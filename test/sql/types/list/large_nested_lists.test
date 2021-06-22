@@ -4,10 +4,10 @@
 
 # list of lists with many small lists
 statement ok
-CREATE TABLE a AS SELECT case when i < 100000 then 'a' else 'b' end g, LIST(case when i %2 = 0 then [i - 2, i, i + 2] else [i, i + 2] end) l FROM range(200000) tbl(i) GROUP BY g
+CREATE TABLE a AS SELECT case when i < 100000 then 'a' else 'b' end g, ARRAY_AGG(case when i %2 = 0 then ARRAY[i - 2, i, i + 2] else ARRAY[i, i + 2] end) l FROM generate_series(0, 199999, 1) tbl(i) GROUP BY g
 
 query IIIII
-SELECT g, COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT g, UNNEST(l) FROM a) tbl(g, i) GROUP BY g ORDER BY g
+SELECT g, COUNT(*), MIN(i::VARCHAR), MAX(i::VARCHAR), COUNT(i) FROM (SELECT g, UNNEST(l) FROM a) tbl(g, i) GROUP BY g ORDER BY g
 ----
 a	100000	[-2, 0, 2]	[99999, 100001]	100000
 b	100000	[100000, 100002, 100004]	[99998, 100000, 100002]	100000
@@ -17,7 +17,7 @@ statement ok
 CREATE TABLE b AS SELECT case when i < 100000 then 'a' else 'b' end g, LIST(case when i %2 = 0 then [i - 2, i, i + 2, NULL] else [i, i + 2, NULL] end) l FROM range(200000) tbl(i) GROUP BY g
 
 query IIIII
-SELECT g, COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT g, UNNEST(l) FROM b) tbl(g, i) GROUP BY g ORDER BY g
+SELECT g, COUNT(*), MIN(i::VARCHAR), MAX(i::VARCHAR), COUNT(i) FROM (SELECT g, UNNEST(l) FROM b) tbl(g, i) GROUP BY g ORDER BY g
 ----
 a	100000	[-2, 0, 2, NULL]	[99999, 100001, NULL]	100000
 b	100000	[100000, 100002, 100004, NULL]	[99998, 100000, 100002, NULL]	100000
