@@ -1,0 +1,11 @@
+# name: test/sql/types/list/large_unnest.test_slow
+# description: Test large unnests
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT COUNT(k), MIN(k), MAX(k) FROM (SELECT UNNEST(l) FROM (SELECT LIST(i) l FROM RANGE(1000000) tbl(i)) tbl2(l)) tbl3(k)
+----
+1000000	0	999999

@@ -98,9 +98,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
 			    BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
-			// FIXME: these can be initialized "empty" (without allocating empty vectors)
 			info.group_chunk.Initialize(delim_types);
-			info.payload_chunk.Initialize(payload_types);
 			info.result_chunk.Initialize(payload_types);
 		}
 	}
@@ -197,7 +195,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
 				chunk.Reference(state->cached_chunk);
-				state->cached_chunk.Reset();
+				state->cached_chunk.SetCardinality(0);
 			} else
 #endif
 			    if (IsRightOuterJoin(join_type)) {
@@ -213,7 +211,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 				if (state->cached_chunk.size() >= (STANDARD_VECTOR_SIZE - 64)) {
 					// chunk cache full: return it
 					chunk.Reference(state->cached_chunk);
-					state->cached_chunk.Reset();
+					state->cached_chunk.SetCardinality(0);
 					return;
 				} else {
 					// chunk cache not full: probe again

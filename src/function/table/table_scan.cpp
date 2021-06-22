@@ -135,6 +135,9 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 // Index Scan
 //===--------------------------------------------------------------------===//
 struct IndexScanOperatorData : public FunctionOperatorData {
+	explicit IndexScanOperatorData(data_ptr_t row_id_data) : row_ids(LOGICAL_ROW_TYPE, row_id_data) {
+	}
+
 	Vector row_ids;
 	ColumnFetchState fetch_state;
 	LocalScanState local_storage_state;
@@ -145,14 +148,14 @@ struct IndexScanOperatorData : public FunctionOperatorData {
 static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, const FunctionData *bind_data_p,
                                                       const vector<column_t> &column_ids,
                                                       TableFilterCollection *filters) {
-	auto result = make_unique<IndexScanOperatorData>();
-	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	result->column_ids = column_ids;
-	result->row_ids.SetType(LOGICAL_ROW_TYPE);
+	data_ptr_t row_id_data = nullptr;
 	if (!bind_data.result_ids.empty()) {
-		FlatVector::SetData(result->row_ids, (data_ptr_t)&bind_data.result_ids[0]);
+		row_id_data = (data_ptr_t)&bind_data.result_ids[0];
 	}
+	auto result = make_unique<IndexScanOperatorData>(row_id_data);
+	auto &transaction = Transaction::GetTransaction(context);
+	result->column_ids = column_ids;
 	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state,
 	                                   filters->table_filters);
 

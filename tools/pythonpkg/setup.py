@@ -11,7 +11,7 @@ from setuptools import setup, Extension
 from setuptools.command.sdist import sdist
 import distutils.spawn
 
-extensions = ['parquet', 'icu', 'fts','tpch', 'visualizer']
+extensions = ['parquet', 'icu', 'fts','tpch', 'tpcds', 'visualizer']
 
 if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts']

@@ -20,7 +20,7 @@ class Executor;
 class TaskContext;
 
 //! The Pipeline class represents an execution pipeline
-class Pipeline {
+class Pipeline : public std::enable_shared_from_this<Pipeline> {
 	friend class Executor;
 
 public:
@@ -33,7 +33,7 @@ public:
 	//! Execute a task within the pipeline on a single thread
 	void Execute(TaskContext &task);
 
-	void AddDependency(Pipeline *pipeline);
+	void AddDependency(shared_ptr<Pipeline> &pipeline);
 	void CompleteDependency();
 	bool HasDependencies() {
 		return !dependencies.empty();
@@ -55,9 +55,6 @@ public:
 	}
 	PhysicalOperator *GetRecursiveCTE() {
 		return recursive_cte;
-	}
-	unordered_set<Pipeline *> &GetDependencies() {
-		return dependencies;
 	}
 	void ClearParents();
 
@@ -85,9 +82,9 @@ private:
 	//! The sink (i.e. destination) for data; this is e.g. a hash table to-be-built
 	PhysicalSink *sink;
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
-	unordered_set<Pipeline *> parents;
+	unordered_map<Pipeline *, weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline
-	unordered_set<Pipeline *> dependencies;
+	unordered_map<Pipeline *, weak_ptr<Pipeline>> dependencies;
 	//! The amount of completed dependencies (the pipeline can only be started after the dependencies have finished
 	//! executing)
 	atomic<idx_t> finished_dependencies;

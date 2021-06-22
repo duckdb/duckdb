@@ -39,9 +39,16 @@ if subprocess.returncode != 0:
 		print(err.decode('utf8'))
 	except:
 		print(err)
-	print('--------------------- SQLANCER LOGS ----------------------')
 	try:
+		print('--------------------- SQLancer Logs ----------------------')
 		print(out.decode('utf8'))
 	except:
 		print(out)
+	try:
+		with open('sqlancer_log.tmp', 'r') as f:
+			text = f.read()
+			print('--------------------- DuckDB Logs ----------------------')
+			print(text)
+	except:
+		pass
 	exit(1)

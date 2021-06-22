@@ -10,10 +10,9 @@ PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manag
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      vector<Value> group_minima_p, vector<idx_t> required_bits_p)
-    : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), required_bits(move(required_bits_p)),
-      total_required_bits(0), group_minima(move(group_minima_p)), sel(STANDARD_VECTOR_SIZE) {
-	addresses.Initialize(LogicalType::POINTER);
-
+    : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), addresses(LogicalType::POINTER),
+      required_bits(move(required_bits_p)), total_required_bits(0), group_minima(move(group_minima_p)),
+      sel(STANDARD_VECTOR_SIZE) {
 	for (auto &group_bits : required_bits) {
 		total_required_bits += group_bits;
 	}

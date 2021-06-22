@@ -10,8 +10,6 @@ namespace duckdb {
 static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 	auto &child_type = ListType::GetChildType(result.GetType());
-	auto list_child = make_unique<Vector>(child_type);
-	ListVector::SetEntry(result, move(list_child));
 
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
@@ -34,8 +32,14 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunction &bound_function,
                                               vector<unique_ptr<Expression>> &arguments) {
-	bound_function.return_type =
-	    LogicalType::LIST(arguments.empty() ? LogicalType::SQLNULL : arguments[0]->return_type);
+	// collect names and deconflict, construct return type
+	auto child_type = LogicalType::SQLNULL;
+	for (idx_t i = 0; i < arguments.size(); i++) {
+		child_type = LogicalType::MaxLogicalType(child_type, arguments[i]->return_type);
+	}
+
+	// this is more for completeness reasons
+	bound_function.return_type = LogicalType::LIST(move(child_type));
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 

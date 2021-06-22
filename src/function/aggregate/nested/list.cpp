@@ -36,7 +36,6 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 	auto list_vector_type = LogicalType::LIST(input.GetType());
 
 	auto states = (ListAggState **)sdata.data;
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	if (input.GetVectorType() == VectorType::SEQUENCE_VECTOR) {
 		input.Normalify(count);
 	}
@@ -44,8 +43,6 @@ static void ListUpdateFunction(Vector inputs[], FunctionData *, idx_t input_coun
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->list_vector) {
 			state->list_vector = new Vector(list_vector_type);
-			auto list_child = make_unique<Vector>(input.GetType());
-			ListVector::SetEntry(*state->list_vector, move(list_child));
 		}
 		ListVector::Append(*state->list_vector, input, i + 1, i);
 	}
@@ -75,7 +72,7 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 	auto states = (ListAggState **)sdata.data;
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
-	result.Initialize(result.GetType()); // deals with constants
+
 	auto &mask = FlatVector::Validity(result);
 	size_t total_len = 0;
 	for (idx_t i = 0; i < count; i++) {
@@ -93,9 +90,6 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 		total_len += state_lv_count;
 	}
 
-	auto &child_type = ListType::GetChildType(result.GetType());
-	auto list_buffer = make_unique<Vector>(child_type);
-	ListVector::SetEntry(result, move(list_buffer));
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->list_vector) {

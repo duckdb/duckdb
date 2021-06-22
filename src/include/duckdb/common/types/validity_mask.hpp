@@ -173,12 +173,17 @@ public:
 		SetValidUnsafe(row_idx);
 	}
 
-	//! Marks the entry at the specified row index as invalid (i.e. null)
-	inline void SetInvalidUnsafe(idx_t row_idx) {
+	//! Marks the bit at the specified entry as invalid (i.e. null)
+	inline void SetInvalidUnsafe(idx_t entry_idx, idx_t idx_in_entry) {
 		D_ASSERT(validity_mask);
+		validity_mask[entry_idx] &= ~(V(1) << V(idx_in_entry));
+	}
+
+	//! Marks the bit at the specified row index as invalid (i.e. null)
+	inline void SetInvalidUnsafe(idx_t row_idx) {
 		idx_t entry_idx, idx_in_entry;
 		GetEntryIndex(row_idx, entry_idx, idx_in_entry);
-		validity_mask[entry_idx] &= ~(V(1) << V(idx_in_entry));
+		SetInvalidUnsafe(entry_idx, idx_in_entry);
 	}
 
 	//! Marks the entry at the specified row index as invalid (i.e. null)

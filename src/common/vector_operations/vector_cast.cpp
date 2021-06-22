@@ -338,8 +338,6 @@ static void NumericCastSwitch(Vector &source, Vector &result, idx_t count) {
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		auto list_child = make_unique<Vector>();
-		ListVector::SetEntry(result, move(list_child));
 		VectorNullCast(source, result, count);
 		break;
 	}
@@ -509,6 +507,10 @@ static void TimestampCastSwitch(Vector &source, Vector &result, idx_t count) {
 static void TimestampNsCastSwitch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
+	case LogicalTypeId::VARCHAR:
+		// timestamp (ns) to varchar
+		VectorStringCast<timestamp_t, duckdb::CastFromTimestampNS>(source, result, count);
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		// timestamp (ns) to timestamp (us)
 		UnaryExecutor::Execute<timestamp_t, timestamp_t, duckdb::CastTimestampNsToUs>(source, result, count);
@@ -522,6 +524,10 @@ static void TimestampNsCastSwitch(Vector &source, Vector &result, idx_t count) {
 static void TimestampMsCastSwitch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
+	case LogicalTypeId::VARCHAR:
+		// timestamp (ms) to varchar
+		VectorStringCast<timestamp_t, duckdb::CastFromTimestampMS>(source, result, count);
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		// timestamp (ms) to timestamp (us)
 		UnaryExecutor::Execute<timestamp_t, timestamp_t, duckdb::CastTimestampMsToUs>(source, result, count);
@@ -535,6 +541,10 @@ static void TimestampMsCastSwitch(Vector &source, Vector &result, idx_t count) {
 static void TimestampSecCastSwitch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
+	case LogicalTypeId::VARCHAR:
+		// timestamp (sec) to varchar
+		VectorStringCast<timestamp_t, duckdb::CastFromTimestampSec>(source, result, count);
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		// timestamp (s) to timestamp (us)
 		UnaryExecutor::Execute<timestamp_t, timestamp_t, duckdb::CastTimestampSecToUs>(source, result, count);
@@ -598,31 +608,30 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(source.GetVectorType());
 			ConstantVector::SetNull(result, ConstantVector::IsNull(source));
+
+			auto ldata = ConstantVector::GetData<list_entry_t>(source);
+			auto tdata = ConstantVector::GetData<list_entry_t>(result);
+			*tdata = *ldata;
 		} else {
 			source.Normalify(count);
 			result.SetVectorType(VectorType::FLAT_VECTOR);
 			FlatVector::SetValidity(result, FlatVector::Validity(source));
-		}
-		auto list_child = make_unique<Vector>(ListType::GetChildType(result.GetType()));
-		ListVector::SetEntry(result, move(list_child));
-		if (ListVector::HasEntry(source)) {
-			auto &source_cc = ListVector::GetEntry(source);
-			auto source_size = ListVector::GetListSize(source);
-			Vector append_vector(ListType::GetChildType(result.GetType()));
-			if (source_size > STANDARD_VECTOR_SIZE) {
-				append_vector.Resize(STANDARD_VECTOR_SIZE, source_size);
-			}
-			if (source_cc.GetData()) {
-				VectorOperations::Cast(source_cc, append_vector, source_size);
-				ListVector::Append(result, append_vector, source_size);
-			}
-		}
 
-		auto ldata = FlatVector::GetData<list_entry_t>(source);
-		auto tdata = FlatVector::GetData<list_entry_t>(result);
-		for (idx_t i = 0; i < count; i++) {
-			tdata[i] = ldata[i];
+			auto ldata = FlatVector::GetData<list_entry_t>(source);
+			auto tdata = FlatVector::GetData<list_entry_t>(result);
+			for (idx_t i = 0; i < count; i++) {
+				tdata[i] = ldata[i];
+			}
 		}
+		auto &source_cc = ListVector::GetEntry(source);
+		auto source_size = ListVector::GetListSize(source);
+
+		ListVector::Reserve(result, source_size);
+		auto &append_vector = ListVector::GetEntry(result);
+
+		VectorOperations::Cast(source_cc, append_vector, source_size);
+		ListVector::SetListSize(result, source_size);
+		D_ASSERT(ListVector::GetListSize(result) == source_size);
 		break;
 	}
 	default:

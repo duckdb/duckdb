@@ -28,4 +28,8 @@ struct RepeatTableFunction {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct UnnestTableFunction {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb

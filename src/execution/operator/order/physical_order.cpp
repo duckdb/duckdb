@@ -307,7 +307,8 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		auto &var_block = *lstate.var_sorting_blocks[sort_col];
 		// compute entry sizes
 		std::fill_n(lstate.entry_sizes, input.size(), 0);
-		RowDataCollection::ComputeEntrySizes(sort.data[sort_col], lstate.entry_sizes, sort.size());
+		RowDataCollection::ComputeEntrySizes(sort.data[sort_col], lstate.entry_sizes, sort.size(), sort.size(),
+		                                     FlatVector::INCREMENTAL_SELECTION_VECTOR);
 		// build and serialize entry sizes
 		var_sizes.Build(sort.size(), lstate.key_locations, nullptr);
 		for (idx_t i = 0; i < input.size(); i++) {
@@ -323,7 +324,8 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 	if (payload_state.all_constant) {
 		lstate.payload_block->Build(input.size(), lstate.key_locations, nullptr);
 	} else {
-		RowDataCollection::ComputeEntrySizes(input, lstate.entry_sizes, payload_state.entry_size);
+		RowDataCollection::ComputeEntrySizes(input, lstate.entry_sizes, payload_state.entry_size,
+		                                     FlatVector::INCREMENTAL_SELECTION_VECTOR, input.size());
 		lstate.sizes_block->Build(input.size(), lstate.key_locations, nullptr);
 		for (idx_t i = 0; i < input.size(); i++) {
 			Store<idx_t>(lstate.entry_sizes[i], lstate.key_locations[i]);
@@ -2188,8 +2190,9 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 
 	// deserialize the payload data
 	for (idx_t payl_col = 0; payl_col < chunk.ColumnCount(); payl_col++) {
-		RowDataCollection::DeserializeIntoVector(chunk.data[payl_col], scan_count, payl_col, state.key_locations,
-		                                         state.validitymask_locations);
+		RowDataCollection::DeserializeIntoVector(chunk.data[payl_col], scan_count,
+		                                         FlatVector::INCREMENTAL_SELECTION_VECTOR, payl_col,
+		                                         state.key_locations, state.validitymask_locations);
 	}
 	chunk.SetCardinality(scan_count);
 	chunk.Verify();

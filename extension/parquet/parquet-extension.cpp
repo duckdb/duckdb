@@ -403,7 +403,7 @@ unique_ptr<TableFunctionRef> ParquetScanReplacement(const string &table_name, vo
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("parquet_scan", children);
+	table_function->function = make_unique<FunctionExpression>("parquet_scan", move(children));
 	return table_function;
 }
 

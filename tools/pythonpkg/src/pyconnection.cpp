@@ -402,7 +402,7 @@ static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)entry.ptr())));
-	table_function->function = make_unique<FunctionExpression>("pandas_scan", children);
+	table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
 	return table_function;
 }
 

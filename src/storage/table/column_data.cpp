@@ -413,7 +413,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	checkpoint_state->CreateEmptySegment();
 
 	bool is_validity = type.id() == LogicalTypeId::VALIDITY;
-	Vector intermediate(is_validity ? LogicalType::BOOLEAN : type, true, is_validity);
+	auto scan_type = is_validity ? LogicalType::BOOLEAN : type;
+	Vector intermediate(scan_type, true, is_validity);
 	// we create a new segment tree with all the new segments
 	// we do this by scanning the current segments of the column and checking for changes
 	// if there are any changes (e.g. updates or deletes) we write the new changes
@@ -469,7 +470,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 		state.current = segment;
 		segment->InitializeScan(state);
 
-		Vector scan_vector(type, nullptr);
+		Vector scan_vector(scan_type, nullptr);
 		for (idx_t base_row_index = 0; base_row_index < segment->count; base_row_index += STANDARD_VECTOR_SIZE) {
 			scan_vector.Reference(intermediate);
 

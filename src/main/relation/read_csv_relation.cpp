@@ -47,7 +47,7 @@ unique_ptr<TableRef> ReadCSVRelation::GetTableRef() {
 		                                                     make_unique<ColumnRefExpression>("auto_detect"),
 		                                                     make_unique<ConstantExpression>(Value::BOOLEAN(true))));
 	}
-	table_ref->function = make_unique<FunctionExpression>("read_csv", children);
+	table_ref->function = make_unique<FunctionExpression>("read_csv", move(children));
 	return move(table_ref);
 }
 

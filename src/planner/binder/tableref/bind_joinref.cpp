@@ -15,7 +15,7 @@ static unique_ptr<ParsedExpression> BindColumn(Binder &binder, ClientContext &co
 	auto expr = make_unique_base<ParsedExpression, ColumnRefExpression>(column_name, alias);
 	ExpressionBinder expr_binder(binder, context);
 	auto result = expr_binder.Bind(expr);
-	return make_unique<BoundExpression>(move(result), nullptr);
+	return make_unique<BoundExpression>(move(result));
 }
 
 static unique_ptr<ParsedExpression> AddCondition(ClientContext &context, Binder &left_binder, Binder &right_binder,

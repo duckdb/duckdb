@@ -24,18 +24,12 @@ static void MapFunction(DataChunk &args, ExpressionState &state, Vector &result)
 	auto &value_vector = child_entries[1];
 	if (args.data.empty()) {
 		// no arguments: construct an empty map
-
-		auto list_child = make_unique<Vector>(LogicalTypeId::SQLNULL);
-		ListVector::SetEntry(*key_vector, move(list_child));
 		ListVector::SetListSize(*key_vector, 0);
 		key_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
 		auto list_data = ConstantVector::GetData<list_entry_t>(*key_vector);
 		list_data->offset = 0;
 		list_data->length = 0;
 
-		list_child = make_unique<Vector>(LogicalTypeId::SQLNULL);
-		list_child->SetVectorType(VectorType::CONSTANT_VECTOR);
-		ListVector::SetEntry(*value_vector, move(list_child));
 		ListVector::SetListSize(*value_vector, 0);
 		value_vector->SetVectorType(VectorType::CONSTANT_VECTOR);
 		list_data = ConstantVector::GetData<list_entry_t>(*value_vector);

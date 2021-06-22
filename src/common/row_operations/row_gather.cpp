@@ -6,6 +6,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/constant_operators.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/types/row_layout.hpp"
 
 namespace duckdb {
@@ -36,12 +37,28 @@ static void TemplatedGatherLoop(Vector &rows, const SelectionVector &row_sel, Ve
 	}
 }
 
-void RowOperations::Gather(const RowLayout &layout, Vector &rows, const SelectionVector &row_sel, Vector &col,
-                           const SelectionVector &col_sel, idx_t count, idx_t col_no) {
+static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vector &col,
+                               const SelectionVector &col_sel, idx_t count, idx_t col_offset, idx_t col_no) {
+	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
+
+	// Build the gather locations
+	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
+	data_ptr_t mask_locations[STANDARD_VECTOR_SIZE];
+	for (idx_t i = 0; i < count; i++) {
+		auto row_idx = row_sel.get_index(i);
+		mask_locations[i] = ptrs[row_idx];
+		data_locations[i] = Load<data_ptr_t>(ptrs[row_idx] + col_offset);
+	}
+
+	// Deserialise into the selected locations
+	RowDataCollection::DeserializeIntoVector(col, count, col_sel, col_no, data_locations, mask_locations);
+}
+
+void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
+                           const idx_t count, const idx_t col_offset, const idx_t col_no) {
 	D_ASSERT(rows.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(rows.GetType().id() == LogicalTypeId::POINTER); // "Cannot gather from non-pointer type!"
 
-	const auto col_offset = layout.GetOffsets()[col_no];
 	col.SetVectorType(VectorType::FLAT_VECTOR);
 	switch (col.GetType().InternalType()) {
 	case PhysicalType::UINT8:
@@ -89,6 +106,11 @@ void RowOperations::Gather(const RowLayout &layout, Vector &rows, const Selectio
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedGatherLoop<string_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		break;
+	case PhysicalType::LIST:
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		GatherNestedVector(rows, row_sel, col, col_sel, count, col_offset, col_no);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for RowOperations::Gather");
