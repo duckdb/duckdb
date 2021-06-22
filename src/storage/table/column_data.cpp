@@ -221,8 +221,10 @@ void ColumnData::RevertAppend(row_t start_row) {
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+	D_ASSERT(row_id >= 0);
+	D_ASSERT(idx_t(row_id) >= start);
 	// perform the fetch within the segment
-	state.row_index = row_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	state.row_index = start + ((row_id - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
 	state.current = (ColumnSegment *)data.GetSegment(state.row_index);
 	ScanVector(state, result);
 }
@@ -248,7 +250,7 @@ void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &up
 	}
 	Vector base_vector(type);
 	ColumnScanState state;
-	Fetch(state, row_ids[0], base_vector);
+	Fetch(state, row_ids[offset], base_vector);
 	updates->Update(transaction, column_index, update_vector, row_ids, offset, update_count, base_vector);
 }
 
