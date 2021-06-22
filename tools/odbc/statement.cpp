@@ -1,4 +1,8 @@
 #include "duckdb_odbc.hpp"
+#include "statement_functions.hpp"
+#include <fstream>
+#include <iostream>
+
 using namespace duckdb;
 
 SQLRETURN SQLSetStmtAttr(SQLHSTMT StatementHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr, SQLINTEGER StringLength) {
@@ -38,22 +42,7 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT StatementHandle, SQLINTEGER Attribute, SQLPOIN
 }
 
 SQLRETURN SQLPrepare(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength) {
-	return WithStatement(StatementHandle, [&](OdbcHandleStmt *stmt) {
-		stmt->stmt.reset();
-		stmt->res.reset();
-		stmt->chunk.reset();
-		stmt->params.resize(0);
-		stmt->bound_cols.resize(0);
-
-		auto query = OdbcUtils::ReadString(StatementText, TextLength);
-		stmt->stmt = stmt->dbc->conn->Prepare(query);
-		if (!stmt->stmt->success) {
-			return SQL_ERROR;
-		}
-		stmt->params.resize(stmt->stmt->n_param);
-		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
-		return SQL_SUCCESS;
-	});
+	return PrepareStmt(StatementHandle, StatementText, TextLength);
 }
 
 SQLRETURN SQLCancel(SQLHSTMT StatementHandle) {
@@ -64,11 +53,12 @@ SQLRETURN SQLCancel(SQLHSTMT StatementHandle) {
 }
 
 SQLRETURN SQLExecDirect(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength) {
-	auto prepare_status = SQLPrepare(StatementHandle, StatementText, TextLength);
+	auto prepare_status = PrepareStmt(StatementHandle, StatementText, TextLength);
 	if (prepare_status != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
-	auto execute_status = SQLExecute(StatementHandle);
+
+	auto execute_status = ExecuteStmt(StatementHandle);
 	if (execute_status != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
@@ -167,6 +157,9 @@ SQLRETURN SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option) {
 		}
 		stmt->res.reset();
 		stmt->chunk.reset();
+		stmt->stmt.reset();
+		stmt->bound_cols.clear();
+		stmt->params.clear();
 		return SQL_SUCCESS;
 	});
 }
