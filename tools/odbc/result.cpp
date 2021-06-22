@@ -23,7 +23,7 @@ SQLRETURN SQLGetData(SQLHSTMT StatementHandle, SQLUSMALLINT Col_or_Param_Num, SQ
 
 		switch (TargetType) {
 		case SQL_C_SLONG:
-			D_ASSERT(BufferLength >= sizeof(int));
+			D_ASSERT(((size_t)BufferLength) >= sizeof(int));
 			Store<int>(val.GetValue<int>(), (data_ptr_t)TargetValuePtr);
 			return SQL_SUCCESS;
 
@@ -47,7 +47,7 @@ SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
 		if (!stmt->open) {
 			return SQL_NO_DATA;
 		}
-		if (!stmt->chunk || stmt->chunk_row >= stmt->chunk->size() - 1) {
+		if (!stmt->chunk || ((idx_t)stmt->chunk_row) >= stmt->chunk->size() - 1) {
 			// TODO try /catch
 			try {
 				stmt->chunk = stmt->res->Fetch();
@@ -82,7 +82,7 @@ SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
 		}
 
 		D_ASSERT(stmt->chunk);
-		D_ASSERT(stmt->chunk_row < stmt->chunk->size());
+		D_ASSERT(((size_t)stmt->chunk_row) < stmt->chunk->size());
 		return SQL_SUCCESS;
 	});
 }
