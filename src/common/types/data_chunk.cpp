@@ -589,16 +589,10 @@ void DataChunk::ToArrowArray(ArrowArray *out_array) {
 		InitializeChild(child_holder, size());
 		auto &vector = child_holder.vector;
 		auto &child = child_holder.array;
-		switch (vector->GetVectorType()) {
-			// TODO support other vector types
-		case VectorType::FLAT_VECTOR: {
-			SetArrowChild(child_holder, GetTypes()[col_idx], data[col_idx], size());
-			SetChildValidityMask(*vector, child);
-			break;
-		}
-		default:
-			throw NotImplementedException(VectorTypeToString(vector->GetVectorType()));
-		}
+
+		//! We could, in theory, output other types of vectors here, currently only FLAT Vectors
+		SetArrowChild(child_holder, GetTypes()[col_idx], data[col_idx], size());
+		SetChildValidityMask(*vector, child);
 		out_array->children[col_idx] = &child;
 	}
 
