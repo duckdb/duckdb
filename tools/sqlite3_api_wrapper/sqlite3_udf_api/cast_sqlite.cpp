@@ -26,7 +26,7 @@ bool CastSQLite::RequiresCastToVarchar(LogicalType type) {
 
 void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chunk) {
 	auto new_types = data_chunk.GetTypes();
-	for(auto &type : new_types) {
+	for (auto &type : new_types) {
 		if (CastSQLite::RequiresCastToVarchar(type)) {
 			type = LogicalType::VARCHAR;
 		}
@@ -205,4 +205,4 @@ string_t CastFromSQLiteValue::GetValue(sqlite3_value input) {
 	return input.str_t;
 }
 
-}
+} // namespace duckdb
