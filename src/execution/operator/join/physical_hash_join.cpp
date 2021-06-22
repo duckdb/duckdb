@@ -185,9 +185,12 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
                                         PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalHashJoinState *>(state_p);
 	auto &sink = (HashJoinGlobalState &)*sink_state;
-	if (sink.hash_table->size() == 0 &&
-	    (sink.hash_table->join_type == JoinType::INNER || sink.hash_table->join_type == JoinType::SEMI)) {
-		// empty hash table with INNER or SEMI join means empty result set
+	bool join_is_inner_right_semi =
+	    (sink.hash_table->join_type == JoinType::INNER || sink.hash_table->join_type == JoinType::RIGHT ||
+	     sink.hash_table->join_type == JoinType::SEMI);
+
+	if (sink.hash_table->size() == 0 && join_is_inner_right_semi) {
+		// empty hash table with INNER, RIGHT or SEMI join means empty result set
 		return;
 	}
 	do {
