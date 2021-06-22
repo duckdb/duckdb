@@ -34,6 +34,8 @@ class BufferedFileWriter;
 class QueryProfiler;
 class QueryProfilerHistory;
 class ClientContextLock;
+struct CreateScalarFunctionInfo;
+class ScalarFunctionCatalogEntry;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -194,6 +196,8 @@ private:
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
 	unique_ptr<ClientContextLock> LockContext();
+
+	bool UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function, CreateScalarFunctionInfo *new_info);
 
 private:
 	//! The currently opened StreamQueryResult (if any)

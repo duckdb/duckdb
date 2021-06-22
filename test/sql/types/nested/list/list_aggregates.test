@@ -17,6 +17,12 @@ select min(list_value(i)), max(list_value(i)) from range(10) tbl(i);
 ----
 [0]	[9]
 
+# Integer comparison, not string comparison
+query II
+select min(list_value(-i)), max(list_value(i+2)) from range(10) tbl(i);
+----
+[-9]	[11]
+
 query I
 select first([i]) from range(10) tbl(i);
 ----
