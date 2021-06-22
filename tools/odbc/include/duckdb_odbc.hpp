@@ -61,6 +61,9 @@ SQLRETURN SQLGetDiagRec(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMALLINT Re
                         SQLINTEGER *NativeErrorPtr, SQLCHAR *MessageText, SQLSMALLINT BufferLength,
                         SQLSMALLINT *TextLengthPtr);
 
+// api info
+SQLRETURN SQLGetFunctions(SQLHDBC ConnectionHandle, SQLUSMALLINT FunctionId, SQLUSMALLINT *SupportedPtr);
+
 } // extern "C"
 
 namespace duckdb {
