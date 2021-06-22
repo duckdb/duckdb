@@ -7,6 +7,7 @@
 #include "arrow/status.h"
 #include "arrow/type.h"
 #include "arrow/type_fwd.h"
+#include "arrow_check.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
@@ -32,42 +33,6 @@ std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
 	std::shared_ptr<arrow::Table> table;
 	reader->ReadTable(&table);
 	return table;
-}
-
-bool ArrowChunkEquals(const arrow::ChunkedArray &left, const arrow::ChunkedArray &right) {
-	if (left.length() != right.length()) {
-		return false;
-	}
-	if (left.null_count() != right.null_count()) {
-		return false;
-	}
-	arrow::internal::MultipleChunkIterator iterator(left, right);
-	std::shared_ptr<arrow::Array> left_piece, right_piece;
-	while (iterator.Next(&left_piece, &right_piece)) {
-		if (!left_piece->Equals(right_piece)) {
-			return false;
-		}
-	}
-	return true;
-}
-
-bool ArrowTableEquals(const arrow::Table &left, const arrow::Table &right) {
-	if (&left == &right) {
-		return true;
-	}
-	if (!(left.schema()->Equals(*right.schema()), true)) {
-		return false;
-	}
-	if (left.num_columns() != right.num_columns()) {
-		return false;
-	}
-
-	for (int i = 0; i < left.num_columns(); i++) {
-		if (!ArrowChunkEquals(*left.column(i), *right.column(i))) {
-			return false;
-		}
-	}
-	return true;
 }
 
 bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connection &conn) {
@@ -117,6 +82,26 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 	return ArrowTableEquals(*new_table, *new_arrow_result_tbl);
 }
 
+TEST_CASE("Test Parquet Files Broken", "[arrow]") {
+
+	std::vector<std::string> skip;
+	skip.emplace_back("bug1588.parquet");            //! FIXME: Booleans are bit-packed
+	skip.emplace_back("nested_maps.snappy.parquet"); //! FIXME: ?
+	skip.emplace_back("bug1554.parquet");            //! FIXME: ?
+	skip.emplace_back("silly-names.parquet");        //! FIXME: ?
+	skip.emplace_back("zstd.parquet");               //! FIXME: ?
+
+	duckdb::DuckDB db;
+	duckdb::Connection conn {db};
+	std::vector<std::string> empty;
+	for (auto &s : skip) {
+		std::string aux = "test/sql/copy/parquet/data/" + s;
+		if (RoundTrip(aux, empty, conn)) {
+			std::cout << s << std::endl;
+		}
+	}
+	skip.clear();
+}
 TEST_CASE("Test Parquet Files", "[arrow]") {
 
 	std::vector<std::string> skip {"aws2.parquet"};     //! Not supported by arrow
@@ -130,15 +115,10 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	skip.emplace_back("fixed.parquet");     //! FIXME: Contains fixed-width-binary columns, we don't support those yet
 	skip.emplace_back("nan-float.parquet"); //! FIXME:What to do with NaNs
 	skip.emplace_back("bug1588.parquet");   //! FIXME: Booleans are bit-packed
-	skip.emplace_back("apkwan.parquet");    //! FIXME: ?
-	skip.emplace_back("nested_lists.snappy.parquet");    //! FIXME: ?
-	skip.emplace_back("struct.parquet");                 //! FIXME: ?
-	skip.emplace_back("list_columns.parquet");           //! FIXME: ?
-	skip.emplace_back("nested_maps.snappy.parquet");     //! FIXME: ?
-	skip.emplace_back("bug1554.parquet");                //! FIXME: ?
-	skip.emplace_back("silly-names.parquet");            //! FIXME: ?
-	skip.emplace_back("zstd.parquet");                   //! FIXME: ?
-	skip.emplace_back("bug1618_struct_strings.parquet"); //! FIXME: ?
+	skip.emplace_back("nested_maps.snappy.parquet"); //! FIXME: ?
+	skip.emplace_back("bug1554.parquet");            //! FIXME: ?
+	skip.emplace_back("silly-names.parquet");        //! FIXME: ?
+	skip.emplace_back("zstd.parquet");               //! FIXME: ?
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
