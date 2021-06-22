@@ -21,10 +21,11 @@ namespace duckdb {
 DataChunk::DataChunk() : count(0) {
 }
 
-DataChunk::~DataChunk() {}
+DataChunk::~DataChunk() {
+}
 
 void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
-	D_ASSERT(data.empty()); // can only be initialized once
+	D_ASSERT(data.empty());     // can only be initialized once
 	D_ASSERT(types.size() > 0); // empty chunk not allowed
 	for (idx_t i = 0; i < types.size(); i++) {
 		data.emplace_back(Vector(types[i], nullptr));
@@ -32,7 +33,7 @@ void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 }
 
 void DataChunk::Initialize(const vector<LogicalType> &types) {
-	D_ASSERT(data.empty()); // can only be initialized once
+	D_ASSERT(data.empty());     // can only be initialized once
 	D_ASSERT(types.size() > 0); // empty chunk not allowed
 	for (idx_t i = 0; i < types.size(); i++) {
 		VectorCache cache(types[i]);
@@ -48,7 +49,7 @@ void DataChunk::Reset() {
 	if (vector_caches.size() != data.size()) {
 		throw InternalException("VectorCache and column count mismatch in DataChunk::Reset");
 	}
-	for(idx_t i = 0; i < ColumnCount(); i++) {
+	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].ResetFromCache(vector_caches[i]);
 	}
 	SetCardinality(0);

@@ -391,8 +391,8 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	return ss;
 }
 
-ScanStructure::ScanStructure(JoinHashTable &ht) :
-    pointers(LogicalType::POINTER), sel_vector(STANDARD_VECTOR_SIZE), ht(ht), finished(false) {
+ScanStructure::ScanStructure(JoinHashTable &ht)
+    : pointers(LogicalType::POINTER), sel_vector(STANDARD_VECTOR_SIZE), ht(ht), finished(false) {
 }
 
 void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {

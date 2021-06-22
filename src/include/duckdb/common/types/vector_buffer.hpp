@@ -41,8 +41,8 @@ public:
 			data = unique_ptr<data_t[]>(new data_t[data_size]);
 		}
 	}
-	explicit VectorBuffer(unique_ptr<data_t[]> data_p) :
-	    buffer_type(VectorBufferType::STANDARD_BUFFER), data(move(data_p)) {
+	explicit VectorBuffer(unique_ptr<data_t[]> data_p)
+	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data(move(data_p)) {
 	}
 	virtual ~VectorBuffer() {
 	}
@@ -168,7 +168,6 @@ public:
 	idx_t size = 0;
 
 private:
-
 	//! child vectors used for nested data
 	unique_ptr<Vector> child;
 };

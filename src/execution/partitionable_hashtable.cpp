@@ -48,8 +48,8 @@ PartitionableHashTable::PartitionableHashTable(BufferManager &buffer_manager_p, 
                                                vector<LogicalType> group_types_p, vector<LogicalType> payload_types_p,
                                                vector<BoundAggregateExpression *> bindings_p)
     : buffer_manager(buffer_manager_p), group_types(move(group_types_p)), payload_types(move(payload_types_p)),
-      bindings(move(bindings_p)), is_partitioned(false), partition_info(partition_info_p),
-      hashes(LogicalType::HASH), hashes_subset(LogicalType::HASH) {
+      bindings(move(bindings_p)), is_partitioned(false), partition_info(partition_info_p), hashes(LogicalType::HASH),
+      hashes_subset(LogicalType::HASH) {
 
 	sel_vectors.resize(partition_info.n_partitions);
 	sel_vector_sizes.resize(partition_info.n_partitions);

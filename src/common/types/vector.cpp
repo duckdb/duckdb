@@ -19,8 +19,8 @@
 
 namespace duckdb {
 
-Vector::Vector(LogicalType type_p, bool create_data, bool zero_data) :
-    vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(nullptr) {
+Vector::Vector(LogicalType type_p, bool create_data, bool zero_data)
+    : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(nullptr) {
 	if (create_data) {
 		Initialize(zero_data);
 	}
@@ -29,41 +29,36 @@ Vector::Vector(LogicalType type_p, bool create_data, bool zero_data) :
 Vector::Vector(LogicalType type_p) : Vector(move(type_p), true, false) {
 }
 
-Vector::Vector(LogicalType type_p, data_ptr_t dataptr) :
-    vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
+Vector::Vector(LogicalType type_p, data_ptr_t dataptr)
+    : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
 	if (dataptr && type.id() == LogicalTypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
 }
 
-Vector::Vector(const VectorCache &cache) :
-	type(cache.GetType()) {
+Vector::Vector(const VectorCache &cache) : type(cache.GetType()) {
 	ResetFromCache(cache);
 }
 
-
-Vector::Vector(Vector &other) :
-	type(other.type) {
+Vector::Vector(Vector &other) : type(other.type) {
 	Reference(other);
 }
 
-Vector::Vector(Vector &other, const SelectionVector &sel, idx_t count) :
-	type(other.type) {
+Vector::Vector(Vector &other, const SelectionVector &sel, idx_t count) : type(other.type) {
 	Slice(other, sel, count);
 }
 
-Vector::Vector(Vector &other, idx_t offset) :
-	type(other.type) {
+Vector::Vector(Vector &other, idx_t offset) : type(other.type) {
 	Slice(other, offset);
 }
 
-Vector::Vector(const Value &value) :
-	type(value.type()) {
+Vector::Vector(const Value &value) : type(value.type()) {
 	Reference(value);
 }
 
 Vector::Vector(Vector &&other) noexcept
-    : vector_type(other.vector_type), type(move(other.type)), data(other.data), validity(move(other.validity)), buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
+    : vector_type(other.vector_type), type(move(other.type)), data(other.data), validity(move(other.validity)),
+      buffer(move(other.buffer)), auxiliary(move(other.auxiliary)) {
 }
 
 void Vector::Reference(const Value &value) {
@@ -125,7 +120,7 @@ void Vector::Slice(Vector &other, idx_t offset) {
 		auto &entries = StructVector::GetEntries(*this);
 		auto &other_entries = StructVector::GetEntries(other);
 		D_ASSERT(entries.size() == other_entries.size());
-		for(idx_t i = 0; i < entries.size(); i++) {
+		for (idx_t i = 0; i < entries.size(); i++) {
 			entries[i]->Slice(*other_entries[i], offset);
 		}
 		if (offset > 0) {
@@ -1020,7 +1015,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 				idx_t child_count = 0;
 				auto le = ConstantVector::GetData<list_entry_t>(*this);
 				D_ASSERT(le->offset + le->length <= ListVector::GetListSize(*this));
-				for(idx_t k = 0; k < le->length; k++) {
+				for (idx_t k = 0; k < le->length; k++) {
 					child_sel.set_index(child_count++, le->offset + k);
 				}
 				child.Verify(child_sel, child_count);
@@ -1045,7 +1040,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 				auto &le = list_data[idx];
 				if (validity.RowIsValid(idx)) {
 					D_ASSERT(le.offset + le.length <= child_size);
-					for(idx_t k = 0; k < le.length; k++) {
+					for (idx_t k = 0; k < le.length; k++) {
 						child_sel.set_index(child_count++, le.offset + k);
 					}
 				}

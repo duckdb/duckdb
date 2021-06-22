@@ -135,7 +135,8 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 // Index Scan
 //===--------------------------------------------------------------------===//
 struct IndexScanOperatorData : public FunctionOperatorData {
-	IndexScanOperatorData(data_ptr_t row_id_data) : row_ids(LOGICAL_ROW_TYPE, row_id_data) {}
+	IndexScanOperatorData(data_ptr_t row_id_data) : row_ids(LOGICAL_ROW_TYPE, row_id_data) {
+	}
 
 	Vector row_ids;
 	ColumnFetchState fetch_state;
@@ -150,7 +151,7 @@ static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, co
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	data_ptr_t row_id_data = nullptr;
 	if (!bind_data.result_ids.empty()) {
-		row_id_data = (data_ptr_t) &bind_data.result_ids[0];
+		row_id_data = (data_ptr_t)&bind_data.result_ids[0];
 	}
 	auto result = make_unique<IndexScanOperatorData>(row_id_data);
 	auto &transaction = Transaction::GetTransaction(context);

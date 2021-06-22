@@ -43,6 +43,7 @@ public:
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
+
 public:
 	DUCKDB_API idx_t size() const {
 		return count;

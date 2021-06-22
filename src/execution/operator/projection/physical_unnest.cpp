@@ -35,7 +35,7 @@ PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expr
 static void UnnestNull(idx_t start, idx_t end, Vector &result) {
 	if (result.GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &children = StructVector::GetEntries(result);
-		for(auto &child : children) {
+		for (auto &child : children) {
 			UnnestNull(start, end, *child);
 		}
 	}

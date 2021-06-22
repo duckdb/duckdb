@@ -427,7 +427,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 
 		if (overflow_child_count == 0) {
 			child_actual_num_values = child_column_reader->Read(child_req_num_values, child_filter, child_defines_ptr,
-																child_repeats_ptr, child_result.data[0]);
+			                                                    child_repeats_ptr, child_result.data[0]);
 		} else {
 			child_actual_num_values = overflow_child_count;
 			overflow_child_count = 0;
