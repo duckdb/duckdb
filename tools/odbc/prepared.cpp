@@ -1,4 +1,5 @@
 #include "duckdb_odbc.hpp"
+#include "statement_functions.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 
 using namespace duckdb;
@@ -69,21 +70,7 @@ SQLRETURN SQLBindParameter(SQLHSTMT StatementHandle, SQLUSMALLINT ParameterNumbe
 }
 
 SQLRETURN SQLExecute(SQLHSTMT StatementHandle) {
-	return WithStatementPrepared(StatementHandle, [&](OdbcHandleStmt *stmt) {
-		stmt->res.reset();
-		stmt->chunk.reset();
-		stmt->chunk_row = -1;
-		stmt->open = false;
-		if (stmt->rows_fetched_ptr) {
-			*stmt->rows_fetched_ptr = 0;
-		}
-		stmt->res = stmt->stmt->Execute(stmt->params);
-		if (!stmt->res->success) {
-			return SQL_ERROR;
-		}
-		stmt->open = true;
-		return SQL_SUCCESS;
-	});
+	return ExecuteStmt(StatementHandle);
 }
 
 SQLRETURN SQLNumResultCols(SQLHSTMT StatementHandle, SQLSMALLINT *ColumnCountPtr) {
@@ -109,7 +96,7 @@ SQLRETURN SQLNumParams(SQLHSTMT StatementHandle, SQLSMALLINT *ParameterCountPtr)
 SQLRETURN SQLBindCol(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNumber, SQLSMALLINT TargetType,
                      SQLPOINTER TargetValuePtr, SQLLEN BufferLength, SQLLEN *StrLen_or_IndPtr) {
 	return WithStatementPrepared(StatementHandle, [&](OdbcHandleStmt *stmt) {
-		auto col_nr_internal = ColumnNumber - 1;
+		size_t col_nr_internal = ColumnNumber - 1;
 		if (col_nr_internal >= stmt->bound_cols.size()) {
 			stmt->bound_cols.resize(col_nr_internal);
 		}
