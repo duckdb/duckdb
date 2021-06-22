@@ -285,7 +285,7 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		case LogicalTypeId::VARCHAR: {
 			auto wrapper = new DuckDBAltrepStringWrapper();
 			wrapper->length = nrows;
-			for(idx_t c_idx = 0; c_idx < result->collection.Chunks().size(); c_idx++) {
+			for (idx_t c_idx = 0; c_idx < result->collection.Chunks().size(); c_idx++) {
 				wrapper->vectors.emplace_back(LogicalType::VARCHAR, nullptr);
 			}
 

@@ -9,8 +9,8 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
           SelectionVector &fside, idx_t fcount);
 
 struct CaseExpressionState : public ExpressionState {
-	CaseExpressionState(const Expression &expr, ExpressionExecutorState &root) :
-	    ExpressionState(expr, root), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE) {
+	CaseExpressionState(const Expression &expr, ExpressionExecutorState &root)
+	    : ExpressionState(expr, root), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE) {
 	}
 
 	SelectionVector true_sel;
@@ -29,7 +29,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseE
 
 void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state_p, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	auto state = (CaseExpressionState *) state_p;
+	auto state = (CaseExpressionState *)state_p;
 
 	state->intermediate_chunk.Reset();
 	auto &res_true = state->intermediate_chunk.data[1];
