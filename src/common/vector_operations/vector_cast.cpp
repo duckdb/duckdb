@@ -509,6 +509,10 @@ static void TimestampCastSwitch(Vector &source, Vector &result, idx_t count) {
 static void TimestampNsCastSwitch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
+	case LogicalTypeId::VARCHAR:
+		// timestamp (ns) to varchar
+		VectorStringCast<timestamp_t, duckdb::CastFromTimestampNS>(source, result, count);
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		// timestamp (ns) to timestamp (us)
 		UnaryExecutor::Execute<timestamp_t, timestamp_t, duckdb::CastTimestampNsToUs>(source, result, count);
@@ -522,6 +526,10 @@ static void TimestampNsCastSwitch(Vector &source, Vector &result, idx_t count) {
 static void TimestampMsCastSwitch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
+	case LogicalTypeId::VARCHAR:
+		// timestamp (ms) to varchar
+		VectorStringCast<timestamp_t, duckdb::CastFromTimestampMS>(source, result, count);
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		// timestamp (ms) to timestamp (us)
 		UnaryExecutor::Execute<timestamp_t, timestamp_t, duckdb::CastTimestampMsToUs>(source, result, count);
@@ -535,6 +543,10 @@ static void TimestampMsCastSwitch(Vector &source, Vector &result, idx_t count) {
 static void TimestampSecCastSwitch(Vector &source, Vector &result, idx_t count) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
+	case LogicalTypeId::VARCHAR:
+		// timestamp (sec) to varchar
+		VectorStringCast<timestamp_t, duckdb::CastFromTimestampSec>(source, result, count);
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		// timestamp (s) to timestamp (us)
 		UnaryExecutor::Execute<timestamp_t, timestamp_t, duckdb::CastTimestampSecToUs>(source, result, count);

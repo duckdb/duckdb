@@ -98,6 +98,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			// do nothing, indexes aren't (yet) persisted to disk
 		} else if (entry->type == CatalogType::PREPARED_STATEMENT) {
 			// do nothing, prepared statements aren't persisted to disk
+		} else if (entry->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
+			// do nothing, functions aren't persisted to disk
 		} else {
 			throw NotImplementedException("Don't know how to drop this type!");
 		}
