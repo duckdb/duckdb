@@ -113,6 +113,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 			UpdateFilterStatistics(*condition.left, *condition.right, condition.comparison);
 			auto stats_left = PropagateExpression(condition.left);
 			auto stats_right = PropagateExpression(condition.right);
+			join.join_stats[0] = move(stats_left);
+			join.join_stats[1] = move(stats_right);
 			break;
 		}
 		default:
