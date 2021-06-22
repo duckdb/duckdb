@@ -844,8 +844,8 @@ jobs:
       run: |
         echo -e "[ODBC]\nTrace = yes\nTraceFile = /tmp/odbctrace\n\n[DuckDB Driver]\nDriver = "`pwd`"/build/debug/tools/odbc/libduckdb_odbc.so" > odbcinst.ini
         echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=:memory:\n" > odbc.ini
-        (cd psqlodbc && export ODBCSYSINI=.. && export PSQLODBC_TEST_DSN="DuckDB" && export ODBC_TRACE=/tmp/odbctrace)
-        (./build/debug/psql_odbc_test connect-test) || (cat $ODBC_TRACE && printf "" > $ODBC_TRACE)
+        cd psqlodbc && export ODBCSYSINI=.. && export PSQLODBC_TEST_DSN="DuckDB" && export ODBC_TRACE=/tmp/odbctrace
+        (./build/debug/psql_odbc_test connect-test && printf "" > $ODBC_TRACE) || (cat $ODBC_TRACE; exit 1)
         (./build/debug/psql_odbc_test select-test) || (cat $ODBC_TRACE; exit 1)
 
 
