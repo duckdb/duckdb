@@ -33,8 +33,15 @@ PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expr
 }
 
 static void UnnestNull(idx_t start, idx_t end, Vector &result) {
+	if (result.GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &children = StructVector::GetEntries(result);
+		for(auto &child : children) {
+			UnnestNull(start, end, *child);
+		}
+	}
+	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = start; i < end; i++) {
-		FlatVector::SetNull(result, i, true);
+		validity.SetInvalid(i);
 	}
 }
 
@@ -116,7 +123,7 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 	case PhysicalType::VARCHAR:
 		TemplatedUnnest<string_t>(vdata, start, end, result);
 		break;
-case PhysicalType::LIST: {
+	case PhysicalType::LIST: {
 		auto &target = ListVector::GetEntry(result);
 		target.Reference(ListVector::GetEntry(source));
 		ListVector::SetListSize(result, ListVector::GetListSize(source));
