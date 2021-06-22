@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/planner/expression.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 class BoundAggregateExpression;
@@ -93,6 +93,18 @@ public:
 	inline const vector<idx_t> &GetOffsets() const {
 		return offsets;
 	}
+	//! Returns whether all columns in this layout are constant size
+	inline bool AllConstant() const {
+		return all_constant;
+	}
+	//! Returns heap block index offset
+	inline idx_t GetHeapBlockIndexOffset() const {
+		return heap_block_index_offset;
+	}
+	//! Returns heap offset offset
+	inline idx_t GetHeapOffsetOffset() const {
+		return heap_offset_offset;
+	}
 
 private:
 	//! The types of the data columns
@@ -109,6 +121,12 @@ private:
 	idx_t row_width;
 	//! The offsets to the columns and aggregate data in each row
 	vector<idx_t> offsets;
+	//! Whether all columns in this layout are constant size
+	bool all_constant;
+	//! Offset to of the heap block index
+	idx_t heap_block_index_offset;
+	//! Offset to the offset in the heap for each row
+	idx_t heap_offset_offset;
 };
 
 } // namespace duckdb

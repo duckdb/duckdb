@@ -8,7 +8,6 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
@@ -125,36 +124,51 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 	auto &types = layout.GetTypes();
 
 	// Compute the entry size of the variable size columns
-	idx_t entry_sizes[STANDARD_VECTOR_SIZE];
-	std::fill_n(entry_sizes, count, 0);
-	bool constant_size = true;
-	for (idx_t col_no = 0; col_no < types.size(); col_no++) {
-		if (TypeIsConstantSize(types[col_no].InternalType())) {
-			continue;
-		} else {
-			constant_size = false;
-		}
-
-		auto &vec = columns.data[col_no];
-		auto &col = col_data[col_no];
-		switch (types[col_no].InternalType()) {
-		case PhysicalType::VARCHAR:
-			ComputeStringEntrySizes(col, entry_sizes, sel, count);
-			break;
-		case PhysicalType::LIST:
-		case PhysicalType::MAP:
-		case PhysicalType::STRUCT:
-			RowDataCollection::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
-			break;
-		default:
-			throw Exception("Unsupported type for RowOperations::Scatter");
-		}
-	}
-
-	// Build out the buffer space
 	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
-	if (!constant_size) {
-		string_heap.Build(count, data_locations, entry_sizes);
+	if (!layout.AllConstant()) {
+		idx_t entry_sizes[STANDARD_VECTOR_SIZE];
+		std::fill_n(entry_sizes, count, sizeof(idx_t));
+		for (idx_t col_no = 0; col_no < types.size(); col_no++) {
+			if (TypeIsConstantSize(types[col_no].InternalType())) {
+				continue;
+			}
+
+			auto &vec = columns.data[col_no];
+			auto &col = col_data[col_no];
+			switch (types[col_no].InternalType()) {
+			case PhysicalType::VARCHAR:
+				ComputeStringEntrySizes(col, entry_sizes, sel, count);
+				break;
+			case PhysicalType::LIST:
+			case PhysicalType::MAP:
+			case PhysicalType::STRUCT:
+				RowDataCollection::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
+				break;
+			default:
+				throw Exception("Unsupported type for RowOperations::Scatter");
+			}
+		}
+
+		// Build out the buffer space
+		auto append_entries = string_heap.Build(count, data_locations, entry_sizes);
+
+		// Serialize information that is needed for swizzling if the computation goes out-of-core
+		const idx_t heap_collection_index_offset = layout.GetHeapBlockIndexOffset();
+		const idx_t heap_block_index_offset = heap_collection_index_offset + sizeof(uint16_t);
+		const idx_t heap_offset_offset = layout.GetHeapOffsetOffset();
+		idx_t i = 0;
+		for (auto &append_entry : append_entries) {
+			for (idx_t j = 0; j < append_entry.count; j++, i++) {
+				// Block is identified by the combination of 2 uint16_t
+				Store<uint16_t>(string_heap.collection_index, ptrs[i] + heap_collection_index_offset);
+				Store<uint16_t>(append_entry.block_index, ptrs[i] + heap_block_index_offset);
+				// Offset of this row into the heap block (as uint32_t NOT idx_t)
+				Store<uint32_t>(append_entry.baseptr - data_locations[i], ptrs[i] + heap_offset_offset);
+				// Row size is stored in the heap in front of each row
+				Store<idx_t>(entry_sizes[i], data_locations[i]);
+				data_locations[i] += sizeof(idx_t);
+			}
+		}
 	}
 
 	for (idx_t col_no = 0; col_no < types.size(); col_no++) {
@@ -215,6 +229,15 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 			throw Exception("Unsupported type for RowOperations::Scatter");
 		}
 	}
+}
+
+void RowOperations::Scatter(DataChunk &columns, const RowLayout &layout, Vector &rows, RowDataCollection &string_heap,
+                            const SelectionVector &sel, idx_t count) {
+	auto col_data = unique_ptr<VectorData[]>(new VectorData[columns.ColumnCount()]);
+	for (idx_t col_idx = 0; col_idx < columns.ColumnCount(); col_idx++) {
+		columns.data[col_idx].Orrify(columns.size(), col_data[col_idx]);
+	}
+	Scatter(columns, col_data.get(), layout, rows, string_heap, sel, count);
 }
 
 } // namespace duckdb

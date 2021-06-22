@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "duckdb/common/types/row_layout.hpp"
+
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 
 namespace duckdb {
@@ -24,7 +25,7 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<Bou
 	return aggregates;
 }
 
-RowLayout::RowLayout() : flag_width(0), data_width(0), aggr_width(0), row_width(0) {
+RowLayout::RowLayout() : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true) {
 }
 
 void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p) {
@@ -34,6 +35,19 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p)
 	// Null mask at the front - 1 bit per value.
 	flag_width = ValidityBytes::ValidityMaskSize(types.size());
 	row_width = flag_width;
+
+	// Whether all columns are constant size.
+	for (const auto &type : types) {
+		all_constant = all_constant && TypeIsConstantSize(type.InternalType());
+	}
+
+	// Offset into heap.
+	if (!all_constant) {
+		heap_block_index_offset = row_width;
+		row_width += sizeof(uint32_t);
+		heap_offset_offset = row_width;
+		row_width += sizeof(uint32_t);
+	}
 
 	// Data columns. No alignment required.
 	for (const auto &type : types) {

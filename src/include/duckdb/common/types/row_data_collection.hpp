@@ -17,9 +17,8 @@
 namespace duckdb {
 
 struct RowDataBlock {
-	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size, idx_t added_capacity = 0)
+	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
-		capacity += added_capacity;
 		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
 	}
 	shared_ptr<BlockHandle> block;
@@ -35,10 +34,12 @@ struct RowDataBlock {
 };
 
 struct BlockAppendEntry {
-	BlockAppendEntry(data_ptr_t baseptr, idx_t count) : baseptr(baseptr), count(count) {
+	BlockAppendEntry(data_ptr_t baseptr, idx_t count, uint16_t block_index)
+	    : baseptr(baseptr), count(count), block_index(block_index) {
 	}
 	data_ptr_t baseptr;
 	idx_t count;
+	uint16_t block_index;
 };
 
 class RowDataCollection {
@@ -57,6 +58,10 @@ public:
 	idx_t entry_size;
 	//! The blocks holding the main data
 	vector<RowDataBlock> blocks;
+	//! The index of this collection
+	uint16_t collection_index;
+	//! Mapping from block index to the corresponding block handle
+	unordered_map<uint32_t, shared_ptr<BlockHandle>> block_map;
 
 public:
 	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
@@ -76,7 +81,7 @@ public:
 	                            data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset = 0);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining, idx_t entry_sizes[]);
-	void Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]);
+	vector<BlockAppendEntry> Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]);
 
 	void Merge(RowDataCollection &other);
 
@@ -109,6 +114,16 @@ private:
 
 	//! Whether the system is little endian
 	const bool is_little_endian;
+	//! The index of the next block
+	uint16_t current_block_index;
+
+	void AddBlockToMap(shared_ptr<BlockHandle> block) {
+		data_t block_index_data[sizeof(uint32_t)];
+		Store<uint16_t>(collection_index, block_index_data);
+		Store<uint16_t>(current_block_index, block_index_data + sizeof(uint16_t));
+		uint32_t &block_index = (uint32_t &)*block_index_data;
+		block_map[block_index] = move(block);
+	}
 };
 
 } // namespace duckdb

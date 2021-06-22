@@ -9,7 +9,7 @@ using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
 RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size)
     : buffer_manager(buffer_manager), count(0), block_capacity(block_capacity), entry_size(entry_size),
-      is_little_endian(IsLittleEndian()) {
+      is_little_endian(IsLittleEndian()), current_block_index(0) {
 	D_ASSERT(block_capacity * entry_size >= Storage::BLOCK_ALLOC_SIZE);
 }
 
@@ -644,12 +644,12 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 		append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
 		dataptr = handle.node->buffer + block.count * entry_size;
 	}
-	append_entries.emplace_back(dataptr, append_count);
+	append_entries.emplace_back(dataptr, append_count, current_block_index);
 	block.count += append_count;
 	return append_count;
 }
 
-void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]) {
+vector<BlockAppendEntry> RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]) {
 	vector<unique_ptr<BufferHandle>> handles;
 	vector<BlockAppendEntry> append_entries;
 
@@ -672,7 +672,9 @@ void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx
 		}
 		while (remaining > 0) {
 			// now for the remaining data, allocate new buffers to store the data and append there
+			current_block_index++;
 			RowDataBlock new_block(buffer_manager, block_capacity, entry_size);
+			AddBlockToMap(new_block.block);
 			auto handle = buffer_manager.Pin(new_block.block);
 
 			// offset the entry sizes array if we have added entries already
@@ -705,6 +707,7 @@ void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx
 			}
 		}
 	}
+	return append_entries;
 }
 
 void RowDataCollection::Merge(RowDataCollection &other) {

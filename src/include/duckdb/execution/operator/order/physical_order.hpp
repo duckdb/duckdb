@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
+#include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/physical_sink.hpp"
 #include "duckdb/parallel/pipeline.hpp"
@@ -18,7 +19,6 @@
 namespace duckdb {
 
 struct SortingState;
-struct PayloadState;
 struct SortedBlock;
 class OrderLocalState;
 class OrderGlobalState;
@@ -59,8 +59,7 @@ public:
 
 private:
 	//! Sort and re-order local state data when the local state has aggregated SORTING_BLOCK_SIZE data
-	void SortLocalState(ClientContext &context, OrderLocalState &lstate, const SortingState &sorting_state,
-	                    const PayloadState &payload_state) const;
+	void SortLocalState(ClientContext &context, OrderLocalState &lstate, OrderGlobalState &state) const;
 };
 
 } // namespace duckdb
