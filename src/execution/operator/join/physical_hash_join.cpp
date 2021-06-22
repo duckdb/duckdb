@@ -98,7 +98,6 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 			info.correlated_counts = make_unique<GroupedAggregateHashTable>(
 			    BufferManager::GetBufferManager(context), delim_types, payload_types, correlated_aggregates);
 			info.correlated_types = delim_types;
-			// FIXME: these can be initialized "empty" (without allocating empty vectors)
 			info.group_chunk.Initialize(delim_types);
 			info.result_chunk.Initialize(payload_types);
 		}

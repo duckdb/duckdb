@@ -172,7 +172,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		if (info.correlated_payload.data.empty()) {
 			vector<LogicalType> types;
 			types.push_back(keys.data[info.correlated_types.size()].GetType());
-			info.correlated_payload.Initialize(types);
+			info.correlated_payload.InitializeEmpty(types);
 		}
 		info.correlated_payload.SetCardinality(keys);
 		info.correlated_payload.data[0].Reference(keys.data[info.correlated_types.size()]);
@@ -230,7 +230,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// now set up the key_locations based on the append entries
 	Vector addresses(LogicalType::POINTER);
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
-	;
+
 	idx_t append_idx = 0;
 	for (auto &append_entry : append_entries) {
 		idx_t next = append_idx + append_entry.count;
