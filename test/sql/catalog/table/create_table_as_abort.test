@@ -1,0 +1,12 @@
+# name: test/sql/catalog/table/create_table_as_abort.test
+# description: Test correct early abort of CREATE TABLE AS query when table already exists (#1891)
+# group: [table]
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+CREATE TABLE IF NOT EXISTS integers AS SELECT i1.i FROM range(10000000000000000) i1(i);
+
+statement error
+CREATE TABLE integers AS SELECT i1.i FROM range(10000000000000000) i1(i);
