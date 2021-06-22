@@ -25,6 +25,8 @@ unique_ptr<Expression> RewriteCorrelatedExpressions::VisitReplace(BoundColumnRef
 	}
 	// correlated column reference
 	// replace with the entry referring to the duplicate eliminated scan
+	// if this assertion occurs it generally means the correlated expressions were not propagated correctly
+	// through different binders
 	D_ASSERT(expr.depth == 1);
 	auto entry = correlated_map.find(expr.binding);
 	D_ASSERT(entry != correlated_map.end());
@@ -79,7 +81,6 @@ void RewriteCorrelatedExpressions::RewriteCorrelatedRecursive::RewriteCorrelated
 		if (entry != correlated_map.end()) {
 			// we found the column in the correlated map!
 			// update the binding and reduce the depth by 1
-
 			bound_colref.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			bound_colref.depth--;
 		}

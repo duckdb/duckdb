@@ -1,0 +1,114 @@
+# name: test/sql/subquery/scalar/test_unnest_subquery.test
+# description: Test unnest in subqueries
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+# uncorrelated
+query I
+SELECT (SELECT UNNEST([1]))
+----
+1
+
+query I
+SELECT (SELECT UNNEST([NULL]))
+----
+NULL
+
+query I
+SELECT (SELECT UNNEST([]))
+----
+NULL
+
+# correlated
+query I
+SELECT (SELECT UNNEST(i)) FROM (VALUES ([1])) tbl(i);
+----
+1
+
+query I
+SELECT (SELECT UNNEST(i)) FROM (VALUES ([NULL])) tbl(i);
+----
+NULL
+
+query I
+SELECT (SELECT UNNEST(i)) FROM (VALUES ([])) tbl(i);
+----
+NULL
+
+# now with an aggregate
+query I
+SELECT (SELECT SUM(k) FROM (SELECT UNNEST(i)) tbl(k)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+6
+
+query I
+SELECT (SELECT SUM(k)+SUM(l) FROM (SELECT UNNEST(i), UNNEST(j) FROM (VALUES ([1, 2, 3])) tbl(j)) tbl(k, l)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+12
+
+# ANY
+query I
+SELECT 1=ANY(SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+true
+
+query I
+SELECT 4=ANY(SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+false
+
+query I
+SELECT NULL=ANY(SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+NULL
+
+query I
+SELECT 4=ANY(SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3, NULL])) tbl(i);
+----
+NULL
+
+# IN
+query I
+SELECT 1 IN (SELECT UNNEST(i)) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+true
+
+# INSIDE a subquery
+query I
+SELECT (SELECT 1=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+true
+
+query I
+SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+false
+
+query I
+SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3, NULL])) tbl(i);
+----
+NULL
+
+# INSIDE a subquery
+query I
+SELECT (SELECT 1=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+true
+
+query I
+SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+false
+
+query I
+SELECT (SELECT 4=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3, NULL])) tbl(i);
+----
+NULL
+
+# double correlated subqueries
+query I
+SELECT (SELECT 1+i[0]=ANY(SELECT UNNEST(i))) FROM (VALUES ([1, 2, 3])) tbl(i);
+----
+true

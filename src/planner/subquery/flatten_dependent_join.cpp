@@ -69,6 +69,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		return move(cross_product);
 	}
 	switch (plan->type) {
+	case LogicalOperatorType::LOGICAL_UNNEST:
 	case LogicalOperatorType::LOGICAL_FILTER: {
 		// filter
 		// first we flatten the dependent join in the child of the filter

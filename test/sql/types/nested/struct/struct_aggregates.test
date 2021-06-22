@@ -10,6 +10,12 @@ select min(struct_pack(i :=  i, j := i + 2)), max(struct_pack(i :=  i, j := i + 
 ----
 {'i': 0, 'j': 2}	{'i': 9, 'j': 11}	{'i': 0, 'j': 2}
 
+# Integer comparison, not string comparison
+query III
+select min(struct_pack(i := -i, j := -i - 2)), max(struct_pack(i := i + 2, j := i + 4)), first(struct_pack(i :=  i, j := i + 2)) from range(10) tbl(i);
+----
+{'i': -9, 'j': -11}	{'i': 11, 'j': 13}	{'i': 0, 'j': 2}
+
 query I
 select string_agg(struct_pack(i :=  i, j := i + 2), ',') from range(10) tbl(i);
 ----

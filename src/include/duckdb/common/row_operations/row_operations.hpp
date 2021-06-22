@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 

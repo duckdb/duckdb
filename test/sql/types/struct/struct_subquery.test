@@ -1,0 +1,16 @@
+# name: test/sql/types/struct/struct_subquery.test
+# description: Test using structs in nested subqueries
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT (SELECT tbl.a['i'] + tbl.b['j'] FROM (VALUES ({'i': 1, 'j': 2})) tbl(b)) FROM (VALUES ({'i': 1, 'j': 2})) tbl(a);
+----
+3
+
+query I
+SELECT (SELECT tbl2.a['i'] + tbl.b['j'] FROM (VALUES ({'i': 1, 'j': 2})) tbl(b)) FROM (VALUES ({'i': 1, 'j': 2})) tbl2(a);
+----
+3

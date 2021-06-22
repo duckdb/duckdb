@@ -46,10 +46,6 @@ bool ParsedExpression::HasSubquery() const {
 }
 
 bool ParsedExpression::Equals(const BaseExpression *other) const {
-	if (other->expression_class == ExpressionClass::BOUND_EXPRESSION) {
-		auto bound_expr = (BoundExpression *)other;
-		other = bound_expr->parsed_expr.get();
-	}
 	if (!BaseExpression::Equals(other)) {
 		return false;
 	}

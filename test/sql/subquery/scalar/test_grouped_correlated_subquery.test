@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE tbl_ProductSales (ColID int, Product_Category  varchar(64), Product_Name  varchar(64), TotalSales int); 
+CREATE TABLE tbl_ProductSales (ColID int, Product_Category  varchar(64), Product_Name  varchar(64), TotalSales int);
 
 statement ok
 CREATE TABLE another_T (col1 INT, col2 INT, col3 INT, col4 INT, col5 INT, col6 INT, col7 INT, col8 INT);
@@ -57,13 +57,11 @@ SELECT (col1 + 1) AS k, k IN (SELECT ColID + k FROM tbl_ProductSales) FROM anoth
 112	0
 1112	0
 
-query T
+# controversial: this fails in postgres but succeeds in sqlite
+# col1 + 1 is a grouping column so could theoretically be used in the subquery
+# but as it is not a column reference directly we fail to bind it here
+statement error
 SELECT (col1 + 1) IN (SELECT ColID + (col1 + 1) FROM tbl_ProductSales) FROM another_T GROUP BY (col1 + 1);
-----
-0
-0
-0
-0
 
 # this should fail, col1 + 42 is not a grouping column
 statement error
