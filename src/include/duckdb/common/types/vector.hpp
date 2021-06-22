@@ -44,6 +44,7 @@ class Vector {
 	friend struct SequenceVector;
 
 	friend class DataChunk;
+	friend class VectorCacheBuffer;
 
 public:
 	//! Create a vector that references the other vector

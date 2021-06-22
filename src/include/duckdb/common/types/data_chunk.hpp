@@ -63,7 +63,7 @@ public:
 
 	//! Set the DataChunk to reference another data chunk
 	DUCKDB_API void Reference(DataChunk &chunk);
-	//! Set the DataChunk to own the data of data chunk
+	//! Set the DataChunk to own the data of data chunk, destroying the other chunk in the process
 	DUCKDB_API void Move(DataChunk &chunk);
 
 	//! Initializes the DataChunk with the specified types to an empty DataChunk

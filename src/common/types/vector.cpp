@@ -37,7 +37,7 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr) :
 }
 
 Vector::Vector(const VectorCache &cache) :
-	type(cache.type) {
+	type(cache.GetType()) {
 	ResetFromCache(cache);
 }
 
@@ -109,43 +109,7 @@ void Vector::Reinterpret(Vector &other) {
 }
 
 void Vector::ResetFromCache(const VectorCache &cache) {
-	D_ASSERT(cache.type == GetType());
-	auto internal_type = type.InternalType();
-	vector_type = VectorType::FLAT_VECTOR;
-	buffer.reset();
-	validity.Reset();
-	switch(internal_type) {
-	case PhysicalType::LIST: {
-		data = cache.owned_data.get();
-		// reinitialize the VectorListBuffer
-		AssignSharedPointer(auxiliary, cache.auxiliary);
-		// propagate through child
-		auto &list_buffer = (VectorListBuffer &) *auxiliary;
-		list_buffer.capacity = STANDARD_VECTOR_SIZE;
-		list_buffer.size = 0;
-
-		auto &list_child = list_buffer.GetChild();
-		list_child.ResetFromCache(*cache.child_caches[0]);
-		break;
-	}
-	case PhysicalType::STRUCT: {
-		// struct does not have data
-		data = nullptr;
-		// reinitialize the VectorStructBuffer
-		AssignSharedPointer(auxiliary, cache.auxiliary);
-		// propagate through children
-		auto &children = ((VectorStructBuffer &) *auxiliary).GetChildren();
-		for(idx_t i = 0; i < children.size(); i++) {
-			children[i]->ResetFromCache(*cache.child_caches[i]);
-		}
-		break;
-	}
-	default:
-		// regular type: no aux data and reset data to cached data
-		data = cache.owned_data.get();
-		auxiliary.reset();
-		break;
-	}
+	cache.ResetFromCache(*this);
 }
 
 void Vector::Slice(Vector &other, idx_t offset) {

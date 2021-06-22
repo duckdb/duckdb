@@ -21,14 +21,12 @@ public:
 	// Instantiate a vector cache with the given type
 	VectorCache(const LogicalType &type);
 
-	//! The type of the vector cache
-	LogicalType type;
-	//! Owned data
-	unique_ptr<data_t[]> owned_data;
-	//! Child caches (if any). Used for nested types.
-	vector<unique_ptr<VectorCache>> child_caches;
-	//! Aux data for the vector (if any)
-	buffer_ptr<VectorBuffer> auxiliary;
+	buffer_ptr<VectorBuffer> buffer;
+
+public:
+	void ResetFromCache(Vector &result) const;
+
+	const LogicalType &GetType() const;
 };
 
 } // namespace duckdb
