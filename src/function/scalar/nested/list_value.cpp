@@ -18,8 +18,6 @@ static void ListValueFunction(DataChunk &args, ExpressionState &state, Vector &r
 		}
 	}
 
-	ListVector::SetListSize(result, 0);
-
 	auto result_data = FlatVector::GetData<list_entry_t>(result);
 	for (idx_t i = 0; i < args.size(); i++) {
 		result_data[i].offset = ListVector::GetListSize(result);
