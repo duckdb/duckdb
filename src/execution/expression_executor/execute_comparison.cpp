@@ -18,8 +18,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCompa
 void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	// resolve the children
-	Vector left(state->intermediate_chunk.data[0]);
-	Vector right(state->intermediate_chunk.data[1]);
+	state->intermediate_chunk.Reset();
+	auto &left = state->intermediate_chunk.data[0];
+	auto &right = state->intermediate_chunk.data[1];
 
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
@@ -500,8 +501,9 @@ idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, Expressi
                                  const SelectionVector *sel, idx_t count, SelectionVector *true_sel,
                                  SelectionVector *false_sel) {
 	// resolve the children
-	Vector left(state->intermediate_chunk.data[0]);
-	Vector right(state->intermediate_chunk.data[1]);
+	state->intermediate_chunk.Reset();
+	auto &left = state->intermediate_chunk.data[0];
+	auto &right = state->intermediate_chunk.data[1];
 
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);

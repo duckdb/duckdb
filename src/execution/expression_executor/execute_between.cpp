@@ -92,9 +92,11 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundBetwe
 void ExpressionExecutor::Execute(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	// resolve the children
-	Vector input(state->intermediate_chunk.data[0]);
-	Vector lower(state->intermediate_chunk.data[1]);
-	Vector upper(state->intermediate_chunk.data[2]);
+	state->intermediate_chunk.Reset();
+
+	auto &input = state->intermediate_chunk.data[0];
+	auto &lower = state->intermediate_chunk.data[1];
+	auto &upper = state->intermediate_chunk.data[2];
 
 	Execute(*expr.input, state->child_states[0].get(), sel, count, input);
 	Execute(*expr.lower, state->child_states[1].get(), sel, count, lower);

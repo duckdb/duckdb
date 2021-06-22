@@ -8,9 +8,18 @@ namespace duckdb {
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
           SelectionVector &fside, idx_t fcount);
 
+struct CaseExpressionState : public ExpressionState {
+	CaseExpressionState(const Expression &expr, ExpressionExecutorState &root) :
+	    ExpressionState(expr, root), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE) {
+	}
+
+	SelectionVector true_sel;
+	SelectionVector false_sel;
+};
+
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<ExpressionState>(expr, root);
+	auto result = make_unique<CaseExpressionState>(expr, root);
 	result->AddChild(expr.check.get());
 	result->AddChild(expr.result_if_true.get());
 	result->AddChild(expr.result_if_false.get());
@@ -18,17 +27,21 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseE
 	return result;
 }
 
-void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
+void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state_p, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	Vector res_true(state->intermediate_chunk.data[1]);
-	Vector res_false(state->intermediate_chunk.data[2]);
+	auto state = (CaseExpressionState *) state_p;
+
+	state->intermediate_chunk.Reset();
+	auto &res_true = state->intermediate_chunk.data[1];
+	auto &res_false = state->intermediate_chunk.data[2];
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();
 	auto res_false_state = state->child_states[2].get();
 
 	// first execute the check expression
-	SelectionVector true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE);
+	auto &true_sel = state->true_sel;
+	auto &false_sel = state->false_sel;
 	idx_t tcount = Select(*expr.check, check_state, sel, count, &true_sel, &false_sel);
 	idx_t fcount = count - tcount;
 	if (fcount == 0) {

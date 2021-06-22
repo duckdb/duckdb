@@ -28,8 +28,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundConju
 void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, ExpressionState *state,
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	// execute the children
+	state->intermediate_chunk.Reset();
 	for (idx_t i = 0; i < expr.children.size(); i++) {
-		Vector current_result(state->intermediate_chunk.data[i]);
+		auto &current_result = state->intermediate_chunk.data[i];
 		Execute(*expr.children[i], state->child_states[i].get(), sel, count, current_result);
 		if (i == 0) {
 			// move the result
