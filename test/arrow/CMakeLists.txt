@@ -141,12 +141,12 @@ add_dependencies(
 
 target_link_libraries(
   test_arrow
-  ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libparquet.a
-  ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libarrow_bundled_dependencies.a
-  ${CMAKE_BINARY_DIR}/third_party/arrow/install/lib/libarrow.a
-  ${CMAKE_BINARY_DIR}/third_party/zlib/install/lib/libz.a
-  ${CMAKE_BINARY_DIR}/third_party/utf8/install/lib/libutf8proc.a
-  ${CMAKE_BINARY_DIR}/third_party/re2/install/lib/libre2.a
-  ${CMAKE_BINARY_DIR}/third_party/snappy/install/lib/libsnappy.a
-  ${CMAKE_BINARY_DIR}/third_party/zstd/install/lib/libzstd.a
+  ${install_arrow}/lib/libparquet.a
+  ${install_arrow}/lib/libarrow_bundled_dependencies.a
+  ${install_arrow}/lib/libarrow.a
+  ${install_zlib}/lib/libz.a
+  ${install_utf8}/lib/libutf8proc.a
+  ${install_re2}/lib/libre2.a
+  ${install_snappy}/lib/libsnappy.a
+  ${install_zstd}/lib/libzstd.a
   Threads::Threads)

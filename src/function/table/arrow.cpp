@@ -217,7 +217,7 @@ void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanState &scan
 
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                         idx_t &list_col_idx, idx_t row_start = 0);
+                         idx_t &list_col_idx, idx_t nested_offset = 0);
 
 void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                        std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
@@ -284,12 +284,26 @@ void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &sca
 }
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                         idx_t &list_col_idx, idx_t row_start) {
+                         idx_t &list_col_idx, idx_t nested_offset) {
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
 		break;
-	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::BOOLEAN: {
+		//! Arrow bit-packs boolean values
+		//! Lets first figure out where we are in the source array
+		auto src_ptr = (uint8_t *)array.buffers[1] + (scan_state.chunk_offset + array.offset) / 8;
+		auto tgt_ptr = (uint8_t *)FlatVector::GetData(vector);
+		int src_pos = 0;
+		for (idx_t row = 0; row < size; row++) {
+			int cur_bit = row % 8;
+			tgt_ptr[row] = src_ptr[src_pos] & (1 << cur_bit);
+			if (cur_bit == 7) {
+				src_pos++;
+			}
+		}
+		break;
+	}
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
@@ -305,13 +319,24 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_NS: {
+		auto data_ptr = (data_ptr_t)array.buffers[1] +
+		                GetTypeIdSize(vector.GetType().InternalType()) * (scan_state.chunk_offset + array.offset);
+		if (nested_offset) {
+			data_ptr = (data_ptr_t)array.buffers[1] +
+			           GetTypeIdSize(vector.GetType().InternalType()) * (array.offset + nested_offset);
+		}
+	}
+
 		FlatVector::SetData(vector, (data_ptr_t)array.buffers[1] + GetTypeIdSize(vector.GetType().InternalType()) *
 		                                                               (scan_state.chunk_offset + array.offset));
 		break;
 
 	case LogicalTypeId::VARCHAR: {
 		auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
+		if (nested_offset) {
+			offsets = (uint32_t *)array.buffers[1] + array.offset + nested_offset;
+		}
 		auto cdata = (char *)array.buffers[2];
 
 		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
@@ -333,6 +358,9 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::TIME: {
 		// convert time from milliseconds to microseconds
 		auto src_ptr = (uint32_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+		if (nested_offset) {
+			src_ptr = (uint32_t *)array.buffers[1] + nested_offset + array.offset;
+		}
 		auto tgt_ptr = (dtime_t *)FlatVector::GetData(vector);
 		for (idx_t row = 0; row < size; row++) {
 			tgt_ptr[row] = dtime_t(int64_t(src_ptr[row]) * 1000);
@@ -345,6 +373,9 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		switch (vector.GetType().InternalType()) {
 		case PhysicalType::INT16: {
 			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+			if (nested_offset) {
+				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
+			}
 			auto tgt_ptr = (int16_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
@@ -356,6 +387,9 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		}
 		case PhysicalType::INT32: {
 			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+			if (nested_offset) {
+				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
+			}
 			auto tgt_ptr = (int32_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
@@ -367,6 +401,9 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		}
 		case PhysicalType::INT64: {
 			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+			if (nested_offset) {
+				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
+			}
 			auto tgt_ptr = (int64_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {

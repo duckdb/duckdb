@@ -28,7 +28,7 @@ void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 }
 
 void DataChunk::Initialize(const vector<LogicalType> &types) {
-	D_ASSERT(types.size() > 0);
+	D_ASSERT(!types.empty());
 	InitializeEmpty(types);
 	for (idx_t i = 0; i < types.size(); i++) {
 		data[i].Initialize();
@@ -337,6 +337,7 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 	child.n_children = children.size();
 	child_holder.children.resize(child.n_children);
 	auto list_size = ListVector::GetListSize(*children[0]);
+	child.length = list_size;
 	for (auto &struct_child : child_holder.children) {
 		InitializeChild(struct_child, list_size);
 		child_holder.children_ptrs.push_back(&struct_child.array);
