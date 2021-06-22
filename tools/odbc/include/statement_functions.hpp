@@ -6,13 +6,13 @@ namespace duckdb {
 
 static SQLRETURN PrepareStmt(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength) {
 	return WithStatement(StatementHandle, [&](OdbcHandleStmt *stmt) {
-		if(stmt->stmt) {
+		if (stmt->stmt) {
 			stmt->stmt.reset();
 		}
-		if(stmt->res) {
+		if (stmt->res) {
 			stmt->res.reset();
 		}
-		if(stmt->chunk) {
+		if (stmt->chunk) {
 			stmt->chunk.reset();
 		}
 		stmt->params.resize(0);
@@ -31,10 +31,10 @@ static SQLRETURN PrepareStmt(SQLHSTMT StatementHandle, SQLCHAR *StatementText, S
 
 static SQLRETURN ExecuteStmt(SQLHSTMT StatementHandle) {
 	return WithStatement(StatementHandle, [&](OdbcHandleStmt *stmt) {
-		if(stmt->res) {
+		if (stmt->res) {
 			stmt->res.reset();
 		}
-		if(stmt->chunk) {
+		if (stmt->chunk) {
 			stmt->chunk.reset();
 		}
 
@@ -52,4 +52,4 @@ static SQLRETURN ExecuteStmt(SQLHSTMT StatementHandle) {
 	});
 }
 
-} // end namespace
+} // namespace duckdb
