@@ -24,7 +24,7 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseE
 	result->AddChild(expr.result_if_true.get());
 	result->AddChild(expr.result_if_false.get());
 	result->Finalize();
-	return result;
+	return move(result);
 }
 
 void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state_p, const SelectionVector *sel,
