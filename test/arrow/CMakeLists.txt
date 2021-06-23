@@ -1,20 +1,22 @@
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
-
 include(ExternalProject)
 
 ExternalProject_Add(
   arrow_ep
   GIT_REPOSITORY "https://github.com/apache/arrow"
-  GIT_TAG f959141ece4d660bce5f7fa545befc0116a7db79
+  GIT_TAG 81ff679c47754692224f655dab32cc0936bb5f55
   PREFIX "${CMAKE_BINARY_DIR}/third_party/arrow"
   INSTALL_DIR "${CMAKE_BINARY_DIR}/third_party/arrow/install"
   BUILD_BYPRODUCTS
     <INSTALL_DIR>/lib/libarrow.a
     <INSTALL_DIR>/lib/libarrow_bundled_dependencies.a
     <INSTALL_DIR>/lib/libparquet.a
+    ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/thrift_ep-install/lib/libthriftd.a
+    ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/utf8proc_ep-install/lib/libutf8proc.a
+    ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/zstd_ep-install/lib/libzstd.a
+    ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/snappy_ep/src/snappy_ep-install/lib/libsnappy.a
   CONFIGURE_COMMAND
-    ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+    ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Debug
+    -DBUILD_WARNING_LEVEL=PRODUCTION -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
     -DCMAKE_CXX_COMPILER_LAUNCHER=${CMAKE_CXX_COMPILER_LAUNCHER}
     -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
     -DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD}
@@ -33,11 +35,20 @@ ExternalProject_Add(
     -DARROW_WITH_PROTOBUF=OFF -DARROW_WITH_RAPIDJSON=OFF -DARROW_WITH_SNAPPY=ON
     -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=ON -DBOOST_SOURCE=AUTO
     <SOURCE_DIR>/cpp
+    CMAKE_ARGS          -Wno-dev
   UPDATE_COMMAND "")
 
 ExternalProject_Get_Property(arrow_ep install_dir)
 
 set(install_arrow ${install_dir})
+
+set(install_thrift ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/thrift_ep-install/lib/libthriftd.a)
+
+set(install_utf8_proc ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/utf8proc_ep-install/lib/libutf8proc.a)
+
+set(install_zstd ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/zstd_ep-install/lib/libzstd.a)
+
+set(install_snappy ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/snappy_ep/src/snappy_ep-install/lib/libsnappy.a)
 
 ExternalProject_Add(
   RE2
@@ -57,24 +68,6 @@ ExternalProject_Get_Property(RE2 install_dir)
 set(install_re2 ${install_dir})
 
 ExternalProject_Add(
-  UTF8
-  GIT_REPOSITORY "https://github.com/pdet/utf8proc.git"
-  DOWNLOAD_DIR "{CMAKE_BINARY_DIR}/third_party/utf8"
-  PREFIX "${CMAKE_BINARY_DIR}/third_party/utf8"
-  BINARY_DIR "${CMAKE_BINARY_DIR}/third_party/utf8/src/UTF8"
-  SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/utf8/src/UTF8"
-  INSTALL_DIR "${CMAKE_BINARY_DIR}/third_party/utf8/install"
-  BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libutf8proc.a
-  CONFIGURE_COMMAND
-    ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/third_party/utf8/install
-  UPDATE_COMMAND "")
-
-ExternalProject_Get_Property(UTF8 install_dir)
-
-set(install_utf8 ${install_dir})
-
-ExternalProject_Add(
   ZLIB
   GIT_REPOSITORY "https://github.com/madler/zlib"
   DOWNLOAD_DIR "{CMAKE_BINARY_DIR}/third_party/zlib"
@@ -92,43 +85,6 @@ ExternalProject_Get_Property(ZLIB install_dir)
 
 set(install_zlib ${install_dir})
 
-ExternalProject_Add(
-  SNAPPY
-  GIT_REPOSITORY "https://github.com/google/snappy"
-  DOWNLOAD_DIR "{CMAKE_BINARY_DIR}/third_party/snappy"
-  PREFIX "${CMAKE_BINARY_DIR}/third_party/snappy"
-  BINARY_DIR "${CMAKE_BINARY_DIR}/third_party/snappy/src/SNAPPY"
-  SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/snappy/src/SNAPPY"
-  INSTALL_DIR "${CMAKE_BINARY_DIR}/third_party/snappy/install"
-  BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libsnappy.a
-  CONFIGURE_COMMAND
-    ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/third_party/snappy/install
-  UPDATE_COMMAND "")
-
-ExternalProject_Get_Property(SNAPPY install_dir)
-
-set(install_snappy ${install_dir})
-
-ExternalProject_Add(
-  ZSTD
-  GIT_REPOSITORY "https://github.com/facebook/zstd"
-  GIT_TAG a488ba114ec17ea1054b9057c26a046fc122b3b6
-  DOWNLOAD_DIR "{CMAKE_BINARY_DIR}/third_party/zstd"
-  PREFIX "${CMAKE_BINARY_DIR}/third_party/zstd"
-  BINARY_DIR "${CMAKE_BINARY_DIR}/third_party/zstd/src/ZSTD/build/cmake"
-  SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/zstd/src/ZSTD"
-  INSTALL_DIR "${CMAKE_BINARY_DIR}/third_party/zstd/install"
-  BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libzstd.a
-  CONFIGURE_COMMAND
-    ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/third_party/zstd/install
-  UPDATE_COMMAND "")
-
-ExternalProject_Get_Property(ZSTD install_dir)
-
-set(install_zstd ${install_dir})
-
 include_directories(${install_arrow}/include)
 include_directories(../../third_party/catch)
 
@@ -143,10 +99,7 @@ add_dependencies(
   test_arrow
   RE2
   arrow_ep
-  UTF8
-  ZLIB
-  SNAPPY
-  ZSTD)
+  ZLIB)
 
 target_link_libraries(
   test_arrow
@@ -154,9 +107,9 @@ target_link_libraries(
   ${install_arrow}/lib/libparquet.a
   ${install_arrow}/lib/libarrow.a
   ${install_zlib}/lib/libz.a
-  ${install_utf8}/lib/libutf8proc.a
   ${install_re2}/lib/libre2.a
-  ${install_snappy}/lib/libsnappy.a
-  ${install_zstd}/lib/libzstd.a
-  # /opt/homebrew/lib/libthrift.a
+  ${install_snappy}
+  ${install_zstd}
+  ${install_thrift}
+  ${install_utf8_proc}
   Threads::Threads)

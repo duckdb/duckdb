@@ -14,6 +14,7 @@ add_subdirectory(ossfuzz)
 
 if(BUILD_ARROW_ABI_TEST)
   add_subdirectory(arrow)
+  target_compile_options(test_arrow PRIVATE "-w")
 endif()
 
 if(NOT WIN32 AND NOT SUN)
