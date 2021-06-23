@@ -12,6 +12,7 @@
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
