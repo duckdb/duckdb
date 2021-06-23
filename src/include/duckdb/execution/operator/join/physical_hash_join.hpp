@@ -29,7 +29,8 @@ public:
 	DataChunk join_keys;
 	ExpressionExecutor probe_executor;
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
-	SelectionVector sel_vec;
+	SelectionVector build_sel_vec;
+	SelectionVector probe_sel_vec;
 	SelectionVector seq_sel_vec;
 };
 //! PhysicalHashJoin represents a hash loop join between two tables

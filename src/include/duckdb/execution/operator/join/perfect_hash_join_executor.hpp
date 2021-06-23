@@ -40,9 +40,11 @@ public:
 	                           JoinHashTable *ht_ptr, PhysicalOperator *operator_child);
 	bool CheckForPerfectHashJoin(JoinHashTable *ht_ptr);
 	void BuildPerfectHashTable(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type);
-	void FillSelectionVectorSwitchProbe(Vector &source, SelectionVector &sel_vec, idx_t count);
+	void FillSelectionVectorSwitchProbe(Vector &source, SelectionVector &build_sel_vec, SelectionVector &probe_sel_vec,
+	                                    idx_t count);
 	template <typename T>
-	void TemplatedFillSelectionVectorProbe(Vector &source, SelectionVector &sel_vec, idx_t count);
+	void TemplatedFillSelectionVectorProbe(Vector &source, SelectionVector &build_sel_vec,
+	                                       SelectionVector &probe_sel_vec, idx_t count);
 	void FillSelectionVectorSwitchBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
 	                                    idx_t count);
 	template <typename T>
@@ -52,10 +54,11 @@ public:
 	bool has_duplicates {false};
 
 private:
-	PerfectHashTable perfect_hash_table;
-	PerfectHashJoinStats pjoin_stats;
-	unique_ptr<bool[]> bitmap_build_idx {nullptr};
-	size_t unique_keys {0};
+	PerfectHashTable perfect_hash_table;           // columnar perfect hash table
+	PerfectHashJoinStats pjoin_stats;              // build and probe statistics
+	unique_ptr<bool[]> bitmap_build_idx {nullptr}; // stores the occurences of each value in the build side
+	size_t unique_keys {0};                        // stores the number of unique keys in the build side
+	size_t probe_sel_count {0};                    // keeps track of how many probe keys have a match
 };
 
 } // namespace duckdb

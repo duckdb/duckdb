@@ -48,7 +48,7 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	// early out
 	if (has_duplicates)
 		return;
-	if (unique_keys == pjoin_stats.build_range) {
+	if (unique_keys == pjoin_stats.build_range + 1) {
 		pjoin_stats.is_build_dense = true;
 	}
 	keys_count = unique_keys; // do not condider keys out of the range
@@ -59,40 +59,6 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 		RowOperations::Gather(hash_table->layout, tuples_addresses, sel_tuples, vector, sel_build, keys_count,
 		                      i + hash_table->condition_types.size());
 	}
-}
-
-bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
-                                                    PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr,
-                                                    PhysicalOperator *operator_child) {
-	// fetch the chunk to join
-	operator_child->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
-	if (physical_state->child_chunk.size() == 0) {
-		// no more keys to probe
-		return true;
-	}
-	// fetch the join keys from the chunk
-	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
-	// select the keys that are in the min-max range
-	auto &keys_vec = physical_state->join_keys.data[0];
-	auto keys_count = physical_state->join_keys.size();
-	// todo: add check for fast pass when probe is part of build domain
-	FillSelectionVectorSwitchProbe(keys_vec, physical_state->sel_vec, keys_count);
-	// If probe is part of the range and build is dense, just reference probe
-	if (pjoin_stats.is_probe_in_range && pjoin_stats.is_build_dense) {
-		result.Reference(physical_state->child_chunk);
-	} else {
-		// otherwise, filter it out the values that do not match
-		result.Slice(physical_state->child_chunk, physical_state->sel_vec, unique_keys, 0);
-	}
-	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
-	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
-		auto &result_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
-		D_ASSERT(result_vector.GetType() == ht_ptr->build_types[i]);
-		auto &build_vec = perfect_hash_table[i];
-		result_vector.Reference(build_vec); //
-		result_vector.Slice(physical_state->sel_vec, keys_count);
-	}
-	return true;
 }
 
 void PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, SelectionVector &sel_vec,
@@ -138,8 +104,9 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 	auto data = reinterpret_cast<T *>(vector_data.data);
 	// generate the selection vector
 	for (idx_t i = 0, sel_idx = 0; i != count; ++i) {
+		auto data_idx = vector_data.sel->get_index(i);
+		auto input_value = data[data_idx];
 		// add index to selection vector if value in the range
-		auto input_value = data[i];
 		if (min_value <= input_value && input_value <= max_value) {
 			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
 			sel_vec.set_index(sel_idx++, idx);
@@ -155,31 +122,66 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 	}
 }
 
-void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, SelectionVector &sel_vec, idx_t count) {
+bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
+                                                    PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr,
+                                                    PhysicalOperator *operator_child) {
+	// fetch the chunk to join
+	operator_child->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
+	if (physical_state->child_chunk.size() == 0) {
+		// no more keys to probe
+		return true;
+	}
+	// fetch the join keys from the chunk
+	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
+	// select the keys that are in the min-max range
+	auto &keys_vec = physical_state->join_keys.data[0];
+	auto keys_count = physical_state->join_keys.size();
+	// todo: add check for fast pass when probe is part of build domain
+	FillSelectionVectorSwitchProbe(keys_vec, physical_state->build_sel_vec, physical_state->probe_sel_vec, keys_count);
+	// If build is dense and probe is build's domain, just reference probe
+	if (pjoin_stats.is_build_dense && keys_count == probe_sel_count) {
+		result.Reference(physical_state->child_chunk);
+	} else {
+		// otherwise, filter it out the values that do not match
+		result.Slice(physical_state->child_chunk, physical_state->probe_sel_vec, unique_keys, 0);
+	}
+	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
+	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
+		auto &result_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
+		D_ASSERT(result_vector.GetType() == ht_ptr->build_types[i]);
+		auto &build_vec = perfect_hash_table[i];
+		result_vector.Reference(build_vec); //
+		result_vector.Slice(physical_state->build_sel_vec, keys_count);
+	}
+	return true;
+}
+
+void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, SelectionVector &build_sel_vec,
+                                                             SelectionVector &probe_sel_vec, idx_t count) {
 	switch (source.GetType().id()) {
 	case LogicalTypeId::TINYINT:
-		TemplatedFillSelectionVectorProbe<int8_t>(source, sel_vec, count);
+		TemplatedFillSelectionVectorProbe<int8_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
 	case LogicalTypeId::SMALLINT:
-		TemplatedFillSelectionVectorProbe<int16_t>(source, sel_vec, count);
+		TemplatedFillSelectionVectorProbe<int16_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
 	case LogicalTypeId::INTEGER:
-		TemplatedFillSelectionVectorProbe<int32_t>(source, sel_vec, count);
+		TemplatedFillSelectionVectorProbe<int32_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
 	case LogicalTypeId::BIGINT:
-		TemplatedFillSelectionVectorProbe<int64_t>(source, sel_vec, count);
+		TemplatedFillSelectionVectorProbe<int64_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
 	case LogicalTypeId::UTINYINT:
-		TemplatedFillSelectionVectorProbe<uint8_t>(source, sel_vec, count);
+		TemplatedFillSelectionVectorProbe<uint8_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
 	case LogicalTypeId::USMALLINT:
-		TemplatedFillSelectionVectorProbe<uint16_t>(source, sel_vec, count);
+		TemplatedFillSelectionVectorProbe<uint16_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
 	case LogicalTypeId::UINTEGER:
-		TemplatedFillSelectionVectorProbe<uint32_t>(source, sel_vec, count);
+		TemplatedFillSelectionVectorProbe<uint32_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
 	case LogicalTypeId::UBIGINT:
-		TemplatedFillSelectionVectorProbe<uint64_t>(source, sel_vec, count);
+		TemplatedFillSelectionVectorProbe<uint64_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
 	default:
 		throw NotImplementedException("Type not supported");
@@ -188,7 +190,8 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, Sel
 }
 
 template <typename T>
-void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, SelectionVector &sel_vec, idx_t count) {
+void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, SelectionVector &build_sel_vec,
+                                                                SelectionVector &probe_sel_vec, idx_t count) {
 	auto min_value = pjoin_stats.build_min.GetValue<T>();
 	auto max_value = pjoin_stats.build_max.GetValue<T>();
 	VectorData vector_data;
@@ -196,11 +199,15 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 	auto data = reinterpret_cast<T *>(vector_data.data);
 	// generate the selection vector
 	for (idx_t i = 0, sel_idx = 0; i != count; ++i) {
+		// retrieve value from vector
+		auto data_idx = vector_data.sel->get_index(i);
+		auto input_value = data[data_idx];
 		// add index to selection vector if value in the range
-		auto input_value = data[i];
 		if (min_value <= input_value && input_value <= max_value) {
 			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-			sel_vec.set_index(sel_idx++, idx);
+			build_sel_vec.set_index(sel_idx, idx);
+			probe_sel_vec.set_index(sel_idx++, i);
+			probe_sel_count++;
 		}
 	}
 }

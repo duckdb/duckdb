@@ -145,9 +145,8 @@ bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, uniq
 		pjoin_executor->BuildPerfectHashTable(global_state->hash_table.get(), global_state->ht_scan_state,
 		                                      global_state->key_type);
 	}
-	// In case of null or duplicates, use regular hash join
+	// In case of duplicates or large build, use regular hash join
 	if (!use_perfect_hash || pjoin_executor->has_duplicates) {
-		pjoin_executor.release();
 		global_state->hash_table->Finalize();
 	}
 
@@ -166,7 +165,8 @@ unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 		state->probe_executor.AddExpression(*cond.left);
 	}
 	// Used in the perfect hash join
-	state->sel_vec.Initialize(STANDARD_VECTOR_SIZE);
+	state->build_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
+	state->probe_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
 	state->seq_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
 	return move(state);
 }
