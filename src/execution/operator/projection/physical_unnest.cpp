@@ -33,8 +33,15 @@ PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expr
 }
 
 static void UnnestNull(idx_t start, idx_t end, Vector &result) {
+	if (result.GetType().InternalType() == PhysicalType::STRUCT) {
+		auto &children = StructVector::GetEntries(result);
+		for (auto &child : children) {
+			UnnestNull(start, end, *child);
+		}
+	}
+	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = start; i < end; i++) {
-		FlatVector::SetNull(result, i, true);
+		validity.SetInvalid(i);
 	}
 	if (result.GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &struct_children = StructVector::GetEntries(result);
@@ -123,12 +130,9 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 		TemplatedUnnest<string_t>(vdata, start, end, result);
 		break;
 	case PhysicalType::LIST: {
-		if (ListVector::HasEntry(source)) {
-			auto list_child = make_unique<Vector>();
-			list_child->Reference(ListVector::GetEntry(source));
-			ListVector::SetEntry(result, move(list_child));
-			ListVector::SetListSize(result, ListVector::GetListSize(source));
-		}
+		auto &target = ListVector::GetEntry(result);
+		target.Reference(ListVector::GetEntry(source));
+		ListVector::SetListSize(result, ListVector::GetListSize(source));
 		TemplatedUnnest<list_entry_t>(vdata, start, end, result);
 		break;
 	}
@@ -188,9 +192,6 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 				auto &list_vector = state->list_data.data[col_idx];
 				list_vector.Orrify(state->list_data.size(), state->list_vector_data[col_idx]);
 
-				if (!ListVector::HasEntry(list_vector)) {
-					continue;
-				}
 				auto &child_vector = ListVector::GetEntry(list_vector);
 				auto list_size = ListVector::GetListSize(list_vector);
 				child_vector.Orrify(list_size, state->list_child_data[col_idx]);

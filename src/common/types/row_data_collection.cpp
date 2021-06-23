@@ -182,16 +182,14 @@ void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], 
 		auto &children = StructVector::GetEntries(child);
 		num_children = children.size();
 		for (auto &struct_child : children) {
-			Vector struct_vector;
-			struct_vector.Slice(*struct_child, dict_sel, vcount);
+			Vector struct_vector(*struct_child, dict_sel, vcount);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	} else {
 		auto &children = StructVector::GetEntries(v);
 		num_children = children.size();
 		for (auto &struct_child : children) {
-			Vector struct_vector;
-			struct_vector.Reference(*struct_child);
+			Vector struct_vector(*struct_child);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	}
@@ -217,8 +215,6 @@ static list_entry_t *GetListData(Vector &v) {
 
 void RowDataCollection::ComputeListEntrySizes(Vector &v, VectorData &vdata, idx_t entry_sizes[], idx_t ser_count,
                                               const SelectionVector &sel, idx_t offset) {
-	ListVector::Initialize(v);
-
 	auto list_data = GetListData(v);
 	auto &child_vector = ListVector::GetEntry(v);
 	idx_t list_entry_sizes[STANDARD_VECTOR_SIZE];
@@ -453,16 +449,14 @@ void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const Sel
 		auto &children = StructVector::GetEntries(child);
 		num_children = children.size();
 		for (auto &struct_child : children) {
-			Vector struct_vector;
-			struct_vector.Slice(*struct_child, dict_sel, vcount);
+			Vector struct_vector(*struct_child, dict_sel, vcount);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	} else {
 		auto &children = StructVector::GetEntries(v);
 		num_children = children.size();
 		for (auto &struct_child : children) {
-			Vector struct_vector;
-			struct_vector.Reference(*struct_child);
+			Vector struct_vector(*struct_child);
 			struct_vectors.push_back(move(struct_vector));
 		}
 	}
@@ -506,7 +500,7 @@ void RowDataCollection::SerializeListVector(Vector &v, idx_t vcount, const Selec
 	ValidityBytes::GetEntryIndex(col_no, entry_idx, idx_in_entry);
 
 	auto list_data = GetListData(v);
-	ListVector::Initialize(v);
+
 	auto &child_vector = ListVector::GetEntry(v);
 
 	VectorData list_vdata;
@@ -786,7 +780,6 @@ static void DeserializeIntoListVector(Vector &v, const idx_t vcount, const Selec
 	auto list_data = GetListData(v);
 	data_ptr_t list_entry_locations[STANDARD_VECTOR_SIZE];
 
-	ListVector::Initialize(v);
 	uint64_t entry_offset = ListVector::GetListSize(v);
 	for (idx_t i = 0; i < vcount; i++) {
 		const auto col_idx = sel.get_index(i);
@@ -817,7 +810,7 @@ static void DeserializeIntoListVector(Vector &v, const idx_t vcount, const Selec
 			// initialize a new vector to append
 			Vector append_vector(v.GetType());
 			append_vector.SetVectorType(v.GetVectorType());
-			ListVector::Initialize(append_vector);
+
 			auto &list_vec_to_append = ListVector::GetEntry(append_vector);
 
 			// set validity

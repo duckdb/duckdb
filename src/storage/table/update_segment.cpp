@@ -870,56 +870,60 @@ unique_ptr<BaseStatistics> UpdateSegment::GetStatistics() {
 	return stats.statistics->Copy();
 }
 
-idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
-                               SelectionVector &sel) {
+idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t offset,
+                               idx_t count, SelectionVector &sel) {
 	auto &mask = FlatVector::Validity(update);
 	auto &validity = (ValidityStatistics &)*stats.statistics;
 	if (!mask.AllValid() && !validity.has_null) {
 		for (idx_t i = 0; i < count; i++) {
-			if (!mask.RowIsValid(i)) {
+			auto idx = offset + i;
+			if (!mask.RowIsValid(idx)) {
 				validity.has_null = true;
 				break;
 			}
 		}
 	}
-	sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
+	sel.Initialize((sel_t *)(FlatVector::INCREMENTAL_VECTOR + offset));
 	return count;
 }
 
 template <class T>
-idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
-                                       SelectionVector &sel) {
+idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t offset,
+                                       idx_t count, SelectionVector &sel) {
 	auto update_data = FlatVector::GetData<T>(update);
 	auto &mask = FlatVector::Validity(update);
 
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			NumericStatistics::Update<T>(stats, update_data[i]);
+			auto idx = offset + i;
+			NumericStatistics::Update<T>(stats, update_data[idx]);
 		}
-		sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
+		sel.Initialize((sel_t *)(FlatVector::INCREMENTAL_VECTOR + offset));
 		return count;
 	} else {
 		idx_t not_null_count = 0;
 		sel.Initialize(STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < count; i++) {
-			if (mask.RowIsValid(i)) {
-				sel.set_index(not_null_count++, i);
-				NumericStatistics::Update<T>(stats, update_data[i]);
+			auto idx = offset + i;
+			if (mask.RowIsValid(idx)) {
+				sel.set_index(not_null_count++, idx);
+				NumericStatistics::Update<T>(stats, update_data[idx]);
 			}
 		}
 		return not_null_count;
 	}
 }
 
-idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
-                             SelectionVector &sel) {
+idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t offset,
+                             idx_t count, SelectionVector &sel) {
 	auto update_data = FlatVector::GetData<string_t>(update);
 	auto &mask = FlatVector::Validity(update);
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			((StringStatistics &)*stats.statistics).Update(update_data[i]);
-			if (!update_data[i].IsInlined()) {
-				update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+			auto idx = offset + i;
+			((StringStatistics &)*stats.statistics).Update(update_data[idx]);
+			if (!update_data[idx].IsInlined()) {
+				update_data[idx] = segment->GetStringHeap().AddString(update_data[idx]);
 			}
 		}
 		sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
@@ -928,11 +932,12 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 		idx_t not_null_count = 0;
 		sel.Initialize(STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < count; i++) {
-			if (mask.RowIsValid(i)) {
-				sel.set_index(not_null_count++, i);
-				((StringStatistics &)*stats.statistics).Update(update_data[i]);
-				if (!update_data[i].IsInlined()) {
-					update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
+			auto idx = offset + i;
+			if (mask.RowIsValid(idx)) {
+				sel.set_index(not_null_count++, idx);
+				((StringStatistics &)*stats.statistics).Update(update_data[idx]);
+				if (!update_data[idx].IsInlined()) {
+					update_data[idx] = segment->GetStringHeap().AddString(update_data[idx]);
 				}
 			}
 		}
@@ -979,8 +984,53 @@ UpdateSegment::statistics_update_function_t GetStatisticsUpdateFunction(Physical
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
-                           Vector &base_data) {
+static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) {
+	D_ASSERT(count > 0);
+
+	bool is_sorted = true;
+	for (idx_t i = 1; i < count; i++) {
+		auto prev_idx = sel.get_index(i - 1);
+		auto idx = sel.get_index(i);
+		if (ids[idx] <= ids[prev_idx]) {
+			is_sorted = false;
+			break;
+		}
+	}
+	if (is_sorted) {
+		// already sorted: bailout
+		return count;
+	}
+	// not sorted: need to sort the selection vector
+	SelectionVector sorted_sel(count);
+	for (idx_t i = 0; i < count; i++) {
+		sorted_sel.set_index(i, sel.get_index(i));
+	}
+	std::sort(sorted_sel.data(), sorted_sel.data() + count, [&](sel_t l, sel_t r) { return ids[l] < ids[r]; });
+	// eliminate any duplicates
+	idx_t pos = 1;
+	for (idx_t i = 1; i < count; i++) {
+		auto prev_idx = sorted_sel.get_index(i - 1);
+		auto idx = sorted_sel.get_index(i);
+		D_ASSERT(ids[idx] >= ids[prev_idx]);
+		if (ids[prev_idx] != ids[idx]) {
+			sorted_sel.set_index(pos++, idx);
+		}
+	}
+#ifdef DEBUG
+	for (idx_t i = 1; i < pos; i++) {
+		auto prev_idx = sorted_sel.get_index(i - 1);
+		auto idx = sorted_sel.get_index(i);
+		D_ASSERT(ids[idx] > ids[prev_idx]);
+	}
+#endif
+
+	sel.Initialize(sorted_sel);
+	D_ASSERT(pos > 0);
+	return pos;
+}
+
+void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t offset,
+                           idx_t count, Vector &base_data) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
@@ -990,18 +1040,18 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 	SelectionVector sel;
 	{
 		lock_guard<mutex> stats_guard(stats_lock);
-		count = statistics_update_function(this, stats, update, count, sel);
+		count = statistics_update_function(this, stats, update, offset, count, sel);
 	}
 	if (count == 0) {
 		return;
 	}
 
-#ifdef DEBUG
-	// verify that the ids are sorted and there are no duplicates
-	for (idx_t i = 1; i < count; i++) {
-		D_ASSERT(ids[i] > ids[i - 1]);
-	}
-#endif
+	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique
+	// this is usually the case for "standard" queries (e.g. UPDATE tbl SET x=bla WHERE cond)
+	// however, for more exotic queries involving e.g. cross products/joins this might not be the case
+	// hence we explicitly check here if the ids are sorted and, if not, sort + duplicate eliminate them
+	count = SortSelectionVector(sel, count, ids);
+	D_ASSERT(count > 0);
 
 	// create the versions for this segment, if there are none yet
 	if (!root) {
@@ -1010,7 +1060,7 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 
 	// get the vector index based on the first id
 	// we assert that all updates must be part of the same vector
-	auto first_id = ids[0];
+	auto first_id = ids[sel.get_index(0)];
 	idx_t vector_index = (first_id - column_data.start) / STANDARD_VECTOR_SIZE;
 	idx_t vector_offset = column_data.start + vector_index * STANDARD_VECTOR_SIZE;
 

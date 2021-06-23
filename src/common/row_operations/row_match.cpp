@@ -127,8 +127,7 @@ static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel
 	RowOperations::Gather(rows, sel, key, key_sel, count, col_offset, col_no);
 
 	// Make a dense dictionary of the probe column so we can match the SelectComparison scatter semantics
-	Vector dense;
-	dense.Slice(col, sel, count);
+	Vector dense(col, sel, count);
 
 	if (NO_MATCH_SEL) {
 		SelectionVector no_match_sel_offset(no_match->data() + no_match_count);

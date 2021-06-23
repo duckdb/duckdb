@@ -78,8 +78,7 @@ void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 	}
 
 	idx_t child_scan_count = last_entry.offset + last_entry.length - first_entry.offset;
-	auto child_vector = make_unique<Vector>(ListType::GetChildType(type), child_scan_count);
-	ListVector::SetEntry(result, move(child_vector));
+	ListVector::Reserve(result, child_scan_count);
 
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
@@ -167,8 +166,8 @@ void ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result)
 	throw NotImplementedException("List Fetch");
 }
 
-void ListColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                              idx_t update_count) {
+void ListColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t offset,
+			idx_t update_count) {
 	throw NotImplementedException("List Update is not supported.");
 }
 
@@ -215,8 +214,7 @@ void ListColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state,
 
 	// FIXME: this is incorrect! we need to append!
 	// allocate a vector and set it up in the child node
-	auto child_vector = make_unique<Vector>(ListType::GetChildType(type), child_scan_count);
-	ListVector::SetEntry(result, move(child_vector));
+	ListVector::Reserve(result, child_scan_count);
 
 	if (child_scan_count > 0) {
 		// seek the scan towards the specified position and read [length] entries

@@ -1,4 +1,4 @@
-# name: test/sql/function/string/test_string_split.test_slow
+# name: test/sql/function/string/test_string_split.test
 # description: String split test
 # group: [string]
 
@@ -10,6 +10,14 @@ query T
 SELECT UNNEST(string_split(NULL, NULL))
 ----
 NULL
+
+query T
+SELECT * FROM (VALUES (string_split('hello world', ' ')), (string_split(NULL, ' ')), (string_split('a b c', NULL)), (string_split('a b c', ' '))) tbl(i)
+----
+[hello, world]
+NULL
+[a b c]
+[a, b, c]
 
 statement ok
 CREATE TABLE strings_with_null (s VARCHAR)
@@ -31,22 +39,6 @@ query T
 SELECT UNNEST(string_split(NULL, ' ')) IS NULL LIMIT 5
 ----
 1
-
-# now continue with string split testing
-query I
-SELECT UNNEST(string_split(string_agg(range, 'DUCK '), ' ')) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
-----
-100000 values hashing to 4df57751b24295162836fcb48d04aa04
-
-query I
-SELECT UNNEST(string_split(string_agg(range, '🦆 '), ' ')) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
-----
-100000 values hashing to 6a8c3f073a6f4bb5c62cb51ef2389dcf
-
-query I
-SELECT UNNEST(string_split_regex(string_agg(range, 'DUCK '), '\s')) AS s, mod(range, 100) xx FROM range(50000) GROUP BY xx ORDER BY s
-----
-100000 values hashing to 4df57751b24295162836fcb48d04aa04
 
 query T
 SELECT UNNEST(string_split('üüüüü', '◌̈'))

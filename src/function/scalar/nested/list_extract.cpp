@@ -122,7 +122,6 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 		auto &child_list = ListVector::GetEntry(list);
 		auto &child_child_list = ListVector::GetEntry(child_list);
 
-		ListVector::Initialize(result);
 		ListVector::GetEntry(result).Reference(child_child_list);
 		ListVector::SetListSize(result, ListVector::GetListSize(child_list));
 		ListExtractTemplate<list_entry_t>(count, list, offsets, result);

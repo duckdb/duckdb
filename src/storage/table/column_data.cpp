@@ -257,8 +257,10 @@ void ColumnData::RevertAppend(row_t start_row) {
 }
 
 void ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+	D_ASSERT(row_id >= 0);
+	D_ASSERT(idx_t(row_id) >= start);
 	// perform the fetch within the segment
-	state.row_index = row_id / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+	state.row_index = start + ((row_id - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
 	state.current = (ColumnSegment *)data.GetSegment(state.row_index);
 	ScanVector(state, result, STANDARD_VECTOR_SIZE);
 }
@@ -277,22 +279,22 @@ void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row
 }
 
 void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                        idx_t update_count) {
+                        idx_t offset, idx_t update_count) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_unique<UpdateSegment>(*this);
 	}
 	Vector base_vector(type);
 	ColumnScanState state;
-	Fetch(state, row_ids[0], base_vector);
-	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
+	Fetch(state, row_ids[offset], base_vector);
+	updates->Update(transaction, column_index, update_vector, row_ids, offset, update_count, base_vector);
 }
 
 void ColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector,
                               row_t *row_ids, idx_t update_count, idx_t depth) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
-	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, 0, update_count);
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
@@ -449,7 +451,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	checkpoint_state->CreateEmptySegment();
 
 	bool is_validity = type.id() == LogicalTypeId::VALIDITY;
-	Vector intermediate(is_validity ? LogicalType::BOOLEAN : type, true, is_validity);
+	auto scan_type = is_validity ? LogicalType::BOOLEAN : type;
+	Vector intermediate(scan_type, true, is_validity);
 	// we create a new segment tree with all the new segments
 	// we do this by scanning the current segments of the column and checking for changes
 	// if there are any changes (e.g. updates or deletes) we write the new changes
@@ -505,7 +508,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 		state.current = segment;
 		segment->InitializeScan(state);
 
-		Vector scan_vector(type, nullptr);
+		Vector scan_vector(scan_type, nullptr);
 		for (idx_t base_row_index = 0; base_row_index < segment->count; base_row_index += STANDARD_VECTOR_SIZE) {
 			scan_vector.Reference(intermediate);
 

@@ -142,11 +142,11 @@ void StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 }
 
 void StructColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                              idx_t update_count) {
-	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
+                              idx_t offset, idx_t update_count) {
+	validity.Update(transaction, column_index, update_vector, row_ids, offset, update_count);
 	auto &child_entries = StructVector::GetEntries(update_vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Update(transaction, column_index, *child_entries[i], row_ids, update_count);
+		sub_columns[i]->Update(transaction, column_index, *child_entries[i], row_ids, offset, update_count);
 	}
 }
 

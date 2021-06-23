@@ -60,7 +60,7 @@ void PhysicalReservoirSample::GetChunkInternal(ExecutionContext &context, DataCh
 	if (!sample_chunk) {
 		return;
 	}
-	chunk.Reference(*sample_chunk);
+	chunk.Move(*sample_chunk);
 }
 
 unique_ptr<PhysicalOperatorState> PhysicalReservoirSample::GetOperatorState() {

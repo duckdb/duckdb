@@ -140,3 +140,11 @@ SELECT CASE WHEN g = 2 THEN LIST_VALUE(g, e, 42) ELSE LIST_VALUE('eeek') END FRO
 [eeek]
 [eeek]
 
+query I
+select * from (values ([1, NULL, 3]), ([NULL, 2, 3]), ([1, 2, NULL]), (NULL), ([1, 2, 3])) tbl(i);
+----
+[1, NULL, 3]
+[NULL, 2, 3]
+[1, 2, NULL]
+NULL
+[1, 2, 3]

@@ -3,8 +3,7 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
-// needed to use namespace (some duckdb types were not recognized automatically)
-using namespace duckdb;
+namespace duckdb {
 
 bool CastSQLite::RequiresCastToVarchar(LogicalType type) {
 	LogicalTypeId type_id = type.id();
@@ -19,19 +18,24 @@ bool CastSQLite::RequiresCastToVarchar(LogicalType type) {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::SQLNULL:
-		return false; // supportted types
+		return false; // supported types
 	default:
 		return true; // types need casting to varchar
 	}
 }
 
 void CastSQLite::InputVectorsToVarchar(DataChunk &data_chunk, DataChunk &new_chunk) {
+	auto new_types = data_chunk.GetTypes();
+	for (auto &type : new_types) {
+		if (CastSQLite::RequiresCastToVarchar(type)) {
+			type = LogicalType::VARCHAR;
+		}
+	}
 	new_chunk.SetCardinality(data_chunk.size());
-	new_chunk.Initialize(data_chunk.GetTypes());
+	new_chunk.Initialize(new_types);
 
 	for (idx_t i = 0; i < data_chunk.ColumnCount(); ++i) {
 		if (CastSQLite::RequiresCastToVarchar(data_chunk.data[i].GetType())) {
-			new_chunk.data[i].SetType(LogicalTypeId::VARCHAR);
 			VectorOperations::Cast(data_chunk.data[i], new_chunk.data[i], data_chunk.size(), true);
 		} else {
 			new_chunk.data[i].Reference(data_chunk.data[i]);
@@ -200,3 +204,5 @@ template <>
 string_t CastFromSQLiteValue::GetValue(sqlite3_value input) {
 	return input.str_t;
 }
+
+} // namespace duckdb

@@ -28,6 +28,7 @@ namespace duckdb {
 class Appender;
 class Catalog;
 class DatabaseInstance;
+class LogicalOperator;
 class PreparedStatementData;
 class Relation;
 class BufferedFileWriter;
@@ -148,6 +149,8 @@ public:
 
 	//! Parse statements from a query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
+	//! Extract the logical plan of a query
+	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
 	void HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
