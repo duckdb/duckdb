@@ -101,6 +101,10 @@ vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &que
 	return context->ParseStatements(query);
 }
 
+unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
+	return context->ExtractPlan(query);
+}
+
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
 	context->Append(description, chunk);
 }
