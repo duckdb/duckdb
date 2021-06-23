@@ -1,16 +1,15 @@
 #include "duckdb_odbc.hpp"
-using namespace duckdb;
 
-SQLRETURN SQLGetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
-                            SQLINTEGER BufferLength, SQLINTEGER *StringLengthPtr) {
+SQLRETURN SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                            SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 
-	return WithConnection(ConnectionHandle, [&](OdbcHandleDbc *dbc) {
-		if (!ValuePtr) {
+	return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) {
+		if (!value_ptr) {
 			return SQL_ERROR;
 		}
-		switch (Attribute) {
+		switch (attribute) {
 		case SQL_ATTR_AUTOCOMMIT:
-			*(SQLUINTEGER *)ValuePtr = dbc->autocommit;
+			*(SQLUINTEGER *)value_ptr = dbc->autocommit;
 			return SQL_SUCCESS;
 		default:
 			return SQL_ERROR;
@@ -18,12 +17,12 @@ SQLRETURN SQLGetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLP
 	});
 }
 
-SQLRETURN SQLSetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
-                            SQLINTEGER StringLength) {
-	return WithConnection(ConnectionHandle, [&](OdbcHandleDbc *dbc) {
-		switch (Attribute) {
+SQLRETURN SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                            SQLINTEGER string_length) {
+	return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) {
+		switch (attribute) {
 		case SQL_ATTR_AUTOCOMMIT:
-			switch ((ptrdiff_t)ValuePtr) {
+			switch ((ptrdiff_t)value_ptr) {
 			case (ptrdiff_t)SQL_AUTOCOMMIT_ON:
 				dbc->autocommit = true;
 				dbc->conn->SetAutoCommit(true);
@@ -42,23 +41,23 @@ SQLRETURN SQLSetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLP
 	});
 }
 
-SQLRETURN SQLGetInfo(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQLPOINTER InfoValuePtr, SQLSMALLINT BufferLength,
-                     SQLSMALLINT *StringLengthPtr) {
+SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr, SQLSMALLINT buffer_length,
+                     SQLSMALLINT *string_length_ptr) {
 
 	// TODO more from fun list
 	// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetinfo-function?view=sql-server-ver15
 
-	switch (InfoType) {
+	switch (info_type) {
 	case SQL_DRIVER_NAME:
 	case SQL_DBMS_NAME: {
-		string dbname = "DuckDB";
-		OdbcUtils::WriteString(dbname, (SQLCHAR *)InfoValuePtr, BufferLength, StringLengthPtr);
+		std::string dbname = "DuckDB";
+		duckdb::OdbcUtils::WriteString(dbname, (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
 		return SQL_SUCCESS;
 	}
 	case SQL_DBMS_VER: {
 		SQLHDBC stmt;
 
-		if (!SQL_SUCCEEDED(SQLAllocHandle(SQL_HANDLE_STMT, ConnectionHandle, &stmt))) {
+		if (!SQL_SUCCEEDED(SQLAllocHandle(SQL_HANDLE_STMT, connection_handle, &stmt))) {
 			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
@@ -70,7 +69,7 @@ SQLRETURN SQLGetInfo(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQLPOINTER
 			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
-		if (!SQL_SUCCEEDED(SQLGetData(stmt, 1, SQL_C_CHAR, InfoValuePtr, BufferLength, (SQLLEN *)StringLengthPtr))) {
+		if (!SQL_SUCCEEDED(SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, (SQLLEN *)string_length_ptr))) {
 			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
@@ -79,20 +78,20 @@ SQLRETURN SQLGetInfo(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQLPOINTER
 	}
 	case SQL_NON_NULLABLE_COLUMNS:
 		// TODO assert buffer length >= sizeof(SQLUSMALLINT)
-		Store<SQLUSMALLINT>(SQL_NNC_NON_NULL, (data_ptr_t)InfoValuePtr);
+		duckdb::Store<SQLUSMALLINT>(SQL_NNC_NON_NULL, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
 
 	case SQL_ODBC_INTERFACE_CONFORMANCE:
 		// TODO assert buffer length >= sizeof(SQLUINTEGER)
 
-		Store<SQLUINTEGER>(SQL_OIC_CORE, (data_ptr_t)InfoValuePtr);
+		duckdb::Store<SQLUINTEGER>(SQL_OIC_CORE, (duckdb::data_ptr_t)info_value_ptr);
 
 		return SQL_SUCCESS;
 
 	case SQL_CREATE_TABLE:
 		// TODO assert buffer length >= sizeof(SQLUINTEGER)
 
-		Store<SQLUINTEGER>(SQL_CT_CREATE_TABLE, (data_ptr_t)InfoValuePtr);
+		duckdb::Store<SQLUINTEGER>(SQL_CT_CREATE_TABLE, (duckdb::data_ptr_t)info_value_ptr);
 
 		return SQL_SUCCESS;
 
@@ -101,12 +100,12 @@ SQLRETURN SQLGetInfo(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQLPOINTER
 	}
 }
 
-SQLRETURN SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMALLINT CompletionType) {
-	if (HandleType != SQL_HANDLE_DBC) { // theoretically this can also be done on env but no no no
+SQLRETURN SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type) {
+	if (handle_type != SQL_HANDLE_DBC) { // theoretically this can also be done on env but no no no
 		return SQL_ERROR;
 	}
-	return WithConnection(Handle, [&](OdbcHandleDbc *dbc) {
-		switch (CompletionType) {
+	return duckdb::WithConnection(handle, [&](duckdb::OdbcHandleDbc *dbc) {
+		switch (completion_type) {
 		case SQL_COMMIT:
 			dbc->conn->Commit();
 		case SQL_ROLLBACK:
@@ -117,8 +116,8 @@ SQLRETURN SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMALLINT Compl
 	});
 }
 
-SQLRETURN SQLDisconnect(SQLHDBC ConnectionHandle) {
-	return WithConnection(ConnectionHandle, [&](OdbcHandleDbc *dbc) {
+SQLRETURN SQLDisconnect(SQLHDBC connection_handle) {
+	return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) {
 		dbc->conn.reset();
 		return SQL_SUCCESS;
 	});

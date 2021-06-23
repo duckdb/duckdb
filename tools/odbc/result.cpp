@@ -1,37 +1,36 @@
 #include "duckdb_odbc.hpp"
-using namespace duckdb;
 
-SQLRETURN SQLGetData(SQLHSTMT StatementHandle, SQLUSMALLINT Col_or_Param_Num, SQLSMALLINT TargetType,
-                     SQLPOINTER TargetValuePtr, SQLLEN BufferLength, SQLLEN *StrLen_or_IndPtr) {
+SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
+                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
-	return WithStatementResult(StatementHandle, [&](OdbcHandleStmt *stmt) {
-		if (!TargetValuePtr) {
+	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
+		if (!target_value_ptr) {
 			return SQL_ERROR;
 		}
 
 		if (!stmt->chunk) {
 			return SQL_ERROR;
 		}
-		auto val = stmt->chunk->GetValue(Col_or_Param_Num - 1, stmt->chunk_row);
+		auto val = stmt->chunk->GetValue(col_or_param_num - 1, stmt->chunk_row);
 		if (val.is_null) {
-			if (!StrLen_or_IndPtr) {
+			if (!str_len_or_ind_ptr) {
 				return SQL_ERROR;
 			}
-			*StrLen_or_IndPtr = SQL_NULL_DATA;
+			*str_len_or_ind_ptr = SQL_NULL_DATA;
 			return SQL_SUCCESS;
 		}
 
-		switch (TargetType) {
+		switch (target_type) {
 		case SQL_C_SLONG:
-			D_ASSERT(((size_t)BufferLength) >= sizeof(int));
-			Store<int>(val.GetValue<int>(), (data_ptr_t)TargetValuePtr);
+			D_ASSERT(((size_t)buffer_length) >= sizeof(int));
+			duckdb::Store<int>(val.GetValue<int>(), (duckdb::data_ptr_t)target_value_ptr);
 			return SQL_SUCCESS;
 
 		case SQL_CHAR: {
-			auto out_len = snprintf((char *)TargetValuePtr, BufferLength, "%s", val.GetValue<string>().c_str());
+			auto out_len = snprintf((char *)target_value_ptr, buffer_length, "%s", val.GetValue<std::string>().c_str());
 
-			if (StrLen_or_IndPtr) {
-				*StrLen_or_IndPtr = out_len;
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = out_len;
 			}
 			return SQL_SUCCESS;
 		}
@@ -42,16 +41,16 @@ SQLRETURN SQLGetData(SQLHSTMT StatementHandle, SQLUSMALLINT Col_or_Param_Num, SQ
 	});
 }
 
-SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
-	return WithStatementResult(StatementHandle, [&](OdbcHandleStmt *stmt) {
+SQLRETURN SQLFetch(SQLHSTMT statement_handle) {
+	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (!stmt->open) {
 			return SQL_NO_DATA;
 		}
-		if (!stmt->chunk || ((idx_t)stmt->chunk_row) >= stmt->chunk->size() - 1) {
+		if (!stmt->chunk || ((duckdb::idx_t)stmt->chunk_row) >= stmt->chunk->size() - 1) {
 			// TODO try /catch
 			try {
 				stmt->chunk = stmt->res->Fetch();
-			} catch (Exception &e) {
+			} catch (duckdb::Exception &e) {
 				// TODO this is quite dirty, we should have separate error holder
 				stmt->res->error = e.what();
 				stmt->res->success = false;
@@ -71,10 +70,10 @@ SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
 
 		// now fill buffers in fetch if set
 		// TODO actually vectorize this
-		for (idx_t col_idx = 0; col_idx < stmt->stmt->ColumnCount(); col_idx++) {
+		for (duckdb::idx_t col_idx = 0; col_idx < stmt->stmt->ColumnCount(); col_idx++) {
 			auto bound_buf = stmt->bound_cols[col_idx];
 			if (bound_buf.IsBound()) {
-				if (!SQL_SUCCEEDED(SQLGetData(StatementHandle, col_idx + 1, bound_buf.type, bound_buf.ptr,
+				if (!SQL_SUCCEEDED(SQLGetData(statement_handle, col_idx + 1, bound_buf.type, bound_buf.ptr,
 				                              bound_buf.len, bound_buf.strlen_or_ind))) {
 					return SQL_ERROR;
 				}
@@ -87,20 +86,20 @@ SQLRETURN SQLFetch(SQLHSTMT StatementHandle) {
 	});
 }
 
-SQLRETURN SQLFetchScroll(SQLHSTMT StatementHandle, SQLSMALLINT FetchOrientation, SQLLEN FetchOffset) {
+SQLRETURN SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
 
-	if (FetchOrientation != SQL_FETCH_NEXT) {
+	if (fetch_orientation != SQL_FETCH_NEXT) {
 		return SQL_ERROR;
 	}
-	return SQLFetch(StatementHandle);
+	return SQLFetch(statement_handle);
 }
 
-SQLRETURN SQLRowCount(SQLHSTMT StatementHandle, SQLLEN *RowCountPtr) {
-	return WithStatementResult(StatementHandle, [&](OdbcHandleStmt *stmt) {
-		if (!RowCountPtr) {
+SQLRETURN SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr) {
+	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
+		if (!row_count_ptr) {
 			return SQL_ERROR;
 		}
-		*RowCountPtr = -1; // we don't actually know most of the time
+		*row_count_ptr = -1; // we don't actually know most of the time
 		return SQL_SUCCESS;
 	});
 }

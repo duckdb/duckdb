@@ -1,7 +1,7 @@
 #include "statement_functions.hpp"
 
-SQLRETURN duckdb::PrepareStmt(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength) {
-	return WithStatement(StatementHandle, [&](OdbcHandleStmt *stmt) {
+SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (stmt->stmt) {
 			stmt->stmt.reset();
 		}
@@ -14,7 +14,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT StatementHandle, SQLCHAR *StatementText, 
 		stmt->params.resize(0);
 		stmt->bound_cols.resize(0);
 
-		auto query = OdbcUtils::ReadString(StatementText, TextLength);
+		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
 		stmt->stmt = stmt->dbc->conn->Prepare(query);
 		if (!stmt->stmt->success) {
 			return SQL_ERROR;
@@ -25,8 +25,8 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT StatementHandle, SQLCHAR *StatementText, 
 	});
 }
 
-SQLRETURN duckdb::ExecuteStmt(SQLHSTMT StatementHandle) {
-	return WithStatement(StatementHandle, [&](OdbcHandleStmt *stmt) {
+SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (stmt->res) {
 			stmt->res.reset();
 		}
