@@ -188,7 +188,7 @@ public:
 		//! Group chunk used for aggregating into correlated_counts
 		DataChunk group_chunk;
 		//! Payload chunk used for aggregating into correlated_counts
-		DataChunk payload_chunk;
+		DataChunk correlated_payload;
 		//! Result chunk used for aggregating into correlated_counts
 		DataChunk result_chunk;
 	} correlated_mark_join_info;

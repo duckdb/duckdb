@@ -207,9 +207,6 @@ template <class STATE_TYPE, class RESULT_TYPE, class OP>
 static void ExecuteListFinalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	auto list_child = make_unique<Vector>(ListType::GetChildType(result.GetType()));
-	ListVector::SetEntry(result, move(list_child));
-
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 

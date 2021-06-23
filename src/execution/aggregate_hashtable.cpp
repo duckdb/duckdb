@@ -38,7 +38,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      HtEntryType entry_type)
     : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), entry_type(entry_type), capacity(0), entries(0),
-      payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
+      payload_page_offset(0), addresses(LogicalType::POINTER), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
       hash_salts(LogicalTypeId::SMALLINT), group_compare_vector(STANDARD_VECTOR_SIZE),
       no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
 
@@ -89,7 +89,6 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		}
 		payload_idx += aggr.child_count;
 	}
-	addresses.Initialize(LogicalType::POINTER);
 	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
 	string_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8);
 }
@@ -315,9 +314,8 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 			// a selection vector
 			if (new_group_count > 0) {
 				if (aggr.filter) {
-					Vector distinct_addresses;
+					Vector distinct_addresses(addresses, new_groups, new_group_count);
 					DataChunk distinct_payload;
-					distinct_addresses.Slice(addresses, new_groups, new_group_count);
 					auto pay_types = payload.GetTypes();
 					distinct_payload.Initialize(pay_types);
 					distinct_payload.Slice(payload, new_groups, new_group_count);
@@ -325,8 +323,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 					distinct_addresses.Normalify(new_group_count);
 					RowOperations::UpdateFilteredStates(aggr, distinct_addresses, distinct_payload, payload_idx);
 				} else {
-					Vector distinct_addresses;
-					distinct_addresses.Slice(addresses, new_groups, new_group_count);
+					Vector distinct_addresses(addresses, new_groups, new_group_count);
 					for (idx_t i = 0; i < aggr.child_count; i++) {
 						payload.data[payload_idx + i].Slice(new_groups, new_group_count);
 						payload.data[payload_idx + i].Verify(new_group_count);
