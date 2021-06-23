@@ -61,7 +61,6 @@ unique_ptr<FunctionOperatorData> PragmaFunctionsInit(ClientContext &context, con
 void AddFunction(BaseScalarFunction &f, idx_t &count, DataChunk &output, bool is_aggregate) {
 	output.SetValue(0, count, Value(f.name));
 	output.SetValue(1, count, Value(is_aggregate ? "AGGREGATE" : "SCALAR"));
-	ListVector::Initialize(output.data[2]);
 	auto result_data = FlatVector::GetData<list_entry_t>(output.data[2]);
 	result_data[count].offset = ListVector::GetListSize(output.data[2]);
 	result_data[count].length = f.arguments.size();

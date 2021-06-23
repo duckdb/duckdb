@@ -1050,9 +1050,8 @@ Value Value::CastAs(const LogicalType &target_type, bool strict) const {
 	if (type_ == target_type) {
 		return Copy();
 	}
-	Vector input, result;
-	input.Reference(*this);
-	result.Initialize(target_type);
+	Vector input(*this);
+	Vector result(target_type);
 	VectorOperations::Cast(input, result, 1, strict);
 	return result.GetValue(0);
 }

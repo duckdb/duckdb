@@ -37,7 +37,7 @@ public:
 	void FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result);
 	void FetchCommitted(idx_t vector_index, Vector &result);
 	void FetchCommittedRange(idx_t start_row, idx_t count, Vector &result);
-	void Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
+	void Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t offset, idx_t count,
 	            Vector &base_data);
 	void FetchRow(Transaction &transaction, idx_t row_id, Vector &result, idx_t result_idx);
 
@@ -78,7 +78,7 @@ public:
 	                                     idx_t row_idx, Vector &result, idx_t result_idx);
 	typedef void (*rollback_update_function_t)(UpdateInfo *base_info, UpdateInfo *rollback_info);
 	typedef idx_t (*statistics_update_function_t)(UpdateSegment *segment, SegmentStatistics &stats, Vector &update,
-	                                              idx_t count, SelectionVector &sel);
+	                                              idx_t offset, idx_t count, SelectionVector &sel);
 
 private:
 	initialize_update_function_t initialize_update_function;
