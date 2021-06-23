@@ -99,7 +99,8 @@ public:
 	bool CompareWithType(const DataType &type) {
 		result_ = true;
 		if (range_length_ != 0) {
-			VisitTypeInline(type, this);
+			auto status = VisitTypeInline(type, this);
+			D_ASSERT(status.ok());
 		}
 		return result_;
 	}

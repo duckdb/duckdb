@@ -31,9 +31,11 @@ std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
 
 	std::unique_ptr<parquet::arrow::FileReader> reader;
 
-	parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader);
+	auto status = parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader);
+	REQUIRE(status.ok());
 	std::shared_ptr<arrow::Table> table;
-	reader->ReadTable(&table);
+	status = reader->ReadTable(&table);
+	REQUIRE(status.ok());
 	return table;
 }
 
@@ -41,8 +43,9 @@ std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow
 	std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
 
 	auto batch_reader = arrow::TableBatchReader(table);
-	batch_reader.ReadAll(&batches);
+	auto status = batch_reader.ReadAll(&batches);
 
+	REQUIRE(status.ok());
 	SimpleFactory factory {batches, table.schema()};
 
 	duckdb::vector<duckdb::Value> params;
@@ -128,7 +131,6 @@ TEST_CASE("Test Parquet Files fix", "[arrow]") {
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
-	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
 	std::string parquet_path = "test/sql/copy/parquet/data/apkwan.parquet";
 	REQUIRE(RoundTrip(parquet_path, skip, conn));
 }

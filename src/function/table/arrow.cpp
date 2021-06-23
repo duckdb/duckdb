@@ -332,8 +332,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			           GetTypeIdSize(vector.GetType().InternalType()) * (array.offset + nested_offset);
 		}
 
-		FlatVector::SetData(vector, (data_ptr_t)array.buffers[1] + GetTypeIdSize(vector.GetType().InternalType()) *
-		                                                               (scan_state.chunk_offset + array.offset));
+		FlatVector::SetData(vector, data_ptr);
 		break;
 	}
 	case LogicalTypeId::DOUBLE: {
