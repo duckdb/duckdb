@@ -176,25 +176,25 @@ void DataChunk::Deserialize(Deserializer &source) {
 	Verify();
 }
 
-void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count) {
-	this->count = count;
+void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
+	this->count = count_p;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < ColumnCount(); c++) {
-		data[c].Slice(sel_vector, count, merge_cache);
+		data[c].Slice(sel_vector, count_p, merge_cache);
 	}
 }
 
-void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset) {
+void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
-	this->count = count;
+	this->count = count_p;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		if (other.data[c].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			// already a dictionary! merge the dictionaries
 			data[col_offset + c].Reference(other.data[c]);
-			data[col_offset + c].Slice(sel, count, merge_cache);
+			data[col_offset + c].Slice(sel, count_p, merge_cache);
 		} else {
-			data[col_offset + c].Slice(other.data[c], sel, count);
+			data[col_offset + c].Slice(other.data[c], sel, count_p);
 		}
 	}
 }
@@ -394,12 +394,12 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN: {
 		//! Gotta bitpack these booleans
-		vector.Reference(data);
+		child_holder.vector = make_unique<Vector>(data);
 		child.n_buffers = 2;
 		idx_t num_bytes = (size + 8 - 1) / 8;
 		child_holder.data = unique_ptr<data_t[]>(new data_t[sizeof(uint8_t) * num_bytes]);
 		child.buffers[1] = child_holder.data.get();
-		auto source_ptr = FlatVector::GetData<uint8_t>(vector);
+		auto source_ptr = FlatVector::GetData<uint8_t>(*child_holder.vector);
 		auto target_ptr = (uint8_t *)child.buffers[1];
 		idx_t target_pos = 0;
 		idx_t cur_bit = 0;
@@ -436,7 +436,6 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 		child_holder.vector = make_unique<Vector>(data);
-
 		child.n_buffers = 2;
 		child.buffers[1] = (void *)FlatVector::GetData(*child_holder.vector);
 		break;

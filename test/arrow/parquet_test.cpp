@@ -107,33 +107,33 @@ TEST_CASE("Test Parquet File NaN", "[arrow]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"foo", "bar", "baz"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {true, false, true}));
 }
-
-TEST_CASE("Test Parquet Files fix", "[arrow]") {
-
-	std::vector<std::string> skip {"aws2.parquet"};     //! Not supported by arrow
-	skip.emplace_back("datapage_v2.snappy.parquet");    //! Not supported by arrow
-	skip.emplace_back("broken-arrow.parquet");          //! Arrow can't read this
-	skip.emplace_back("nan-float.parquet");             //! Can't roundtrip NaNs
-	skip.emplace_back("alltypes_dictionary.parquet");   //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("blob.parquet");                  //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("alltypes_plain.parquet");        //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("alltypes_plain.snappy.parquet"); //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("data-types.parquet");            //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("fixed.parquet"); //! FIXME: Contains fixed-width-binary columns, we don't support those yet
-
-	//! Breaking with vec2
-	//	skip.emplace_back("nested_maps.parquet");
-	//	skip.emplace_back("nested_maps.snappy.parquet");
-	//	skip.emplace_back("apkwan.parquet");
-	//	skip.emplace_back("nested_lists.snappy.parquet");
-	//    skip.emplace_back("leftdate3_192_loop_1.parquet"); //! This is just crazy slow
-	//	skip.emplace_back("list_columns.parquet");
-
-	duckdb::DuckDB db;
-	duckdb::Connection conn {db};
-	std::string parquet_path = "test/sql/copy/parquet/data/apkwan.parquet";
-	REQUIRE(RoundTrip(parquet_path, skip, conn));
-}
+//
+//TEST_CASE("Test Parquet Files fix", "[arrow]") {
+//
+//	std::vector<std::string> skip {"aws2.parquet"};     //! Not supported by arrow
+//	skip.emplace_back("datapage_v2.snappy.parquet");    //! Not supported by arrow
+//	skip.emplace_back("broken-arrow.parquet");          //! Arrow can't read this
+//	skip.emplace_back("nan-float.parquet");             //! Can't roundtrip NaNs
+//	skip.emplace_back("alltypes_dictionary.parquet");   //! FIXME: Contains binary columns, we don't support those yet
+//	skip.emplace_back("blob.parquet");                  //! FIXME: Contains binary columns, we don't support those yet
+//	skip.emplace_back("alltypes_plain.parquet");        //! FIXME: Contains binary columns, we don't support those yet
+//	skip.emplace_back("alltypes_plain.snappy.parquet"); //! FIXME: Contains binary columns, we don't support those yet
+//	skip.emplace_back("data-types.parquet");            //! FIXME: Contains binary columns, we don't support those yet
+//	skip.emplace_back("fixed.parquet"); //! FIXME: Contains fixed-width-binary columns, we don't support those yet
+//
+//	//! Breaking with vec2
+//	//	skip.emplace_back("nested_maps.parquet");
+//	//	skip.emplace_back("nested_maps.snappy.parquet");
+//	//	skip.emplace_back("apkwan.parquet");
+//	//	skip.emplace_back("nested_lists.snappy.parquet");
+//	//    skip.emplace_back("leftdate3_192_loop_1.parquet"); //! This is just crazy slow
+//	//	skip.emplace_back("list_columns.parquet");
+//
+//	duckdb::DuckDB db;
+//	duckdb::Connection conn {db};
+//	std::string parquet_path = "test/sql/copy/parquet/data/apkwan.parquet";
+//	REQUIRE(RoundTrip(parquet_path, skip, conn));
+//}
 TEST_CASE("Test Parquet Files", "[arrow]") {
 
 	std::vector<std::string> skip {"aws2.parquet"};     //! Not supported by arrow
