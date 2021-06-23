@@ -35,6 +35,7 @@ ExternalProject_Get_Property(arrow_ep install_dir)
 
 set(install_arrow ${install_dir})
 
+
 ExternalProject_Add(
   RE2
   GIT_REPOSITORY "https://github.com/google/re2"
@@ -130,6 +131,8 @@ set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_arrow>
     PARENT_SCOPE)
 
+
+
 add_dependencies(
   test_arrow
   RE2
@@ -139,14 +142,17 @@ add_dependencies(
   SNAPPY
   ZSTD)
 
+
+message(${install_arrow})
 target_link_libraries(
   test_arrow
-  ${install_arrow}/lib/libparquet.a
   ${install_arrow}/lib/libarrow_bundled_dependencies.a
+  ${install_arrow}/lib/libparquet.a
   ${install_arrow}/lib/libarrow.a
   ${install_zlib}/lib/libz.a
   ${install_utf8}/lib/libutf8proc.a
   ${install_re2}/lib/libre2.a
   ${install_snappy}/lib/libsnappy.a
   ${install_zstd}/lib/libzstd.a
+#        /opt/homebrew/lib/libthrift.a
   Threads::Threads)
