@@ -61,8 +61,6 @@ struct ColumnFetchState {
 	buffer_handle_set_t handles;
 	//! Any child states of the fetch
 	vector<unique_ptr<ColumnFetchState>> child_states;
-	//! Any child scan states of the fetch
-	vector<unique_ptr<ColumnScanState>> child_scan_states;
 };
 
 struct LocalScanState {

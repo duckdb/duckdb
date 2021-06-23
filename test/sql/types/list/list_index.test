@@ -85,9 +85,6 @@ SELECT * FROM a WHERE id=4
 4	[4, 5, NULL, 6]
 
 # now try with multiple entries on the same index
-# FIXME: we need to actually append here rather than replace the vector
-mode skip
-
 statement ok
 INSERT INTO a VALUES (1, [4, 5, NULL])
 

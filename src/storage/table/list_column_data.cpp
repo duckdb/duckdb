@@ -190,10 +190,6 @@ void ListColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state,
 		auto child_state = make_unique<ColumnFetchState>();
 		state.child_states.push_back(move(child_state));
 	}
-	if (state.child_scan_states.empty()) {
-		auto child_state = make_unique<ColumnScanState>();
-		state.child_scan_states.push_back(move(child_state));
-	}
 	// fetch the list_entry_t and the validity mask for that list
 	auto segment = (ColumnSegment *)data.GetSegment(row_id);
 
@@ -203,30 +199,29 @@ void ListColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state,
 
 	auto &validity = FlatVector::Validity(result);
 	auto list_data = FlatVector::GetData<list_entry_t>(result);
+	auto &list_entry = list_data[result_idx];
+	auto original_offset = list_entry.offset;
+	// set the list entry offset to the size of the current list
+	list_entry.offset = ListVector::GetListSize(result);
 	if (!validity.RowIsValid(result_idx)) {
 		// the list is NULL! no need to fetch the child
+		D_ASSERT(list_entry.length == 0);
 		return;
 	}
 
 	// now we need to read from the child all the elements between [offset...length]
-	auto &list_entry = list_data[result_idx];
 	auto child_scan_count = list_entry.length;
-
-	// FIXME: this is incorrect! we need to append!
-	// allocate a vector and set it up in the child node
-	ListVector::Reserve(result, child_scan_count);
-
 	if (child_scan_count > 0) {
+		auto child_state = make_unique<ColumnScanState>();
+		auto &child_type = ListType::GetChildType(result.GetType());
+		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
-		child_column->InitializeScanWithOffset(*state.child_scan_states[0], list_entry.offset);
-		auto &child_entry = ListVector::GetEntry(result);
-		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT || state.child_scan_states[0]->row_index + child_scan_count <= child_column->GetCount());
-		child_column->ScanCount(*state.child_scan_states[0], child_entry, child_scan_count);
-	}
-	// set the offset to 0
-	list_entry.offset = 0;
+		child_column->InitializeScanWithOffset(*child_state, original_offset);
+		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT || child_state->row_index + child_scan_count <= child_column->GetCount());
+		child_column->ScanCount(*child_state, child_scan, child_scan_count);
 
-	ListVector::SetListSize(result, child_scan_count);
+		ListVector::Append(result, child_scan, child_scan_count);
+	}
 }
 
 void ListColumnData::CommitDropColumn() {
