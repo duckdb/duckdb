@@ -1,7 +1,5 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
-#include <fstream>
-#include <iostream>
 
 using namespace duckdb;
 
