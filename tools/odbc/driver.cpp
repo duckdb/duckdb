@@ -54,7 +54,8 @@ SQLRETURN SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	}
 }
 
-SQLRETURN SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr, SQLINTEGER string_length) {
+SQLRETURN SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                        SQLINTEGER string_length) {
 	if (!environment_handle) {
 		return SQL_ERROR;
 	}
@@ -160,7 +161,8 @@ SQLRETURN SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT r
 	}
 }
 
-SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLSMALLINT diag_identifier,
-                          SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr) {
+SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
+                          SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
+                          SQLSMALLINT *string_length_ptr) {
 	throw std::runtime_error("SQLGetDiagField");
 }

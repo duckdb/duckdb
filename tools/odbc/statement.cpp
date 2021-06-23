@@ -1,7 +1,8 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
 
-SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr, SQLINTEGER string_length) {
+SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                         SQLINTEGER string_length) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (!value_ptr) {
 			return SQL_ERROR;

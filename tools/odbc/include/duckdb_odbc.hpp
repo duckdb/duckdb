@@ -15,10 +15,12 @@ SQLRETURN SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle);
 // attributes
 SQLRETURN SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                             SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr);
-SQLRETURN SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr, SQLINTEGER string_length);
+SQLRETURN SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                        SQLINTEGER string_length);
 SQLRETURN SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                             SQLINTEGER string_length);
-SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr, SQLINTEGER string_length);
+SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                         SQLINTEGER string_length);
 
 // connections
 SQLRETURN SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_handle, SQLCHAR *in_connection_string,
@@ -27,8 +29,8 @@ SQLRETURN SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_handle, SQL
 SQLRETURN SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQLSMALLINT name_length1, SQLCHAR *user_name,
                      SQLSMALLINT name_length2, SQLCHAR *authentication, SQLSMALLINT name_length3);
 
-SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr, SQLSMALLINT buffer_length,
-                     SQLSMALLINT *string_length_ptr);
+SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr,
+                     SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr);
 SQLRETURN SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type);
 SQLRETURN SQLDisconnect(SQLHDBC connection_handle);
 
@@ -55,8 +57,9 @@ SQLRETURN SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientatio
 SQLRETURN SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr);
 
 // diagnostics
-SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLSMALLINT diag_identifier,
-                          SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr);
+SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
+                          SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
+                          SQLSMALLINT *string_length_ptr);
 SQLRETURN SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLCHAR *sql_state,
                         SQLINTEGER *native_error_ptr, SQLCHAR *message_text, SQLSMALLINT buffer_length,
                         SQLSMALLINT *text_length_ptr);

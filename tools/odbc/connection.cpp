@@ -41,8 +41,8 @@ SQLRETURN SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQL
 	});
 }
 
-SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr, SQLSMALLINT buffer_length,
-                     SQLSMALLINT *string_length_ptr) {
+SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr,
+                     SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr) {
 
 	// TODO more from fun list
 	// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetinfo-function?view=sql-server-ver15
@@ -69,7 +69,8 @@ SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINT
 			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
-		if (!SQL_SUCCEEDED(SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, (SQLLEN *)string_length_ptr))) {
+		if (!SQL_SUCCEEDED(
+		        SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, (SQLLEN *)string_length_ptr))) {
 			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
