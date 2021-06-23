@@ -373,7 +373,33 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	auto &child = child_holder.array;
 	auto &vector = child_holder.vector;
 	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::BOOLEAN: {
+		//! Gotta bitpack these booleans
+		vector.Reference(data);
+		child.n_buffers = 2;
+		idx_t num_bytes = (size + 8 - 1) / 8;
+		child_holder.data = unique_ptr<data_t[]>(new data_t[sizeof(uint8_t) * num_bytes]);
+		child.buffers[1] = child_holder.data.get();
+		auto source_ptr = FlatVector::GetData<uint8_t>(vector);
+		auto target_ptr = (uint8_t *)child.buffers[1];
+		idx_t target_pos = 0;
+		idx_t cur_bit = 0;
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			if (cur_bit == 8) {
+				target_pos++;
+				cur_bit = 0;
+			}
+			if (source_ptr[row_idx] == 0) {
+				//! We set the bit to 0
+				target_ptr[target_pos] &= ~(1 << cur_bit);
+			} else {
+				//! We set the bit to 1
+				target_ptr[target_pos] |= 1 << cur_bit;
+			}
+			cur_bit++;
+		}
+		break;
+	}
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:

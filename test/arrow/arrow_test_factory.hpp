@@ -4,8 +4,6 @@
 #include "arrow/array.h"
 #include "catch.hpp"
 
-constexpr size_t ARRAY_SIZE = 1024;
-
 #define REQUIRE_RESULT(OUT, IN)                                                                                        \
 	REQUIRE(IN.ok());                                                                                                  \
 	OUT = IN.ValueUnsafe();

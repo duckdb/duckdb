@@ -44,7 +44,7 @@ TEST_CASE("Test random integers", "[arrow]") {
 
 			std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
 			while (n > 0) {
-				auto here = std::min<size_t>(ARRAY_SIZE, n);
+				auto here = std::min<size_t>(STANDARD_VECTOR_SIZE, n);
 				REQUIRE_RESULT(auto a, GenI32Seq(here, next_a));
 				REQUIRE_RESULT(auto b, GenI32Seq(here, next_b));
 				REQUIRE_RESULT(auto c, GenI32Seq(here, next_c));

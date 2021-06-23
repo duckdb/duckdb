@@ -22,6 +22,8 @@
 #include <iostream>
 #include "parquet/exception.h"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/query_result.hpp"
+#include "test_helpers.hpp"
 
 std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
 	std::shared_ptr<arrow::io::ReadableFile> infile;
@@ -33,6 +35,21 @@ std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
 	std::shared_ptr<arrow::Table> table;
 	reader->ReadTable(&table);
 	return table;
+}
+
+std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow::Table &table) {
+	std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
+
+	auto batch_reader = arrow::TableBatchReader(table);
+	batch_reader.ReadAll(&batches);
+
+	SimpleFactory factory {batches, table.schema()};
+
+	duckdb::vector<duckdb::Value> params;
+	params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
+	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
+	params.push_back(duckdb::Value::UBIGINT(1000000));
+	return conn.TableFunction("arrow_scan", params)->Execute();
 }
 
 bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connection &conn) {
@@ -48,19 +65,8 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 	}
 
 	auto table = ReadParquetFile(path);
-	std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
 
-	auto batch_reader = arrow::TableBatchReader(*table);
-	batch_reader.ReadAll(&batches);
-
-	SimpleFactory factory {batches, table->schema()};
-
-	duckdb::vector<duckdb::Value> params;
-	params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
-	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
-	params.push_back(duckdb::Value::UBIGINT(1000000));
-	auto result = conn.TableFunction("arrow_scan", params)->Execute();
-
+	auto result = ArrowToDuck(conn, *table);
 	ArrowSchema abi_arrow_schema;
 	std::vector<std::shared_ptr<arrow::RecordBatch>> batches_result;
 	result->ToArrowSchema(&abi_arrow_schema);
@@ -82,43 +88,62 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 	return ArrowTableEquals(*new_table, *new_arrow_result_tbl);
 }
 
-TEST_CASE("Test Parquet Files Broken", "[arrow]") {
-
+TEST_CASE("Test Parquet File NaN", "[arrow]") {
 	std::vector<std::string> skip;
-	skip.emplace_back("bug1588.parquet");            //! FIXME: Booleans are bit-packed
-	skip.emplace_back("nested_maps.snappy.parquet"); //! FIXME: ?
-	skip.emplace_back("bug1554.parquet");            //! FIXME: ?
-	skip.emplace_back("silly-names.parquet");        //! FIXME: ?
-	skip.emplace_back("zstd.parquet");               //! FIXME: ?
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
-	std::vector<std::string> empty;
-	for (auto &s : skip) {
-		std::string aux = "test/sql/copy/parquet/data/" + s;
-		if (RoundTrip(aux, empty, conn)) {
-			std::cout << s << std::endl;
-		}
-	}
-	skip.clear();
+
+	//! Impossible to round-trip NaNs so we just validate that the duckdb table is correct-o
+	std::string parquet_path = "test/sql/copy/parquet/data/nan-float.parquet";
+	auto table = ReadParquetFile(parquet_path);
+
+	auto result = ArrowToDuck(conn, *table);
+	REQUIRE(result->success);
+	REQUIRE(CHECK_COLUMN(result, 0, {-1, nullptr, 2.5}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"foo", "bar", "baz"}));
+	REQUIRE(CHECK_COLUMN(result, 2, {true, false, true}));
+}
+
+TEST_CASE("Test Parquet Files fix", "[arrow]") {
+
+	std::vector<std::string> skip {"aws2.parquet"};     //! Not supported by arrow
+	skip.emplace_back("datapage_v2.snappy.parquet");    //! Not supported by arrow
+	skip.emplace_back("broken-arrow.parquet");          //! Arrow can't read this
+	skip.emplace_back("nan-float.parquet");             //! Can't roundtrip NaNs
+	skip.emplace_back("alltypes_dictionary.parquet");   //! FIXME: Contains binary columns, we don't support those yet
+	skip.emplace_back("blob.parquet");                  //! FIXME: Contains binary columns, we don't support those yet
+	skip.emplace_back("alltypes_plain.parquet");        //! FIXME: Contains binary columns, we don't support those yet
+	skip.emplace_back("alltypes_plain.snappy.parquet"); //! FIXME: Contains binary columns, we don't support those yet
+	skip.emplace_back("data-types.parquet");            //! FIXME: Contains binary columns, we don't support those yet
+	skip.emplace_back("fixed.parquet"); //! FIXME: Contains fixed-width-binary columns, we don't support those yet
+
+	//! Breaking with vec2
+	//	skip.emplace_back("nested_maps.parquet");
+	//	skip.emplace_back("nested_maps.snappy.parquet");
+	//	skip.emplace_back("apkwan.parquet");
+	//	skip.emplace_back("nested_lists.snappy.parquet");
+	//    skip.emplace_back("leftdate3_192_loop_1.parquet"); //! This is just crazy slow
+	//	skip.emplace_back("list_columns.parquet");
+
+	duckdb::DuckDB db;
+	duckdb::Connection conn {db};
+	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
+	std::string parquet_path = "test/sql/copy/parquet/data/apkwan.parquet";
+	REQUIRE(RoundTrip(parquet_path, skip, conn));
 }
 TEST_CASE("Test Parquet Files", "[arrow]") {
 
 	std::vector<std::string> skip {"aws2.parquet"};     //! Not supported by arrow
 	skip.emplace_back("datapage_v2.snappy.parquet");    //! Not supported by arrow
 	skip.emplace_back("broken-arrow.parquet");          //! Arrow can't read this
+	skip.emplace_back("nan-float.parquet");             //! Can't roundtrip NaNs
 	skip.emplace_back("alltypes_dictionary.parquet");   //! FIXME: Contains binary columns, we don't support those yet
 	skip.emplace_back("blob.parquet");                  //! FIXME: Contains binary columns, we don't support those yet
 	skip.emplace_back("alltypes_plain.parquet");        //! FIXME: Contains binary columns, we don't support those yet
 	skip.emplace_back("alltypes_plain.snappy.parquet"); //! FIXME: Contains binary columns, we don't support those yet
 	skip.emplace_back("data-types.parquet");            //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("fixed.parquet");     //! FIXME: Contains fixed-width-binary columns, we don't support those yet
-	skip.emplace_back("nan-float.parquet"); //! FIXME:What to do with NaNs
-	skip.emplace_back("bug1588.parquet");   //! FIXME: Booleans are bit-packed
-	skip.emplace_back("nested_maps.snappy.parquet"); //! FIXME: ?
-	skip.emplace_back("bug1554.parquet");            //! FIXME: ?
-	skip.emplace_back("silly-names.parquet");        //! FIXME: ?
-	skip.emplace_back("zstd.parquet");               //! FIXME: ?
+	skip.emplace_back("fixed.parquet"); //! FIXME: Contains fixed-width-binary columns, we don't support those yet
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
@@ -138,12 +163,12 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 
 	skip.emplace_back("cache1.parquet"); //! FIXME: Contains binary columns, we don't support those yet
 
-	//! Cache Files
+	//! FIXME: Cache Files
 	parquet_files = fs.Glob("test/sql/copy/parquet/data/cache/*.parquet");
 	for (auto &parquet_path : parquet_files) {
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
-	//! GLOB Files (More binaries)
+	//! FIXME: GLOB Files (More binaries)
 	//	parquet_files = fs.Glob("test/sql/copy/parquet/data/glob/*.parquet");
 	//	for (auto &parquet_path : parquet_files) {
 	//	    std::cout << parquet_path <<  std::endl;

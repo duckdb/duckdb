@@ -261,7 +261,7 @@ void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 	ListVector::SetListSize(vector, list_size);
 	SetValidityMask(child_vector, *array.children[0], scan_state, list_size);
 	ColumnArrowToDuckDB(child_vector, *array.children[0], scan_state, list_size, arrow_convert_data, col_idx,
-	                    list_col_idx);
+	                    list_col_idx, offsets[0]);
 }
 void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                           std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
@@ -295,11 +295,17 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		auto src_ptr = (uint8_t *)array.buffers[1] + (scan_state.chunk_offset + array.offset) / 8;
 		auto tgt_ptr = (uint8_t *)FlatVector::GetData(vector);
 		int src_pos = 0;
+		int cur_bit = scan_state.chunk_offset % 8;
 		for (idx_t row = 0; row < size; row++) {
-			int cur_bit = row % 8;
-			tgt_ptr[row] = src_ptr[src_pos] & (1 << cur_bit);
-			if (cur_bit == 7) {
+			if ((src_ptr[src_pos] & (1 << cur_bit)) == 0) {
+				tgt_ptr[row] = 0;
+			} else {
+				tgt_ptr[row] = 1;
+			}
+			cur_bit++;
+			if (cur_bit == 8) {
 				src_pos++;
+				cur_bit = 0;
 			}
 		}
 		break;
@@ -312,7 +318,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::USMALLINT:
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
-	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DATE:
@@ -322,16 +327,28 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::TIMESTAMP_NS: {
 		auto data_ptr = (data_ptr_t)array.buffers[1] +
 		                GetTypeIdSize(vector.GetType().InternalType()) * (scan_state.chunk_offset + array.offset);
-		if (nested_offset) {
+		if (nested_offset != 0) {
 			data_ptr = (data_ptr_t)array.buffers[1] +
 			           GetTypeIdSize(vector.GetType().InternalType()) * (array.offset + nested_offset);
 		}
-	}
 
 		FlatVector::SetData(vector, (data_ptr_t)array.buffers[1] + GetTypeIdSize(vector.GetType().InternalType()) *
 		                                                               (scan_state.chunk_offset + array.offset));
 		break;
-
+	}
+	case LogicalTypeId::DOUBLE: {
+		FlatVector::SetData(vector, (data_ptr_t)array.buffers[1] + GetTypeIdSize(vector.GetType().InternalType()) *
+		                                                               (scan_state.chunk_offset + array.offset));
+		//! Need to check if there are NaNs, if yes, must turn that to null
+		auto data = (double *)vector.GetData();
+		auto &mask = FlatVector::Validity(vector);
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			if (!Value::DoubleIsValid(data[row_idx])) {
+				mask.SetInvalid(row_idx);
+			}
+		}
+		break;
+	}
 	case LogicalTypeId::VARCHAR: {
 		auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 		if (nested_offset) {
@@ -356,7 +373,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		break;
 	}
 	case LogicalTypeId::TIME: {
-		// convert time from milliseconds to microseconds
+		//! convert time from milliseconds to microseconds
 		auto src_ptr = (uint32_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 		if (nested_offset) {
 			src_ptr = (uint32_t *)array.buffers[1] + nested_offset + array.offset;
