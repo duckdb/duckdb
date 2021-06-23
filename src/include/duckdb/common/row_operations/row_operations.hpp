@@ -65,6 +65,15 @@ struct RowOperations {
 	static idx_t Match(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
 	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
 	                   idx_t &no_match_count);
+
+	//===--------------------------------------------------------------------===//
+	// Out-of-Core Operators
+	//===--------------------------------------------------------------------===//
+	//! Swizzles pointers to blobs to (blockID, offset)
+	static void Swizzle(const RowLayout &layout, const data_ptr_t &row_base_ptr, const idx_t &count);
+	//! Unswizzles (blockID, offset) back to pointers to blobs
+	static void Unswizzle(const RowLayout &layout, const data_ptr_t &row_base_ptr, const data_ptr_t &heap_base_ptr,
+	                      const idx_t &count);
 };
 
 } // namespace duckdb

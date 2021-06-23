@@ -150,24 +150,16 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 		}
 
 		// Build out the buffer space
-		auto append_entries = string_heap.Build(count, data_locations, entry_sizes);
+		string_heap.Build(count, data_locations, entry_sizes);
 
 		// Serialize information that is needed for swizzling if the computation goes out-of-core
-		const idx_t heap_collection_index_offset = layout.GetHeapBlockIndexOffset();
-		const idx_t heap_block_index_offset = heap_collection_index_offset + sizeof(uint16_t);
-		const idx_t heap_offset_offset = layout.GetHeapOffsetOffset();
-		idx_t i = 0;
-		for (auto &append_entry : append_entries) {
-			for (idx_t j = 0; j < append_entry.count; j++, i++) {
-				// Block is identified by the combination of 2 uint16_t
-				Store<uint16_t>(string_heap.collection_index, ptrs[i] + heap_collection_index_offset);
-				Store<uint16_t>(append_entry.block_index, ptrs[i] + heap_block_index_offset);
-				// Offset of this row into the heap block (as uint32_t NOT idx_t)
-				Store<uint32_t>(append_entry.baseptr - data_locations[i], ptrs[i] + heap_offset_offset);
-				// Row size is stored in the heap in front of each row
-				Store<idx_t>(entry_sizes[i], data_locations[i]);
-				data_locations[i] += sizeof(idx_t);
-			}
+		const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
+		for (idx_t i = 0; i < count; i++) {
+			// Pointer to this row into the heap block
+			Store<data_ptr_t>(data_locations[i], ptrs[i] + heap_pointer_offset);
+			// Row size is stored in the heap in front of each row
+			Store<idx_t>(entry_sizes[i], data_locations[i]);
+			data_locations[i] += sizeof(idx_t);
 		}
 	}
 

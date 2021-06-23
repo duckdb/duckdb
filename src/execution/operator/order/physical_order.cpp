@@ -84,31 +84,30 @@ struct SortingState {
 class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(SortingState sorting_state, RowLayout payload_layout)
-	    : sorting_state(move(sorting_state)), payload_layout(move(payload_layout)), next_heap_index(0), total_count(0),
-	      sorting_data_radix_capacity(0), sorting_data_blob_capacity(0), payload_data_capacity(0),
-	      sorting_data_heap_capacity(0), payload_data_heap_capacity(0), external(false) {
+	    : sorting_state(move(sorting_state)), payload_layout(move(payload_layout)), next_heap_block_id(0),
+	      total_count(0), sorting_data_radix_capacity(0), sorting_data_blob_capacity(0), payload_data_capacity(0),
+	      sorting_data_heap_capacity(0), payload_data_heap_capacity(0), external_sort(false) {
 	}
 
 	~OrderGlobalState() override;
 
 	//! The lock for updating the order global state
 	std::mutex lock;
-
-	//! Constants concerning sorting and/or payload data
+	//! Constants concerning sorting and payload data
 	const SortingState sorting_state;
 	const RowLayout payload_layout;
-
-	//! Index to assign to each heap
-	uint16_t next_heap_index;
 
 	//! Sorted data
 	vector<unique_ptr<SortedBlock>> sorted_blocks;
 	vector<vector<unique_ptr<SortedBlock>>> sorted_blocks_temp;
 	unique_ptr<SortedBlock> odd_one_out = nullptr;
+	//! Pinned heap data (if sorting in memory)
+	vector<unique_ptr<BufferHandle>> heap_handles;
+	//! Next heap block id (used if doing external sort)
+	std::atomic<uint32_t> next_heap_block_id;
 
 	//! Total count - set after PhysicalOrder::Finalize is called
 	idx_t total_count;
-
 	//! Capacity (number of rows) used to initialize blocks
 	idx_t sorting_data_radix_capacity;
 	idx_t sorting_data_blob_capacity;
@@ -118,10 +117,7 @@ public:
 	idx_t payload_data_heap_capacity;
 
 	//! Whether we are doing an external sort
-	bool external;
-	//! Mapping from block index to the corresponding heap block handle
-	unordered_map<uint32_t, shared_ptr<BlockHandle>> heap_block_map;
-
+	bool external_sort;
 	//! Progress in merge path stage
 	idx_t pair_idx;
 	idx_t l_start;
@@ -135,51 +131,44 @@ public:
 
 	//! Whether this local state has been initialized
 	bool initialized;
-
-	//! Local copy of the executor
+	//! Local copy of the sorting expression executor
 	ExpressionExecutor executor;
-
 	//! Holds a vector of incoming sorting columns
 	DataChunk sort;
 
+	//! Initialize the local state using the global state
 	void Initialize(ClientContext &context, OrderGlobalState &gstate) {
 		auto &buffer_manager = BufferManager::GetBufferManager(context);
 		auto &sorting_state = gstate.sorting_state;
 		auto &payload_layout = gstate.payload_layout;
-		// radix sorting data
+		// Radix sorting data
 		idx_t vectors_per_block =
 		    (Storage::BLOCK_ALLOC_SIZE / sorting_state.entry_size + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
 		sorting_data_radix = make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE,
 		                                                    sorting_state.entry_size);
-		// variable sorting data
+		// Blob sorting data
 		if (!sorting_state.all_constant) {
 			auto blob_row_width = sorting_state.blob_layout.GetRowWidth();
 			vectors_per_block =
 			    (Storage::BLOCK_ALLOC_SIZE / blob_row_width + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
 			sorting_data_blob = make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE,
 			                                                   blob_row_width);
-			sorting_data_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8);
-			std::lock_guard<mutex> lock(gstate.lock);
-			sorting_data_heap->collection_index = gstate.next_heap_index;
-			gstate.next_heap_index++;
+			sorting_data_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8, true);
 		}
-
-		// payload data
+		// Payload data
 		auto payload_row_width = payload_layout.GetRowWidth();
 		vectors_per_block =
 		    (Storage::BLOCK_ALLOC_SIZE / payload_row_width + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
 		payload_data =
 		    make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, payload_row_width);
 		if (!payload_layout.AllConstant()) {
-			std::lock_guard<mutex> lock(gstate.lock);
-			payload_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8);
-			payload_heap->collection_index = gstate.next_heap_index;
-			gstate.next_heap_index++;
+			payload_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8, true);
 		}
 
 		initialized = true;
 	}
 
+	//! Whether the localstate has collected enough data to perform an external sort
 	bool Full(ClientContext &context, const SortingState &sorting_state, const RowLayout &payload_layout) {
 		// Compute the size of the collected data (in bytes)
 		idx_t size_in_bytes = sorting_data_radix->count * sorting_state.entry_size;
@@ -286,7 +275,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 
 	// when sorting data reaches a certain size, we sort it
 	if (lstate.Full(context.client, sorting_state, payload_layout)) {
-		gstate.external = true;
+		gstate.external_sort = true;
 		SortLocalState(context.client, lstate, gstate);
 	}
 }
@@ -336,12 +325,6 @@ public:
 	idx_t Count() {
 		idx_t count = std::accumulate(data_blocks.begin(), data_blocks.end(), 0,
 		                              [](idx_t a, const RowDataBlock &b) { return a + b.count; });
-#ifdef DEBUG
-		if (!layout.AllConstant()) {
-			D_ASSERT(count == std::accumulate(heap_blocks.begin(), heap_blocks.end(), (idx_t)0,
-			                                  [](idx_t a, const RowDataBlock &b) { return a + b.count; }));
-		}
-#endif
 		return count;
 	}
 
@@ -350,7 +333,7 @@ public:
 		data_capacity = data_capacity_p;
 		heap_capacity = heap_capacity_p;
 		CreateDataBlock();
-		if (!layout.AllConstant() && state.external) {
+		if (!layout.AllConstant() && state.external_sort) {
 			CreateHeapBlock();
 		}
 	}
@@ -362,20 +345,37 @@ public:
 
 	void CreateHeapBlock() {
 		D_ASSERT(!layout.AllConstant());
+		heap_block_id = state.next_heap_block_id++;
 		heap_blocks.emplace_back(buffer_manager, heap_capacity / 8, 8);
+		heap_blocks.back().heap_block_id = heap_block_id;
+	}
+
+	idx_t GetHeapBlockIndex(uint32_t block_id) {
+		for (idx_t i = 0; i < heap_blocks.size(); i++) {
+			if (heap_blocks[i].heap_block_id == block_id) {
+				return i;
+			}
+		}
+		D_ASSERT(false);
+		return 0;
 	}
 
 	data_ptr_t DataPtr() const {
 		D_ASSERT(data_blocks[block_idx].block->Readers() != 0 &&
 		         data_handle->handle->BlockId() == data_blocks[block_idx].block->BlockId());
-		return data_ptr + entry_idx * layout.GetRowWidth();
+		return data_ptr;
+	}
+
+	data_ptr_t HeapPtr() const {
+		D_ASSERT(!layout.AllConstant() && state.external_sort);
+		return heap_ptr + Load<uint32_t>(data_ptr + layout.GetHeapOffsetOffset());
 	}
 
 	void Pin() {
-		D_ASSERT(block_idx < data_blocks.size());
-		data_handle = buffer_manager.Pin(data_blocks[block_idx].block);
-		data_ptr = data_handle->Ptr();
-		// TODO: if we are going external, pin the heap block too, and get the ptr, do swizzling
+		PinData();
+		if (!layout.AllConstant() && state.external_sort) {
+			PinHeap();
+		}
 	}
 
 	void SetIndex(const idx_t &global_idx) {
@@ -384,13 +384,24 @@ public:
 
 	void Advance() {
 		entry_idx++;
+		data_ptr += layout.GetRowWidth();
 		if (entry_idx == data_blocks[block_idx].count) {
 			block_idx++;
 			entry_idx = 0;
 			if (block_idx < data_blocks.size()) {
-				Pin();
+				PinData();
 			} else {
 				UnpinAndReset(block_idx, entry_idx);
+				return;
+			}
+		}
+		if (!layout.AllConstant() && state.external_sort) {
+			D_ASSERT(block_idx < data_blocks.size());
+			uint32_t block_id = Load<uint32_t>(data_ptr + layout.GetHeapBlockIdOffset());
+			if (heap_block_id != block_id) {
+				heap_block_id = block_id;
+				heap_block_idx++;
+				PinHeap();
 			}
 		}
 	}
@@ -409,42 +420,52 @@ public:
 	}
 
 	unique_ptr<SortedData> CreateSlice(const idx_t start, const idx_t end) {
-		// identify blocks/entry indices of this slice
+		// Identify blocks/entry indices of this slice
 		idx_t start_block_index;
 		idx_t start_entry_index;
 		GlobalToLocalIndex(start, start_block_index, start_entry_index);
 		idx_t end_block_index;
 		idx_t end_entry_index;
 		GlobalToLocalIndex(end, end_block_index, end_entry_index);
-		// add the corresponding blocks to the result
+		// Add the corresponding blocks to the result
 		auto result = make_unique<SortedData>(layout, buffer_manager, state);
 		for (idx_t i = start_block_index; i <= end_block_index; i++) {
 			result->data_blocks.push_back(data_blocks[i]);
-			if (!layout.AllConstant()) {
-				//				result->offset_blocks.push_back(offset_blocks[i]);
-			}
 		}
-		// use start and end entry indices to set the boundaries
+		// Use start and end entry indices to set the boundaries
 		result->entry_idx = start_entry_index;
 		D_ASSERT(end_entry_index <= result->data_blocks.back().count);
 		result->data_blocks.back().count = end_entry_index;
-		if (!layout.AllConstant()) {
-			//			D_ASSERT(end_entry_index <= result->offset_blocks.back().count);
-			//			result->offset_blocks.back().count = end_entry_index;
-		}
 		return result;
 	}
 
 	//! Layout of this data
 	const RowLayout layout;
-	//! Data and blob blocks
+	//! Data and heap blocks
 	vector<RowDataBlock> data_blocks;
 	vector<RowDataBlock> heap_blocks;
-	//! Read indices
+	//! Read indices row data
 	idx_t block_idx;
 	idx_t entry_idx;
+	//! Read indices heap data
+	uint32_t heap_block_id;
+	idx_t heap_block_idx;
 
 private:
+	void PinData() {
+		D_ASSERT(block_idx < data_blocks.size());
+		data_handle = buffer_manager.Pin(data_blocks[block_idx].block);
+		data_ptr = data_handle->Ptr();
+	}
+
+	void PinHeap() {
+		D_ASSERT(!layout.AllConstant() && state.external_sort);
+		heap_block_id = Load<uint32_t>(data_ptr + layout.GetHeapBlockIdOffset());
+		heap_block_idx = GetHeapBlockIndex(heap_block_id);
+		heap_handle = buffer_manager.Pin(heap_blocks[heap_block_idx].block);
+		heap_ptr = heap_handle->Ptr();
+	}
+
 	//! The buffer manager
 	BufferManager &buffer_manager;
 	//! The global state
@@ -677,40 +698,6 @@ static RowDataBlock ConcatenateBlocks(BufferManager &buffer_manager, RowDataColl
 	}
 	row_data.blocks.clear();
 	row_data.count = 0;
-	return new_block;
-}
-
-static RowDataBlock SizesToOffsets(BufferManager &buffer_manager, RowDataCollection &row_data) {
-	idx_t total_count;
-	idx_t capacity;
-	ComputeCountAndCapacity(row_data, true, total_count, capacity);
-	// offsets block must store the size of the final entry, therefore need 1 more capacity
-	capacity++;
-
-	const idx_t &entry_size = row_data.entry_size;
-	RowDataBlock new_block(buffer_manager, capacity, entry_size);
-	new_block.count = total_count;
-	auto new_block_handle = buffer_manager.Pin(new_block.block);
-	data_ptr_t new_block_ptr = new_block_handle->Ptr();
-	for (auto &block : row_data.blocks) {
-		auto block_handle = buffer_manager.Pin(block.block);
-		memcpy(new_block_ptr, block_handle->Ptr(), block.count * entry_size);
-		new_block_ptr += block.count * entry_size;
-		buffer_manager.UnregisterBlock(block.block->BlockId(), true);
-	}
-	row_data.blocks.clear();
-	row_data.count = 0;
-	// convert sizes to offsets
-	idx_t *offsets = (idx_t *)new_block_handle->Ptr();
-	idx_t prev = offsets[0];
-	offsets[0] = 0;
-	idx_t curr;
-	for (idx_t i = 1; i < total_count; i++) {
-		curr = offsets[i];
-		offsets[i] = offsets[i - 1] + prev;
-		prev = curr;
-	}
-	offsets[total_count] = offsets[total_count - 1] + prev;
 	return new_block;
 }
 
@@ -1019,58 +1006,103 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 	}
 }
 
-static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t sorting_ptr, OrderGlobalState &state) {
+static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap,
+                    OrderGlobalState &gstate) {
 	const idx_t &count = sd.data_blocks.back().count;
-
+	// Pin unordered block
 	auto &unordered_data_block = sd.data_blocks.back();
 	auto unordered_data_handle = buffer_manager.Pin(unordered_data_block.block);
 	const data_ptr_t unordered_data_ptr = unordered_data_handle->Ptr();
-
+	// Create new block that will hold re-ordered row data
 	RowDataBlock reordered_data_block(buffer_manager, unordered_data_block.capacity, unordered_data_block.entry_size);
 	reordered_data_block.count = count;
 	auto ordered_data_handle = buffer_manager.Pin(reordered_data_block.block);
 	data_ptr_t ordered_data_ptr = ordered_data_handle->Ptr();
-
 	// Do the actual re-ordering
 	const idx_t row_width = sd.layout.GetRowWidth();
-	const idx_t sorting_entry_size = state.sorting_state.entry_size;
+	const idx_t sorting_entry_size = gstate.sorting_state.entry_size;
 	for (idx_t i = 0; i < count; i++) {
 		idx_t index = Load<idx_t>(sorting_ptr);
 		memcpy(ordered_data_ptr, unordered_data_ptr + index * row_width, row_width);
 		ordered_data_ptr += row_width;
 		sorting_ptr += sorting_entry_size;
 	}
-	// TODO: concatenate heap data in order and do pointer swizzling! (if external)
-
-	// Replace the unordered block with the re-ordered block
+	// Deal with the heap
+	if (!sd.layout.AllConstant() && gstate.external_sort) {
+		// Swizzle the pointers to offsets
+		RowOperations::Swizzle(sd.layout, ordered_data_handle->Ptr(), count);
+		// Create a single heap block to store the re-ordered heap
+		idx_t total_byte_offset = std::accumulate(heap.blocks.begin(), heap.blocks.end(), 0,
+		                                          [](idx_t a, const RowDataBlock &b) { return a + b.byte_offset; });
+		idx_t heap_block_size = MaxValue(total_byte_offset, (idx_t)Storage::BLOCK_ALLOC_SIZE);
+		RowDataBlock reordered_heap_block(buffer_manager, heap_block_size / 8, 8);
+		reordered_heap_block.count = count;
+		reordered_heap_block.byte_offset = total_byte_offset;
+		auto reordered_heap_handle = buffer_manager.Pin(reordered_data_block.block);
+		const data_ptr_t reordered_heap_base_ptr = reordered_heap_handle->Ptr();
+		data_ptr_t reordered_heap_ptr = reordered_heap_handle->Ptr();
+		// Create an ID for it
+		const uint32_t heap_block_id = gstate.next_heap_block_id++;
+		// Fill the heap in order
+		ordered_data_ptr = ordered_data_handle->Ptr();
+		const idx_t heap_ptr_offset = sd.layout.GetHeapPointerOffset();
+		const idx_t heap_blockid_offset = sd.layout.GetHeapBlockIdOffset();
+		const idx_t heap_offset_offset = sd.layout.GetHeapOffsetOffset();
+		for (idx_t i = 0; i < count; i++) {
+			// Copy the heap row
+			auto heap_row_ptr = Load<data_ptr_t>(ordered_data_ptr + heap_ptr_offset);
+			auto heap_row_size = Load<idx_t>(heap_row_ptr);
+			memcpy(reordered_heap_ptr, heap_row_ptr, heap_row_size);
+			// Store the heap blockid and heap offset over where the pointer was
+			Store<uint32_t>(heap_block_id, ordered_data_ptr + heap_blockid_offset);
+			Store<uint32_t>(reordered_heap_ptr - reordered_heap_base_ptr, ordered_data_ptr + heap_offset_offset);
+			reordered_heap_ptr += heap_row_size;
+		}
+		// Keep track of the heap block ids that correspond to the row blocks
+		reordered_heap_block.heap_block_id = heap_block_id;
+		reordered_data_block.heap_block_ids.push_back(heap_block_id);
+		// Move the re-ordered heap to the SortedData, and clear the local heap
+		sd.heap_blocks.push_back(move(reordered_heap_block));
+		heap.pinned_blocks.clear();
+		for (auto &block : heap.blocks) {
+			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+		}
+		heap.blocks.clear();
+		heap.count = 0;
+	} else {
+		// Keep heap blocks pinned (move handles to the global state)
+		for (auto &handle : heap.pinned_blocks) {
+			gstate.heap_handles.push_back(move(handle));
+		}
+	}
+	// Replace the unordered data block with the re-ordered data block
 	buffer_manager.UnregisterBlock(unordered_data_block.block->BlockId(), true);
 	sd.data_blocks.clear();
 	sd.data_blocks.push_back(move(reordered_data_block));
 }
 
 //! Use the ordered sorting data to re-order the rest of the data
-static void ReOrder(ClientContext &context, SortedBlock &sb, OrderGlobalState &state) {
+static void ReOrder(ClientContext &context, SortedBlock &sb, OrderLocalState &lstate, OrderGlobalState &gstate) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto sorting_handle = buffer_manager.Pin(sb.sorting_data_radix.back().block);
-	const data_ptr_t sorting_ptr = sorting_handle->Ptr() + state.sorting_state.comparison_size;
+	const data_ptr_t sorting_ptr = sorting_handle->Ptr() + gstate.sorting_state.comparison_size;
 	// Re-order variable size sorting columns
-	if (!state.payload_layout.AllConstant()) {
-		ReOrder(buffer_manager, *sb.sorting_data_blob, sorting_ptr, state);
+	if (!gstate.sorting_state.all_constant) {
+		ReOrder(buffer_manager, *sb.sorting_data_blob, sorting_ptr, *lstate.sorting_data_heap, gstate);
 	}
 	// And the payload
-	ReOrder(buffer_manager, *sb.payload_data, sorting_ptr, state);
+	ReOrder(buffer_manager, *sb.payload_data, sorting_ptr, *lstate.payload_heap, gstate);
 }
 
-void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lstate, OrderGlobalState &state) const {
+void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lstate, OrderGlobalState &gstate) const {
 	D_ASSERT(lstate.sorting_data_radix->count == lstate.payload_data->count);
 	if (lstate.sorting_data_radix->count == 0) {
 		return;
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	const auto &sorting_state = state.sorting_state;
-	const auto &payload_layout = state.payload_layout;
+	const auto &sorting_state = gstate.sorting_state;
 	// Move all data to a single SortedBlock
-	auto sb = make_unique<SortedBlock>(buffer_manager, state);
+	auto sb = make_unique<SortedBlock>(buffer_manager, gstate);
 	// Fixed-size sorting data
 	auto sorting_block = ConcatenateBlocks(buffer_manager, *lstate.sorting_data_radix, true);
 	sb->sorting_data_radix.push_back(move(sorting_block));
@@ -1086,7 +1118,7 @@ void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lsta
 	// Now perform the actual sort
 	SortInMemory(buffer_manager, *sb, sorting_state);
 	// Re-order before the merge sort
-	ReOrder(context, *sb, state);
+	ReOrder(context, *sb, lstate, gstate);
 	// Add the sorted block to the local state
 	lstate.sorted_blocks.push_back(move(sb));
 }
@@ -1391,12 +1423,13 @@ public:
 			} else {
 				// there are variable sized sorting columns, pin the var blocks
 				if (!l_done) {
-					left.PinBlobData();
+					left.sorting_data_blob->Pin();
 				}
 				if (!r_done) {
-					right.PinBlobData();
+					right.sorting_data_blob->Pin();
 				}
 				if (!l_done && !r_done) {
+					// TODO: differentiate between in-memory and external sort! (state.external_sort)
 					for (; compared < count && l_entry_idx < l_count && r_entry_idx < r_count; compared++) {
 						// update for next iteration using the comparison bool
 						left_smaller[compared] = CompareColumns(left, right, l_ptr, r_ptr, sorting_state) < 0;
@@ -1426,9 +1459,10 @@ public:
 			}
 		}
 		// reset block indices before the actual merge
+		// TODO: also reset the heap block idx!!
 		if (!sorting_state.all_constant) {
 			left.sorting_data_blob->UnpinAndReset(l_blob_block_idx, l_blob_entry_idx);
-			right.sorting_data_blob->UnpinAndReset(r_blob_entry_idx, r_blob_entry_idx);
+			right.sorting_data_blob->UnpinAndReset(r_blob_block_idx, r_blob_entry_idx);
 		}
 	}
 
@@ -1504,7 +1538,7 @@ public:
 	           const bool *left_smaller, idx_t *next_entry_sizes) {
 		const auto &layout = result_data.layout;
 		const idx_t row_width = layout.GetRowWidth();
-		const idx_t heap_block_index_offset = layout.GetHeapBlockIndexOffset();
+		const idx_t heap_blockid_offset = layout.GetHeapBlockIdOffset();
 		const idx_t heap_offset_offset = layout.GetHeapOffsetOffset();
 
 		// Left and right row data to merge
@@ -1519,6 +1553,8 @@ public:
 		uint32_t r_heap_block_id;
 		unique_ptr<BufferHandle> l_heap_handle;
 		unique_ptr<BufferHandle> r_heap_handle;
+		data_ptr_t l_heap_base_ptr;
+		data_ptr_t r_heap_base_ptr;
 		data_ptr_t l_heap_ptr;
 		data_ptr_t r_heap_ptr;
 
@@ -1531,12 +1567,14 @@ public:
 		unique_ptr<BufferHandle> result_heap_handle;
 		data_ptr_t result_heap_base_ptr;
 		data_ptr_t result_heap_ptr;
+		uint32_t result_heap_block_id;
 		bool heap_block_full = false;
 		if (!layout.AllConstant()) {
 			result_heap_block = &result_data.heap_blocks.back();
 			result_heap_handle = buffer_manager.Pin(result_heap_block->block);
 			result_heap_base_ptr = result_heap_handle->Ptr();
-			result_heap_ptr = result_heap_base_ptr + result_heap_block->byte_offset;
+			result_heap_ptr = result_heap_handle->Ptr() + result_heap_block->byte_offset;
+			result_heap_block_id = result_heap_block->heap_block_id;
 		}
 
 		idx_t copied = 0;
@@ -1562,9 +1600,14 @@ public:
 				result_data_block = &result_data.data_blocks.back();
 				result_data_handle = buffer_manager.Pin(result_data_block->block);
 				result_data_ptr = result_data_handle->Ptr();
+				// Add heap block ID to this block (if not already there)
+				if (!layout.AllConstant() && state.external_sort &&
+				    result_data_block->heap_block_ids.back() != result_heap_block_id) {
+					result_data_block->heap_block_ids.push_back(result_heap_block_id);
+				}
 			}
 			// Perform one of two ways to merge
-			if (layout.AllConstant() || !state.external) {
+			if (layout.AllConstant() || !state.external_sort) {
 				// If all constant size, or if we are doing an in-memory sort, we do not need to touch the heap
 				if (!l_done && !r_done) {
 					// Neither left nor right side is exhausted
@@ -1582,14 +1625,16 @@ public:
 			} else {
 				// External sorting with variable size data. Pin the heap blocks too
 				if (!l_done) {
-					l_heap_block_id = Load<uint32_t>(l_ptr + layout.GetHeapBlockIndexOffset());
-					l_heap_handle = buffer_manager.Pin(state.heap_block_map.at(l_heap_block_id));
-					l_heap_ptr = l_heap_handle->Ptr() + Load<idx_t>(l_ptr + heap_offset_offset);
+					l_heap_block_id = Load<uint32_t>(l_ptr + layout.GetHeapBlockIdOffset());
+					l_heap_handle = buffer_manager.Pin(l_data.heap_blocks[l_data.heap_block_idx].block);
+					l_heap_base_ptr = l_heap_handle->Ptr();
+					l_heap_ptr = l_heap_base_ptr + Load<uint32_t>(l_ptr + heap_offset_offset);
 				}
 				if (!r_done) {
-					r_heap_block_id = Load<uint32_t>(r_ptr + layout.GetHeapBlockIndexOffset());
-					r_heap_handle = buffer_manager.Pin(state.heap_block_map.at(r_heap_block_id));
-					r_heap_ptr = r_heap_handle->Ptr() + Load<idx_t>(r_ptr + heap_offset_offset);
+					r_heap_block_id = Load<uint32_t>(r_ptr + layout.GetHeapBlockIdOffset());
+					l_heap_handle = buffer_manager.Pin(r_data.heap_blocks[r_data.heap_block_idx].block);
+					r_heap_base_ptr = r_heap_handle->Ptr();
+					r_heap_ptr = r_heap_base_ptr + Load<uint32_t>(r_ptr + heap_offset_offset);
 				}
 				// Create new result heap block (if needed)
 				if (heap_block_full) {
@@ -1597,7 +1642,9 @@ public:
 					result_heap_block = &result_data.heap_blocks.back();
 					result_heap_handle = buffer_manager.Pin(result_heap_block->block);
 					result_heap_base_ptr = result_heap_handle->Ptr();
-					result_heap_ptr = result_heap_base_ptr + result_heap_block->byte_offset;
+					result_heap_ptr = result_heap_handle->Ptr() + result_heap_block->byte_offset;
+					result_heap_block_id = result_heap_block->heap_block_id;
+					result_data_block->heap_block_ids.push_back(result_heap_block_id);
 					heap_block_full = false;
 				}
 				// Merge both the row data and the heap at the same time
@@ -1607,12 +1654,14 @@ public:
 					const idx_t result_heap_capacity = result_data_block->capacity * result_data_block->entry_size;
 					for (next = 0; copied + next < count && l_data.entry_idx < l_count && r_data.entry_idx < r_count;
 					     next++) {
-						if (l_heap_block_id != Load<uint32_t>(l_ptr + heap_block_index_offset)) {
+						if (l_heap_block_id != Load<uint32_t>(l_ptr + heap_blockid_offset)) {
 							// Next left row has a different heap block
+							l_data.heap_block_idx++;
 							break;
 						}
-						if (r_heap_block_id != Load<uint32_t>(r_ptr + heap_block_index_offset)) {
+						if (r_heap_block_id != Load<uint32_t>(r_ptr + heap_blockid_offset)) {
 							// Next right row has a different heap block
+							r_data.heap_block_idx++;
 							break;
 						}
 						// Get the entry size of next entry that will be copied, and check if it will fit
@@ -1624,26 +1673,26 @@ public:
 							heap_block_full = true;
 							break;
 						}
-						// Copy fixed size row, update heap offset, and copy heap row (from the smaller side)
-						// Then update the corresponding indices and pointers from that side
+						// Copy fixed size row, update heap block ID and offset, and copy heap row (from the smaller
+						// side) Then update the corresponding indices and pointers from that side
 						if (l_smaller) {
 							memcpy(result_data_ptr, l_ptr, row_width);
-							// TODO: also copy heap block id!
+							Store<uint32_t>(result_heap_block_id, result_data_ptr + heap_blockid_offset);
 							Store<uint32_t>(result_heap_ptr - result_heap_base_ptr,
 							                result_data_ptr + heap_offset_offset);
 							memcpy(result_heap_ptr, l_heap_ptr, l_size);
 							l_data.entry_idx++;
 							l_ptr += row_width;
-							l_heap_ptr += l_size;
+							l_heap_ptr = l_heap_base_ptr + Load<uint32_t>(l_ptr + heap_offset_offset);
 						} else {
 							memcpy(result_data_ptr, r_ptr, row_width);
-							// TODO: also copy heap block id!
+							Store<uint32_t>(result_heap_block_id, result_data_ptr + heap_blockid_offset);
 							Store<uint32_t>(result_heap_ptr - result_heap_base_ptr,
 							                result_data_ptr + heap_offset_offset);
 							memcpy(result_heap_ptr, r_heap_ptr, entry_size);
 							r_data.entry_idx++;
 							r_ptr += row_width;
-							r_heap_ptr += r_size;
+							r_heap_ptr = r_heap_base_ptr + Load<uint32_t>(r_ptr + heap_offset_offset);
 						}
 						// Update result indices and pointers
 						result_data_block->count++;
@@ -1664,7 +1713,7 @@ public:
 					                  result_heap_base_ptr, copied, count, heap_block_full);
 				}
 			}
-			// move to new blocks (if needed)
+			// move to new data blocks (if needed)
 			if (l_data.block_idx < l_data.data_blocks.size() &&
 			    l_data.entry_idx == l_data.data_blocks[l_data.block_idx].count) {
 				l_data.block_idx++;
@@ -1719,36 +1768,39 @@ public:
 	}
 
 	void FlushVariableSize(const RowLayout &layout, const idx_t &source_count, data_ptr_t &source_data_ptr,
-	                       idx_t &source_entry_idx, data_ptr_t &source_heap_ptr, uint32_t source_heap_block_id,
-	                       RowDataBlock *target_data_block, data_ptr_t &target_data_ptr,
+	                       idx_t &source_entry_idx, const data_ptr_t &source_heap_base_ptr,
+	                       uint32_t source_heap_block_id, RowDataBlock *target_data_block, data_ptr_t &target_data_ptr,
 	                       RowDataBlock *target_heap_block, data_ptr_t &target_heap_ptr,
 	                       const data_ptr_t &target_heap_base_ptr, idx_t &copied, const idx_t &count,
 	                       bool &target_block_full) {
 		const idx_t row_width = layout.GetRowWidth();
-		const idx_t heap_block_index_offset = layout.GetHeapBlockIndexOffset();
+		const idx_t heap_blockid_offset = layout.GetHeapBlockIdOffset();
 		const idx_t heap_offset_offset = layout.GetHeapOffsetOffset();
+		const uint32_t target_heap_block_id = target_heap_block->heap_block_id;
 		// Flush source into target
 		idx_t next;
+		data_ptr_t source_heap_ptr;
 		const idx_t &target_heap_capacity = target_heap_block->capacity * target_heap_block->entry_size;
 		for (next = 0; copied + next < count && source_entry_idx < source_count; next++) {
-			if (source_heap_block_id != Load<uint32_t>(source_data_ptr + heap_block_index_offset)) {
+			if (source_heap_block_id != Load<uint32_t>(source_data_ptr + heap_blockid_offset)) {
 				// Next source row has a different heap block
 				break;
 			}
+			source_heap_ptr = source_heap_base_ptr + Load<uint32_t>(source_data_ptr + heap_offset_offset);
 			idx_t entry_size = Load<idx_t>(source_heap_ptr);
 			if (target_heap_block->byte_offset + entry_size > target_heap_capacity) {
 				target_block_full = true;
 				break;
 			}
-			// Copy fixed size row, update heap offset, and copy heap row (from the smaller side)
+			// Copy fixed size row, update heap block ID and offset, and copy heap row (from the smaller side)
 			// Then update the corresponding indices and pointers from that side
 			memcpy(target_data_ptr, source_data_ptr, row_width);
+			Store<uint32_t>(target_heap_block_id, target_data_ptr + heap_blockid_offset);
 			Store<uint32_t>(target_heap_ptr - target_heap_base_ptr, target_data_ptr + heap_offset_offset);
-			// TODO: also copy heap block id!
 			memcpy(target_heap_ptr, source_heap_ptr, entry_size);
 			source_entry_idx++;
 			source_data_ptr += row_width;
-			source_heap_ptr += entry_size;
+			source_heap_ptr = source_heap_base_ptr + Load<uint32_t>(source_data_ptr + heap_offset_offset);
 			// Update result indices and pointers
 			target_data_block->count++;
 			target_data_block->byte_offset += entry_size;
@@ -1793,7 +1845,7 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 			auto &data_block = sb->sorting_data_blob->data_blocks.back();
 			state.sorting_data_blob_capacity =
 			    MaxValue(state.sorting_data_blob_capacity, data_block.capacity * data_block.entry_size);
-			if (state.external) {
+			if (state.external_sort) {
 				auto &heap_block = sb->sorting_data_blob->heap_blocks.back();
 				state.sorting_data_heap_capacity =
 				    MaxValue(state.sorting_data_heap_capacity, heap_block.capacity * heap_block.entry_size);
@@ -1806,7 +1858,7 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		auto &data_block = sb->payload_data->data_blocks.back();
 		state.payload_data_capacity =
 		    MaxValue(state.payload_data_capacity, data_block.capacity * data_block.entry_size);
-		if (!payload_layout.AllConstant() && state.external) {
+		if (!payload_layout.AllConstant() && state.external_sort) {
 			auto &heap_block = sb->payload_data->heap_blocks.back();
 			state.payload_data_heap_capacity =
 			    MaxValue(state.sorting_data_heap_capacity, heap_block.capacity * heap_block.entry_size);
@@ -1947,35 +1999,40 @@ static void UpdateStateIndices(const idx_t &next, const SortedData &payload_data
 static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperatorState &state, OrderGlobalState &gstate,
                  const idx_t &scan_count) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	const auto &layout = gstate.payload_layout;
-
 	auto &payload_data = *state.payload_data;
+	const auto &layout = gstate.payload_layout;
+	const idx_t &row_width = layout.GetRowWidth();
 	vector<unique_ptr<BufferHandle>> handles;
-
 	// Set up a batch of pointers to scan data from
 	idx_t count = 0;
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(state.addresses);
 	while (count < scan_count) {
+		// Grab the row data block
 		auto &data_block = payload_data.data_blocks[state.block_idx];
 		auto data_handle = buffer_manager.Pin(data_block.block);
 		data_ptr_t payl_dataptr = data_handle->Ptr() + state.entry_idx * layout.GetRowWidth();
-		handles.push_back(move(data_handle));
-
+		// Check how many rows we can read from the same heap block
 		idx_t next = MinValue(data_block.count - state.entry_idx, scan_count - count);
-		if (!layout.AllConstant() && gstate.external) {
-			const uint32_t heap_block_id = Load<uint32_t>(payl_dataptr + layout.GetHeapBlockIndexOffset());
-			auto heap_handle = buffer_manager.Pin(gstate.heap_block_map.at(heap_block_id));
-			data_ptr_t heap_ptr = heap_handle->Ptr() + Load<idx_t>(payl_dataptr + layout.GetHeapOffsetOffset());
-			handles.push_back(move(heap_handle));
+		if (!layout.AllConstant() && gstate.external_sort) {
+			const idx_t heap_block_id_offset = layout.GetHeapBlockIdOffset();
+			const uint32_t heap_block_id = Load<uint32_t>(payl_dataptr + heap_block_id_offset);
 			for (idx_t i = 0; i < next; i++) {
-				if (heap_block_id != Load<uint32_t>(payl_dataptr + layout.GetHeapBlockIndexOffset())) {
+				if (heap_block_id != Load<uint32_t>(payl_dataptr + heap_block_id_offset)) {
 					next = i;
 					break;
 				}
-				// TODO: unswizzle
+				payl_dataptr += row_width;
 			}
+			// Unswizzle the offsets back to pointers
+			auto heap_handle =
+			    buffer_manager.Pin(payload_data.heap_blocks[payload_data.GetHeapBlockIndex(heap_block_id)].block);
+			RowOperations::Unswizzle(layout, data_handle->Ptr() + state.entry_idx * layout.GetRowWidth(),
+			                         heap_handle->Ptr(), next);
+			handles.push_back(move(heap_handle));
 		}
 		// Set up the next pointers
+		payl_dataptr = data_handle->Ptr() + state.entry_idx * layout.GetRowWidth();
+		handles.push_back(move(data_handle));
 		for (idx_t i = 0; i < next; i++) {
 			data_pointers[count + i] = payl_dataptr;
 			payl_dataptr += layout.GetRowWidth();

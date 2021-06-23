@@ -7,9 +7,10 @@ namespace duckdb {
 
 using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
-RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size)
+RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size,
+                                     bool keep_pinned)
     : buffer_manager(buffer_manager), count(0), block_capacity(block_capacity), entry_size(entry_size),
-      is_little_endian(IsLittleEndian()), current_block_index(0) {
+      is_little_endian(IsLittleEndian()), keep_pinned(keep_pinned) {
 	D_ASSERT(block_capacity * entry_size >= Storage::BLOCK_ALLOC_SIZE);
 }
 
@@ -644,12 +645,12 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 		append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
 		dataptr = handle.node->buffer + block.count * entry_size;
 	}
-	append_entries.emplace_back(dataptr, append_count, current_block_index);
+	append_entries.emplace_back(dataptr, append_count);
 	block.count += append_count;
 	return append_count;
 }
 
-vector<BlockAppendEntry> RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]) {
+void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]) {
 	vector<unique_ptr<BufferHandle>> handles;
 	vector<BlockAppendEntry> append_entries;
 
@@ -672,9 +673,7 @@ vector<BlockAppendEntry> RowDataCollection::Build(idx_t added_count, data_ptr_t 
 		}
 		while (remaining > 0) {
 			// now for the remaining data, allocate new buffers to store the data and append there
-			current_block_index++;
 			RowDataBlock new_block(buffer_manager, block_capacity, entry_size);
-			AddBlockToMap(new_block.block);
 			auto handle = buffer_manager.Pin(new_block.block);
 
 			// offset the entry sizes array if we have added entries already
@@ -687,7 +686,11 @@ vector<BlockAppendEntry> RowDataCollection::Build(idx_t added_count, data_ptr_t 
 				// it can be that no tuples fit the block (huge entry e.g. large string)
 				// in this case we do not add them
 				blocks.push_back(move(new_block));
-				handles.push_back(move(handle));
+				if (keep_pinned) {
+					pinned_blocks.push_back(move(handle));
+				} else {
+					handles.push_back(move(handle));
+				}
 			}
 		}
 	}
@@ -707,7 +710,6 @@ vector<BlockAppendEntry> RowDataCollection::Build(idx_t added_count, data_ptr_t 
 			}
 		}
 	}
-	return append_entries;
 }
 
 void RowDataCollection::Merge(RowDataCollection &other) {

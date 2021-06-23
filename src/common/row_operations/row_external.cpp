@@ -1,0 +1,82 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/types/row_operations/row_external.cpp
+//
+//
+//===----------------------------------------------------------------------===//
+#include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types/row_layout.hpp"
+
+namespace duckdb {
+
+void RowOperations::Swizzle(const RowLayout &layout, const data_ptr_t &row_base_ptr, const idx_t &count) {
+	const idx_t row_width = layout.GetRowWidth();
+	// Swizzle the columns one by one
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		auto physical_type = layout.GetTypes()[col_idx].InternalType();
+		if (TypeIsConstantSize(physical_type)) {
+			continue;
+		}
+		data_ptr_t heap_base_ptr = row_base_ptr + layout.GetHeapPointerOffset();
+		data_ptr_t col_ptr = row_base_ptr + layout.GetOffsets()[col_idx];
+		if (physical_type == PhysicalType::VARCHAR) {
+			// Replace the pointer with the computed offset (if non-inlined)
+			for (idx_t i = 0; i < count; i++) {
+				string_t &str = (string_t &)*col_ptr;
+				if (!str.IsInlined()) {
+					data_ptr_t ptr_ptr = col_ptr + sizeof(uint32_t);
+					Store<idx_t>(Load<data_ptr_t>(ptr_ptr) - Load<data_ptr_t>(heap_base_ptr), ptr_ptr);
+					heap_base_ptr += row_width;
+					col_ptr += row_width;
+				}
+			}
+		} else {
+			// Replace the pointer with the computed offset
+			for (idx_t i = 0; i < count; i++) {
+				Store<idx_t>(Load<data_ptr_t>(col_ptr) - Load<data_ptr_t>(heap_base_ptr), col_ptr);
+				heap_base_ptr += row_width;
+				col_ptr += row_width;
+			}
+		}
+	}
+}
+
+void RowOperations::Unswizzle(const RowLayout &layout, const data_ptr_t &row_base_ptr, const data_ptr_t &heap_base_ptr,
+                              const idx_t &count) {
+	const idx_t row_width = layout.GetRowWidth();
+	data_ptr_t heap_offset_ptr = row_base_ptr + layout.GetHeapOffsetOffset();
+	// Compute the base pointer to each row
+	vector<data_ptr_t> heap_row_pointers(count);
+	for (idx_t i = 0; i < count; i++) {
+		heap_row_pointers[i] = heap_base_ptr + Load<uint32_t>(heap_offset_ptr);
+		heap_offset_ptr += row_width;
+	}
+	// Unswizzle the columns one by one
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		auto physical_type = layout.GetTypes()[col_idx].InternalType();
+		if (TypeIsConstantSize(physical_type)) {
+			continue;
+		}
+		data_ptr_t col_ptr = row_base_ptr + layout.GetOffsets()[col_idx];
+		if (physical_type == PhysicalType::VARCHAR) {
+			// Replace offset with the pointer (if non-inlined)
+			for (idx_t i = 0; i < count; i++) {
+				string_t &str = (string_t &)*col_ptr;
+				if (!str.IsInlined()) {
+					data_ptr_t offset_ptr = col_ptr + sizeof(uint32_t);
+					Store<data_ptr_t>(heap_row_pointers[i] + Load<idx_t>(offset_ptr), offset_ptr);
+					col_ptr += row_width;
+				}
+			}
+		} else {
+			// Replace the offset with the pointer
+			for (idx_t i = 0; i < count; i++) {
+				Store<data_ptr_t>(heap_row_pointers[i] + Load<idx_t>(col_ptr), col_ptr);
+				col_ptr += row_width;
+			}
+		}
+	}
+}
+
+} // namespace duckdb

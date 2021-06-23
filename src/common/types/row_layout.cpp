@@ -41,9 +41,12 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p)
 		all_constant = all_constant && TypeIsConstantSize(type.InternalType());
 	}
 
-	// Offset into heap.
+	// This enables pointer swizzling for out-of-core computation.
 	if (!all_constant) {
-		heap_block_index_offset = row_width;
+		// When unswizzled the pointer lives here.
+		heap_pointer_offset = row_width;
+		// When swizzled, the pointer is replaced by id, offset.
+		heap_blockid_offset = row_width;
 		row_width += sizeof(uint32_t);
 		heap_offset_offset = row_width;
 		row_width += sizeof(uint32_t);

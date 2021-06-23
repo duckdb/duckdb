@@ -97,9 +97,12 @@ public:
 	inline bool AllConstant() const {
 		return all_constant;
 	}
+	inline idx_t GetHeapPointerOffset() const {
+		return heap_pointer_offset;
+	}
 	//! Returns heap block index offset
-	inline idx_t GetHeapBlockIndexOffset() const {
-		return heap_block_index_offset;
+	inline idx_t GetHeapBlockIdOffset() const {
+		return heap_blockid_offset;
 	}
 	//! Returns heap offset offset
 	inline idx_t GetHeapOffsetOffset() const {
@@ -123,8 +126,10 @@ private:
 	vector<idx_t> offsets;
 	//! Whether all columns in this layout are constant size
 	bool all_constant;
+	//! Offset to the pointer to the heap for each row
+	idx_t heap_pointer_offset;
 	//! Offset to of the heap block index
-	idx_t heap_block_index_offset;
+	idx_t heap_blockid_offset;
 	//! Offset to the offset in the heap for each row
 	idx_t heap_offset_offset;
 };
