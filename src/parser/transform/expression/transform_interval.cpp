@@ -113,7 +113,7 @@ unique_ptr<ParsedExpression> Transformer::TransformInterval(duckdb_libpgquery::P
 	// now push the operation
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(expr));
-	return make_unique<FunctionExpression>(fname, children);
+	return make_unique<FunctionExpression>(fname, move(children));
 }
 
 } // namespace duckdb

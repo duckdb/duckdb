@@ -188,6 +188,9 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		for (idx_t i = 0; i < bound_select.aggregates.size(); i++) {
 			EnumerateExpression(bound_select.aggregates[i], callback);
 		}
+		for (idx_t i = 0; i < bound_select.unnests.size(); i++) {
+			EnumerateExpression(bound_select.unnests[i], callback);
+		}
 		for (idx_t i = 0; i < bound_select.windows.size(); i++) {
 			EnumerateExpression(bound_select.windows[i], callback);
 		}

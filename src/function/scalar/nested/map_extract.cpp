@@ -7,7 +7,6 @@
 namespace duckdb {
 void FillResult(Value &values, Vector &result, idx_t row) {
 	//! First Initialize List Vector
-	ListVector::Initialize(result);
 	idx_t current_offset = ListVector::GetListSize(result);
 	//! Push Values to List Vector
 	for (idx_t i = 0; i < values.list_value.size(); i++) {

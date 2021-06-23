@@ -36,6 +36,8 @@ ExpressionBinder::~ExpressionBinder() {
 BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression) {
 	auto &expr_ref = **expr;
 	switch (expr_ref.expression_class) {
+	case ExpressionClass::BETWEEN:
+		return BindExpression((BetweenExpression &)expr_ref, depth);
 	case ExpressionClass::CASE:
 		return BindExpression((CaseExpression &)expr_ref, depth);
 	case ExpressionClass::CAST:
@@ -200,7 +202,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 		return result.error;
 	} else {
 		// successfully bound: replace the node with a BoundExpression
-		*expr = make_unique<BoundExpression>(move(result.expression), move(*expr));
+		*expr = make_unique<BoundExpression>(move(result.expression));
 		auto be = (BoundExpression *)expr->get();
 		D_ASSERT(be);
 		be->alias = alias;

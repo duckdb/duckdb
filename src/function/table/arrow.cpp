@@ -74,9 +74,8 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 	} else if (format == "ttm") {
 		return LogicalType::TIME;
 	} else if (format == "+l") {
-		D_ASSERT(arrow_convert_data[col_idx]);
-		std::pair<ArrowListType, idx_t> list_type {ArrowListType::NORMAL, 0};
-		((ListArrowConvertData *)arrow_convert_data[col_idx].get())->list_type.push_back(list_type);
+
+		((ListArrowConvertData *)arrow_convert_data[col_idx].get())->list_type.emplace_back(ArrowListType::NORMAL, 0);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(child_type);
 	} else if (format == "+L") {
@@ -224,7 +223,6 @@ void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
                        idx_t &list_col_idx) {
 	auto original_type = ((ListArrowConvertData *)arrow_convert_data[col_idx].get())->list_type[list_col_idx++];
 	idx_t list_size = 0;
-	ListVector::Initialize(vector);
 	auto &child_vector = ListVector::GetEntry(vector);
 	SetValidityMask(vector, array, scan_state, size);
 

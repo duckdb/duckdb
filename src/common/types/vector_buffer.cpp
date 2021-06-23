@@ -16,16 +16,12 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
 	return make_buffer<VectorBuffer>(GetTypeIdSize(type));
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(VectorType vector_type, const LogicalType &type) {
-	return make_buffer<VectorBuffer>(vector_type, type, GetTypeIdSize(type.InternalType()));
+buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(const LogicalType &type) {
+	return VectorBuffer::CreateConstantVector(type.InternalType());
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, const LogicalType &type) {
-	return make_buffer<VectorBuffer>(vector_type, type, STANDARD_VECTOR_SIZE * GetTypeIdSize(type.InternalType()));
-}
-
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(VectorType vector_type, PhysicalType type) {
-	return make_buffer<VectorBuffer>(vector_type, STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &type) {
+	return VectorBuffer::CreateStandardVector(type.InternalType());
 }
 
 VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING_BUFFER) {
@@ -34,21 +30,34 @@ VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING
 VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 }
 
+VectorStructBuffer::VectorStructBuffer(const LogicalType &type) : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+	auto &child_types = StructType::GetChildTypes(type);
+	for (auto &child_type : child_types) {
+		auto vector = make_unique<Vector>(child_type.second);
+		children.push_back(move(vector));
+	}
+}
+
 VectorStructBuffer::~VectorStructBuffer() {
 }
 
-VectorListBuffer::VectorListBuffer() : VectorBuffer(VectorBufferType::LIST_BUFFER) {
+VectorListBuffer::VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity)
+    : VectorBuffer(VectorBufferType::LIST_BUFFER), capacity(initial_capacity), child(move(vector)) {
 }
 
-void VectorListBuffer::SetChild(unique_ptr<Vector> new_child) {
-	child = move(new_child);
+VectorListBuffer::VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity)
+    : VectorBuffer(VectorBufferType::LIST_BUFFER) {
+	// FIXME: directly construct vector of correct size
+	child = make_unique<Vector>(ListType::GetChildType(list_type));
 	capacity = STANDARD_VECTOR_SIZE;
+	Reserve(initial_capacity);
 }
 
 void VectorListBuffer::Reserve(idx_t to_reserve) {
 	if (to_reserve > capacity) {
-		idx_t new_capacity = (to_reserve) / STANDARD_VECTOR_SIZE + ((to_reserve) % STANDARD_VECTOR_SIZE != 0);
-		new_capacity *= STANDARD_VECTOR_SIZE;
+		idx_t new_capacity = (to_reserve + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE;
+		D_ASSERT(new_capacity >= to_reserve);
+		D_ASSERT(new_capacity % STANDARD_VECTOR_SIZE == 0);
 		child->Resize(capacity, new_capacity);
 		capacity = new_capacity;
 	}

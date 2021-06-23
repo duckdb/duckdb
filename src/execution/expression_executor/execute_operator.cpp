@@ -22,6 +22,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		if (expr.children.size() < 2) {
 			throw Exception("IN needs at least two children");
 		}
+
 		Vector left(expr.children[0]->return_type);
 		// eval left side
 		Execute(*expr.children[0], state->child_states[0].get(), sel, count, left);
@@ -59,8 +60,8 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			result.Reference(intermediate);
 		}
 	} else if (expr.children.size() == 1) {
-		Vector child;
-		child.Reference(state->intermediate_chunk.data[0]);
+		state->intermediate_chunk.Reset();
+		auto &child = state->intermediate_chunk.data[0];
 
 		Execute(*expr.children[0], state->child_states[0].get(), sel, count, child);
 		switch (expr.type) {

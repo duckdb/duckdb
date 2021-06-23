@@ -22,6 +22,10 @@
 #include "tpch-extension.hpp"
 #endif
 
+#ifdef BUILD_TPCDS_EXTENSION
+#include "tpcds-extension.hpp"
+#endif
+
 #ifdef BUILD_FTS_EXTENSION
 #include "fts-extension.hpp"
 #endif
@@ -50,6 +54,9 @@ public:
 #endif
 #ifdef BUILD_TPCH_EXTENSION
 		db.LoadExtension<TPCHExtension>();
+#endif
+#ifdef BUILD_TPCDS_EXTENSION
+		db.LoadExtension<TPCDSExtension>();
 #endif
 #ifdef BUILD_FTS_EXTENSION
 		db.LoadExtension<FTSExtension>();
@@ -80,6 +87,13 @@ public:
 		} else if (extension == "tpch") {
 #ifdef BUILD_TPCH_EXTENSION
 			db.LoadExtension<TPCHExtension>();
+#else
+			// icu extension required but not build: skip this test
+			return ExtensionLoadResult::NOT_LOADED;
+#endif
+		} else if (extension == "tpcds") {
+#ifdef BUILD_TPCDS_EXTENSION
+			db.LoadExtension<TPCDSExtension>();
 #else
 			// icu extension required but not build: skip this test
 			return ExtensionLoadResult::NOT_LOADED;

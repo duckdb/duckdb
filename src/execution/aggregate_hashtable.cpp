@@ -38,7 +38,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      HtEntryType entry_type)
     : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), entry_type(entry_type), capacity(0), entries(0),
-      payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
+      payload_page_offset(0), addresses(LogicalType::POINTER), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
       hash_salts(LogicalTypeId::SMALLINT), group_compare_vector(STANDARD_VECTOR_SIZE),
       no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
 
@@ -89,7 +89,6 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		}
 		payload_idx += aggr.child_count;
 	}
-	addresses.Initialize(LogicalType::POINTER);
 	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
 	string_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8);
 }
@@ -315,9 +314,8 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 			// a selection vector
 			if (new_group_count > 0) {
 				if (aggr.filter) {
-					Vector distinct_addresses;
+					Vector distinct_addresses(addresses, new_groups, new_group_count);
 					DataChunk distinct_payload;
-					distinct_addresses.Slice(addresses, new_groups, new_group_count);
 					auto pay_types = payload.GetTypes();
 					distinct_payload.Initialize(pay_types);
 					distinct_payload.Slice(payload, new_groups, new_group_count);
@@ -325,8 +323,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 					distinct_addresses.Normalify(new_group_count);
 					RowOperations::UpdateFilteredStates(aggr, distinct_addresses, distinct_payload, payload_idx);
 				} else {
-					Vector distinct_addresses;
-					distinct_addresses.Slice(addresses, new_groups, new_group_count);
+					Vector distinct_addresses(addresses, new_groups, new_group_count);
 					for (idx_t i = 0; i < aggr.child_count; i++) {
 						payload.data[payload_idx + i].Slice(new_groups, new_group_count);
 						payload.data[payload_idx + i].Verify(new_group_count);
@@ -544,8 +541,9 @@ void GroupedAggregateHashTable::FlushMove(Vector &source_addresses, Vector &sour
 	groups.SetCardinality(count);
 	for (idx_t i = 0; i < groups.ColumnCount(); i++) {
 		auto &column = groups.data[i];
-		RowOperations::Gather(layout, source_addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, column,
-		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, count, i);
+		const auto col_offset = layout.GetOffsets()[i];
+		RowOperations::Gather(source_addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, column,
+		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, count, col_offset, i);
 	}
 
 	SelectionVector new_groups(STANDARD_VECTOR_SIZE);
@@ -670,8 +668,9 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	const auto group_cols = layout.ColumnCount() - 1;
 	for (idx_t i = 0; i < group_cols; i++) {
 		auto &column = result.data[i];
-		RowOperations::Gather(layout, addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, column,
-		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, result.size(), i);
+		const auto col_offset = layout.GetOffsets()[i];
+		RowOperations::Gather(addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, column,
+		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, result.size(), col_offset, i);
 	}
 
 	RowOperations::FinalizeStates(layout, addresses, result, group_cols);

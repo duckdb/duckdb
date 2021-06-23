@@ -33,7 +33,7 @@ if(BUILD_ARROW_ABI_TEST)
 endif()
 
 if(NOT WIN32 AND NOT SUN)
-  target_link_libraries(unittest duckdb dsdgen test_helpers)
+  target_link_libraries(unittest duckdb test_helpers)
   if(${BUILD_TPCE})
     target_link_libraries(unittest tpce)
   endif()

@@ -19,12 +19,21 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 	}
 	BindChild(function.children[0], depth, error);
 	if (!error.empty()) {
-		return BindResult(error);
+		// failed to bind
+		// try to bind correlated columns manually
+		if (!BindCorrelatedColumns(function.children[0])) {
+			return BindResult(error);
+		}
+		auto bound_expr = (BoundExpression *)function.children[0].get();
+		ExtractCorrelatedExpressions(binder, *bound_expr->expr);
 	}
 	auto &child = (BoundExpression &)*function.children[0];
 	auto &child_type = child.expr->return_type;
 	if (child_type.id() != LogicalTypeId::LIST) {
 		return BindResult(binder.FormatError(function, "Unnest() can only be applied to lists"));
+	}
+	if (depth > 0) {
+		throw BinderException(binder.FormatError(function, "Unnest() for correlated expressions is not supported yet"));
 	}
 	auto &return_type = ListType::GetChildType(child_type);
 
@@ -36,11 +45,10 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth) {
 
 	// TODO what if we have multiple unnests in the same projection list? ignore for now
 
-	// now create a column reference referring to the aggregate
+	// now create a column reference referring to the unnest
 	auto colref = make_unique<BoundColumnRefExpression>(
 	    function.alias.empty() ? node.unnests[unnest_index]->ToString() : function.alias, return_type,
 	    ColumnBinding(node.unnest_index, unnest_index), depth);
-	// move the aggregate expression into the set of bound aggregates
 	return BindResult(move(colref));
 }
 
