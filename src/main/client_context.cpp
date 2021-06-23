@@ -31,6 +31,7 @@
 #include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
 
 namespace duckdb {
 
@@ -291,6 +292,34 @@ void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &sta
 
 	PragmaHandler handler(*this);
 	handler.HandlePragmaStatements(*lock, statements);
+}
+
+unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
+	auto lock = LockContext();
+	auto statements = ParseStatementsInternal(*lock, query);
+	if (statements.size() != 1) {
+		throw Exception("ExtractPlan can only prepare a single statement");
+	}
+
+	unique_ptr<LogicalOperator> plan;
+	RunFunctionInTransactionInternal(*lock, [&]() {
+		Planner planner(*this);
+		planner.CreatePlan(move(statements[0]));
+		D_ASSERT(planner.plan);
+
+		plan = move(planner.plan);
+
+		if (enable_optimizer) {
+			Optimizer optimizer(*planner.binder, *this);
+			plan = optimizer.Optimize(move(plan));
+		}
+
+		ColumnBindingResolver resolver;
+		resolver.VisitOperator(*plan);
+
+		plan->ResolveOperatorTypes();
+	});
+	return plan;
 }
 
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
