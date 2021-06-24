@@ -18,7 +18,7 @@ select * from parquet_schema('test/sql/copy/parquet/data/decimal/int64_decimal.p
 
 # with globs
 statement ok
-select * from parquet_metadata('test/sql/copy/parquet/data/decimal/*.parquet');
+select * from parquet_metadata('test/sql/copy/parquet/data/glob/*.parquet');
 
 statement ok
-select * from parquet_schema('test/sql/copy/parquet/data/decimal/*.parquet');
+select * from parquet_schema('test/sql/copy/parquet/data/glob/*.parquet');
