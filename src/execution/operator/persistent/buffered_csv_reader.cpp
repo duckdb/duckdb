@@ -184,7 +184,7 @@ static string TrimWhitespace(const string &col_name) {
 	while (begin < size) {
 		auto bytes = utf8proc_iterate(str + begin, size - begin, &codepoint);
 		D_ASSERT(bytes > 0);
-		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS ) {
+		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 			break;
 		}
 		begin += bytes;
@@ -197,7 +197,7 @@ static string TrimWhitespace(const string &col_name) {
 		auto bytes = utf8proc_iterate(str + next, size - next, &codepoint);
 		D_ASSERT(bytes > 0);
 		next += bytes;
-		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS ) {
+		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
 			end = next;
 		}
 	}
@@ -205,7 +205,6 @@ static string TrimWhitespace(const string &col_name) {
 	// return the trimmed string
 	return col_name.substr(begin, end - begin);
 }
-
 
 static string NormalizeColumnName(const string &col_name) {
 	// normalize UTF8 characters to NFKD
@@ -215,14 +214,12 @@ static string NormalizeColumnName(const string &col_name) {
 
 	// only keep ASCII characters 0-9 a-z A-Z and replace spaces with regular whitespace
 	string col_name_ascii = "";
-	for (idx_t i = 0; i < col_name_nfkd.size(); i++){
-		if (col_name_nfkd[i] == '_' ||
-			(col_name_nfkd[i] >= '0' && col_name_nfkd[i] <= '9') ||
-			(col_name_nfkd[i] >= 'A' && col_name_nfkd[i] <= 'Z') ||
-			(col_name_nfkd[i] >= 'a' && col_name_nfkd[i] <= 'z') ){
+	for (idx_t i = 0; i < col_name_nfkd.size(); i++) {
+		if (col_name_nfkd[i] == '_' || (col_name_nfkd[i] >= '0' && col_name_nfkd[i] <= '9') ||
+		    (col_name_nfkd[i] >= 'A' && col_name_nfkd[i] <= 'Z') ||
+		    (col_name_nfkd[i] >= 'a' && col_name_nfkd[i] <= 'z')) {
 			col_name_ascii += col_name_nfkd[i];
-		}
-		else if (StringUtil::CharacterIsSpace(col_name_nfkd[i])) {
+		} else if (StringUtil::CharacterIsSpace(col_name_nfkd[i])) {
 			col_name_ascii += " ";
 		}
 	}
@@ -237,22 +234,19 @@ static string NormalizeColumnName(const string &col_name) {
 				col_name_cleaned += "_";
 				in_whitespace = true;
 			}
-		}
-		else {
+		} else {
 			col_name_cleaned += col_name_trimmed[i];
 			in_whitespace = false;
 		}
 	}
 
-	// don't leave string empty
+	// don't leave string empty; if not empty, make lowercase
 	if (col_name_cleaned.empty()) {
 		col_name_cleaned = "_";
-	}
-	// make lowercase
-	else {
+	} else {
 		col_name_cleaned = StringUtil::Lower(col_name_cleaned);
 	}
-	
+
 	// prepend _ if name starts with a digit or is a reserved keyword
 	if (KeywordHelper::IsKeyword(col_name_cleaned) || (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
 		col_name_cleaned = "_" + col_name_cleaned;
@@ -776,8 +770,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 			// normalize names or at least trim whitespace
 			if (options.normalize_names) {
 				col_name = NormalizeColumnName(col_name);
-			}
-			else {
+			} else {
 				col_name = TrimWhitespace(col_name);
 			}
 
@@ -787,7 +780,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 				name_collision_count[col_name] += 1;
 				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
 			}
-			
+
 			col_names.push_back(col_name);
 			name_collision_count[col_name] = 0;
 		}
