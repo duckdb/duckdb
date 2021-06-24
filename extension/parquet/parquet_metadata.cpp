@@ -365,7 +365,7 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, vector<Valu
 	if (result->files.empty()) {
 		throw IOException("No files found that match the pattern \"%s\"", file_name);
 	}
-	return result;
+	return move(result);
 }
 
 template <bool SCHEMA>
