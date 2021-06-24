@@ -1,0 +1,29 @@
+# name: test/sql/types/list/list_update_with_many_matches.test
+# description: Test update on a list column with several matches (due to a cross product)
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table lists(id int, i int[]);
+
+statement ok
+insert into lists values (1, [1, 2, 3]), (2, [4, 5]), (3, [NULL]);
+
+query II
+select * from lists order by id;
+----
+1	[1, 2, 3]
+2	[4, 5]
+3	[NULL]
+
+statement ok
+update lists set i=[5,6,7] from lists l2 where lists.id=1;
+
+query II
+select * from lists order by id;
+----
+1	[5, 6, 7]
+2	[4, 5]
+3	[NULL]

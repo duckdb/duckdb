@@ -220,7 +220,7 @@ void RowGroup::NextVector(RowGroupScanState &state) {
 	state.vector_index++;
 	for (idx_t i = 0; i < state.parent.column_ids.size(); i++) {
 		auto column = state.parent.column_ids[i];
-		if (column == INVALID_INDEX) {
+		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
 		D_ASSERT(column < columns.size());

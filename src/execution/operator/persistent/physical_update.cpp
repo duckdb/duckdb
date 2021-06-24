@@ -19,6 +19,7 @@ public:
 
 	mutex lock;
 	idx_t updated_count;
+	unordered_set<row_t> updated_columns;
 };
 
 class UpdateLocalState : public LocalSinkState {
@@ -71,8 +72,27 @@ void PhysicalUpdate::Sink(ExecutionContext &context, GlobalOperatorState &state,
 
 	lock_guard<mutex> glock(gstate.lock);
 	if (update_is_del_and_insert) {
-		// index update, perform a delete and an append instead
+		// index update or update on complex type, perform a delete and an append instead
+
+		// figure out which rows have not yet been deleted in this update
+		// this is required since we might see the same row_id multiple times
+		// in the case of an UPDATE query that e.g. has joins
+		auto row_id_data = FlatVector::GetData<row_t>(row_ids);
+		SelectionVector sel(STANDARD_VECTOR_SIZE);
+		idx_t update_count = 0;
+		for(idx_t i = 0; i < update_chunk.size(); i++) {
+			auto row_id = row_id_data[i];
+			if (gstate.updated_columns.find(row_id) == gstate.updated_columns.end()) {
+				gstate.updated_columns.insert(row_id);
+				sel.set_index(update_count++, i);
+			}
+		}
+		if (update_count != update_chunk.size()) {
+			// we need to slice here
+			update_chunk.Slice(sel, update_count);
+		}
 		table.Delete(tableref, context.client, row_ids, update_chunk.size());
+		// for the append we need to arrange the columns in a specific manner (namely the "standard table order")
 		mock_chunk.SetCardinality(update_chunk);
 		for (idx_t i = 0; i < columns.size(); i++) {
 			mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
