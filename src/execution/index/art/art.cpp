@@ -280,10 +280,10 @@ void ART::VerifyAppend(DataChunk &chunk) {
 				if (k > 0) {
 					key_name += ", ";
 				}
-				key_name += expression_result.data[k].GetValue(i).ToString();
+				key_name += unbound_expressions[k]->GetName() + ": " + expression_result.data[k].GetValue(i).ToString();
 			}
 			// node already exists in tree
-			throw ConstraintException("duplicate key \"%s\" violates primary key or unique constraint", key_name);
+			throw ConstraintException("duplicate key \"%s\" violates %s constraint", key_name, is_primary ? "primary key" : "unique");
 		}
 	}
 }

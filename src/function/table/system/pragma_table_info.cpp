@@ -80,7 +80,7 @@ static void CheckConstraints(TableCatalogEntry *table, idx_t oid, bool &out_not_
 		}
 		case ConstraintType::UNIQUE: {
 			auto &unique = (BoundUniqueConstraint &)*constraint;
-			if (unique.is_primary_key && unique.keys.find(oid) != unique.keys.end()) {
+			if (unique.is_primary_key && unique.key_set.find(oid) != unique.key_set.end()) {
 				out_pk = true;
 			}
 			break;
