@@ -392,7 +392,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 		auto node = Lookup(tree, *keys[i], 0);
 		if (node) {
 			auto leaf = static_cast<Leaf *>(node);
-			for(idx_t k = 0; k < leaf->num_elements; k++) {
+			for (idx_t k = 0; k < leaf->num_elements; k++) {
 				D_ASSERT(leaf->GetRowId(k) != row_identifiers[i]);
 			}
 		}
