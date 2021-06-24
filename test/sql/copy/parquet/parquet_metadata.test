@@ -4,8 +4,6 @@
 
 require parquet
 
-mode output_result
-
 statement ok
 SELECT * FROM parquet_metadata('test/sql/copy/parquet/data/lineitem-top10000.gzip.parquet');
 
