@@ -48,9 +48,6 @@ public:
 
 	string ParamsToString() const override;
 
-	//! Prefix size of strings in the memcmp-able sorting representation
-	constexpr static idx_t STRING_RADIX_SIZE = 8;
-
 	//! Tuples are merged in strides of size MERGE_STRIDE
 	constexpr static idx_t MERGE_STRIDE = 1024;
 
