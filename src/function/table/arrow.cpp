@@ -645,7 +645,7 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanS
 	if (dict_vectors.find(col_idx) == dict_vectors.end()) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_unique<Vector>(vector.GetType());
-		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length,0, array.null_count > 0);
+		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, 0, array.null_count > 0);
 		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length, arrow_convert_data,
 		                    col_idx, list_col_idx);
 		dict_vectors[col_idx] = move(base_vector);
