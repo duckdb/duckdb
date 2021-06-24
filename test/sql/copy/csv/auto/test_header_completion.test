@@ -22,10 +22,23 @@ statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/duplicate_header_col.csv');
 
 query ITT
-SELECT a_0, b, a_1 FROM test ORDER BY a_0;
+SELECT a, b, a_1 FROM test ORDER BY a;
 ----
 123	TEST2	text1
 345	TEST2	text2
+
+statement ok
+DROP TABLE test;
+
+# CSV file with one duplicate header and collision
+statement ok
+CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/duplicate_header_collision.csv');
+
+query ITTT
+SELECT a, b, a_1, a_1_1 FROM test ORDER BY a;
+----
+123	TEST2	text1	text1
+345	TEST2	text2	text2
 
 statement ok
 DROP TABLE test;
@@ -61,7 +74,7 @@ statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/duplicate_header_columns.csv');
 
 query IIIT
-SELECT a_00, a_08, a_09, column12 FROM test;
+SELECT a, a_8, a_9, column12 FROM test;
 ----
 123	NULL	NULL	value1
 345	NULL	NULL	value2
@@ -74,7 +87,7 @@ statement ok
 CREATE TABLE test AS SELECT * FROM read_csv_auto ('test/sql/copy/csv/data/auto/test_header_mix.csv');
 
 query IIIIIT
-SELECT a_0, a_8, a_9, column12_0, column11, column12_1 FROM test;
+SELECT a, a_8, a_9, column12, column11, column12_1 FROM test;
 ----
 123	NULL	NULL	NULL	NULL	value1
 345	NULL	NULL	NULL	NULL	value2
