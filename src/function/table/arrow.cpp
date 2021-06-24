@@ -220,11 +220,11 @@ void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanState &scan
 			memcpy((void *)mask.GetData(), (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes);
 		} else {
 			//! need to re-align nullmask
-			bitset<STANDARD_VECTOR_SIZE + 8> temp_nullmask;
-			memcpy(&temp_nullmask, (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
-
-			temp_nullmask >>= (bit_offset % 8); //! why this has to be a right shift is a mystery to me
-			memcpy((void *)mask.GetData(), (data_ptr_t)&temp_nullmask, n_bitmask_bytes);
+			std::vector<uint8_t> temp_nullmask(n_bitmask_bytes + 1);
+			memcpy(temp_nullmask.data(), (uint8_t *)array.buffers[0] + bit_offset / 8, n_bitmask_bytes + 1);
+			ShiftRight(temp_nullmask.data(), n_bitmask_bytes + 1,
+			           bit_offset % 8); //! why this has to be a right shift is a mystery to me
+			memcpy((void *)mask.GetData(), (data_ptr_t)temp_nullmask.data(), n_bitmask_bytes);
 		}
 	}
 }
@@ -255,7 +255,7 @@ void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 			le.length = original_type.second;
 			cur_offset += original_type.second;
 		}
-		list_size = offset;
+		list_size = cur_offset;
 	} else if (original_type.first == ArrowListType::NORMAL) {
 		auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 		if (nested_offset != 0) {
@@ -645,7 +645,7 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanS
 	if (dict_vectors.find(col_idx) == dict_vectors.end()) {
 		//! We need to set the dictionary data for this column
 		auto base_vector = make_unique<Vector>(vector.GetType());
-		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length, array.null_count > 0);
+		SetValidityMask(*base_vector, *array.dictionary, scan_state, array.dictionary->length,0, array.null_count > 0);
 		ColumnArrowToDuckDB(*base_vector, *array.dictionary, scan_state, array.dictionary->length, arrow_convert_data,
 		                    col_idx, list_col_idx);
 		dict_vectors[col_idx] = move(base_vector);
