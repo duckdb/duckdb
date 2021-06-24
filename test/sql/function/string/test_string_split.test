@@ -1,0 +1,352 @@
+# name: test/sql/function/string/test_string_split.test
+# description: String split test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+# test unnesting of null values a bit
+query T
+SELECT UNNEST(string_split(NULL, NULL))
+----
+NULL
+
+query T
+SELECT * FROM (VALUES (string_split('hello world', ' ')), (string_split(NULL, ' ')), (string_split('a b c', NULL)), (string_split('a b c', ' '))) tbl(i)
+----
+[hello, world]
+NULL
+[a b c]
+[a, b, c]
+
+statement ok
+CREATE TABLE strings_with_null (s VARCHAR)
+
+statement ok
+INSERT INTO strings_with_null VALUES ('aba'), (NULL), ('ababa')
+
+query T
+SELECT UNNEST(string_split(s, 'b')) FROM strings_with_null
+----
+a
+a
+NULL
+a
+a
+a
+
+query T
+SELECT UNNEST(string_split(NULL, ' ')) IS NULL LIMIT 5
+----
+1
+
+query T
+SELECT UNNEST(string_split('üüüüü', '◌̈'))
+----
+üüüüü
+
+query T
+SELECT UNNEST(string_split('üüüüü', '◌'))
+----
+üüüüü
+
+query T
+SELECT UNNEST(string_split_regex('üüüüü', '◌̈'))
+----
+üüüüü
+
+query T
+SELECT UNNEST(string_split_regex('üüüüü', '◌'))
+----
+üüüüü
+
+query T
+SELECT UNNEST(string_split(' 🦆🦆  🦆🦆', '  '))
+----
+ 🦆🦆
+🦆🦆
+
+query T
+SELECT UNNEST(string_split('a a a a a', ' '))
+----
+a
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(string_split('🦆 🦆 🦆 🦆 🦆', ' '))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
+query T
+SELECT UNNEST(string_split('🦆🐈🐈🦆🐈🐈🦆🐈🐈🦆🐈🐈🦆', '🐈🐈'))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
+query T
+SELECT UNNEST(string_split('', 'delim'))
+----
+(empty)
+
+query T
+SELECT UNNEST(string_split('aaaaa', ''))
+----
+a
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(string_split('🦆🦆🦆🦆🦆', ''))
+----
+🦆
+🦆
+🦆
+🦆
+🦆
+
+query T
+SELECT UNNEST(string_split('abab', 'b'))
+----
+a
+a
+(empty)
+
+query T
+SELECT UNNEST(string_split('🦆b🦆b', 'b'))
+----
+🦆
+🦆
+(empty)
+
+statement ok
+CREATE TABLE documents(s VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES ('baabbaa'), ('aabbaab'), ('ababababa'), ('b🦆🦆bb🦆🦆'), ('🦆🦆bb🦆🦆b'), ('🦆b🦆b🦆b🦆b🦆')
+
+query T
+SELECT UNNEST(string_split(s, 'bb')) FROM documents WHERE 1
+----
+baa
+aa
+aa
+aab
+ababababa
+b🦆🦆
+🦆🦆
+🦆🦆
+🦆🦆b
+🦆b🦆b🦆b🦆b🦆
+
+query T
+SELECT UNNEST(string_split(s, 'bb')) FROM documents WHERE s LIKE 'b%'
+----
+baa
+aa
+b🦆🦆
+🦆🦆
+
+query T
+SELECT string_agg(ss, 'bb') FROM (SELECT rowid AS id, UNNEST(string_split(s, 'bb')) AS ss FROM documents) AS q GROUP BY id ORDER BY id
+----
+baabbaa
+aabbaab
+ababababa
+b🦆🦆bb🦆🦆
+🦆🦆bb🦆🦆b
+🦆b🦆b🦆b🦆b🦆
+
+query T
+SELECT UNNEST(string_split_regex('a1a11a111a', '[0-9]+'))
+----
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(string_split_regex('aaaaa', ''))
+----
+a
+a
+a
+a
+a
+
+
+query T
+SELECT UNNEST(string_split_regex('a a  a   a', '\s+'))
+----
+a
+a
+a
+a
+
+query T
+SELECT UNNEST(string_split('aaaaa', NULL))
+----
+aaaaa
+
+# taken from postgres string_to_array tests
+query T
+select UNNEST(string_split('1|2|3', '|'))
+----
+1
+2
+3
+
+query T
+select UNNEST(string_split('1|2|3|', '|'))
+----
+1
+2
+3
+(empty)
+
+query T
+select UNNEST(string_split('1||2|3||', '||'))
+----
+1
+2|3
+(empty)
+
+query T
+select UNNEST(string_split('1|2|3', ''))
+----
+1
+|
+2
+|
+3
+
+query T
+select UNNEST(string_split('', '|'))
+----
+(empty)
+
+query T
+select UNNEST(string_split('1|2|3', NULL))
+----
+1|2|3
+
+query T
+select string_split(NULL, '|') IS NULL
+----
+1
+
+query T
+select UNNEST(string_split('abc', ''))
+----
+a
+b
+c
+
+query T
+select UNNEST(string_split_regex('abc', '(|abc)'))
+----
+a
+b
+c
+
+query T
+select UNNEST(string_split_regex('abc', '(abc|)'))
+----
+(empty)
+(empty)
+
+query T
+select UNNEST(string_split('abc', ','))
+----
+abc
+
+query T
+select UNNEST(string_split_regex('abc', '(,|abc)'))
+----
+(empty)
+(empty)
+
+query T
+select UNNEST(string_split_regex('abc', '(abc|,)'))
+----
+(empty)
+(empty)
+
+query T
+select UNNEST(string_split('1,2,3,4,,6', ','))
+----
+1
+2
+3
+4
+(empty)
+6
+
+query T
+select UNNEST(string_split_regex('1,2,3,4,,6', '(,|)'))
+----
+1
+(empty)
+2
+(empty)
+3
+(empty)
+4
+(empty)
+(empty)
+6
+
+
+query T
+select UNNEST(string_split_regex('1,2,3,4,,6', '(|,)'))
+----
+1
+,
+2
+,
+3
+,
+4
+,
+,
+6
+
+query T
+select UNNEST(string_split_regex('1,2,3,4,*,6', '(,|\*)'))
+----
+1
+2
+3
+4
+(empty)
+(empty)
+6
+
+query T
+select UNNEST(string_split_regex('1,2,3,4,*,6', '(\*|,)'))
+----
+1
+2
+3
+4
+(empty)
+(empty)
+6
+
+# test incorrect usage
+statement error
+select string_split()
+
+statement error
+select string_split('a')

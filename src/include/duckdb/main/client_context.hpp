@@ -28,12 +28,15 @@ namespace duckdb {
 class Appender;
 class Catalog;
 class DatabaseInstance;
+class LogicalOperator;
 class PreparedStatementData;
 class Relation;
 class BufferedFileWriter;
 class QueryProfiler;
 class QueryProfilerHistory;
 class ClientContextLock;
+struct CreateScalarFunctionInfo;
+class ScalarFunctionCatalogEntry;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -89,6 +92,9 @@ public:
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
+	//! The schema search path, in order by which entries are searched if no schema entry is provided
+	vector<string> catalog_search_path = {TEMP_SCHEMA, DEFAULT_SCHEMA, "pg_catalog"};
+
 public:
 	DUCKDB_API Transaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
@@ -143,6 +149,8 @@ public:
 
 	//! Parse statements from a query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
+	//! Extract the logical plan of a query
+	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
 	void HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
@@ -191,6 +199,8 @@ private:
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
 	unique_ptr<ClientContextLock> LockContext();
+
+	bool UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function, CreateScalarFunctionInfo *new_info);
 
 private:
 	//! The currently opened StreamQueryResult (if any)

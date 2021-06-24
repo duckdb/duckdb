@@ -1,0 +1,9 @@
+# name: test/sql/table_function/duckdb_types.test
+# description: Test duckdb_types function
+# group: [table_function]
+
+statement ok nosort duckdb_col
+SELECT * FROM duckdb_types();
+
+statement ok nosort duckdb_col
+SELECT * FROM duckdb_types;

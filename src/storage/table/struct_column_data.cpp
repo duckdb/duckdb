@@ -7,7 +7,7 @@ StructColumnData::StructColumnData(DataTableInfo &info, idx_t column_index, idx_
                                    ColumnData *parent)
     : ColumnData(info, column_index, start_row, move(type_p), parent), validity(info, 0, start_row, this) {
 	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
-	auto &child_types = type.child_types();
+	auto &child_types = StructType::GetChildTypes(type);
 	D_ASSERT(child_types.size() > 0);
 	// the sub column index, starting at 1 (0 is the validity mask)
 	idx_t sub_column_index = 1;
@@ -128,11 +128,11 @@ void StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 }
 
 void StructColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                              idx_t update_count) {
-	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
+                              idx_t offset, idx_t update_count) {
+	validity.Update(transaction, column_index, update_vector, row_ids, offset, update_count);
 	auto &child_entries = StructVector::GetEntries(update_vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		sub_columns[i]->Update(transaction, column_index, *child_entries[i], row_ids, update_count);
+		sub_columns[i]->Update(transaction, column_index, *child_entries[i], row_ids, offset, update_count);
 	}
 }
 

@@ -8,28 +8,40 @@ namespace duckdb {
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
           SelectionVector &fside, idx_t fcount);
 
+struct CaseExpressionState : public ExpressionState {
+	CaseExpressionState(const Expression &expr, ExpressionExecutorState &root)
+	    : ExpressionState(expr, root), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE) {
+	}
+
+	SelectionVector true_sel;
+	SelectionVector false_sel;
+};
+
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<ExpressionState>(expr, root);
+	auto result = make_unique<CaseExpressionState>(expr, root);
 	result->AddChild(expr.check.get());
 	result->AddChild(expr.result_if_true.get());
 	result->AddChild(expr.result_if_false.get());
 	result->Finalize();
-	return result;
+	return move(result);
 }
 
-void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
+void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state_p, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	Vector res_true, res_false;
-	res_true.Reference(state->intermediate_chunk.data[1]);
-	res_false.Reference(state->intermediate_chunk.data[2]);
+	auto state = (CaseExpressionState *)state_p;
+
+	state->intermediate_chunk.Reset();
+	auto &res_true = state->intermediate_chunk.data[1];
+	auto &res_false = state->intermediate_chunk.data[2];
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();
 	auto res_false_state = state->child_states[2].get();
 
 	// first execute the check expression
-	SelectionVector true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE);
+	auto &true_sel = state->true_sel;
+	auto &false_sel = state->false_sel;
 	idx_t tcount = Select(*expr.check, check_state, sel, count, &true_sel, &false_sel);
 	idx_t fcount = count - tcount;
 	if (fcount == 0) {
@@ -171,19 +183,14 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		break;
 	}
 	case PhysicalType::LIST: {
-		auto result_vector = make_unique<Vector>(result.GetType().child_types()[0].second);
-		ListVector::SetEntry(result, move(result_vector));
-
 		idx_t offset = 0;
-		if (ListVector::HasEntry(res_true)) {
-			auto &true_child = ListVector::GetEntry(res_true);
-			offset += ListVector::GetListSize(res_true);
-			ListVector::Append(result, true_child, ListVector::GetListSize(res_true));
-		}
-		if (ListVector::HasEntry(res_false)) {
-			auto &false_child = ListVector::GetEntry(res_false);
-			ListVector::Append(result, false_child, ListVector::GetListSize(res_false));
-		}
+
+		auto &true_child = ListVector::GetEntry(res_true);
+		offset += ListVector::GetListSize(res_true);
+		ListVector::Append(result, true_child, ListVector::GetListSize(res_true));
+
+		auto &false_child = ListVector::GetEntry(res_false);
+		ListVector::Append(result, false_child, ListVector::GetListSize(res_false));
 
 		// all the false offsets need to be incremented by true_child.count
 		TemplatedFillLoop<list_entry_t>(res_true, result, tside, tcount);

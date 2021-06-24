@@ -71,6 +71,11 @@ public:
 		return indexes.empty();
 	}
 
+	idx_t Count() {
+		lock_guard<mutex> lock(indexes_lock);
+		return indexes.size();
+	}
+
 private:
 	//! Indexes associated with the current table
 	mutex indexes_lock;

@@ -19,7 +19,8 @@ public:
 	    : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
 	}
 	UniqueConstraint(vector<string> columns, bool is_primary_key)
-	    : Constraint(ConstraintType::UNIQUE), index(INVALID_INDEX), columns(columns), is_primary_key(is_primary_key) {
+	    : Constraint(ConstraintType::UNIQUE), index(INVALID_INDEX), columns(move(columns)),
+	      is_primary_key(is_primary_key) {
 	}
 
 	//! The index of the column for which this constraint holds. Only used when the constraint relates to a single

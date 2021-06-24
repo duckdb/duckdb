@@ -12,6 +12,7 @@
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
@@ -99,6 +100,10 @@ unique_ptr<TableDescription> Connection::TableInfo(const string &schema_name, co
 
 vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &query) {
 	return context->ParseStatements(query);
+}
+
+unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
+	return context->ExtractPlan(query);
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {

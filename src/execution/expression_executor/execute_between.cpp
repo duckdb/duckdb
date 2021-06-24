@@ -92,10 +92,11 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundBetwe
 void ExpressionExecutor::Execute(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	// resolve the children
-	Vector input, lower, upper;
-	input.Reference(state->intermediate_chunk.data[0]);
-	lower.Reference(state->intermediate_chunk.data[1]);
-	upper.Reference(state->intermediate_chunk.data[2]);
+	state->intermediate_chunk.Reset();
+
+	auto &input = state->intermediate_chunk.data[0];
+	auto &lower = state->intermediate_chunk.data[1];
+	auto &upper = state->intermediate_chunk.data[2];
 
 	Execute(*expr.input, state->child_states[0].get(), sel, count, input);
 	Execute(*expr.lower, state->child_states[1].get(), sel, count, lower);
@@ -123,10 +124,9 @@ void ExpressionExecutor::Execute(const BoundBetweenExpression &expr, ExpressionS
 idx_t ExpressionExecutor::Select(const BoundBetweenExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// resolve the children
-	Vector input, lower, upper;
-	input.Reference(state->intermediate_chunk.data[0]);
-	lower.Reference(state->intermediate_chunk.data[1]);
-	upper.Reference(state->intermediate_chunk.data[2]);
+	Vector input(state->intermediate_chunk.data[0]);
+	Vector lower(state->intermediate_chunk.data[1]);
+	Vector upper(state->intermediate_chunk.data[2]);
 
 	Execute(*expr.input, state->child_states[0].get(), sel, count, input);
 	Execute(*expr.lower, state->child_states[1].get(), sel, count, lower);

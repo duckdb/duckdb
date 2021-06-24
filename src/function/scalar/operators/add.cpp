@@ -76,13 +76,26 @@ date_t AddOperator::Operation(interval_t left, date_t right) {
 	return AddOperator::Operation<date_t, interval_t, date_t>(right, left);
 }
 
+dtime_t AddIntervalToTimeOperation(dtime_t left, interval_t right, date_t &date) {
+	int64_t diff = right.micros - ((right.micros / Interval::MICROS_PER_DAY) * Interval::MICROS_PER_DAY);
+	left += diff;
+	if (left.micros >= Interval::MICROS_PER_DAY) {
+		left.micros -= Interval::MICROS_PER_DAY;
+		date.days++;
+	} else if (left.micros < 0) {
+		left.micros += Interval::MICROS_PER_DAY;
+		date.days--;
+	}
+	return left;
+}
+
 template <>
 timestamp_t AddOperator::Operation(timestamp_t left, interval_t right) {
 	date_t date;
 	dtime_t time;
 	Timestamp::Convert(left, date, time);
 	auto new_date = AddOperator::Operation<date_t, interval_t, date_t>(date, right);
-	auto new_time = AddTimeOperator::Operation<dtime_t, interval_t, dtime_t>(time, right);
+	auto new_time = AddIntervalToTimeOperation(time, right, new_date);
 	return Timestamp::FromDatetime(new_date, new_time);
 }
 
@@ -214,14 +227,8 @@ hugeint_t DecimalAddOverflowCheck::Operation(hugeint_t left, hugeint_t right) {
 //===--------------------------------------------------------------------===//
 template <>
 dtime_t AddTimeOperator::Operation(dtime_t left, interval_t right) {
-	int64_t diff = right.micros - ((right.micros / Interval::MICROS_PER_DAY) * Interval::MICROS_PER_DAY);
-	left += diff;
-	if (left.micros >= Interval::MICROS_PER_DAY) {
-		left.micros -= Interval::MICROS_PER_DAY;
-	} else if (left.micros < 0) {
-		left.micros += Interval::MICROS_PER_DAY;
-	}
-	return left;
+	date_t date(0);
+	return AddIntervalToTimeOperation(left, right, date);
 }
 
 template <>

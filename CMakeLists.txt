@@ -107,7 +107,7 @@ if(${ENABLE_THREAD_SANITIZER})
   if(${ENABLE_SANITIZER})
     message(
       WARNING
-        "Both thread and address sanitizers are enabled. This is not supported by clang. The address sanitizer will be disabled, and we will run with only the thread sanitizer."
+        "Both thread and address sanitizers are enabled. This is not supported. The address sanitizer will be disabled, and we will run with only the thread sanitizer."
     )
   endif()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=thread")
@@ -120,15 +120,22 @@ elseif(${ENABLE_SANITIZER})
 endif()
 
 if(${ENABLE_UBSAN})
-  if(FORCE_ASSERT)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fno-sanitize-recover=all")
-    if (${DISABLE_VPTR_SANITIZER})
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-sanitize=vptr")
-    endif()
+  if(${ENABLE_THREAD_SANITIZER})
+    message(
+      WARNING
+        "Both thread and undefined sanitizers are enabled. This is not supported. The undefined sanitizer will be disabled, and we will run with only the thread sanitizer."
+    )
   else()
-    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=undefined -fno-sanitize-recover=all")
-    if (${DISABLE_VPTR_SANITIZER})
-      set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fno-sanitize=vptr")
+    if(FORCE_ASSERT)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=undefined -fno-sanitize-recover=all")
+      if (${DISABLE_VPTR_SANITIZER})
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-sanitize=vptr")
+      endif()
+    else()
+      set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fsanitize=undefined -fno-sanitize-recover=all")
+      if (${DISABLE_VPTR_SANITIZER})
+        set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -fno-sanitize=vptr")
+      endif()
     endif()
   endif()
 endif()
@@ -192,8 +199,10 @@ option(AMALGAMATION_BUILD
 option(BUILD_ICU_EXTENSION "Build the ICU extension." FALSE)
 option(BUILD_PARQUET_EXTENSION "Build the Parquet extension." FALSE)
 option(BUILD_TPCH_EXTENSION "Build the TPC-H extension." FALSE)
+option(BUILD_TPCDS_EXTENSION "Build the TPC-DS extension." FALSE)
 option(BUILD_FTS_EXTENSION "Build the FTS extension." FALSE)
 option(BUILD_HTTPFS_EXTENSION "Build the HTTP File System extension." FALSE)
+option(BUILD_VISUALIZER_EXTENSION "Build the profiler-output visualizer extension." FALSE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_SQLSMITH "Enable building of SQLSmith." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
@@ -201,6 +210,7 @@ option(JDBC_DRIVER "Build the DuckDB JDBC driver" FALSE)
 option(BUILD_ODBC_DRIVER "Build the DuckDB ODBC driver" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
+option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
 
 option(BUILD_REST "Build the DuckDB REST server" FALSE)
 option(BUILD_SHELL "Build the DuckDB Shell and SQLite API Wrappers" TRUE)
@@ -226,6 +236,7 @@ if(BUILD_PYTHON
    OR BUILD_R
    OR JDBC_DRIVER)
   set(BUILD_ICU_EXTENSION TRUE)
+  set(BUILD_VISUALIZER_EXTENSION TRUE)
   set(BUILD_PARQUET_EXTENSION TRUE)
 endif()
 
@@ -402,6 +413,11 @@ function(add_extension_definitions)
     add_definitions(-DBUILD_TPCH_EXTENSION=${BUILD_TPCH_EXTENSION})
   endif()
 
+  if(${BUILD_TPCDS_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/tpcds/include)
+    add_definitions(-DBUILD_TPCDS_EXTENSION=${BUILD_TPCDS_EXTENSION})
+  endif()
+
   if(${BUILD_FTS_EXTENSION})
     include_directories(${CMAKE_SOURCE_DIR}/extension/fts/include)
     add_definitions(-DBUILD_FTS_EXTENSION=${BUILD_FTS_EXTENSION})
@@ -411,6 +427,11 @@ function(add_extension_definitions)
     find_package(OpenSSL REQUIRED)
     include_directories(${CMAKE_SOURCE_DIR}/extension/httpfs/include ${OPENSSL_INCLUDE_DIR})
     add_definitions(-DBUILD_HTTPFS_EXTENSION=${BUILD_HTTPFS_EXTENSION})
+  endif()
+
+  if(${BUILD_VISUALIZER_EXTENSION})
+    include_directories(${PROJECT_SOURCE_DIR}/extension/visualizer/include)
+    add_definitions(-DBUILD_VISUALIZER_EXTENSION=${BUILD_VISUALIZER_EXTENSION})
   endif()
 endfunction()
 
@@ -427,12 +448,20 @@ function(add_extension_dependencies LIBRARY)
     add_dependencies(${LIBRARY} tpch_extension)
   endif()
 
+  if(${BUILD_TPCDS_EXTENSION})
+    add_dependencies(${LIBRARY} tpcds_extension)
+  endif()
+
   if(${BUILD_FTS_EXTENSION})
     add_dependencies(${LIBRARY} fts_extension)
   endif()
 
   if(${BUILD_HTTPFS_EXTENSION})
     add_dependencies(${LIBRARY} httpfs_extension)
+  endif()
+
+  if(${BUILD_VISUALIZER_EXTENSION})
+    add_dependencies(${LIBRARY} visualizer_extension)
   endif()
 endfunction()
 
@@ -449,6 +478,10 @@ function(link_extension_libraries LIBRARY)
     target_link_libraries(${LIBRARY} tpch_extension)
   endif()
 
+  if(${BUILD_TPCDS_EXTENSION})
+    target_link_libraries(${LIBRARY} tpcds_extension)
+  endif()
+
   if(${BUILD_FTS_EXTENSION})
     target_link_libraries(${LIBRARY} fts_extension)
   endif()
@@ -456,6 +489,10 @@ function(link_extension_libraries LIBRARY)
   if(${BUILD_HTTPFS_EXTENSION})
     find_package(OpenSSL REQUIRED)
     target_link_libraries(${LIBRARY} httpfs_extension ${OPENSSL_LIBRARIES})
+  endif()
+
+  if(${BUILD_VISUALIZER_EXTENSION})
+    target_link_libraries(${LIBRARY} visualizer_extension)
   endif()
 endfunction()
 

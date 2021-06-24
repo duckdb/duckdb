@@ -285,7 +285,9 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		case LogicalTypeId::VARCHAR: {
 			auto wrapper = new DuckDBAltrepStringWrapper();
 			wrapper->length = nrows;
-			wrapper->vectors.resize(result->collection.Chunks().size());
+			for (idx_t c_idx = 0; c_idx < result->collection.Chunks().size(); c_idx++) {
+				wrapper->vectors.emplace_back(LogicalType::VARCHAR, nullptr);
+			}
 
 			auto ptr = PROTECT(R_MakeExternalPtr((void *)wrapper, R_NilValue, R_NilValue));
 			R_RegisterCFinalizer(ptr, AltrepString::Finalize);
@@ -414,7 +416,7 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				auto &src_vec = chunk->data[col_idx];
 				auto &decimal_type = result->types[col_idx];
 				double *dest_ptr = ((double *)NUMERIC_POINTER(dest)) + dest_offset;
-				auto dec_scale = decimal_type.scale();
+				auto dec_scale = DecimalType::GetScale(decimal_type);
 				switch (decimal_type.InternalType()) {
 				case PhysicalType::INT16:
 					RDecimalCastLoop<int16_t>(src_vec, chunk->size(), dest_ptr, dec_scale);

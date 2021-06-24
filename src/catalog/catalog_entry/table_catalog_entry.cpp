@@ -86,7 +86,7 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 					column_ids.push_back(key);
 				}
 				// create an adaptive radix tree around the expressions
-				auto art = make_unique<ART>(column_ids, move(unbound_expressions), true);
+				auto art = make_unique<ART>(column_ids, move(unbound_expressions), true, unique.is_primary_key);
 				storage->AddIndex(move(art), bound_expressions);
 			}
 		}
@@ -354,7 +354,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			break;
 		case ConstraintType::UNIQUE: {
 			auto &bound_unique = (BoundUniqueConstraint &)*bound_constraints[i];
-			if (bound_unique.keys.find(change_idx) != bound_unique.keys.end()) {
+			if (bound_unique.key_set.find(change_idx) != bound_unique.key_set.end()) {
 				throw BinderException(
 				    "Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
 			}
@@ -450,7 +450,7 @@ string TableCatalogEntry::ToSQL() {
 		} else if (constraint->type == ConstraintType::UNIQUE) {
 			auto &pk = (UniqueConstraint &)*constraint;
 			vector<string> constraint_columns = pk.columns;
-			if (pk.columns.empty()) {
+			if (pk.index != INVALID_INDEX) {
 				// no columns specified: single column constraint
 				if (pk.is_primary_key) {
 					pk_columns.insert(pk.index);

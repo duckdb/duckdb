@@ -21,8 +21,9 @@ unique_ptr<Constraint> UniqueConstraint::Copy() {
 	if (index == INVALID_INDEX) {
 		return make_unique<UniqueConstraint>(columns, is_primary_key);
 	} else {
-		D_ASSERT(columns.size() == 0);
-		return make_unique<UniqueConstraint>(index, is_primary_key);
+		auto result = make_unique<UniqueConstraint>(index, is_primary_key);
+		result->columns = columns;
+		return move(result);
 	}
 }
 
@@ -41,18 +42,20 @@ unique_ptr<Constraint> UniqueConstraint::Deserialize(Deserializer &source) {
 	auto is_primary_key = source.Read<bool>();
 	auto index = source.Read<uint64_t>();
 	auto column_count = source.Read<uint32_t>();
+	vector<string> columns;
+	for (uint32_t i = 0; i < column_count; i++) {
+		auto column_name = source.Read<string>();
+		columns.push_back(column_name);
+	}
 
 	if (index != INVALID_INDEX) {
 		// single column parsed constraint
-		return make_unique<UniqueConstraint>(index, is_primary_key);
+		auto result = make_unique<UniqueConstraint>(index, is_primary_key);
+		result->columns = move(columns);
+		return move(result);
 	} else {
 		// column list parsed constraint
-		vector<string> columns;
-		for (uint32_t i = 0; i < column_count; i++) {
-			auto column_name = source.Read<string>();
-			columns.push_back(column_name);
-		}
-		return make_unique<UniqueConstraint>(columns, is_primary_key);
+		return make_unique<UniqueConstraint>(move(columns), is_primary_key);
 	}
 }
 

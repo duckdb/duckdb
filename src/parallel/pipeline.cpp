@@ -19,11 +19,11 @@ namespace duckdb {
 
 class PipelineTask : public Task {
 public:
-	explicit PipelineTask(Pipeline *pipeline_p) : pipeline(pipeline_p) {
+	explicit PipelineTask(shared_ptr<Pipeline> pipeline_p) : pipeline(move(pipeline_p)) {
 	}
 
 	TaskContext task;
-	Pipeline *pipeline;
+	shared_ptr<Pipeline> pipeline;
 
 public:
 	void Execute() override {
@@ -93,7 +93,7 @@ void Pipeline::Execute(TaskContext &task) {
 		auto lstate = sink->GetLocalSinkState(context);
 		// incrementally process the pipeline
 		DataChunk intermediate;
-		child->InitializeChunkEmpty(intermediate);
+		child->InitializeChunk(intermediate);
 		while (true) {
 			child->GetChunk(context, intermediate, state.get());
 			thread.profiler.StartOperator(sink);
@@ -134,7 +134,7 @@ void Pipeline::FinishTask() {
 
 void Pipeline::ScheduleSequentialTask() {
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	auto task = make_unique<PipelineTask>(this);
+	auto task = make_unique<PipelineTask>(shared_from_this());
 
 	this->total_tasks = 1;
 	scheduler.ScheduleTask(*executor.producer, move(task));
@@ -157,7 +157,7 @@ bool Pipeline::LaunchScanTasks(PhysicalOperator *op, idx_t max_threads, unique_p
 	// launch a task for every thread
 	this->total_tasks = max_threads;
 	for (idx_t i = 0; i < max_threads; i++) {
-		auto task = make_unique<PipelineTask>(this);
+		auto task = make_unique<PipelineTask>(shared_from_this());
 		scheduler.ScheduleTask(*executor.producer, move(task));
 	}
 
@@ -211,10 +211,18 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 }
 
 void Pipeline::ClearParents() {
-	for (auto &parent : parents) {
+	for (auto &parent_entry : parents) {
+		auto parent = parent_entry.second.lock();
+		if (!parent) {
+			continue;
+		}
 		parent->dependencies.erase(this);
 	}
-	for (auto &dep : dependencies) {
+	for (auto &dep_entry : dependencies) {
+		auto dep = dep_entry.second.lock();
+		if (!dep) {
+			continue;
+		}
 		dep->parents.erase(this);
 	}
 	parents.clear();
@@ -294,9 +302,12 @@ void Pipeline::Schedule() {
 	ScheduleSequentialTask();
 }
 
-void Pipeline::AddDependency(Pipeline *pipeline) {
-	this->dependencies.insert(pipeline);
-	pipeline->parents.insert(this);
+void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
+	if (!pipeline) {
+		return;
+	}
+	dependencies[pipeline.get()] = weak_ptr<Pipeline>(pipeline);
+	pipeline->parents[this] = weak_ptr<Pipeline>(shared_from_this());
 }
 
 void Pipeline::CompleteDependency() {
@@ -312,7 +323,11 @@ void Pipeline::Finish() {
 	D_ASSERT(!finished);
 	finished = true;
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
-	for (auto &parent : parents) {
+	for (auto &parent_entry : parents) {
+		auto parent = parent_entry.second.lock();
+		if (!parent) {
+			continue;
+		}
 		// mark a dependency as completed for each of the parents
 		parent->CompleteDependency();
 	}

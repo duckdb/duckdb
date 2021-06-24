@@ -14,6 +14,48 @@ namespace duckdb {
 using ValidityBytes = RowLayout::ValidityBytes;
 using Predicates = RowOperations::Predicates;
 
+template <typename OP>
+static idx_t SelectComparison(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                              SelectionVector *true_sel, SelectionVector *false_sel) {
+	throw NotImplementedException("Unsupported nested comparison operand for RowOperations::Match");
+}
+
+template <>
+idx_t SelectComparison<Equals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                               SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<NotEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                  SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::NotEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<GreaterThan>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                    SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThan(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<GreaterThanEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                          SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<LessThan>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                 SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+}
+
+template <>
+idx_t SelectComparison<LessThanEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                       SelectionVector *true_sel, SelectionVector *false_sel) {
+	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+}
+
 template <class T, class OP, bool NO_MATCH_SEL>
 static void TemplatedMatchType(VectorData &col, Vector &rows, SelectionVector &sel, idx_t &count, idx_t col_offset,
                                idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
@@ -77,8 +119,29 @@ static void TemplatedMatchType(VectorData &col, Vector &rows, SelectionVector &s
 }
 
 template <class OP, bool NO_MATCH_SEL>
-static void TemplatedMatchOp(const RowLayout &layout, Vector &rows, VectorData &col, SelectionVector &sel, idx_t &count,
-                             idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
+static void TemplatedMatchNested(Vector &col, Vector &rows, SelectionVector &sel, idx_t &count, const idx_t col_offset,
+                                 const idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
+	// Gather a dense Vector containing the column values being matched
+	Vector key(col.GetType());
+	const auto &key_sel = FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	RowOperations::Gather(rows, sel, key, key_sel, count, col_offset, col_no);
+
+	// Make a dense dictionary of the probe column so we can match the SelectComparison scatter semantics
+	Vector dense(col, sel, count);
+
+	if (NO_MATCH_SEL) {
+		SelectionVector no_match_sel_offset(no_match->data() + no_match_count);
+		auto match_count = SelectComparison<OP>(dense, key, &sel, count, &sel, &no_match_sel_offset);
+		no_match_count += count - match_count;
+		count = match_count;
+	} else {
+		count = SelectComparison<OP>(dense, key, &sel, count, &sel, nullptr);
+	}
+}
+
+template <class OP, bool NO_MATCH_SEL>
+static void TemplatedMatchOp(Vector &vec, VectorData &col, const RowLayout &layout, Vector &rows, SelectionVector &sel,
+                             idx_t &count, idx_t col_no, SelectionVector *no_match, idx_t &no_match_count) {
 	if (count == 0) {
 		return;
 	}
@@ -141,36 +204,46 @@ static void TemplatedMatchOp(const RowLayout &layout, Vector &rows, VectorData &
 		TemplatedMatchType<string_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
 		                                               no_match_count);
 		break;
+	case PhysicalType::LIST:
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		TemplatedMatchNested<OP, NO_MATCH_SEL>(vec, rows, sel, count, col_offset, col_no, no_match, no_match_count);
+		break;
 	default:
 		throw Exception("Unsupported column type for RowOperations::Match");
 	}
 }
 
 template <bool NO_MATCH_SEL>
-static void TemplatedMatch(const RowLayout &layout, Vector &rows, VectorData col_data[], const Predicates &predicates,
-                           SelectionVector &sel, idx_t &count, SelectionVector *no_match, idx_t &no_match_count) {
+static void TemplatedMatch(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
+                           const Predicates &predicates, SelectionVector &sel, idx_t &count, SelectionVector *no_match,
+                           idx_t &no_match_count) {
 	for (idx_t col_no = 0; col_no < predicates.size(); ++col_no) {
+		auto &vec = columns.data[col_no];
 		auto &col = col_data[col_no];
 		switch (predicates[col_no]) {
 		case ExpressionType::COMPARE_EQUAL:
-			TemplatedMatchOp<Equals, NO_MATCH_SEL>(layout, rows, col, sel, count, col_no, no_match, no_match_count);
+			TemplatedMatchOp<Equals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
+			                                       no_match_count);
 			break;
 		case ExpressionType::COMPARE_NOTEQUAL:
-			TemplatedMatchOp<NotEquals, NO_MATCH_SEL>(layout, rows, col, sel, count, col_no, no_match, no_match_count);
+			TemplatedMatchOp<NotEquals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
+			                                          no_match_count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHAN:
-			TemplatedMatchOp<GreaterThan, NO_MATCH_SEL>(layout, rows, col, sel, count, col_no, no_match,
+			TemplatedMatchOp<GreaterThan, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
 			                                            no_match_count);
 			break;
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			TemplatedMatchOp<GreaterThanEquals, NO_MATCH_SEL>(layout, rows, col, sel, count, col_no, no_match,
+			TemplatedMatchOp<GreaterThanEquals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
 			                                                  no_match_count);
 			break;
 		case ExpressionType::COMPARE_LESSTHAN:
-			TemplatedMatchOp<LessThan, NO_MATCH_SEL>(layout, rows, col, sel, count, col_no, no_match, no_match_count);
+			TemplatedMatchOp<LessThan, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
+			                                         no_match_count);
 			break;
 		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			TemplatedMatchOp<LessThanEquals, NO_MATCH_SEL>(layout, rows, col, sel, count, col_no, no_match,
+			TemplatedMatchOp<LessThanEquals, NO_MATCH_SEL>(vec, col, layout, rows, sel, count, col_no, no_match,
 			                                               no_match_count);
 			break;
 		default:
@@ -179,12 +252,13 @@ static void TemplatedMatch(const RowLayout &layout, Vector &rows, VectorData col
 	}
 }
 
-idx_t RowOperations::Match(const RowLayout &layout, Vector &rows, VectorData col_data[], const Predicates &predicates,
-                           SelectionVector &sel, idx_t count, SelectionVector *no_match, idx_t &no_match_count) {
+idx_t RowOperations::Match(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
+                           const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
+                           idx_t &no_match_count) {
 	if (no_match) {
-		TemplatedMatch<true>(layout, rows, col_data, predicates, sel, count, no_match, no_match_count);
+		TemplatedMatch<true>(columns, col_data, layout, rows, predicates, sel, count, no_match, no_match_count);
 	} else {
-		TemplatedMatch<false>(layout, rows, col_data, predicates, sel, count, no_match, no_match_count);
+		TemplatedMatch<false>(columns, col_data, layout, rows, predicates, sel, count, no_match, no_match_count);
 	}
 
 	return count;

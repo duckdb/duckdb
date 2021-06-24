@@ -38,8 +38,6 @@ public:
 	DataChunk child_chunk;
 	//! State of the child of this operator
 	unique_ptr<PhysicalOperatorState> child_state;
-	//! The initial chunk
-	DataChunk initial_chunk;
 };
 
 //! PhysicalOperator is the base class of the physical operators present in the

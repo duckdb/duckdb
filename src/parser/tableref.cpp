@@ -54,7 +54,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 	return result;
 }
 
-void TableRef::CopyProperties(TableRef &target) {
+void TableRef::CopyProperties(TableRef &target) const {
 	D_ASSERT(type == target.type);
 	target.alias = alias;
 	target.query_location = query_location;

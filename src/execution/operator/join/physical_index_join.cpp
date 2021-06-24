@@ -96,9 +96,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 		}
 		rhs_chunk.Initialize(fetch_types);
 		ColumnFetchState fetch_state;
-		Vector row_ids;
-		row_ids.SetType(LOGICAL_ROW_TYPE);
-		FlatVector::SetData(row_ids, (data_ptr_t)&fetch_rows[0]);
+		Vector row_ids(LOGICAL_ROW_TYPE, (data_ptr_t)&fetch_rows[0]);
 		tbl->Fetch(transaction, rhs_chunk, fetch_ids, row_ids, output_sel_idx, fetch_state);
 	}
 

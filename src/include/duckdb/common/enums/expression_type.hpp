@@ -50,13 +50,13 @@ enum class ExpressionType : uint8_t {
 	COMPARE_NOT_IN = 36,
 	// IS DISTINCT FROM operator
 	COMPARE_DISTINCT_FROM = 37,
-	// compare final boundary
 
 	COMPARE_BETWEEN = 38,
 	COMPARE_NOT_BETWEEN = 39,
-	COMPARE_BOUNDARY_END = COMPARE_NOT_BETWEEN,
 	// IS NOT DISTINCT FROM operator
 	COMPARE_NOT_DISTINCT_FROM = 40,
+	// compare final boundary
+	COMPARE_BOUNDARY_END = COMPARE_NOT_DISTINCT_FROM,
 
 	// -----------------------------
 	// Conjunction Operators
@@ -169,6 +169,7 @@ enum class ExpressionClass : uint8_t {
 	COLLATE = 16,
 	LAMBDA = 17,
 	POSITIONAL_REFERENCE = 18,
+	BETWEEN = 19,
 	//===--------------------------------------------------------------------===//
 	// Bound Expressions
 	//===--------------------------------------------------------------------===//

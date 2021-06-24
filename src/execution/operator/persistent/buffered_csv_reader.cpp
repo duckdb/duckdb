@@ -202,12 +202,15 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 	if (options.force_not_null.size() != num_cols) {
 		options.force_not_null.resize(num_cols, false);
 	}
+	if (num_cols == parse_chunk.ColumnCount()) {
+		parse_chunk.Reset();
+	} else {
+		parse_chunk.Destroy();
 
-	parse_chunk.Destroy();
-
-	// initialize the parse_chunk with a set of VARCHAR types
-	vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
-	parse_chunk.Initialize(varchar_types);
+		// initialize the parse_chunk with a set of VARCHAR types
+		vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
+		parse_chunk.Initialize(varchar_types);
+	}
 }
 
 void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = false) {
@@ -778,8 +781,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 					// create a new chunk and fill it with the remainder
 					auto chunk = make_unique<DataChunk>();
 					auto parse_chunk_types = parse_chunk.GetTypes();
-					chunk->Initialize(parse_chunk_types);
-					chunk->Reference(parse_chunk);
+					chunk->Move(parse_chunk);
 					cached_chunks.push(move(chunk));
 				} else {
 					while (!cached_chunks.empty()) {
@@ -1239,7 +1241,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		cached_buffers.clear();
 	} else {
 		auto &chunk = cached_chunks.front();
-		parse_chunk.Reference(*chunk);
+		parse_chunk.Move(*chunk);
 		cached_chunks.pop();
 		Flush(insert_chunk);
 		return;

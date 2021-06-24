@@ -1,0 +1,21 @@
+# name: test/issues/rigger/timestamp_overflow.test
+# description: SQLancer bug that detected an overflow in date to timestamp casting
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t0(c0 DATE, c1 BOOLEAN);;
+
+statement ok
+CREATE TABLE t1(c0 TINYINT, c1 VARCHAR, c2 TIMESTAMP);
+
+statement ok
+INSERT INTO t0 VALUES('1969-12-18',true);
+
+statement ok
+CREATE VIEW v0(c0, c1) AS SELECT TIMESTAMP '1970-01-06 13:25:51', t1.c2 FROM t1 OFFSET 1274033658;
+
+statement ok
+SELECT * FROM v0, t0 WHERE ((((v0.c1) ::DATE))=(v0.c0)) UNION SELECT * FROM v0, t0 WHERE (NOT ((((v0.c1) ::DATE))=(v0.c0))) UNION SELECT * FROM v0, t0 WHERE ((((((v0.c1) ::DATE))=(v0.c0))) IS NULL);

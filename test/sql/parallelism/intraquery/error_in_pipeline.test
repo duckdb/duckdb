@@ -1,0 +1,19 @@
+# name: test/sql/parallelism/intraquery/error_in_pipeline.test
+# description: Test errors happening in pipelines
+# group: [intraquery]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=16
+
+statement ok
+create table varchars as select i::varchar i from range(1000000) tbl(i);
+
+statement ok
+insert into varchars values ('hello')
+
+# we get a conversion error in the pipeline here
+statement error
+select (select min(i::int)+tbl.k from varchars) from (values (1), (2), (3)) tbl(k);

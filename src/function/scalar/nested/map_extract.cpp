@@ -7,7 +7,6 @@
 namespace duckdb {
 void FillResult(Value &values, Vector &result, idx_t row) {
 	//! First Initialize List Vector
-	ListVector::Initialize(result);
 	idx_t current_offset = ListVector::GetListSize(result);
 	//! Push Values to List Vector
 	for (idx_t i = 0; i < values.list_value.size(); i++) {
@@ -36,7 +35,7 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 		auto &children = StructVector::GetEntries(child);
 		auto &dict_sel = DictionaryVector::SelVector(map);
 		children[0]->Orrify(args.size(), offset_data);
-		auto &key_type = children[0]->GetType().child_types()[0].second;
+		auto &key_type = ListType::GetChildType(children[0]->GetType());
 		if (key_type != LogicalTypeId::SQLNULL) {
 			key_value = key_value.CastAs(key_type);
 		}
@@ -49,7 +48,7 @@ static void MapExtractFunction(DataChunk &args, ExpressionState &state, Vector &
 	} else {
 		auto &children = StructVector::GetEntries(map);
 		children[0]->Orrify(args.size(), offset_data);
-		auto &key_type = children[0]->GetType().child_types()[0].second;
+		auto &key_type = ListType::GetChildType(children[0]->GetType());
 		if (key_type != LogicalTypeId::SQLNULL) {
 			key_value = key_value.CastAs(key_type);
 		}
@@ -75,13 +74,11 @@ static unique_ptr<FunctionData> MapExtractBind(ClientContext &context, ScalarFun
 	if (arguments[0]->return_type.id() != LogicalTypeId::MAP) {
 		throw BinderException("MAP_EXTRACT can only operate on MAPs");
 	}
-	auto value_type = arguments[0]->return_type.child_types()[1].second.child_types()[0].second;
+	auto &child_types = StructType::GetChildTypes(arguments[0]->return_type);
+	auto &value_type = ListType::GetChildType(child_types[1].second);
 
 	//! Here we have to construct the List Type that will be returned
-	child_list_t<LogicalType> children;
-	children.push_back(std::make_pair("", value_type));
-
-	bound_function.return_type = LogicalType(LogicalTypeId::LIST, move(children));
+	bound_function.return_type = LogicalType::LIST(value_type);
 	return make_unique<VariableReturnBindData>(value_type);
 }
 

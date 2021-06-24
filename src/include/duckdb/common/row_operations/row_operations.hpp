@@ -16,6 +16,7 @@ namespace duckdb {
 struct AggregateObject;
 class DataChunk;
 class RowLayout;
+class RowDataCollection;
 struct SelectionVector;
 class StringHeap;
 class Vector;
@@ -43,11 +44,11 @@ struct RowOperations {
 	// Read/Write Operators
 	//===--------------------------------------------------------------------===//
 	//! Scatter group data to the rows. Initialises the ValidityMask.
-	static void Scatter(VectorData col_data[], const RowLayout &layout, Vector &rows, StringHeap &string_heap,
-	                    const SelectionVector &sel, idx_t count);
+	static void Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
+	                    RowDataCollection &string_heap, const SelectionVector &sel, idx_t count);
 	//! Gather a single column
-	static void Gather(const RowLayout &layout, Vector &rows, const SelectionVector &row_sel, Vector &col,
-	                   const SelectionVector &col_sel, idx_t count, idx_t col_idx);
+	static void Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
+	                   const idx_t count, const idx_t col_offset, const idx_t col_no);
 	//! Full Scan an entire columns
 	static void FullScanColumn(const RowLayout &layout, Vector &rows, Vector &col, idx_t count, idx_t col_idx);
 
@@ -59,8 +60,9 @@ struct RowOperations {
 	//! Returns the number of matches remaining in the selection.
 	using Predicates = vector<ExpressionType>;
 
-	static idx_t Match(const RowLayout &layout, Vector &rows, VectorData col_data[], const Predicates &predicates,
-	                   SelectionVector &sel, idx_t count, SelectionVector *no_match, idx_t &no_match_count);
+	static idx_t Match(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
+	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
+	                   idx_t &no_match_count);
 };
 
 } // namespace duckdb

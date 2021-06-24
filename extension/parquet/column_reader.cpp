@@ -39,10 +39,9 @@ const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                            idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-      type(move(type_p)), page_rows_available(0) {
+      type(move(type_p)), page_rows_available(0), dummy_result(type, nullptr) {
 
 	// dummies for Skip()
-	dummy_result.Initialize(Type());
 	none_filter.none();
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	dummy_repeat.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -411,17 +410,12 @@ void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReade
 
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                              Vector &result_out) {
-	if (!ListVector::HasEntry(result_out)) {
-		auto list_child = make_unique<Vector>(result_out.GetType().child_types()[0].second);
-		ListVector::SetEntry(result_out, move(list_child));
-	}
-
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
 
+	child_result.Reset();
 	while (result_offset < num_values) {
 		auto child_req_num_values = MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
-
 		if (child_req_num_values == 0) {
 			break;
 		}
@@ -433,19 +427,17 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 
 		if (overflow_child_count == 0) {
 			child_actual_num_values = child_column_reader->Read(child_req_num_values, child_filter, child_defines_ptr,
-			                                                    child_repeats_ptr, child_result);
+			                                                    child_repeats_ptr, child_result.data[0]);
 		} else {
 			child_actual_num_values = overflow_child_count;
 			overflow_child_count = 0;
-			child_result.Reference(overflow_child_vector);
+			child_result.data[0].Reference(child_result.data[1]);
 		}
 
-		append_chunk.data[0].Reference(child_result);
-		append_chunk.SetCardinality(child_actual_num_values);
-		append_chunk.Verify();
-
+		child_result.data[0].Verify(child_actual_num_values);
 		idx_t current_chunk_offset = ListVector::GetListSize(result_out);
-		ListVector::Append(result_out, append_chunk.data[0], append_chunk.size());
+		ListVector::Append(result_out, child_result.data[0], child_actual_num_values);
+
 		// hard-won piece of code this, modify at your own risk
 		// the intuition is that we have to only collapse values into lists that are repeated *on this level*
 		// the rest is pretty much handed up as-is as a single-valued list or NULL
@@ -479,9 +471,9 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		// we have read more values from the child reader than we can fit into the result for this read
 		// we have to pass everything from child_idx to child_actual_num_values into the next call
 		if (child_idx < child_actual_num_values && result_offset == num_values) {
-			overflow_child_vector.Slice(child_result, child_idx);
+			child_result.data[1].Slice(child_result.data[0], child_idx);
 			overflow_child_count = child_actual_num_values - child_idx;
-			overflow_child_vector.Verify(overflow_child_count);
+			child_result.data[1].Verify(overflow_child_count);
 
 			// move values in the child repeats and defines *backward* by child_idx
 			for (idx_t repdef_idx = 0; repdef_idx < overflow_child_count; repdef_idx++) {
@@ -505,12 +497,12 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_defines_ptr = (uint8_t *)child_defines.ptr;
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
 
-	auto child_type = Type().child_types()[0].second;
-	child_result.Initialize(child_type);
+	auto child_type = ListType::GetChildType(Type());
 
-	vector<LogicalType> append_chunk_types;
-	append_chunk_types.push_back(child_type);
-	append_chunk.Initialize(append_chunk_types);
+	vector<LogicalType> child_result_types;
+	child_result_types.push_back(child_type);
+	child_result_types.push_back(child_type);
+	child_result.Initialize(child_result_types);
 
 	child_filter.set();
 }

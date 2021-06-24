@@ -56,8 +56,9 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	for (idx_t i = 0; i < hash_table->build_types.size(); i++) {
 		auto &vector = perfect_hash_table[i];
 		D_ASSERT(vector.GetType() == hash_table->build_types[i]);
-		RowOperations::Gather(hash_table->layout, tuples_addresses, sel_tuples, vector, sel_build, keys_count,
-		                      i + hash_table->condition_types.size());
+		const auto col_no = hash_table->condition_types.size() + i;
+		const auto col_offset = hash_table->layout.GetOffsets()[col_no];
+		RowOperations::Gather(tuples_addresses, sel_tuples, vector, sel_build, keys_count, col_offset, col_no);
 	}
 }
 
@@ -205,9 +206,12 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
 			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-			build_sel_vec.set_index(sel_idx, idx);
-			probe_sel_vec.set_index(sel_idx++, i);
-			probe_sel_count++;
+			// check for matches in the build
+			if (bitmap_build_idx[idx]) {
+				build_sel_vec.set_index(sel_idx, idx);
+				probe_sel_vec.set_index(sel_idx++, i);
+				probe_sel_count++;
+			}
 		}
 	}
 }

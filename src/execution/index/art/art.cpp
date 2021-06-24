@@ -8,8 +8,9 @@
 
 namespace duckdb {
 
-ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions, bool is_unique)
-    : Index(IndexType::ART, column_ids, unbound_expressions), is_unique(is_unique) {
+ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions, bool is_unique,
+         bool is_primary)
+    : Index(IndexType::ART, column_ids, unbound_expressions, is_unique, is_primary) {
 	tree = nullptr;
 	expression_result.Initialize(logical_types);
 	is_little_endian = IsLittleEndian();
@@ -274,8 +275,16 @@ void ART::VerifyAppend(DataChunk &chunk) {
 			continue;
 		}
 		if (Lookup(tree, *keys[i], 0) != nullptr) {
+			string key_name;
+			for (idx_t k = 0; k < expression_result.ColumnCount(); k++) {
+				if (k > 0) {
+					key_name += ", ";
+				}
+				key_name += unbound_expressions[k]->GetName() + ": " + expression_result.data[k].GetValue(i).ToString();
+			}
 			// node already exists in tree
-			throw ConstraintException("duplicate key value violates primary key or unique constraint");
+			throw ConstraintException("duplicate key \"%s\" violates %s constraint", key_name,
+			                          is_primary ? "primary key" : "unique");
 		}
 	}
 }
@@ -379,6 +388,15 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 		Erase(tree, *keys[i], 0, row_identifiers[i]);
+#ifdef DEBUG
+		auto node = Lookup(tree, *keys[i], 0);
+		if (node) {
+			auto leaf = static_cast<Leaf *>(node);
+			for (idx_t k = 0; k < leaf->num_elements; k++) {
+				D_ASSERT(leaf->GetRowId(k) != row_identifiers[i]);
+			}
+		}
+#endif
 	}
 }
 

@@ -275,7 +275,7 @@ bool Value::DoubleIsValid(double value) {
 
 Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
 	D_ASSERT(width <= Decimal::MAX_WIDTH_INT16);
-	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+	Value result(LogicalType::DECIMAL(width, scale));
 	result.value_.smallint = value;
 	result.is_null = false;
 	return result;
@@ -283,14 +283,14 @@ Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
 
 Value Value::DECIMAL(int32_t value, uint8_t width, uint8_t scale) {
 	D_ASSERT(width >= Decimal::MAX_WIDTH_INT16 && width <= Decimal::MAX_WIDTH_INT32);
-	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+	Value result(LogicalType::DECIMAL(width, scale));
 	result.value_.integer = value;
 	result.is_null = false;
 	return result;
 }
 
 Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
-	LogicalType decimal_type(LogicalTypeId::DECIMAL, width, scale);
+	auto decimal_type = LogicalType::DECIMAL(width, scale);
 	Value result(decimal_type);
 	switch (decimal_type.InternalType()) {
 	case PhysicalType::INT16:
@@ -313,7 +313,7 @@ Value Value::DECIMAL(int64_t value, uint8_t width, uint8_t scale) {
 
 Value Value::DECIMAL(hugeint_t value, uint8_t width, uint8_t scale) {
 	D_ASSERT(width >= Decimal::MAX_WIDTH_INT64 && width <= Decimal::MAX_WIDTH_INT128);
-	Value result(LogicalType(LogicalTypeId::DECIMAL, width, scale));
+	Value result(LogicalType::DECIMAL(width, scale));
 	result.value_.hugeint = value;
 	result.is_null = false;
 	return result;
@@ -421,7 +421,7 @@ Value Value::STRUCT(child_list_t<Value> values) {
 		child_types.push_back(make_pair(move(child.first), child.second.type()));
 		result.struct_value.push_back(move(child.second));
 	}
-	result.type_ = LogicalType(LogicalTypeId::STRUCT, child_types);
+	result.type_ = LogicalType::STRUCT(move(child_types));
 
 	result.is_null = false;
 	return result;
@@ -433,7 +433,7 @@ Value Value::MAP(Value key, Value value) {
 	child_types.push_back({"key", key.type()});
 	child_types.push_back({"value", value.type()});
 
-	result.type_ = LogicalType(LogicalTypeId::MAP, child_types);
+	result.type_ = LogicalType::MAP(move(child_types));
 
 	result.struct_value.push_back(move(key));
 	result.struct_value.push_back(move(value));
@@ -442,8 +442,14 @@ Value Value::MAP(Value key, Value value) {
 }
 
 Value Value::LIST(vector<Value> values) {
+	D_ASSERT(!values.empty());
+#ifdef DEBUG
+	for (idx_t i = 1; i < values.size(); i++) {
+		D_ASSERT(values[i].type() == values[0].type());
+	}
+#endif
 	Value result;
-	result.type_ = LogicalType(LogicalTypeId::LIST);
+	result.type_ = LogicalType::LIST(values[0].type());
 	result.list_value = move(values);
 	result.is_null = false;
 	return result;
@@ -721,7 +727,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(value);
 	case LogicalTypeId::DECIMAL:
-		return Value::DECIMAL(value, type.width(), type.scale());
+		return Value::DECIMAL(value, DecimalType::GetWidth(type), DecimalType::GetScale(type));
 	case LogicalTypeId::FLOAT:
 		return Value((float)value);
 	case LogicalTypeId::DOUBLE:
@@ -887,15 +893,16 @@ string Value::ToString() const {
 		return to_string(value_.double_);
 	case LogicalTypeId::DECIMAL: {
 		auto internal_type = type_.InternalType();
+		auto scale = DecimalType::GetScale(type_);
 		if (internal_type == PhysicalType::INT16) {
-			return Decimal::ToString(value_.smallint, type_.scale());
+			return Decimal::ToString(value_.smallint, scale);
 		} else if (internal_type == PhysicalType::INT32) {
-			return Decimal::ToString(value_.integer, type_.scale());
+			return Decimal::ToString(value_.integer, scale);
 		} else if (internal_type == PhysicalType::INT64) {
-			return Decimal::ToString(value_.bigint, type_.scale());
+			return Decimal::ToString(value_.bigint, scale);
 		} else {
 			D_ASSERT(internal_type == PhysicalType::INT128);
-			return Decimal::ToString(value_.hugeint, type_.scale());
+			return Decimal::ToString(value_.hugeint, scale);
 		}
 	}
 	case LogicalTypeId::DATE:
@@ -922,8 +929,9 @@ string Value::ToString() const {
 		return to_string(value_.hash);
 	case LogicalTypeId::STRUCT: {
 		string ret = "{";
+		auto &child_types = StructType::GetChildTypes(type_);
 		for (size_t i = 0; i < struct_value.size(); i++) {
-			auto &name = type_.child_types()[i].first;
+			auto &name = child_types[i].first;
 			auto &child = struct_value[i];
 			ret += "'" + name + "': " + child.ToString();
 			if (i < struct_value.size() - 1) {
@@ -1042,9 +1050,8 @@ Value Value::CastAs(const LogicalType &target_type, bool strict) const {
 	if (type_ == target_type) {
 		return Copy();
 	}
-	Vector input, result;
-	input.Reference(*this);
-	result.Initialize(target_type);
+	Vector input(*this);
+	Vector result(target_type);
 	VectorOperations::Cast(input, result, 1, strict);
 	return result.GetValue(0);
 }
