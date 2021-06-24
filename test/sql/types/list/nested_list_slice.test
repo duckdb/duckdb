@@ -1,4 +1,4 @@
-# name: test/sql/types/list/nested_list_extract.test
+# name: test/sql/types/list/nested_list_slice.test
 # description: Test nested list extract
 # group: [list]
 

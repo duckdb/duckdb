@@ -82,7 +82,6 @@ void StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t c
 	state.child_states[0].Next(count);
 }
 
-
 void StructColumnData::InitializeAppend(ColumnAppendState &state) {
 	ColumnAppendState validity_append;
 	validity.InitializeAppend(validity_append);

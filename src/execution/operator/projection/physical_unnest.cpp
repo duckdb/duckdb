@@ -45,7 +45,7 @@ static void UnnestNull(idx_t start, idx_t end, Vector &result) {
 	}
 	if (result.GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &struct_children = StructVector::GetEntries(result);
-		for(auto &child : struct_children) {
+		for (auto &child : struct_children) {
 			UnnestNull(start, end, *child);
 		}
 	}

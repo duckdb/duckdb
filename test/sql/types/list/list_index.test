@@ -1,6 +1,6 @@
 # name: test/sql/types/list/list_index.test
 # description: Test list lookups using an index
-# group: [struct]
+# group: [list]
 
 statement ok
 PRAGMA enable_verification

@@ -17,7 +17,7 @@ namespace duckdb {
 class ListColumnData : public ColumnData {
 public:
 	ListColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type,
-	                 ColumnData *parent = nullptr);
+	               ColumnData *parent = nullptr);
 
 	//! The child-column of the list
 	unique_ptr<ColumnData> child_column;

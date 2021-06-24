@@ -60,7 +60,8 @@ public:
 	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(const LogicalType &logical_type);
-	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type, idx_t capacity = STANDARD_VECTOR_SIZE);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type,
+	                                                     idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	inline VectorBufferType GetBufferType() const {
 		return buffer_type;

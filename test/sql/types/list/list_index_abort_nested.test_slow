@@ -1,4 +1,4 @@
-# name: test/sql/types/list/list_index_abort.test_slow
+# name: test/sql/types/list/list_index_abort_nested.test_slow
 # description: Test abort of list insertion in a primary key index
 # group: [list]
 

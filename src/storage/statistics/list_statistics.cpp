@@ -61,7 +61,6 @@ string ListStatistics::ToString() {
 void ListStatistics::Verify(Vector &vector, idx_t count) {
 	BaseStatistics::Verify(vector, count);
 
-
 	auto &child_entry = ListVector::GetEntry(vector);
 	child_stats->Verify(child_entry, count);
 }

@@ -4,7 +4,7 @@
 namespace duckdb {
 
 ListColumnData::ListColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type_p,
-                                   ColumnData *parent)
+                               ColumnData *parent)
     : ColumnData(info, column_index, start_row, move(type_p), parent), validity(info, 0, start_row, this) {
 	D_ASSERT(type.InternalType() == PhysicalType::LIST);
 	auto &child_type = ListType::GetChildType(type);
@@ -86,12 +86,12 @@ void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 	auto last_entry = data[scan_count - 1];
 
 #ifdef DEBUG
-	for(idx_t i = 1; i < scan_count; i++) {
+	for (idx_t i = 1; i < scan_count; i++) {
 		D_ASSERT(data[i].offset == data[i - 1].offset + data[i - 1].length);
 	}
 #endif
 	// shift all offsets so they are 0 at the first entry
-	for(idx_t i = 0; i < scan_count; i++) {
+	for (idx_t i = 0; i < scan_count; i++) {
 		data[i].offset -= first_entry.offset;
 	}
 
@@ -100,7 +100,8 @@ void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
-		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT || state.child_states[1].row_index + child_scan_count <= child_column->GetCount());
+		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT ||
+		         state.child_states[1].row_index + child_scan_count <= child_column->GetCount());
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
 	}
 	state.NextInternal(count);
@@ -126,7 +127,7 @@ void ListColumnData::InitializeAppend(ColumnAppendState &state) {
 
 void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, Vector &vector, idx_t count) {
 	D_ASSERT(count > 0);
-	auto &stats = (ListStatistics &) stats_p;
+	auto &stats = (ListStatistics &)stats_p;
 
 	vector.Normalify(count);
 	auto &list_validity = FlatVector::Validity(vector);
@@ -137,7 +138,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	idx_t child_count = 0;
 
 	auto append_offsets = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		if (list_validity.RowIsValid(i)) {
 			append_offsets[i].offset = start_offset + input_offsets[i].offset;
 			append_offsets[i].length = input_offsets[i].length;
@@ -153,16 +154,17 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 	}
 #ifdef DEBUG
 	D_ASSERT(append_offsets[0].offset == start_offset);
-	for(idx_t i = 1; i < count; i++) {
+	for (idx_t i = 1; i < count; i++) {
 		D_ASSERT(append_offsets[i].offset == append_offsets[i - 1].offset + append_offsets[i - 1].length);
 	}
-	D_ASSERT(append_offsets[count - 1].offset + append_offsets[count - 1].length - append_offsets[0].offset == child_count);
+	D_ASSERT(append_offsets[count - 1].offset + append_offsets[count - 1].length - append_offsets[0].offset ==
+	         child_count);
 #endif
 
 	VectorData vdata;
 	vdata.validity = list_validity;
 	vdata.sel = FlatVector::IncrementalSelectionVector(count, vdata.owned_sel);
-	vdata.data = (data_ptr_t) append_offsets.get();
+	vdata.data = (data_ptr_t)append_offsets.get();
 
 	// append the list offsets
 	ColumnData::AppendData(stats, state, vdata, count);
@@ -190,13 +192,13 @@ void ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result)
 	throw NotImplementedException("List Fetch");
 }
 
-void ListColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t offset,
-			idx_t update_count) {
+void ListColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+                            idx_t offset, idx_t update_count) {
 	throw NotImplementedException("List Update is not supported.");
 }
 
-void ListColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path,
-                                    Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
+void ListColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector,
+                                  row_t *row_ids, idx_t update_count, idx_t depth) {
 	throw NotImplementedException("List Update Column is not supported");
 }
 
@@ -205,7 +207,7 @@ unique_ptr<BaseStatistics> ListColumnData::GetUpdateStatistics() {
 }
 
 void ListColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
-                                idx_t result_idx) {
+                              idx_t result_idx) {
 	// insert any child states that are required
 	// we need two (validity & list child)
 	// note that we need a scan state for the child vector
@@ -241,7 +243,8 @@ void ListColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state,
 		Vector child_scan(child_type, child_scan_count);
 		// seek the scan towards the specified position and read [length] entries
 		child_column->InitializeScanWithOffset(*child_state, original_offset);
-		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT || child_state->row_index + child_scan_count <= child_column->GetCount());
+		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
+		         child_state->row_index + child_scan_count <= child_column->GetCount());
 		child_column->ScanCount(*child_state, child_scan, child_scan_count);
 
 		ListVector::Append(result, child_scan, child_scan_count);
@@ -282,8 +285,7 @@ void ListColumnData::CommitDropColumn() {
 // 	}
 // };
 
-unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group,
-                                                                          TableDataWriter &writer) {
+unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) {
 	throw NotImplementedException("List CreateCheckpointState");
 	// return make_unique<StructColumnCheckpointState>(row_group, *this, writer);
 }

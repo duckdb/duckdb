@@ -30,8 +30,8 @@ VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING
 VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 }
 
-VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity) :
-    VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
+    : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &child_type : child_types) {
 		auto vector = make_unique<Vector>(child_type.second, capacity);
