@@ -2,6 +2,8 @@
 # description: Test large nested lists
 # group: [list]
 
+require noforcestorage
+
 # list of lists with many small lists
 statement ok
 CREATE TABLE a AS SELECT case when i < 100000 then 'a' else 'b' end g, ARRAY_AGG(case when i %2 = 0 then ARRAY[i - 2, i, i + 2] else ARRAY[i, i + 2] end) l FROM generate_series(0, 199999, 1) tbl(i) GROUP BY g

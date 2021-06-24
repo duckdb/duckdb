@@ -2,6 +2,8 @@
 # description: Test updates on nested lists with in-memory storage
 # group: [list]
 
+require noforcestorage
+
 statement ok
 CREATE TABLE a(id INTEGER, b INTEGER[][]);
 

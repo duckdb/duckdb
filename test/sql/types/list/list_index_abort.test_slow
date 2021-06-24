@@ -2,6 +2,8 @@
 # description: Test abort of list insertion in a primary key index
 # group: [list]
 
+require noforcestorage
+
 statement ok
 PRAGMA enable_verification
 

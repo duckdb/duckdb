@@ -2,6 +2,8 @@
 # description: Test storing large lists
 # group: [list]
 
+require noforcestorage
+
 statement ok
 PRAGMA enable_verification
 

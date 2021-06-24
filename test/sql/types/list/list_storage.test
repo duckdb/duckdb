@@ -2,6 +2,8 @@
 # description: Test lists with in-memory storage
 # group: [list]
 
+require noforcestorage
+
 statement ok
 CREATE TABLE a(b INTEGER[]);
 

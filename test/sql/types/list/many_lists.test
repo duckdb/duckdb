@@ -2,6 +2,8 @@
 # description: Test many lists
 # group: [list]
 
+require noforcestorage
+
 # integers
 statement ok
 CREATE TABLE t1 AS SELECT i % 5000 g, LIST(i) l FROM RANGE(20000) tbl(i) GROUP BY g

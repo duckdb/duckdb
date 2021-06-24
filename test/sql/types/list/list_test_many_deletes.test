@@ -2,6 +2,8 @@
 # description: Test many deletes on list columns
 # group: [list]
 
+require noforcestorage
+
 statement ok
 CREATE TABLE lists(i INT[])
 
