@@ -13,7 +13,7 @@ ListColumnData::ListColumnData(DataTableInfo &info, idx_t column_index, idx_t st
 }
 
 bool ListColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter) {
-	// table filters are not supported yet for struct columns
+	// table filters are not supported yet for list columns
 	return false;
 }
 
