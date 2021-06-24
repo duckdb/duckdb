@@ -1,0 +1,34 @@
+# name: test/sql/types/list/nested_list_slice.test
+# description: Test nested list extract
+# group: [list]
+
+require noforcestorage
+
+# nesting level=2
+statement ok
+CREATE TABLE a(id INTEGER, b INTEGER[][]);
+
+statement ok
+INSERT INTO a VALUES (0, [[1, 2], NULL, [3, NULL]]), (1, NULL), (2, [[4, 5, 6, 7], [NULL]])
+
+query II
+SELECT * FROM a ORDER BY id
+----
+0	[[1, 2], NULL, [3, NULL]]
+1	NULL
+2	[[4, 5, 6, 7], [NULL]]
+
+# test nested list slice
+query II
+SELECT id, b[0:1] FROM a ORDER BY id
+----
+0	[[1, 2]]
+1	NULL
+2	[[4, 5, 6, 7]]
+
+query II
+SELECT id, b[0:2] FROM a ORDER BY id
+----
+0	[[1, 2], NULL]
+1	NULL
+2	[[4, 5, 6, 7], [NULL]]

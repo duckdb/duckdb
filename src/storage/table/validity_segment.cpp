@@ -313,7 +313,7 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 		// now finally we can merge the input mask with the result mask
 		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
 			if (!result_data) {
-				result_mask.Initialize(STANDARD_VECTOR_SIZE);
+				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count));
 				result_data = (validity_t *)result_mask.GetData();
 			}
 			result_data[current_result_idx] &= input_mask;
