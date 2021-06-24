@@ -88,6 +88,18 @@ bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connec
 	auto arrow_result_tbl = arrow::Table::FromRecordBatches(batches_result).ValueUnsafe();
 	auto new_table = table->CombineChunks().ValueUnsafe();
 	auto new_arrow_result_tbl = arrow_result_tbl->CombineChunks().ValueUnsafe();
+
+	result = ArrowToDuck(conn, *new_arrow_result_tbl);
+	while (true) {
+		auto data_chunk = result->Fetch();
+		if (!data_chunk || data_chunk->size() == 0) {
+			break;
+		}
+		ArrowArray arrow_array;
+		data_chunk->ToArrowArray(&arrow_array);
+		auto batch = arrow::ImportRecordBatch(&arrow_array, result_schema.ValueUnsafe());
+		batches_result.push_back(batch.MoveValueUnsafe());
+	}
 	return ArrowTableEquals(*new_table, *new_arrow_result_tbl);
 }
 
@@ -107,33 +119,23 @@ TEST_CASE("Test Parquet File NaN", "[arrow]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {"foo", "bar", "baz"}));
 	REQUIRE(CHECK_COLUMN(result, 2, {true, false, true}));
 }
-//
-//TEST_CASE("Test Parquet Files fix", "[arrow]") {
-//
-//	std::vector<std::string> skip {"aws2.parquet"};     //! Not supported by arrow
-//	skip.emplace_back("datapage_v2.snappy.parquet");    //! Not supported by arrow
-//	skip.emplace_back("broken-arrow.parquet");          //! Arrow can't read this
-//	skip.emplace_back("nan-float.parquet");             //! Can't roundtrip NaNs
-//	skip.emplace_back("alltypes_dictionary.parquet");   //! FIXME: Contains binary columns, we don't support those yet
-//	skip.emplace_back("blob.parquet");                  //! FIXME: Contains binary columns, we don't support those yet
-//	skip.emplace_back("alltypes_plain.parquet");        //! FIXME: Contains binary columns, we don't support those yet
-//	skip.emplace_back("alltypes_plain.snappy.parquet"); //! FIXME: Contains binary columns, we don't support those yet
-//	skip.emplace_back("data-types.parquet");            //! FIXME: Contains binary columns, we don't support those yet
-//	skip.emplace_back("fixed.parquet"); //! FIXME: Contains fixed-width-binary columns, we don't support those yet
-//
-//	//! Breaking with vec2
-//	//	skip.emplace_back("nested_maps.parquet");
-//	//	skip.emplace_back("nested_maps.snappy.parquet");
-//	//	skip.emplace_back("apkwan.parquet");
-//	//	skip.emplace_back("nested_lists.snappy.parquet");
-//	//    skip.emplace_back("leftdate3_192_loop_1.parquet"); //! This is just crazy slow
-//	//	skip.emplace_back("list_columns.parquet");
-//
-//	duckdb::DuckDB db;
-//	duckdb::Connection conn {db};
-//	std::string parquet_path = "test/sql/copy/parquet/data/apkwan.parquet";
-//	REQUIRE(RoundTrip(parquet_path, skip, conn));
-//}
+
+TEST_CASE("Test Parquet Long Files", "[arrow]") {
+	std::vector<std::string> skip;
+
+	duckdb::DuckDB db;
+	duckdb::Connection conn {db};
+
+	std::vector<std::string> run {"test/sql/copy/parquet/data/leftdate3_192_loop_1.parquet"};
+	run.emplace_back("test/sql/copy/parquet/data/bug687_nulls.parquet");
+	if (STANDARD_VECTOR_SIZE >= 1024) {
+		for (auto &parquet_path : run) {
+			std::cout << parquet_path << std::endl;
+			REQUIRE(RoundTrip(parquet_path, skip, conn));
+		}
+	}
+}
+
 TEST_CASE("Test Parquet Files", "[arrow]") {
 
 	std::vector<std::string> skip {"aws2.parquet"};     //! Not supported by arrow
@@ -146,6 +148,8 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	skip.emplace_back("alltypes_plain.snappy.parquet"); //! FIXME: Contains binary columns, we don't support those yet
 	skip.emplace_back("data-types.parquet");            //! FIXME: Contains binary columns, we don't support those yet
 	skip.emplace_back("fixed.parquet"); //! FIXME: Contains fixed-width-binary columns, we don't support those yet
+	skip.emplace_back("leftdate3_192_loop_1.parquet"); //! This is just crazy slow
+	skip.emplace_back("bug687_nulls.parquet");         //! This is just crazy slow
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
@@ -153,6 +157,7 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 
 	auto parquet_files = fs.Glob("test/sql/copy/parquet/data/*.parquet");
 	for (auto &parquet_path : parquet_files) {
+		std::cout << parquet_path << std::endl;
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
 	skip.clear();

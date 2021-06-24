@@ -33,7 +33,7 @@ void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 }
 
 void DataChunk::Initialize(const vector<LogicalType> &types) {
-	D_ASSERT(data.empty());     // can only be initialized once
+	D_ASSERT(data.empty());   // can only be initialized once
 	D_ASSERT(!types.empty()); // empty chunk not allowed
 	for (idx_t i = 0; i < types.size(); i++) {
 		VectorCache cache(types[i]);

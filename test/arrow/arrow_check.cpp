@@ -372,7 +372,8 @@ protected:
 		const auto compare_ranges = [&](int64_t left_offset, int64_t right_offset, int64_t length) -> bool {
 			RangeDataEqualsImpl impl(options_, floating_approximate_, left_data, right_data, left_offset, right_offset,
 			                         length);
-			return impl.Compare();
+			auto result = impl.Compare();
+			return result;
 		};
 
 		CompareWithOffsets<typename TypeClass::offset_type>(1, compare_ranges);
