@@ -1,0 +1,43 @@
+# name: test/sql/types/list/list_test_many_deletes.test
+# description: Test many deletes on list columns
+# group: [list]
+
+require noforcestorage
+
+statement ok
+CREATE TABLE lists(i INT[])
+
+statement ok
+INSERT INTO lists SELECT [i, NULL, i+1] FROM range(10000) tbl(i);
+
+statement ok
+DELETE FROM lists WHERE i[0] <= 9995
+
+query I
+SELECT * FROM lists
+----
+[9996, NULL, 9997]
+[9997, NULL, 9998]
+[9998, NULL, 9999]
+[9999, NULL, 10000]
+
+statement ok
+DROP TABLE lists
+
+# now with nested lists
+statement ok
+CREATE TABLE lists(i INT[][])
+
+statement ok
+INSERT INTO lists SELECT [[i], NULL, [i+1, 4], [NULL, 1, 2]] FROM range(10000) tbl(i);
+
+statement ok
+DELETE FROM lists WHERE i[0][0] <= 9995
+
+query I
+SELECT * FROM lists
+----
+[[9996], NULL, [9997, 4], [NULL, 1, 2]]
+[[9997], NULL, [9998, 4], [NULL, 1, 2]]
+[[9998], NULL, [9999, 4], [NULL, 1, 2]]
+[[9999], NULL, [10000, 4], [NULL, 1, 2]]
