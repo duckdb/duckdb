@@ -480,6 +480,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
 
+	idx_t append_count = chunk.size();
 	idx_t remaining = chunk.size();
 	while (true) {
 		auto current_row_group = state.row_group_append_state.row_group;
@@ -519,7 +520,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 			break;
 		}
 	}
-	state.current_row += chunk.size();
+	state.current_row += append_count;
 }
 
 void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
