@@ -133,6 +133,7 @@ public:
 
 	void Verify();
 
+	void NextVector(RowGroupScanState &state);
 private:
 	ChunkInfo *GetChunkInfo(idx_t vector_idx);
 

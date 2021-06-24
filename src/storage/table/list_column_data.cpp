@@ -110,6 +110,29 @@ void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 	ListVector::SetListSize(result, child_scan_count);
 }
 
+void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
+	// we need to read the list entries/offsets to figure out how much to skip
+	// note that we only need to read the first and last entry
+	// however, let's just read all "count" entries for now
+	auto data = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
+	Vector result(type, (data_ptr_t) data.get());
+	idx_t scan_count = ScanVector(state, result, count);
+	if (scan_count == 0) {
+		return;
+	}
+
+	auto &first_entry = data[0];
+	auto &last_entry = data[scan_count - 1];
+	idx_t child_scan_count = last_entry.offset + last_entry.length - first_entry.offset;
+
+	// skip the list state and the validity state forward by "count"
+	state.NextInternal(count);
+	state.child_states[0].NextInternal(count);
+
+	// skip the child state forward by the child_scan_count
+	child_column->Skip(state.child_states[1], child_scan_count);
+}
+
 void ListColumnData::InitializeAppend(ColumnAppendState &state) {
 	// initialize the list offset append
 	ColumnData::InitializeAppend(state);

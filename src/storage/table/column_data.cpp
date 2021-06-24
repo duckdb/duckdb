@@ -149,6 +149,10 @@ void ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) 
 	ScanVector(state, result, count);
 }
 
+void ColumnData::Skip(ColumnScanState &state, idx_t count) {
+	state.Next(count);
+}
+
 void ColumnScanState::NextInternal(idx_t count) {
 	if (!current) {
 		//! There is no column segment
@@ -175,14 +179,6 @@ void ColumnScanState::Next(idx_t count) {
 
 void ColumnScanState::NextVector() {
 	Next(STANDARD_VECTOR_SIZE);
-}
-
-void TableScanState::NextVector() {
-	//! nothing to scan for this vector, skip the entire vector
-	throw NotImplementedException("FIXME: next vector");
-	// for (idx_t j = 0; j < column_ids.size(); j++) {
-	// 	column_scans[j].Next();
-	// }
 }
 
 void ColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {

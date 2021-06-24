@@ -66,6 +66,9 @@ public:
 	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
 	virtual void ScanCount(ColumnScanState &state, Vector &result, idx_t count);
 
+	//! Skip the scan forward by "count" rows
+	virtual void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE);
+
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
 	//! Append a vector of type [type] to the end of the column
