@@ -47,9 +47,6 @@ struct RowOperations {
 	//! Scatter group data to the rows. Initialises the ValidityMask.
 	static void Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
 	                    RowDataCollection &string_heap, const SelectionVector &sel, idx_t count);
-	//! Scatter group data to the rows. Orrifies the DataChunk first.
-	static void Scatter(DataChunk &columns, const RowLayout &layout, Vector &rows, RowDataCollection &string_heap,
-	                    const SelectionVector &sel, idx_t count);
 	//! Gather a single column
 	static void Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
 	                   const idx_t count, const idx_t col_offset, const idx_t col_no);

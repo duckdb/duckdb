@@ -161,13 +161,12 @@ void RowDataCollection::SerializeVectorSortable(Vector &v, idx_t vcount, const S
 
 void RowDataCollection::ComputeStringEntrySizes(VectorData &vdata, idx_t entry_sizes[], const idx_t ser_count,
                                                 const SelectionVector &sel, const idx_t offset) {
-	const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 	auto strings = (string_t *)vdata.data;
 	for (idx_t i = 0; i < ser_count; i++) {
 		auto idx = sel.get_index(i);
 		auto str_idx = vdata.sel->get_index(idx) + offset;
 		if (vdata.validity.RowIsValid(str_idx)) {
-			entry_sizes[i] += string_prefix_len + strings[str_idx].GetSize();
+			entry_sizes[i] += sizeof(uint32_t) + strings[str_idx].GetSize();
 		}
 	}
 }
@@ -398,7 +397,6 @@ void RowDataCollection::SerializeStringVector(Vector &v, idx_t vcount, const Sel
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
-	const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 	auto strings = (string_t *)vdata.data;
 	if (!validitymask_locations) {
 		for (idx_t i = 0; i < ser_count; i++) {
@@ -408,7 +406,7 @@ void RowDataCollection::SerializeStringVector(Vector &v, idx_t vcount, const Sel
 				auto &string_entry = strings[source_idx];
 				// store string size
 				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
-				key_locations[i] += string_prefix_len;
+				key_locations[i] += sizeof(uint32_t);
 				// store the string
 				memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
 				key_locations[i] += string_entry.GetSize();
@@ -424,7 +422,7 @@ void RowDataCollection::SerializeStringVector(Vector &v, idx_t vcount, const Sel
 				auto &string_entry = strings[source_idx];
 				// store string size
 				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
-				key_locations[i] += string_prefix_len;
+				key_locations[i] += sizeof(uint32_t);
 				// store the string
 				memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
 				key_locations[i] += string_entry.GetSize();
@@ -742,7 +740,6 @@ static void TemplatedDeserializeIntoVector(Vector &v, const idx_t count, const S
 static void DeserializeIntoStringVector(Vector &v, const idx_t vcount, const SelectionVector &sel,
                                         data_ptr_t *key_locations) {
 	const auto &validity = FlatVector::Validity(v);
-	const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 	auto target = FlatVector::GetData<string_t>(v);
 
 	for (idx_t i = 0; i < vcount; i++) {
@@ -751,7 +748,7 @@ static void DeserializeIntoStringVector(Vector &v, const idx_t vcount, const Sel
 			continue;
 		}
 		auto len = Load<uint32_t>(key_locations[i]);
-		key_locations[i] += string_prefix_len;
+		key_locations[i] += sizeof(uint32_t);
 		target[col_idx] = StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i], len));
 		key_locations[i] += len;
 	}

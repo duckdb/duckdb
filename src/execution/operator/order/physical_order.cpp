@@ -50,7 +50,7 @@ struct SortingState {
 				switch (physical_type) {
 				case PhysicalType::VARCHAR:
 					// TODO: make use of statistics
-					col_size = string_t::INLINE_LENGTH;
+					col_size += string_t::INLINE_LENGTH;
 					break;
 				default:
 					throw NotImplementedException("Unable to order column with type %s", expr.return_type.ToString());
@@ -61,6 +61,7 @@ struct SortingState {
 			comparison_size += col_size;
 		}
 		entry_size = comparison_size + sizeof(idx_t);
+		blob_layout.Initialize(blob_layout_types);
 	}
 
 	idx_t column_count;
@@ -161,9 +162,7 @@ public:
 		    (Storage::BLOCK_ALLOC_SIZE / payload_row_width + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
 		payload_data =
 		    make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, payload_row_width);
-		if (!payload_layout.AllConstant()) {
-			payload_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8, true);
-		}
+		payload_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8, true);
 
 		initialized = true;
 	}
@@ -244,33 +243,37 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 	lstate.executor.Execute(input, sort);
 
 	// build and serialize sorting data
-	auto key_locations = FlatVector::GetData<data_ptr_t>(lstate.addresses);
-	lstate.sorting_data_radix->Build(sort.size(), key_locations, nullptr);
+	auto data_pointers = FlatVector::GetData<data_ptr_t>(lstate.addresses);
+	lstate.sorting_data_radix->Build(sort.size(), data_pointers, nullptr);
 	for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
 		bool has_null = sorting_state.has_null[sort_col];
 		bool nulls_first = sorting_state.order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
 		bool desc = sorting_state.order_types[sort_col] == OrderType::DESCENDING;
 		// TODO: use actual string statistics
 		lstate.sorting_data_radix->SerializeVectorSortable(sort.data[sort_col], sort.size(), lstate.sel_ptr,
-		                                                   sort.size(), key_locations, desc, has_null, nulls_first,
+		                                                   sort.size(), data_pointers, desc, has_null, nulls_first,
 		                                                   string_t::INLINE_LENGTH);
 	}
 
 	// also fully serialize variable size sorting columns
 	if (!sorting_state.all_constant) {
 		DataChunk blob_chunk;
+		blob_chunk.SetCardinality(sort.size());
 		for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
 			if (!TypeIsConstantSize(sort.data[sort_col].GetType().InternalType())) {
 				blob_chunk.data.emplace_back(sort.data[sort_col]);
 			}
 		}
-		lstate.sorting_data_blob->Build(blob_chunk.size(), key_locations, nullptr);
-		RowOperations::Scatter(blob_chunk, sorting_state.blob_layout, lstate.addresses, *lstate.sorting_data_heap,
-		                       lstate.sel_ptr, blob_chunk.size());
+		lstate.sorting_data_blob->Build(blob_chunk.size(), data_pointers, nullptr);
+		auto blob_data = blob_chunk.Orrify();
+		RowOperations::Scatter(blob_chunk, blob_data.get(), sorting_state.blob_layout, lstate.addresses,
+		                       *lstate.sorting_data_heap, lstate.sel_ptr, blob_chunk.size());
 	}
 
-	lstate.payload_data->Build(input.size(), key_locations, nullptr);
-	RowOperations::Scatter(input, payload_layout, lstate.addresses, *lstate.payload_heap, lstate.sel_ptr, input.size());
+	lstate.payload_data->Build(input.size(), data_pointers, nullptr);
+	auto input_data = input.Orrify();
+	RowOperations::Scatter(input, input_data.get(), payload_layout, lstate.addresses, *lstate.payload_heap,
+	                       lstate.sel_ptr, input.size());
 
 	// when sorting data reaches a certain size, we sort it
 	if (lstate.Full(context.client, sorting_state, payload_layout)) {
@@ -701,17 +704,17 @@ static inline bool IsValid(const idx_t &col_idx, const data_ptr_t row_ptr) {
 	return row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry);
 }
 
-static bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const SortingState &sorting_state) {
+static bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout) {
 	// Check if the blob is NULL
 	if (!IsValid(col_idx, row_ptr)) {
 		// Can't break a NULL tie
 		return false;
 	}
 	// Check if it is too short
-	switch (sorting_state.blob_layout.GetTypes()[col_idx].InternalType()) {
+	switch (row_layout.GetTypes()[col_idx].InternalType()) {
 	case PhysicalType::VARCHAR: {
-		const auto &tie_col_offset = sorting_state.blob_layout.GetOffsets()[col_idx];
-		string_t &tie_string = (string_t &)*(row_ptr + tie_col_offset);
+		const auto &tie_col_offset = row_layout.GetOffsets()[col_idx];
+		string_t tie_string = Load<string_t>(row_ptr + tie_col_offset);
 		if (tie_string.GetSize() <= string_t::INLINE_LENGTH) {
 			// No need to break the tie
 			return false;
@@ -719,8 +722,7 @@ static bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented compare for type %s",
-		                              sorting_state.logical_types[col_idx].ToString());
+		throw NotImplementedException("Unimplemented compare for type %s", row_layout.GetTypes()[col_idx].ToString());
 	}
 	return true;
 }
@@ -741,8 +743,8 @@ static inline int TemplatedCompareVal(const T &left_val, const T &right_val, con
 static int CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, const LogicalType &type, const int &order) {
 	switch (type.InternalType()) {
 	case PhysicalType::VARCHAR: {
-		string_t &left_val = (string_t &)*(l_ptr);
-		string_t &right_val = (string_t &)*(r_ptr);
+		string_t left_val = Load<string_t>(l_ptr);
+		string_t right_val = Load<string_t>(r_ptr);
 		return TemplatedCompareVal<string_t>(left_val, right_val, order);
 	}
 	default:
@@ -768,7 +770,7 @@ int BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData 
                  const SortingState &sorting_state, const bool &external) {
 	idx_t col_idx = sorting_state.sorting_to_blob_col.at(tie_col);
 	data_ptr_t l_data_ptr = left.DataPtr();
-	if (!TieIsBreakable(col_idx, l_data_ptr, sorting_state)) {
+	if (!TieIsBreakable(col_idx, l_data_ptr, sorting_state.blob_layout)) {
 		// Quick check to see if ties can be broken
 		return 0;
 	}
@@ -800,9 +802,12 @@ int BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData 
 static void SortTiedStrings(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &start,
                             const idx_t &end, const idx_t &tie_col, bool *ties, const data_ptr_t blob_ptr,
                             const SortingState &sorting_state) {
+	const auto row_width = sorting_state.blob_layout.GetRowWidth();
 	idx_t col_idx = sorting_state.sorting_to_blob_col.at(tie_col);
-	data_ptr_t row_ptr = blob_ptr + start * sorting_state.blob_layout.GetRowWidth();
-	if (!TieIsBreakable(col_idx, row_ptr, sorting_state)) {
+	// Locate the first blob row in question
+	data_ptr_t row_ptr = dataptr + start * sorting_state.entry_size;
+	data_ptr_t blob_row_ptr = blob_ptr + Load<idx_t>(row_ptr + sorting_state.comparison_size) * row_width;
+	if (!TieIsBreakable(col_idx, blob_row_ptr, sorting_state.blob_layout)) {
 		// Quick check to see if ties can be broken
 		return;
 	}
@@ -811,20 +816,19 @@ static void SortTiedStrings(BufferManager &buffer_manager, const data_ptr_t data
 	    buffer_manager.Allocate(MaxValue((end - start) * sizeof(data_ptr_t), (idx_t)Storage::BLOCK_ALLOC_SIZE));
 	auto entry_ptrs = (data_ptr_t *)ptr_block->Ptr();
 	for (idx_t i = start; i < end; i++) {
-		entry_ptrs[i - start] = dataptr + i * sorting_state.entry_size;
+		entry_ptrs[i - start] = row_ptr;
+		row_ptr += sorting_state.entry_size;
 	}
-	// Define some constants
-	const int order = sorting_state.order_types[tie_col] == OrderType::DESCENDING ? -1 : 1;
-	const auto row_width = sorting_state.blob_layout.GetRowWidth();
-	const auto &tie_col_offset = sorting_state.blob_layout.GetOffsets()[col_idx];
 	// Slow pointer-based sorting
+	const int order = sorting_state.order_types[tie_col] == OrderType::DESCENDING ? -1 : 1;
+	const auto &tie_col_offset = sorting_state.blob_layout.GetOffsets()[col_idx];
 	std::sort(entry_ptrs, entry_ptrs + end - start,
 	          [&blob_ptr, &order, &sorting_state, &tie_col_offset, &row_width](const data_ptr_t l, const data_ptr_t r) {
 		          // use indices to find strings in blob
 		          idx_t left_idx = Load<idx_t>(l + sorting_state.comparison_size);
 		          idx_t right_idx = Load<idx_t>(r + sorting_state.comparison_size);
-		          string_t &left_val = (string_t &)*(blob_ptr + left_idx * row_width + tie_col_offset);
-		          string_t &right_val = (string_t &)*(blob_ptr + right_idx * row_width + tie_col_offset);
+		          string_t left_val = Load<string_t>(blob_ptr + left_idx * row_width + tie_col_offset);
+		          string_t right_val = Load<string_t>(blob_ptr + right_idx * row_width + tie_col_offset);
 		          return TemplatedCompareVal<string_t>(left_val, right_val, order) < 0;
 	          });
 	// Re-order
@@ -841,12 +845,12 @@ static void SortTiedStrings(BufferManager &buffer_manager, const data_ptr_t data
 		data_ptr_t idx_ptr = dataptr + start * sorting_state.entry_size + sorting_state.comparison_size;
 		// Load current entry
 		idx_t current_idx = Load<idx_t>(idx_ptr);
-		string_t &current_val = (string_t &)*(blob_ptr + current_idx * row_width + tie_col_offset);
+		string_t current_val = Load<string_t>(blob_ptr + current_idx * row_width + tie_col_offset);
 		for (idx_t i = 0; i < end - start - 1; i++) {
 			// Load next entry
 			idx_ptr += sorting_state.entry_size;
 			idx_t next_idx = Load<idx_t>(idx_ptr);
-			string_t &next_val = (string_t &)*(blob_ptr + next_idx * row_width + tie_col_offset);
+			string_t next_val = Load<string_t>(blob_ptr + next_idx * row_width + tie_col_offset);
 			// Compare
 			ties[start + i] = Equals::Operation<string_t>(current_val, next_val);
 			current_val = next_val;
@@ -898,15 +902,7 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 	D_ASSERT(col_offset + tie_size <= sorting_state.comparison_size);
 	// align dataptr
 	dataptr += col_offset;
-	idx_t i = 0;
-	for (; i + 7 < count - 1; i += 8) {
-		// fixed size inner loop to allow unrolling
-		for (idx_t j = 0; j < 8; j++) {
-			ties[i + j] = ties[i + j] && memcmp(dataptr, dataptr + sorting_state.entry_size, tie_size) == 0;
-			dataptr += sorting_state.entry_size;
-		}
-	}
-	for (; i < count - 1; i++) {
+	for (idx_t i = 0; i < count - 1; i++) {
 		ties[i] = ties[i] && memcmp(dataptr, dataptr + sorting_state.entry_size, tie_size) == 0;
 		dataptr += sorting_state.entry_size;
 	}
@@ -992,10 +988,9 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 	idx_t col_offset = 0;
 	unique_ptr<BufferHandle> ties_handle;
 	bool *ties = nullptr;
-	const idx_t num_cols = sorting_state.column_count;
-	for (idx_t i = 0; i < num_cols; i++) {
+	for (idx_t i = 0; i < sorting_state.column_count; i++) {
 		sorting_size += sorting_state.column_sizes[i];
-		if (sorting_state.constant_size[i] && i < num_cols - 1) {
+		if (sorting_state.constant_size[i] && i < sorting_state.column_count - 1) {
 			// Add columns to the sorting size until we reach a variable size column, or the last column
 			continue;
 		}
@@ -1012,7 +1007,7 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 			SubSortTiedTuples(buffer_manager, dataptr, count, col_offset, sorting_size, ties, sorting_state);
 		}
 
-		if (sorting_state.constant_size[i] && i == num_cols - 1) {
+		if (sorting_state.constant_size[i] && i == sorting_state.column_count - 1) {
 			// All columns are sorted, no ties to break because last column is constant size
 			break;
 		}
@@ -2067,11 +2062,10 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 	D_ASSERT(count == scan_count);
 	state.global_entry_idx += scan_count;
 	// Deserialize the payload data
-	for (idx_t i = 0; i < layout.ColumnCount(); i++) {
-		auto &column = chunk.data[i];
-		const auto col_offset = layout.GetOffsets()[i];
-		RowOperations::Gather(state.addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, column,
-		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, chunk.size(), col_offset, i);
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		const auto col_offset = layout.GetOffsets()[col_idx];
+		RowOperations::Gather(state.addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, chunk.data[col_idx],
+		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, scan_count, col_offset, col_idx);
 	}
 	chunk.SetCardinality(scan_count);
 	chunk.Verify();

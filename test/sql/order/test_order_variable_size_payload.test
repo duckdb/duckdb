@@ -28,7 +28,7 @@ NULL
 NULL
 a
 
-# strings longer than the 8 character prefix
+# strings longer than the 12 character prefix
 statement ok
 CREATE TABLE test0 (job VARCHAR, name VARCHAR)
 
@@ -49,7 +49,7 @@ statement ok
 CREATE TABLE test1 (s VARCHAR)
 
 statement ok
-INSERT INTO test1 VALUES ('2'), (NULL), ('355555552'), ('1'), ('35555556'), ('10'), ('355555553'), ('355555551')
+INSERT INTO test1 VALUES ('2'), (NULL), ('3555555555552'), ('1'), ('355555555556'), ('10'), ('3555555555553'), ('3555555555551')
 
 query I
 SELECT * FROM test1 ORDER BY s
@@ -58,10 +58,10 @@ NULL
 1
 10
 2
-355555551
-355555552
-355555553
-35555556
+3555555555551
+3555555555552
+3555555555553
+355555555556
 
 # sort on 10000 strings
 statement ok

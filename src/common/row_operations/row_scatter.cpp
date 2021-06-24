@@ -223,13 +223,4 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 	}
 }
 
-void RowOperations::Scatter(DataChunk &columns, const RowLayout &layout, Vector &rows, RowDataCollection &string_heap,
-                            const SelectionVector &sel, idx_t count) {
-	auto col_data = unique_ptr<VectorData[]>(new VectorData[columns.ColumnCount()]);
-	for (idx_t col_idx = 0; col_idx < columns.ColumnCount(); col_idx++) {
-		columns.data[col_idx].Orrify(columns.size(), col_data[col_idx]);
-	}
-	Scatter(columns, col_data.get(), layout, rows, string_heap, sel, count);
-}
-
 } // namespace duckdb
