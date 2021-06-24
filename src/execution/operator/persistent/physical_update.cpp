@@ -80,7 +80,7 @@ void PhysicalUpdate::Sink(ExecutionContext &context, GlobalOperatorState &state,
 		auto row_id_data = FlatVector::GetData<row_t>(row_ids);
 		SelectionVector sel(STANDARD_VECTOR_SIZE);
 		idx_t update_count = 0;
-		for(idx_t i = 0; i < update_chunk.size(); i++) {
+		for (idx_t i = 0; i < update_chunk.size(); i++) {
 			auto row_id = row_id_data[i];
 			if (gstate.updated_columns.find(row_id) == gstate.updated_columns.end()) {
 				gstate.updated_columns.insert(row_id);

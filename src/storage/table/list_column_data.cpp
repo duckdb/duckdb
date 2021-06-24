@@ -115,7 +115,7 @@ void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
 	// note that we only need to read the first and last entry
 	// however, let's just read all "count" entries for now
 	auto data = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
-	Vector result(type, (data_ptr_t) data.get());
+	Vector result(type, (data_ptr_t)data.get());
 	idx_t scan_count = ScanVector(state, result, count);
 	if (scan_count == 0) {
 		return;
