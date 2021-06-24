@@ -118,6 +118,9 @@ public:
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	static Value BLOB(const_data_ptr_t data, idx_t len);
+	static Value BLOB_RAW(const string &data) {
+		return Value::BLOB((const_data_ptr_t) data.c_str(), data.size());
+	}
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	static Value BLOB(const string &data);
 
