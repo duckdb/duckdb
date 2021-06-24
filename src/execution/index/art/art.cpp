@@ -275,8 +275,15 @@ void ART::VerifyAppend(DataChunk &chunk) {
 			continue;
 		}
 		if (Lookup(tree, *keys[i], 0) != nullptr) {
+			string key_name;
+			for(idx_t k = 0; k < expression_result.ColumnCount(); k++) {
+				if (k > 0) {
+					key_name += ", ";
+				}
+				key_name += expression_result.data[k].GetValue(i).ToString();
+			}
 			// node already exists in tree
-			throw ConstraintException("duplicate key value violates primary key or unique constraint");
+			throw ConstraintException("duplicate key \"%s\" violates primary key or unique constraint", key_name);
 		}
 	}
 }
@@ -380,6 +387,7 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 		Erase(tree, *keys[i], 0, row_identifiers[i]);
+		D_ASSERT(!is_unique || Lookup(tree, *keys[i], 0) == nullptr);
 	}
 }
 
