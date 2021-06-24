@@ -21,7 +21,7 @@ if(STATIC_LIBCPP)
 endif()
 
 if(NOT AMALGAMATION_BUILD AND NOT WIN32)
-  target_link_libraries(shell utf8proc_duck)
+  target_link_libraries(shell utf8proc)
 endif()
 
 set_target_properties(shell PROPERTIES OUTPUT_NAME duckdb)

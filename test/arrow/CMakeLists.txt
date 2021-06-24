@@ -11,6 +11,7 @@ ExternalProject_Add(
     <INSTALL_DIR>/lib/libarrow_bundled_dependencies.a
     <INSTALL_DIR>/lib/libparquet.a
     ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/thrift_ep-install/lib/libthriftd.a
+    ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/utf8proc_ep-install/lib/libutf8proc.a
     ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/zstd_ep-install/lib/libzstd.a
     ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/snappy_ep/src/snappy_ep-install/lib/libsnappy.a
   CONFIGURE_COMMAND
@@ -45,6 +46,10 @@ set(install_thrift
     ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/thrift_ep-install/lib/libthriftd.a
 )
 
+set(install_utf8_proc
+    ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/utf8proc_ep-install/lib/libutf8proc.a
+)
+
 set(install_zstd
     ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/zstd_ep-install/lib/libzstd.a
 )
@@ -69,24 +74,6 @@ ExternalProject_Add(
 ExternalProject_Get_Property(RE2 install_dir)
 
 set(install_re2 ${install_dir})
-
-ExternalProject_Add(
-  UTF8
-  GIT_REPOSITORY "https://github.com/pdet/utf8proc.git"
-  DOWNLOAD_DIR "{CMAKE_BINARY_DIR}/third_party/utf8"
-  PREFIX "${CMAKE_BINARY_DIR}/third_party/utf8"
-  BINARY_DIR "${CMAKE_BINARY_DIR}/third_party/utf8/src/UTF8"
-  SOURCE_DIR "${CMAKE_BINARY_DIR}/third_party/utf8/src/UTF8"
-  INSTALL_DIR "${CMAKE_BINARY_DIR}/third_party/utf8/install"
-  BUILD_BYPRODUCTS <INSTALL_DIR>/lib/libutf8proc.a
-  CONFIGURE_COMMAND
-    ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Release
-    -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/third_party/utf8/install
-  UPDATE_COMMAND "")
-
-ExternalProject_Get_Property(UTF8 install_dir)
-
-set(install_utf8 ${install_dir})
 
 ExternalProject_Add(
   ZLIB
@@ -116,7 +103,7 @@ set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:test_arrow>
     PARENT_SCOPE)
 
-add_dependencies(test_arrow RE2 arrow_ep UTF8 ZLIB)
+add_dependencies(test_arrow RE2 arrow_ep ZLIB)
 
 target_link_libraries(
   test_arrow
@@ -125,7 +112,6 @@ target_link_libraries(
   ${install_arrow}/lib/libarrow.a
   ${install_zlib}/lib/libz.a
   ${install_re2}/lib/libre2.a
-  ${install_utf8}/lib/libutf8proc.a
   ${install_snappy}
   ${install_zstd}
   ${install_thrift}

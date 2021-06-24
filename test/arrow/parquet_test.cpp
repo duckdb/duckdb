@@ -130,7 +130,6 @@ TEST_CASE("Test Parquet Long Files", "[arrow]") {
 	run.emplace_back("test/sql/copy/parquet/data/bug687_nulls.parquet");
 	if (STANDARD_VECTOR_SIZE >= 1024) {
 		for (auto &parquet_path : run) {
-			std::cout << parquet_path << std::endl;
 			REQUIRE(RoundTrip(parquet_path, skip, conn));
 		}
 	}
@@ -157,7 +156,6 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 
 	auto parquet_files = fs.Glob("test/sql/copy/parquet/data/*.parquet");
 	for (auto &parquet_path : parquet_files) {
-		std::cout << parquet_path << std::endl;
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
 	skip.clear();
