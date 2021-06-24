@@ -31,7 +31,22 @@ void ListColumnData::InitializeScan(ColumnScanState &state) {
 	state.child_states.push_back(move(child_state));
 }
 
+list_entry_t ListColumnData::FetchListEntry(idx_t row_idx) {
+	auto segment = (ColumnSegment *)data.GetSegment(row_idx);
+	ColumnFetchState fetch_state;
+	Vector result(type, 1);
+	segment->FetchRow(fetch_state, row_idx, result, 0);
+
+	// initialize the child scan with the required offset
+	auto list_data = FlatVector::GetData<list_entry_t>(result);
+	return list_data[0];
+}
+
 void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+	if (row_idx == 0) {
+		InitializeScan(state);
+		return;
+	}
 	ColumnData::InitializeScanWithOffset(state, row_idx);
 
 	// initialize the validity segment
@@ -39,17 +54,20 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	validity.InitializeScanWithOffset(validity_state, row_idx);
 	state.child_states.push_back(move(validity_state));
 
-	// FIXME: need to read the list at position row_idx and get the row offset of the child
-	throw NotImplementedException("List InitializeScanWithOffset");
+	// we need to read the list at position row_idx to get the correct row offset of the child
+	auto list_entry = FetchListEntry(row_idx);
+	auto child_offset = list_entry.offset;
+
+	ColumnScanState child_state;
+	child_column->InitializeScanWithOffset(state, child_offset);
+	state.child_states.push_back(move(child_state));
 }
 
 void ListColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	D_ASSERT(state.row_index == vector_index * STANDARD_VECTOR_SIZE);
 	ScanCount(state, result, STANDARD_VECTOR_SIZE);
 }
 
 void ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	D_ASSERT(state.row_index == vector_index * STANDARD_VECTOR_SIZE);
 	ScanCount(state, result, STANDARD_VECTOR_SIZE);
 }
 
@@ -158,8 +176,14 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 }
 
 void ListColumnData::RevertAppend(row_t start_row) {
+	ColumnData::RevertAppend(start_row);
 	validity.RevertAppend(start_row);
-	child_column->RevertAppend(start_row);
+	auto column_count = GetCount();
+	if (column_count > 0) {
+		// revert append in the child column
+		auto list_entry = FetchListEntry(column_count - 1);
+		child_column->RevertAppend(list_entry.offset + list_entry.length);
+	}
 }
 
 void ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
