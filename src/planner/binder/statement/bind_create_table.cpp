@@ -90,7 +90,8 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 				has_primary_key = true;
 				primary_keys = keys;
 			}
-			info.bound_constraints.push_back(make_unique<BoundUniqueConstraint>(move(keys), move(key_set), unique.is_primary_key));
+			info.bound_constraints.push_back(
+			    make_unique<BoundUniqueConstraint>(move(keys), move(key_set), unique.is_primary_key));
 			break;
 		}
 		default:

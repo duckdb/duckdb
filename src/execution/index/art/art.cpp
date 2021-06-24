@@ -283,7 +283,8 @@ void ART::VerifyAppend(DataChunk &chunk) {
 				key_name += unbound_expressions[k]->GetName() + ": " + expression_result.data[k].GetValue(i).ToString();
 			}
 			// node already exists in tree
-			throw ConstraintException("duplicate key \"%s\" violates %s constraint", key_name, is_primary ? "primary key" : "unique");
+			throw ConstraintException("duplicate key \"%s\" violates %s constraint", key_name,
+			                          is_primary ? "primary key" : "unique");
 		}
 	}
 }
