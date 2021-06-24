@@ -19,14 +19,14 @@ struct ParquetMetaDataOperatorData : public FunctionOperatorData {
 	void LoadSchemaData(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path);
 };
 
-template<class T>
+template <class T>
 string ConvertParquetElementToString(T &&entry) {
 	std::stringstream ss;
 	ss << entry;
 	return ss.str();
 }
 
-template<class T>
+template <class T>
 string PrintParquetElementToString(T &&entry) {
 	std::stringstream ss;
 	entry.printTo(ss);
@@ -101,7 +101,8 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	return_types.push_back(LogicalType::BIGINT);
 }
 
-void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path) {
+void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types,
+                                                   const string &file_path) {
 	collection.Reset();
 
 	auto reader = make_unique<ParquetReader>(context, file_path);
@@ -109,10 +110,10 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 	DataChunk current_chunk;
 	current_chunk.Initialize(return_types);
 	auto meta_data = reader->GetFileMetadata();
-	for(idx_t row_group_idx = 0; row_group_idx < meta_data->row_groups.size(); row_group_idx++) {
+	for (idx_t row_group_idx = 0; row_group_idx < meta_data->row_groups.size(); row_group_idx++) {
 		auto &row_group = meta_data->row_groups[row_group_idx];
 
-		for(idx_t col_idx = 0; col_idx < row_group.columns.size(); col_idx++) {
+		for (idx_t col_idx = 0; col_idx < row_group.columns.size(); col_idx++) {
 			auto &column = row_group.columns[col_idx];
 			auto &col_meta = column.meta_data;
 			auto &stats = col_meta.statistics;
@@ -148,26 +149,32 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 			current_chunk.SetValue(9, count, stats.__isset.min ? Value::BLOB_RAW(stats.min) : Value(LogicalType::BLOB));
 
 			// stats_max, LogicalType::BLOB
-			current_chunk.SetValue(10, count, stats.__isset.max ? Value::BLOB_RAW(stats.max) : Value(LogicalType::BLOB));
+			current_chunk.SetValue(10, count,
+			                       stats.__isset.max ? Value::BLOB_RAW(stats.max) : Value(LogicalType::BLOB));
 
 			// stats_null_count, LogicalType::BIGINT
-			current_chunk.SetValue(11, count, stats.__isset.null_count ? Value::BIGINT(stats.null_count) : Value(LogicalType::BIGINT));
+			current_chunk.SetValue(
+			    11, count, stats.__isset.null_count ? Value::BIGINT(stats.null_count) : Value(LogicalType::BIGINT));
 
 			// stats_distinct_count, LogicalType::BIGINT
-			current_chunk.SetValue(12, count, stats.__isset.distinct_count ? Value::BIGINT(stats.distinct_count) : Value(LogicalType::BIGINT));
+			current_chunk.SetValue(12, count,
+			                       stats.__isset.distinct_count ? Value::BIGINT(stats.distinct_count)
+			                                                    : Value(LogicalType::BIGINT));
 
 			// stats_min_value, LogicalType::BLOB
-			current_chunk.SetValue(13, count, stats.__isset.min_value ? Value::BLOB_RAW(stats.min_value) : Value(LogicalType::BLOB));
+			current_chunk.SetValue(
+			    13, count, stats.__isset.min_value ? Value::BLOB_RAW(stats.min_value) : Value(LogicalType::BLOB));
 
 			// stats_max_value, LogicalType::BLOB
-			current_chunk.SetValue(14, count, stats.__isset.max_value ? Value::BLOB_RAW(stats.max_value) : Value(LogicalType::BLOB));
+			current_chunk.SetValue(
+			    14, count, stats.__isset.max_value ? Value::BLOB_RAW(stats.max_value) : Value(LogicalType::BLOB));
 
 			// compression, LogicalType::VARCHAR
 			current_chunk.SetValue(15, count, ConvertParquetElementToString(col_meta.codec));
 
 			// encodings, LogicalType::VARCHAR
 			vector<string> encoding_string;
-			for(auto &encoding : col_meta.encodings) {
+			for (auto &encoding : col_meta.encodings) {
 				encoding_string.push_back(ConvertParquetElementToString(encoding));
 			}
 			current_chunk.SetValue(16, count, Value(StringUtil::Join(encoding_string, ", ")));
@@ -236,8 +243,6 @@ void ParquetMetaDataOperatorData::BindSchema(vector<LogicalType> &return_types, 
 	return_types.push_back(LogicalType::VARCHAR);
 }
 
-
-
 Value ParquetLogicalTypeToString(const duckdb_parquet::format::LogicalType &type) {
 
 	if (type.__isset.STRING) {
@@ -282,7 +287,8 @@ Value ParquetLogicalTypeToString(const duckdb_parquet::format::LogicalType &type
 	return Value();
 }
 
-void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const vector<LogicalType> &return_types, const string &file_path) {
+void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const vector<LogicalType> &return_types,
+                                                 const string &file_path) {
 	collection.Reset();
 
 	auto reader = make_unique<ParquetReader>(context, file_path);
@@ -290,7 +296,7 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 	DataChunk current_chunk;
 	current_chunk.Initialize(return_types);
 	auto meta_data = reader->GetFileMetadata();
-	for(idx_t col_idx = 0; col_idx < meta_data->schema.size(); col_idx++) {
+	for (idx_t col_idx = 0; col_idx < meta_data->schema.size(); col_idx++) {
 		auto &column = meta_data->schema[col_idx];
 
 		// file_name, LogicalType::VARCHAR
@@ -339,14 +345,11 @@ void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const v
 	collection.Append(current_chunk);
 }
 
-
-
-template<bool SCHEMA>
+template <bool SCHEMA>
 unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, vector<Value> &inputs,
-													unordered_map<string, Value> &named_parameters,
-													vector<LogicalType> &input_table_types,
-													vector<string> &input_table_names,
-													vector<LogicalType> &return_types, vector<string> &names) {
+                                             unordered_map<string, Value> &named_parameters,
+                                             vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+                                             vector<LogicalType> &return_types, vector<string> &names) {
 	if (SCHEMA) {
 		ParquetMetaDataOperatorData::BindSchema(return_types, names);
 	} else {
@@ -365,10 +368,10 @@ unique_ptr<FunctionData> ParquetMetaDataBind(ClientContext &context, vector<Valu
 	return result;
 }
 
-template<bool SCHEMA>
+template <bool SCHEMA>
 unique_ptr<FunctionOperatorData> ParquetMetaDataInit(ClientContext &context, const FunctionData *bind_data_p,
-															const vector<column_t> &column_ids,
-															TableFilterCollection *filters) {
+                                                     const vector<column_t> &column_ids,
+                                                     TableFilterCollection *filters) {
 	auto &bind_data = (ParquetMetaDataBindData &)*bind_data_p;
 	D_ASSERT(!bind_data.files.empty());
 
@@ -382,13 +385,12 @@ unique_ptr<FunctionOperatorData> ParquetMetaDataInit(ClientContext &context, con
 	return move(result);
 }
 
-template<bool SCHEMA>
+template <bool SCHEMA>
 void ParquetMetaDataImplementation(ClientContext &context, const FunctionData *bind_data_p,
-											FunctionOperatorData *operator_state, DataChunk *input,
-											DataChunk &output) {
+                                   FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (ParquetMetaDataOperatorData &)*operator_state;
 	auto &bind_data = (ParquetMetaDataBindData &)*bind_data_p;
-	while(true) {
+	while (true) {
 		auto chunk = data.collection.Fetch();
 		if (!chunk) {
 			if (data.file_index + 1 < bind_data.files.size()) {
@@ -413,20 +415,21 @@ void ParquetMetaDataImplementation(ClientContext &context, const FunctionData *b
 }
 
 ParquetMetaDataFunction::ParquetMetaDataFunction()
-	: TableFunction("parquet_metadata", {LogicalType::VARCHAR}, ParquetMetaDataImplementation<false>, ParquetMetaDataBind<false>,
-					ParquetMetaDataInit<false>, /* statistics */ nullptr, /* cleanup */ nullptr,
-					/* dependency */ nullptr, nullptr,
-					/* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, nullptr, nullptr, nullptr,
-					nullptr, nullptr, false, false, nullptr) {
+    : TableFunction("parquet_metadata", {LogicalType::VARCHAR}, ParquetMetaDataImplementation<false>,
+                    ParquetMetaDataBind<false>, ParquetMetaDataInit<false>, /* statistics */ nullptr,
+                    /* cleanup */ nullptr,
+                    /* dependency */ nullptr, nullptr,
+                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, nullptr, nullptr, nullptr, nullptr,
+                    nullptr, false, false, nullptr) {
 }
-
 
 ParquetSchemaFunction::ParquetSchemaFunction()
-	: TableFunction("parquet_schema", {LogicalType::VARCHAR}, ParquetMetaDataImplementation<true>, ParquetMetaDataBind<true>,
-					ParquetMetaDataInit<true>, /* statistics */ nullptr, /* cleanup */ nullptr,
-					/* dependency */ nullptr, nullptr,
-					/* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, nullptr, nullptr, nullptr,
-					nullptr, nullptr, false, false, nullptr) {
+    : TableFunction("parquet_schema", {LogicalType::VARCHAR}, ParquetMetaDataImplementation<true>,
+                    ParquetMetaDataBind<true>, ParquetMetaDataInit<true>, /* statistics */ nullptr,
+                    /* cleanup */ nullptr,
+                    /* dependency */ nullptr, nullptr,
+                    /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, nullptr, nullptr, nullptr, nullptr,
+                    nullptr, false, false, nullptr) {
 }
 
-}
+} // namespace duckdb

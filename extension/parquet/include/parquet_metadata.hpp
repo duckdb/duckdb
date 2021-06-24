@@ -22,6 +22,4 @@ public:
 	ParquetSchemaFunction();
 };
 
-
-
-}
+} // namespace duckdb
