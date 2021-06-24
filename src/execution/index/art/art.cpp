@@ -276,7 +276,7 @@ void ART::VerifyAppend(DataChunk &chunk) {
 		}
 		if (Lookup(tree, *keys[i], 0) != nullptr) {
 			string key_name;
-			for(idx_t k = 0; k < expression_result.ColumnCount(); k++) {
+			for (idx_t k = 0; k < expression_result.ColumnCount(); k++) {
 				if (k > 0) {
 					key_name += ", ";
 				}
