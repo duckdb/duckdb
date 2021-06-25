@@ -22,10 +22,10 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
                                 idx_t col_idx) {
 	auto format = string(schema.format);
 	if (format == "+l" || format == "+L" || (format[0] == '+' && format[1] == 'w') || format == "z" || format == "Z" ||
-	    format[0] == 'w') {
-		//! This is a list or a binary, we might have to create a list_convert_data in our arrow_convert_data
+	    format == "u" || format == "U" || format[0] == 'w') {
+		//! This is a list, string or a binary, we might have to create a list_convert_data in our arrow_convert_data
 		if (arrow_convert_data.find(col_idx) == arrow_convert_data.end()) {
-			arrow_convert_data[col_idx] = make_unique<ArrowVariableSizeConvertData>();
+			arrow_convert_data[col_idx] = make_unique<ArrowConvertData>();
 		}
 	}
 	if (format == "n") {
@@ -61,6 +61,10 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		}
 		return LogicalType::DECIMAL(width, scale);
 	} else if (format == "u") {
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
+		return LogicalType::VARCHAR;
+	} else if (format == "U") {
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
 		return LogicalType::VARCHAR;
 	} else if (format == "tsn:") {
 		return LogicalTypeId::TIMESTAMP_NS;
@@ -75,20 +79,17 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 	} else if (format == "ttm") {
 		return LogicalType::TIME;
 	} else if (format == "+l") {
-		((ArrowVariableSizeConvertData *)arrow_convert_data[col_idx].get())
-		    ->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(child_type);
 	} else if (format == "+L") {
-		((ArrowVariableSizeConvertData *)arrow_convert_data[col_idx].get())
-		    ->variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(child_type);
 	} else if (format[0] == '+' && format[1] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
-		((ArrowVariableSizeConvertData *)arrow_convert_data[col_idx].get())
-		    ->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
 		return LogicalType::LIST(move(child_type));
 	} else if (format == "+s") {
@@ -112,18 +113,15 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		}
 		return LogicalType::MAP(move(child_types));
 	} else if (format == "z") {
-		((ArrowVariableSizeConvertData *)arrow_convert_data[col_idx].get())
-		    ->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 		return LogicalType::BLOB;
 	} else if (format == "Z") {
-		((ArrowVariableSizeConvertData *)arrow_convert_data[col_idx].get())
-		    ->variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::SUPER_SIZE, 0);
 		return LogicalType::BLOB;
 	} else if (format[0] == 'w') {
 		std::string parameters = format.substr(format.find(':') + 1);
 		idx_t fixed_size = std::stoi(parameters);
-		((ArrowVariableSizeConvertData *)arrow_convert_data[col_idx].get())
-		    ->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
+		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::FIXED_SIZE, fixed_size);
 		return LogicalType::BLOB;
 	} else {
 		throw NotImplementedException("Unsupported Internal Arrow Type %s", format);
@@ -157,7 +155,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 		}
 		if (schema.dictionary) {
 			res->arrow_convert_data[col_idx] =
-			    make_unique<DictionaryArrowConvertData>(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
+			    make_unique<ArrowConvertData>(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
 			return_types.emplace_back(GetArrowLogicalType(*schema.dictionary, res->arrow_convert_data, col_idx));
 		} else {
 			return_types.emplace_back(GetArrowLogicalType(schema, res->arrow_convert_data, col_idx));
@@ -251,8 +249,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                        std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
                        idx_t &list_col_idx, idx_t nested_offset, ValidityMask *parent_mask) {
-	auto original_type =
-	    ((ArrowVariableSizeConvertData *)arrow_convert_data[col_idx].get())->variable_sz_type[list_col_idx++];
+	auto original_type = arrow_convert_data[col_idx]->variable_sz_type[list_col_idx++];
 	idx_t list_size = 0;
 	SetValidityMask(vector, array, scan_state, size, nested_offset);
 	idx_t start_offset = 0;
@@ -324,8 +321,7 @@ void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                        std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
                        idx_t &list_col_idx, idx_t nested_offset) {
-	auto original_type =
-	    ((ArrowVariableSizeConvertData *)arrow_convert_data[col_idx].get())->variable_sz_type[list_col_idx++];
+	auto original_type = arrow_convert_data[col_idx]->variable_sz_type[list_col_idx++];
 	SetValidityMask(vector, array, scan_state, size, nested_offset);
 	if (original_type.first == ArrowVariableSizeType::FIXED_SIZE) {
 		//! Have to check validity mask before setting this up
@@ -358,6 +354,10 @@ void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 			FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddStringOrBlob(vector, bptr, blob_len);
 		}
 	} else {
+		//! Check if last offset is higher than max uint32
+		if (((uint64_t *)array.buffers[1])[array.length] > std::numeric_limits<uint32_t>::max()) {
+			throw std::runtime_error("We do not support Blobs over 4GB");
+		}
 		auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 		if (nested_offset != 0) {
 			offsets = (uint64_t *)array.buffers[1] + array.offset + nested_offset;
@@ -404,6 +404,22 @@ void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &sca
 	}
 	ColumnArrowToDuckDB(child_vector, array, scan_state, list_size, arrow_convert_data, col_idx, list_col_idx,
 	                    offsets[0]);
+}
+template <class T>
+static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets) {
+	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+		if (FlatVector::IsNull(vector, row_idx)) {
+			continue;
+		}
+		auto cptr = cdata + offsets[row_idx];
+		auto str_len = offsets[row_idx + 1] - offsets[row_idx];
+
+		auto utf_type = Utf8Proc::Analyze(cptr, str_len);
+		if (utf_type == UnicodeType::INVALID) {
+			throw std::runtime_error("Invalid UTF8 string encoding");
+		}
+		FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddString(vector, cptr, str_len);
+	}
 }
 
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
@@ -480,24 +496,24 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		break;
 	}
 	case LogicalTypeId::VARCHAR: {
-		auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
-		if (nested_offset != 0) {
-			offsets = (uint32_t *)array.buffers[1] + array.offset + nested_offset;
-		}
+		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[list_col_idx++];
 		auto cdata = (char *)array.buffers[2];
-
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			if (FlatVector::IsNull(vector, row_idx)) {
-				continue;
+		if (original_type.first == ArrowVariableSizeType::SUPER_SIZE) {
+			if (((uint64_t *)array.buffers[1])[array.length] > std::numeric_limits<uint32_t>::max()) {
+				throw std::runtime_error("We do not support Strings over 4GB");
 			}
-			auto cptr = cdata + offsets[row_idx];
-			auto str_len = offsets[row_idx + 1] - offsets[row_idx];
-
-			auto utf_type = Utf8Proc::Analyze(cptr, str_len);
-			if (utf_type == UnicodeType::INVALID) {
-				throw std::runtime_error("Invalid UTF8 string encoding");
+			auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
+			if (nested_offset != 0) {
+				offsets = (uint64_t *)array.buffers[1] + array.offset + nested_offset;
 			}
-			FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddString(vector, cptr, str_len);
+			SetVectorString(vector, size, cdata, offsets);
+
+		} else {
+			auto offsets = (uint32_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
+			if (nested_offset != 0) {
+				offsets = (uint32_t *)array.buffers[1] + array.offset + nested_offset;
+			}
+			SetVectorString(vector, size, cdata, offsets);
 		}
 
 		break;
@@ -749,7 +765,7 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanS
 		                    col_idx, list_col_idx);
 		dict_vectors[col_idx] = move(base_vector);
 	}
-	auto dictionary_type = ((DictionaryArrowConvertData *)arrow_convert_data[col_idx].get())->dictionary_type;
+	auto dictionary_type = arrow_convert_data[col_idx]->dictionary_type;
 	//! Get Pointer to Indices of Dictionary
 	auto indices = (data_ptr_t)array.buffers[1] +
 	               GetTypeIdSize(dictionary_type.InternalType()) * (scan_state.chunk_offset + array.offset);

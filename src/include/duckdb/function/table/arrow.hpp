@@ -19,17 +19,9 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 enum class ArrowVariableSizeType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
 struct ArrowConvertData {
-	virtual ~ArrowConvertData() = default;
-};
-
-struct DictionaryArrowConvertData : public ArrowConvertData {
-	DictionaryArrowConvertData(LogicalType type) : dictionary_type(type) {};
+	ArrowConvertData(LogicalType type) : dictionary_type(type) {};
+	ArrowConvertData() {};
 	LogicalType dictionary_type;
-};
-
-struct ArrowVariableSizeConvertData : public ArrowConvertData {
-	ArrowVariableSizeConvertData() {
-	}
 	vector<std::pair<ArrowVariableSizeType, idx_t>> variable_sz_type;
 };
 
