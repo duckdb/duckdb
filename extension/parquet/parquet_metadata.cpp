@@ -108,20 +108,6 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	return_types.push_back(LogicalType::BIGINT);
 }
 
-
-// struct Type {
-//   enum type {
-//     BOOLEAN = 0,
-//     INT32 = 1,
-//     INT64 = 2,
-//     INT96 = 3,
-//     FLOAT = 4,
-//     DOUBLE = 5,
-//     BYTE_ARRAY = 6,
-//     FIXED_LEN_BYTE_ARRAY = 7
-//   };
-// };
-
 Value ConvertParquetStats(duckdb_parquet::format::Type::type type, bool stats_is_set, const std::string &stats) {
 	if (!stats_is_set) {
 		return Value(LogicalType::VARCHAR);
