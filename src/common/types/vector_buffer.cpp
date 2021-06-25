@@ -8,8 +8,8 @@
 
 namespace duckdb {
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type) {
-	return make_buffer<VectorBuffer>(STANDARD_VECTOR_SIZE * GetTypeIdSize(type));
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(PhysicalType type, idx_t capacity) {
+	return make_buffer<VectorBuffer>(capacity * GetTypeIdSize(type));
 }
 
 buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(PhysicalType type) {
@@ -20,8 +20,8 @@ buffer_ptr<VectorBuffer> VectorBuffer::CreateConstantVector(const LogicalType &t
 	return VectorBuffer::CreateConstantVector(type.InternalType());
 }
 
-buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &type) {
-	return VectorBuffer::CreateStandardVector(type.InternalType());
+buffer_ptr<VectorBuffer> VectorBuffer::CreateStandardVector(const LogicalType &type, idx_t capacity) {
+	return VectorBuffer::CreateStandardVector(type.InternalType(), capacity);
 }
 
 VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING_BUFFER) {
@@ -30,10 +30,11 @@ VectorStringBuffer::VectorStringBuffer() : VectorBuffer(VectorBufferType::STRING
 VectorStructBuffer::VectorStructBuffer() : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 }
 
-VectorStructBuffer::VectorStructBuffer(const LogicalType &type) : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
+VectorStructBuffer::VectorStructBuffer(const LogicalType &type, idx_t capacity)
+    : VectorBuffer(VectorBufferType::STRUCT_BUFFER) {
 	auto &child_types = StructType::GetChildTypes(type);
 	for (auto &child_type : child_types) {
-		auto vector = make_unique<Vector>(child_type.second);
+		auto vector = make_unique<Vector>(child_type.second, capacity);
 		children.push_back(move(vector));
 	}
 }

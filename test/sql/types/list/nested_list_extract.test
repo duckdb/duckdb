@@ -1,0 +1,100 @@
+# name: test/sql/types/list/nested_list_extract.test
+# description: Test nested list extract
+# group: [list]
+
+require noforcestorage
+
+# nesting level=2
+statement ok
+CREATE TABLE a(id INTEGER, b INTEGER[][]);
+
+statement ok
+INSERT INTO a VALUES (0, [[1, 2], NULL, [3, NULL]]), (1, NULL), (2, [[4, 5, 6, 7], [NULL]])
+
+query II
+SELECT * FROM a ORDER BY id
+----
+0	[[1, 2], NULL, [3, NULL]]
+1	NULL
+2	[[4, 5, 6, 7], [NULL]]
+
+# test nested list extract
+query II
+SELECT id, b[0] FROM a ORDER BY id
+----
+0	[1, 2]
+1	NULL
+2	[4, 5, 6, 7]
+
+query II
+SELECT id, b[0][0] FROM a ORDER BY id
+----
+0	1
+1	NULL
+2	4
+
+query II
+SELECT id, b[0][3] FROM a ORDER BY id
+----
+0	NULL
+1	NULL
+2	7
+
+query II
+SELECT * FROM a WHERE b[0][0]=1
+----
+0	[[1, 2], NULL, [3, NULL]]
+
+query II
+SELECT * FROM a WHERE b[0][0]=1 OR b[0][1]=2
+----
+0	[[1, 2], NULL, [3, NULL]]
+
+# nesting level=3
+statement ok
+CREATE TABLE nested(id INTEGER, b INTEGER[][][]);
+
+statement ok
+INSERT INTO nested VALUES (0, [[[1, 2], [3, 4]], NULL, [NULL, [2, 5]]]), (1, NULL), (2, [[[6, 7, 8, 9], [10, 11], [12, 13]], NULL, [NULL, [10, 11], [12, 13]]]);
+
+query II
+SELECT * FROM nested ORDER BY id
+----
+0	[[[1, 2], [3, 4]], NULL, [NULL, [2, 5]]]
+1	NULL
+2	[[[6, 7, 8, 9], [10, 11], [12, 13]], NULL, [NULL, [10, 11], [12, 13]]]
+
+query II
+SELECT id, b[0] FROM nested ORDER BY id
+----
+0	[[1, 2], [3, 4]]
+1	NULL
+2	[[6, 7, 8, 9], [10, 11], [12, 13]]
+
+query II
+SELECT id, b[0][0] FROM nested ORDER BY id
+----
+0	[1, 2]
+1	NULL
+2	[6, 7, 8, 9]
+
+query II
+SELECT id, b[0][2] FROM nested ORDER BY id
+----
+0	NULL
+1	NULL
+2	[12, 13]
+
+query II
+SELECT id, b[0][2][0] FROM nested ORDER BY id
+----
+0	NULL
+1	NULL
+2	12
+
+query II
+SELECT id, b[0][2][3] FROM nested ORDER BY id
+----
+0	NULL
+1	NULL
+2	NULL

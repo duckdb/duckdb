@@ -48,8 +48,12 @@ struct ColumnScanState {
 	bool segment_checked = false;
 
 public:
-	//! Move on to the next vector in the scan
-	void Next();
+	//! Move the scan state forward by "count" rows (including all child states)
+	void Next(idx_t count);
+	//! Move ONLY this state forward by "count" rows (i.e. not the child states)
+	void NextInternal(idx_t count);
+	//! Move the scan state forward by STANDARD_VECTOR_SIZE rows
+	void NextVector();
 };
 
 struct ColumnFetchState {

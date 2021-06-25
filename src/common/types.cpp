@@ -244,7 +244,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 	case PhysicalType::STRUCT:
 		return 0; // no own payload
 	case PhysicalType::LIST:
-		return 16; // offset + len
+		return sizeof(list_entry_t); // offset + len
 
 	default:
 		throw ConversionException("Invalid PhysicalType %s", type);
