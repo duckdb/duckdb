@@ -675,8 +675,7 @@ void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx
 			remaining -= append_count;
 
 			if (new_block.count > 0) {
-				// it can be that no tuples fit the block (huge entry e.g. large string)
-				// in this case we do not add them
+				// in case 0 tuples fit the block (huge entry, e.g. large string) we do not add
 				blocks.push_back(move(new_block));
 				if (keep_pinned) {
 					pinned_blocks.push_back(move(handle));

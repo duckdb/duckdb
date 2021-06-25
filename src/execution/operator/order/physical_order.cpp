@@ -102,7 +102,8 @@ public:
 	vector<vector<unique_ptr<SortedBlock>>> sorted_blocks_temp;
 	unique_ptr<SortedBlock> odd_one_out = nullptr;
 	//! Pinned heap data (if sorting in memory)
-	vector<unique_ptr<BufferHandle>> heap_handles;
+	vector<shared_ptr<BlockHandle>> heap_blocks;
+	vector<unique_ptr<BufferHandle>> pinned_blocks;
 	//! Next heap block id (used if doing external sort)
 	std::atomic<uint32_t> next_heap_block_id;
 
@@ -362,7 +363,7 @@ public:
 	inline data_ptr_t DataPtr() const {
 		D_ASSERT(data_blocks[block_idx].block->Readers() != 0 &&
 		         data_handle->handle->BlockId() == data_blocks[block_idx].block->BlockId());
-		return data_ptr;
+		return data_ptr + entry_idx * layout.GetRowWidth();
 	}
 
 	inline data_ptr_t HeapPtr() const {
@@ -377,13 +378,8 @@ public:
 		}
 	}
 
-	void SetIndex(const idx_t &global_idx) {
-		GlobalToLocalIndex(global_idx, block_idx, entry_idx);
-	}
-
 	inline void Advance() {
 		entry_idx++;
-		data_ptr += layout.GetRowWidth();
 		if (entry_idx == data_blocks[block_idx].count) {
 			block_idx++;
 			entry_idx = 0;
@@ -695,7 +691,7 @@ static inline bool IsValid(const idx_t &col_idx, const data_ptr_t row_ptr) {
 	return row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry);
 }
 
-static bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout) {
+static inline bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout) {
 	// Check if the blob is NULL
 	if (!IsValid(col_idx, row_ptr)) {
 		// Can't break a NULL tie
@@ -731,7 +727,8 @@ static inline int TemplatedCompareVal(const T &left_val, const T &right_val, con
 	return order * comp_res;
 }
 
-static int CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, const LogicalType &type, const int &order) {
+static inline int CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, const LogicalType &type,
+                             const int &order) {
 	switch (type.InternalType()) {
 	case PhysicalType::VARCHAR: {
 		string_t left_val = Load<string_t>(l_ptr);
@@ -757,8 +754,8 @@ static inline void SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &hea
 	Store<idx_t>(Load<data_ptr_t>(data_ptr) - heap_ptr, data_ptr);
 }
 
-int BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData &right,
-                 const SortingState &sorting_state, const bool &external) {
+static inline int BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData &right,
+                               const SortingState &sorting_state, const bool &external) {
 	const idx_t &col_idx = sorting_state.sorting_to_blob_col.at(tie_col);
 	data_ptr_t l_data_ptr = left.DataPtr();
 	if (!TieIsBreakable(col_idx, l_data_ptr, sorting_state.blob_layout)) {
@@ -770,8 +767,8 @@ int BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData 
 	l_data_ptr += tie_col_offset;
 	data_ptr_t r_data_ptr = right.DataPtr() + tie_col_offset;
 	// Now do the comparison
-	const int order = sorting_state.order_types[col_idx] == OrderType::DESCENDING ? -1 : 1;
-	const auto &type = sorting_state.logical_types[col_idx];
+	const int order = sorting_state.order_types[tie_col] == OrderType::DESCENDING ? -1 : 1;
+	const auto &type = left.layout.GetTypes()[col_idx];
 	int result;
 	if (external) {
 		// Unswizzle to restore the pointer
@@ -1077,18 +1074,22 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t so
 		reordered_data_block.heap_block_ids.push_back(heap_block_id);
 		// Move the re-ordered heap to the SortedData, and clear the local heap
 		sd.heap_blocks.push_back(move(reordered_heap_block));
-		heap.pinned_blocks.clear();
 		for (auto &block : heap.blocks) {
 			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
 		}
-		heap.blocks.clear();
-		heap.count = 0;
 	} else {
 		// Keep heap blocks pinned (move handles to the global state)
-		for (auto &handle : heap.pinned_blocks) {
-			gstate.heap_handles.push_back(move(handle));
+		D_ASSERT(heap.blocks.size() == heap.pinned_blocks.size());
+		lock_guard<mutex> lock(gstate.lock);
+		for (idx_t i = 0; i < heap.blocks.size(); i++) {
+			gstate.pinned_blocks.push_back(move(heap.pinned_blocks[i]));
+			gstate.heap_blocks.push_back(heap.blocks[i].block);
 		}
 	}
+	// Reset the heap
+	heap.pinned_blocks.clear();
+	heap.blocks.clear();
+	heap.count = 0;
 	// Replace the unordered data block with the re-ordered data block
 	buffer_manager.UnregisterBlock(unordered_data_block.block->BlockId(), true);
 	sd.data_blocks.clear();
@@ -1137,8 +1138,8 @@ void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lsta
 	lstate.sorted_blocks.push_back(move(sb));
 }
 
-int CompareTuple(const SortedBlock &left, const SortedBlock &right, const data_ptr_t &l_ptr, const data_ptr_t &r_ptr,
-                 const SortingState &sorting_state, const bool &external_sort) {
+inline int CompareTuple(const SortedBlock &left, const SortedBlock &right, const data_ptr_t &l_ptr,
+                        const data_ptr_t &r_ptr, const SortingState &sorting_state, const bool &external_sort) {
 	// Compare the sorting columns one by one
 	int comp_res = 0;
 	data_ptr_t l_ptr_offset = l_ptr;
@@ -1176,15 +1177,15 @@ public:
 		}
 #endif
 		// Set up the write block
-		auto &left = *left_block;
-		auto &right = *right_block;
-		auto l_count = left.Remaining();
-		auto r_count = right.Remaining();
 		result->InitializeWrite();
 		// Initialize arrays to store merge data
 		bool left_smaller[PhysicalOrder::MERGE_STRIDE];
 		idx_t next_entry_sizes[PhysicalOrder::MERGE_STRIDE];
 		// Merge loop
+		auto &left = *left_block;
+		auto &right = *right_block;
+		auto l_count = left.Remaining();
+		auto r_count = right.Remaining();
 		while (true) {
 			auto l_remaining = left.Remaining();
 			auto r_remaining = right.Remaining();
@@ -1283,12 +1284,12 @@ public:
 		D_ASSERT(l_idx < l.Count());
 		D_ASSERT(r_idx < r.Count());
 
-		idx_t l_entry_idx;
 		idx_t l_block_idx;
+		idx_t l_entry_idx;
 		l.GlobalToLocalIndex(l_idx, l_block_idx, l_entry_idx);
 
-		idx_t r_entry_idx;
 		idx_t r_block_idx;
+		idx_t r_entry_idx;
 		r.GlobalToLocalIndex(r_idx, r_block_idx, r_entry_idx);
 
 		auto l_block_handle = buffer_manager.Pin(l.sorting_data_radix[l_block_idx].block);
@@ -1297,12 +1298,14 @@ public:
 		data_ptr_t r_ptr = r_block_handle->Ptr() + r_entry_idx * sorting_state.entry_size;
 
 		int comp_res;
-		if (sorting_state.all_constant || !state.external) {
+		if (sorting_state.all_constant) {
 			comp_res = memcmp(l_ptr, r_ptr, sorting_state.comparison_size);
 		} else {
-			l.sorting_data_blob->SetIndex(l_idx);
-			r.sorting_data_blob->SetIndex(r_idx);
+			l.sorting_data_blob->block_idx = l_block_idx;
+			l.sorting_data_blob->entry_idx = l_entry_idx;
 			l.sorting_data_blob->Pin();
+			r.sorting_data_blob->block_idx = r_block_idx;
+			r.sorting_data_blob->entry_idx = r_entry_idx;
 			r.sorting_data_blob->Pin();
 			comp_res = CompareTuple(l, r, l_ptr, r_ptr, sorting_state, state.external);
 		}
@@ -1404,11 +1407,6 @@ public:
 		unique_ptr<BufferHandle> r_block_handle;
 		data_ptr_t l_ptr;
 		data_ptr_t r_ptr;
-		// Also store the indices of the variable size sorting data
-		idx_t l_blob_block_idx = left.sorting_data_blob->block_idx;
-		idx_t r_blob_block_idx = right.sorting_data_blob->block_idx;
-		idx_t l_blob_entry_idx = left.sorting_data_blob->entry_idx;
-		idx_t r_blob_entry_idx = right.sorting_data_blob->entry_idx;
 		// Compute the merge of the next 'count' tuples
 		idx_t compared = 0;
 		while (compared < count) {
@@ -1453,7 +1451,7 @@ public:
 				if (!r_done) {
 					right.sorting_data_blob->Pin();
 				}
-				// Sort with variable size sorting columns
+				// Merge with variable size sorting columns
 				for (; compared < count && l_entry_idx < l_count && r_entry_idx < r_count; compared++) {
 					left_smaller[compared] = CompareTuple(left, right, l_ptr, r_ptr, sorting_state, state.external) < 0;
 					if (left_smaller[compared]) {
@@ -1480,8 +1478,8 @@ public:
 		// Reset block indices before the actual merge
 		// TODO: do we need to reset the heap block idx?
 		if (!sorting_state.all_constant) {
-			left.sorting_data_blob->UnpinAndReset(l_blob_block_idx, l_blob_entry_idx);
-			right.sorting_data_blob->UnpinAndReset(r_blob_block_idx, r_blob_entry_idx);
+			left.sorting_data_blob->UnpinAndReset(left.block_idx, left.entry_idx);
+			right.sorting_data_blob->UnpinAndReset(right.block_idx, right.entry_idx);
 		}
 	}
 
@@ -1552,7 +1550,7 @@ public:
 		}
 	}
 
-	//! Merges fixed/variable size SortedData
+	//! Merges SortedData
 	void Merge(SortedData &result_data, SortedData &l_data, SortedData &r_data, const idx_t &count,
 	           const bool *left_smaller, idx_t *next_entry_sizes) {
 		const auto &layout = result_data.layout;
