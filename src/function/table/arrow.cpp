@@ -231,11 +231,11 @@ void GetValidityMask(ValidityMask &mask, ArrowArray &array, ArrowScanState &scan
 
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                         idx_t &list_col_idx, idx_t nested_offset = 0);
+                         idx_t &list_col_idx, idx_t nested_offset = 0, ValidityMask *parent_mask = nullptr);
 
 void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                        std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                       idx_t &list_col_idx, idx_t nested_offset) {
+                       idx_t &list_col_idx, idx_t nested_offset, ValidityMask *parent_mask) {
 	auto original_type = ((ListArrowConvertData *)arrow_convert_data[col_idx].get())->list_type[list_col_idx++];
 	idx_t list_size = 0;
 	SetValidityMask(vector, array, scan_state, size, nested_offset);
@@ -290,12 +290,23 @@ void ArrowToDuckDBList(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 	ListVector::SetListSize(vector, list_size);
 	auto &child_vector = ListVector::GetEntry(vector);
 	SetValidityMask(child_vector, *array.children[0], scan_state, list_size, start_offset);
+	auto &list_mask = FlatVector::Validity(vector);
+	if (parent_mask) {
+		//! Since this List is owned by a struct we must guarantee their validity map matches on Null
+		if (!parent_mask->AllValid()) {
+			for (idx_t i = 0; i < size; i++) {
+				if (!parent_mask->RowIsValid(i)) {
+					list_mask.SetInvalid(i);
+				}
+			}
+		}
+	}
 	ColumnArrowToDuckDB(child_vector, *array.children[0], scan_state, list_size, arrow_convert_data, col_idx,
 	                    list_col_idx, start_offset);
 }
 void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                           std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                          idx_t &list_col_idx, uint32_t *offsets) {
+                          idx_t &list_col_idx, uint32_t *offsets, ValidityMask *parent_mask) {
 	idx_t list_size = offsets[size] - offsets[0];
 	ListVector::Reserve(vector, list_size);
 
@@ -310,13 +321,24 @@ void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &sca
 	}
 	ListVector::SetListSize(vector, list_size);
 	SetValidityMask(child_vector, array, scan_state, list_size, offsets[0]);
+	auto &list_mask = FlatVector::Validity(vector);
+	if (parent_mask) {
+		//! Since this List is owned by a struct we must guarantee their validity map matches on Null
+		if (!parent_mask->AllValid()) {
+			for (idx_t i = 0; i < size; i++) {
+				if (!parent_mask->RowIsValid(i)) {
+					list_mask.SetInvalid(i);
+				}
+			}
+		}
+	}
 	ColumnArrowToDuckDB(child_vector, array, scan_state, list_size, arrow_convert_data, col_idx, list_col_idx,
 	                    offsets[0]);
 }
 
 void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t size,
                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data, idx_t col_idx,
-                         idx_t &list_col_idx, idx_t nested_offset) {
+                         idx_t &list_col_idx, idx_t nested_offset, ValidityMask *parent_mask) {
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
@@ -480,7 +502,8 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		ArrowToDuckDBList(vector, array, scan_state, size, arrow_convert_data, col_idx, list_col_idx, nested_offset);
+		ArrowToDuckDBList(vector, array, scan_state, size, arrow_convert_data, col_idx, list_col_idx, nested_offset,
+		                  parent_mask);
 		break;
 	}
 	case LogicalTypeId::MAP: {
@@ -492,20 +515,22 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		if (nested_offset != 0) {
 			offsets = (uint32_t *)array.buffers[1] + nested_offset;
 		}
+		auto &struct_validity_mask = FlatVector::Validity(vector);
 		//! Fill the children
 		for (idx_t type_idx = 0; type_idx < (idx_t)struct_arrow.n_children; type_idx++) {
 			ArrowToDuckDBMapList(*child_entries[type_idx], *struct_arrow.children[type_idx], scan_state, size,
-			                     arrow_convert_data, col_idx, list_col_idx, offsets);
+			                     arrow_convert_data, col_idx, list_col_idx, offsets, &struct_validity_mask);
 		}
 		break;
 	}
 	case LogicalTypeId::STRUCT: {
 		//! Fill the children
 		auto &child_entries = StructVector::GetEntries(vector);
+		auto &struct_validity_mask = FlatVector::Validity(vector);
 		for (idx_t type_idx = 0; type_idx < (idx_t)array.n_children; type_idx++) {
 			SetValidityMask(*child_entries[type_idx], *array.children[type_idx], scan_state, size, nested_offset);
 			ColumnArrowToDuckDB(*child_entries[type_idx], *array.children[type_idx], scan_state, size,
-			                    arrow_convert_data, col_idx, list_col_idx, nested_offset);
+			                    arrow_convert_data, col_idx, list_col_idx, nested_offset, &struct_validity_mask);
 		}
 		break;
 	}
