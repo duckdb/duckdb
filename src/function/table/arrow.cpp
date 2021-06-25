@@ -355,7 +355,7 @@ void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 		}
 	} else {
 		//! Check if last offset is higher than max uint32
-		if (((uint64_t *)array.buffers[1])[array.length] > std::numeric_limits<uint32_t>::max()) {
+		if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) {
 			throw std::runtime_error("We do not support Blobs over 4GB");
 		}
 		auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
@@ -499,7 +499,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[list_col_idx++];
 		auto cdata = (char *)array.buffers[2];
 		if (original_type.first == ArrowVariableSizeType::SUPER_SIZE) {
-			if (((uint64_t *)array.buffers[1])[array.length] > std::numeric_limits<uint32_t>::max()) {
+			if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) {
 				throw std::runtime_error("We do not support Strings over 4GB");
 			}
 			auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
