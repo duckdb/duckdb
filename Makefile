@@ -125,7 +125,6 @@ unittest: debug
 unittestci:
 	build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
-	build/debug/tools/arrow_abi_test/arrow_abi_test
 
 allunit: release_expanded # uses release build because otherwise allunit takes forever
 	build/release_expanded/test/unittest "*"
