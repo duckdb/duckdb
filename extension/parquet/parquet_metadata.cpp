@@ -115,22 +115,22 @@ Value ConvertParquetStats(duckdb_parquet::format::Type::type type, bool stats_is
 	switch (type) {
 	case Type::BOOLEAN:
 		if (stats.size() == sizeof(bool)) {
-			return Value(Value::BOOLEAN(*((bool *)stats.c_str())).ToString());
+			return Value(Value::BOOLEAN(Load<bool>((data_ptr_t)stats.c_str())).ToString());
 		}
 		break;
 	case Type::INT32:
 		if (stats.size() == sizeof(int32_t)) {
-			return Value(Value::INTEGER(*((int32_t *)stats.c_str())).ToString());
+			return Value(Value::INTEGER(Load<int32_t>((data_ptr_t)stats.c_str())).ToString());
 		}
 		break;
 	case Type::INT64:
 		if (stats.size() == sizeof(int64_t)) {
-			return Value(Value::BIGINT(*((int64_t *)stats.c_str())).ToString());
+			return Value(Value::BIGINT(Load<int64_t>((data_ptr_t)stats.c_str())).ToString());
 		}
 		break;
 	case Type::FLOAT:
 		if (stats.size() == sizeof(float)) {
-			float val = *((float *)stats.c_str());
+			float val = Load<float>((data_ptr_t)stats.c_str());
 			if (Value::FloatIsValid(val)) {
 				return Value(Value::FLOAT(val).ToString());
 			}
@@ -138,7 +138,7 @@ Value ConvertParquetStats(duckdb_parquet::format::Type::type type, bool stats_is
 		break;
 	case Type::DOUBLE:
 		if (stats.size() == sizeof(double)) {
-			double val = *((double *)stats.c_str());
+			double val = Load<double>((data_ptr_t)stats.c_str());
 			if (Value::DoubleIsValid(val)) {
 				return Value(Value::DOUBLE(val).ToString());
 			}
