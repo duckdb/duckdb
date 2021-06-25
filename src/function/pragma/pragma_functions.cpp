@@ -1,13 +1,15 @@
 #include "duckdb/function/pragma/pragma_functions.hpp"
-#include "duckdb/main/query_profiler.hpp"
+
+#include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
-#include "duckdb/common/enums/output_type.hpp"
+
 #include <cctype>
 
 namespace duckdb {
@@ -161,6 +163,14 @@ static void PragmaDisableForceParallelism(ClientContext &context, const Function
 	context.force_parallelism = false;
 }
 
+static void PragmaEnableForceExternal(ClientContext &context, const FunctionParameters &parameters) {
+	context.force_external = true;
+}
+
+static void PragmaDisableForceExternal(ClientContext &context, const FunctionParameters &parameters) {
+	context.force_external = false;
+}
+
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).object_cache_enable = true;
 }
@@ -276,6 +286,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_parallelism", PragmaEnableForceParallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_parallelism", PragmaDisableForceParallelism));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("force_external", PragmaEnableForceExternal));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_external", PragmaDisableForceExternal));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));

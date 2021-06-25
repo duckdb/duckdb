@@ -212,6 +212,7 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	RowLayout payload_layout;
 	payload_layout.Initialize(types);
 	auto state = make_unique<OrderGlobalState>(SortingState(orders), payload_layout);
+	state->external = context.force_external;
 	return move(state);
 }
 
