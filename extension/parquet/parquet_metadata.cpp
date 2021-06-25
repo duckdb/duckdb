@@ -112,25 +112,25 @@ Value ConvertParquetStats(duckdb_parquet::format::Type::type type, bool stats_is
 	if (!stats_is_set) {
 		return Value(LogicalType::VARCHAR);
 	}
-	switch(type) {
+	switch (type) {
 	case Type::BOOLEAN:
 		if (stats.size() == sizeof(bool)) {
-			return Value(Value::BOOLEAN(*((bool *) stats.c_str())).ToString());
+			return Value(Value::BOOLEAN(*((bool *)stats.c_str())).ToString());
 		}
 		break;
 	case Type::INT32:
 		if (stats.size() == sizeof(int32_t)) {
-			return Value(Value::INTEGER(*((int32_t *) stats.c_str())).ToString());
+			return Value(Value::INTEGER(*((int32_t *)stats.c_str())).ToString());
 		}
 		break;
 	case Type::INT64:
 		if (stats.size() == sizeof(int64_t)) {
-			return Value(Value::BIGINT(*((int64_t *) stats.c_str())).ToString());
+			return Value(Value::BIGINT(*((int64_t *)stats.c_str())).ToString());
 		}
 		break;
 	case Type::FLOAT:
 		if (stats.size() == sizeof(float)) {
-			float val = *((float *) stats.c_str());
+			float val = *((float *)stats.c_str());
 			if (Value::FloatIsValid(val)) {
 				return Value(Value::FLOAT(val).ToString());
 			}
@@ -138,7 +138,7 @@ Value ConvertParquetStats(duckdb_parquet::format::Type::type type, bool stats_is
 		break;
 	case Type::DOUBLE:
 		if (stats.size() == sizeof(double)) {
-			double val = *((double *) stats.c_str());
+			double val = *((double *)stats.c_str());
 			if (Value::DoubleIsValid(val)) {
 				return Value(Value::DOUBLE(val).ToString());
 			}
@@ -220,10 +220,12 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 			                                                    : Value(LogicalType::BIGINT));
 
 			// stats_min_value, LogicalType::VARCHAR
-			current_chunk.SetValue(14, count, ConvertParquetStats(col_meta.type, stats.__isset.min_value, stats.min_value));
+			current_chunk.SetValue(14, count,
+			                       ConvertParquetStats(col_meta.type, stats.__isset.min_value, stats.min_value));
 
 			// stats_max_value, LogicalType::VARCHAR
-			current_chunk.SetValue(15, count, ConvertParquetStats(col_meta.type, stats.__isset.max_value, stats.max_value));
+			current_chunk.SetValue(15, count,
+			                       ConvertParquetStats(col_meta.type, stats.__isset.max_value, stats.max_value));
 
 			// compression, LogicalType::VARCHAR
 			current_chunk.SetValue(16, count, ConvertParquetElementToString(col_meta.codec));
