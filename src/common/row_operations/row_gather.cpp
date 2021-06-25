@@ -189,7 +189,7 @@ void RowOperations::FullScanColumn(const RowLayout &layout, Vector &rows, Vector
 		TemplatedFullScanLoop<string_t>(rows, col, count, col_offset, col_no);
 		break;
 	default:
-		throw NotImplementedException("Unimplemented type for RowOperations::Gather");
+		throw NotImplementedException("Unimplemented type for RowOperations::FullScanColumn");
 	}
 }
 } // namespace duckdb

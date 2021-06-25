@@ -145,6 +145,7 @@ bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, uniq
 	}
 	// In case of duplicates or large build, use regular hash join
 	if (!use_perfect_hash || pjoin_executor->has_duplicates) {
+		use_perfect_hash = false;
 		global_state->hash_table->Finalize();
 	}
 

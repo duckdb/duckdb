@@ -24,13 +24,13 @@ endloop
 mode output_hash
 
 statement ok
-PRAGMA enable_profiling;
+#PRAGMA enable_profiling;
 
 query I
 select test3.r, test4.r from test3,test4 where test3.r=test4.r;
 
 statement ok
-PRAGMA disable_profiling
+#PRAGMA disable_profiling
 
 
 
@@ -44,10 +44,10 @@ endloop
 mode output_hash
 
 statement ok
-PRAGMA enable_profiling;
+#PRAGMA enable_profiling;
 
 query I
 select test3.r, test4.r from test3,test4 where test3.r=test4.r;
 
 statement ok
-PRAGMA disable_profiling
+#PRAGMA disable_profiling

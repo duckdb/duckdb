@@ -126,34 +126,38 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
                                                     PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr,
                                                     PhysicalOperator *operator_child) {
-	// fetch the chunk to join
-	operator_child->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
-	if (physical_state->child_chunk.size() == 0) {
-		// no more keys to probe
-		return true;
-	}
-	// fetch the join keys from the chunk
-	physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
-	// select the keys that are in the min-max range
-	auto &keys_vec = physical_state->join_keys.data[0];
-	auto keys_count = physical_state->join_keys.size();
-	// todo: add check for fast pass when probe is part of build domain
-	FillSelectionVectorSwitchProbe(keys_vec, physical_state->build_sel_vec, physical_state->probe_sel_vec, keys_count);
-	// If build is dense and probe is build's domain, just reference probe
-	if (pjoin_stats.is_build_dense && keys_count == probe_sel_count) {
-		result.Reference(physical_state->child_chunk);
-	} else {
-		// otherwise, filter it out the values that do not match
-		result.Slice(physical_state->child_chunk, physical_state->probe_sel_vec, unique_keys, 0);
-	}
-	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
-	for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
-		auto &result_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
-		D_ASSERT(result_vector.GetType() == ht_ptr->build_types[i]);
-		auto &build_vec = perfect_hash_table[i];
-		result_vector.Reference(build_vec); //
-		result_vector.Slice(physical_state->build_sel_vec, keys_count);
-	}
+	do {
+		// fetch the chunk to join
+		operator_child->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
+		if (physical_state->child_chunk.size() == 0) {
+			// no more keys to probe
+			return true;
+		}
+		// fetch the join keys from the chunk
+		physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
+		// select the keys that are in the min-max range
+		auto &keys_vec = physical_state->join_keys.data[0];
+		auto keys_count = physical_state->join_keys.size();
+		// todo: add check for fast pass when probe is part of build domain
+		FillSelectionVectorSwitchProbe(keys_vec, physical_state->build_sel_vec, physical_state->probe_sel_vec,
+		                               keys_count);
+		// If build is dense and probe is in build's domain, just reference probe
+		if (pjoin_stats.is_build_dense && keys_count == probe_sel_count) {
+			result.Reference(physical_state->child_chunk);
+		} else {
+			// otherwise, filter it out the values that do not match
+			result.Slice(physical_state->child_chunk, physical_state->probe_sel_vec, probe_sel_count, 0);
+		}
+		// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
+		for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
+			auto &result_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
+			D_ASSERT(result_vector.GetType() == ht_ptr->build_types[i]);
+			auto &build_vec = perfect_hash_table[i];
+			result_vector.Reference(build_vec); //
+			result_vector.Slice(physical_state->build_sel_vec, probe_sel_count);
+		}
+		probe_sel_count = 0;
+	} while (result.size() == 0);
 	return true;
 }
 

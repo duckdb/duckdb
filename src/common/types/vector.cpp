@@ -26,14 +26,14 @@ Vector::Vector(LogicalType type_p, bool create_data, bool zero_data)
 	}
 }
 
-Vector::Vector(const LogicalType &type, idx_t tuple_count) {
+Vector::Vector(const LogicalType &type_p, idx_t tuple_count)
+    : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)) {
 	D_ASSERT(type != LogicalType::INVALID);
 	D_ASSERT(tuple_count > 0);
 	auto data_size = GetTypeIdSize(type.InternalType()) * tuple_count;
 	buffer = make_buffer<VectorBuffer>(data_size);
 	auxiliary.reset();
 	data = buffer->GetData();
-	vector_type = VectorType::FLAT_VECTOR;
 	if (type.id() == LogicalTypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
 	}
