@@ -139,7 +139,8 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		}
 	} else {
 		sql_types = requested_types;
-		JumpToBeginning(options.skip_rows, options.header);
+		ResetBuffer();
+		SkipRowsAndReadHeader(options.skip_rows, options.header);
 	}
 	InitParseChunk(sql_types.size());
 }
@@ -298,17 +299,9 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = false) {
 	ResetBuffer();
 	ResetStream();
-	SkipBOM();
 	SkipRowsAndReadHeader(skip_rows, skip_header);
 	sample_chunk_idx = 0;
-}
-
-void BufferedCSVReader::SkipBOM() {
-	char bom_buffer[3];
-	file_handle->Read(bom_buffer, 3);
-	if (bom_buffer[0] != '\xEF' || bom_buffer[1] != '\xBB' || bom_buffer[2] != '\xBF') {
-		ResetStream();
-	}
+	bom_checked = false;
 }
 
 void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
@@ -1322,6 +1315,12 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	}
 	start = 0;
 	position = remaining;
+	if (!bom_checked) {
+		bom_checked = true;
+		if (read_count >= 3 && buffer[0] == '\xEF' && buffer[1] == '\xBB' && buffer[2] == '\xBF') {
+			position += 3;
+		}
+	}
 
 	return read_count > 0;
 }
