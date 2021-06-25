@@ -272,7 +272,7 @@ jobs:
         fetch-depth: 0
 
     - name: Build
-      run: BUILD_ARROW_ABI_TEST=1 make debug
+      run: make debug
 
     - name: Test
       run: make unittestci

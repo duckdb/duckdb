@@ -51,9 +51,9 @@ public:
 	DUCKDB_API idx_t ColumnCount() const {
 		return data.size();
 	}
-	void SetCardinality(idx_t count) {
+	void SetCardinality(idx_t count_p) {
 		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
-		this->count = count;
+		this->count = count_p;
 	}
 	void SetCardinality(const DataChunk &other) {
 		this->count = other.size();

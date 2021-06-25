@@ -18,7 +18,9 @@ namespace duckdb {
 // Arrow List Types
 //===--------------------------------------------------------------------===//
 enum class ArrowListType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
-struct ArrowConvertData {};
+struct ArrowConvertData {
+	virtual ~ArrowConvertData() = default;
+};
 
 struct DictionaryArrowConvertData : public ArrowConvertData {
 	DictionaryArrowConvertData(LogicalType type) : dictionary_type(type) {};

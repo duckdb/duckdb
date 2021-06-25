@@ -2,7 +2,7 @@
 #include "arrow/array/builder_primitive.h"
 #include "arrow/c/abi.h"
 #include "arrow/c/bridge.h"
-#include "arrow/record_batch.h"
+#include "arrow_test_factory.hpp"
 #include "arrow/result.h"
 #include "arrow/status.h"
 #include "arrow/type.h"
@@ -12,12 +12,13 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
+#include <parquet/arrow/reader.h>
+#include "arrow/io/file.h"
 #include <arrow/type_traits.h>
+#include "arrow/table.h"
+#include "arrow/c/bridge.h"
 #include <memory>
-
-#define CATCH_CONFIG_MAIN
-#include "catch.hpp"
+#include "parquet/exception.h"
 
 static arrow::Result<std::shared_ptr<arrow::Array>> GenI32Seq(int32_t n, int32_t next) {
 	arrow::TypeTraits<arrow::Int32Type>::BuilderType builder;
@@ -27,42 +28,6 @@ static arrow::Result<std::shared_ptr<arrow::Array>> GenI32Seq(int32_t n, int32_t
 	REQUIRE(builder.length() == n);
 	return builder.Finish();
 }
-constexpr size_t ARRAY_SIZE = 1024;
-
-#define REQUIRE_RESULT(OUT, IN)                                                                                        \
-	REQUIRE(IN.ok());                                                                                                  \
-	OUT = IN.ValueUnsafe();
-
-struct SimpleFactory {
-	/// All materialized batches
-	arrow::RecordBatchVector batches;
-	/// The schema
-	std::shared_ptr<arrow::Schema> schema;
-
-	SimpleFactory(arrow::RecordBatchVector batches, std::shared_ptr<arrow::Schema> schema)
-	    : batches(std::move(batches)), schema(std::move(schema)) {
-	}
-
-	static std::unique_ptr<duckdb::ArrowArrayStreamWrapper> CreateStream(uintptr_t this_ptr) {
-		// Create a new batch reader
-		auto &factory = *reinterpret_cast<SimpleFactory *>(this_ptr); // NOLINT
-		REQUIRE_RESULT(auto reader, arrow::RecordBatchReader::Make(factory.batches, factory.schema));
-
-		// Export C arrow stream stream
-		auto stream_wrapper = duckdb::make_unique<duckdb::ArrowArrayStreamWrapper>();
-		stream_wrapper->arrow_array_stream.release = nullptr;
-		auto maybe_ok = arrow::ExportRecordBatchReader(reader, &stream_wrapper->arrow_array_stream);
-		if (!maybe_ok.ok()) {
-			if (stream_wrapper->arrow_array_stream.release) {
-				stream_wrapper->arrow_array_stream.release(&stream_wrapper->arrow_array_stream);
-			}
-			return nullptr;
-		}
-
-		// Pass ownership to caller
-		return stream_wrapper;
-	}
-};
 
 TEST_CASE("Test random integers", "[arrow]") {
 
@@ -79,7 +44,7 @@ TEST_CASE("Test random integers", "[arrow]") {
 
 			std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
 			while (n > 0) {
-				auto here = std::min<size_t>(ARRAY_SIZE, n);
+				auto here = std::min<size_t>(STANDARD_VECTOR_SIZE, n);
 				REQUIRE_RESULT(auto a, GenI32Seq(here, next_a));
 				REQUIRE_RESULT(auto b, GenI32Seq(here, next_b));
 				REQUIRE_RESULT(auto c, GenI32Seq(here, next_c));
