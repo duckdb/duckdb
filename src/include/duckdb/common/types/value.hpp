@@ -187,6 +187,10 @@ public:
 
 	static bool FloatIsValid(float value);
 	static bool DoubleIsValid(double value);
+	static bool StringIsValid(const char *str, idx_t length);
+	static bool StringIsValid(const string &str) {
+		return StringIsValid(str.c_str(), str.size());
+	}
 
 	template <class T>
 	static bool IsValid(T value) {

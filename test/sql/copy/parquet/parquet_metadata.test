@@ -22,3 +22,9 @@ select * from parquet_metadata('test/sql/copy/parquet/data/glob/*.parquet');
 
 statement ok
 select * from parquet_schema('test/sql/copy/parquet/data/glob/*.parquet');
+
+statement ok
+SELECT * FROM parquet_metadata('test/sql/copy/parquet/data/*.parquet');
+
+statement ok
+SELECT * FROM parquet_schema('test/sql/copy/parquet/data/*.parquet');
