@@ -155,8 +155,10 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 		// Serialize information that is needed for swizzling if the computation goes out-of-core
 		const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
 		for (idx_t i = 0; i < count; i++) {
+			auto row_idx = sel.get_index(i);
+			auto row = ptrs[row_idx];
 			// Pointer to this row into the heap block
-			Store<data_ptr_t>(data_locations[i], ptrs[i] + heap_pointer_offset);
+			Store<data_ptr_t>(data_locations[i], row + heap_pointer_offset);
 			// Row size is stored in the heap in front of each row
 			Store<idx_t>(entry_sizes[i], data_locations[i]);
 			data_locations[i] += sizeof(idx_t);

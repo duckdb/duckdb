@@ -6,7 +6,6 @@ statement ok
 PRAGMA enable_verification
 
 # payload string that is longer than the 8MB initial string size - this tests whether RowDataCollection dynamically increases block capacity
-# TODO: test a mix of long and short strings
 statement ok
 select range % 2 i, string_agg('thisstringis200characterslong..........................................................................................................................................................................') s from range(100000) group by i order by i
 
@@ -413,3 +412,40 @@ query TT
 SELECT i, list(j) FROM test9 GROUP BY i ORDER BY i;
 ----
 8 values hashing to fc909a9ac472ea404c0bceecf7f1f3d6
+
+statement ok
+CREATE TABLE DirectReports
+(
+    EmployeeID smallint,
+    Name varchar NOT NULL,
+    Title varchar NOT NULL,
+    EmployeeLevel int NOT NULL,
+    Sort varchar NOT NULL
+);
+
+statement ok
+INSERT INTO DirectReports VALUES
+(1, 'Ken Sánchez', 'Chief Executive Officer', 1, 'Ken Sánchez'),
+(273, '>Brian Welcker', 'Vice President of Sales', 2, 'Ken Sánchez>Brian Welcker'),
+(274, '>>Stephen Jiang', 'North American Sales Manager', 3, 'Ken Sánchez>Brian Welcker>Stephen Jiang'),
+(285, '>>Syed Abbas', 'Pacific Sales Manager', 3, 'Ken Sánchez>Brian Welcker>Syed Abbas'),
+(16, '>>David Bradley', 'Marketing Manager', 3, 'Ken Sánchez>Brian Welcker>David Bradley'),
+(275, '>>>Michael Blythe', 'Sales Representative', 4, 'Ken Sánchez>Brian Welcker>Stephen Jiang>Michael Blythe'),
+(276, '>>>Linda Mitchell', 'Sales Representative', 4, 'Ken Sánchez>Brian Welcker>Stephen Jiang>Linda Mitchell'),
+(286, '>>>Lynn Tsoflias', 'Sales Representative', 4, 'Ken Sánchez>Brian Welcker>Syed Abbas>Lynn Tsoflias'),
+(23, '>>>Mary Gibson', 'Marketing Specialist', 4, 'Ken Sánchez>Brian Welcker>David Bradley>Mary Gibson');
+
+query IIII
+SELECT EmployeeID, Name, Title, EmployeeLevel
+FROM DirectReports
+ORDER BY Sort, EmployeeID;
+----
+1	Ken Sánchez	Chief Executive Officer	1
+273	>Brian Welcker	Vice President of Sales	2
+16	>>David Bradley	Marketing Manager	3
+23	>>>Mary Gibson	Marketing Specialist	4
+274	>>Stephen Jiang	North American Sales Manager	3
+276	>>>Linda Mitchell	Sales Representative	4
+275	>>>Michael Blythe	Sales Representative	4
+285	>>Syed Abbas	Pacific Sales Manager	3
+286	>>>Lynn Tsoflias	Sales Representative	4

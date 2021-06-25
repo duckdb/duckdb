@@ -86,8 +86,7 @@ class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(SortingState sorting_state, RowLayout payload_layout)
 	    : sorting_state(move(sorting_state)), payload_layout(move(payload_layout)), next_heap_block_id(0),
-	      total_count(0), sorting_data_radix_capacity(0), sorting_data_blob_capacity(0), payload_data_capacity(0),
-	      sorting_data_heap_capacity(0), payload_data_heap_capacity(0), external(false) {
+	      total_count(0), block_capacity(0), sorting_heap_capacity(0), payload_heap_capacity(0), external(false) {
 	}
 
 	~OrderGlobalState() override;
@@ -110,12 +109,10 @@ public:
 	//! Total count - set after PhysicalOrder::Finalize is called
 	idx_t total_count;
 	//! Capacity (number of rows) used to initialize blocks
-	idx_t sorting_data_radix_capacity;
-	idx_t sorting_data_blob_capacity;
-	idx_t payload_data_capacity;
+	idx_t block_capacity;
 	//! Capacity (number of bytes) used to initialize blocks
-	idx_t sorting_data_heap_capacity;
-	idx_t payload_data_heap_capacity;
+	idx_t sorting_heap_capacity;
+	idx_t payload_heap_capacity;
 
 	//! Whether we are doing an external sort
 	bool external;
@@ -163,7 +160,7 @@ public:
 		payload_data =
 		    make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, payload_row_width);
 		payload_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8, true);
-
+		// Init done
 		initialized = true;
 	}
 
@@ -190,6 +187,7 @@ public:
 		idx_t num_threads = task_scheduler.NumberOfThreads();
 		// memory usage per thread should scale with max mem / num threads
 		// we take 10% of the max memory, to be VERY conservative
+		// TODO: make sure heap blocks are never bigger than 4GB
 		return size_in_bytes > (0.1 * max_memory / num_threads);
 	}
 
@@ -331,8 +329,7 @@ public:
 	}
 
 	//! Initialize this to write data to during the merge
-	void InitializeWrite(const idx_t &data_capacity_p, const idx_t &heap_capacity_p) {
-		data_capacity = data_capacity_p;
+	void InitializeWrite(const idx_t &heap_capacity_p) {
 		heap_capacity = heap_capacity_p;
 		CreateDataBlock();
 		if (!layout.AllConstant() && state.external) {
@@ -342,7 +339,7 @@ public:
 
 	//! Initialize new block to write to
 	void CreateDataBlock() {
-		data_blocks.emplace_back(buffer_manager, data_capacity / layout.GetRowWidth(), layout.GetRowWidth());
+		data_blocks.emplace_back(buffer_manager, state.block_capacity, layout.GetRowWidth());
 	}
 
 	void CreateHeapBlock() {
@@ -384,7 +381,7 @@ public:
 		GlobalToLocalIndex(global_idx, block_idx, entry_idx);
 	}
 
-	void Advance() {
+	inline void Advance() {
 		entry_idx++;
 		data_ptr += layout.GetRowWidth();
 		if (entry_idx == data_blocks[block_idx].count) {
@@ -478,8 +475,7 @@ private:
 	//! Pointers into the buffers being currently read
 	data_ptr_t data_ptr;
 	data_ptr_t heap_ptr;
-	//! Capacity (in bytes) of the data and heap blocks
-	idx_t data_capacity;
+	//! Capacity (in bytes) of the heap blocks
 	idx_t heap_capacity;
 };
 
@@ -488,9 +484,7 @@ public:
 	SortedBlock(BufferManager &buffer_manager, OrderGlobalState &state)
 	    : block_idx(0), entry_idx(0), buffer_manager(buffer_manager), state(state), sorting_state(state.sorting_state),
 	      payload_layout(state.payload_layout) {
-		if (!sorting_state.all_constant) {
-			sorting_data_blob = make_unique<SortedData>(sorting_state.blob_layout, buffer_manager, state);
-		}
+		sorting_data_blob = make_unique<SortedData>(sorting_state.blob_layout, buffer_manager, state);
 		payload_data = make_unique<SortedData>(payload_layout, buffer_manager, state);
 	}
 
@@ -517,23 +511,18 @@ public:
 		return remaining;
 	}
 
-	void SetVarIndices(const idx_t &global_idx) {
-		sorting_data_blob->SetIndex(global_idx);
-	}
-
 	//! Initialize this block to write data to
 	void InitializeWrite() {
-		capacity = state.sorting_data_radix_capacity;
 		CreateBlock();
 		if (!sorting_state.all_constant) {
-			sorting_data_blob->InitializeWrite(state.sorting_data_blob_capacity, state.sorting_data_heap_capacity);
+			sorting_data_blob->InitializeWrite(state.sorting_heap_capacity);
 		}
-		payload_data->InitializeWrite(state.payload_data_capacity, state.payload_data_heap_capacity);
+		payload_data->InitializeWrite(state.payload_heap_capacity);
 	}
 
 	//! Init new block to write to
 	void CreateBlock() {
-		sorting_data_radix.emplace_back(buffer_manager, capacity / sorting_state.entry_size, sorting_state.entry_size);
+		sorting_data_radix.emplace_back(buffer_manager, state.block_capacity, sorting_state.entry_size);
 	}
 	//! Cleanup sorting data
 	void UnregisterSortingBlocks() {
@@ -544,8 +533,10 @@ public:
 			for (auto &block : sorting_data_blob->data_blocks) {
 				buffer_manager.UnregisterBlock(block.block->BlockId(), true);
 			}
-			for (auto &block : sorting_data_blob->heap_blocks) {
-				buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+			if (state.external) {
+				for (auto &block : sorting_data_blob->heap_blocks) {
+					buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+				}
 			}
 		}
 	}
@@ -554,9 +545,11 @@ public:
 		for (auto &block : payload_data->data_blocks) {
 			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
 		}
-		if (!payload_data->layout.AllConstant()) {
-			for (auto &block : payload_data->heap_blocks) {
-				buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+		if (state.external) {
+			if (!payload_data->layout.AllConstant()) {
+				for (auto &block : payload_data->heap_blocks) {
+					buffer_manager.UnregisterBlock(block.block->BlockId(), true);
+				}
 			}
 		}
 	}
@@ -637,8 +630,6 @@ private:
 
 	//! Handle and ptr for sorting_blocks
 	unique_ptr<BufferHandle> sorting_handle;
-
-	idx_t capacity;
 };
 
 OrderGlobalState::~OrderGlobalState() {
@@ -715,7 +706,7 @@ static bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const
 	case PhysicalType::VARCHAR: {
 		const auto &tie_col_offset = row_layout.GetOffsets()[col_idx];
 		string_t tie_string = Load<string_t>(row_ptr + tie_col_offset);
-		if (tie_string.GetSize() <= string_t::INLINE_LENGTH) {
+		if (tie_string.GetSize() < string_t::INLINE_LENGTH) {
 			// No need to break the tie
 			return false;
 		}
@@ -768,7 +759,7 @@ static inline void SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &hea
 
 int BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData &right,
                  const SortingState &sorting_state, const bool &external) {
-	idx_t col_idx = sorting_state.sorting_to_blob_col.at(tie_col);
+	const idx_t &col_idx = sorting_state.sorting_to_blob_col.at(tie_col);
 	data_ptr_t l_data_ptr = left.DataPtr();
 	if (!TieIsBreakable(col_idx, l_data_ptr, sorting_state.blob_layout)) {
 		// Quick check to see if ties can be broken
@@ -789,12 +780,12 @@ int BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData 
 		UnswizzleSingleValue(l_data_ptr, l_heap_ptr, type);
 		UnswizzleSingleValue(r_data_ptr, r_heap_ptr, type);
 		// Compare
-		result = CompareVal(left.DataPtr() + tie_col_offset, right.DataPtr() + tie_col_offset, type, order);
+		result = CompareVal(l_data_ptr, r_data_ptr, type, order);
 		// Swizzle the pointer back
 		SwizzleSingleValue(l_data_ptr, l_heap_ptr, type);
 		SwizzleSingleValue(r_data_ptr, r_heap_ptr, type);
 	} else {
-		result = CompareVal(left.DataPtr() + tie_col_offset, right.DataPtr() + tie_col_offset, type, order);
+		result = CompareVal(l_data_ptr, r_data_ptr, type, order);
 	}
 	return result;
 }
@@ -803,7 +794,7 @@ static void SortTiedStrings(BufferManager &buffer_manager, const data_ptr_t data
                             const idx_t &end, const idx_t &tie_col, bool *ties, const data_ptr_t blob_ptr,
                             const SortingState &sorting_state) {
 	const auto row_width = sorting_state.blob_layout.GetRowWidth();
-	idx_t col_idx = sorting_state.sorting_to_blob_col.at(tie_col);
+	const idx_t &col_idx = sorting_state.sorting_to_blob_col.at(tie_col);
 	// Locate the first blob row in question
 	data_ptr_t row_ptr = dataptr + start * sorting_state.entry_size;
 	data_ptr_t blob_row_ptr = blob_ptr + Load<idx_t>(row_ptr + sorting_state.comparison_size) * row_width;
@@ -1176,6 +1167,14 @@ public:
 
 	void Execute() override {
 		ComputeWork();
+		D_ASSERT(left_block->sorting_data_radix.size() == left_block->payload_data->data_blocks.size());
+		D_ASSERT(right_block->sorting_data_radix.size() == right_block->payload_data->data_blocks.size());
+#ifdef DEBUG
+		if (!sorting_state.all_constant) {
+			D_ASSERT(left_block->sorting_data_radix.size() == left_block->sorting_data_blob->data_blocks.size());
+			D_ASSERT(right_block->sorting_data_radix.size() == right_block->sorting_data_blob->data_blocks.size());
+		}
+#endif
 		// Set up the write block
 		auto &left = *left_block;
 		auto &right = *right_block;
@@ -1203,8 +1202,15 @@ public:
 			if (!sorting_state.all_constant) {
 				Merge(*result->sorting_data_blob, *left.sorting_data_blob, *right.sorting_data_blob, next, left_smaller,
 				      next_entry_sizes);
+				D_ASSERT(left.block_idx == left.sorting_data_blob->block_idx &&
+				         left.entry_idx == left.sorting_data_blob->entry_idx);
+				D_ASSERT(right.block_idx == right.sorting_data_blob->block_idx &&
+				         right.entry_idx == right.sorting_data_blob->entry_idx);
 			}
 			Merge(*result->payload_data, *left.payload_data, *right.payload_data, next, left_smaller, next_entry_sizes);
+			D_ASSERT(left.block_idx == left.payload_data->block_idx && left.entry_idx == left.payload_data->entry_idx);
+			D_ASSERT(right.block_idx == right.payload_data->block_idx &&
+			         right.entry_idx == right.payload_data->entry_idx);
 		}
 		D_ASSERT(result->Count() == l_count + r_count);
 
@@ -1213,7 +1219,6 @@ public:
 		if (parent.finished_tasks == parent.total_tasks) {
 			// Unregister processed data
 			for (auto &sb : state.sorted_blocks) {
-				// TODO: check if this can be unregistered if we do in-memory sorting
 				sb->UnregisterSortingBlocks();
 				sb->UnregisterPayloadBlocks();
 			}
@@ -1245,8 +1250,8 @@ public:
 		// Compute the work that this thread must do using Merge Path
 		idx_t l_end;
 		idx_t r_end;
-		if (state.l_start + state.r_start + state.sorting_data_radix_capacity < l_count + r_count) {
-			const idx_t intersection = state.l_start + state.r_start + state.sorting_data_radix_capacity;
+		if (state.l_start + state.r_start + state.block_capacity < l_count + r_count) {
+			const idx_t intersection = state.l_start + state.r_start + state.block_capacity;
 			ComputeIntersection(left, right, intersection, l_end, r_end);
 			D_ASSERT(l_end <= l_count);
 			D_ASSERT(r_end <= r_count);
@@ -1295,8 +1300,8 @@ public:
 		if (sorting_state.all_constant || !state.external) {
 			comp_res = memcmp(l_ptr, r_ptr, sorting_state.comparison_size);
 		} else {
-			l.SetVarIndices(l_idx);
-			r.SetVarIndices(r_idx);
+			l.sorting_data_blob->SetIndex(l_idx);
+			r.sorting_data_blob->SetIndex(r_idx);
 			l.sorting_data_blob->Pin();
 			r.sorting_data_blob->Pin();
 			comp_res = CompareTuple(l, r, l_ptr, r_ptr, sorting_state, state.external);
@@ -1441,7 +1446,7 @@ public:
 					r_ptr += r_smaller * sorting_state.entry_size;
 				}
 			} else {
-				// Pin the blob data (if external sort)
+				// Pin the blob data
 				if (!l_done) {
 					left.sorting_data_blob->Pin();
 				}
@@ -1583,7 +1588,7 @@ public:
 		data_ptr_t result_heap_ptr;
 		uint32_t result_heap_block_id;
 		bool heap_block_full = false;
-		if (!layout.AllConstant()) {
+		if (!layout.AllConstant() && state.external) {
 			result_heap_block = &result_data.heap_blocks.back();
 			result_heap_handle = buffer_manager.Pin(result_heap_block->block);
 			result_heap_base_ptr = result_heap_handle->Ptr();
@@ -1846,36 +1851,27 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	for (auto &sb : state.sorted_blocks) {
 		state.total_count += sb->sorting_data_radix.back().count;
 	}
-	// Use the data that we have to determine which block sizes to use during the merge
-	// Radix sorting data
+	// Use the data that we have to determine which block size to use during the merge
 	const auto &sorting_state = state.sorting_state;
 	for (auto &sb : state.sorted_blocks) {
 		auto &block = sb->sorting_data_radix.back();
-		state.sorting_data_radix_capacity = MaxValue(state.sorting_data_radix_capacity, block.capacity);
+		state.block_capacity = MaxValue(state.block_capacity, block.capacity);
 	}
-	// Blob sorting data
-	if (!sorting_state.all_constant) {
+	// Sorting heap data
+	if (!sorting_state.all_constant && state.external) {
 		for (auto &sb : state.sorted_blocks) {
-			auto &data_block = sb->sorting_data_blob->data_blocks.back();
-			state.sorting_data_blob_capacity =
-			    MaxValue(state.sorting_data_blob_capacity, data_block.capacity * data_block.entry_size);
-			if (state.external) {
-				auto &heap_block = sb->sorting_data_blob->heap_blocks.back();
-				state.sorting_data_heap_capacity =
-				    MaxValue(state.sorting_data_heap_capacity, heap_block.capacity * heap_block.entry_size);
-			}
+			auto &heap_block = sb->sorting_data_blob->heap_blocks.back();
+			state.sorting_heap_capacity =
+			    MaxValue(state.sorting_heap_capacity, heap_block.capacity * heap_block.entry_size);
 		}
 	}
-	// Payload data
+	// Payload heap data
 	const auto &payload_layout = state.payload_layout;
-	for (auto &sb : state.sorted_blocks) {
-		auto &data_block = sb->payload_data->data_blocks.back();
-		state.payload_data_capacity =
-		    MaxValue(state.payload_data_capacity, data_block.capacity * data_block.entry_size);
-		if (!payload_layout.AllConstant() && state.external) {
+	if (!payload_layout.AllConstant() && state.external) {
+		for (auto &sb : state.sorted_blocks) {
 			auto &heap_block = sb->payload_data->heap_blocks.back();
-			state.payload_data_heap_capacity =
-			    MaxValue(state.sorting_data_heap_capacity, heap_block.capacity * heap_block.entry_size);
+			state.payload_heap_capacity =
+			    MaxValue(state.sorting_heap_capacity, heap_block.capacity * heap_block.entry_size);
 		}
 	}
 	// Start the merge or finish if a merge is not necessary
@@ -1901,22 +1897,20 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 		pipeline.Finish();
 		return;
 	}
-
-	// uneven amount of blocks
+	// Uneven amount of blocks - keep one on the side
 	auto num_blocks = state.sorted_blocks.size();
 	if (num_blocks % 2 == 1) {
 		state.odd_one_out = move(state.sorted_blocks.back());
 		state.sorted_blocks.pop_back();
 		num_blocks--;
 	}
-
+	// Init merge path path indices
 	state.pair_idx = 0;
 	state.l_start = 0;
 	state.r_start = 0;
-
-	// compute how many tasks there will be
+	// Compute how many tasks there will be
 	idx_t num_tasks = 0;
-	const idx_t tuples_per_block = state.sorting_data_radix_capacity / state.sorting_state.entry_size;
+	const idx_t tuples_per_block = state.block_capacity;
 	for (idx_t block_idx = 0; block_idx < num_blocks; block_idx += 2) {
 		auto &left = *state.sorted_blocks[block_idx];
 		auto &right = *state.sorted_blocks[block_idx + 1];
@@ -1937,77 +1931,23 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-idx_t PhysicalOrder::MaxThreads(ClientContext &context) {
-	if (this->sink_state) {
-		auto &state = (OrderGlobalState &)*this->sink_state;
-		return state.total_count / STANDARD_VECTOR_SIZE + 1;
-	} else {
-		return estimated_cardinality / STANDARD_VECTOR_SIZE + 1;
-	}
-}
-
-class OrderParallelState : public ParallelState {
-public:
-	OrderParallelState() : global_entry_idx(0), block_idx(0), entry_idx(0) {
-	}
-
-	idx_t global_entry_idx;
-
-	idx_t block_idx;
-	idx_t entry_idx;
-
-	mutex lock;
-};
-
-unique_ptr<ParallelState> PhysicalOrder::GetParallelState() {
-	auto result = make_unique<OrderParallelState>();
-	return move(result);
-}
-
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
 	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child)
 	    : PhysicalOperatorState(op, child), initialized(false), global_entry_idx(0), block_idx(0), entry_idx(0) {
 	}
 	bool initialized;
-	ParallelState *parallel_state;
 
 	SortedData *payload_data;
-
 	Vector addresses = Vector(LogicalType::POINTER);
 
 	idx_t global_entry_idx;
-
 	idx_t block_idx;
 	idx_t entry_idx;
-
-	void InitNextIndices() {
-		auto &p_state = *reinterpret_cast<OrderParallelState *>(parallel_state);
-		global_entry_idx = p_state.global_entry_idx;
-		block_idx = p_state.block_idx;
-		entry_idx = p_state.entry_idx;
-	}
 };
 
 unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
-}
-
-static void UpdateStateIndices(const idx_t &next, const SortedData &payload_data, OrderParallelState &parallel_state) {
-	parallel_state.global_entry_idx += next;
-
-	idx_t remaining = next;
-	while (remaining > 0) {
-		auto &data_block = payload_data.data_blocks[parallel_state.block_idx];
-		if (parallel_state.entry_idx + remaining > data_block.count) {
-			remaining -= data_block.count - parallel_state.entry_idx;
-			parallel_state.block_idx++;
-			parallel_state.entry_idx = 0;
-		} else {
-			parallel_state.entry_idx += remaining;
-			remaining = 0;
-		}
-	}
 }
 
 static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperatorState &state, OrderGlobalState &gstate,
@@ -2068,7 +2008,6 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, scan_count, col_offset, col_idx);
 	}
 	chunk.SetCardinality(scan_count);
-	chunk.Verify();
 }
 
 void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
@@ -2083,49 +2022,12 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	if (!state.initialized) {
 		D_ASSERT(gstate.sorted_blocks.back()->Count() == gstate.total_count);
 		state.payload_data = gstate.sorted_blocks.back()->payload_data.get();
-		// initialize parallel state (if any)
-		state.parallel_state = nullptr;
-		auto &task = context.task;
-		// check if there is any parallel state to fetch
-		state.parallel_state = nullptr;
-		auto task_info = task.task_info.find(this);
-		if (task_info != task.task_info.end()) {
-			// parallel scan init
-			state.parallel_state = task_info->second;
-		}
 		state.initialized = true;
 	}
 
-	if (!state.parallel_state) {
-		// sequential scan
-		auto next = MinValue((idx_t)STANDARD_VECTOR_SIZE, gstate.total_count - state.global_entry_idx);
-		Scan(context.client, chunk, state, gstate, next);
-		if (chunk.size() != 0) {
-			return;
-		}
-	} else {
-		// parallel scan
-		auto &parallel_state = *reinterpret_cast<OrderParallelState *>(state.parallel_state);
-		do {
-			idx_t next;
-			{
-				lock_guard<mutex> parallel_lock(parallel_state.lock);
-				next = MinValue((idx_t)STANDARD_VECTOR_SIZE, gstate.total_count - parallel_state.global_entry_idx);
-				// init local state using parallel state
-				state.InitNextIndices();
-				// update parallel state for the next scan
-				UpdateStateIndices(next, *state.payload_data, parallel_state);
-			}
-			// now we scan using the local state
-			Scan(context.client, chunk, state, gstate, next);
-			if (chunk.size() == 0) {
-				break;
-			} else {
-				return;
-			}
-		} while (true);
-	}
-	D_ASSERT(chunk.size() == 0);
+	auto next = MinValue((idx_t)STANDARD_VECTOR_SIZE, gstate.total_count - state.global_entry_idx);
+	Scan(context.client, chunk, state, gstate, next);
+	chunk.Verify();
 }
 
 string PhysicalOrder::ParamsToString() const {

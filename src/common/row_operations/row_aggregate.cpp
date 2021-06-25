@@ -5,9 +5,10 @@
 //
 //
 //===----------------------------------------------------------------------===//
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
+
 #include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
