@@ -167,7 +167,6 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 
 	auto parquet_files = fs.Glob("test/sql/copy/parquet/data/*.parquet");
 	for (auto &parquet_path : parquet_files) {
-		std::cout << parquet_path << std::endl;
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
 	skip.clear();
@@ -184,7 +183,6 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	}
 	parquet_files = fs.Glob("test/sql/copy/parquet/data/glob/*.parquet");
 	for (auto &parquet_path : parquet_files) {
-		std::cout << parquet_path << std::endl;
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
 }
