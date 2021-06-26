@@ -390,7 +390,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	Vector result(LogicalType::INTEGER);
 	try {
 		executor.ExecuteExpression(chunk, result);
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, ex.what());
 	} catch (...) {
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);

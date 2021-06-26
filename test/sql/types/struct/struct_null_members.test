@@ -5,9 +5,9 @@
 statement ok
 PRAGMA enable_verification
 
-# Integer lists with NULLs in various positions
+# Integer STRUCTs with NULLs in various positions
 statement ok
-CREATE VIEW list_int AS
+CREATE VIEW struct_int AS
 SELECT * FROM (VALUES
 	({'x': 1, 'y': 0}),
 	({'x': 1, 'y': 2}),
@@ -24,7 +24,7 @@ SELECT lhs.i, rhs.i,
 	lhs.i = rhs.i, lhs.i <> rhs.i,
 	lhs.i > rhs.i, lhs.i >= rhs.i,
 	lhs.i IS NOT DISTINCT FROM rhs.i, lhs.i IS DISTINCT FROM rhs.i
-FROM list_int lhs, list_int rhs;
+FROM struct_int lhs, struct_int rhs;
 ----
 {'x': 1, 'y': 0}	{'x': 1, 'y': 0}	False	True	True	False	False	True	True	False
 {'x': 1, 'y': 0}	{'x': 1, 'y': 2}	True	True	False	True	False	False	False	True

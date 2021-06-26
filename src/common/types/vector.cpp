@@ -19,27 +19,29 @@
 
 namespace duckdb {
 
-Vector::Vector(LogicalType type_p, bool create_data, bool zero_data)
+Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capacity)
     : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(nullptr) {
 	if (create_data) {
-		Initialize(zero_data);
+		Initialize(zero_data, capacity);
 	}
 }
 
-Vector::Vector(const LogicalType &type_p, idx_t tuple_count)
+/* Vector::Vector(const LogicalType &type_p, idx_t tuple_count)
     : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)) {
-	D_ASSERT(type != LogicalType::INVALID);
-	D_ASSERT(tuple_count > 0);
-	auto data_size = GetTypeIdSize(type.InternalType()) * tuple_count;
-	buffer = make_buffer<VectorBuffer>(data_size);
-	auxiliary.reset();
-	data = buffer->GetData();
-	if (type.id() == LogicalTypeId::INVALID) {
-		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
-	}
-}
+    D_ASSERT(type != LogicalType::INVALID);
+    D_ASSERT(tuple_count > 0);
+    auto data_size = GetTypeIdSize(type.InternalType()) * tuple_count;
+    buffer = make_buffer<VectorBuffer>(data_size);
+    auxiliary.reset();
+    data = buffer->GetData();
+    if (type.id() == LogicalTypeId::INVALID) {
+        throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
+    }
+} */
 
 Vector::Vector(LogicalType type_p) : Vector(move(type_p), true, false) {
+}
+Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(move(type_p), true, false, capacity) {
 }
 
 Vector::Vector(LogicalType type_p, data_ptr_t dataptr)
@@ -195,13 +197,13 @@ void Vector::Slice(const SelectionVector &sel, idx_t count, SelCache &cache) {
 	}
 }
 
-void Vector::Initialize(bool zero_data) {
+void Vector::Initialize(bool zero_data, idx_t capacity) {
 	auxiliary.reset();
 	validity.Reset();
 	auto &type = GetType();
 	auto internal_type = type.InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		auto struct_buffer = make_unique<VectorStructBuffer>(type);
+		auto struct_buffer = make_unique<VectorStructBuffer>(type, capacity);
 		auxiliary = move(struct_buffer);
 	} else if (internal_type == PhysicalType::LIST) {
 		auto list_buffer = make_unique<VectorListBuffer>(type);
@@ -209,10 +211,10 @@ void Vector::Initialize(bool zero_data) {
 	}
 	auto type_size = GetTypeIdSize(internal_type);
 	if (type_size > 0) {
-		buffer = VectorBuffer::CreateStandardVector(type);
+		buffer = VectorBuffer::CreateStandardVector(type, capacity);
 		data = buffer->GetData();
 		if (zero_data) {
-			memset(data, 0, STANDARD_VECTOR_SIZE * type_size);
+			memset(data, 0, capacity * type_size);
 		}
 	}
 }
@@ -1007,6 +1009,20 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 			for (idx_t child_idx = 0; child_idx < children.size(); child_idx++) {
 				if (GetVectorType() == VectorType::CONSTANT_VECTOR) {
 					D_ASSERT(children[child_idx]->GetVectorType() == VectorType::CONSTANT_VECTOR);
+					if (ConstantVector::IsNull(*this)) {
+						D_ASSERT(ConstantVector::IsNull(*children[child_idx]));
+					}
+				} else if (GetVectorType() == VectorType::FLAT_VECTOR &&
+				           children[child_idx]->GetVectorType() == VectorType::FLAT_VECTOR) {
+					// for any NULL entry in the struct, the child should be NULL as well
+					auto &validity = FlatVector::Validity(*this);
+					auto &child_validity = FlatVector::Validity(*children[child_idx]);
+					for (idx_t i = 0; i < count; i++) {
+						auto index = sel.get_index(i);
+						if (!validity.RowIsValid(index)) {
+							D_ASSERT(!child_validity.RowIsValid(index));
+						}
+					}
 				}
 				D_ASSERT(children[child_idx]->GetType() == child_types[child_idx].second);
 				children[child_idx]->Verify(sel, count);

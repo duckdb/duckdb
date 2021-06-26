@@ -1,5 +1,5 @@
 # name: test/sql/types/list/list_comparison.test_slow
-# description: Test STRUCT comparisons
+# description: Test LIST comparisons
 # group: [list]
 
 statement ok

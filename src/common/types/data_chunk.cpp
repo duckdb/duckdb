@@ -33,8 +33,8 @@ void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 }
 
 void DataChunk::Initialize(const vector<LogicalType> &types) {
-	D_ASSERT(data.empty());     // can only be initialized once
-	D_ASSERT(types.size() > 0); // empty chunk not allowed
+	D_ASSERT(data.empty());   // can only be initialized once
+	D_ASSERT(!types.empty()); // empty chunk not allowed
 	for (idx_t i = 0; i < types.size(); i++) {
 		VectorCache cache(types[i]);
 		data.emplace_back(cache);
@@ -176,25 +176,25 @@ void DataChunk::Deserialize(Deserializer &source) {
 	Verify();
 }
 
-void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count) {
-	this->count = count;
+void DataChunk::Slice(const SelectionVector &sel_vector, idx_t count_p) {
+	this->count = count_p;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < ColumnCount(); c++) {
-		data[c].Slice(sel_vector, count, merge_cache);
+		data[c].Slice(sel_vector, count_p, merge_cache);
 	}
 }
 
-void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count, idx_t col_offset) {
+void DataChunk::Slice(DataChunk &other, const SelectionVector &sel, idx_t count_p, idx_t col_offset) {
 	D_ASSERT(other.ColumnCount() <= col_offset + ColumnCount());
-	this->count = count;
+	this->count = count_p;
 	SelCache merge_cache;
 	for (idx_t c = 0; c < other.ColumnCount(); c++) {
 		if (other.data[c].GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 			// already a dictionary! merge the dictionaries
 			data[col_offset + c].Reference(other.data[c]);
-			data[col_offset + c].Slice(sel, count, merge_cache);
+			data[col_offset + c].Slice(sel, count_p, merge_cache);
 		} else {
-			data[col_offset + c].Slice(other.data[c], sel, count);
+			data[col_offset + c].Slice(other.data[c], sel, count_p);
 		}
 	}
 }
@@ -357,6 +357,7 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 	child.n_children = children.size();
 	child_holder.children.resize(child.n_children);
 	auto list_size = ListVector::GetListSize(*children[0]);
+	child.length = list_size;
 	for (auto &struct_child : child_holder.children) {
 		InitializeChild(struct_child, list_size);
 		child_holder.children_ptrs.push_back(&struct_child.array);
@@ -391,7 +392,33 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
                    ValidityMask *parent_mask) {
 	auto &child = child_holder.array;
 	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN:
+	case LogicalTypeId::BOOLEAN: {
+		//! Gotta bitpack these booleans
+		child_holder.vector = make_unique<Vector>(data);
+		child.n_buffers = 2;
+		idx_t num_bytes = (size + 8 - 1) / 8;
+		child_holder.data = unique_ptr<data_t[]>(new data_t[sizeof(uint8_t) * num_bytes]);
+		child.buffers[1] = child_holder.data.get();
+		auto source_ptr = FlatVector::GetData<uint8_t>(*child_holder.vector);
+		auto target_ptr = (uint8_t *)child.buffers[1];
+		idx_t target_pos = 0;
+		idx_t cur_bit = 0;
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			if (cur_bit == 8) {
+				target_pos++;
+				cur_bit = 0;
+			}
+			if (source_ptr[row_idx] == 0) {
+				//! We set the bit to 0
+				target_ptr[target_pos] &= ~(1 << cur_bit);
+			} else {
+				//! We set the bit to 1
+				target_ptr[target_pos] |= 1 << cur_bit;
+			}
+			cur_bit++;
+		}
+		break;
+	}
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
@@ -409,7 +436,6 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 		child_holder.vector = make_unique<Vector>(data);
-
 		child.n_buffers = 2;
 		child.buffers[1] = (void *)FlatVector::GetData(*child_holder.vector);
 		break;

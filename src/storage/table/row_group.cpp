@@ -216,10 +216,15 @@ void RowGroup::CommitDropColumn(idx_t column_idx) {
 	columns[column_idx]->CommitDropColumn();
 }
 
-void RowGroupScanState::NextVector() {
-	vector_index++;
-	for (idx_t i = 0; i < parent.column_ids.size(); i++) {
-		column_scans[i].Next();
+void RowGroup::NextVector(RowGroupScanState &state) {
+	state.vector_index++;
+	for (idx_t i = 0; i < state.parent.column_ids.size(); i++) {
+		auto column = state.parent.column_ids[i];
+		if (column == COLUMN_IDENTIFIER_ROW_ID) {
+			continue;
+		}
+		D_ASSERT(column < columns.size());
+		columns[column]->Skip(state.column_scans[i]);
 	}
 }
 
@@ -264,7 +269,7 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 				return true;
 			}
 			while (state.vector_index < target_vector_index) {
-				state.NextVector();
+				NextVector(state);
 			}
 			return false;
 		}
@@ -298,7 +303,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 			count = state.row_group->GetSelVector(*transaction, state.vector_index, valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
-				state.NextVector();
+				NextVector(state);
 				continue;
 			}
 		} else {

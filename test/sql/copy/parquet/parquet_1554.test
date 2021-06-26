@@ -9,9 +9,8 @@ SELECT COUNT(backlink_count) FROM parquet_scan('test/sql/copy/parquet/data/bug15
 ----
 0
 
-
 query II
 SELECT http_status_code, COUNT(backlink_count) FROM parquet_scan('test/sql/copy/parquet/data/bug1554.parquet') GROUP BY http_status_code ORDER BY http_status_code
 ----
-200	0	
+200	0
 301	0

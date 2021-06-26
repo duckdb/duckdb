@@ -19,8 +19,6 @@ public:
 
 public:
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
-	void InitializeScan(ColumnScanState &state) override;
-	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 };
 
 } // namespace duckdb

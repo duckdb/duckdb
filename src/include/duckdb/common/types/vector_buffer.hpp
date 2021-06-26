@@ -57,10 +57,11 @@ public:
 		data = move(new_data);
 	}
 
-	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
-	static buffer_ptr<VectorBuffer> CreateConstantVector(const LogicalType &logicalType);
-	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logicalType);
+	static buffer_ptr<VectorBuffer> CreateConstantVector(const LogicalType &logical_type);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type,
+	                                                     idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	inline VectorBufferType GetBufferType() const {
 		return buffer_type;
@@ -130,7 +131,7 @@ private:
 class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
-	VectorStructBuffer(const LogicalType &struct_type);
+	VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	~VectorStructBuffer() override;
 
 public:

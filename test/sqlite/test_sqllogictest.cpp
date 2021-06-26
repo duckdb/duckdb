@@ -1373,6 +1373,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 #ifndef _WIN32
 				return;
 #endif
+			} else if (param == "noforcestorage") {
+				if (TestForceStorage()) {
+					return;
+				}
 			} else if (param == "vector_size") {
 				// require a specific vector size
 				int required_vector_size = std::stoi(sScript.azToken[2]);
