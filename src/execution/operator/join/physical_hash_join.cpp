@@ -138,12 +138,12 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
 	auto global_state = reinterpret_cast<HashJoinGlobalState *>(state.get());
 	// check for possible perfect hash table
-	use_perfect_hash = pjoin_executor->CheckForPerfectHashJoin(global_state->hash_table.get());
+	use_perfect_hash = pjoin_executor->CanDoPerfectHashJoin();
 	if (use_perfect_hash) {
 		pjoin_executor->BuildPerfectHashTable(global_state->hash_table.get(), global_state->ht_scan_state,
 		                                      global_state->key_type);
 	}
-	// In case of duplicates or large build, use regular hash join
+	// In case large build side or duplicates, use regular hash join
 	if (!use_perfect_hash || pjoin_executor->has_duplicates) {
 		use_perfect_hash = false;
 		global_state->hash_table->Finalize();

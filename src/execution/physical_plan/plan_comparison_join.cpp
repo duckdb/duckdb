@@ -38,12 +38,11 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	// with one condition
 	if (op.conditions.size() != 1)
 		return;
-	// with no stats
+	// with propagated statistics
 	if (op.join_stats.size() <= 0)
 		return;
-	// with equality
+	// with equality condition
 	for (auto &&condition : op.conditions) {
-		// check if it is equality
 		if (condition.comparison != ExpressionType::COMPARE_EQUAL) {
 			return;
 		}
@@ -56,7 +55,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 		}
 	}
 
-	// and when the build range is smaller than the pre-set threshold
+	// and when the build range is smaller than the threshold
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
 	auto build_range = stats_build->max - stats_build->min;                           // Join Keys Range
 
@@ -69,11 +68,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 		join_state.build_min = stats_build->min;
 		join_state.build_max = stats_build->max;
 		join_state.estimated_cardinality = op.estimated_cardinality;
-		join_state.build_range = build_range.GetValue<idx_t>();
-		// check whether the probe min-max is in the build min-max
-		if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
-			join_state.is_probe_in_range = true;
-		}
+		join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
 	}
 	return;
 }

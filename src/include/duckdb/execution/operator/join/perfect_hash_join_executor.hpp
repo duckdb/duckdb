@@ -24,8 +24,6 @@ struct PerfectHashJoinStats {
 	Value probe_min;
 	Value probe_max;
 	bool is_build_small {false};
-	bool is_probe_in_range {false};
-	bool is_build_min_small {false};
 	bool is_build_dense {false};
 	idx_t build_range {0};
 	idx_t estimated_cardinality {0};
@@ -38,7 +36,7 @@ public:
 	using PerfectHashTable = std::vector<Vector>;
 	bool ProbePerfectHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
 	                           JoinHashTable *ht_ptr, PhysicalOperator *operator_child);
-	bool CheckForPerfectHashJoin(JoinHashTable *ht_ptr);
+	bool CanDoPerfectHashJoin();
 	void BuildPerfectHashTable(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type);
 	void FillSelectionVectorSwitchProbe(Vector &source, SelectionVector &build_sel_vec, SelectionVector &probe_sel_vec,
 	                                    idx_t count);

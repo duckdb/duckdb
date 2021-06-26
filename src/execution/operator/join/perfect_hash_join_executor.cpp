@@ -8,10 +8,8 @@ namespace duckdb {
 PerfectHashJoinExecutor::PerfectHashJoinExecutor(PerfectHashJoinStats pjoin_stats_) : pjoin_stats(pjoin_stats_) {
 }
 
-bool PerfectHashJoinExecutor::CheckForPerfectHashJoin(JoinHashTable *ht_ptr) {
-	if (!pjoin_stats.is_build_small)
-		return false;
-	return true;
+bool PerfectHashJoinExecutor::CanDoPerfectHashJoin() {
+	return pjoin_stats.is_build_small;
 }
 
 void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
@@ -33,17 +31,16 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
                                                 JoinHashTable *hash_table) {
 	Vector tuples_addresses(LogicalType::POINTER, hash_table->size());      // allocate space for all the tuples
 	auto key_locations = FlatVector::GetData<data_ptr_t>(tuples_addresses); // get a pointer to vector data
-	// TODO: In a parallel finalize whenever hashtable finalize also gets parallelized: 1: One should exclusivly lock
-	// for the allocation 2: Each thread should do one part of the code below.
+	// TODO: In a parallel finalize: One should exclusivly lock and each thread should do one part of the code below.
 	// Go through all the blocks and fill the keys addresses
 	auto keys_count = hash_table->FillWithHTOffsets(key_locations, state);
 	// Scan the build keys in the hash table
 	Vector build_vector(key_type, keys_count);
 	RowOperations::FullScanColumn(hash_table->layout, tuples_addresses, build_vector, keys_count, 0);
 	// Now fill the selection vector using the build keys and create a sequential vector
+	// todo: add check for fast pass when probe is part of build domain
 	SelectionVector sel_build(keys_count + 1);
 	SelectionVector sel_tuples(keys_count + 1);
-	// todo: add check for fast pass when probe is part of build domain
 	FillSelectionVectorSwitchBuild(build_vector, sel_build, sel_tuples, keys_count);
 	// early out
 	if (has_duplicates)
