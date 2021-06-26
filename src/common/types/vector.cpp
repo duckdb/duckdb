@@ -1175,6 +1175,10 @@ string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
 	return StringVector::AddString(vector, string_t(data, len));
 }
 
+string_t StringVector::AddStringOrBlob(Vector &vector, const char *data, idx_t len) {
+	return StringVector::AddStringOrBlob(vector, string_t(data, len));
+}
+
 string_t StringVector::AddString(Vector &vector, const char *data) {
 	return StringVector::AddString(vector, string_t(data, strlen(data)));
 }

@@ -222,6 +222,10 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "n";
 		break;
 	}
+	case LogicalTypeId::BLOB: {
+		child.format = "z";
+		break;
+	}
 	case LogicalTypeId::LIST: {
 		child.format = "+l";
 		child.n_children = 1;
