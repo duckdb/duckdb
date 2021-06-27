@@ -55,8 +55,6 @@ public:
 	explicit Vector(Vector &other, idx_t offset);
 	//! Create a vector of size one holding the passed on value
 	explicit Vector(const Value &value);
-	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)
-	explicit Vector(LogicalType type);
 	//! Create a vector of size tuple_count (non-standard)
 	explicit Vector(LogicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	//! Create an empty standard vector with a type, equivalent to calling Vector(type, true, false)

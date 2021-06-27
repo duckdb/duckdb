@@ -39,8 +39,6 @@ Vector::Vector(LogicalType type_p, bool create_data, bool zero_data, idx_t capac
     }
 } */
 
-Vector::Vector(LogicalType type_p) : Vector(move(type_p), true, false) {
-}
 Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(move(type_p), true, false, capacity) {
 }
 
