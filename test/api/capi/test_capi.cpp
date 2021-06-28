@@ -23,6 +23,10 @@ public:
 		return result.row_count;
 	}
 
+	idx_t row_changed() {
+		return result.row_changed;
+	}
+
 	template <class T>
 	T Fetch(idx_t col, idx_t row) {
 		throw NotImplementedException("Unimplemented type for fetch");
@@ -210,7 +214,9 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO test VALUES (11, 22)"));
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO test VALUES (NULL, 21)"));
-	REQUIRE_NO_FAIL(tester.Query("INSERT INTO test VALUES (13, 22)"));
+	result = tester.Query("INSERT INTO test VALUES (13, 22)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->row_changed() == 1);
 
 	// NULL selection
 	result = tester.Query("SELECT a, b FROM test ORDER BY a");
@@ -227,6 +233,10 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(result->ColumnName(0) == "a");
 	REQUIRE(result->ColumnName(1) == "b");
 	REQUIRE(result->ColumnName(2) == "");
+
+	result = tester.Query("UPDATE test SET a = 1 WHERE b=22");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->row_changed() == 2);
 }
 
 TEST_CASE("Test different types of C API", "[capi]") {
