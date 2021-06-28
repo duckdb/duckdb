@@ -24,17 +24,21 @@ public:
 
 public:
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
+
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
+
 	void Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) override;
 	void ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) override;
+	void ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+
 	void InitializeAppend(ColumnAppendState &state) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, VectorData &vdata, idx_t count) override;
 	void RevertAppend(row_t start_row) override;
 	void Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
 	              idx_t result_idx) override;
-	void Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+	void Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t offset,
 	            idx_t update_count) override;
 	void UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector,
 	                  row_t *row_ids, idx_t update_count, idx_t depth) override;

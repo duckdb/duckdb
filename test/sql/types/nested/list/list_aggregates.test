@@ -17,6 +17,30 @@ select min(list_value(i)), max(list_value(i)) from range(10) tbl(i);
 ----
 [0]	[9]
 
+# Integer comparison, not string comparison
+query II
+select min(list_value(-i)), max(list_value(i+2)) from range(10) tbl(i);
+----
+[-9]	[11]
+
+# Integer lists with NULLs in various positions
+statement ok
+CREATE VIEW list_int AS
+SELECT * FROM (VALUES
+	([1]),
+	([1, 2]),
+	([1, NULL]),
+	([NULL, 2]),
+	([NULL, NULL]),
+	([NULL]),
+	(NULL)
+) tbl(i);
+
+query III
+select min(i), max(i), first(i) from list_int;
+----
+[1]	[NULL, NULL]	[1]
+
 query I
 select first([i]) from range(10) tbl(i);
 ----

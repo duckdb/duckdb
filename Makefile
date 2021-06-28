@@ -48,6 +48,9 @@ endif
 ifeq (${BUILD_TPCH}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCH_EXTENSION=1
 endif
+ifeq (${BUILD_TPCDS}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCDS_EXTENSION=1
+endif
 ifeq (${BUILD_FTS}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_FTS_EXTENSION=1
 endif
@@ -70,7 +73,7 @@ ifeq (${BUILD_ODBC}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_ODBC_DRIVER=1
 endif
 ifeq (${BUILD_PYTHON}, 1)
-	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 DBUILD_TPCDS=1
 endif
 ifeq (${BUILD_R}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
@@ -83,6 +86,9 @@ ifneq ($(TIDY_THREADS),)
 endif
 ifeq ($(BUILD_ARROW_ABI_TEST), 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_ARROW_ABI_TEST=1
+endif
+ifneq ("${FORCE_QUERY_LOG}a", "a")
+	EXTENSIONS:=${EXTENSIONS} -DFORCE_QUERY_LOG=${FORCE_QUERY_LOG}
 endif
 
 clean:
@@ -119,7 +125,6 @@ unittest: debug
 unittestci:
 	build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
-	build/debug/tools/arrow_abi_test/arrow_abi_test
 
 allunit: release_expanded # uses release build because otherwise allunit takes forever
 	build/release_expanded/test/unittest "*"

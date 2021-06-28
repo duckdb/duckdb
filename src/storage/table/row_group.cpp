@@ -216,10 +216,15 @@ void RowGroup::CommitDropColumn(idx_t column_idx) {
 	columns[column_idx]->CommitDropColumn();
 }
 
-void RowGroupScanState::NextVector() {
-	vector_index++;
-	for (idx_t i = 0; i < parent.column_ids.size(); i++) {
-		column_scans[i].Next();
+void RowGroup::NextVector(RowGroupScanState &state) {
+	state.vector_index++;
+	for (idx_t i = 0; i < state.parent.column_ids.size(); i++) {
+		auto column = state.parent.column_ids[i];
+		if (column == COLUMN_IDENTIFIER_ROW_ID) {
+			continue;
+		}
+		D_ASSERT(column < columns.size());
+		columns[column]->Skip(state.column_scans[i]);
 	}
 }
 
@@ -264,7 +269,7 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 				return true;
 			}
 			while (state.vector_index < target_vector_index) {
-				state.NextVector();
+				NextVector(state);
 			}
 			return false;
 		}
@@ -298,7 +303,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 			count = state.row_group->GetSelVector(*transaction, state.vector_index, valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
-				state.NextVector();
+				NextVector(state);
 				continue;
 			}
 		} else {
@@ -518,11 +523,10 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 	state.offset_in_row_group += append_count;
 }
 
-void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector &row_ids,
+void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, row_t *ids, idx_t offset, idx_t count,
                       const vector<column_t> &column_ids) {
-	auto ids = FlatVector::GetData<row_t>(row_ids);
 #ifdef DEBUG
-	for (size_t i = 0; i < update_chunk.size(); i++) {
+	for (size_t i = offset; i < offset + count; i++) {
 		D_ASSERT(ids[i] >= row_t(this->start) && ids[i] < row_t(this->start + this->count));
 	}
 #endif
@@ -530,7 +534,7 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, Vector 
 		auto column = column_ids[i];
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
-		columns[column]->Update(transaction, column, update_chunk.data[i], ids, update_chunk.size());
+		columns[column]->Update(transaction, column, update_chunk.data[i], ids, offset, count);
 		MergeStatistics(column, *columns[column]->GetUpdateStatistics());
 	}
 }

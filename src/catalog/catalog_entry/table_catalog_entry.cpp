@@ -354,7 +354,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			break;
 		case ConstraintType::UNIQUE: {
 			auto &bound_unique = (BoundUniqueConstraint &)*bound_constraints[i];
-			if (bound_unique.keys.find(change_idx) != bound_unique.keys.end()) {
+			if (bound_unique.key_set.find(change_idx) != bound_unique.key_set.end()) {
 				throw BinderException(
 				    "Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
 			}

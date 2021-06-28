@@ -1,0 +1,34 @@
+# name: test/sql/tpcds/tpcds_sf0.test
+# description: Test TPC-DS SF0
+# group: [tpcds]
+
+require tpcds
+
+statement ok
+CALL dsdgen(sf=0)
+
+loop i 1 104
+
+statement ok
+PRAGMA tpcds(${i})
+
+endloop
+
+# out of range
+statement error
+PRAGMA tpcds(-1)
+
+statement error
+PRAGMA tpcds(3290819023812038903)
+
+statement error
+PRAGMA tpcds(32908301298)
+
+statement error
+PRAGMA tpcds(1.1)
+
+# queries
+query T
+SELECT * FROM tpcds_queries()
+----
+206 values hashing to 4fa46c9bb76f94dd5654cd7876d617b4

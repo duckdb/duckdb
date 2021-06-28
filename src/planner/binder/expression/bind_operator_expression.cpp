@@ -82,7 +82,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	}
 	if (!function_name.empty()) {
-		auto function = make_unique<FunctionExpression>(function_name, op.children);
+		auto function = make_unique<FunctionExpression>(function_name, move(op.children));
 		return BindExpression(*function, depth, nullptr);
 	}
 

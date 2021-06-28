@@ -1,0 +1,168 @@
+# name: test/sql/types/list/list_comparison.test_slow
+# description: Test LIST comparisons
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+# Large constant integer lists
+query T
+SELECT (select list(l) from range(1999) tbl(l)) < (select list(r) from range(2000) tbl(r))
+----
+true
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) < (select list(l) from range(1999) tbl(l))
+----
+false
+
+query T
+SELECT NULL < (select list(l) from range(1999) tbl(l))
+----
+NULL
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) < NULL
+----
+NULL
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) <= (select list(r) from range(2000) tbl(r))
+----
+true
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) <= (select list(l) from range(1999) tbl(l))
+----
+true
+
+query T
+SELECT NULL <= (select list(l) from range(1999) tbl(l))
+----
+NULL
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) <= NULL
+----
+NULL
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) = (select list(r) from range(2000) tbl(r))
+----
+false
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) = (select list(l) from range(1999) tbl(l))
+----
+true
+
+query T
+SELECT NULL = (select list(l) from range(1999) tbl(l))
+----
+NULL
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) = NULL
+----
+NULL
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) >= (select list(r) from range(2000) tbl(r))
+----
+false
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) >= (select list(l) from range(1999) tbl(l))
+----
+true
+
+query T
+SELECT NULL >= (select list(l) from range(1999) tbl(l))
+----
+NULL
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) >= NULL
+----
+NULL
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) > (select list(r) from range(2000) tbl(r))
+----
+false
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) > (select list(l) from range(1999) tbl(l))
+----
+false
+
+query T
+SELECT NULL > (select list(l) from range(1999) tbl(l))
+----
+NULL
+
+query T
+SELECT (select list(l) from range(1999) tbl(l)) > NULL
+----
+NULL
+
+statement ok
+CREATE VIEW list_long AS SELECT * FROM (VALUES
+	((select list(l) from range(1999) tbl(l)), (select list(l) from range(1999) tbl(l))),
+	((select list(l) from range(1999) tbl(l)), (select list(r) from range(2000) tbl(r))),
+	((select list(r) from range(2000) tbl(r)), (select list(l) from range(1999) tbl(l))),
+	(NULL, (select list(l) from range(1999) tbl(l))),
+	((select list(r) from range(2000) tbl(r)), NULL),
+	(NULL, NULL)
+	) tbl(l, r);
+
+query T
+SELECT l < r FROM list_long
+----
+false
+true
+false
+NULL
+NULL
+NULL
+
+query T
+SELECT l <= r FROM list_long
+----
+true
+true
+false
+NULL
+NULL
+NULL
+
+query T
+SELECT l = r FROM list_long
+----
+true
+false
+false
+NULL
+NULL
+NULL
+
+query T
+SELECT l >= r FROM list_long
+----
+true
+false
+true
+NULL
+NULL
+NULL
+
+query T
+SELECT l > r FROM list_long
+----
+false
+false
+true
+NULL
+NULL
+NULL
+

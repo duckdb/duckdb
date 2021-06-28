@@ -29,7 +29,7 @@ public:
 	vector<column_t> columns;
 	vector<unique_ptr<Expression>> expressions;
 	vector<unique_ptr<Expression>> bound_defaults;
-	bool is_index_update;
+	bool update_is_del_and_insert;
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

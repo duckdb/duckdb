@@ -2,6 +2,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
@@ -210,6 +211,109 @@ struct MaxOperationString : public StringMinMaxBase {
 	}
 };
 
+struct ValueMinMaxState {
+	Value *value;
+};
+
+struct ValueMinMaxBase {
+	static bool IgnoreNull() {
+		return true;
+	}
+
+	template <class STATE>
+	static void Initialize(STATE *state) {
+		state->value = nullptr;
+	}
+
+	template <class STATE>
+	static void Destroy(STATE *state) {
+		if (state->value) {
+			delete state->value;
+		}
+		state->value = nullptr;
+	}
+
+	template <class STATE>
+	static void Assign(STATE *state, const Value &input) {
+		Destroy(state);
+		state->value = new Value(input);
+	}
+
+	template <class STATE, typename OP>
+	static void Execute(STATE *state, const Value &input) {
+		if (OP::template Operation<Value>(input, *state->value)) {
+			Assign(state, input);
+		}
+	}
+
+	template <class STATE, class OP>
+	static void Update(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector, idx_t count) {
+		auto &input = inputs[0];
+		VectorData sdata;
+		state_vector.Orrify(count, sdata);
+
+		auto states = (STATE **)sdata.data;
+		for (idx_t i = 0; i < count; i++) {
+			auto val = input.GetValue(i);
+			if (val.is_null) {
+				continue;
+			}
+			const auto sidx = sdata.sel->get_index(i);
+			auto state = states[sidx];
+			if (!state->value) {
+				Assign(state, val);
+			} else {
+				OP::template Execute(state, val);
+			}
+		}
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE *target) {
+		if (!source.value) {
+			return;
+		} else if (!target->value) {
+			Assign(target, *source.value);
+		} else {
+			OP::template Execute(target, *source.value);
+		}
+	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		if (!state->value) {
+			mask.SetInvalid(idx);
+		} else {
+			result.SetValue(idx, *state->value);
+		}
+	}
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
+	                                     vector<unique_ptr<Expression>> &arguments) {
+		function.arguments[0] = arguments[0]->return_type;
+		function.return_type = arguments[0]->return_type;
+		return nullptr;
+	}
+};
+
+struct MinOperationValue : public ValueMinMaxBase {
+	template <class STATE>
+	static void Execute(STATE *state, const Value &input) {
+		if (ValueOperations::LessThan(input, *state->value)) {
+			Assign(state, input);
+		}
+	}
+};
+
+struct MaxOperationValue : public ValueMinMaxBase {
+	template <class STATE>
+	static void Execute(STATE *state, const Value &input) {
+		if (ValueOperations::GreaterThan(input, *state->value)) {
+			Assign(state, input);
+		}
+	}
+};
+
 template <class OP>
 unique_ptr<FunctionData> BindDecimalMinMax(ClientContext &context, AggregateFunction &function,
                                            vector<unique_ptr<Expression>> &arguments) {
@@ -249,15 +353,30 @@ static void AddMinMaxOperator(AggregateFunctionSet &set) {
 	}
 }
 
+template <typename OP, typename STATE>
+static AggregateFunction GetMinMaxFunction(const LogicalType &type) {
+	return AggregateFunction({type}, type, AggregateFunction::StateSize<STATE>,
+	                         AggregateFunction::StateInitialize<STATE, OP>, OP::template Update<STATE, OP>,
+	                         AggregateFunction::StateCombine<STATE, OP>,
+	                         AggregateFunction::StateFinalize<STATE, void, OP>, nullptr, OP::Bind,
+	                         AggregateFunction::StateDestroy<STATE, OP>);
+}
+
 void MinFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet min("min");
 	AddMinMaxOperator<MinOperation, MinOperationString>(min);
+	min.AddFunction(GetMinMaxFunction<MinOperationValue, ValueMinMaxState>(LogicalTypeId::LIST));
+	min.AddFunction(GetMinMaxFunction<MinOperationValue, ValueMinMaxState>(LogicalTypeId::MAP));
+	min.AddFunction(GetMinMaxFunction<MinOperationValue, ValueMinMaxState>(LogicalTypeId::STRUCT));
 	set.AddFunction(min);
 }
 
 void MaxFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet max("max");
 	AddMinMaxOperator<MaxOperation, MaxOperationString>(max);
+	max.AddFunction(GetMinMaxFunction<MaxOperationValue, ValueMinMaxState>(LogicalTypeId::LIST));
+	max.AddFunction(GetMinMaxFunction<MaxOperationValue, ValueMinMaxState>(LogicalTypeId::MAP));
+	max.AddFunction(GetMinMaxFunction<MaxOperationValue, ValueMinMaxState>(LogicalTypeId::STRUCT));
 	set.AddFunction(max);
 }
 

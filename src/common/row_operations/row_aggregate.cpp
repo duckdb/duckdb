@@ -62,8 +62,7 @@ void RowOperations::UpdateFilteredStates(AggregateObject &aggr, Vector &addresse
 	filtered_payload.Initialize(pay_types);
 	filtered_payload.Slice(payload, true_sel, count);
 
-	Vector filtered_addresses;
-	filtered_addresses.Slice(addresses, true_sel, count);
+	Vector filtered_addresses(addresses, true_sel, count);
 	filtered_addresses.Normalify(count);
 
 	UpdateStates(aggr, filtered_addresses, filtered_payload, arg_idx, filtered_payload.size());

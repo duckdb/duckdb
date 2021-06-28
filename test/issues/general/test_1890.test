@@ -1,0 +1,16 @@
+# name: test/issues/general/test_1890.test
+# description: Issue 1890: INTERVAL not working as expected across day boundry
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT TIMESTAMP '2000-01-01 00:00:00' - INTERVAL 1 MINUTE
+----
+1999-12-31 23:59:00
+
+query I
+SELECT TIMESTAMP '2000-01-01 23:59:00' + INTERVAL 1 MINUTE
+----
+2000-01-02 00:00:00

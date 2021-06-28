@@ -15,20 +15,14 @@
 
 namespace duckdb {
 //===--------------------------------------------------------------------===//
-// Arrow List Types
+// Arrow Variable Size Types
 //===--------------------------------------------------------------------===//
-enum class ArrowListType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
-struct ArrowConvertData {};
-
-struct DictionaryArrowConvertData : public ArrowConvertData {
-	DictionaryArrowConvertData(LogicalType type) : dictionary_type(type) {};
+enum class ArrowVariableSizeType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
+struct ArrowConvertData {
+	ArrowConvertData(LogicalType type) : dictionary_type(type) {};
+	ArrowConvertData() {};
 	LogicalType dictionary_type;
-};
-
-struct ListArrowConvertData : public ArrowConvertData {
-	ListArrowConvertData() {
-	}
-	vector<std::pair<ArrowListType, idx_t>> list_type;
+	vector<std::pair<ArrowVariableSizeType, idx_t>> variable_sz_type;
 };
 
 struct ArrowScanFunctionData : public TableFunctionData {

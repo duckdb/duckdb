@@ -37,10 +37,7 @@ bool StandardColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filte
 }
 
 void StandardColumnData::InitializeScan(ColumnScanState &state) {
-	// initialize the current segment
-	state.current = (ColumnSegment *)data.GetRootSegment();
-	state.row_index = state.current ? state.current->start : 0;
-	state.initialized = false;
+	ColumnData::InitializeScan(state);
 
 	// initialize the validity segment
 	ColumnScanState child_state;
@@ -49,9 +46,7 @@ void StandardColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
-	state.current = (ColumnSegment *)data.GetSegment(row_idx);
-	state.row_index = row_idx;
-	state.initialized = false;
+	ColumnData::InitializeScanWithOffset(state, row_idx);
 
 	// initialize the validity segment
 	ColumnScanState child_state;
@@ -63,14 +58,20 @@ void StandardColumnData::Scan(Transaction &transaction, idx_t vector_index, Colu
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	ColumnData::Scan(transaction, vector_index, state, result);
 	validity.Scan(transaction, vector_index, state.child_states[0], result);
-	state.Next();
+	state.NextVector();
 }
 
 void StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	ColumnData::ScanCommitted(vector_index, state, result, allow_updates);
 	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
-	state.Next();
+	state.NextVector();
+}
+
+void StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+	ColumnData::ScanCount(state, result, count);
+	validity.ScanCount(state.child_states[0], result, count);
+	state.Next(count);
 }
 
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
@@ -104,16 +105,16 @@ void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &res
 }
 
 void StandardColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                                idx_t update_count) {
-	ColumnData::Update(transaction, column_index, update_vector, row_ids, update_count);
-	validity.Update(transaction, column_index, update_vector, row_ids, update_count);
+                                idx_t offset, idx_t update_count) {
+	ColumnData::Update(transaction, column_index, update_vector, row_ids, offset, update_count);
+	validity.Update(transaction, column_index, update_vector, row_ids, offset, update_count);
 }
 
 void StandardColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path,
                                       Vector &update_vector, row_t *row_ids, idx_t update_count, idx_t depth) {
 	if (depth >= column_path.size()) {
 		// update this column
-		ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
+		ColumnData::Update(transaction, column_path[0], update_vector, row_ids, 0, update_count);
 	} else {
 		// update the child column (i.e. the validity column)
 		validity.UpdateColumn(transaction, column_path, update_vector, row_ids, update_count, depth + 1);

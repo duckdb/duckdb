@@ -61,8 +61,7 @@ Value::Value(string_t val) : Value(string(val.GetDataUnsafe(), val.GetSize())) {
 }
 
 Value::Value(string val) : type_(LogicalType::VARCHAR), is_null(false), str_value(move(val)) {
-	auto utf_type = Utf8Proc::Analyze(str_value.c_str(), str_value.size());
-	if (utf_type == UnicodeType::INVALID) {
+	if (!Value::StringIsValid(str_value.c_str(), str_value.size())) {
 		throw Exception("String value is not valid UTF8");
 	}
 }
@@ -271,6 +270,11 @@ bool Value::FloatIsValid(float value) {
 
 bool Value::DoubleIsValid(double value) {
 	return !(std::isnan(value) || std::isinf(value));
+}
+
+bool Value::StringIsValid(const char *str, idx_t length) {
+	auto utf_type = Utf8Proc::Analyze(str, length);
+	return utf_type != UnicodeType::INVALID;
 }
 
 Value Value::DECIMAL(int16_t value, uint8_t width, uint8_t scale) {
@@ -1050,9 +1054,8 @@ Value Value::CastAs(const LogicalType &target_type, bool strict) const {
 	if (type_ == target_type) {
 		return Copy();
 	}
-	Vector input, result;
-	input.Reference(*this);
-	result.Initialize(target_type);
+	Vector input(*this);
+	Vector result(target_type);
 	VectorOperations::Cast(input, result, 1, strict);
 	return result.GetValue(0);
 }

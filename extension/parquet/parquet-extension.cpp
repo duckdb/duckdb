@@ -6,6 +6,7 @@
 #include "parquet-extension.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
+#include "parquet_metadata.hpp"
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
@@ -403,7 +404,7 @@ unique_ptr<TableFunctionRef> ParquetScanReplacement(const string &table_name, vo
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ConstantExpression>(Value(table_name)));
-	table_function->function = make_unique<FunctionExpression>("parquet_scan", children);
+	table_function->function = make_unique<FunctionExpression>("parquet_scan", move(children));
 	return table_function;
 }
 
@@ -413,6 +414,12 @@ void ParquetExtension::Load(DuckDB &db) {
 	cinfo.name = "read_parquet";
 	CreateTableFunctionInfo pq_scan = cinfo;
 	pq_scan.name = "parquet_scan";
+
+	ParquetMetaDataFunction meta_fun;
+	CreateTableFunctionInfo meta_cinfo(meta_fun);
+
+	ParquetSchemaFunction schema_fun;
+	CreateTableFunctionInfo schema_cinfo(schema_fun);
 
 	CopyFunction function("parquet");
 	function.copy_to_bind = ParquetWriteBind;
@@ -434,6 +441,8 @@ void ParquetExtension::Load(DuckDB &db) {
 	catalog.CreateCopyFunction(context, &info);
 	catalog.CreateTableFunction(context, &cinfo);
 	catalog.CreateTableFunction(context, &pq_scan);
+	catalog.CreateTableFunction(context, &meta_cinfo);
+	catalog.CreateTableFunction(context, &schema_cinfo);
 	con.Commit();
 
 	auto &config = DBConfig::GetConfig(*db.instance);
