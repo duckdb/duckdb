@@ -26,7 +26,6 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 void VectorOperations::Copy(const Vector &source, Vector &target, const SelectionVector &sel_p, idx_t source_count,
                             idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
-	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(source.GetType() == target.GetType());
 	idx_t copy_count = source_count - source_offset;
 
@@ -63,6 +62,14 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	if (copy_count == 0) {
 		return;
 	}
+
+	// Allow copying of a single value to constant vectors
+	const auto target_vector_type = target.GetVectorType();
+	if (copy_count == 1 && target_vector_type == VectorType::CONSTANT_VECTOR) {
+		target_offset = 0;
+		target.SetVectorType(VectorType::FLAT_VECTOR);
+	}
+	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	// first copy the nullmask
 	auto &tmask = FlatVector::Validity(target);
@@ -193,6 +200,8 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		throw NotImplementedException("Unimplemented type '%s' for copy!",
 		                              TypeIdToString(source.GetType().InternalType()));
 	}
+
+	target.SetVectorType(target_vector_type);
 }
 
 void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,

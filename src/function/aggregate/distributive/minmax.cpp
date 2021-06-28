@@ -4,6 +4,7 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/aggregate_executor.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/aggregate_operators.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -310,6 +311,119 @@ struct MaxOperationValue : public ValueMinMaxBase {
 	static void Execute(STATE *state, const Value &input) {
 		if (ValueOperations::GreaterThan(input, *state->value)) {
 			Assign(state, input);
+		}
+	}
+};
+
+struct VectorMinMaxState {
+	Vector *value;
+};
+
+struct VectorMinMaxBase {
+	static bool IgnoreNull() {
+		return true;
+	}
+
+	template <class STATE>
+	static void Initialize(STATE *state) {
+		state->value = nullptr;
+	}
+
+	template <class STATE>
+	static void Destroy(STATE *state) {
+		if (state->value) {
+			delete state->value;
+		}
+		state->value = nullptr;
+	}
+
+	template <class STATE>
+	static void Assign(STATE *state, Vector &input, const idx_t idx) {
+		if (!state->value) {
+			state->value = new Vector(input.GetType());
+			state->value->SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+		sel_t selv = idx;
+		SelectionVector sel(&selv);
+		VectorOperations::Copy(input, *state->value, sel, 1, 0, 0);
+	}
+
+	template <class STATE>
+	static void Execute(STATE *state, Vector &input, const idx_t count, const idx_t idx) {
+		Assign(state, input, idx);
+	}
+
+	template <class STATE, class OP>
+	static void Update(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector, idx_t count) {
+		auto &input = inputs[0];
+		VectorData idata;
+		input.Orrify(count, idata);
+
+		VectorData sdata;
+		state_vector.Orrify(count, sdata);
+
+		auto states = (STATE **)sdata.data;
+		for (idx_t i = 0; i < count; i++) {
+			const auto idx = idata.sel->get_index(i);
+			if (!idata.validity.RowIsValid(idx)) {
+				continue;
+			}
+			const auto sidx = sdata.sel->get_index(i);
+			auto state = states[sidx];
+			if (!state->value) {
+				Assign(state, input, idx);
+			} else {
+				OP::template Execute(state, input, count, idx);
+			}
+		}
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE *target) {
+		if (!source.value) {
+			return;
+		} else if (!target->value) {
+			Assign(target, *source.value, 0);
+		} else {
+			OP::template Execute(target, *source.value, 1, 0);
+		}
+	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		if (!state->value) {
+			mask.SetInvalid(idx);
+		} else {
+			VectorOperations::Copy(*state->value, result, 1, 0, idx);
+		}
+	}
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
+	                                     vector<unique_ptr<Expression>> &arguments) {
+		function.arguments[0] = arguments[0]->return_type;
+		function.return_type = arguments[0]->return_type;
+		return nullptr;
+	}
+};
+
+struct MinOperationVector : public VectorMinMaxBase {
+	template <class STATE>
+	static void Execute(STATE *state, Vector &input, const idx_t count, const idx_t idx) {
+		sel_t sidx = idx;
+		SelectionVector true_sel(&sidx);
+		if (VectorOperations::NestedLessThan(input, *state->value, count, true_sel, 1, &true_sel, nullptr) > 0) {
+			Assign(state, input, idx);
+		}
+	}
+};
+
+struct MaxOperationVector : public VectorMinMaxBase {
+	template <class STATE>
+	static void Execute(STATE *state, Vector &input, const idx_t count, const idx_t idx) {
+		sel_t sidx = idx;
+		SelectionVector true_sel(&sidx);
+		if (VectorOperations::NestedGreaterThan(input, *state->value, count, true_sel, 1, &true_sel, nullptr) > 0) {
+			Assign(state, input, idx);
 		}
 	}
 };
