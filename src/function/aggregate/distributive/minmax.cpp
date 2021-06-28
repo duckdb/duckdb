@@ -480,8 +480,8 @@ void MinFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet min("min");
 	AddMinMaxOperator<MinOperation, MinOperationString>(min);
 	min.AddFunction(GetMinMaxFunction<MinOperationValue, ValueMinMaxState>(LogicalTypeId::LIST));
-	min.AddFunction(GetMinMaxFunction<MinOperationValue, ValueMinMaxState>(LogicalTypeId::MAP));
-	min.AddFunction(GetMinMaxFunction<MinOperationValue, ValueMinMaxState>(LogicalTypeId::STRUCT));
+	min.AddFunction(GetMinMaxFunction<MinOperationVector, VectorMinMaxState>(LogicalTypeId::MAP));
+	min.AddFunction(GetMinMaxFunction<MinOperationVector, VectorMinMaxState>(LogicalTypeId::STRUCT));
 	set.AddFunction(min);
 }
 
@@ -489,8 +489,8 @@ void MaxFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet max("max");
 	AddMinMaxOperator<MaxOperation, MaxOperationString>(max);
 	max.AddFunction(GetMinMaxFunction<MaxOperationValue, ValueMinMaxState>(LogicalTypeId::LIST));
-	max.AddFunction(GetMinMaxFunction<MaxOperationValue, ValueMinMaxState>(LogicalTypeId::MAP));
-	max.AddFunction(GetMinMaxFunction<MaxOperationValue, ValueMinMaxState>(LogicalTypeId::STRUCT));
+	max.AddFunction(GetMinMaxFunction<MaxOperationVector, VectorMinMaxState>(LogicalTypeId::MAP));
+	max.AddFunction(GetMinMaxFunction<MaxOperationVector, VectorMinMaxState>(LogicalTypeId::STRUCT));
 	set.AddFunction(max);
 }
 

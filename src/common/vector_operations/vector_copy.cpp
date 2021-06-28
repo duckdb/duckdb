@@ -201,7 +201,9 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		                              TypeIdToString(source.GetType().InternalType()));
 	}
 
-	target.SetVectorType(target_vector_type);
+	if (target_vector_type != VectorType::FLAT_VECTOR) {
+		target.SetVectorType(target_vector_type);
+	}
 }
 
 void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,

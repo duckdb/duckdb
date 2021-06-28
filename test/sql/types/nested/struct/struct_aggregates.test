@@ -38,3 +38,12 @@ query III
 select min(i), max(i), first(i) from struct_int;
 ----
 {'x': 1, 'y': 0}	{'x': NULL, 'y': NULL}	{'x': 1, 'y': 0}
+
+statement ok
+CREATE VIEW million_structs AS
+SELECT {'m': (i+1) % 998513, 'i': i+1} as s FROM range(999983) tbl(i);
+
+query II
+SELECT min (s), max(s) FROM million_structs;
+----
+{'m': 0, 'i': 998513}	{'m': 998512, 'i': 998512}

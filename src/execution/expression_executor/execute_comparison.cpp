@@ -107,44 +107,46 @@ struct NestedSelector {
 	// Those semantics are the same as the corresponding non-distinct comparator
 	template <typename OP>
 	static idx_t Select(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
-                                             SelectionVector *true_sel, SelectionVector *false_sel) {
+	                    SelectionVector *true_sel, SelectionVector *false_sel) {
 		throw InvalidTypeException(left.GetType(), "Invalid operation for nested SELECT");
 	}
 };
 
 template <>
-idx_t NestedSelector::Select<duckdb::Equals>(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
-                                             SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t NestedSelector::Select<duckdb::Equals>(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
+                                             idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::NestedEquals(left, right, vcount, sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t NestedSelector::Select<duckdb::NotEquals>(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
-                                             SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t NestedSelector::Select<duckdb::NotEquals>(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
+                                                idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::NestedNotEquals(left, right, vcount, sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t NestedSelector::Select<duckdb::LessThan>(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
-                                             SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t NestedSelector::Select<duckdb::LessThan>(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
+                                               idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::NestedLessThan(left, right, vcount, sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t NestedSelector::Select<duckdb::LessThanEquals>(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
-                                             SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t NestedSelector::Select<duckdb::LessThanEquals>(Vector &left, Vector &right, idx_t vcount,
+                                                     const SelectionVector &sel, idx_t count, SelectionVector *true_sel,
+                                                     SelectionVector *false_sel) {
 	return VectorOperations::NestedLessThanEquals(left, right, vcount, sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t NestedSelector::Select<duckdb::GreaterThan>(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
-                                             SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t NestedSelector::Select<duckdb::GreaterThan>(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
+                                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::NestedGreaterThan(left, right, vcount, sel, count, true_sel, false_sel);
 }
 
 template <>
-idx_t NestedSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
-                                             SelectionVector *true_sel, SelectionVector *false_sel) {
+idx_t NestedSelector::Select<duckdb::GreaterThanEquals>(Vector &left, Vector &right, idx_t vcount,
+                                                        const SelectionVector &sel, idx_t count,
+                                                        SelectionVector *true_sel, SelectionVector *false_sel) {
 	return VectorOperations::NestedGreaterThanEquals(left, right, vcount, sel, count, true_sel, false_sel);
 }
 
