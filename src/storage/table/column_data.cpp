@@ -527,18 +527,6 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	return checkpoint_state;
 }
 
-void ColumnData::Initialize(PersistentColumnData &column_data) {
-	// load persistent segments
-	idx_t segment_rows = 0;
-	for (auto &segment : column_data.segments) {
-		segment_rows += segment->count;
-		data.AppendSegment(move(segment));
-	}
-	if (segment_rows != column_data.total_rows) {
-		throw Exception("Segment rows does not match total rows stored in column...");
-	}
-}
-
 void ColumnData::DeserializeColumn(Deserializer &source) {
 	// load the data pointers for the column
 	idx_t data_pointer_count = source.Read<idx_t>();
@@ -641,7 +629,7 @@ void ColumnData::Verify(RowGroup &parent) {
 			root = root->next.get();
 		}
 	} else {
-		if (type.id() != LogicalTypeId::STRUCT) {
+		if (type.InternalType() != PhysicalType::STRUCT) {
 			D_ASSERT(parent.count == 0);
 		}
 	}

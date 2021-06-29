@@ -279,50 +279,50 @@ void ListColumnData::CommitDropColumn() {
 	child_column->CommitDropColumn();
 }
 
-// struct StructColumnCheckpointState : public ColumnCheckpointState {
-// 	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
-// 	    : ColumnCheckpointState(row_group, column_data, writer) {
-// 		global_stats = make_unique<StructStatistics>(column_data.type);
-// 	}
+struct ListColumnCheckpointState : public ColumnCheckpointState {
+	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
+	    : ColumnCheckpointState(row_group, column_data, writer) {
+		global_stats = make_unique<ListStatistics>(column_data.type);
+	}
 
-// 	unique_ptr<ColumnCheckpointState> validity_state;
-// 	vector<unique_ptr<ColumnCheckpointState>> child_states;
+	unique_ptr<ColumnCheckpointState> validity_state;
+	unique_ptr<ColumnCheckpointState> child_state;
 
-// public:
-// 	unique_ptr<BaseStatistics> GetStatistics() override {
-// 		auto stats = make_unique<StructStatistics>(column_data.type);
-// 		D_ASSERT(stats->child_stats.size() == child_states.size());
-// 		stats->validity_stats = validity_state->GetStatistics();
-// 		for (idx_t i = 0; i < child_states.size(); i++) {
-// 			stats->child_stats[i] = child_states[i]->GetStatistics();
-// 			D_ASSERT(stats->child_stats[i]);
-// 		}
-// 		return move(stats);
-// 	}
+public:
+	unique_ptr<BaseStatistics> GetStatistics() override {
+		auto stats = global_stats->Copy();
+		auto &list_stats = (ListStatistics &) *stats;
+		stats->validity_stats = validity_state->GetStatistics();
+		list_stats.child_stats = child_state->GetStatistics();
+		return stats;
+	}
 
-// 	void FlushToDisk() override {
-// 		validity_state->FlushToDisk();
-// 		for (auto &state : child_states) {
-// 			state->FlushToDisk();
-// 		}
-// 	}
-// };
+	void FlushToDisk() override {
+		ColumnCheckpointState::FlushToDisk();
+		validity_state->FlushToDisk();
+		child_state->FlushToDisk();
+	}
+};
 
 unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) {
-	throw NotImplementedException("List CreateCheckpointState");
-	// return make_unique<StructColumnCheckpointState>(row_group, *this, writer);
+	return make_unique<ListColumnCheckpointState>(row_group, *this, writer);
 }
 
 unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
-	throw NotImplementedException("List Checkpoint");
-}
+	auto validity_state = validity.Checkpoint(row_group, writer);
+	auto base_state = ColumnData::Checkpoint(row_group, writer);
+	auto child_state = child_column->Checkpoint(row_group, writer);
 
-void ListColumnData::Initialize(PersistentColumnData &column_data) {
-	throw NotImplementedException("List Initialize");
+	auto &checkpoint_state = (ListColumnCheckpointState &)*base_state;
+	checkpoint_state.validity_state = move(validity_state);
+	checkpoint_state.child_state = move(child_state);
+	return base_state;
 }
 
 void ListColumnData::DeserializeColumn(Deserializer &source) {
-	throw NotImplementedException("List Deserialize");
+	ColumnData::DeserializeColumn(source);
+	validity.DeserializeColumn(source);
+	child_column->DeserializeColumn(source);
 }
 
 void ListColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {

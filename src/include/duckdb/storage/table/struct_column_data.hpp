@@ -48,7 +48,6 @@ public:
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
 	void CommitDropColumn() override;
-	void Initialize(PersistentColumnData &column_data) override;
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer) override;

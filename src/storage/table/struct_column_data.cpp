@@ -249,14 +249,6 @@ unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_gro
 	return move(checkpoint_state);
 }
 
-void StructColumnData::Initialize(PersistentColumnData &column_data) {
-	auto &persistent = (StructPersistentColumnData &)column_data;
-	validity.Initialize(*persistent.validity);
-	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		sub_columns[i]->Initialize(*persistent.child_data[i]);
-	}
-}
-
 void StructColumnData::DeserializeColumn(Deserializer &source) {
 	validity.DeserializeColumn(source);
 	for (auto &sub_column : sub_columns) {
