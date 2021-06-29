@@ -1,6 +1,10 @@
 #include "parquet_metadata.hpp"
 #include <sstream>
 
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/types/blob.hpp"
+#endif
+
 namespace duckdb {
 
 struct ParquetMetaDataBindData : public FunctionData {
@@ -61,11 +65,14 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	names.emplace_back("path_in_schema");
 	return_types.push_back(LogicalType::VARCHAR);
 
+	names.emplace_back("type");
+	return_types.push_back(LogicalType::VARCHAR);
+
 	names.emplace_back("stats_min");
-	return_types.push_back(LogicalType::BLOB);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.emplace_back("stats_max");
-	return_types.push_back(LogicalType::BLOB);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.emplace_back("stats_null_count");
 	return_types.push_back(LogicalType::BIGINT);
@@ -74,10 +81,10 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	return_types.push_back(LogicalType::BIGINT);
 
 	names.emplace_back("stats_min_value");
-	return_types.push_back(LogicalType::BLOB);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.emplace_back("stats_max_value");
-	return_types.push_back(LogicalType::BLOB);
+	return_types.push_back(LogicalType::VARCHAR);
 
 	names.emplace_back("compression");
 	return_types.push_back(LogicalType::VARCHAR);
@@ -99,6 +106,55 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 
 	names.emplace_back("total_uncompressed_size");
 	return_types.push_back(LogicalType::BIGINT);
+}
+
+Value ConvertParquetStats(duckdb_parquet::format::Type::type type, bool stats_is_set, const std::string &stats) {
+	if (!stats_is_set) {
+		return Value(LogicalType::VARCHAR);
+	}
+	switch (type) {
+	case Type::BOOLEAN:
+		if (stats.size() == sizeof(bool)) {
+			return Value(Value::BOOLEAN(Load<bool>((data_ptr_t)stats.c_str())).ToString());
+		}
+		break;
+	case Type::INT32:
+		if (stats.size() == sizeof(int32_t)) {
+			return Value(Value::INTEGER(Load<int32_t>((data_ptr_t)stats.c_str())).ToString());
+		}
+		break;
+	case Type::INT64:
+		if (stats.size() == sizeof(int64_t)) {
+			return Value(Value::BIGINT(Load<int64_t>((data_ptr_t)stats.c_str())).ToString());
+		}
+		break;
+	case Type::FLOAT:
+		if (stats.size() == sizeof(float)) {
+			float val = Load<float>((data_ptr_t)stats.c_str());
+			if (Value::FloatIsValid(val)) {
+				return Value(Value::FLOAT(val).ToString());
+			}
+		}
+		break;
+	case Type::DOUBLE:
+		if (stats.size() == sizeof(double)) {
+			double val = Load<double>((data_ptr_t)stats.c_str());
+			if (Value::DoubleIsValid(val)) {
+				return Value(Value::DOUBLE(val).ToString());
+			}
+		}
+		break;
+	case Type::BYTE_ARRAY:
+	case Type::INT96:
+	case Type::FIXED_LEN_BYTE_ARRAY:
+	default:
+		break;
+	}
+	if (Value::StringIsValid(stats)) {
+		return Value(stats);
+	} else {
+		return Value(Blob::ToString(string_t(stats)));
+	}
 }
 
 void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types,
@@ -145,54 +201,56 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 			// path_in_schema, LogicalType::VARCHAR
 			current_chunk.SetValue(8, count, StringUtil::Join(col_meta.path_in_schema, ", "));
 
-			// stats_min, LogicalType::BLOB
-			current_chunk.SetValue(9, count, stats.__isset.min ? Value::BLOB_RAW(stats.min) : Value(LogicalType::BLOB));
+			// type, LogicalType::VARCHAR
+			current_chunk.SetValue(9, count, ConvertParquetElementToString(col_meta.type));
 
-			// stats_max, LogicalType::BLOB
-			current_chunk.SetValue(10, count,
-			                       stats.__isset.max ? Value::BLOB_RAW(stats.max) : Value(LogicalType::BLOB));
+			// stats_min, LogicalType::VARCHAR
+			current_chunk.SetValue(10, count, ConvertParquetStats(col_meta.type, stats.__isset.min, stats.min));
+
+			// stats_max, LogicalType::VARCHAR
+			current_chunk.SetValue(11, count, ConvertParquetStats(col_meta.type, stats.__isset.max, stats.max));
 
 			// stats_null_count, LogicalType::BIGINT
 			current_chunk.SetValue(
-			    11, count, stats.__isset.null_count ? Value::BIGINT(stats.null_count) : Value(LogicalType::BIGINT));
+			    12, count, stats.__isset.null_count ? Value::BIGINT(stats.null_count) : Value(LogicalType::BIGINT));
 
 			// stats_distinct_count, LogicalType::BIGINT
-			current_chunk.SetValue(12, count,
+			current_chunk.SetValue(13, count,
 			                       stats.__isset.distinct_count ? Value::BIGINT(stats.distinct_count)
 			                                                    : Value(LogicalType::BIGINT));
 
-			// stats_min_value, LogicalType::BLOB
-			current_chunk.SetValue(
-			    13, count, stats.__isset.min_value ? Value::BLOB_RAW(stats.min_value) : Value(LogicalType::BLOB));
+			// stats_min_value, LogicalType::VARCHAR
+			current_chunk.SetValue(14, count,
+			                       ConvertParquetStats(col_meta.type, stats.__isset.min_value, stats.min_value));
 
-			// stats_max_value, LogicalType::BLOB
-			current_chunk.SetValue(
-			    14, count, stats.__isset.max_value ? Value::BLOB_RAW(stats.max_value) : Value(LogicalType::BLOB));
+			// stats_max_value, LogicalType::VARCHAR
+			current_chunk.SetValue(15, count,
+			                       ConvertParquetStats(col_meta.type, stats.__isset.max_value, stats.max_value));
 
 			// compression, LogicalType::VARCHAR
-			current_chunk.SetValue(15, count, ConvertParquetElementToString(col_meta.codec));
+			current_chunk.SetValue(16, count, ConvertParquetElementToString(col_meta.codec));
 
 			// encodings, LogicalType::VARCHAR
 			vector<string> encoding_string;
 			for (auto &encoding : col_meta.encodings) {
 				encoding_string.push_back(ConvertParquetElementToString(encoding));
 			}
-			current_chunk.SetValue(16, count, Value(StringUtil::Join(encoding_string, ", ")));
+			current_chunk.SetValue(17, count, Value(StringUtil::Join(encoding_string, ", ")));
 
 			// index_page_offset, LogicalType::BIGINT
-			current_chunk.SetValue(17, count, Value::BIGINT(col_meta.index_page_offset));
+			current_chunk.SetValue(18, count, Value::BIGINT(col_meta.index_page_offset));
 
 			// dictionary_page_offset, LogicalType::BIGINT
-			current_chunk.SetValue(18, count, Value::BIGINT(col_meta.dictionary_page_offset));
+			current_chunk.SetValue(19, count, Value::BIGINT(col_meta.dictionary_page_offset));
 
 			// data_page_offset, LogicalType::BIGINT
-			current_chunk.SetValue(19, count, Value::BIGINT(col_meta.data_page_offset));
+			current_chunk.SetValue(20, count, Value::BIGINT(col_meta.data_page_offset));
 
 			// total_compressed_size, LogicalType::BIGINT
-			current_chunk.SetValue(20, count, Value::BIGINT(col_meta.total_compressed_size));
+			current_chunk.SetValue(21, count, Value::BIGINT(col_meta.total_compressed_size));
 
 			// total_uncompressed_size, LogicalType::BIGINT
-			current_chunk.SetValue(21, count, Value::BIGINT(col_meta.total_uncompressed_size));
+			current_chunk.SetValue(22, count, Value::BIGINT(col_meta.total_uncompressed_size));
 
 			count++;
 			if (count >= STANDARD_VECTOR_SIZE) {

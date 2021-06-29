@@ -91,7 +91,7 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 		// fetch the chunk and return it
 		auto chunk = FetchInternal(*lock);
 		return chunk;
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		open_result->error = ex.what();
 	} catch (...) {
 		open_result->error = "Unhandled exception in Fetch";
@@ -128,7 +128,7 @@ string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
 					transaction.Rollback();
 				}
 			}
-		} catch (Exception &ex) {
+		} catch (std::exception &ex) {
 			error = ex.what();
 		} catch (...) {
 			error = "Unhandled exception!";
