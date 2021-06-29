@@ -92,17 +92,6 @@ void WriteData(duckdb_result *out, ChunkCollection &source, idx_t col) {
 	}
 }
 
-static bool duckdb_statement_return_changes(StatementType type) {
-	switch (type) {
-	case StatementType::INSERT_STATEMENT:
-	case StatementType::UPDATE_STATEMENT:
-	case StatementType::DELETE_STATEMENT:
-		return true;
-	default:
-		return false;
-	}
-}
-
 static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_result *out) {
 	D_ASSERT(result);
 	if (!out) {
@@ -119,12 +108,12 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	// first write the meta data
 	out->column_count = result->types.size();
 	out->row_count = result->collection.Count();
-	out->row_changed = 0;
-	if (out->row_count > 0 && duckdb_statement_return_changes(result->statement_type)) {
+	out->rows_changed = 0;
+	if (out->row_count > 0 && StatementTypeReturnChanges(result->statement_type)) {
 		// update total changes
 		auto row_changes = result->GetValue(0, 0);
 		if (!row_changes.is_null && row_changes.TryCastAs(LogicalType::BIGINT)) {
-			out->row_changed = row_changes.GetValue<int64_t>();
+			out->rows_changed = row_changes.GetValue<int64_t>();
 		}
 	}
 	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);

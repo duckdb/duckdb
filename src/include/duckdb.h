@@ -112,7 +112,7 @@ typedef struct {
 typedef struct {
 	idx_t column_count;
 	idx_t row_count;
-	idx_t row_changed;
+	idx_t rows_changed;
 	duckdb_column *columns;
 	char *error_message;
 } duckdb_result;

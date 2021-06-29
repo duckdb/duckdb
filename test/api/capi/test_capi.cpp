@@ -23,8 +23,8 @@ public:
 		return result.row_count;
 	}
 
-	idx_t row_changed() {
-		return result.row_changed;
+	idx_t rows_changed() {
+		return result.rows_changed;
 	}
 
 	template <class T>
@@ -216,7 +216,7 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO test VALUES (NULL, 21)"));
 	result = tester.Query("INSERT INTO test VALUES (13, 22)");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->row_changed() == 1);
+	REQUIRE(result->rows_changed() == 1);
 
 	// NULL selection
 	result = tester.Query("SELECT a, b FROM test ORDER BY a");
@@ -236,7 +236,11 @@ TEST_CASE("Basic test of C API", "[capi]") {
 
 	result = tester.Query("UPDATE test SET a = 1 WHERE b=22");
 	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->row_changed() == 2);
+	REQUIRE(result->rows_changed() == 2);
+
+	result = tester.Query("CREATE TABLE x AS SELECT 42");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->rows_changed() == 1);
 }
 
 TEST_CASE("Test different types of C API", "[capi]") {
