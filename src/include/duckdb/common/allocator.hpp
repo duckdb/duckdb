@@ -22,6 +22,7 @@ struct PrivateAllocatorData {
 
 typedef data_ptr_t (*allocate_function_ptr_t)(PrivateAllocatorData *private_data, idx_t size);
 typedef void (*free_function_ptr_t)(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
+typedef data_ptr_t (*reallocate_function_ptr_t)(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size);
 
 class AllocatedData {
 public:
@@ -50,6 +51,7 @@ public:
 
 	data_ptr_t AllocateData(idx_t size);
 	void FreeData(data_ptr_t pointer, idx_t size);
+	data_ptr_t ReAllocateData(data_ptr_t pointer, idx_t size);
 
 	unique_ptr<AllocatedData> Allocate(idx_t size) {
 		return make_unique<AllocatedData>(*this, AllocateData(size), size);
@@ -61,6 +63,9 @@ public:
 	static void DefaultFree(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
 		delete[] pointer;
 	}
+	static data_ptr_t DefaultReallocate(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
+		return (data_ptr_t)realloc(pointer, size);
+	}
 	static Allocator &Get(ClientContext &context);
 	static Allocator &Get(DatabaseInstance &db);
 
@@ -71,6 +76,7 @@ public:
 private:
 	allocate_function_ptr_t allocate_function;
 	free_function_ptr_t free_function;
+	reallocate_function_ptr_t reallocate_function;
 
 	unique_ptr<PrivateAllocatorData> private_data;
 };

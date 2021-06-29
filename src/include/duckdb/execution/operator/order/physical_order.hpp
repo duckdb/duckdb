@@ -43,9 +43,6 @@ public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
-	idx_t MaxThreads(ClientContext &context);
-	unique_ptr<ParallelState> GetParallelState();
-
 	string ParamsToString() const override;
 
 	//! Tuples are merged in strides of size MERGE_STRIDE

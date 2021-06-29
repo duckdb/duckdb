@@ -100,14 +100,6 @@ public:
 	inline idx_t GetHeapPointerOffset() const {
 		return heap_pointer_offset;
 	}
-	//! Returns heap block index offset
-	inline idx_t GetHeapBlockIdOffset() const {
-		return heap_blockid_offset;
-	}
-	//! Returns heap offset offset
-	inline idx_t GetHeapOffsetOffset() const {
-		return heap_offset_offset;
-	}
 
 private:
 	//! The types of the data columns
@@ -128,10 +120,6 @@ private:
 	bool all_constant;
 	//! Offset to the pointer to the heap for each row
 	idx_t heap_pointer_offset;
-	//! Offset to of the heap block index
-	idx_t heap_blockid_offset;
-	//! Offset to the offset in the heap for each row
-	idx_t heap_offset_offset;
 };
 
 } // namespace duckdb

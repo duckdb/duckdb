@@ -12,7 +12,7 @@ PRAGMA threads=4
 statement ok
 PRAGMA force_external
 
-loop 0 2
+loop i 0 2
 
 statement ok
 create table test as (select range i from range(100000));
@@ -115,6 +115,9 @@ query T
 select * from test order by cast(i % 1000 + 1000000000000 as varchar), i % 100, i % 10, cast(i + 1000000000000 as varchar)
 ----
 100001 values hashing to c694f8aa434f0617970c6f3540b20863
+
+statement ok
+drop table test
 
 statement ok
 PRAGMA disable_force_external

@@ -46,6 +46,9 @@ public:
 	//! The allocated memory is released when the buffer handle is destroyed.
 	unique_ptr<BufferHandle> Allocate(idx_t alloc_size);
 
+	//! Reallocate an in-memory buffer that is pinned.
+	void ReAllocate(BufferHandle &handle, idx_t alloc_size);
+
 	unique_ptr<BufferHandle> Pin(shared_ptr<BlockHandle> &handle);
 	void Unpin(shared_ptr<BlockHandle> &handle);
 

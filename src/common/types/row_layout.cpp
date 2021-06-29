@@ -44,12 +44,9 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p)
 	// This enables pointer swizzling for out-of-core computation.
 	if (!all_constant) {
 		// When unswizzled the pointer lives here.
+		// When swizzled, the pointer is replaced by an offset.
 		heap_pointer_offset = row_width;
-		// When swizzled, the pointer is replaced by id, offset.
-		heap_blockid_offset = row_width;
-		row_width += sizeof(uint32_t);
-		heap_offset_offset = row_width;
-		row_width += sizeof(uint32_t);
+		row_width += sizeof(data_ptr_t);
 	}
 
 	// Data columns. No alignment required.

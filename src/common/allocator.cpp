@@ -36,4 +36,11 @@ void Allocator::FreeData(data_ptr_t pointer, idx_t size) {
 	return free_function(private_data.get(), pointer, size);
 }
 
+data_ptr_t Allocator::ReAllocateData(data_ptr_t pointer, idx_t size) {
+	if (!pointer) {
+		return pointer;
+	}
+	return reallocate_function(private_data.get(), pointer, size);
+}
+
 } // namespace duckdb

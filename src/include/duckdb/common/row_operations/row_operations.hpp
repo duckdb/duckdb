@@ -66,9 +66,12 @@ struct RowOperations {
 	//===--------------------------------------------------------------------===//
 	// Out-of-Core Operators
 	//===--------------------------------------------------------------------===//
-	//! Swizzles pointers to blobs to (blockID, offset)
-	static void Swizzle(const RowLayout &layout, const data_ptr_t &row_base_ptr, const idx_t &count);
-	//! Unswizzles (blockID, offset) back to pointers to blobs
+	//! Swizzles pointers to blobs to offset within row
+	static void SwizzleColumns(const RowLayout &layout, const data_ptr_t &row_ptr, const idx_t &count);
+	//! Swizzles the base pointer of each row to offset within heap block
+	static void SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t &heap_ptr,
+	                               const idx_t &count);
+	//! Unswizzles offsets back to pointers to blobs
 	static void Unswizzle(const RowLayout &layout, const data_ptr_t &row_base_ptr, const data_ptr_t &heap_base_ptr,
 	                      const idx_t &count);
 };

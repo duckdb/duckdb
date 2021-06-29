@@ -30,10 +30,6 @@ struct RowDataBlock {
 	idx_t count;
 	//! Write offset (if variable size entries)
 	idx_t byte_offset;
-	//! Heap block id (if this is a heap block)
-	uint32_t heap_block_id;
-	//! Block ids of the corresponding heap blocks (if any)
-	vector<uint32_t> heap_block_ids;
 };
 
 struct BlockAppendEntry {
