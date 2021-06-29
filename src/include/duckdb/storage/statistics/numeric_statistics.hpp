@@ -33,6 +33,9 @@ public:
 
 public:
 	void Merge(const BaseStatistics &other) override;
+
+	bool IsConstant() override;
+
 	FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const Value &constant);
 
 	unique_ptr<BaseStatistics> Copy() override;

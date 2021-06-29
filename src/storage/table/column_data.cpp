@@ -371,13 +371,20 @@ void ColumnCheckpointState::FlushSegment() {
 	auto &buffer_manager = BufferManager::GetBufferManager(column_data.GetDatabase());
 	auto &block_manager = BlockManager::GetBlockManager(column_data.GetDatabase());
 
-	auto handle = buffer_manager.Pin(current_segment->block);
+	bool block_is_constant = segment_stats->statistics->IsConstant();
 
-	// get a free block id to write to
-	auto block_id = block_manager.GetFreeBlockId();
+	block_id_t block_id;
+	uint32_t offset_in_block;
+	if (!block_is_constant) {
+		// get a free block id to write to
+		block_id = block_manager.GetFreeBlockId();
+		offset_in_block = 0;
+	} else {
+		block_id = INVALID_BLOCK;
+		offset_in_block = 0;
+	}
 
 	// construct the data pointer
-	uint32_t offset_in_block = 0;
 
 	DataPointer data_pointer;
 	data_pointer.block_pointer.block_id = block_id;
@@ -397,12 +404,16 @@ void ColumnCheckpointState::FlushSegment() {
 	new_tree.AppendSegment(move(persistent_segment));
 
 	data_pointers.push_back(move(data_pointer));
-	// write the block to disk
-	block_manager.Write(*handle->node, block_id);
+
+	if (!block_is_constant) {
+		// write the block to disk
+		auto handle = buffer_manager.Pin(current_segment->block);
+		block_manager.Write(*handle->node, block_id);
+		handle.reset();
+	}
 
 	// merge the segment stats into the global stats
 	global_stats->Merge(*segment_stats->statistics);
-	handle.reset();
 
 	current_segment.reset();
 	segment_stats.reset();

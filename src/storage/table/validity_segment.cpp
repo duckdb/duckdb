@@ -42,22 +42,26 @@ void ValiditySegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &re
 }
 
 idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t vcount) {
+	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
+
 	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - tuple_count);
 	if (data.validity.AllValid()) {
 		// no null values: skip append
 		tuple_count += append_count;
+		validity_stats.has_no_null = true;
 		return append_count;
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 
-	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
 	ValidityMask mask((validity_t *)handle->node->buffer);
 	for (idx_t i = 0; i < append_count; i++) {
 		auto idx = data.sel->get_index(offset + i);
 		if (!data.validity.RowIsValidUnsafe(idx)) {
 			mask.SetInvalidUnsafe(tuple_count + i);
 			validity_stats.has_null = true;
+		} else {
+			validity_stats.has_no_null = true;
 		}
 	}
 	tuple_count += append_count;
