@@ -120,6 +120,22 @@ TEST_CASE("Test Parquet File NaN", "[arrow]") {
 	REQUIRE(CHECK_COLUMN(result, 2, {true, false, true}));
 }
 
+TEST_CASE("Test Parquet File Fixed Size Binary", "[arrow]") {
+	std::vector<std::string> skip;
+
+	duckdb::DuckDB db;
+	duckdb::Connection conn {db};
+
+	//! Impossible to round-trip Fixed Binaries so we just validate that the duckdb table is correct-o
+	std::string parquet_path = "test/sql/copy/parquet/data/fixed.parquet";
+	auto table = ReadParquetFile(parquet_path);
+
+	auto result = ArrowToDuck(conn, *table);
+	REQUIRE(result->success);
+	REQUIRE(
+	    CHECK_COLUMN(result, 0, {"\\x00\\x01\\x02\\x03\\x04\\x05\\x06\\x07\\x08\\x09\\x0A\\x0B\\x0C\\x0D\\x0E\\x0F"}));
+}
+
 TEST_CASE("Test Parquet Long Files", "[arrow]") {
 	std::vector<std::string> skip;
 
@@ -137,16 +153,11 @@ TEST_CASE("Test Parquet Long Files", "[arrow]") {
 
 TEST_CASE("Test Parquet Files", "[arrow]") {
 
-	std::vector<std::string> skip {"aws2.parquet"};     //! Not supported by arrow
-	skip.emplace_back("datapage_v2.snappy.parquet");    //! Not supported by arrow
-	skip.emplace_back("broken-arrow.parquet");          //! Arrow can't read this
-	skip.emplace_back("nan-float.parquet");             //! Can't roundtrip NaNs
-	skip.emplace_back("alltypes_dictionary.parquet");   //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("blob.parquet");                  //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("alltypes_plain.parquet");        //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("alltypes_plain.snappy.parquet"); //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("data-types.parquet");            //! FIXME: Contains binary columns, we don't support those yet
-	skip.emplace_back("fixed.parquet"); //! FIXME: Contains fixed-width-binary columns, we don't support those yet
+	std::vector<std::string> skip {"aws2.parquet"};    //! Not supported by arrow
+	skip.emplace_back("datapage_v2.snappy.parquet");   //! Not supported by arrow
+	skip.emplace_back("broken-arrow.parquet");         //! Arrow can't read this
+	skip.emplace_back("nan-float.parquet");            //! Can't roundtrip NaNs
+	skip.emplace_back("fixed.parquet");                //! Can't roundtrip Fixed-size Binaries
 	skip.emplace_back("leftdate3_192_loop_1.parquet"); //! This is just crazy slow
 	skip.emplace_back("bug687_nulls.parquet");         //! This is just crazy slow
 
@@ -166,17 +177,12 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
 
-	skip.emplace_back("cache1.parquet"); //! FIXME: Contains binary columns, we don't support those yet
-
-	//! FIXME: Cache Files
 	parquet_files = fs.Glob("test/sql/copy/parquet/data/cache/*.parquet");
 	for (auto &parquet_path : parquet_files) {
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
-	//! FIXME: GLOB Files (More binaries)
-	//	parquet_files = fs.Glob("test/sql/copy/parquet/data/glob/*.parquet");
-	//	for (auto &parquet_path : parquet_files) {
-	//	    std::cout << parquet_path <<  std::endl;
-	//        REQUIRE(RoundTrip(parquet_path,skip,conn));
-	//	}
+	parquet_files = fs.Glob("test/sql/copy/parquet/data/glob/*.parquet");
+	for (auto &parquet_path : parquet_files) {
+		REQUIRE(RoundTrip(parquet_path, skip, conn));
+	}
 }

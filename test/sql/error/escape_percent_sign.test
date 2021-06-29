@@ -1,0 +1,10 @@
+# name: test/sql/error/escape_percent_sign.test
+# description: Issue 1926: Exception messages need to escape percent signs
+# group: [error]
+
+statement ok
+CREATE VIEW list_int AS
+SELECT case when i%2 <> 0 then [1] else NULL end FROM range(10000) tbl(i);
+
+statement error
+select count(*) from list_int where l is distinct from NULL;
