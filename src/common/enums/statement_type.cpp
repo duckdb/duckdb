@@ -61,7 +61,6 @@ bool StatementTypeReturnChanges(StatementType type) {
 	case StatementType::INSERT_STATEMENT:
 	case StatementType::UPDATE_STATEMENT:
 	case StatementType::DELETE_STATEMENT:
-	case StatementType::CREATE_STATEMENT:
 		return true;
 	default:
 		return false;
