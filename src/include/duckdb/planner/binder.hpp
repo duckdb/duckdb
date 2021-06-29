@@ -126,7 +126,8 @@ public:
 
 	string FormatErrorRecursive(idx_t query_location, const string &message, vector<ExceptionFormatValue> &values);
 	template <class T, typename... Args>
-	string FormatErrorRecursive(idx_t query_location, const string &msg, vector<ExceptionFormatValue> &values, T param, Args... params) {
+	string FormatErrorRecursive(idx_t query_location, const string &msg, vector<ExceptionFormatValue> &values, T param,
+	                            Args... params) {
 		values.push_back(ExceptionFormatValue::CreateFormatValue<T>(param));
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
@@ -136,6 +137,7 @@ public:
 		vector<ExceptionFormatValue> values;
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
