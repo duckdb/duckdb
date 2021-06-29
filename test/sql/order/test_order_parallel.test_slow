@@ -1,5 +1,5 @@
 # name: test/sql/order/test_order_parallel.test_slow
-# description: Test ORDER BY keyword with multiple threads
+# description: Test ORDER BY keyword with multiple threads (internal and external sorting)
 # group: [order]
 
 statement ok
@@ -8,9 +8,11 @@ PRAGMA force_parallelism
 statement ok
 PRAGMA threads=4
 
-# make sure this does not use too much memory
+# first iteration runs externally, second runs normally
 statement ok
-PRAGMA memory_limit='300MB'
+PRAGMA force_external
+
+loop 0 2
 
 statement ok
 create table test as (select range i from range(100000));
@@ -113,3 +115,8 @@ query T
 select * from test order by cast(i % 1000 + 1000000000000 as varchar), i % 100, i % 10, cast(i + 1000000000000 as varchar)
 ----
 100001 values hashing to c694f8aa434f0617970c6f3540b20863
+
+statement ok
+PRAGMA disable_force_external
+
+endloop

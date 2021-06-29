@@ -23,7 +23,7 @@ void RowOperations::Swizzle(const RowLayout &layout, const data_ptr_t &row_base_
 		if (physical_type == PhysicalType::VARCHAR) {
 			// Replace the pointer with the computed offset (if non-inlined)
 			for (idx_t i = 0; i < count; i++) {
-				string_t &str = (string_t &)*col_ptr;
+				const string_t str = Load<string_t>(col_ptr);
 				if (!str.IsInlined()) {
 					data_ptr_t ptr_ptr = col_ptr + sizeof(uint32_t);
 					Store<idx_t>(Load<data_ptr_t>(ptr_ptr) - Load<data_ptr_t>(heap_base_ptr), ptr_ptr);
@@ -62,7 +62,7 @@ void RowOperations::Unswizzle(const RowLayout &layout, const data_ptr_t &row_bas
 		if (physical_type == PhysicalType::VARCHAR) {
 			// Replace offset with the pointer (if non-inlined)
 			for (idx_t i = 0; i < count; i++) {
-				string_t &str = (string_t &)*col_ptr;
+				const string_t str = Load<string_t>(col_ptr);
 				if (!str.IsInlined()) {
 					data_ptr_t offset_ptr = col_ptr + sizeof(uint32_t);
 					Store<data_ptr_t>(heap_row_pointers[i] + Load<idx_t>(offset_ptr), offset_ptr);
