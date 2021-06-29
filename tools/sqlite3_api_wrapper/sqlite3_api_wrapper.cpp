@@ -208,17 +208,6 @@ bool sqlite3_display_result(StatementType type) {
 	}
 }
 
-bool sqlite3_statement_returns_changes(StatementType type) {
-	switch (type) {
-	case StatementType::INSERT_STATEMENT:
-	case StatementType::UPDATE_STATEMENT:
-	case StatementType::DELETE_STATEMENT:
-		return true;
-	default:
-		return false;
-	}
-}
-
 /* Prepare the next result to be retrieved */
 int sqlite3_step(sqlite3_stmt *pStmt) {
 	if (!pStmt) {
@@ -247,7 +236,7 @@ int sqlite3_step(sqlite3_stmt *pStmt) {
 		pStmt->current_row = -1;
 
 		auto statement_type = pStmt->prepared->GetStatementType();
-		if (sqlite3_statement_returns_changes(statement_type) && pStmt->current_chunk->size() > 0) {
+		if (StatementTypeReturnChanges(statement_type) && pStmt->current_chunk->size() > 0) {
 			// update total changes
 			auto row_changes = pStmt->current_chunk->GetValue(0, 0);
 			if (!row_changes.is_null && row_changes.TryCastAs(LogicalType::BIGINT)) {
