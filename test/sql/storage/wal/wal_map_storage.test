@@ -1,6 +1,6 @@
 # name: test/sql/storage/wal/wal_map_storage.test
 # description: Test maps with persistent storage and WAL
-# group: [map]
+# group: [wal]
 
 # load the DB from disk
 load __TEST_DIR__/map_storage_test.db

@@ -1,6 +1,6 @@
-# name: test/sql/storage/types/list/persistent_list_storage.test
+# name: test/sql/storage/wal/wal_list_storage.test
 # description: Test lists with persistent storage
-# group: [list]
+# group: [wal]
 
 load __TEST_DIR__/list_storage_test.db
 

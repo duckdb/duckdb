@@ -832,7 +832,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			// serialize the list entries in a flat array
 			auto data = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
 			auto source_array = (list_entry_t *)vdata.data;
-			for(idx_t i = 0; i < count; i++) {
+			for (idx_t i = 0; i < count; i++) {
 				auto idx = vdata.sel->get_index(i);
 				auto source = source_array[idx];
 				data[i].offset = source.offset;
@@ -841,7 +841,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 
 			// write the list size
 			serializer.Write<idx_t>(list_size);
-			serializer.WriteData((data_ptr_t) data.get(), count * sizeof(list_entry_t));
+			serializer.WriteData((data_ptr_t)data.get(), count * sizeof(list_entry_t));
 
 			child.Serialize(list_size, serializer);
 			break;

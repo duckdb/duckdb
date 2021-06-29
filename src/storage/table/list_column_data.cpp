@@ -291,7 +291,7 @@ struct ListColumnCheckpointState : public ColumnCheckpointState {
 public:
 	unique_ptr<BaseStatistics> GetStatistics() override {
 		auto stats = global_stats->Copy();
-		auto &list_stats = (ListStatistics &) *stats;
+		auto &list_stats = (ListStatistics &)*stats;
 		stats->validity_stats = validity_state->GetStatistics();
 		list_stats.child_stats = child_state->GetStatistics();
 		return stats;
