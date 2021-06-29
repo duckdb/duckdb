@@ -41,8 +41,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 			auto similar_bindings = binder.bind_context.GetSimilarBindings(colref.column_name);
 			string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
 			return BindResult(
-			    binder.FormatError(colref, StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s",
-			                                                  colref.column_name.c_str(), candidate_str)));
+			    binder.FormatError(colref.query_location, "Referenced column \"%s\" not found in FROM clause!%s", colref.column_name.c_str(), candidate_str));
 		}
 	}
 	// if it was a macro parameter, let macro_binding bind it to the argument

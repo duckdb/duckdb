@@ -286,9 +286,9 @@ string Binder::FormatError(TableRef &ref_context, const string &message) {
 	return FormatError(ref_context.query_location, message);
 }
 
-string Binder::FormatError(idx_t query_location, const string &message) {
+string Binder::FormatErrorRecursive(idx_t query_location, const string &message, vector<ExceptionFormatValue> &values) {
 	QueryErrorContext context(root_statement, query_location);
-	return context.FormatError(message);
+	return context.FormatErrorRecursive(message, values);
 }
 
 } // namespace duckdb
