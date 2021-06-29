@@ -502,10 +502,9 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		}
 		break;
 	}
-
+	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR: {
 		child_holder.vector = make_unique<Vector>(data);
-
 		child.n_buffers = 3;
 		child_holder.offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
 		child.buffers[1] = child_holder.offsets.get();
