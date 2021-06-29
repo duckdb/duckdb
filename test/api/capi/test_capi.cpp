@@ -237,10 +237,6 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	result = tester.Query("UPDATE test SET a = 1 WHERE b=22");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->rows_changed() == 2);
-
-	result = tester.Query("CREATE TABLE x AS SELECT 42");
-	REQUIRE_NO_FAIL(*result);
-	REQUIRE(result->rows_changed() == 1);
 }
 
 TEST_CASE("Test different types of C API", "[capi]") {
