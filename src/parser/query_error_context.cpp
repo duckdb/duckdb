@@ -110,7 +110,7 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 }
 
 string QueryErrorContext::FormatErrorRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
-	string error_message = ExceptionFormatValue::Format(msg, values);
+	string error_message = values.empty() ? msg : ExceptionFormatValue::Format(msg, values);
 	if (!statement || query_location >= statement->query.size()) {
 		// no statement provided or query location out of range
 		return error_message;
