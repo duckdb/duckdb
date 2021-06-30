@@ -22,7 +22,14 @@ enum class ArrowVariableSizeType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_S
 //===--------------------------------------------------------------------===//
 // Arrow Time/Date Types
 //===--------------------------------------------------------------------===//
-enum class ArrowDateTimeType : uint8_t { MLS = 0, MCS = 1, NS = 2, SEC = 3, DAYS = 4 };
+enum class ArrowDateTimeType : uint8_t {
+	MILLISECONDS = 0,
+	MICROSECONDS = 1,
+	NANOSECONDS = 2,
+	SECONDS = 3,
+	DAYS = 4,
+	MONTHS = 5
+};
 struct ArrowConvertData {
 	ArrowConvertData(LogicalType type) : dictionary_type(type) {};
 	ArrowConvertData() {};

@@ -35,30 +35,6 @@ class TestArrowTime(object):
         assert (rel['c'] == arrow_table['c'])
         assert (rel['d'] == arrow_table['c'])
 
-    def test_negative_times(self, duckdb_cursor):
-        if not can_run:
-            return   
-
-        with pytest.raises(Exception):
-            data = pa.array([-1], type=pa.time32('s'))
-            arrow_table = pa.Table.from_arrays([data],['a'])
-            rel = duckdb.from_arrow_table(arrow_table).arrow()
-
-        with pytest.raises(Exception):
-            data = pa.array([-1], type=pa.time32('ms'))
-            arrow_table = pa.Table.from_arrays([data],['a'])
-            rel = duckdb.from_arrow_table(arrow_table).arrow()
-
-        with pytest.raises(Exception):
-            data = pa.array([-1], type=pa.time32('us'))
-            arrow_table = pa.Table.from_arrays([data],['a'])
-            rel = duckdb.from_arrow_table(arrow_table).arrow()
-
-        with pytest.raises(Exception):
-            data = pa.array([-1], type=pa.time32('ns'))
-            arrow_table = pa.Table.from_arrays([data],['a'])
-            rel = duckdb.from_arrow_table(arrow_table).arrow()
-
     def test_max_times(self, duckdb_cursor):
         if not can_run:
             return   

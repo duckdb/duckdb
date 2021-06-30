@@ -1,21 +1,21 @@
-#include "duckdb/common/arrow_wrapper.hpp"
-#include "duckdb.hpp"
-
 #include "duckdb/common/arrow.hpp"
-#include "duckdb/function/table/arrow.hpp"
 
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb.hpp"
+#include "duckdb/common/arrow_wrapper.hpp"
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/function/table/arrow.hpp"
+#include "duckdb/function/table_function.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/types/date.hpp"
-#include "duckdb/common/to_string.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "utf8proc_wrapper.hpp"
-#include "duckdb/common/types/hugeint.hpp"
-#include "duckdb/common/limits.hpp"
 
-#include "duckdb/common/types/time.hpp"
+#include "duckdb/common/operator/multiply.hpp"
 namespace duckdb {
 
 LogicalType GetArrowLogicalType(ArrowSchema &schema,
@@ -75,20 +75,38 @@ LogicalType GetArrowLogicalType(ArrowSchema &schema,
 		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::DAYS);
 		return LogicalType::DATE;
 	} else if (format == "tdm") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MLS);
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
 		return LogicalType::DATE;
 	} else if (format == "tts") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::SEC);
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
 		return LogicalType::TIME;
 	} else if (format == "ttm") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MLS);
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
 		return LogicalType::TIME;
 	} else if (format == "ttu") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MCS);
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
 		return LogicalType::TIME;
 	} else if (format == "ttn") {
-		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::NS);
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
 		return LogicalType::TIME;
+	} else if (format == "tDs") {
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::SECONDS);
+		return LogicalType::INTERVAL;
+	} else if (format == "tDm") {
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MILLISECONDS);
+		return LogicalType::INTERVAL;
+	} else if (format == "tDu") {
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MICROSECONDS);
+		return LogicalType::INTERVAL;
+	} else if (format == "tDn") {
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::NANOSECONDS);
+		return LogicalType::INTERVAL;
+	} else if (format == "tiD") {
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::DAYS);
+		return LogicalType::INTERVAL;
+	} else if (format == "tiM") {
+		arrow_convert_data[col_idx]->date_time_precision.emplace_back(ArrowDateTimeType::MONTHS);
+		return LogicalType::INTERVAL;
 	} else if (format == "+l") {
 		arrow_convert_data[col_idx]->variable_sz_type.emplace_back(ArrowVariableSizeType::NORMAL, 0);
 		auto child_type = GetArrowLogicalType(*schema.children[0], arrow_convert_data, col_idx);
@@ -435,29 +453,56 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 }
 
 void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t nested_offset) {
-	auto data_ptr = (data_ptr_t)array.buffers[1] +
-	                GetTypeIdSize(vector.GetType().InternalType()) * (scan_state.chunk_offset + array.offset);
+	auto internal_type = GetTypeIdSize(vector.GetType().InternalType());
+	auto data_ptr = (data_ptr_t)array.buffers[1] + internal_type * (scan_state.chunk_offset + array.offset);
 	if (nested_offset != 0) {
-		data_ptr = (data_ptr_t)array.buffers[1] +
-		           GetTypeIdSize(vector.GetType().InternalType()) * (array.offset + nested_offset);
+		data_ptr = (data_ptr_t)array.buffers[1] + internal_type * (array.offset + nested_offset);
 	}
 	FlatVector::SetData(vector, data_ptr);
 }
 
 template <class T>
 void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t nested_offset, idx_t size,
-                    double conversion) {
+                    int64_t conversion) {
 	auto tgt_ptr = (dtime_t *)FlatVector::GetData(vector);
 	auto src_ptr = (T *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 	if (nested_offset) {
 		src_ptr = (T *)array.buffers[1] + nested_offset + array.offset;
 	}
-	//! convert time from seconds to microseconds
 	for (idx_t row = 0; row < size; row++) {
-		if (src_ptr[row] < 0) {
-			throw std::runtime_error("Negative Times are not supported ");
+		if (!TryMultiplyOperator::Operation((int64_t)src_ptr[row], conversion, tgt_ptr[row].micros)) {
+			throw ConversionException("Could not convert Interval to Microsecond");
 		}
-		tgt_ptr[row] = src_ptr[row] * conversion;
+	}
+}
+
+void IntervalConversionUs(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t nested_offset,
+                          idx_t size, int64_t conversion) {
+	auto tgt_ptr = (interval_t *)FlatVector::GetData(vector);
+	auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+	if (nested_offset) {
+		src_ptr = (int64_t *)array.buffers[1] + nested_offset + array.offset;
+	}
+	for (idx_t row = 0; row < size; row++) {
+		tgt_ptr[row].days = 0;
+		tgt_ptr[row].months = 0;
+		if (!TryMultiplyOperator::Operation(src_ptr[row], conversion, tgt_ptr[row].micros)) {
+			throw ConversionException("Could not convert Interval to Microsecond");
+		}
+	}
+}
+
+void IntervalConversionMonths(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, idx_t nested_offset,
+                              idx_t size) {
+	auto tgt_ptr = (interval_t *)FlatVector::GetData(vector);
+	auto src_ptr = (int32_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+	if (nested_offset) {
+		src_ptr = (int32_t *)array.buffers[1] + nested_offset + array.offset;
+	}
+	for (idx_t row = 0; row < size; row++) {
+		tgt_ptr[row].days = 0;
+		tgt_ptr[row].micros = 0;
+		tgt_ptr[row].months = src_ptr[row];
 	}
 }
 
@@ -556,7 +601,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			DirectConversion(vector, array, scan_state, nested_offset);
 			break;
 		}
-		case ArrowDateTimeType::MLS: {
+		case ArrowDateTimeType::MILLISECONDS: {
 			//! convert date from nanoseconds to days
 			auto src_ptr = (uint64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 			if (nested_offset) {
@@ -576,24 +621,67 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::TIME: {
 		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.second++];
 		switch (precision) {
-		case ArrowDateTimeType::SEC: {
+		case ArrowDateTimeType::SECONDS: {
 			TimeConversion<int32_t>(vector, array, scan_state, nested_offset, size, 1000000);
 			break;
 		}
-		case ArrowDateTimeType::MLS: {
+		case ArrowDateTimeType::MILLISECONDS: {
 			TimeConversion<int32_t>(vector, array, scan_state, nested_offset, size, 1000);
 			break;
 		}
-		case ArrowDateTimeType::MCS: {
+		case ArrowDateTimeType::MICROSECONDS: {
 			TimeConversion<int64_t>(vector, array, scan_state, nested_offset, size, 1);
 			break;
 		}
-		case ArrowDateTimeType::NS: {
-			TimeConversion<int64_t>(vector, array, scan_state, nested_offset, size, 0.001);
+		case ArrowDateTimeType::NANOSECONDS: {
+			auto tgt_ptr = (dtime_t *)FlatVector::GetData(vector);
+			auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+			if (nested_offset) {
+				src_ptr = (int64_t *)array.buffers[1] + nested_offset + array.offset;
+			}
+			for (idx_t row = 0; row < size; row++) {
+				tgt_ptr[row].micros = src_ptr[row] / 1000;
+			}
 			break;
 		}
 		default:
 			throw std::runtime_error("Unsupported precision for Time Type ");
+		}
+		break;
+	}
+	case LogicalTypeId::INTERVAL: {
+		auto precision = arrow_convert_data[col_idx]->date_time_precision[arrow_convert_idx.second++];
+		switch (precision) {
+		case ArrowDateTimeType::SECONDS: {
+			IntervalConversionUs(vector, array, scan_state, nested_offset, size, 1000000);
+			break;
+		}
+		case ArrowDateTimeType::DAYS:
+		case ArrowDateTimeType::MILLISECONDS: {
+			IntervalConversionUs(vector, array, scan_state, nested_offset, size, 1000);
+			break;
+		}
+		case ArrowDateTimeType::MICROSECONDS: {
+			IntervalConversionUs(vector, array, scan_state, nested_offset, size, 1);
+			break;
+		}
+		case ArrowDateTimeType::NANOSECONDS: {
+			auto tgt_ptr = (interval_t *)FlatVector::GetData(vector);
+			auto src_ptr = (int64_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+			if (nested_offset) {
+				src_ptr = (int64_t *)array.buffers[1] + nested_offset + array.offset;
+			}
+			for (idx_t row = 0; row < size; row++) {
+				tgt_ptr[row].micros = src_ptr[row] / 1000;
+			}
+			break;
+		}
+		case ArrowDateTimeType::MONTHS: {
+			IntervalConversionMonths(vector, array, scan_state, nested_offset, size);
+			break;
+		}
+		default:
+			throw std::runtime_error("Unsupported precision for Interval/Duration Type ");
 		}
 		break;
 	}
@@ -649,7 +737,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			break;
 		}
 		default:
-			throw std::runtime_error("Unsupported physical type for Decimal" +
+			throw std::runtime_error("Unsupported physical type for Decimal: " +
 			                         TypeIdToString(vector.GetType().InternalType()));
 		}
 		break;

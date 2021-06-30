@@ -227,16 +227,13 @@ string Interval::ToString(interval_t interval) {
 
 int64_t Interval::GetMilli(interval_t val) {
 	int64_t milli_month, milli_day, milli;
-	int64_t ns_in_us = 1000;
-	if (!TryMultiplyOperator::Operation((int64_t)val.months, Interval::MICROS_PER_MONTH, milli_month)) {
+	if (!TryMultiplyOperator::Operation((int64_t)val.months, Interval::MICROS_PER_MONTH / 1000, milli_month)) {
 		throw ConversionException("Could not convert Interval to Milliseconds");
 	}
-	if (!TryMultiplyOperator::Operation((int64_t)val.days, Interval::MICROS_PER_DAY, milli_day)) {
+	if (!TryMultiplyOperator::Operation((int64_t)val.days, Interval::MICROS_PER_DAY / 1000, milli_day)) {
 		throw ConversionException("Could not convert Interval to Milliseconds");
 	}
-	if (!TryMultiplyOperator::Operation(val.micros, ns_in_us, milli)) {
-		throw ConversionException("Could not convert Interval to Milliseconds");
-	}
+	milli = val.micros / 1000;
 	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(milli, milli_month, milli)) {
 		throw ConversionException("Could not convert Interval to Milliseconds");
 	}

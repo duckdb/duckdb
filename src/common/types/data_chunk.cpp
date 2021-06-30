@@ -566,6 +566,19 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		SetStructMap(child_holder.children[0], struct_type, *child_holder.vector, size, &map_mask);
 		break;
 	}
+	case LogicalTypeId::INTERVAL: {
+		//! convert interval from month/days/ucs to milliseconds
+		child_holder.vector = make_unique<Vector>(data);
+		child.n_buffers = 2;
+		child_holder.data = unique_ptr<data_t[]>(new data_t[sizeof(int64_t) * (size)]);
+		child.buffers[1] = child_holder.data.get();
+		auto source_ptr = FlatVector::GetData<interval_t>(*child_holder.vector);
+		auto target_ptr = (int64_t *)child.buffers[1];
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			target_ptr[row_idx] = Interval::GetMilli(source_ptr[row_idx]);
+		}
+		break;
+	}
 	default:
 		throw std::runtime_error("Unsupported type " + type.ToString());
 	}
