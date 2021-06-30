@@ -29,7 +29,7 @@ public:
 	ExpressionRewriter rewriter;
 
 private:
-	void RunOptimizer(OptimizerType type, std::function<void()> callback);
+	void RunOptimizer(OptimizerType type, const std::function<void()> &callback);
 };
 
 } // namespace duckdb
