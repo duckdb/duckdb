@@ -11,6 +11,9 @@
 #include "duckdb/optimizer/expression_rewriter.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_operator_visitor.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
+
+#include <functional>
 
 namespace duckdb {
 class Binder;
@@ -24,6 +27,9 @@ public:
 	ClientContext &context;
 	Binder &binder;
 	ExpressionRewriter rewriter;
+
+private:
+	void RunOptimizer(OptimizerType type, std::function<void()> callback);
 };
 
 } // namespace duckdb

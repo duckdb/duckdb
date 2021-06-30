@@ -13,6 +13,9 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/function_set.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #endif
 
 using namespace duckdb;
@@ -22,18 +25,52 @@ using namespace duckdb;
 
 void ExecuteQuery(Connection &con, const string &query);
 
-int main() {
-	DuckDB db(nullptr);
-	Connection con(db);
+void CreateFunction(Connection &con, string name, vector<LogicalType> arguments, LogicalType return_type) {
+	auto &context = *con.context;
+	auto &catalog = Catalog::GetCatalog(context);
 
-	// disable the optimizer
-	// for now this is required since the statistics propagator will truncate our plan
+	// we can register multiple functions here if we want overloads
+	// you may also want to set has_side_effects or varargs in the ScalarFunction (if required)
+	ScalarFunctionSet set(name);
+	set.AddFunction(ScalarFunction(move(arguments), move(return_type), nullptr));
+
+	CreateScalarFunctionInfo info(move(set));
+	catalog.CreateFunction(context, &info);
+}
+
+void CreateAggregateFunction(Connection &con, string name, vector<LogicalType> arguments, LogicalType return_type) {
+	auto &context = *con.context;
+	auto &catalog = Catalog::GetCatalog(context);
+
+	// we can register multiple functions here if we want overloads
+	AggregateFunctionSet set(name);
+	set.AddFunction(AggregateFunction(move(arguments), move(return_type), nullptr, nullptr, nullptr, nullptr, nullptr));
+
+	CreateAggregateFunctionInfo info(move(set));
+	catalog.CreateFunction(context, &info);
+}
+
+int main() {
+	DBConfig config;
+	config.initialize_default_database = false;
+
+	// disable the statistics propagator optimizer
+	// this is required since the statistics propagator will truncate our plan
 	// (e.g. it will recognize the table is empty that satisfy the predicate i=3
 	//       and then prune the entire plan)
-	// we can fix this by disabling ONLY the statistics propagator, but for now this is easier
-	// alternatively we could just insert the same values into our table (or at least the min/max values)
-	con.Query("PRAGMA disable_optimizer");
-	// create a dummy table (for our binding purposes)
+	config.disabled_optimizers.insert(OptimizerType::STATISTICS_PROPAGATION);
+	// we don't support filter pushdown yet in our toy example
+	config.disabled_optimizers.insert(OptimizerType::FILTER_PUSHDOWN);
+
+	DuckDB db(nullptr, &config);
+	Connection con(db);
+
+	// we perform an explicit BEGIN TRANSACTION here
+	// since "CreateFunction" will directly poke around in the catalog
+	// which requires an active transaction
+	con.Query("BEGIN TRANSACTION");
+
+	// register dummy tables (for our binding purposes)
 	con.Query("CREATE TABLE mytable(i INTEGER, j INTEGER)");
 	con.Query("CREATE TABLE myothertable(k INTEGER)");
 	// contents of the tables
@@ -43,6 +80,13 @@ int main() {
 	// myothertable
 	// k: 1, 10, 20
 	// (see MyScanNode)
+
+	// register functions and aggregates (for our binding purposes)
+	CreateFunction(con, "+", {LogicalType::INTEGER, LogicalType::INTEGER}, LogicalType::INTEGER);
+	CreateAggregateFunction(con, "count_star", {}, LogicalType::BIGINT);
+	CreateAggregateFunction(con, "sum", {LogicalType::INTEGER}, LogicalType::INTEGER);
+
+	con.Query("COMMIT");
 
 	// standard projections
 	ExecuteQuery(con, "SELECT * FROM mytable");

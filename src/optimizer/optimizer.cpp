@@ -17,6 +17,7 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/main/config.hpp"
 
 #include "duckdb/optimizer/rule/in_clause_simplification.hpp"
 
@@ -43,86 +44,97 @@ Optimizer::Optimizer(Binder &binder, ClientContext &context) : context(context),
 #endif
 }
 
+void Optimizer::RunOptimizer(OptimizerType type, std::function<void()> callback) {
+	auto &config = DBConfig::GetConfig(context);
+	if (config.disabled_optimizers.find(type) != config.disabled_optimizers.end()) {
+		// optimizer is marked as disabled: skip
+		return;
+	}
+	context.profiler->StartPhase(OptimizerTypeToString(type));
+	callback();
+	context.profiler->EndPhase();
+}
+
 unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	// first we perform expression rewrites using the ExpressionRewriter
 	// this does not change the logical plan structure, but only simplifies the expression trees
-	context.profiler->StartPhase("expression_rewriter");
-	rewriter.VisitOperator(*plan);
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::EXPRESSION_REWRITER, [&]() {
+		rewriter.VisitOperator(*plan);
+	});
 
 	// perform filter pullup
-	context.profiler->StartPhase("filter_pullup");
-	FilterPullup filter_pullup;
-	plan = filter_pullup.Rewrite(move(plan));
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::FILTER_PULLUP, [&]() {
+		FilterPullup filter_pullup;
+		plan = filter_pullup.Rewrite(move(plan));
+	});
 
 	// perform filter pushdown
-	context.profiler->StartPhase("filter_pushdown");
-	FilterPushdown filter_pushdown(*this);
-	plan = filter_pushdown.Rewrite(move(plan));
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::FILTER_PUSHDOWN, [&]() {
+		FilterPushdown filter_pushdown(*this);
+		plan = filter_pushdown.Rewrite(move(plan));
+	});
 
-	context.profiler->StartPhase("regex_range");
-	RegexRangeFilter regex_opt;
-	plan = regex_opt.Rewrite(move(plan));
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::REGEX_RANGE, [&]() {
+		RegexRangeFilter regex_opt;
+		plan = regex_opt.Rewrite(move(plan));
+	});
 
-	context.profiler->StartPhase("in_clause");
-	InClauseRewriter rewriter(*this);
-	plan = rewriter.Rewrite(move(plan));
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
+		InClauseRewriter rewriter(*this);
+		plan = rewriter.Rewrite(move(plan));
+	});
 
 	// then we perform the join ordering optimization
 	// this also rewrites cross products + filters into joins and performs filter pushdowns
-	context.profiler->StartPhase("join_order");
-	JoinOrderOptimizer optimizer(context);
-	plan = optimizer.Optimize(move(plan));
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
+		JoinOrderOptimizer optimizer(context);
+		plan = optimizer.Optimize(move(plan));
+	});
 
 	// removes any redundant DelimGets/DelimJoins
-	context.profiler->StartPhase("deliminator");
-	Deliminator deliminator;
-	plan = deliminator.Optimize(move(plan));
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
+		Deliminator deliminator;
+		plan = deliminator.Optimize(move(plan));
+	});
 
-	context.profiler->StartPhase("unused_columns");
-	RemoveUnusedColumns unused(binder, context, true);
-	unused.VisitOperator(*plan);
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::UNUSED_COLUMNS, [&]() {
+		RemoveUnusedColumns unused(binder, context, true);
+		unused.VisitOperator(*plan);
+	});
 
 	// perform statistics propagation
-	context.profiler->StartPhase("statistics_propagation");
-	StatisticsPropagator propagator(context);
-	propagator.PropagateStatistics(plan);
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
+		StatisticsPropagator propagator(context);
+		propagator.PropagateStatistics(plan);
+	});
 
 	// then we extract common subexpressions inside the different operators
-	context.profiler->StartPhase("common_subexpressions");
-	CommonSubExpressionOptimizer cse_optimizer(binder);
-	cse_optimizer.VisitOperator(*plan);
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::COMMON_SUBEXPRESSIONS, [&]() {
+		CommonSubExpressionOptimizer cse_optimizer(binder);
+		cse_optimizer.VisitOperator(*plan);
+	});
 
-	context.profiler->StartPhase("common_aggregate");
-	CommonAggregateOptimizer common_aggregate;
-	common_aggregate.VisitOperator(*plan);
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::COMMON_AGGREGATE, [&]() {
+		CommonAggregateOptimizer common_aggregate;
+		common_aggregate.VisitOperator(*plan);
+	});
 
-	context.profiler->StartPhase("column_lifetime");
-	ColumnLifetimeAnalyzer column_lifetime(true);
-	column_lifetime.VisitOperator(*plan);
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::COLUMN_LIFETIME, [&]() {
+		ColumnLifetimeAnalyzer column_lifetime(true);
+		column_lifetime.VisitOperator(*plan);
+	});
 
 	// transform ORDER BY + LIMIT to TopN
-	context.profiler->StartPhase("top_n");
-	TopN topn;
-	plan = topn.Optimize(move(plan));
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::TOP_N, [&]() {
+		TopN topn;
+		plan = topn.Optimize(move(plan));
+	});
 
 	// apply simple expression heuristics to get an initial reordering
-	context.profiler->StartPhase("reorder_filter");
-	ExpressionHeuristics expression_heuristics(*this);
-	plan = expression_heuristics.Rewrite(move(plan));
-	context.profiler->EndPhase();
+	RunOptimizer(OptimizerType::REORDER_FILTER, [&]() {
+		ExpressionHeuristics expression_heuristics(*this);
+		plan = expression_heuristics.Rewrite(move(plan));
+	});
 
 	return plan;
 }
