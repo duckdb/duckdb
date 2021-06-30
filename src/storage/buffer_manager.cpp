@@ -193,27 +193,19 @@ unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size) {
 	return Pin(block);
 }
 
-void BufferManager::ReAllocate(BufferHandle &handle, idx_t alloc_size) {
-	auto &block = handle.handle;
-	lock_guard<mutex> lock(block->lock);
-	D_ASSERT(block->state == BlockState::BLOCK_LOADED);
-	// only possible if there is exactly one reader
-	// since we cannot update the memory usage of other unique_ptr<BufferHandle>
-	// that may be pinning this block
-	D_ASSERT(handle.handle->readers == 1);
-	if (alloc_size > block->memory_usage) {
-		idx_t required_memory = alloc_size - block->memory_usage;
+void BufferManager::ReAllocate(shared_ptr<BlockHandle> handle, idx_t alloc_size) {
+	lock_guard<mutex> lock(handle->lock);
+	D_ASSERT(handle->readers == 1);
+	if (alloc_size > handle->memory_usage) {
+		idx_t required_memory = alloc_size - handle->memory_usage;
 		// evict blocks until we have space to increase the size of this block
 		if (!EvictBlocks(required_memory, maximum_memory)) {
 			throw OutOfRangeException("Not enough memory to complete operation: failed to increase block size");
 		}
 	}
-	// re-allocate the buffer size, which may result in a new pointer
-	data_ptr_t new_ptr = handle.node->allocator.ReAllocateData(handle.Ptr(), alloc_size);
-	handle.node->buffer = new_ptr;
-	//
-	handle.handle->memory_usage = alloc_size;
-	block->memory_usage = alloc_size;
+	// re-allocate the buffer size and update its memory usage
+	handle->buffer->Resize(alloc_size);
+	handle->memory_usage = alloc_size;
 }
 
 unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {

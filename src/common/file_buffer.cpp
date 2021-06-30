@@ -1,9 +1,10 @@
 #include "duckdb/common/file_buffer.hpp"
-#include "duckdb/common/file_system.hpp"
-#include "duckdb/common/helper.hpp"
+
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/helper.hpp"
 
 #include <cstring>
 
@@ -11,6 +12,12 @@ namespace duckdb {
 
 FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsiz)
     : allocator(allocator), type(type), malloced_buffer(nullptr) {
+	SetMallocedSize(bufsiz);
+	malloced_buffer = allocator.AllocateData(malloced_size);
+	Construct(bufsiz);
+}
+
+void FileBuffer::SetMallocedSize(uint64_t &bufsiz) {
 	const int sector_size = Storage::SECTOR_SIZE;
 	// round up to the nearest sector_size, this is only really necessary if the file buffer will be used for Direct IO
 	if (bufsiz % sector_size != 0) {
@@ -20,7 +27,10 @@ FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsi
 	D_ASSERT(bufsiz >= sector_size);
 	// we add (sector_size - 1) to ensure that we can align the buffer to sector_size
 	malloced_size = bufsiz + (sector_size - 1);
-	malloced_buffer = allocator.AllocateData(malloced_size);
+}
+
+void FileBuffer::Construct(uint64_t bufsiz) {
+	const int sector_size = Storage::SECTOR_SIZE;
 	if (!malloced_buffer) {
 		throw std::bad_alloc();
 	}
@@ -38,6 +48,12 @@ FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsi
 	internal_size = bufsiz;
 	buffer = internal_buffer + Storage::BLOCK_HEADER_SIZE;
 	size = internal_size - Storage::BLOCK_HEADER_SIZE;
+}
+
+void FileBuffer::Resize(uint64_t bufsiz) {
+	SetMallocedSize(bufsiz);
+	malloced_buffer = allocator.ReallocateData(malloced_buffer, malloced_size);
+	Construct(bufsiz);
 }
 
 FileBuffer::~FileBuffer() {
@@ -68,4 +84,5 @@ void FileBuffer::Write(FileHandle &handle, uint64_t location) {
 void FileBuffer::Clear() {
 	memset(internal_buffer, 0, internal_size);
 }
+
 } // namespace duckdb
