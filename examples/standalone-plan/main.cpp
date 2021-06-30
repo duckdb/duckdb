@@ -187,7 +187,8 @@ void CreateAggregateFunction(Connection &con, string name, vector<LogicalType> a
 // Custom Table Scan Function
 //===--------------------------------------------------------------------===//
 struct MyBindData : public FunctionData {
-	MyBindData(string name_p) : table_name(move(name_p)) {}
+	MyBindData(string name_p) : table_name(move(name_p)) {
+	}
 
 	string table_name;
 };
@@ -201,9 +202,8 @@ struct MyBindData : public FunctionData {
 // (see MyScanNode)
 static unique_ptr<FunctionData> MyScanBind(ClientContext &context, vector<Value> &inputs,
                                            unordered_map<string, Value> &named_parameters,
-                                           vector<LogicalType> &input_table_types,
-                                           vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                           vector<string> &names) {
+                                           vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+                                           vector<LogicalType> &return_types, vector<string> &names) {
 	auto table_name = inputs[0].ToString();
 	if (table_name == "mytable") {
 		names.emplace_back("i");
@@ -222,8 +222,8 @@ static unique_ptr<FunctionData> MyScanBind(ClientContext &context, vector<Value>
 }
 
 static unique_ptr<BaseStatistics> MyScanStatistics(ClientContext &context, const FunctionData *bind_data_p,
-                                                      column_t column_id) {
-	auto &bind_data = (MyBindData &) *bind_data_p;
+                                                   column_t column_id) {
+	auto &bind_data = (MyBindData &)*bind_data_p;
 	if (bind_data.table_name == "mytable") {
 		if (column_id == 0) {
 			// i: 1, 2, 3, 4, 5
@@ -240,7 +240,7 @@ static unique_ptr<BaseStatistics> MyScanStatistics(ClientContext &context, const
 }
 
 unique_ptr<NodeStatistics> MyScanCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = (MyBindData &) *bind_data_p;
+	auto &bind_data = (MyBindData &)*bind_data_p;
 	if (bind_data.table_name == "mytable") {
 		// 5 tuples
 		return make_unique<NodeStatistics>(5, 5);
@@ -254,7 +254,8 @@ void CreateMyScanFunction(Connection &con) {
 	auto &context = *con.context;
 	auto &catalog = Catalog::GetCatalog(context);
 
-	TableFunction my_scan("my_scan", {LogicalType::VARCHAR}, nullptr, MyScanBind, nullptr, MyScanStatistics, nullptr, nullptr, MyScanCardinality);
+	TableFunction my_scan("my_scan", {LogicalType::VARCHAR}, nullptr, MyScanBind, nullptr, MyScanStatistics, nullptr,
+	                      nullptr, MyScanCardinality);
 	my_scan.projection_pushdown = true;
 	my_scan.filter_pushdown = false;
 
@@ -518,7 +519,7 @@ unique_ptr<MyNode> MyPlanGenerator::TransformPlan(LogicalOperator &op) {
 			return make_unique<MyScanNode>(table.table->name, get.column_ids);
 		} else if (get.function.name == "my_scan") {
 			// our own scan
-			auto &my_bind_data = (MyBindData &) *get.bind_data;
+			auto &my_bind_data = (MyBindData &)*get.bind_data;
 			return make_unique<MyScanNode>(my_bind_data.table_name, get.column_ids);
 		} else {
 			throw std::runtime_error("Unsupported table function");
