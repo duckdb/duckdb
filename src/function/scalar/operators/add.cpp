@@ -58,6 +58,7 @@ date_t AddOperator::Operation(date_t left, interval_t right) {
 			year--;
 			month += Interval::MONTHS_PER_YEAR;
 		}
+		day = MinValue<int32_t>(day, Date::MonthDays(year, month));
 		result = Date::FromDate(year, month, day);
 	} else {
 		result = left;
