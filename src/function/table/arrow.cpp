@@ -673,6 +673,8 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			}
 			for (idx_t row = 0; row < size; row++) {
 				tgt_ptr[row].micros = src_ptr[row] / 1000;
+				tgt_ptr[row].days = 0;
+				tgt_ptr[row].months = 0;
 			}
 			break;
 		}
