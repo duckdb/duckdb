@@ -45,7 +45,7 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	// early out
 	if (has_duplicates)
 		return;
-	if (unique_keys == pjoin_stats.build_range + 1) {
+	if (unique_keys == pjoin_stats.build_range + 1 && !hash_table->has_null) {
 		pjoin_stats.is_build_dense = true;
 	}
 	keys_count = unique_keys; // do not condider keys out of the range
@@ -199,7 +199,8 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 	VectorData vector_data;
 	source.Orrify(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);
-	// generate the selection vector
+
+	// build selection vector for non-dense build
 	for (idx_t i = 0, sel_idx = 0; i != count; ++i) {
 		// retrieve value from vector
 		auto data_idx = vector_data.sel->get_index(i);
@@ -207,7 +208,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
 			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-			// check for matches in the build
+			                                             // check for matches in the build
 			if (bitmap_build_idx[idx]) {
 				build_sel_vec.set_index(sel_idx, idx);
 				probe_sel_vec.set_index(sel_idx++, i);
@@ -216,4 +217,5 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 		}
 	}
 }
+
 } // namespace duckdb

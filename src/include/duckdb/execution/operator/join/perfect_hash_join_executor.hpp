@@ -12,8 +12,6 @@
 #include "duckdb/execution/join_hashtable.hpp"
 
 namespace duckdb {
-constexpr size_t BUILD_THRESHOLD = 1 << 14; // 16384
-constexpr size_t MIN_THRESHOLD = 1 << 7;    // 128
 
 class PhysicalHashJoinState;
 class HashJoinGlobalState;
@@ -25,6 +23,7 @@ struct PerfectHashJoinStats {
 	Value probe_max;
 	bool is_build_small {false};
 	bool is_build_dense {false};
+	bool is_probe_in_domain {false};
 	idx_t build_range {0};
 	idx_t estimated_cardinality {0};
 };

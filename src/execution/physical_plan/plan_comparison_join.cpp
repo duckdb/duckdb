@@ -59,17 +59,20 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
 	auto build_range = stats_build->max - stats_build->min;                           // Join Keys Range
 
-	if (build_range < BUILD_THRESHOLD) {
-		// Fill join_stats for invisible join
-		auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
-		join_state.is_build_small = true;
-		join_state.probe_min = stats_probe->min;
-		join_state.probe_max = stats_probe->max;
-		join_state.build_min = stats_build->min;
-		join_state.build_max = stats_build->max;
-		join_state.estimated_cardinality = op.estimated_cardinality;
-		join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
+	// Fill join_stats for invisible join
+	auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
+	join_state.is_build_small = true;
+	join_state.probe_min = stats_probe->min;
+	join_state.probe_max = stats_probe->max;
+	join_state.build_min = stats_build->min;
+	join_state.build_max = stats_build->max;
+	join_state.estimated_cardinality = op.estimated_cardinality;
+	join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
+
+	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
+		join_state.is_probe_in_domain = true;
 	}
+
 	return;
 }
 
