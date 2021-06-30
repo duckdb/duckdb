@@ -5,7 +5,7 @@
 namespace duckdb {
 
 string OptimizerTypeToString(OptimizerType type) {
-	switch(type) {
+	switch (type) {
 	case OptimizerType::EXPRESSION_REWRITER:
 		return "expression_rewriter";
 	case OptimizerType::FILTER_PULLUP:
@@ -40,4 +40,4 @@ string OptimizerTypeToString(OptimizerType type) {
 	return "INVALID";
 }
 
-}
+} // namespace duckdb
