@@ -108,6 +108,14 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	// first write the meta data
 	out->column_count = result->types.size();
 	out->row_count = result->collection.Count();
+	out->rows_changed = 0;
+	if (out->row_count > 0 && StatementTypeReturnChanges(result->statement_type)) {
+		// update total changes
+		auto row_changes = result->GetValue(0, 0);
+		if (!row_changes.is_null && row_changes.TryCastAs(LogicalType::BIGINT)) {
+			out->rows_changed = row_changes.GetValue<int64_t>();
+		}
+	}
 	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
 	if (!out->columns) {
 		return DuckDBError;
