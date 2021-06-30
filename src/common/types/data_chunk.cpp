@@ -15,6 +15,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 
@@ -25,8 +26,8 @@ DataChunk::~DataChunk() {
 }
 
 void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
-	D_ASSERT(data.empty());     // can only be initialized once
-	D_ASSERT(types.size() > 0); // empty chunk not allowed
+	D_ASSERT(data.empty());   // can only be initialized once
+	D_ASSERT(!types.empty()); // empty chunk not allowed
 	for (idx_t i = 0; i < types.size(); i++) {
 		data.emplace_back(Vector(types[i], nullptr));
 	}
