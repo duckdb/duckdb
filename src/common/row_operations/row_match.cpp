@@ -47,13 +47,13 @@ idx_t SelectComparison<GreaterThanEquals>(Vector &left, Vector &right, const Sel
 template <>
 idx_t SelectComparison<LessThan>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                  SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::LessThan(left, right, sel, count, true_sel, false_sel);
 }
 
 template <>
 idx_t SelectComparison<LessThanEquals>(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                        SelectionVector *true_sel, SelectionVector *false_sel) {
-	return VectorOperations::GreaterThanEquals(left, right, sel, count, true_sel, false_sel);
+	return VectorOperations::LessThanEquals(left, right, sel, count, true_sel, false_sel);
 }
 
 template <class T, class OP, bool NO_MATCH_SEL>

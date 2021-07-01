@@ -180,10 +180,6 @@ static inline idx_t SelectNotNull(VectorData &lvdata, VectorData &rvdata, const 
 
 static void ScatterSelection(SelectionVector *target, const idx_t count, const SelectionVector *sel,
                              const SelectionVector &dense_vec) {
-	if (!sel) {
-		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
-	}
-
 	if (target) {
 		for (idx_t i = 0; i < count; ++i) {
 			target->set_index(i, sel->get_index(dense_vec.get_index(i)));
@@ -198,6 +194,9 @@ static idx_t NestedSelectOperation(Vector &left, Vector &right, const SelectionV
 	// a selection vector in a single pass. But to implement progressive comparisons,
 	// we have to make multiple passes, so we need to keep track of the original input positions
 	// and then scatter the output selections when we are done.
+	if (!sel) {
+		sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
+	}
 
 	VectorData lvdata, rvdata;
 	left.Orrify(vcount, lvdata);
@@ -223,6 +222,14 @@ static idx_t NestedSelectOperation(Vector &left, Vector &right, const SelectionV
 	//	Now that we have handled the NULLs, we can use the recursive nested comparator for the rest.
 	auto match_count = NestedSelector::Select<OP>(left, right, vcount, maybe_vec, count, true_opt, false_opt);
 	no_match_count += (count - match_count);
+
+	// Sort the optional selections if we would overwrite.
+	if (true_sel == sel) {
+		std::sort(true_vec.data(), true_vec.data() + match_count);
+	}
+	if (false_sel == sel) {
+		std::sort(false_vec.data(), false_vec.data() + no_match_count);
+	}
 
 	// Scatter the original selection to the output selections
 	ScatterSelection(true_sel, match_count, sel, true_vec);
