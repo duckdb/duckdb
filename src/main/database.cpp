@@ -208,6 +208,8 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	config.default_null_order = new_config.default_null_order;
 	config.enable_external_access = new_config.enable_external_access;
 	config.replacement_scans = move(new_config.replacement_scans);
+	config.initialize_default_database = new_config.initialize_default_database;
+	config.disabled_optimizers = move(new_config.disabled_optimizers);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
