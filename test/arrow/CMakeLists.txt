@@ -96,7 +96,8 @@ set(install_zlib ${install_dir})
 include_directories(${install_arrow}/include)
 include_directories(../../third_party/catch)
 
-set(TEST_ARROW_OBJECTS abi_test.cpp parquet_test.cpp arrow_check.cpp)
+set(TEST_ARROW_OBJECTS abi_test.cpp parquet_test.cpp arrow_check.cpp
+                       interval_test.cpp)
 
 add_library_unity(test_arrow OBJECT ${TEST_ARROW_OBJECTS})
 set(ALL_OBJECT_FILES

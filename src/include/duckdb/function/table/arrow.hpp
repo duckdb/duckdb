@@ -18,11 +18,27 @@ namespace duckdb {
 // Arrow Variable Size Types
 //===--------------------------------------------------------------------===//
 enum class ArrowVariableSizeType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
+
+//===--------------------------------------------------------------------===//
+// Arrow Time/Date Types
+//===--------------------------------------------------------------------===//
+enum class ArrowDateTimeType : uint8_t {
+	MILLISECONDS = 0,
+	MICROSECONDS = 1,
+	NANOSECONDS = 2,
+	SECONDS = 3,
+	DAYS = 4,
+	MONTHS = 5
+};
 struct ArrowConvertData {
 	ArrowConvertData(LogicalType type) : dictionary_type(type) {};
 	ArrowConvertData() {};
+	//! Hold type of dictionary
 	LogicalType dictionary_type;
+	//! If its a variable size type (e.g., strings, blobs, lists) holds which type it is
 	vector<std::pair<ArrowVariableSizeType, idx_t>> variable_sz_type;
+	//! If this is a date/time holds its precision
+	vector<ArrowDateTimeType> date_time_precision;
 };
 
 struct ArrowScanFunctionData : public TableFunctionData {
