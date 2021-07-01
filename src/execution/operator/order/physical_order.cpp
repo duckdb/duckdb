@@ -703,14 +703,14 @@ static inline int CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, con
 
 static inline void UnswizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data_ptr += sizeof(uint32_t);
+		data_ptr += sizeof(uint32_t) + string_t::PREFIX_LENGTH;
 	}
 	Store<data_ptr_t>(heap_ptr + Load<idx_t>(data_ptr), data_ptr);
 }
 
 static inline void SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data_ptr += sizeof(uint32_t);
+		data_ptr += sizeof(uint32_t) + string_t::PREFIX_LENGTH;
 	}
 	Store<idx_t>(Load<data_ptr_t>(data_ptr) - heap_ptr, data_ptr);
 }
@@ -1511,8 +1511,6 @@ public:
 		const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
 
 		// Left and right row data to merge
-		RowDataBlock *l_data_block;
-		RowDataBlock *r_data_block;
 		unique_ptr<BufferHandle> l_data_block_handle;
 		unique_ptr<BufferHandle> r_data_block_handle;
 		data_ptr_t l_ptr;
@@ -1527,7 +1525,7 @@ public:
 		RowDataBlock *result_data_block = &result_data.data_blocks.back();
 		auto result_data_handle = buffer_manager.Pin(result_data_block->block);
 		data_ptr_t result_data_ptr = result_data_handle->Ptr() + result_data_block->count * row_width;
-		// Result heap to write to
+		// Result heap to write to (if needed)
 		RowDataBlock *result_heap_block;
 		unique_ptr<BufferHandle> result_heap_handle;
 		data_ptr_t result_heap_ptr;
@@ -1543,17 +1541,15 @@ public:
 			const bool r_done = r_data.block_idx == r_data.data_blocks.size();
 			// Pin the row data blocks
 			if (!l_done) {
-				l_data_block = &l_data.data_blocks[l_data.block_idx];
-				l_data_block_handle = buffer_manager.Pin(l_data_block->block);
+				l_data_block_handle = buffer_manager.Pin(l_data.data_blocks[l_data.block_idx].block);
 				l_ptr = l_data_block_handle->Ptr() + l_data.entry_idx * row_width;
 			}
 			if (!r_done) {
-				r_data_block = &r_data.data_blocks[r_data.block_idx];
-				r_data_block_handle = buffer_manager.Pin(r_data_block->block);
+				r_data_block_handle = buffer_manager.Pin(r_data.data_blocks[r_data.block_idx].block);
 				r_ptr = r_data_block_handle->Ptr() + r_data.entry_idx * row_width;
 			}
-			const idx_t &l_count = !l_done ? l_data_block->count : 0;
-			const idx_t &r_count = !r_done ? r_data_block->count : 0;
+			const idx_t &l_count = !l_done ? l_data.data_blocks[l_data.block_idx].count : 0;
+			const idx_t &r_count = !r_done ? r_data.data_blocks[r_data.block_idx].count : 0;
 			// Create new result data block (if needed)
 			if (result_data_block->count == result_data_block->capacity) {
 				result_data.CreateBlock();
@@ -1618,8 +1614,13 @@ public:
 						auto &entry_size = next_entry_sizes[copied + i];
 						entry_size =
 						    l_smaller * Load<idx_t>(l_heap_ptr_copy) + r_smaller * Load<idx_t>(r_heap_ptr_copy);
+						D_ASSERT(entry_size >= sizeof(idx_t));
 						l_heap_ptr_copy += l_smaller * entry_size;
 						r_heap_ptr_copy += r_smaller * entry_size;
+						D_ASSERT((idx_t)(l_heap_ptr_copy - l_heap_handle->Ptr()) <=
+						         l_data.heap_blocks[l_data.block_idx].byte_offset);
+						D_ASSERT((idx_t)(r_heap_ptr_copy - r_heap_handle->Ptr()) <=
+						         r_data.heap_blocks[r_data.block_idx].byte_offset);
 						copy_bytes += entry_size;
 					}
 					// Reallocate result heap block size (if needed)
@@ -1741,6 +1742,7 @@ public:
 			// Compute entry size and add to total
 			auto &entry_size = next_entry_sizes[copied + i];
 			entry_size = Load<idx_t>(source_heap_ptr_copy);
+			D_ASSERT(entry_size >= sizeof(idx_t));
 			source_heap_ptr_copy += entry_size;
 			copy_bytes += entry_size;
 		}

@@ -23,13 +23,14 @@ void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t &ba
 		const idx_t &col_offset = layout.GetOffsets()[col_idx];
 		if (physical_type == PhysicalType::VARCHAR) {
 			// Replace the pointer with the computed offset (if non-inlined)
+			const idx_t string_pointer_offset = sizeof(uint32_t) + string_t::PREFIX_LENGTH;
 			for (idx_t i = 0; i < count; i++) {
 				const string_t str = Load<string_t>(row_ptr + col_offset);
 				if (!str.IsInlined()) {
 					// Load the pointer to the start of the row in the heap
 					data_ptr_t heap_row_ptr = Load<data_ptr_t>(row_ptr + heap_pointer_offset);
 					// This is where the pointer that points to the heap is stored in the RowLayout
-					data_ptr_t col_ptr = row_ptr + col_offset + sizeof(uint32_t);
+					data_ptr_t col_ptr = row_ptr + col_offset + string_pointer_offset;
 					// Load the pointer to the data of this column in the same heap row
 					data_ptr_t heap_col_ptr = Load<data_ptr_t>(col_ptr);
 					// Overwrite the column data pointer with the within-row offset (pointer arithmetic)
@@ -91,13 +92,14 @@ void RowOperations::UnswizzleColumns(const RowLayout &layout, const data_ptr_t &
 		data_ptr_t row_ptr = base_row_ptr;
 		if (physical_type == PhysicalType::VARCHAR) {
 			// Replace offset with the pointer (if non-inlined)
+			const idx_t string_pointer_offset = sizeof(uint32_t) + string_t::PREFIX_LENGTH;
 			for (idx_t i = 0; i < count; i++) {
 				const string_t str = Load<string_t>(row_ptr + col_offset);
 				if (!str.IsInlined()) {
 					// Load the pointer to the start of the row in the heap
 					data_ptr_t heap_row_ptr = Load<data_ptr_t>(row_ptr + heap_pointer_offset);
 					// This is where the pointer that points to the heap is stored in the RowLayout
-					data_ptr_t col_ptr = row_ptr + col_offset + sizeof(uint32_t);
+					data_ptr_t col_ptr = row_ptr + col_offset + string_pointer_offset;
 					// Load the offset to the data of this column in the same heap row
 					idx_t heap_col_offset = Load<idx_t>(col_ptr);
 					// Overwrite the column data offset with the pointer

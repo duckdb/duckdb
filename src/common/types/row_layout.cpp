@@ -25,7 +25,8 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<Bou
 	return aggregates;
 }
 
-RowLayout::RowLayout() : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true) {
+RowLayout::RowLayout()
+    : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_pointer_offset(0) {
 }
 
 void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p) {

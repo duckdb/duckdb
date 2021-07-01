@@ -157,7 +157,7 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 		for (idx_t i = 0; i < count; i++) {
 			auto row_idx = sel.get_index(i);
 			auto row = ptrs[row_idx];
-			// Pointer to this row into the heap block
+			// Pointer to this row in the heap block
 			Store<data_ptr_t>(data_locations[i], row + heap_pointer_offset);
 			// Row size is stored in the heap in front of each row
 			Store<idx_t>(entry_sizes[i], data_locations[i]);
