@@ -35,14 +35,15 @@ bool IsNumeric(SQLSMALLINT value_type) {
 	}
 }
 
-void ValidateNumeric(int precision, int scale) {
-	// if( !(precision >= 1 && precision <= Decimal::MAX_WIDTH_DECIMAL && scale <= precision) )
+SQLRETURN ValidateNumeric(int precision, int scale) {
 	if (precision < 1 || precision > Decimal::MAX_WIDTH_DECIMAL || scale < 0 || scale > Decimal::MAX_WIDTH_DECIMAL ||
 	    scale > precision) {
+		// TODO we should use SQLGetDiagField to register the error message
 		std::string msg = "Numeric precision: " + std::to_string(precision) + " and scale: " + std::to_string(scale) +
 		                  " not supported.";
-		throw duckdb::NotImplementedException(msg);
+		return SQL_ERROR;
 	}
+	return SQL_SUCCESS;
 }
 
 SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT input_output_type,
@@ -108,7 +109,9 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 			break;
 		case SQL_NUMERIC: {
 			auto precision = column_size;
-			ValidateNumeric(precision, decimal_digits);
+			if (ValidateNumeric(precision, decimal_digits) == SQL_ERROR) {
+				return SQL_ERROR;
+			}
 			if (column_size <= Decimal::MAX_WIDTH_INT64) {
 				res = Value::DECIMAL(Load<int64_t>(dataptr), precision, decimal_digits);
 			} else {
@@ -117,11 +120,6 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 				memcpy(&dec_value.upper, dataptr + sizeof(dec_value.lower), sizeof(dec_value.upper));
 				res = Value::DECIMAL(dec_value, precision, decimal_digits);
 			}
-
-			duckdb::LogicalType dec_type = duckdb::LogicalType::DECIMAL(precision, decimal_digits);
-			// it is needed to reset the result info type to the proper precision and scale
-			// instead of using the default DECIMAL(18, 3)
-			stmt->stmt->ResetResultValueInfo(parameter_number, Value(dec_type));
 			break;
 		}
 		// TODO more types

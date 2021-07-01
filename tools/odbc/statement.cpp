@@ -152,11 +152,11 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 		if (option != SQL_CLOSE) {
 			return SQL_ERROR;
 		}
-		// stmt->res.reset();
+		stmt->res.reset();
 		stmt->chunk.reset();
-		// stmt->stmt.reset();
+		// stmt->stmt.reset(); // the statment can be reuse in prepared statement
 		stmt->bound_cols.clear();
-		// stmt->params.clear();
+		// stmt->params.clear(); // parameters can be reuse in prepared statement
 		return SQL_SUCCESS;
 	});
 }

@@ -74,7 +74,6 @@ SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, S
 				// case all digits in fraction is 0, remove them
 				if (std::stoi(str_fraction) == 0) {
 					str_val.erase(str_val.begin() + pos_dot, str_val.end());
-					numeric->scale = 0;
 				}
 				width = str_val.size();
 			}
