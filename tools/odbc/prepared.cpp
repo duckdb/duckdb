@@ -1,6 +1,49 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/exception.hpp"
+
+using duckdb::Decimal;
+using duckdb::hugeint_t;
+using duckdb::idx_t;
+using duckdb::Load;
+using duckdb::string_t;
+using duckdb::Value;
+
+bool IsNumeric(SQLSMALLINT value_type) {
+	switch (value_type) {
+	case SQL_C_TINYINT:
+	case SQL_C_STINYINT:
+	case SQL_C_UTINYINT:
+	case SQL_C_SHORT:
+	case SQL_C_SSHORT:
+	case SQL_C_USHORT:
+	case SQL_C_SLONG:
+	case SQL_C_LONG:
+	case SQL_C_ULONG:
+	case SQL_C_SBIGINT:
+	case SQL_C_UBIGINT:
+	case SQL_C_FLOAT:
+	case SQL_C_DOUBLE:
+	case SQL_NUMERIC:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void ValidateNumeric(int precision, int scale) {
+	// if( !(precision >= 1 && precision <= Decimal::MAX_WIDTH_DECIMAL && scale <= precision) )
+	if (precision < 1 || precision > Decimal::MAX_WIDTH_DECIMAL || scale < 0 || scale > Decimal::MAX_WIDTH_DECIMAL ||
+	    scale > precision) {
+		std::string msg = "Numeric precision: " + std::to_string(precision) + " and scale: " + std::to_string(scale) +
+		                  " not supported.";
+		throw duckdb::NotImplementedException(msg);
+	}
+}
 
 SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT input_output_type,
                            SQLSMALLINT value_type, SQLSMALLINT parameter_type, SQLULEN column_size,
@@ -17,47 +60,69 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 		// it would appear that the parameter_type does not matter that much
 		// we cast it anyway and if the cast fails we will hear about it during execution
 		duckdb::Value res;
-		auto dataptr = (duckdb::const_data_ptr_t)parameter_value_ptr;
+		duckdb::const_data_ptr_t dataptr;
+		// cast properly to numeric type
+		if (IsNumeric(value_type)) {
+			auto numeric = (SQL_NUMERIC_STRUCT *)parameter_value_ptr;
+			dataptr = numeric->val;
+		} else {
+			dataptr = (duckdb::const_data_ptr_t)parameter_value_ptr;
+		}
+
 		switch (value_type) {
 		case SQL_C_CHAR:
-			res = duckdb::Value(duckdb::OdbcUtils::ReadString(parameter_value_ptr, buffer_length));
+			res = Value(duckdb::OdbcUtils::ReadString(parameter_value_ptr, buffer_length));
 			break;
 		case SQL_C_TINYINT:
 		case SQL_C_STINYINT:
-			res = duckdb::Value::TINYINT(duckdb::Load<int8_t>(dataptr));
+			res = Value::TINYINT(Load<int8_t>(dataptr));
 			break;
 		case SQL_C_UTINYINT:
-			res = duckdb::Value::TINYINT(duckdb::Load<uint8_t>(dataptr));
+			res = Value::TINYINT(Load<uint8_t>(dataptr));
 			break;
 		case SQL_C_SHORT:
 		case SQL_C_SSHORT:
-			res = duckdb::Value::SMALLINT(duckdb::Load<int16_t>(dataptr));
+			res = Value::SMALLINT(Load<int16_t>(dataptr));
 			break;
 		case SQL_C_USHORT:
-			res = duckdb::Value::USMALLINT(duckdb::Load<uint16_t>(dataptr));
+			res = Value::USMALLINT(Load<uint16_t>(dataptr));
 			break;
 		case SQL_C_SLONG:
 		case SQL_C_LONG:
-			res = duckdb::Value::INTEGER(duckdb::Load<int32_t>(dataptr));
+			res = Value::INTEGER(Load<int32_t>(dataptr));
 			break;
 		case SQL_C_ULONG:
-			res = duckdb::Value::UINTEGER(duckdb::Load<uint32_t>(dataptr));
+			res = Value::UINTEGER(Load<uint32_t>(dataptr));
 			break;
 		case SQL_C_SBIGINT:
-			res = duckdb::Value::BIGINT(duckdb::Load<int64_t>(dataptr));
+			res = Value::BIGINT(Load<int64_t>(dataptr));
 			break;
 		case SQL_C_UBIGINT:
-			res = duckdb::Value::UBIGINT(duckdb::Load<uint64_t>(dataptr));
+			res = Value::UBIGINT(Load<uint64_t>(dataptr));
 			break;
 		case SQL_C_FLOAT:
-			res = duckdb::Value::FLOAT(duckdb::Load<float>(dataptr));
+			res = Value::FLOAT(Load<float>(dataptr));
 			break;
 		case SQL_C_DOUBLE:
-			res = duckdb::Value::DOUBLE(duckdb::Load<double>(dataptr));
+			res = Value::DOUBLE(Load<double>(dataptr));
 			break;
+		case SQL_NUMERIC: {
+			auto precision = column_size;
+			ValidateNumeric(precision, decimal_digits);
+			if (column_size <= Decimal::MAX_WIDTH_INT64) {
+				res = Value::DECIMAL(Load<int64_t>(dataptr), precision, decimal_digits);
+			} else {
+				hugeint_t dec_value;
+				memcpy(&dec_value.lower, dataptr, sizeof(dec_value.lower));
+				memcpy(&dec_value.upper, dataptr + sizeof(dec_value.lower), sizeof(dec_value.upper));
+				res = Value::DECIMAL(dec_value, precision, decimal_digits);
+			}
 
-			// TODO moar types
-
+			duckdb::LogicalType dec_type = duckdb::LogicalType::DECIMAL(precision, decimal_digits);
+			stmt->stmt->ResetResultValueInfo(parameter_number, Value(dec_type));
+			break;
+		}
+		// TODO more types
 		default:
 			// TODO error message?
 			return SQL_ERROR;
