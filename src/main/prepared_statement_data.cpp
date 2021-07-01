@@ -1,7 +1,6 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/sql_statement.hpp"
-#include "duckdb/execution/operator/projection/physical_projection.hpp"
 
 namespace duckdb {
 
