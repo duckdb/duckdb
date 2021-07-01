@@ -18,6 +18,7 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #endif
 
@@ -344,16 +345,24 @@ void ColumnReader::Skip(idx_t num_values) {
 	}
 }
 
-void StringColumnReader::VerifyString(const char *str_data, idx_t str_len) {
+uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) {
 	if (Type() != LogicalTypeId::VARCHAR) {
-		return;
+		return str_len;
 	}
 	// verify if a string is actually UTF8, and if there are no null bytes in the middle of the string
 	// technically Parquet should guarantee this, but reality is often disappointing
-	auto utf_type = Utf8Proc::Analyze(str_data, str_len);
+	UnicodeInvalidReason reason;
+	size_t pos;
+	auto utf_type = Utf8Proc::Analyze(str_data, str_len, &reason, &pos);
 	if (utf_type == UnicodeType::INVALID) {
-		throw InternalException("Invalid string encoding found in Parquet file: value is not valid UTF8!");
+		if (reason == UnicodeInvalidReason::NULL_BYTE) {
+			// for null bytes we just truncate the string
+			return pos;
+		}
+		throw InvalidInputException("Invalid string encoding found in Parquet file: value \"" +
+		                            Blob::ToString(string_t(str_data, str_len)) + "\" is not valid UTF8!");
 	}
+	return str_len;
 }
 
 void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) {
@@ -363,8 +372,8 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 		uint32_t str_len = dict->read<uint32_t>();
 		dict->available(str_len);
 
-		VerifyString(dict->ptr, str_len);
-		dict_strings[dict_idx] = string_t(dict->ptr, str_len);
+		auto actual_str_len = VerifyString(dict->ptr, str_len);
+		dict_strings[dict_idx] = string_t(dict->ptr, actual_str_len);
 		dict->inc(str_len);
 	}
 }
@@ -395,8 +404,8 @@ string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnR
 	auto &scr = ((StringColumnReader &)reader);
 	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
 	plain_data.available(str_len);
-	((StringColumnReader &)reader).VerifyString(plain_data.ptr, str_len);
-	auto ret_str = string_t(plain_data.ptr, str_len);
+	auto actual_str_len = ((StringColumnReader &)reader).VerifyString(plain_data.ptr, str_len);
+	auto ret_str = string_t(plain_data.ptr, actual_str_len);
 	plain_data.inc(str_len);
 	return ret_str;
 }

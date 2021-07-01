@@ -36,7 +36,7 @@ public:
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override;
 
 	unique_ptr<string_t[]> dict_strings;
-	void VerifyString(const char *str_data, idx_t str_len);
+	uint32_t VerifyString(const char *str_data, uint32_t str_len);
 	idx_t fixed_width_string_length;
 
 protected:
