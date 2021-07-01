@@ -45,9 +45,9 @@ const LogicalType &ColumnData::RootType() const {
 	return type;
 }
 
-idx_t ColumnData::GetCount() {
+idx_t ColumnData::GetMaxEntry() {
 	auto last_segment = data.GetLastSegment();
-	return last_segment ? last_segment->start + last_segment->count : 0;
+	return last_segment ? last_segment->start + last_segment->count : start;
 }
 
 void ColumnData::InitializeScan(ColumnScanState &state) {
@@ -68,6 +68,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
+	D_ASSERT(state.current->type == type);
 	idx_t row_index = state.row_index;
 	idx_t initial_remaining = remaining;
 	while (remaining > 0) {

@@ -23,8 +23,8 @@ bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter)
 	return false;
 }
 
-idx_t StructColumnData::GetCount() {
-	return sub_columns[0]->GetCount();
+idx_t StructColumnData::GetMaxEntry() {
+	return sub_columns[0]->GetMaxEntry();
 }
 
 void StructColumnData::InitializeScan(ColumnScanState &state) {

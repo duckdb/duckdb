@@ -50,7 +50,7 @@ public:
 
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
-	virtual idx_t GetCount();
+	virtual idx_t GetMaxEntry();
 
 	//! The root type of the column
 	const LogicalType &RootType() const;

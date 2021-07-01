@@ -26,7 +26,7 @@ public:
 
 public:
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
-	idx_t GetCount() override;
+	idx_t GetMaxEntry() override;
 
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
