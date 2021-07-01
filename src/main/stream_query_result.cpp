@@ -29,7 +29,7 @@ string StreamQueryResult::ToString() {
 
 unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 	if (!success || !is_open) {
-		throw InvalidInputException("Attempting to fetch from an unsuccessful or closed streaming query result");
+		throw InvalidInputException("Attempting to fetch from an unsuccessful or closed streaming query result\nError: %s", error);
 	}
 	auto chunk = context->Fetch();
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {

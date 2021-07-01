@@ -48,7 +48,7 @@ unique_ptr<DataChunk> MaterializedQueryResult::Fetch() {
 
 unique_ptr<DataChunk> MaterializedQueryResult::FetchRaw() {
 	if (!success) {
-		throw InvalidInputException("Attempting to fetch from an unsuccessful query result");
+		throw InvalidInputException("Attempting to fetch from an unsuccessful query result\nError: %s", error);
 	}
 	return collection.Fetch();
 }
