@@ -55,31 +55,34 @@ void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t ro
 	}
 }
 
-void StructColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	validity.Scan(transaction, vector_index, state.child_states[0], result);
+idx_t StructColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+	auto scan_count = validity.Scan(transaction, vector_index, state.child_states[0], result);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->Scan(transaction, vector_index, state.child_states[i + 1], *child_entries[i]);
 	}
 	state.child_states[0].NextVector();
+	return scan_count;
 }
 
-void StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
+idx_t StructColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
+	auto scan_count = validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->ScanCommitted(vector_index, state.child_states[i + 1], *child_entries[i], allow_updates);
 	}
 	state.child_states[0].NextVector();
+	return scan_count;
 }
 
-void StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
-	validity.ScanCount(state.child_states[0], result, count);
+idx_t StructColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+	auto scan_count = validity.ScanCount(state.child_states[0], result, count);
 	auto &child_entries = StructVector::GetEntries(result);
 	for (idx_t i = 0; i < sub_columns.size(); i++) {
 		sub_columns[i]->ScanCount(state.child_states[i + 1], *child_entries[i], count);
 	}
 	state.child_states[0].Next(count);
+	return scan_count;
 }
 
 void StructColumnData::InitializeAppend(ColumnAppendState &state) {

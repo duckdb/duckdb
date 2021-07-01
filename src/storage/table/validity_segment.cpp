@@ -231,6 +231,7 @@ const validity_t ValiditySegment::UPPER_MASKS[] = {0x0,
 void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
 
+	result.Normalify(scan_count);
 	auto &result_mask = FlatVector::Validity(result);
 	auto input_data = (validity_t *)state.primary_handle->node->buffer;
 

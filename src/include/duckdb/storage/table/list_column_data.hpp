@@ -30,9 +30,9 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
-	void Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) override;
-	void ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) override;
-	void ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+	idx_t Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) override;
+	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) override;
+	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
 
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 

@@ -152,7 +152,6 @@ TEST_CASE("Test Parquet Long Files", "[arrow]") {
 }
 
 TEST_CASE("Test Parquet Files", "[arrow]") {
-
 	std::vector<std::string> skip {"aws2.parquet"};    //! Not supported by arrow
 	skip.emplace_back("datapage_v2.snappy.parquet");   //! Not supported by arrow
 	skip.emplace_back("broken-arrow.parquet");         //! Arrow can't read this

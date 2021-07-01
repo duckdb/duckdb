@@ -93,14 +93,15 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 }
 
 template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
-void ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	ScanVector(state, result, STANDARD_VECTOR_SIZE);
+idx_t ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+	auto scan_count = ScanVector(state, result, STANDARD_VECTOR_SIZE);
 
 	lock_guard<mutex> update_guard(update_lock);
 	if (updates) {
 		if (!ALLOW_UPDATES && updates->HasUncommittedUpdates(vector_index)) {
 			throw TransactionException("Cannot create index with outstanding updates");
 		}
+		result.Normalify(scan_count);
 		if (SCAN_COMMITTED) {
 			updates->FetchCommitted(vector_index, result);
 		} else {
@@ -108,45 +109,58 @@ void ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, Column
 			updates->FetchUpdates(*transaction, vector_index, result);
 		}
 	}
+	return scan_count;
 }
 
-template void ColumnData::ScanVector<false, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
+template idx_t ColumnData::ScanVector<false, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
                                                    Vector &result);
-template void ColumnData::ScanVector<true, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
+template idx_t ColumnData::ScanVector<true, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
                                                   Vector &result);
-template void ColumnData::ScanVector<false, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
+template idx_t ColumnData::ScanVector<false, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
                                                   Vector &result);
-template void ColumnData::ScanVector<true, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
+template idx_t ColumnData::ScanVector<true, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
                                                  Vector &result);
 
-void ColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	ScanVector<false, true>(&transaction, vector_index, state, result);
+idx_t ColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+	return ScanVector<false, true>(&transaction, vector_index, state, result);
 }
 
-void ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
+idx_t ColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
 	if (allow_updates) {
-		ScanVector<true, true>(nullptr, vector_index, state, result);
+		return ScanVector<true, true>(nullptr, vector_index, state, result);
 	} else {
-		ScanVector<true, false>(nullptr, vector_index, state, result);
+		return ScanVector<true, false>(nullptr, vector_index, state, result);
 	}
 }
 
 void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result) {
 	ColumnScanState child_state;
 	InitializeScanWithOffset(child_state, row_group_start + offset_in_row_group);
-	ScanVector(child_state, result, STANDARD_VECTOR_SIZE);
+	auto scan_count = ScanVector(child_state, result, STANDARD_VECTOR_SIZE);
 	if (updates) {
+		result.Normalify(scan_count);
 		updates->FetchCommittedRange(offset_in_row_group, count, result);
 	}
 }
 
-void ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
 	if (count == 0) {
-		return;
+		return 0;
 	}
 	// ScanCount can only be used if there are no updates
 	D_ASSERT(!updates);
-	ScanVector(state, result, count);
+	return ScanVector(state, result, count);
+}
+
+void ColumnData::Select(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &count, const TableFilter &filter) {
+	idx_t scan_count = Scan(transaction, vector_index, state, result);
+	result.Normalify(scan_count);
+	UncompressedSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
+}
+
+void ColumnData::FilterScan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t count) {
+	Scan(transaction, vector_index, state, result);
+	result.Slice(sel, count);
 }
 
 void ColumnData::Skip(ColumnScanState &state, idx_t count) {
@@ -309,7 +323,9 @@ void ColumnData::CommitDropColumn() {
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			auto &persistent = (PersistentSegment &)*segment;
-			block_manager.MarkBlockAsModified(persistent.block_id);
+			if (persistent.block_id != INVALID_BLOCK) {
+				block_manager.MarkBlockAsModified(persistent.block_id);
+			}
 		}
 		segment = (ColumnSegment *)segment->next.get();
 	}
@@ -438,6 +454,7 @@ void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, 
                                 idx_t base_row_index, idx_t count, Vector &scan_vector) {
 	segment->Scan(state, base_row_index, count, scan_vector, 0);
 	if (updates) {
+		scan_vector.Normalify(count);
 		updates->FetchCommittedRange(segment->start - row_group_start + base_row_index, count, scan_vector);
 	}
 }
@@ -478,7 +495,9 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 			}
 			if (has_changes) {
 				// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
-				block_manager.MarkBlockAsModified(persistent.block_id);
+				if (persistent.block_id != INVALID_BLOCK) {
+					block_manager.MarkBlockAsModified(persistent.block_id);
+				}
 			} else {
 				// unchanged persistent segment: no need to write the data
 
