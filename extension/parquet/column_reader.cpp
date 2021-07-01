@@ -359,7 +359,8 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 			// for null bytes we just truncate the string
 			return pos;
 		}
-		throw InvalidInputException("Invalid string encoding found in Parquet file: value \"" + Blob::ToString(string_t(str_data, str_len)) + "\" is not valid UTF8!");
+		throw InvalidInputException("Invalid string encoding found in Parquet file: value \"" +
+		                            Blob::ToString(string_t(str_data, str_len)) + "\" is not valid UTF8!");
 	}
 	return str_len;
 }
