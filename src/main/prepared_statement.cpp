@@ -46,17 +46,4 @@ unique_ptr<QueryResult> PreparedStatement::Execute(vector<Value> &values, bool a
 	return result;
 }
 
-void PreparedStatement::ResetResultValueInfo(idx_t param_idx, const Value &value) {
-	switch (value.type().id()) {
-	case LogicalTypeId::DECIMAL:
-		// just for decimal because of ODBC
-		// is it need to change the shared_ptr in a transaction ?
-		data->ResetResultValueEntry(param_idx, value);
-		break;
-
-	default:
-		break;
-	}
-}
-
 } // namespace duckdb

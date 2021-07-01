@@ -54,8 +54,6 @@ public:
 	DUCKDB_API void Bind(vector<Value> values);
 	//! Get the expected SQL Type of the bound parameter
 	DUCKDB_API LogicalType GetType(idx_t param_index);
-
-	void ResetResultValueEntry(idx_t val_idx, const Value &value);
 };
 
 } // namespace duckdb
