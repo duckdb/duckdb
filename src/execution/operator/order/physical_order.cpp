@@ -1631,15 +1631,19 @@ public:
 						    result_heap_block->entry_size;
 						buffer_manager.ReAllocate(result_heap_block->block,
 						                          new_capacity * result_heap_block->entry_size);
-						result_heap_ptr = result_heap_handle->Ptr();
+						result_heap_block->capacity = new_capacity;
+						result_heap_ptr = result_heap_handle->Ptr() + result_heap_block->byte_offset;
 					}
+					D_ASSERT(result_heap_block->byte_offset + copy_bytes <=
+					         result_heap_block->capacity * result_heap_block->entry_size);
 					// Now copy the heap data
 					for (idx_t i = 0; i < merged; i++) {
 						const bool &l_smaller = left_smaller[copied + i];
 						const bool r_smaller = !l_smaller;
-						auto &entry_size = next_entry_sizes[copied + i];
+						const auto &entry_size = next_entry_sizes[copied + i];
 						memcpy(result_heap_ptr, l_heap_ptr, l_smaller * entry_size);
 						memcpy(result_heap_ptr, r_heap_ptr, r_smaller * entry_size);
+						D_ASSERT(Load<idx_t>(result_heap_ptr) == entry_size);
 						result_heap_ptr += entry_size;
 						l_heap_ptr += l_smaller * entry_size;
 						r_heap_ptr += r_smaller * entry_size;
@@ -1654,12 +1658,12 @@ public:
 					// Right side is exhausted - flush left
 					FlushVariableSize(buffer_manager, layout, l_count, l_ptr, l_data.entry_idx, l_heap_ptr,
 					                  result_data_block, result_data_ptr, result_heap_block, *result_heap_handle,
-					                  result_heap_ptr, copied, count, next_entry_sizes);
+					                  result_heap_ptr, copied, count);
 				} else {
 					// Left side is exhausted - flush right
 					FlushVariableSize(buffer_manager, layout, r_count, r_ptr, r_data.entry_idx, r_heap_ptr,
 					                  result_data_block, result_data_ptr, result_heap_block, *result_heap_handle,
-					                  result_heap_ptr, copied, count, next_entry_sizes);
+					                  result_heap_ptr, copied, count);
 				}
 			}
 			// move to new data blocks (if needed)
@@ -1721,8 +1725,7 @@ public:
 	                              data_ptr_t &source_data_ptr, idx_t &source_entry_idx, data_ptr_t &source_heap_ptr,
 	                              RowDataBlock *target_data_block, data_ptr_t &target_data_ptr,
 	                              RowDataBlock *target_heap_block, BufferHandle &target_heap_handle,
-	                              data_ptr_t &target_heap_ptr, idx_t &copied, const idx_t &count,
-	                              idx_t next_entry_sizes[]) {
+	                              data_ptr_t &target_heap_ptr, idx_t &copied, const idx_t &count) {
 		const idx_t row_width = layout.GetRowWidth();
 		const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
 		idx_t source_entry_idx_copy = source_entry_idx;
@@ -1740,8 +1743,7 @@ public:
 			Store<idx_t>(target_heap_block->byte_offset + copy_bytes, target_data_ptr + heap_pointer_offset);
 			target_data_ptr += row_width;
 			// Compute entry size and add to total
-			auto &entry_size = next_entry_sizes[copied + i];
-			entry_size = Load<idx_t>(source_heap_ptr_copy);
+			auto entry_size = Load<idx_t>(source_heap_ptr_copy);
 			D_ASSERT(entry_size >= sizeof(idx_t));
 			source_heap_ptr_copy += entry_size;
 			copy_bytes += entry_size;
@@ -1750,9 +1752,12 @@ public:
 		if (target_heap_block->byte_offset + copy_bytes > target_heap_block->capacity * target_heap_block->entry_size) {
 			idx_t new_capacity = (target_heap_block->byte_offset + copy_bytes + target_heap_block->entry_size) /
 			                     target_heap_block->entry_size;
-			buffer_manager.ReAllocate(target_heap_block->block, new_capacity);
-			target_heap_ptr = target_heap_handle.Ptr();
+			buffer_manager.ReAllocate(target_heap_block->block, new_capacity * target_heap_block->entry_size);
+			target_heap_block->capacity = new_capacity;
+			target_heap_ptr = target_heap_handle.Ptr() + target_heap_block->byte_offset;
 		}
+		D_ASSERT(target_heap_block->byte_offset + copy_bytes <=
+		         target_heap_block->capacity * target_heap_block->entry_size);
 		// Copy the heap data in one go
 		memcpy(target_heap_ptr, source_heap_ptr, copy_bytes);
 		target_heap_ptr += copy_bytes;
@@ -1762,6 +1767,7 @@ public:
 		// Update result indices and pointers
 		target_heap_block->count += flushed;
 		target_heap_block->byte_offset += copy_bytes;
+		D_ASSERT(target_heap_block->byte_offset <= target_heap_block->capacity * target_heap_block->entry_size);
 	}
 
 private:

@@ -24,7 +24,7 @@ struct RowDataBlock {
 	//! The buffer block handle
 	shared_ptr<BlockHandle> block;
 	//! Capacity (number of entries) and entry size that fit in this block
-	const idx_t capacity;
+	idx_t capacity;
 	const idx_t entry_size;
 	//! Number of entries currently in this block
 	idx_t count;
