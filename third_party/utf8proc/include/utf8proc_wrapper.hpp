@@ -9,7 +9,6 @@ namespace duckdb {
 enum class UnicodeType { INVALID, ASCII, UNICODE };
 enum class UnicodeInvalidReason { BYTE_MISMATCH, NULL_BYTE };
 
-
 class Utf8Proc {
 public:
 	//! Distinguishes ASCII, Valid UTF8 and Invalid UTF8 strings
@@ -29,7 +28,7 @@ public:
 	static int CodepointLength(int cp);
 	//! Transform a UTF8 string to a codepoint; returns the codepoint and writes the length of the codepoint (in UTF8) to sz
 	static int32_t UTF8ToCodepoint(const char *c, int &sz);
-    static size_t RenderWidth(const char *s, size_t len, size_t pos);
+	static size_t RenderWidth(const char *s, size_t len, size_t pos);
 
 };
 
