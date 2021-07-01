@@ -1161,14 +1161,7 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 }
 
 const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel) {
-	if (count <= STANDARD_VECTOR_SIZE) {
-		return &FlatVector::INCREMENTAL_SELECTION_VECTOR;
-	}
-	owned_sel.Initialize(count);
-	for (idx_t i = 0; i < count; i++) {
-		owned_sel.set_index(i, i);
-	}
-	return &owned_sel;
+	return &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
