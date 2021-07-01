@@ -60,6 +60,8 @@ public:
 	//! Execute the prepared statement with the given set of values
 	DUCKDB_API unique_ptr<QueryResult> Execute(vector<Value> &values, bool allow_stream_result = true);
 
+	void ResetResultValueInfo(idx_t param_idx, const Value &value);
+
 private:
 	unique_ptr<QueryResult> ExecuteRecursive(vector<Value> &values) {
 		return Execute(values);
