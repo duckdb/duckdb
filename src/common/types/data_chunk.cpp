@@ -282,11 +282,9 @@ void SetChildValidityMask(Vector &vector, ArrowArray &child) {
 	child.buffers[0] = (void *)mask.GetData();
 }
 
-void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size,
-                   ValidityMask *parent_mask = nullptr);
+void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size);
 
-void SetList(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size,
-             ValidityMask *parent_mask = nullptr) {
+void SetList(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
 	auto &child = child_holder.array;
 	child_holder.vector = make_unique<Vector>(data);
 
@@ -297,15 +295,13 @@ void SetList(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type,
 	child.buffers[1] = child_holder.offsets.get();
 	auto offset_ptr = (uint32_t *)child.buffers[1];
 	auto list_data = FlatVector::GetData<list_entry_t>(data);
+	auto list_mask = FlatVector::Validity(data);
 	idx_t offset = 0;
 	offset_ptr[0] = 0;
 	for (idx_t i = 0; i < size; i++) {
 		auto &le = list_data[i];
-		if (parent_mask) {
-			if (parent_mask->RowIsValid(i)) {
-				offset += le.length;
-			}
-		} else {
+
+		if (list_mask.RowIsValid(i)) {
 			offset += le.length;
 		}
 
@@ -318,14 +314,12 @@ void SetList(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type,
 	child_holder.children_ptrs.push_back(&child_holder.children[0].array);
 	child.children = &child_holder.children_ptrs[0];
 	auto &child_vector = ListVector::GetEntry(data);
-	auto &list_mask = FlatVector::Validity(data);
 	auto &child_type = ListType::GetChildType(type);
-	SetArrowChild(child_holder.children[0], child_type, child_vector, list_size, &list_mask);
+	SetArrowChild(child_holder.children[0], child_type, child_vector, list_size);
 	SetChildValidityMask(child_vector, child_holder.children[0].array);
 }
 
-void SetStruct(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size,
-               ValidityMask *parent_mask = nullptr, bool is_map = false) {
+void SetStruct(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
 	auto &child = child_holder.array;
 	child_holder.vector = make_unique<Vector>(data);
 
@@ -340,15 +334,13 @@ void SetStruct(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &typ
 	}
 	child.children = &child_holder.children_ptrs[0];
 	for (idx_t child_idx = 0; child_idx < child_holder.children.size(); child_idx++) {
-		auto &struct_mask = FlatVector::Validity(data);
 		SetArrowChild(child_holder.children[child_idx], StructType::GetChildType(type, child_idx), *children[child_idx],
-		              size, &struct_mask);
+		              size);
 		SetChildValidityMask(*children[child_idx], child_holder.children[child_idx].array);
 	}
 }
 
-void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size,
-                  ValidityMask *map_mask) {
+void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
 	auto &child = child_holder.array;
 	child_holder.vector = make_unique<Vector>(data);
 
@@ -385,12 +377,11 @@ void SetStructMap(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &
 			SetChildValidityMask(list_vector_child, child_holder.children[child_idx].array);
 		}
 		SetArrowChild(child_holder.children[child_idx], ListType::GetChildType(child_types[child_idx].second),
-		              list_vector_child, list_size, map_mask);
+		              list_vector_child, list_size);
 	}
 }
 
-void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size,
-                   ValidityMask *parent_mask) {
+void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType &type, Vector &data, idx_t size) {
 	auto &child = child_holder.array;
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN: {
@@ -528,11 +519,11 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		SetList(child_holder, type, data, size, parent_mask);
+		SetList(child_holder, type, data, size);
 		break;
 	}
 	case LogicalTypeId::STRUCT: {
-		SetStruct(child_holder, type, data, size, parent_mask);
+		SetStruct(child_holder, type, data, size);
 		break;
 	}
 	case LogicalTypeId::MAP: {
@@ -564,7 +555,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		//! We need to set up a struct
 		auto struct_type = LogicalType::STRUCT(StructType::GetChildTypes(type));
 
-		SetStructMap(child_holder.children[0], struct_type, *child_holder.vector, size, &map_mask);
+		SetStructMap(child_holder.children[0], struct_type, *child_holder.vector, size);
 		break;
 	}
 	case LogicalTypeId::INTERVAL: {

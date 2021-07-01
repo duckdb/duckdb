@@ -35,6 +35,10 @@ std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
 	REQUIRE(status.ok());
 	std::shared_ptr<arrow::Table> table;
 	status = reader->ReadTable(&table);
+	if (!status.ok()) {
+		std::cout << status.ToString() << std::endl;
+		std::cout << path << std::endl;
+	}
 	REQUIRE(status.ok());
 	return table;
 }
@@ -110,7 +114,7 @@ TEST_CASE("Test Parquet File NaN", "[arrow]") {
 	duckdb::Connection conn {db};
 
 	//! Impossible to round-trip NaNs so we just validate that the duckdb table is correct-o
-	std::string parquet_path = "test/sql/copy/parquet/data/nan-float.parquet";
+	std::string parquet_path = "data/parquet-testing/nan-float.parquet";
 	auto table = ReadParquetFile(parquet_path);
 
 	auto result = ArrowToDuck(conn, *table);
@@ -127,7 +131,7 @@ TEST_CASE("Test Parquet File Fixed Size Binary", "[arrow]") {
 	duckdb::Connection conn {db};
 
 	//! Impossible to round-trip Fixed Binaries so we just validate that the duckdb table is correct-o
-	std::string parquet_path = "test/sql/copy/parquet/data/fixed.parquet";
+	std::string parquet_path = "data/parquet-testing/fixed.parquet";
 	auto table = ReadParquetFile(parquet_path);
 
 	auto result = ArrowToDuck(conn, *table);
@@ -142,8 +146,8 @@ TEST_CASE("Test Parquet Long Files", "[arrow]") {
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
 
-	std::vector<std::string> run {"test/sql/copy/parquet/data/leftdate3_192_loop_1.parquet"};
-	run.emplace_back("test/sql/copy/parquet/data/bug687_nulls.parquet");
+	std::vector<std::string> run {"data/parquet-testing/leftdate3_192_loop_1.parquet"};
+	run.emplace_back("data/parquet-testing/bug687_nulls.parquet");
 	if (STANDARD_VECTOR_SIZE >= 1024) {
 		for (auto &parquet_path : run) {
 			REQUIRE(RoundTrip(parquet_path, skip, conn));
@@ -153,35 +157,55 @@ TEST_CASE("Test Parquet Long Files", "[arrow]") {
 
 TEST_CASE("Test Parquet Files", "[arrow]") {
 
-	std::vector<std::string> skip {"aws2.parquet"};    //! Not supported by arrow
-	skip.emplace_back("datapage_v2.snappy.parquet");   //! Not supported by arrow
-	skip.emplace_back("broken-arrow.parquet");         //! Arrow can't read this
-	skip.emplace_back("nan-float.parquet");            //! Can't roundtrip NaNs
-	skip.emplace_back("fixed.parquet");                //! Can't roundtrip Fixed-size Binaries
-	skip.emplace_back("leftdate3_192_loop_1.parquet"); //! This is just crazy slow
-	skip.emplace_back("bug687_nulls.parquet");         //! This is just crazy slow
+	std::vector<std::string> skip {"aws2.parquet"};         //! Not supported by arrow
+	skip.emplace_back("datapage_v2.snappy.parquet");        //! Not supported by arrow
+	skip.emplace_back("broken-arrow.parquet");              //! Arrow can't read this
+	skip.emplace_back("nan-float.parquet");                 //! Can't roundtrip NaNs
+	skip.emplace_back("fixed.parquet");                     //! Can't roundtrip Fixed-size Binaries
+	skip.emplace_back("leftdate3_192_loop_1.parquet");      //! This is just crazy slow
+	skip.emplace_back("bug687_nulls.parquet");              //! This is just crazy slow
+	skip.emplace_back("lz4_raw_compressed.parquet");        //! Arrow can't read this
+	skip.emplace_back("lz4_raw_compressed_larger.parquet"); //! Arrow can't read this
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
 	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
 
-	auto parquet_files = fs.Glob("test/sql/copy/parquet/data/*.parquet");
+	auto parquet_files = fs.Glob("data/parquet-testing/*.parquet");
 	for (auto &parquet_path : parquet_files) {
-		REQUIRE(RoundTrip(parquet_path, skip, conn));
+		if (!RoundTrip(parquet_path, skip, conn)) {
+			std::cout << parquet_path << std::endl;
+		}
 	}
-	skip.clear();
+}
+
+TEST_CASE("Test Parquet Files Decimal", "[arrow]") {
+	std::vector<std::string> skip;
+
+	duckdb::DuckDB db;
+	duckdb::Connection conn {db};
+	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
 
 	//! Decimal Files
-	parquet_files = fs.Glob("test/sql/copy/parquet/data/decimal/*.parquet");
+	auto parquet_files = fs.Glob("data/parquet-testing/decimal/*.parquet");
 	for (auto &parquet_path : parquet_files) {
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
+}
 
-	parquet_files = fs.Glob("test/sql/copy/parquet/data/cache/*.parquet");
+TEST_CASE("Test Parquet Files Glob", "[arrow]") {
+
+	std::vector<std::string> skip;
+
+	duckdb::DuckDB db;
+	duckdb::Connection conn {db};
+	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
+
+	auto parquet_files = fs.Glob("data/parquet-testing/cache/*.parquet");
 	for (auto &parquet_path : parquet_files) {
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
-	parquet_files = fs.Glob("test/sql/copy/parquet/data/glob/*.parquet");
+	parquet_files = fs.Glob("data/parquet-testing/glob/*.parquet");
 	for (auto &parquet_path : parquet_files) {
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
