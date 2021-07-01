@@ -1,0 +1,15 @@
+# name: test/sql/types/nested/struct/struct_minmax.test_slow
+# description: Test structs with aggregations
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE VIEW million_structs AS
+SELECT {'m': (i+1) % 998513, 'i': i+1} as s FROM range(999983) tbl(i);
+
+query II
+SELECT min(s), max(s) FROM million_structs;
+----
+{'m': 0, 'i': 998513}	{'m': 998512, 'i': 998512}

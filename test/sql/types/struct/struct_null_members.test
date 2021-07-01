@@ -76,7 +76,7 @@ NULL	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 NULL	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	True	False
 
-# String lists with NULLs in various positions
+# String STRUCTs with NULLs in various positions
 statement ok
 CREATE VIEW list_str AS
 SELECT * FROM (VALUES

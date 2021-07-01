@@ -26,7 +26,6 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 void VectorOperations::Copy(const Vector &source, Vector &target, const SelectionVector &sel_p, idx_t source_count,
                             idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
-	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(source.GetType() == target.GetType());
 	idx_t copy_count = source_count - source_offset;
 
@@ -63,6 +62,14 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	if (copy_count == 0) {
 		return;
 	}
+
+	// Allow copying of a single value to constant vectors
+	const auto target_vector_type = target.GetVectorType();
+	if (copy_count == 1 && target_vector_type == VectorType::CONSTANT_VECTOR) {
+		target_offset = 0;
+		target.SetVectorType(VectorType::FLAT_VECTOR);
+	}
+	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 
 	// first copy the nullmask
 	auto &tmask = FlatVector::Validity(target);
@@ -151,40 +158,60 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	}
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
-		//! if the source has list offsets, we need to append them to the target
-		//! build a selection vector for the copied child elements
-		auto sdata = FlatVector::GetData<list_entry_t>(source);
-		vector<sel_t> child_rows;
-		for (idx_t i = 0; i < copy_count; ++i) {
-			if (tmask.RowIsValid(target_offset + i)) {
-				auto source_idx = sel->get_index(source_offset + i);
-				auto &source_entry = sdata[source_idx];
-				for (idx_t j = 0; j < source_entry.length; ++j) {
-					child_rows.emplace_back(source_entry.offset + j);
-				}
-			}
-		}
-		idx_t source_child_size = child_rows.size();
-		SelectionVector child_sel(child_rows.data());
 
 		auto &source_child = ListVector::GetEntry(source);
-
-		idx_t old_target_child_len = ListVector::GetListSize(target);
-
-		//! append to list itself
-		ListVector::Append(target, source_child, child_sel, source_child_size);
-
-		//! now write the list offsets
+		auto sdata = FlatVector::GetData<list_entry_t>(source);
 		auto tdata = FlatVector::GetData<list_entry_t>(target);
-		for (idx_t i = 0; i < copy_count; i++) {
-			auto source_idx = sel->get_index(source_offset + i);
-			auto &source_entry = sdata[source_idx];
-			auto &target_entry = tdata[target_offset + i];
 
+		if (target_vector_type == VectorType::CONSTANT_VECTOR) {
+			// If we are only writing one value, then the copied values (if any) are contiguous
+			// and we can just Append from the offset position
+			if (!tmask.RowIsValid(target_offset)) {
+				break;
+			}
+			auto source_idx = sel->get_index(source_offset);
+			auto &source_entry = sdata[source_idx];
+			const idx_t source_child_size = source_entry.length + source_entry.offset;
+
+			//! overwrite constant target vectors.
+			ListVector::SetListSize(target, 0);
+			ListVector::Append(target, source_child, source_child_size, source_entry.offset);
+
+			auto &target_entry = tdata[target_offset];
 			target_entry.length = source_entry.length;
-			target_entry.offset = old_target_child_len;
-			if (tmask.RowIsValid(target_offset + i)) {
-				old_target_child_len += target_entry.length;
+			target_entry.offset = 0;
+		} else {
+			//! if the source has list offsets, we need to append them to the target
+			//! build a selection vector for the copied child elements
+			vector<sel_t> child_rows;
+			for (idx_t i = 0; i < copy_count; ++i) {
+				if (tmask.RowIsValid(target_offset + i)) {
+					auto source_idx = sel->get_index(source_offset + i);
+					auto &source_entry = sdata[source_idx];
+					for (idx_t j = 0; j < source_entry.length; ++j) {
+						child_rows.emplace_back(source_entry.offset + j);
+					}
+				}
+			}
+			idx_t source_child_size = child_rows.size();
+			SelectionVector child_sel(child_rows.data());
+
+			idx_t old_target_child_len = ListVector::GetListSize(target);
+
+			//! append to list itself
+			ListVector::Append(target, source_child, child_sel, source_child_size);
+
+			//! now write the list offsets
+			for (idx_t i = 0; i < copy_count; i++) {
+				auto source_idx = sel->get_index(source_offset + i);
+				auto &source_entry = sdata[source_idx];
+				auto &target_entry = tdata[target_offset + i];
+
+				target_entry.length = source_entry.length;
+				target_entry.offset = old_target_child_len;
+				if (tmask.RowIsValid(target_offset + i)) {
+					old_target_child_len += target_entry.length;
+				}
 			}
 		}
 		break;
@@ -192,6 +219,10 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	default:
 		throw NotImplementedException("Unimplemented type '%s' for copy!",
 		                              TypeIdToString(source.GetType().InternalType()));
+	}
+
+	if (target_vector_type != VectorType::FLAT_VECTOR) {
+		target.SetVectorType(target_vector_type);
 	}
 }
 
