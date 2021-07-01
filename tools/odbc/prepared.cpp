@@ -119,6 +119,8 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 			}
 
 			duckdb::LogicalType dec_type = duckdb::LogicalType::DECIMAL(precision, decimal_digits);
+			// it is needed to reset the result info type to the proper precision and scale
+			// instead of using the default DECIMAL(18, 3)
 			stmt->stmt->ResetResultValueInfo(parameter_number, Value(dec_type));
 			break;
 		}
