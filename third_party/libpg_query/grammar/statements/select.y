@@ -1198,13 +1198,15 @@ Typename:	SimpleTypename opt_array_bounds
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
-			| RowOrStruct '(' colid_type_list ')' {
+			| RowOrStruct '(' colid_type_list ')' opt_array_bounds {
                $$ = SystemTypeName("struct");
+               $$->arrayBounds = $5;
                $$->typmods = $3;
                $$->location = @1;
                }
-            | MAP '(' type_list ')' {
+            | MAP '(' type_list ')' opt_array_bounds {
                $$ = SystemTypeName("map");
+               $$->arrayBounds = $5;
                $$->typmods = $3;
                $$->location = @1;
 			}
@@ -1877,6 +1879,14 @@ a_expr:		c_expr									{ $$ = $1; }
 				PGFuncCall *n = makeFuncCall(SystemFuncName("row"), $1, @1);
 				$$ = (PGNode *) n;
 			}
+			| '{' dict_arguments '}' {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("struct_pack"), $2, @2);
+				$$ = (PGNode *) n;
+			}
+			| '[' opt_expr_list ']' {
+				PGFuncCall *n = makeFuncCall(SystemFuncName("list_value"), $2, @2);
+				$$ = (PGNode *) n;
+			}
 			| row LAMBDA_ARROW a_expr
 			{
 				PGLambdaFunction *n = makeNode(PGLambdaFunction);
@@ -2079,6 +2089,11 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
+			| ARRAY '[' opt_expr_list ']' {
+				PGList *func_name = list_make1(makeString("construct_array"));
+				PGFuncCall *n = makeFuncCall(func_name, $3, @1);
+				$$ = (PGNode *) n;
+			}
 		;
 
 /*
@@ -2156,6 +2171,13 @@ b_expr:		c_expr
  */
 c_expr:		columnref								{ $$ = $1; }
 			| AexprConst							{ $$ = $1; }
+			| '#' ICONST
+				{
+					PGPositionalReference *n = makeNode(PGPositionalReference);
+					n->position = $2;
+					n->location = @1;
+					$$ = (PGNode *) n;
+				}
 			| '?' opt_indirection
 				{
 					if ($2)
@@ -2779,6 +2801,20 @@ row:		qualified_row							{ $$ = $1;}
 			| '(' expr_list ',' a_expr ')'			{ $$ = lappend($2, $4); }
 		;
 
+dict_arg:
+	ColIdOrString ':' a_expr						{
+		PGNamedArgExpr *na = makeNode(PGNamedArgExpr);
+		na->name = $1;
+		na->arg = (PGExpr *) $3;
+		na->argnumber = -1;
+		na->location = @1;
+		$$ = (PGNode *) na;
+	}
+
+dict_arguments:
+	dict_arg						{ $$ = list_make1($1); }
+	| dict_arguments ',' dict_arg	{ $$ = lappend($1, $3); }
+
 sub_type:	ANY										{ $$ = PG_ANY_SUBLINK; }
 			| SOME									{ $$ = PG_ANY_SUBLINK; }
 			| ALL									{ $$ = PG_ALL_SUBLINK; }
@@ -2859,6 +2895,18 @@ expr_list:	a_expr
 					$$ = lappend($1, $3);
 				}
 		;
+
+opt_expr_list:
+			expr_list
+				{
+					$$ = $1;
+				}
+			| /* empty */
+				{
+					$$ = NULL;
+				}
+		;
+
 
 /* function arguments can have names */
 func_arg_list:  func_arg_expr
@@ -3278,9 +3326,17 @@ AexprConst: Iconst
 				{
 					$$ = makeFloatConst($1, @1);
 				}
-			| Sconst
+			| Sconst opt_indirection
 				{
-					$$ = makeStringConst($1, @1);
+					if ($2)
+					{
+						PGAIndirection *n = makeNode(PGAIndirection);
+						n->arg = makeStringConst($1, @1);
+						n->indirection = check_indirection($2, yyscanner);
+						$$ = (PGNode *) n;
+					}
+					else
+						$$ = makeStringConst($1, @1);
 				}
 			| BCONST
 				{

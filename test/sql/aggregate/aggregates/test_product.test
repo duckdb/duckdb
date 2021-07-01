@@ -57,12 +57,12 @@ NULL
 # Window Function
 require vector_size 512
 
-query I
+query I rowsort
 select product(i) over (partition by i%2)
     from integers;
 ----
-NULL
-8
-8
 1
+8
+8
+NULL
 

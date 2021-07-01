@@ -108,6 +108,14 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	// first write the meta data
 	out->column_count = result->types.size();
 	out->row_count = result->collection.Count();
+	out->rows_changed = 0;
+	if (out->row_count > 0 && StatementTypeReturnChanges(result->statement_type)) {
+		// update total changes
+		auto row_changes = result->GetValue(0, 0);
+		if (!row_changes.is_null && row_changes.TryCastAs(LogicalType::BIGINT)) {
+			out->rows_changed = row_changes.GetValue<int64_t>();
+		}
+	}
 	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
 	if (!out->columns) {
 		return DuckDBError;
@@ -232,16 +240,28 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			}
 			break;
 		}
-		case LogicalTypeId::TIMESTAMP: {
+		case LogicalTypeId::TIMESTAMP:
+		case LogicalTypeId::TIMESTAMP_NS:
+		case LogicalTypeId::TIMESTAMP_MS:
+		case LogicalTypeId::TIMESTAMP_SEC: {
 			idx_t row = 0;
 			auto target = (duckdb_timestamp *)out->columns[col].data;
 			for (auto &chunk : result->collection.Chunks()) {
 				auto source = FlatVector::GetData<timestamp_t>(chunk->data[col]);
+
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
 						date_t date;
 						dtime_t time;
-						Timestamp::Convert(source[k], date, time);
+						auto source_value = source[k];
+						if (result->types[col].id() == LogicalTypeId::TIMESTAMP_NS) {
+							source_value = Timestamp::FromEpochNanoSeconds(source[k].value);
+						} else if (result->types[col].id() == LogicalTypeId::TIMESTAMP_MS) {
+							source_value = Timestamp::FromEpochMs(source[k].value);
+						} else if (result->types[col].id() == LogicalTypeId::TIMESTAMP_SEC) {
+							source_value = Timestamp::FromEpochSeconds(source[k].value);
+						}
+						Timestamp::Convert(source_value, date, time);
 
 						int32_t year, month, day;
 						Date::Convert(date, year, month, day);
@@ -499,6 +519,13 @@ duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
 		return DUCKDB_TYPE_DOUBLE;
 	case LogicalTypeId::TIMESTAMP:
 		return DUCKDB_TYPE_TIMESTAMP;
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return DUCKDB_TYPE_TIMESTAMP_S;
+	case LogicalTypeId::TIMESTAMP_MS:
+		return DUCKDB_TYPE_TIMESTAMP_MS;
+	case LogicalTypeId::TIMESTAMP_NS:
+		return DUCKDB_TYPE_TIMESTAMP_NS;
+
 	case LogicalTypeId::DATE:
 		return DUCKDB_TYPE_DATE;
 	case LogicalTypeId::TIME:
@@ -537,6 +564,9 @@ idx_t GetCTypeSize(duckdb_type type) {
 	case DUCKDB_TYPE_TIME:
 		return sizeof(duckdb_time);
 	case DUCKDB_TYPE_TIMESTAMP:
+	case DUCKDB_TYPE_TIMESTAMP_NS:
+	case DUCKDB_TYPE_TIMESTAMP_MS:
+	case DUCKDB_TYPE_TIMESTAMP_S:
 		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
 		return sizeof(const char *);
@@ -590,6 +620,9 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 		auto time = UnsafeFetch<duckdb_time>(result, col, row);
 		return Value::TIME(time.hour, time.min, time.sec, time.micros);
 	}
+	case DUCKDB_TYPE_TIMESTAMP_NS:
+	case DUCKDB_TYPE_TIMESTAMP_MS:
+	case DUCKDB_TYPE_TIMESTAMP_S:
 	case DUCKDB_TYPE_TIMESTAMP: {
 		auto timestamp = UnsafeFetch<duckdb_timestamp>(result, col, row);
 		return Value::TIMESTAMP(timestamp.date.year, timestamp.date.month, timestamp.date.day, timestamp.time.hour,
@@ -746,6 +779,14 @@ duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
 		blob.size = val.str_value.size();
 	}
 	return blob;
+}
+
+void *duckdb_malloc(size_t size) {
+	return malloc(size);
+}
+
+void duckdb_free(void *ptr) {
+	free(ptr);
 }
 
 duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,

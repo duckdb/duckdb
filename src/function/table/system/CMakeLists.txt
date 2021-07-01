@@ -1,0 +1,21 @@
+add_library_unity(
+  duckdb_table_func_system
+  OBJECT
+  duckdb_columns.cpp
+  duckdb_constraints.cpp
+  duckdb_dependencies.cpp
+  duckdb_indexes.cpp
+  duckdb_schemas.cpp
+  duckdb_sequences.cpp
+  duckdb_tables.cpp
+  duckdb_types.cpp
+  duckdb_views.cpp
+  pragma_collations.cpp
+  pragma_database_list.cpp
+  pragma_database_size.cpp
+  pragma_functions.cpp
+  pragma_storage_info.cpp
+  pragma_table_info.cpp)
+set(ALL_OBJECT_FILES
+    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_table_func_system>
+    PARENT_SCOPE)

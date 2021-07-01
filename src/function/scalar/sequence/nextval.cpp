@@ -32,7 +32,6 @@ static int64_t NextSequenceValue(Transaction &transaction, SequenceCatalogEntry 
 	if (seq->cycle) {
 		result = seq->counter;
 		seq->counter += seq->increment;
-		;
 		if (result < seq->min_value) {
 			result = seq->max_value;
 			seq->counter = seq->max_value + seq->increment;
@@ -52,6 +51,7 @@ static int64_t NextSequenceValue(Transaction &transaction, SequenceCatalogEntry 
 			                        seq->max_value);
 		}
 	}
+	seq->last_value = result;
 	seq->usage_count++;
 	transaction.sequence_usage[seq] = SequenceValue(seq->usage_count, seq->counter);
 	return result;

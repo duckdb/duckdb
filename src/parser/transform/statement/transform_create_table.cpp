@@ -26,8 +26,9 @@ string Transformer::TransformCollation(duckdb_libpgquery::PGCollateClause *colla
 	return collation;
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery::PGCollateClause *collate) {
-	auto child = TransformExpression(collate->arg);
+unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery::PGCollateClause *collate,
+                                                               idx_t depth) {
+	auto child = TransformExpression(collate->arg, depth + 1);
 	auto collation = TransformCollation(collate);
 	return make_unique<CollateExpression>(collation, move(child));
 }
@@ -42,7 +43,7 @@ ColumnDefinition Transformer::TransformColumnDefinition(duckdb_libpgquery::PGCol
 		if (target_type.id() != LogicalTypeId::VARCHAR) {
 			throw ParserException("Only VARCHAR columns can have collations!");
 		}
-		target_type = LogicalType(LogicalTypeId::VARCHAR, TransformCollation(cdef->collClause));
+		target_type = LogicalType::VARCHAR_COLLATION(TransformCollation(cdef->collClause));
 	}
 
 	return ColumnDefinition(colname, target_type);

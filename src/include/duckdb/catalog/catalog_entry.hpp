@@ -11,6 +11,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/catalog_type.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/atomic.hpp"
+
 #include <memory>
 
 namespace duckdb {
@@ -22,10 +24,7 @@ class ClientContext;
 //! Abstract base class of an entry in the catalog
 class CatalogEntry {
 public:
-	CatalogEntry(CatalogType type, Catalog *catalog, string name)
-	    : type(type), catalog(catalog), set(nullptr), name(name), deleted(false), temporary(false), internal(false),
-	      parent(nullptr) {
-	}
+	CatalogEntry(CatalogType type, Catalog *catalog, string name);
 	virtual ~CatalogEntry();
 
 	virtual unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) {
@@ -44,6 +43,8 @@ public:
 		throw CatalogException("Unsupported catalog type for ToSQL()");
 	}
 
+	//! The oid of the entry
+	idx_t oid;
 	//! The type of this catalog entry
 	CatalogType type;
 	//! Reference to the catalog this entry belongs to
@@ -59,7 +60,7 @@ public:
 	//! Whether or not the entry is an internal entry (cannot be deleted, not dumped, etc)
 	bool internal;
 	//! Timestamp at which the catalog entry was created
-	transaction_t timestamp;
+	atomic<transaction_t> timestamp;
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
 	//! Parent entry (the node that owns this node)

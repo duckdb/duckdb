@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -15,6 +16,8 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/common/set.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -22,6 +25,24 @@ class TableFunctionRef;
 
 enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
 enum class CheckpointAbort : uint8_t { NO_ABORT = 0, DEBUG_ABORT_BEFORE_TRUNCATE = 1, DEBUG_ABORT_BEFORE_HEADER = 2 };
+
+enum class ConfigurationOptionType : uint32_t {
+	INVALID = 0,
+	ACCESS_MODE,
+	DEFAULT_ORDER_TYPE,
+	DEFAULT_NULL_ORDER,
+	ENABLE_EXTERNAL_ACCESS,
+	ENABLE_OBJECT_CACHE,
+	MAXIMUM_MEMORY,
+	THREADS
+};
+
+struct ConfigurationOption {
+	ConfigurationOptionType type;
+	const char *name;
+	const char *description;
+	LogicalTypeId parameter_type;
+};
 
 // this is optional and only used in tests at the moment
 struct DBConfig {
@@ -33,6 +54,8 @@ public:
 
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
 	AccessMode access_mode = AccessMode::AUTOMATIC;
+	//! The allocator used by the system
+	Allocator allocator;
 	// Checkpoint when WAL reaches this size (default: 16MB)
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
@@ -42,6 +65,8 @@ public:
 	unique_ptr<FileSystem> file_system;
 	//! The maximum memory used by the database system (in bytes). Default: 80% of System available memory
 	idx_t maximum_memory = (idx_t)-1;
+	//! The maximum amount of CPU threads used by the database system. Default: all available.
+	idx_t maximum_threads = (idx_t)-1;
 	//! Whether or not to create and use a temporary directory to store intermediates that do not fit in memory
 	bool use_temporary_directory = true;
 	//! Directory to store temporary structures that do not fit in memory
@@ -53,7 +78,7 @@ public:
 	//! Null ordering used when none is specified (default: NULLS FIRST)
 	OrderByNullType default_null_order = OrderByNullType::NULLS_FIRST;
 	//! enable COPY and related commands
-	bool enable_copy = true;
+	bool enable_external_access = true;
 	//! Whether or not object cache is used
 	bool object_cache_enable = false;
 	//! Database configuration variables as controlled by SET
@@ -66,10 +91,23 @@ public:
 	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
+	//! Initialize the database with the standard set of DuckDB functions
+	//! You should probably not touch this unless you know what you are doing
+	bool initialize_default_database = true;
+	//! The set of disabled optimizers (default empty)
+	set<OptimizerType> disabled_optimizers;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
 	DUCKDB_API static DBConfig &GetConfig(DatabaseInstance &db);
+	DUCKDB_API static vector<ConfigurationOption> GetOptions();
+
+	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
+	DUCKDB_API static ConfigurationOption *GetOptionByName(const string &name);
+
+	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
+
+	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
 };
 
 } // namespace duckdb

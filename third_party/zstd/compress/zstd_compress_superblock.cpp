@@ -11,13 +11,13 @@
  /*-*************************************
  *  Dependencies
  ***************************************/
-#include "zstd_compress_superblock.h"
+#include "zstd/compress/zstd_compress_superblock.h"
 
-#include "../common/zstd_internal.h"  /* ZSTD_getSequenceLength */
-#include "hist.h"                     /* HIST_countFast_wksp */
-#include "zstd_compress_internal.h"
-#include "zstd_compress_sequences.h"
-#include "zstd_compress_literals.h"
+#include "zstd/common/zstd_internal.h"  /* ZSTD_getSequenceLength */
+#include "zstd/compress/hist.h"                     /* HIST_countFast_wksp */
+#include "zstd/compress/zstd_compress_internal.h"
+#include "zstd/compress/zstd_compress_sequences.h"
+#include "zstd/compress/zstd_compress_literals.h"
 
 namespace duckdb_zstd {
 /*-*************************************

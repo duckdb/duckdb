@@ -1,38 +1,35 @@
 #include "duckdb/execution/perfect_aggregate_hashtable.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 
 namespace duckdb {
 
-PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manager, vector<LogicalType> group_types_p,
+PerfectAggregateHashTable::PerfectAggregateHashTable(BufferManager &buffer_manager,
+                                                     const vector<LogicalType> &group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      vector<Value> group_minima_p, vector<idx_t> required_bits_p)
-    : BaseAggregateHashTable(buffer_manager, move(group_types_p), move(payload_types_p), move(aggregate_objects_p)),
-      required_bits(move(required_bits_p)), total_required_bits(0), group_minima(move(group_minima_p)) {
-	addresses.Initialize(LogicalType::POINTER);
-
+    : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), addresses(LogicalType::POINTER),
+      required_bits(move(required_bits_p)), total_required_bits(0), group_minima(move(group_minima_p)),
+      sel(STANDARD_VECTOR_SIZE) {
 	for (auto &group_bits : required_bits) {
 		total_required_bits += group_bits;
 	}
 	// the total amount of groups we allocate space for is 2^required_bits
 	total_groups = 1 << total_required_bits;
 	// we don't need to store the groups in a perfect hash table, since the group keys can be deduced by their location
-	tuple_size = payload_width;
+	grouping_columns = group_types_p.size();
+	layout.Initialize(move(aggregate_objects_p));
+	tuple_size = layout.GetRowWidth();
 
 	// allocate and null initialize the data
 	owned_data = unique_ptr<data_t[]>(new data_t[tuple_size * total_groups]);
 	data = owned_data.get();
 
+	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
 	group_is_set = unique_ptr<bool[]>(new bool[total_groups]);
 	memset(group_is_set.get(), 0, total_groups * sizeof(bool));
-
-	// set up the empty payloads for every tuple, and initialize the "occupied" flag to false
-	data_ptr_t payload_ptr = data;
-	for (idx_t i = 0; i < total_groups; i++) {
-		memcpy(payload_ptr, empty_payload_data.get(), payload_width);
-		payload_ptr += tuple_size;
-	}
 }
 
 PerfectAggregateHashTable::~PerfectAggregateHashTable() {
@@ -104,38 +101,35 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	}
 	// now we have the HT entry number for every tuple
 	// compute the actual pointer to the data by adding it to the base HT pointer and multiplying by the tuple size
+	idx_t needs_init = 0;
 	for (idx_t i = 0; i < groups.size(); i++) {
 		D_ASSERT(address_data[i] < total_groups);
-		group_is_set[address_data[i]] = true;
+		const auto group = address_data[i];
 		address_data[i] = uintptr_t(data) + address_data[i] * tuple_size;
+		if (!group_is_set[group]) {
+			group_is_set[group] = true;
+			sel.set_index(needs_init++, i);
+			if (needs_init == STANDARD_VECTOR_SIZE) {
+				RowOperations::InitializeStates(layout, addresses, sel, needs_init);
+				needs_init = 0;
+			}
+		}
 	}
+	RowOperations::InitializeStates(layout, addresses, sel, needs_init);
 
 	// after finding the group location we update the aggregates
 	idx_t payload_idx = 0;
+	auto &aggregates = layout.GetAggregates();
 	for (auto &aggregate : aggregates) {
 		auto input_count = (idx_t)aggregate.child_count;
 		if (aggregate.filter) {
-			GroupedAggregateHashTable::UpdateAggregate(aggregate, payload, addresses, input_count, payload_idx);
+			RowOperations::UpdateFilteredStates(aggregate, addresses, payload, payload_idx);
 		} else {
-			aggregate.function.update(input_count == 0 ? nullptr : &payload.data[payload_idx], nullptr, input_count,
-			                          addresses, payload.size());
+			RowOperations::UpdateStates(aggregate, addresses, payload, payload_idx, payload.size());
 		}
 		// move to the next aggregate
 		payload_idx += input_count;
 		VectorOperations::AddInPlace(addresses, aggregate.payload_size, payload.size());
-	}
-}
-
-void PerfectAggregateHashTable::Combine(Vector &source_addresses, Vector &target_addresses, idx_t combine_count) {
-	if (combine_count == 0) {
-		return;
-	}
-
-	for (auto &aggr : aggregates) {
-		D_ASSERT(aggr.function.combine);
-		aggr.function.combine(source_addresses, target_addresses, combine_count);
-		VectorOperations::AddInPlace(source_addresses, aggr.payload_size, combine_count);
-		VectorOperations::AddInPlace(target_addresses, aggr.payload_size, combine_count);
 	}
 }
 
@@ -152,6 +146,8 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 	data_ptr_t source_ptr = other.data;
 	data_ptr_t target_ptr = data;
 	idx_t combine_count = 0;
+	idx_t reinit_count = 0;
+	const auto &reinit_sel = FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	for (idx_t i = 0; i < total_groups; i++) {
 		auto has_entry_source = other.group_is_set[i];
 		// we only have any work to do if the source has an entry for this group
@@ -163,7 +159,7 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 				target_addresses_ptr[combine_count] = target_ptr;
 				combine_count++;
 				if (combine_count == STANDARD_VECTOR_SIZE) {
-					Combine(source_addresses, target_addresses, combine_count);
+					RowOperations::CombineStates(layout, source_addresses, target_addresses, combine_count);
 					combine_count = 0;
 				}
 			} else {
@@ -177,7 +173,8 @@ void PerfectAggregateHashTable::Combine(PerfectAggregateHashTable &other) {
 		source_ptr += tuple_size;
 		target_ptr += tuple_size;
 	}
-	Combine(source_addresses, target_addresses, combine_count);
+	RowOperations::CombineStates(layout, source_addresses, target_addresses, combine_count);
+	RowOperations::InitializeStates(layout, addresses, reinit_sel, reinit_count);
 }
 
 template <class T>
@@ -245,25 +242,20 @@ void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 	}
 	// first reconstruct the groups from the group index
 	idx_t shift = total_required_bits;
-	for (idx_t i = 0; i < group_types.size(); i++) {
+	for (idx_t i = 0; i < grouping_columns; i++) {
 		shift -= required_bits[i];
 		ReconstructGroupVector(group_values, group_minima[i], required_bits[i], shift, entry_count, result.data[i]);
 	}
 	// then construct the payloads
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		auto &target = result.data[group_types.size() + i];
-		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, aggr.bind_data, target, entry_count);
-		VectorOperations::AddInPlace(addresses, aggr.payload_size, entry_count);
-	}
 	result.SetCardinality(entry_count);
+	RowOperations::FinalizeStates(layout, addresses, result, grouping_columns);
 }
 
 void PerfectAggregateHashTable::Destroy() {
 	// check if there is any destructor to call
 	bool has_destructor = false;
-	for (idx_t i = 0; i < aggregates.size(); i++) {
-		if (aggregates[i].function.destructor) {
+	for (auto &aggr : layout.GetAggregates()) {
+		if (aggr.function.destructor) {
 			has_destructor = true;
 		}
 	}
@@ -272,23 +264,22 @@ void PerfectAggregateHashTable::Destroy() {
 	}
 	// there are aggregates with destructors: loop over the hash table
 	// and call the destructor method for each of the aggregates
-	data_ptr_t data_pointers[STANDARD_VECTOR_SIZE];
-	Vector state_vector(LogicalType::POINTER, (data_ptr_t)data_pointers);
+	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 	idx_t count = 0;
 
-	// iterate over all occupied slots of the hash table
+	// iterate over all initialised slots of the hash table
 	data_ptr_t payload_ptr = data;
 	for (idx_t i = 0; i < total_groups; i++) {
 		if (group_is_set[i]) {
 			data_pointers[count++] = payload_ptr;
 			if (count == STANDARD_VECTOR_SIZE) {
-				CallDestructors(state_vector, count);
+				RowOperations::DestroyStates(layout, addresses, count);
 				count = 0;
 			}
 		}
 		payload_ptr += tuple_size;
 	}
-	CallDestructors(state_vector, count);
+	RowOperations::DestroyStates(layout, addresses, count);
 }
 
 } // namespace duckdb

@@ -16,7 +16,7 @@ statement ok
 INSERT INTO bitwise_test VALUES (1, 1), (1, 0), (0, 1), (0, 0), (1, NULL), (NULL, 1), (NULL, NULL)
 
 query IIIII
-SELECT i << j, i >> j, i & j, i | j, i # j FROM bitwise_test
+SELECT i << j, i >> j, i & j, i | j, xor(i, j) FROM bitwise_test
 ----
 2	0	1	1	0
 1	1	0	1	1
@@ -40,7 +40,7 @@ statement ok
 INSERT INTO bitwise_test VALUES (1, 1), (1, 0), (0, 1), (0, 0), (1, NULL), (NULL, 1), (NULL, NULL)
 
 query IIIII
-SELECT i << j, i >> j, i & j, i | j, i # j FROM bitwise_test
+SELECT i << j, i >> j, i & j, i | j, xor(i, j) FROM bitwise_test
 ----
 2	0	1	1	0
 1	1	0	1	1
@@ -64,7 +64,7 @@ statement ok
 INSERT INTO bitwise_test VALUES (1, 1), (1, 0), (0, 1), (0, 0), (1, NULL), (NULL, 1), (NULL, NULL)
 
 query IIIII
-SELECT i << j, i >> j, i & j, i | j, i # j FROM bitwise_test
+SELECT i << j, i >> j, i & j, i | j, xor(i, j) FROM bitwise_test
 ----
 2	0	1	1	0
 1	1	0	1	1
@@ -88,7 +88,7 @@ statement ok
 INSERT INTO bitwise_test VALUES (1, 1), (1, 0), (0, 1), (0, 0), (1, NULL), (NULL, 1), (NULL, NULL)
 
 query IIIII
-SELECT i << j, i >> j, i & j, i | j, i # j FROM bitwise_test
+SELECT i << j, i >> j, i & j, i | j, xor(i, j) FROM bitwise_test
 ----
 2	0	1	1	0
 1	1	0	1	1

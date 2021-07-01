@@ -1,6 +1,7 @@
 #include "duckdb/main/client_context.hpp"
-
+#include "duckdb/main/query_profiler.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/parsed_data/create_function_info.hpp"
 #include "duckdb/parser/statement/drop_statement.hpp"
 #include "duckdb/parser/statement/execute_statement.hpp"
 #include "duckdb/parser/statement/explain_statement.hpp"
@@ -28,6 +30,8 @@
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
 #include "duckdb/planner/pragma_handler.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/execution/column_binding_resolver.hpp"
 
 namespace duckdb {
 
@@ -44,10 +48,13 @@ private:
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
+    : profiler(make_unique<QueryProfiler>()), query_profiler_history(make_unique<QueryProfilerHistory>()),
+      db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
       temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)), open_result(nullptr) {
 	std::random_device rd;
 	random_engine.seed(rd());
+
+	progress_bar = make_unique<ProgressBar>(&executor, wait_time);
 }
 
 ClientContext::~ClientContext() {
@@ -84,7 +91,7 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 		// fetch the chunk and return it
 		auto chunk = FetchInternal(*lock);
 		return chunk;
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		open_result->error = ex.what();
 	} catch (...) {
 		open_result->error = "Unhandled exception in Fetch";
@@ -95,17 +102,21 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 }
 
 string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
-	profiler.EndQuery();
+	profiler->EndQuery();
 	executor.Reset();
 
 	string error;
 	if (transaction.HasActiveTransaction()) {
 		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
-		query_profiler_history.GetPrevProfilers().emplace_back(transaction.ActiveTransaction().active_query,
-		                                                       move(profiler));
-		profiler.save_location = query_profiler_history.GetPrevProfilers().back().second.save_location;
-		if (query_profiler_history.GetPrevProfilers().size() >= query_profiler_history.GetPrevProfilersSize()) {
-			query_profiler_history.GetPrevProfilers().pop_front();
+		// Move the query profiler into the history
+		auto &prev_profilers = query_profiler_history->GetPrevProfilers();
+		prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
+		// Reinitialize the query profiler
+		profiler = make_unique<QueryProfiler>();
+		// Propagate settings of the saved query into the new profiler.
+		profiler->Propagate(*prev_profilers.back().second);
+		if (prev_profilers.size() >= query_profiler_history->GetPrevProfilersSize()) {
+			prev_profilers.pop_front();
 		}
 		try {
 			if (transaction.IsAutoCommit()) {
@@ -117,7 +128,7 @@ string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
 					transaction.Rollback();
 				}
 			}
-		} catch (Exception &ex) {
+		} catch (std::exception &ex) {
 			error = ex.what();
 		} catch (...) {
 			error = "Unhandled exception!";
@@ -154,11 +165,11 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
-	profiler.StartPhase("planner");
+	profiler->StartPhase("planner");
 	Planner planner(*this);
 	planner.CreatePlan(move(statement));
 	D_ASSERT(planner.plan);
-	profiler.EndPhase();
+	profiler->EndPhase();
 
 	auto plan = move(planner.plan);
 	// extract the result column names from the plan
@@ -171,24 +182,25 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
 
 	if (enable_optimizer) {
-		profiler.StartPhase("optimizer");
+		profiler->StartPhase("optimizer");
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
 		D_ASSERT(plan);
-		profiler.EndPhase();
+		profiler->EndPhase();
 	}
 
-	profiler.StartPhase("physical_planner");
+	profiler->StartPhase("physical_planner");
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
 	auto physical_plan = physical_planner.CreatePlan(move(plan));
-	profiler.EndPhase();
+	profiler->EndPhase();
 
 	result->plan = move(physical_plan);
 	return result;
 }
 
 int ClientContext::GetProgress() {
+	//	auto my_progress_bar = progress_bar;
 	if (!progress_bar) {
 		return -1;
 	}
@@ -213,10 +225,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 
 	bool create_stream_result = statement.allow_stream_result && allow_stream_result;
 	if (enable_progress_bar) {
-		if (progress_bar) {
-			progress_bar.reset();
-		}
-		progress_bar = make_unique<ProgressBar>(&executor, wait_time);
+		progress_bar->Initialize(wait_time);
 		progress_bar->Start();
 	}
 	// store the physical plan in the context for calls to Fetch()
@@ -227,7 +236,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 	D_ASSERT(types == statement.types);
 
 	if (create_stream_result) {
-		if (progress_bar) {
+		if (enable_progress_bar) {
 			progress_bar->Stop();
 		}
 		// successfully compiled SELECT clause and it is the last statement
@@ -251,7 +260,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 #endif
 		result->collection.Append(*chunk);
 	}
-	if (progress_bar) {
+	if (enable_progress_bar) {
 		progress_bar->Stop();
 	}
 	return move(result);
@@ -283,6 +292,34 @@ void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &sta
 
 	PragmaHandler handler(*this);
 	handler.HandlePragmaStatements(*lock, statements);
+}
+
+unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
+	auto lock = LockContext();
+	auto statements = ParseStatementsInternal(*lock, query);
+	if (statements.size() != 1) {
+		throw Exception("ExtractPlan can only prepare a single statement");
+	}
+
+	unique_ptr<LogicalOperator> plan;
+	RunFunctionInTransactionInternal(*lock, [&]() {
+		Planner planner(*this);
+		planner.CreatePlan(move(statements[0]));
+		D_ASSERT(planner.plan);
+
+		plan = move(planner.plan);
+
+		if (enable_optimizer) {
+			Optimizer optimizer(*planner.binder, *this);
+			plan = optimizer.Optimize(move(plan));
+		}
+
+		ColumnBindingResolver resolver;
+		resolver.VisitOperator(*plan);
+
+		plan->ResolveOperatorTypes();
+	});
+	return plan;
 }
 
 unique_ptr<PreparedStatement> ClientContext::PrepareInternal(ClientContextLock &lock,
@@ -336,6 +373,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	} catch (std::exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
+	LogQueryInternal(*lock, query);
 	return RunStatementOrPreparedStatement(*lock, query, nullptr, prepared, &values, allow_stream_result);
 }
 
@@ -381,7 +419,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
 		statement = move(copied_statement);
 	}
 	// start the profiler
-	profiler.StartQuery(query);
+	profiler->StartQuery(query);
 	try {
 		if (statement) {
 			result = RunStatementInternal(lock, query, move(statement), allow_stream_result);
@@ -464,19 +502,27 @@ unique_ptr<QueryResult> ClientContext::RunStatements(ClientContextLock &lock, co
 
 void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 	if (!log_query_writer) {
+#ifdef DUCKDB_FORCE_QUERY_LOG
+		try {
+			string log_path(DUCKDB_FORCE_QUERY_LOG);
+			log_query_writer = make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path);
+		} catch (...) {
+			return;
+		}
+#else
 		return;
+#endif
 	}
 	// log query path is set: log the query
 	log_query_writer->WriteData((const_data_ptr_t)query.c_str(), query.size());
 	log_query_writer->WriteData((const_data_ptr_t) "\n", 1);
 	log_query_writer->Flush();
+	log_query_writer->Sync();
 }
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
 	auto lock = LockContext();
-	if (log_query_writer) {
-		LogQueryInternal(*lock, statement->query.substr(statement->stmt_location, statement->stmt_length));
-	}
+	LogQueryInternal(*lock, statement->query.substr(statement->stmt_location, statement->stmt_length));
 
 	vector<unique_ptr<SQLStatement>> statements;
 	statements.push_back(move(statement));
@@ -511,12 +557,12 @@ void ClientContext::Interrupt() {
 
 void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
-	profiler.Enable();
+	profiler->Enable();
 }
 
 void ClientContext::DisableProfiling() {
 	auto lock = LockContext();
-	profiler.Disable();
+	profiler->Disable();
 }
 
 string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement) {
@@ -576,9 +622,9 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 #endif
 
 	// disable profiling if it is enabled
-	bool profiling_is_enabled = profiler.IsEnabled();
+	bool profiling_is_enabled = profiler->IsEnabled();
 	if (profiling_is_enabled) {
-		profiler.Disable();
+		profiler->Disable();
 	}
 
 	// see below
@@ -645,7 +691,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	enable_optimizer = true;
 
 	if (profiling_is_enabled) {
-		profiler.Enable();
+		profiler->Enable();
 	}
 
 	// now compare the results
@@ -673,10 +719,42 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	return "";
 }
 
+bool ClientContext::UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function,
+                                                CreateScalarFunctionInfo *new_info) {
+	if (new_info->functions.empty()) {
+		throw std::runtime_error("Registering function without scalar function definitions!");
+	}
+	bool need_rewrite_entry = false;
+	idx_t size_new_func = new_info->functions.size();
+	for (idx_t exist_idx = 0; exist_idx < existing_function->functions.size(); ++exist_idx) {
+		bool can_add = true;
+		for (idx_t new_idx = 0; new_idx < size_new_func; ++new_idx) {
+			if (new_info->functions[new_idx].Equal(existing_function->functions[exist_idx])) {
+				can_add = false;
+				break;
+			}
+		}
+		if (can_add) {
+			new_info->functions.push_back(existing_function->functions[exist_idx]);
+			need_rewrite_entry = true;
+		}
+	}
+	return need_rewrite_entry;
+}
+
 void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 	RunFunctionInTransaction([&]() {
 		auto &catalog = Catalog::GetCatalog(*this);
-		catalog.CreateFunction(*this, temporary_objects.get(), info);
+		ScalarFunctionCatalogEntry *existing_function = (ScalarFunctionCatalogEntry *)catalog.GetEntry(
+		    *this, CatalogType::SCALAR_FUNCTION_ENTRY, info->schema, info->name, true);
+		if (existing_function) {
+			if (UpdateFunctionInfoFromEntry(existing_function, (CreateScalarFunctionInfo *)info)) {
+				// function info was updated from catalog entry, rewrite is needed
+				info->on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+			}
+		}
+		// create function
+		catalog.CreateFunction(*this, info);
 	});
 }
 
@@ -687,25 +765,26 @@ void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, co
 		throw Exception("Failed: transaction has been invalidated!");
 	}
 	// check if we are on AutoCommit. In this case we should start a transaction
-	if (transaction.IsAutoCommit()) {
+	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
+	if (require_new_transaction) {
 		transaction.BeginTransaction();
 	}
 	try {
 		fun();
 	} catch (StandardException &ex) {
-		if (transaction.IsAutoCommit()) {
+		if (require_new_transaction) {
 			transaction.Rollback();
 		}
 		throw;
 	} catch (std::exception &ex) {
-		if (transaction.IsAutoCommit()) {
+		if (require_new_transaction) {
 			transaction.Rollback();
 		} else {
 			ActiveTransaction().Invalidate();
 		}
 		throw;
 	}
-	if (transaction.IsAutoCommit()) {
+	if (require_new_transaction) {
 		transaction.Commit();
 	}
 }

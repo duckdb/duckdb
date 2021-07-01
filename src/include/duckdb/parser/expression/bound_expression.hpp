@@ -19,13 +19,11 @@ namespace duckdb {
 //! when dealing with subqueries.
 class BoundExpression : public ParsedExpression {
 public:
-	BoundExpression(unique_ptr<Expression> expr, unique_ptr<ParsedExpression> parsed_expr)
-	    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(move(expr)),
-	      parsed_expr(move(parsed_expr)) {
+	BoundExpression(unique_ptr<Expression> expr)
+	    : ParsedExpression(ExpressionType::INVALID, ExpressionClass::BOUND_EXPRESSION), expr(move(expr)) {
 	}
 
 	unique_ptr<Expression> expr;
-	unique_ptr<ParsedExpression> parsed_expr;
 
 public:
 	string ToString() const override {
@@ -33,10 +31,10 @@ public:
 	}
 
 	bool Equals(const BaseExpression *other) const override {
-		return parsed_expr->Equals(other);
+		return false;
 	}
 	hash_t Hash() const override {
-		return parsed_expr->Hash();
+		return 0;
 	}
 
 	unique_ptr<ParsedExpression> Copy() const override {

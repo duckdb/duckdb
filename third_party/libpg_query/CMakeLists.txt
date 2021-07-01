@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 2.8.12)
 
 project(pg_query CXX C)
-cmake_policy(SET CMP0063 NEW)
+if(POLICY CMP0063)
+    cmake_policy(SET CMP0063 NEW)
+endif()
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 
 add_library(pg_query STATIC

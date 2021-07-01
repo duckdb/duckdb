@@ -11,6 +11,9 @@ unique_ptr<SQLStatement> DeleteStatement::Copy() const {
 		result->condition = condition->Copy();
 	}
 	result->table = table->Copy();
+	for (auto &using_clause : using_clauses) {
+		result->using_clauses.push_back(using_clause->Copy());
+	}
 	return move(result);
 }
 

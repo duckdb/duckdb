@@ -1,0 +1,360 @@
+# name: test/sql/pg_catalog/sqlalchemy.test
+# description: Test postgres catalog queries from SQL Alchemy to test postgres compatibility on this frnot
+# group: [pg_catalog]
+
+# https://github.com/sqlalchemy/sqlalchemy/blob/master/lib/sqlalchemy/dialects/postgresql/base.py
+
+statement ok
+CREATE TABLE integral_values (
+    j smallint,
+    k integer,
+    l bigint,
+    i real,
+    z double precision,
+    m DECIMAL(4, 1),
+    n DECIMAL(9, 2),
+    o DECIMAL(18, 4),
+    p DECIMAL(37, 2),
+    q varchar,
+    r bytea,
+    s date,
+    t time,
+    u timestamp
+);
+
+# has_schema
+query I
+select nspname from pg_namespace " "where lower(nspname)='main'
+----
+main
+
+# has_table
+query I
+select relname from pg_class c join pg_namespace n on
+n.oid=c.relnamespace where
+pg_catalog.pg_table_is_visible(c.oid)
+and relname='integral_values'
+----
+integral_values
+
+query I
+select relname from pg_class c join pg_namespace n on
+n.oid=c.relnamespace where
+pg_catalog.pg_table_is_visible(c.oid)
+and relname='f'
+----
+
+
+# has_table with an explicit schema
+query I
+select relname from pg_class c join pg_namespace n on
+n.oid=c.relnamespace where n.nspname='main' and
+relname='integral_values'
+----
+integral_values
+
+query I
+select relname from pg_class c join pg_namespace n on
+n.oid=c.relnamespace where n.nspname='main' and
+relname='f'
+----
+
+# has_sequence
+statement ok
+CREATE SEQUENCE seq
+
+query I
+SELECT relname FROM pg_class c join pg_namespace n on
+n.oid=c.relnamespace where relkind='S' and
+n.nspname='main' and relname='seq'
+----
+seq
+
+query I
+SELECT relname FROM pg_class c join pg_namespace n on
+n.oid=c.relnamespace where relkind='S' and
+n.nspname='main' and relname='f'
+----
+
+# has_type
+statement ok
+SELECT EXISTS (
+	SELECT * FROM pg_catalog.pg_type t, pg_catalog.pg_namespace n
+	WHERE t.typnamespace = n.oid
+	AND t.typname = 'INTEGER'
+	AND n.nspname = 'main'
+	)
+
+statement ok
+SELECT EXISTS (
+	SELECT * FROM pg_catalog.pg_type t, pg_catalog.pg_namespace n
+	WHERE t.typnamespace = n.oid
+	AND t.typname = 'INTEGER'
+	AND n.nspname = 'main'
+	)
+
+# get_table_oid
+query I
+SELECT COUNT(c.oid)
+FROM pg_catalog.pg_class c
+LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+WHERE (pg_catalog.pg_table_is_visible(c.oid))
+AND c.relname = 'integral_values' AND c.relkind in
+('r', 'v', 'm', 'f', 'p')
+----
+1
+
+# get_schema_names
+statement ok
+SELECT nspname FROM pg_namespace
+WHERE nspname NOT LIKE 'pg_%'
+ORDER BY nspname
+
+# get_table_names
+query I
+SELECT c.relname FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'main' AND c.relkind in ('r', 'p')
+----
+integral_values
+
+# _get_foreign_table_names
+statement ok
+SELECT c.relname FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'main' AND c.relkind = 'f'
+
+# get_view_names
+statement ok
+CREATE SCHEMA myschema
+
+statement ok
+CREATE VIEW myschema.v1 AS SELECT 42;
+
+query I
+SELECT c.relname FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'myschema' AND c.relkind IN ('v', 'm')
+----
+v1
+
+# get_sequence_names
+query I
+SELECT relname FROM pg_class c join pg_namespace n on
+n.oid=c.relnamespace where relkind='S' and
+n.nspname='main'
+----
+seq
+
+# get_view_definition
+query I
+SELECT string_split_regex(pg_get_viewdef(c.oid), '\n')[0] view_def FROM pg_class c
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'myschema' AND c.relname = 'v1'
+AND c.relkind IN ('v', 'm')
+----
+CREATE VIEW myschema.v1 AS SELECT 42;
+
+# get_columns
+query IIII
+SELECT a.attname,
+	pg_catalog.format_type(a.atttypid, a.atttypmod),
+	(
+	SELECT pg_catalog.pg_get_expr(d.adbin, d.adrelid)
+	FROM pg_catalog.pg_attrdef d
+	WHERE d.adrelid = a.attrelid AND d.adnum = a.attnum
+	AND a.atthasdef
+	) AS DEFAULT,
+	a.attnotnull
+FROM pg_catalog.pg_attribute a
+LEFT JOIN pg_catalog.pg_description pgd ON (
+	pgd.objoid = a.attrelid AND pgd.objsubid = a.attnum)
+WHERE a.attrelid = (SELECT MIN(oid) FROM pg_class WHERE relname='integral_values')
+AND a.attnum > 0 AND NOT a.attisdropped
+ORDER BY a.attnum;
+----
+j	smallint	NULL	false
+k	integer	NULL	false
+l	bigint	NULL	false
+i	real	NULL	false
+z	double precision	NULL	false
+m	numeric(4,1)	NULL	false
+n	numeric(9,2)	NULL	false
+o	numeric(18,4)	NULL	false
+p	numeric(37,2)	NULL	false
+q	character varying	NULL	false
+r	bytea	NULL	false
+s	date	NULL	false
+t	time without time zone	NULL	false
+u	timestamp without time zone	NULL	false
+
+# get_pk_constraint
+statement ok
+SELECT a.attname
+FROM
+	pg_class t
+	join pg_index ix on t.oid = ix.indrelid
+	join pg_attribute a
+		on t.oid=a.attrelid
+	WHERE
+	t.oid = (SELECT MIN(table_oid) FROM duckdb_tables) and ix.indisprimary = 't'
+ORDER BY a.attnum
+
+mode skip
+# get_pk_constraint, >= v8.4
+statement ok
+SELECT a.attname
+FROM pg_attribute a JOIN (
+	SELECT unnest(ix.indkey) attnum,
+			generate_subscripts(ix.indkey, 1) ord
+	FROM pg_index ix
+	WHERE ix.indrelid = (SELECT MIN(table_oid) FROM duckdb_tables) AND ix.indisprimary
+	) k ON a.attnum=k.attnum
+WHERE a.attrelid = (SELECT MIN(table_oid) FROM duckdb_tables)
+ORDER BY k.ord
+
+mode unskip
+
+# get_foreign_keys
+statement ok
+SELECT r.conname,
+	pg_catalog.pg_get_constraintdef(r.oid, true) as condef,
+	n.nspname as conschema
+FROM  pg_catalog.pg_constraint r,
+	pg_namespace n,
+	pg_class c
+WHERE r.conrelid = (SELECT MIN(table_oid) FROM duckdb_tables) AND
+	r.contype = 'f' AND
+	c.oid = confrelid AND
+	n.oid = c.relnamespace
+ORDER BY 1
+
+# get_unique_constraints
+statement ok
+SELECT
+	cons.conname as name,
+	cons.conkey as key,
+	a.attnum as col_num,
+	a.attname as col_name
+FROM
+	pg_catalog.pg_constraint cons
+	join pg_attribute a
+		on cons.conrelid = a.attrelid AND
+		a.attnum = ANY(cons.conkey)
+WHERE
+	cons.conrelid = (SELECT MIN(table_oid) FROM duckdb_tables) AND
+	cons.contype = 'u'
+
+# get_indexes
+statement ok
+SELECT
+	i.relname as relname,
+	ix.indisunique, ix.indexprs, ix.indpred,
+	a.attname, a.attnum, NULL, ix.indkey,
+	am.amname,
+	NULL as indnkeyatts
+FROM
+	pg_class t
+		join pg_index ix on t.oid = ix.indrelid
+		join pg_class i on i.oid = ix.indexrelid
+		left outer join
+			pg_attribute a
+			on t.oid = a.attrelid
+		left outer join
+			pg_am am
+			on i.relam = am.oid
+WHERE
+	t.relkind IN ('r', 'v', 'f', 'm')
+	and t.oid = (SELECT MIN(table_oid) FROM duckdb_tables)
+	and ix.indisprimary = 'f'
+ORDER BY
+	t.relname,
+	i.relname
+
+mode skip
+# FIXME: ANY(list) in left outer join
+# this will be fixed by either allowing subqueries in left-outer joins
+# or by modifying ANY(list) to be a function instead of a rewrite to a subquery
+
+statement ok
+SELECT
+	i.relname as relname,
+	ix.indisunique, ix.indexprs,
+	a.attname, a.attnum, c.conrelid, ix.indkey::varchar,
+	ix.indoption::varchar, i.reloptions, am.amname,
+	pg_get_expr(ix.indpred, ix.indrelid)
+FROM
+	pg_class t
+		join pg_index ix on t.oid = ix.indrelid
+		join pg_class i on i.oid = ix.indexrelid
+		left outer join
+			pg_attribute a
+			on t.oid = a.attrelid and a.attnum = ANY(ix.indkey)
+		left outer join
+			pg_constraint c
+			on (ix.indrelid = c.conrelid and
+				ix.indexrelid = c.conindid and
+				c.contype in ('p', 'u', 'x'))
+		left outer join
+			pg_am am
+			on i.relam = am.oid
+WHERE
+	t.relkind IN ('r', 'v', 'f', 'm', 'p')
+	and t.oid = (SELECT MIN(table_oid) FROM duckdb_tables)
+	and ix.indisprimary = 'f'
+ORDER BY
+	t.relname,
+	i.relname
+
+mode unskip
+
+# get_table_comment
+statement ok
+SELECT
+	pgd.description as table_comment
+FROM
+	pg_catalog.pg_description pgd
+WHERE
+	pgd.objsubid = 0 AND
+	pgd.objoid = (SELECT MIN(table_oid) FROM duckdb_tables)
+
+# get_check_constraints
+mode skip
+
+# FIXME: pg_get_constraintdef overload
+statement ok
+SELECT
+	cons.conname as name,
+	pg_get_constraintdef(cons.oid) as src
+FROM
+	pg_catalog.pg_constraint cons
+WHERE
+	cons.conrelid = (SELECT MIN(table_oid) FROM duckdb_tables) AND
+	cons.contype = 'c'
+
+mode unskip
+
+# load_enums
+statement ok
+SELECT t.typname as "name",
+	-- no enum defaults in 8.4 at least
+	-- t.typdefault as "default",
+	pg_catalog.pg_type_is_visible(t.oid) as "visible",
+	n.nspname as "schema",
+	e.enumlabel as "label"
+FROM pg_catalog.pg_type t
+		LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+		LEFT JOIN pg_catalog.pg_enum e ON t.oid = e.enumtypid
+WHERE t.typtype = 'e'
+
+# load domains
+statement ok
+SELECT t.typname as "name",
+	pg_catalog.format_type(t.typbasetype, t.typtypmod) as "attype",
+	not t.typnotnull as "nullable",
+	t.typdefault as "default",
+	pg_catalog.pg_type_is_visible(t.oid) as "visible",
+	n.nspname as "schema"
+FROM pg_catalog.pg_type t
+	LEFT JOIN pg_catalog.pg_namespace n ON n.oid = t.typnamespace
+WHERE t.typtype = 'd'

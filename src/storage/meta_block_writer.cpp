@@ -7,11 +7,19 @@ namespace duckdb {
 MetaBlockWriter::MetaBlockWriter(DatabaseInstance &db) : db(db) {
 	auto &block_manager = BlockManager::GetBlockManager(db);
 	block = block_manager.CreateBlock();
+	Store<block_id_t>(-1, block->buffer);
 	offset = sizeof(block_id_t);
 }
 
 MetaBlockWriter::~MetaBlockWriter() {
 	Flush();
+}
+
+BlockPointer MetaBlockWriter::GetBlockPointer() {
+	BlockPointer pointer;
+	pointer.block_id = block->id;
+	pointer.offset = offset;
+	return pointer;
 }
 
 void MetaBlockWriter::Flush() {
@@ -44,6 +52,7 @@ void MetaBlockWriter::WriteData(const_data_ptr_t buffer, idx_t write_size) {
 		Flush();
 		// now update the block id of the lbock
 		block->id = new_block_id;
+		Store<block_id_t>(-1, block->buffer);
 	}
 	memcpy(block->buffer + offset, buffer, write_size);
 	offset += write_size;

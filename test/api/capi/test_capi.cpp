@@ -23,6 +23,10 @@ public:
 		return result.row_count;
 	}
 
+	idx_t rows_changed() {
+		return result.rows_changed;
+	}
+
 	template <class T>
 	T Fetch(idx_t col, idx_t row) {
 		throw NotImplementedException("Unimplemented type for fetch");
@@ -210,7 +214,9 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test (a INTEGER, b INTEGER);"));
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO test VALUES (11, 22)"));
 	REQUIRE_NO_FAIL(tester.Query("INSERT INTO test VALUES (NULL, 21)"));
-	REQUIRE_NO_FAIL(tester.Query("INSERT INTO test VALUES (13, 22)"));
+	result = tester.Query("INSERT INTO test VALUES (13, 22)");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->rows_changed() == 1);
 
 	// NULL selection
 	result = tester.Query("SELECT a, b FROM test ORDER BY a");
@@ -227,6 +233,10 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(result->ColumnName(0) == "a");
 	REQUIRE(result->ColumnName(1) == "b");
 	REQUIRE(result->ColumnName(2) == "");
+
+	result = tester.Query("UPDATE test SET a = 1 WHERE b=22");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->rows_changed() == 2);
 }
 
 TEST_CASE("Test different types of C API", "[capi]") {
@@ -312,21 +322,31 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(result->Fetch<string>(0, 2) == Value::DATE(30000, 9, 20).ToString());
 
 	// timestamp columns
-	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE timestamps(t TIMESTAMP)"));
-	REQUIRE_NO_FAIL(tester.Query("INSERT INTO timestamps VALUES ('1992-09-20 12:01:30'), (NULL)"));
+	REQUIRE_NO_FAIL(tester.Query(
+	    "CREATE TABLE timestamp (sec TIMESTAMP_S, milli TIMESTAMP_MS,micro TIMESTAMP_US, nano TIMESTAMP_NS );"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO timestamp VALUES (NULL,NULL,NULL,NULL )"));
+	REQUIRE_NO_FAIL(tester.Query("INSERT INTO timestamp VALUES ('1992-09-20 12:01:30','1992-09-20 "
+	                             "12:01:30','1992-09-20 12:01:30','1992-09-20 12:01:30')"));
 
-	result = tester.Query("SELECT * FROM timestamps ORDER BY t");
+	result = tester.Query("SELECT * FROM timestamp ORDER BY sec");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->IsNull(0, 0));
-	duckdb_timestamp stamp = result->Fetch<duckdb_timestamp>(0, 1);
-	REQUIRE(stamp.date.year == 1992);
-	REQUIRE(stamp.date.month == 9);
-	REQUIRE(stamp.date.day == 20);
-	REQUIRE(stamp.time.hour == 12);
-	REQUIRE(stamp.time.min == 1);
-	REQUIRE(stamp.time.sec == 30);
-	REQUIRE(stamp.time.micros == 0);
-	REQUIRE(result->Fetch<string>(0, 1) == Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString());
+	REQUIRE(result->IsNull(1, 0));
+	REQUIRE(result->IsNull(2, 0));
+	REQUIRE(result->IsNull(3, 0));
+	for (idx_t i = 0; i < 4; i++) {
+		duckdb_timestamp stamp = result->Fetch<duckdb_timestamp>(i, 1);
+		REQUIRE(stamp.date.year == 1992);
+		REQUIRE(stamp.date.month == 9);
+		REQUIRE(stamp.date.day == 20);
+		REQUIRE(stamp.time.hour == 12);
+		REQUIRE(stamp.time.min == 1);
+		REQUIRE(stamp.time.sec == 30);
+		REQUIRE(stamp.time.micros == 0);
+		auto result_string = result->Fetch<string>(i, 1);
+		auto timestamp_string = Value::TIMESTAMP(1992, 9, 20, 12, 1, 30, 0).ToString();
+		REQUIRE(result->Fetch<string>(i, 1) == timestamp_string);
+	}
 
 	// blob columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE blobs(b BLOB)"));
@@ -466,7 +486,7 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	REQUIRE(status == DuckDBSuccess);
 	auto value = duckdb_value_varchar(&res, 0, 0);
 	REQUIRE(string(value) == "hello");
-	free(value);
+	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
 	duckdb_bind_blob(stmt, 1, "hello\0world", 11);
@@ -474,7 +494,7 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	REQUIRE(status == DuckDBSuccess);
 	value = duckdb_value_varchar(&res, 0, 0);
 	REQUIRE(string(value) == "hello\\x00world");
-	free(value);
+	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
 	duckdb_destroy_prepare(&stmt);
@@ -521,6 +541,12 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	REQUIRE(status == DuckDBError);
 	duckdb_destroy_result(&res);
 	duckdb_destroy_prepare(&stmt);
+
+	// test duckdb_malloc explicitly
+	auto malloced_data = duckdb_malloc(100);
+	memcpy(malloced_data, "hello\0", 6);
+	REQUIRE(string((char *)malloced_data) == "hello");
+	duckdb_free(malloced_data);
 }
 
 TEST_CASE("Test appender statements in C API", "[capi][.]") {

@@ -45,6 +45,12 @@ public:
 	//! Convert an interval object to a string
 	static string ToString(interval_t date);
 
+	//! Get Interval in milliseconds
+	static int64_t GetMilli(interval_t val);
+
+	//! Get Interval in Nanoseconds
+	static int64_t GetNanoseconds(interval_t val);
+
 	//! Returns the difference between two timestamps
 	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
 

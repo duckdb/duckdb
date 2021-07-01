@@ -95,3 +95,15 @@ ORDER BY permno, date;
 10000.0	 -0.12909470484217817  	 -0.09859155118465424
 10000.0	 0.006160298054551344  	 -0.22265625
 10000.0	 -0.038918077590690346 	 -0.005025125574320555
+
+# Issue #1697
+statement ok
+create table issue1697 as
+    select mod(b, 100) as a, b from (select b from range(10000) tbl(b)) t
+
+statement ok
+select avg(a) over (
+    order by b asc
+    rows between mod(b * 1023, 11) preceding and 23 - mod(b * 1023, 11) following)
+from issue1697
+

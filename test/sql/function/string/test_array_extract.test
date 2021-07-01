@@ -1,0 +1,147 @@
+# name: test/sql/function/string/test_array_extract.test
+# description: Substring test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER);
+
+statement ok
+INSERT INTO strings VALUES ('hello', 0), ('world', 1), ('b', 0), (NULL, 1)
+
+# test zero length
+query TT
+SELECT array_extract('🦆ab', 3), array_extract('abc', 3)
+----
+(empty)	(empty)
+
+# constant offset/length
+# normal array_extract
+query T
+SELECT array_extract(s, 1) FROM strings
+----
+e
+o
+(empty)
+NULL
+
+# array_extract out of range
+query T
+SELECT array_extract(s, 2) FROM strings
+----
+l
+r
+(empty)
+NULL
+
+# variable length offset/length
+query T
+SELECT array_extract(s, off) FROM strings
+----
+h
+o
+b
+NULL
+
+query T
+SELECT array_extract(s, 1) FROM strings
+----
+e
+o
+(empty)
+NULL
+
+query T
+SELECT array_extract('hello', off) FROM strings
+----
+h
+e
+h
+e
+
+# test substrings with constant nulls in different places
+query T
+SELECT array_extract(NULL::VARCHAR, off) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT array_extract('hello', NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT array_extract(NULL::VARCHAR, NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT array_extract(NULL::VARCHAR, off) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT array_extract(NULL::VARCHAR, NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+# negative offset
+query T
+SELECT array_extract(s, -1) FROM strings
+----
+o
+d
+b
+NULL
+
+# zero offset
+query T
+SELECT array_extract(s, 0) FROM strings
+----
+h
+w
+b
+NULL
+
+# length 0
+query T
+SELECT array_extract(s, 5) FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL
+
+# very large offset and length
+query T
+SELECT array_extract(s, 2147483646) FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL
+
+query T
+SELECT array_extract(s, -2147483647) FROM strings
+----
+h
+w
+b
+NULL

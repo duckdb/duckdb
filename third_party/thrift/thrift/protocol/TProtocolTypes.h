@@ -20,7 +20,7 @@
 #ifndef THRIFT_PROTOCOL_TPROTOCOLTYPES_H_
 #define THRIFT_PROTOCOL_TPROTOCOLTYPES_H_ 1
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace protocol {
 
@@ -31,6 +31,6 @@ enum PROTOCOL_TYPES {
 };
 }
 }
-} // apache::thrift::protocol
+} // duckdb_apache::thrift::protocol
 
 #endif // #define _THRIFT_PROTOCOL_TPROTOCOLTYPES_H_ 1

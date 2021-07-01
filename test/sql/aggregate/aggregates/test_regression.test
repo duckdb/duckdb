@@ -255,27 +255,27 @@ select regr_intercept(v, v2) from aggr;
 # Window Function
 require vector_size 512
 
-query I
+query I rowsort
 select  regr_avgx(v, v2) over (partition by k)
     from aggr;
 ----
+22.666667
+22.666667
+22.666667
+22.666667
 NULL
-22.666667
-22.666667
-22.666667
-22.666667
 
-query I
+query I rowsort
 select  regr_avgy(v, v2) over (partition by k)
     from aggr;
 ----
+20.000000
+20.000000
+20.000000
+20.000000
 NULL
-20.000000
-20.000000
-20.000000
-20.000000
 
-query I
+query I rowsort
 select  regr_count(v, v2) over (partition by k)
     from aggr;
 ----
@@ -285,62 +285,62 @@ select  regr_count(v, v2) over (partition by k)
 3
 3
 
-query I
+query I rowsort
 select  regr_slope(v, v2) over (partition by k)
     from aggr;
 ----
+0.831409
+0.831409
+0.831409
+0.831409
 NULL
-0.831409
-0.831409
-0.831409
-0.831409
 
-query I
+query I rowsort
 select  regr_r2(v, v2) over (partition by k)
     from aggr;
 ----
+0.997691
+0.997691
+0.997691
+0.997691
 NULL
-0.997691
-0.997691
-0.997691
-0.997691
 
-query I
+query I rowsort
 select  regr_sxx(v, v2) over (partition by k)
     from aggr;
 ----
+288.666667
+288.666667
+288.666667
+288.666667
 NULL
-288.666667
-288.666667
-288.666667
-288.666667
 
-query I
+query I rowsort
 select  regr_syy(v, v2) over (partition by k)
     from aggr;
 ----
+200.000000
+200.000000
+200.000000
+200.000000
 NULL
-200.000000
-200.000000
-200.000000
-200.000000
 
-query I
+query I rowsort
 select  regr_sxy(v, v2) over (partition by k)
     from aggr;
 ----
+240.000000
+240.000000
+240.000000
+240.000000
 NULL
-240.000000
-240.000000
-240.000000
-240.000000
 
-query I
+query I rowsort
 select  regr_intercept(v, v2) over (partition by k)
     from aggr;
 ----
+1.154734
+1.154734
+1.154734
+1.154734
 NULL
-1.154734
-1.154734
-1.154734
-1.154734

@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_expression
   OBJECT
+  between_expression.cpp
   case_expression.cpp
   cast_expression.cpp
   collate_expression.cpp
@@ -13,6 +14,7 @@ add_library_unity(
   lambda_expression.cpp
   operator_expression.cpp
   parameter_expression.cpp
+  positional_reference_expression.cpp
   star_expression.cpp
   subquery_expression.cpp
   table_star_expression.cpp

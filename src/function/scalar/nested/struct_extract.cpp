@@ -2,6 +2,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/storage/statistics/struct_statistics.hpp"
 
 namespace duckdb {
 
@@ -35,31 +36,21 @@ static void StructExtractFunction(DataChunk &args, ExpressionState &state, Vecto
 		auto &child = DictionaryVector::Child(vec);
 		auto &dict_sel = DictionaryVector::SelVector(vec);
 		auto &children = StructVector::GetEntries(child);
-		if (info.index >= children.size()) {
-			throw Exception("Not enough struct entries for struct_extract");
-		}
+		D_ASSERT(info.index < children.size());
 		auto &struct_child = children[info.index];
-		if (struct_child.first != info.key || struct_child.second->GetType() != info.type) {
-			throw Exception("Struct key or type mismatch");
-		}
-		result.Slice(*struct_child.second, dict_sel, args.size());
+		result.Slice(*struct_child, dict_sel, args.size());
 	} else {
 		auto &children = StructVector::GetEntries(vec);
-		if (info.index >= children.size()) {
-			throw Exception("Not enough struct entries for struct_extract");
-		}
+		D_ASSERT(info.index < children.size());
 		auto &struct_child = children[info.index];
-		if (struct_child.first != info.key || struct_child.second->GetType() != info.type) {
-			throw Exception("Struct key or type mismatch");
-		}
-		result.Reference(*struct_child.second);
+		result.Reference(*struct_child);
 	}
 	result.Verify(args.size());
 }
 
 static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
-	auto &struct_children = arguments[0]->return_type.child_types();
+	auto &struct_children = StructType::GetChildTypes(arguments[0]->return_type);
 	if (struct_children.empty()) {
 		throw Exception("Can't extract something from an empty struct");
 	}
@@ -99,10 +90,25 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
 	return make_unique<StructExtractBindData>(key, key_index, return_type);
 }
 
+static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &context, BoundFunctionExpression &expr,
+                                                              FunctionData *bind_data,
+                                                              vector<unique_ptr<BaseStatistics>> &child_stats) {
+	if (!child_stats[0]) {
+		return nullptr;
+	}
+	auto &struct_stats = (StructStatistics &)*child_stats[0];
+	auto &info = (StructExtractBindData &)*bind_data;
+	return info.index < struct_stats.child_stats.size() ? struct_stats.child_stats[info.index]->Copy() : nullptr;
+}
+
+ScalarFunction StructExtractFun::GetFunction() {
+	return ScalarFunction("struct_extract", {LogicalTypeId::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
+	                      StructExtractFunction, false, StructExtractBind, nullptr, PropagateStructExtractStats);
+}
+
 void StructExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("struct_extract", {LogicalType::STRUCT, LogicalType::VARCHAR}, LogicalType::ANY,
-	                   StructExtractFunction, false, StructExtractBind);
+	auto fun = GetFunction();
 	set.AddFunction(fun);
 }
 

@@ -15,20 +15,25 @@ using namespace std;
 
 class TestProgressBar {
 public:
-	explicit TestProgressBar(ClientContext *context) : context(context) {
+	explicit TestProgressBar(ClientContext *context) : context(context), correct(true) {
 	}
 
 	ClientContext *context;
-	bool stop;
+	atomic<bool> stop;
 	std::thread check_thread;
+	atomic<bool> correct;
 
 	void CheckProgressThread() {
 		int prev_percentage = -1;
 		while (!stop) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(10));
 			int new_percentage = context->GetProgress();
-			REQUIRE((new_percentage >= prev_percentage || new_percentage == -1));
-			REQUIRE(new_percentage <= 100);
+			if (!(new_percentage >= prev_percentage || new_percentage == -1)) {
+				correct = false;
+			}
+			if (!(new_percentage <= 100)) {
+				correct = false;
+			}
 		}
 	}
 	void Start() {
@@ -38,10 +43,11 @@ public:
 	void End() {
 		stop = true;
 		check_thread.join();
+		REQUIRE(correct);
 	}
 };
 
-TEST_CASE("Test Progress Bar", "[api]") {
+TEST_CASE("Test Progress Bar", "[api][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	TestProgressBar test_progress(con.context.get());
@@ -105,7 +111,7 @@ TEST_CASE("Test Progress Bar", "[api]") {
 	REQUIRE_NO_FAIL(*result);
 }
 
-TEST_CASE("Test Progress Bar CSV", "[api]") {
+TEST_CASE("Test Progress Bar CSV", "[api][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 

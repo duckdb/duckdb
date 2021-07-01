@@ -46,8 +46,14 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_FLOAT,
 	// double
 	DUCKDB_TYPE_DOUBLE,
-	// duckdb_timestamp
+	// duckdb_timestamp (us)
 	DUCKDB_TYPE_TIMESTAMP,
+	// duckdb_timestamp (s)
+	DUCKDB_TYPE_TIMESTAMP_S,
+	// duckdb_timestamp (ns)
+	DUCKDB_TYPE_TIMESTAMP_NS,
+	// duckdb_timestamp (ms)
+	DUCKDB_TYPE_TIMESTAMP_MS,
 	// duckdb_date
 	DUCKDB_TYPE_DATE,
 	// duckdb_time
@@ -106,6 +112,7 @@ typedef struct {
 typedef struct {
 	idx_t column_count;
 	idx_t row_count;
+	idx_t rows_changed;
 	duckdb_column *columns;
 	char *error_message;
 } duckdb_result;
@@ -174,11 +181,18 @@ DUCKDB_API uint64_t duckdb_value_uint64(duckdb_result *result, idx_t col, idx_t 
 DUCKDB_API float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to a double. Returns 0.0 on failure or NULL.
 DUCKDB_API double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row);
-//! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with free.
+//! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with
+//! duckdb_free.
 DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
 //! Fetches a blob from a result set column. Returns a blob with blob.data set to nullptr on failure or NULL. The
-//! resulting "blob.data" must be freed with free.
+//! resulting "blob.data" must be freed with duckdb_free.
 DUCKDB_API duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row);
+
+//! Allocate [size] amounts of memory using the duckdb internal malloc function. Any memory allocated in this manner
+//! should be freed using duckdb_free
+DUCKDB_API void *duckdb_malloc(size_t size);
+//! Free a value returned from duckdb_malloc, duckdb_value_varchar or duckdb_value_blob
+DUCKDB_API void duckdb_free(void *ptr);
 
 // Prepared Statements
 

@@ -1,0 +1,23 @@
+# name: test/sql/copy/parquet/parquet_1619.test
+# description: Error: Not implemented Error: Expr of type 347 not implemented
+# group: [parquet]
+
+require parquet
+
+query I
+select struct_extract("inner", 'f64_field') from parquet_scan('test/sql/copy/parquet/data/struct.parquet');
+----
+NULL
+1.23
+
+query I
+select ("inner")."f64_field" from parquet_scan('test/sql/copy/parquet/data/struct.parquet');
+----
+NULL
+1.23
+
+query I
+select "inner"['f64_field'] from parquet_scan('test/sql/copy/parquet/data/struct.parquet');
+----
+NULL
+1.23

@@ -1,0 +1,110 @@
+# name: test/sql/types/nested/list/list_aggregates.test
+# description: Test lists with aggregations
+# group: [list]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+query II
+select min(i::varchar), max(i::varchar) from range(10) tbl(i);
+----
+0	9
+
+query II
+select min(list_value(i)), max(list_value(i)) from range(10) tbl(i);
+----
+[0]	[9]
+
+# Integer comparison, not string comparison
+query II
+select min(list_value(-i)), max(list_value(i+2)) from range(10) tbl(i);
+----
+[-9]	[11]
+
+# Integer lists with NULLs in various positions
+statement ok
+CREATE VIEW list_int AS
+SELECT * FROM (VALUES
+	([1]),
+	([1, 2]),
+	([1, NULL]),
+	([NULL, 2]),
+	([NULL, NULL]),
+	([NULL]),
+	(NULL)
+) tbl(i);
+
+query III
+select min(i), max(i), first(i) from list_int;
+----
+[1]	[NULL, NULL]	[1]
+
+query I
+select first([i]) from range(10) tbl(i);
+----
+[0]
+
+query II
+select i%3 a, first([i]) from range(10) tbl(i) group by a order by a;
+----
+0	[0]
+1	[1]
+2	[2]
+
+query II
+select i%3 a, unnest(first([i])) from range(10) tbl(i) group by a order by a;
+----
+0	0
+1	1
+2	2
+
+query I
+select string_agg(list_value(i), ',') from range(10) tbl(i);
+----
+[0],[1],[2],[3],[4],[5],[6],[7],[8],[9]
+
+# window aggregate
+query III
+select i, i % 2, min(list_value(i)) over(partition by i % 2 order by i) from range(10) tbl(i) ORDER BY 1;
+----
+0	0	[0]
+1	1	[1]
+2	0	[0]
+3	1	[1]
+4	0	[0]
+5	1	[1]
+6	0	[0]
+7	1	[1]
+8	0	[0]
+9	1	[1]
+
+# list
+query III
+select i, i % 2, list(i) over(partition by i % 2 order by i) from range(10) tbl(i) ORDER BY 2, 1;
+----
+0	0	[0]
+2	0	[0, 2]
+4	0	[0, 2, 4]
+6	0	[0, 2, 4, 6]
+8	0	[0, 2, 4, 6, 8]
+1	1	[1]
+3	1	[1, 3]
+5	1	[1, 3, 5]
+7	1	[1, 3, 5, 7]
+9	1	[1, 3, 5, 7, 9]
+
+query III
+select i, i % 2, list(i) over(partition by i % 2 order by i rows between 1 preceding and 1 following) from range(10) tbl(i) ORDER BY 2, 1;
+----
+0	0	[0, 2]
+2	0	[0, 2, 4]
+4	0	[2, 4, 6]
+6	0	[4, 6, 8]
+8	0	[6, 8]
+1	1	[1, 3]
+3	1	[1, 3, 5]
+5	1	[3, 5, 7]
+7	1	[5, 7, 9]
+9	1	[7, 9]

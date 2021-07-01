@@ -23,6 +23,12 @@ endif
 ifeq (${DISABLE_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG=-DENABLE_SANITIZER=FALSE -DENABLE_UBSAN=0
 endif
+ifeq (${DISABLE_UBSAN}, 1)
+	DISABLE_SANITIZER_FLAG=-DENABLE_UBSAN=0
+endif
+ifeq (${DISABLE_VPTR_SANITIZER}, 1)
+	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DDISABLE_VPTR_SANITIZER=1
+endif
 ifeq (${FORCE_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DFORCE_SANITIZER=1
 endif
@@ -42,8 +48,14 @@ endif
 ifeq (${BUILD_TPCH}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCH_EXTENSION=1
 endif
+ifeq (${BUILD_TPCDS}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_TPCDS_EXTENSION=1
+endif
 ifeq (${BUILD_FTS}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_FTS_EXTENSION=1
+endif
+ifeq (${BUILD_VISUALIZER}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_VISUALIZER_EXTENSION=1
 endif
 ifeq (${BUILD_HTTPFS}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_HTTPFS_EXTENSION=1
@@ -57,8 +69,11 @@ endif
 ifeq (${BUILD_JDBC}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DJDBC_DRIVER=1
 endif
+ifeq (${BUILD_ODBC}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_ODBC_DRIVER=1
+endif
 ifeq (${BUILD_PYTHON}, 1)
-	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 DBUILD_TPCDS=1
 endif
 ifeq (${BUILD_R}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
@@ -68,6 +83,12 @@ ifeq (${BUILD_REST}, 1)
 endif
 ifneq ($(TIDY_THREADS),)
 	TIDY_THREAD_PARAMETER := -j ${TIDY_THREADS}
+endif
+ifeq ($(BUILD_ARROW_ABI_TEST), 1)
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_ARROW_ABI_TEST=1
+endif
+ifneq ("${FORCE_QUERY_LOG}a", "a")
+	EXTENSIONS:=${EXTENSIONS} -DFORCE_QUERY_LOG=${FORCE_QUERY_LOG}
 endif
 
 clean:
@@ -94,10 +115,14 @@ cldebug:
 clreldebug:
 	mkdir -p build/clreldebug && \
 	cd build/clreldebug && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_R=1 -DBUILD_FTS_EXTENSION=1 -DENABLE_SANITIZER=0 -DENABLE_UBSAN=0 -DCMAKE_BUILD_TYPE=RelWithDebInfo ../.. && \
 	cmake --build .
 
 unittest: debug
+	build/debug/test/unittest
+	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+
+unittestci:
 	build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
@@ -158,7 +183,13 @@ format-check-silent:
 	python3 scripts/format.py --all --check --silent
 
 format-fix:
-	python3 scripts/format.py --all --fix
+	python3 scripts/format.py --all --fix --noconfirm
+
+format-head:
+	python3 scripts/format.py HEAD --fix --noconfirm
+
+format-master:
+	python3 scripts/format.py master --fix --noconfirm
 
 third_party/sqllogictest:
 	git clone --depth=1 https://github.com/cwida/sqllogictest.git third_party/sqllogictest

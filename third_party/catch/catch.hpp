@@ -3743,6 +3743,10 @@ namespace Catch {
         virtual RunTests::InWhatOrder runOrder() const = 0;
         virtual unsigned int rngSeed() const = 0;
         virtual int benchmarkResolutionMultiple() const = 0;
+        virtual int startOffset() const = 0;
+        virtual int startOffsetPercentage() const = 0;
+        virtual int endOffset() const = 0;
+        virtual int endOffsetPercentage() const = 0;
         virtual UseColour::YesOrNo useColour() const = 0;
         virtual std::vector<std::string> const& getSectionsToRun() const = 0;
         virtual Verbosity verbosity() const = 0;
@@ -3783,6 +3787,11 @@ namespace Catch {
         int abortAfter = -1;
         unsigned int rngSeed = 0;
         int benchmarkResolutionMultiple = 100;
+
+        int startOffset = -1;
+        int startOffsetPercentage = -1;
+        int endOffset = -1;
+        int endOffsetPercentage = -1;
 
         Verbosity verbosity = Verbosity::Normal;
         WarnAbout::What warnings = WarnAbout::Nothing;
@@ -3845,6 +3854,10 @@ namespace Catch {
         int abortAfter() const override;
         bool showInvisibles() const override;
         Verbosity verbosity() const override;
+        int startOffset() const override;
+        int startOffsetPercentage() const override;
+        int endOffset() const override;
+        int endOffsetPercentage() const override;
 
     private:
 
@@ -7124,7 +7137,18 @@ namespace Catch {
             | Opt( config.benchmarkResolutionMultiple, "multiplier" )
                 ["--benchmark-resolution-multiple"]
                 ( "multiple of clock resolution to run benchmarks" )
-
+            | Opt( config.startOffset, "startOffset" )
+                ["--start-offset"]
+                ( "start offset of tests (absolute test index)" )
+            | Opt( config.endOffset, "endOffset" )
+                ["--end-offset"]
+                ( "end offset of tests (absolute test index)" )
+            | Opt( config.startOffsetPercentage, "startOffsetPercentage" )
+                ["--start-offset-percentage"]
+                ( "start offset of tests (percentage of total tests)" )
+            | Opt( config.endOffsetPercentage, "endOffsetPercentage" )
+                ["--end-offset-percentage"]
+                ( "end offset of tests (percentage of total tests)" )
             | Arg( config.testsOrTags, "test name|pattern|tags" )
                 ( "which test or tests to use" );
 
@@ -7226,6 +7250,11 @@ namespace Catch {
     int Config::abortAfter() const                     { return m_data.abortAfter; }
     bool Config::showInvisibles() const                { return m_data.showInvisibles; }
     Verbosity Config::verbosity() const                { return m_data.verbosity; }
+    int Config::startOffset() const                    { return m_data.startOffset; }
+    int Config::endOffset() const                      { return m_data.endOffset; }
+    int Config::startOffsetPercentage() const          { return m_data.startOffsetPercentage; }
+    int Config::endOffsetPercentage() const            { return m_data.endOffsetPercentage; }
+
 
     IStream const* Config::openStream() {
         return Catch::makeStream(m_data.outputFilename);
@@ -9976,8 +10005,25 @@ namespace Catch {
                     total_tests_run++;
                 }
             }
+            int start_offset = 0;
+            int end_offset = total_tests_run;
+            if (config->startOffset() >= 0) {
+                start_offset = config->startOffset();
+            } else if (config->startOffsetPercentage() >= 0) {
+                start_offset = int((config->startOffsetPercentage() / 100.0) * total_tests_run);
+            }
+            if (config->endOffset() >= 0) {
+                end_offset = config->endOffset();
+            } else if (config->endOffsetPercentage() >= 0) {
+                end_offset = int((config->endOffsetPercentage() / 100.0) * total_tests_run);
+            }
             for (auto const& testCase : allTestCases) {
                 if (!context.aborting() && matchTest(testCase, testSpec, *config)) {
+                    if (current_test < start_offset || current_test >= end_offset) {
+                        // skip this test
+                        current_test++;
+                        continue;
+                    }
                     renderTestProgress(current_test, total_tests_run, testCase.name);
                     totals += context.runTest(testCase);
                     current_test++;

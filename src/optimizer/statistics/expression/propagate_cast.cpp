@@ -14,7 +14,9 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 		return nullptr;
 	}
 	auto stats = make_unique<NumericStatistics>(target, move(min), move(max));
-	stats->has_null = input.has_null;
+	if (input.validity_stats) {
+		stats->validity_stats = input.validity_stats->Copy();
+	}
 	return move(stats);
 }
 

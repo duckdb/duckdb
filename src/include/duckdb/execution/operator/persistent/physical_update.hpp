@@ -29,14 +29,16 @@ public:
 	vector<column_t> columns;
 	vector<unique_ptr<Expression>> expressions;
 	vector<unique_ptr<Expression>> bound_defaults;
-	bool is_index_update;
+	bool update_is_del_and_insert;
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	          DataChunk &input) const override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 };
 
 } // namespace duckdb

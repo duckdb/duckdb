@@ -1,5 +1,5 @@
 #include "duckdb/execution/operator/join/physical_index_join.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/art/art.hpp"
@@ -8,6 +8,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 
 #include <iostream>
 #include <utility>
@@ -33,7 +34,6 @@ public:
 	//! Vector of rows that mush be fetched for every LHS key
 	vector<vector<row_t>> rhs_rows;
 	ExpressionExecutor probe_executor;
-	IndexLock lock;
 };
 
 PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
@@ -63,7 +63,7 @@ PhysicalIndexJoin::PhysicalIndexJoin(LogicalOperator &op, unique_ptr<PhysicalOpe
 	}
 }
 
-void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const {
 	auto &transaction = Transaction::GetTransaction(context.client);
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
@@ -96,9 +96,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &chunk, Phys
 		}
 		rhs_chunk.Initialize(fetch_types);
 		ColumnFetchState fetch_state;
-		Vector row_ids;
-		row_ids.SetType(LOGICAL_ROW_TYPE);
-		FlatVector::SetData(row_ids, (data_ptr_t)&fetch_rows[0]);
+		Vector row_ids(LOGICAL_ROW_TYPE, (data_ptr_t)&fetch_rows[0]);
 		tbl->Fetch(transaction, rhs_chunk, fetch_ids, row_ids, output_sel_idx, fetch_state);
 	}
 
@@ -133,9 +131,12 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 		state->rhs_rows[i].clear();
 		if (!equal_value.is_null) {
 			if (fetch_types.empty()) {
-				//! Nothing to materialize
+				IndexLock lock;
+				index->InitializeLock(lock);
 				art.SearchEqualJoinNoFetch(equal_value, state->result_sizes[i]);
 			} else {
+				IndexLock lock;
+				index->InitializeLock(lock);
 				art.SearchEqual((ARTIndexScanState *)index_state.get(), (idx_t)-1, state->rhs_rows[i]);
 				state->result_sizes[i] = state->rhs_rows[i].size();
 			}
@@ -150,11 +151,9 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, PhysicalOperato
 	}
 }
 
-void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalIndexJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                         PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalIndexJoinOperatorState *>(state_p);
-	if (!state->lock.index_lock) {
-		index->InitializeLock(state->lock);
-	}
 	state->result_size = 0;
 	while (state->result_size == 0) {
 		//! Check if we need to get a new LHS chunk
@@ -197,6 +196,13 @@ unique_ptr<PhysicalOperatorState> PhysicalIndexJoin::GetOperatorState() {
 		state->probe_executor.AddExpression(*cond.left);
 	}
 	return move(state);
+}
+void PhysicalIndexJoin::FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
+	auto &state_p = reinterpret_cast<PhysicalIndexJoinOperatorState &>(state);
+	context.thread.profiler.Flush(this, &state_p.probe_executor, "probe_executor", 0);
+	if (!children.empty() && state.child_state) {
+		children[0]->FinalizeOperatorState(*state.child_state, context);
+	}
 }
 
 } // namespace duckdb

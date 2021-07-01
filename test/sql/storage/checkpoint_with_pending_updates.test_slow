@@ -1,0 +1,53 @@
+# name: test/sql/storage/checkpoint_with_pending_updates.test_slow
+# description: Test checkpoint with pending updates
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/pending_updates.db
+
+statement ok
+CREATE TABLE test (i INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM range(1000000);
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+UPDATE test SET i=i+1;
+
+# cannot checkpoint: this transaction has transaction-local changes
+statement error
+CHECKPOINT
+
+statement ok
+ROLLBACK
+
+# now we can checkpoint
+statement ok
+CHECKPOINT
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+UPDATE test SET i=i+1;
+
+# We ALSO cannot force checkpoint when we have transaction local changes ourselves (can only abort OTHER transactions)
+statement error
+FORCE CHECKPOINT
+
+statement ok
+ROLLBACK
+
+# now we can checkpoint
+statement ok
+CHECKPOINT
+
+restart
+
+query III
+SELECT MIN(i), MAX(i), COUNT(*) FROM test;
+----
+0	999999	1000000

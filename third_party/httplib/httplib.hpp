@@ -218,9 +218,6 @@ using socket_t = int;
 #include <iostream>
 #include <sstream>
 
-#if OPENSSL_VERSION_NUMBER < 0x1010100fL
-#error Sorry, OpenSSL versions prior to 1.1.1 are not supported
-#endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 #include <openssl/crypto.h>

@@ -1,0 +1,106 @@
+# name: test/sql/storage/commit_abort_large.test_slow
+# description: Test abort of commit with many values
+# group: [storage]
+
+# FIXME: this test fails right now because deleted tuples are not correctly removed
+# while checkpointing, which causes the start-up after checkpoint to fail during
+# primary index construction. It should be re-enabled when deleted tuples are properly vacuumed.
+mode skip
+
+# load the DB from disk
+load __TEST_DIR__/commit_abort.db
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);
+
+statement ok
+INSERT INTO test VALUES (11, 22, 'hello'), (13, 22, 'world'), (12, 21, 'test'), (10, NULL, NULL);
+
+# start a transaction for con and con2
+statement ok con1
+BEGIN TRANSACTION
+
+statement ok con2
+BEGIN TRANSACTION
+
+# insert the value 14 in con1
+statement ok con1
+INSERT INTO test VALUES (14, 10, 'con')
+
+# insert a bunch of unique values in con2
+statement ok con2
+INSERT INTO test SELECT i, NULL, NULL FROM range(15, 1000000) tbl(i);
+
+# now insert value 14
+statement ok con2
+INSERT INTO test VALUES (14, 10, 'con2')
+
+# commit both
+# con2 will fail
+
+statement ok con1
+COMMIT
+
+statement error con2
+COMMIT
+
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+14	10	con
+
+statement ok con1
+INSERT INTO test VALUES (15, NULL, NULL)
+
+statement ok con1
+INSERT INTO test VALUES (16, 24, 'blabla')
+
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+14	10	con
+15	NULL	NULL
+16	24	blabla
+
+restart
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+14	10	con
+15	NULL	NULL
+16	24	blabla
+
+restart
+
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+14	10	con
+15	NULL	NULL
+16	24	blabla

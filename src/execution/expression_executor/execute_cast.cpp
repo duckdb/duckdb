@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpression &expr,
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCastExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_unique<ExpressionState>(expr, root);
 	result->AddChild(expr.child.get());
@@ -12,11 +12,12 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCastExpress
 	return result;
 }
 
-void ExpressionExecutor::Execute(BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel,
+void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 	// resolve the child
-	Vector child;
-	child.Reference(state->intermediate_chunk.data[0]);
+	state->intermediate_chunk.Reset();
+
+	auto &child = state->intermediate_chunk.data[0];
 	auto child_state = state->child_states[0].get();
 
 	Execute(*expr.child, child_state, sel, count, child);

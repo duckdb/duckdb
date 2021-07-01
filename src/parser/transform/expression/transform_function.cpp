@@ -37,22 +37,23 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 	return ExpressionType::WINDOW_AGGREGATE;
 }
 
-void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
+void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr, idx_t depth) {
 	D_ASSERT(window_spec);
 	D_ASSERT(expr);
 
 	// next: partitioning/ordering expressions
-	TransformExpressionList(window_spec->partitionClause, expr->partitions);
+	TransformExpressionList(window_spec->partitionClause, expr->partitions, depth);
 	TransformOrderBy(window_spec->orderClause, expr->orders);
 }
 
-void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
+void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr,
+                                       idx_t depth) {
 	D_ASSERT(window_spec);
 	D_ASSERT(expr);
 
 	// finally: specifics of bounds
-	expr->start_expr = TransformExpression(window_spec->startOffset);
-	expr->end_expr = TransformExpression(window_spec->endOffset);
+	expr->start_expr = TransformExpression(window_spec->startOffset, depth + 1);
+	expr->end_expr = TransformExpression(window_spec->endOffset, depth + 1);
 
 	if ((window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_PRECEDING) ||
 	    (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)) {
@@ -101,7 +102,7 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_sp
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall *root) {
+unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall *root, idx_t depth) {
 	auto name = root->funcname;
 	string schema, function_name;
 	if (name->length == 2) {
@@ -135,7 +136,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 		if (root->args) {
 			vector<unique_ptr<ParsedExpression>> function_list;
-			auto res = TransformExpressionList(root->args, function_list);
+			auto res = TransformExpressionList(root->args, function_list, depth);
 			if (!res) {
 				throw Exception("Failed to transform window function children");
 			}
@@ -176,8 +177,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			window_ref = it->second;
 			D_ASSERT(window_ref);
 		}
-		TransformWindowDef(window_ref, expr.get());
-		TransformWindowFrame(window_spec, expr.get());
+		TransformWindowDef(window_ref, expr.get(), depth);
+		TransformWindowFrame(window_spec, expr.get(), depth);
 
 		return move(expr);
 	}
@@ -186,13 +187,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	vector<unique_ptr<ParsedExpression>> children;
 	if (root->args != nullptr) {
 		for (auto node = root->args->head; node != nullptr; node = node->next) {
-			auto child_expr = TransformExpression((duckdb_libpgquery::PGNode *)node->data.ptr_value);
+			auto child_expr = TransformExpression((duckdb_libpgquery::PGNode *)node->data.ptr_value, depth + 1);
 			children.push_back(move(child_expr));
 		}
 	}
 	unique_ptr<ParsedExpression> filter_expr;
 	if (root->agg_filter) {
-		filter_expr = TransformExpression(root->agg_filter);
+		filter_expr = TransformExpression(root->agg_filter, depth + 1);
 	}
 
 	// star gets eaten in the parser
@@ -211,9 +212,11 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		expr->case_checks.push_back(move(check));
 		expr->else_expr = move(children[2]);
 		return move(expr);
-	}
-
-	else if (lowercase_name == "ifnull") {
+	} else if (lowercase_name == "construct_array") {
+		auto construct_array = make_unique<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
+		construct_array->children = move(children);
+		return move(construct_array);
+	} else if (lowercase_name == "ifnull") {
 		if (children.size() != 2) {
 			throw ParserException("Wrong number of arguments to IFNULL.");
 		}
@@ -225,7 +228,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		return move(coalesce_op);
 	}
 
-	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), children, move(filter_expr),
+	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), move(children), move(filter_expr),
 	                                                root->agg_distinct);
 	function->query_location = root->location;
 	return move(function);
@@ -268,13 +271,14 @@ static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node) {
+unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node,
+                                                                    idx_t depth) {
 	if (!node) {
 		return nullptr;
 	}
 	vector<unique_ptr<ParsedExpression>> children;
 	auto fname = SQLValueOpToString(node->op);
-	return make_unique<FunctionExpression>(DEFAULT_SCHEMA, fname, children);
+	return make_unique<FunctionExpression>(DEFAULT_SCHEMA, fname, move(children));
 }
 
 } // namespace duckdb

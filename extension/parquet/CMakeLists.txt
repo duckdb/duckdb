@@ -4,11 +4,17 @@ project(ParquetExtension)
 
 include_directories(
   include ../../third_party/parquet ../../third_party/snappy
-  ../../third_party/miniz ../../third_party/thrift ../../third_party/zstd)
+  ../../third_party/miniz ../../third_party/thrift
+  ../../third_party/zstd/include)
 
 set(PARQUET_EXTENSION_FILES
-    parquet-extension.cpp parquet_reader.cpp parquet_timestamp.cpp
-    parquet_writer.cpp parquet_statistics.cpp column_reader.cpp)
+    parquet-extension.cpp
+    parquet_metadata.cpp
+    parquet_reader.cpp
+    parquet_timestamp.cpp
+    parquet_writer.cpp
+    parquet_statistics.cpp
+    column_reader.cpp)
 
 if(NOT CLANG_TIDY)
   set(PARQUET_EXTENSION_FILES
@@ -44,3 +50,9 @@ if(NOT CLANG_TIDY)
 endif()
 
 add_library(parquet_extension STATIC ${PARQUET_EXTENSION_FILES})
+
+if(NOT CLANG_TIDY)
+  add_executable(parquetcli parquetcli.cpp)
+  target_link_libraries(parquetcli parquet_extension)
+  target_link_libraries(parquetcli duckdb_static)
+endif()

@@ -26,11 +26,10 @@ struct IndexLock;
 //! The index is an abstract base class that serves as the basis for indexes
 class Index {
 public:
-	Index(IndexType type, vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions);
+	Index(IndexType type, const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions,
+	      bool is_unique, bool is_primary);
 	virtual ~Index() = default;
 
-	//! Lock used for updating the index
-	std::mutex lock;
 	//! The type of the index
 	IndexType type;
 	//! Column identifiers to extract from the base table
@@ -43,6 +42,10 @@ public:
 	vector<PhysicalType> types;
 	//! The logical types of the expressions
 	vector<LogicalType> logical_types;
+	//! Whether or not the index is an index built to enforce a UNIQUE or PRIMARY KEY constraint
+	bool is_unique;
+	//! Whether or not the index is an index built to enforce a PRIMARY KEY constraint
+	bool is_primary;
 
 public:
 	//! Initialize a scan on the index with the given expression and column ids
@@ -76,10 +79,13 @@ public:
 	virtual bool Insert(IndexLock &lock, DataChunk &input, Vector &row_identifiers) = 0;
 
 	//! Returns true if the index is affected by updates on the specified column ids, and false otherwise
-	bool IndexIsUpdated(vector<column_t> &column_ids);
+	bool IndexIsUpdated(const vector<column_t> &column_ids) const;
 
 protected:
 	void ExecuteExpressions(DataChunk &input, DataChunk &result);
+
+	//! Lock used for updating the index
+	mutex lock;
 
 private:
 	//! Bound expressions used by the index

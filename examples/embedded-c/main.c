@@ -36,7 +36,7 @@ int main() {
 		for (size_t col_idx = 0; col_idx < result.column_count; col_idx++) {
 			char *val = duckdb_value_varchar(&result, col_idx, row_idx);
 			printf("%s ", val);
-			free(val);
+			duckdb_free(val);
 		}
 		printf("\n");
 	}

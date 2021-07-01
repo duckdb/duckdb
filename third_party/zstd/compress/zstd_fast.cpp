@@ -8,8 +8,8 @@
  * You may select, at your option, one of the above-listed licenses.
  */
 
-#include "zstd_compress_internal.h"  /* ZSTD_hashPtr, ZSTD_count, ZSTD_storeSeq */
-#include "zstd_fast.h"
+#include "zstd/compress/zstd_compress_internal.h"  /* ZSTD_hashPtr, ZSTD_count, ZSTD_storeSeq */
+#include "zstd/compress/zstd_fast.h"
 
 namespace duckdb_zstd {
 

@@ -7,6 +7,16 @@ require vector_size 512
 statement ok
 PRAGMA enable_verification
 
+# negative lag
+query II
+select *
+from (
+    select lag(i, -1) over () as negative, lead(i, 1) over () as positive
+    from generate_series(0, 10, 1) tbl(i)
+    ) w
+where negative <> positive
+----
+
 statement ok
 CREATE TABLE empsalary (depname varchar, empno bigint, salary int, enroll_date date)
 

@@ -74,8 +74,9 @@ NULL
 # use it inside subquery
 query I
 SELECT
- (select sum(t2.i) FILTER (where t2.i < 10)  from t as t2)
+ (select sum(t2.i) FILTER (where t2.i < 10)  from t as t2) sq
 FROM t
+ORDER BY sq
 limit 5;
 ----
 45
@@ -98,7 +99,7 @@ query II
   sum(i) AS unfiltered,
   sum(i) FILTER (WHERE i < 5) AS filtered
 FROM t
-group by j;
+group by j ORDER BY j;
 ----
 49500	0
 49600	1
@@ -119,7 +120,7 @@ query III
   COUNT(*) FILTER (WHERE i > 5 and i < 10) AS filtered,
   j
 FROM t
-group by j;
+group by j ORDER BY j;
 ----
 100	0	0
 100	0	1
@@ -139,7 +140,7 @@ SELECT
   SUM(i) AS unfiltered,
   SUM(i) FILTER (WHERE i between 5 and 10) AS filtered
 FROM t
-group by j;
+group by j ORDER BY j;
 ----
 49500	10
 49600	NULL
@@ -161,7 +162,7 @@ SELECT
   SUM(j) FILTER (WHERE j = 1) AS filtered,
   j
 FROM t
-group by j;
+group by j ORDER BY j;
 ----
 49500	NULL	0
 49600	100	    1
@@ -179,7 +180,7 @@ query I
 SELECT
   SUM(j) FILTER (WHERE i < 10)
 FROM t
-group by j;
+group by j ORDER BY j;
 ----
 0
 1
@@ -196,7 +197,7 @@ query I
 SELECT
   SUM(j) FILTER (WHERE i < (select 10))
 FROM t
-group by j;
+group by j ORDER BY j;
 ----
 0
 1
@@ -213,7 +214,7 @@ query I
 SELECT
   SUM(i) FILTER (WHERE i < (select i from t as t2 where t.i = t2.i))
 FROM t
-group by j;
+group by j ORDER BY j;
 ----
 NULL
 NULL
@@ -231,7 +232,7 @@ query I
  SELECT
  (select sum(t2.i) FILTER (where t2.i < 10)  from t as t2)
 FROM t
-group by j
+group by j ORDER BY j
 limit 5;
 ----
 45
@@ -246,7 +247,7 @@ SELECT
  SUM(j) FILTER (WHERE i < 10),
   SUM(i) FILTER (WHERE i < 5)
 FROM t
-group by j;
+group by j ORDER BY j;
 ----
 0	0
 1	1
@@ -265,7 +266,7 @@ query II
   sum(i) AS unfiltered,
   sum(i) FILTER (WHERE i < 5) AS filtered
 FROM t
-group by k;
+group by k ORDER BY k;
 ----
 49500	0
 49600	1
@@ -285,7 +286,7 @@ query II
   COUNT(*) AS unfiltered,
   COUNT(*) FILTER (WHERE i > 5 and i < 10) AS filtered
 FROM t
-group by k;
+group by k ORDER BY k;
 ----
 100	0
 100	0
@@ -305,7 +306,7 @@ SELECT
   SUM(i) AS unfiltered,
   SUM(i) FILTER (WHERE i between 5 and 10) AS filtered
 FROM t
-group by k;
+group by k ORDER BY k;
 ----
 49500	10
 49600	NULL
@@ -327,7 +328,7 @@ SELECT
   SUM(j) FILTER (WHERE j = 1) AS filtered,
   k
 FROM t
-group by k;
+group by k ORDER BY k;
 ----
 49500	NULL	0
 49600	100	10000000
@@ -345,7 +346,7 @@ query I
 SELECT
   SUM(j) FILTER (WHERE i < 10)
 FROM t
-group by k;
+group by k ORDER BY k;
 ----
 0
 1
@@ -362,7 +363,7 @@ query I
 SELECT
   SUM(j) FILTER (WHERE i < (select 10))
 FROM t
-group by k;
+group by k ORDER BY k;
 ----
 0
 1
@@ -379,7 +380,7 @@ query I
 SELECT
   SUM(i) FILTER (WHERE i < (select i from t as t2 where t.i = t2.i))
 FROM t
-group by k;
+group by k ORDER BY k;
 ----
 NULL
 NULL
@@ -397,7 +398,7 @@ query I
  SELECT
  (select sum(t2.i) FILTER (where t2.i < 10)  from t as t2)
 FROM t
-group by k
+group by k ORDER BY k
 limit 5;
 ----
 45
@@ -412,7 +413,7 @@ SELECT
  SUM(j) FILTER (WHERE i < 10),
   SUM(i) FILTER (WHERE i < 5)
 FROM t
-group by k;
+group by k ORDER BY k;
 ----
 0	0
 1	1
@@ -429,9 +430,9 @@ group by k;
 # use correlated expression inside the filter itself
 query I
     SELECT
- (select sum(t2.i) FILTER (where t.i = t2.i)  from t as t2)
+ (select sum(t2.i) FILTER (where t.i = t2.i) from t as t2) sq
 FROM t
-where i < 5
+where i < 5 ORDER BY sq
 ----
 0
 1
@@ -454,7 +455,7 @@ query IIIII
 select count (a) filter (where a>10 and a < 15), count (b) filter (where b between 1 and 3),
     count (c) filter ( where c < 10), count (d) filter (where d =5), count(e) filter (where e < 10)
     from t_2
-    group by b;
+    group by b ORDER BY b
 ----
 0	10	10	10	0
 4	90	0	90	0
@@ -470,7 +471,7 @@ select COVAR_POP(a,b) filter (where a < 100), COVAR_POP(a,b) filter (where b <5)
 query II
 select COVAR_POP(a,c) filter (where a < 100), COVAR_POP(a,c) filter (where c <50)
 from t_2
-group by b;
+group by b ORDER BY b;
 ----
 8.250000	8.250000
 674.916667	133.250000

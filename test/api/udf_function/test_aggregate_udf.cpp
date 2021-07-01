@@ -106,29 +106,6 @@ TEST_CASE("Aggregate UDFs", "[udf_function][.]") {
 		    "udf_covar_pop_double_args", LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::INTEGER));
 	}
 
-	SECTION("Cheking if aggregate UDFs are temporary") {
-		REQUIRE_NOTHROW(
-		    con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>("udf_avg_double"));
-		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>("udf_avg_int"));
-		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<int>, int, int>(
-		    "udf_avg_int_args", LogicalType::INTEGER, LogicalType::INTEGER));
-		REQUIRE_NOTHROW(con.CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>(
-		    "udf_avg_double_args", LogicalType::DOUBLE, LogicalType::DOUBLE));
-
-		REQUIRE_NO_FAIL(con.Query("SELECT udf_avg_double(1)"));
-		REQUIRE_NO_FAIL(con.Query("SELECT udf_avg_int(1)"));
-		REQUIRE_NO_FAIL(con.Query("SELECT udf_avg_int_args(1)"));
-		REQUIRE_NO_FAIL(con.Query("SELECT udf_avg_double_args(1)"));
-
-		// Trying to use the aggregate UDFs with a different connection, it must fail
-		Connection con_NEW(db);
-		con_NEW.EnableQueryVerification();
-		REQUIRE_FAIL(con_NEW.Query("SELECT udf_avg_double(1)"));
-		REQUIRE_FAIL(con_NEW.Query("SELECT udf_avg_int(1)"));
-		REQUIRE_FAIL(con_NEW.Query("SELECT udf_avg_int_args(1)"));
-		REQUIRE_FAIL(con_NEW.Query("SELECT udf_avg_double_args(1)"));
-	}
-
 	SECTION("Testing the generic CreateAggregateFunction()") {
 		REQUIRE_NOTHROW(con.CreateAggregateFunction(
 		    "udf_sum", {LogicalType::DOUBLE}, LogicalType::DOUBLE, &UDFSum::StateSize<UDFSum::sum_state_t>,

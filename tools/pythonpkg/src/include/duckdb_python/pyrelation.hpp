@@ -10,6 +10,7 @@
 
 #include "duckdb_python/pybind_wrapper.hpp"
 #include "duckdb.hpp"
+#include "arrow_array_stream.hpp"
 
 namespace duckdb {
 struct DuckDBPyResult;
@@ -19,6 +20,7 @@ public:
 	explicit DuckDBPyRelation(shared_ptr<Relation> rel);
 
 	shared_ptr<Relation> rel;
+	unique_ptr<PythonTableArrowArrayStreamFactory> arrow_stream_factory;
 
 public:
 	static void Initialize(py::handle &m);
@@ -27,11 +29,13 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> Values(py::object values = py::list());
 
+	static unique_ptr<DuckDBPyRelation> FromQuery(const string &query, const string &alias);
+
 	static unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 
 	static unique_ptr<DuckDBPyRelation> FromParquet(const string &filename);
 
-	static unique_ptr<DuckDBPyRelation> FromArrowTable(const py::object &table);
+	static unique_ptr<DuckDBPyRelation> FromArrowTable(py::object &table);
 
 	unique_ptr<DuckDBPyRelation> Project(const string &expr);
 
@@ -63,6 +67,10 @@ public:
 
 	py::object ToDF();
 
+	py::object Fetchone();
+
+	py::object Fetchall();
+
 	py::object ToArrowTable();
 
 	unique_ptr<DuckDBPyRelation> Union(DuckDBPyRelation *other);
@@ -70,6 +78,8 @@ public:
 	unique_ptr<DuckDBPyRelation> Except(DuckDBPyRelation *other);
 
 	unique_ptr<DuckDBPyRelation> Intersect(DuckDBPyRelation *other);
+
+	unique_ptr<DuckDBPyRelation> Map(py::function fun);
 
 	unique_ptr<DuckDBPyRelation> Join(DuckDBPyRelation *other, const string &condition);
 
@@ -97,6 +107,9 @@ public:
 	string Print();
 
 	py::object Getattr(const py::str &key);
+
+private:
+	py::object map_function;
 };
 
 } // namespace duckdb

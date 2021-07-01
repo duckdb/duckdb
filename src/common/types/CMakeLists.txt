@@ -11,7 +11,8 @@ add_library_unity(
   hugeint.cpp
   hyperloglog.cpp
   interval.cpp
-  null_value.cpp
+  row_data_collection.cpp
+  row_layout.cpp
   selection_vector.cpp
   string_heap.cpp
   string_type.cpp
@@ -21,6 +22,7 @@ add_library_unity(
   value.cpp
   vector_buffer.cpp
   vector.cpp
+  vector_cache.cpp
   vector_constants.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common_types>

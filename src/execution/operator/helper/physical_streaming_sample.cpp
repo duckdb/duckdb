@@ -22,7 +22,7 @@ public:
 	RandomEngine random;
 };
 
-void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, PhysicalOperatorState *state_p) {
+void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, PhysicalOperatorState *state_p) const {
 	// system sampling: we throw one dice per chunk
 	auto &state = (StreamingSampleOperatorState &)*state_p;
 	double rand = state.random.NextRandom();
@@ -32,7 +32,8 @@ void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, 
 	}
 }
 
-void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &result, PhysicalOperatorState *state_p) {
+void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &result,
+                                              PhysicalOperatorState *state_p) const {
 	// bernoulli sampling: we throw one dice per tuple
 	// then slice the result chunk
 	auto &state = (StreamingSampleOperatorState &)*state_p;
@@ -50,7 +51,7 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 }
 
 void PhysicalStreamingSample::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state) {
+                                               PhysicalOperatorState *state) const {
 
 	// get the next chunk from the child
 	do {

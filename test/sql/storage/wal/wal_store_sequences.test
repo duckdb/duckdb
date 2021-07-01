@@ -7,6 +7,9 @@ load __TEST_DIR__/store_sequences.db
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
 # standard sequence
 statement ok
 CREATE SEQUENCE seq
@@ -30,6 +33,9 @@ restart
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
 
 query I
 SELECT nextval('seq')

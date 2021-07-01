@@ -12,6 +12,8 @@
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/storage/table/column_data.hpp"
 
 #include <cstring>
 
@@ -64,8 +66,6 @@ UpdateInfo *Transaction::CreateUpdateInfo(idx_t type_size, idx_t entries) {
 	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
 	update_info->tuple_data = ((data_ptr_t)update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
 	update_info->version_number = transaction_id;
-	ValidityMask update_mask(update_info->validity);
-	update_mask.SetAllValid(STANDARD_VECTOR_SIZE);
 	return update_info;
 }
 

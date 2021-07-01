@@ -10,9 +10,10 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/vector_size.hpp"
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
-class MorselInfo;
+class RowGroup;
 struct SelectionVector;
 class Transaction;
 
@@ -20,15 +21,13 @@ enum class ChunkInfoType : uint8_t { CONSTANT_INFO, VECTOR_INFO, EMPTY_INFO };
 
 class ChunkInfo {
 public:
-	ChunkInfo(idx_t start, MorselInfo &morsel, ChunkInfoType type) : start(start), morsel(morsel), type(type) {
+	ChunkInfo(idx_t start, ChunkInfoType type) : start(start), type(type) {
 	}
 	virtual ~ChunkInfo() {
 	}
 
 	//! The row index of the first row
 	idx_t start;
-	//! The morsel the chunk info belongs to
-	MorselInfo &morsel;
 	//! The ChunkInfo type
 	ChunkInfoType type;
 
@@ -41,15 +40,15 @@ public:
 	virtual void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) = 0;
 
 	virtual void Serialize(Serializer &serialize) = 0;
-	static unique_ptr<ChunkInfo> Deserialize(MorselInfo &morsel, Deserializer &source);
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
 };
 
 class ChunkConstantInfo : public ChunkInfo {
 public:
-	ChunkConstantInfo(idx_t start, MorselInfo &morsel);
+	ChunkConstantInfo(idx_t start);
 
-	transaction_t insert_id;
-	transaction_t delete_id;
+	atomic<transaction_t> insert_id;
+	atomic<transaction_t> delete_id;
 
 public:
 	idx_t GetSelVector(Transaction &transaction, SelectionVector &sel_vector, idx_t max_count) override;
@@ -57,21 +56,21 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 
 	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(MorselInfo &morsel, Deserializer &source);
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
 };
 
 class ChunkVectorInfo : public ChunkInfo {
 public:
-	ChunkVectorInfo(idx_t start, MorselInfo &morsel);
+	ChunkVectorInfo(idx_t start);
 
 	//! The transaction ids of the transactions that inserted the tuples (if any)
-	transaction_t inserted[STANDARD_VECTOR_SIZE];
-	transaction_t insert_id;
-	bool same_inserted_id;
+	atomic<transaction_t> inserted[STANDARD_VECTOR_SIZE];
+	atomic<transaction_t> insert_id;
+	atomic<bool> same_inserted_id;
 
 	//! The transaction ids of the transactions that deleted the tuples (if any)
-	transaction_t deleted[STANDARD_VECTOR_SIZE];
-	bool any_deleted;
+	atomic<transaction_t> deleted[STANDARD_VECTOR_SIZE];
+	atomic<bool> any_deleted;
 
 public:
 	idx_t GetSelVector(transaction_t start_time, transaction_t transaction_id, SelectionVector &sel_vector,
@@ -81,11 +80,11 @@ public:
 	void CommitAppend(transaction_t commit_id, idx_t start, idx_t end) override;
 
 	void Append(idx_t start, idx_t end, transaction_t commit_id);
-	void Delete(Transaction &transaction, row_t rows[], idx_t count);
+	idx_t Delete(Transaction &transaction, row_t rows[], idx_t count);
 	void CommitDelete(transaction_t commit_id, row_t rows[], idx_t count);
 
 	void Serialize(Serializer &serialize) override;
-	static unique_ptr<ChunkInfo> Deserialize(MorselInfo &morsel, Deserializer &source);
+	static unique_ptr<ChunkInfo> Deserialize(Deserializer &source);
 };
 
 } // namespace duckdb

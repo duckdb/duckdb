@@ -29,7 +29,7 @@ CheckOptions:
   - key:             readability-identifier-naming.StaticConstantCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.ConstantMemberCase
-    value:           UPPER_CASE
+    value:           aNy_CasE
   - key:             readability-identifier-naming.StaticVariableCase
     value:           UPPER_CASE
   - key:             readability-identifier-naming.ClassConstantCase

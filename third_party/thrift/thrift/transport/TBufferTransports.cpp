@@ -19,13 +19,13 @@
 
 #include <cassert>
 #include <algorithm>
-#include <thrift/thrift_export.h>
+#include "thrift/thrift_export.h"
 
-#include <thrift/transport/TBufferTransports.h>
+#include "thrift/transport/TBufferTransports.h"
 
 using std::string;
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace transport {
 
@@ -136,4 +136,4 @@ const uint8_t* TMemoryBuffer::borrowSlow(uint8_t* buf, uint32_t* len) {
 }
 }
 }
-} // apache::thrift::transport
+} // duckdb_apache::thrift::transport

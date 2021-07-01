@@ -46,14 +46,12 @@ bool ParsedExpression::HasSubquery() const {
 }
 
 bool ParsedExpression::Equals(const BaseExpression *other) const {
-	if (other->expression_class == ExpressionClass::BOUND_EXPRESSION) {
-		auto bound_expr = (BoundExpression *)other;
-		other = bound_expr->parsed_expr.get();
-	}
 	if (!BaseExpression::Equals(other)) {
 		return false;
 	}
 	switch (expression_class) {
+	case ExpressionClass::BETWEEN:
+		return BetweenExpression::Equals((BetweenExpression *)this, (BetweenExpression *)other);
 	case ExpressionClass::CASE:
 		return CaseExpression::Equals((CaseExpression *)this, (CaseExpression *)other);
 	case ExpressionClass::CAST:
@@ -78,6 +76,9 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 		return OperatorExpression::Equals((OperatorExpression *)this, (OperatorExpression *)other);
 	case ExpressionClass::PARAMETER:
 		return true;
+	case ExpressionClass::POSITIONAL_REFERENCE:
+		return PositionalReferenceExpression::Equals((PositionalReferenceExpression *)this,
+		                                             (PositionalReferenceExpression *)other);
 	case ExpressionClass::STAR:
 		return true;
 	case ExpressionClass::TABLE_STAR:
@@ -110,6 +111,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	auto alias = source.Read<string>();
 	unique_ptr<ParsedExpression> result;
 	switch (expression_class) {
+	case ExpressionClass::BETWEEN:
+		result = BetweenExpression::Deserialize(type, source);
+		break;
 	case ExpressionClass::CASE:
 		result = CaseExpression::Deserialize(type, source);
 		break;
@@ -145,6 +149,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 		break;
 	case ExpressionClass::PARAMETER:
 		result = ParameterExpression::Deserialize(type, source);
+		break;
+	case ExpressionClass::POSITIONAL_REFERENCE:
+		result = PositionalReferenceExpression::Deserialize(type, source);
 		break;
 	case ExpressionClass::STAR:
 		result = StarExpression::Deserialize(type, source);

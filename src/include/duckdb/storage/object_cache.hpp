@@ -27,7 +27,7 @@ public:
 
 class ObjectCache {
 public:
-	shared_ptr<ObjectCacheEntry> Get(std::string key) {
+	shared_ptr<ObjectCacheEntry> Get(string key) {
 		lock_guard<mutex> glock(lock);
 		auto entry = cache.find(key);
 		if (entry == cache.end()) {
@@ -36,7 +36,7 @@ public:
 		return entry->second;
 	}
 
-	void Put(std::string key, shared_ptr<ObjectCacheEntry> value) {
+	void Put(string key, shared_ptr<ObjectCacheEntry> value) {
 		lock_guard<mutex> glock(lock);
 		cache[key] = move(value);
 	}
@@ -46,8 +46,8 @@ public:
 
 private:
 	//! Object Cache
-	std::unordered_map<std::string, shared_ptr<ObjectCacheEntry>> cache;
-	std::mutex lock;
+	unordered_map<string, shared_ptr<ObjectCacheEntry>> cache;
+	mutex lock;
 };
 
 } // namespace duckdb

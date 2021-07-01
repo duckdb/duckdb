@@ -52,6 +52,26 @@ static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalP
 	}
 }
 
+static bool TypeSupportsRegularUpdate(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		// lists and maps don't support updates directly
+		return false;
+	case LogicalTypeId::STRUCT: {
+		auto &child_types = StructType::GetChildTypes(type);
+		for (auto &entry : child_types) {
+			if (!TypeSupportsRegularUpdate(entry.second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return true;
+	}
+}
+
 static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
                                   LogicalUpdate &update) {
 	// check the constraints and indexes of the table to see if we need to project any additional columns
@@ -66,16 +86,26 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 			BindExtraColumns(table, get, proj, update, check.bound_columns);
 		}
 	}
-	// for index updates, we do the same, however, for index updates we always turn any update into an insert and a
-	// delete for the insert, we thus need all the columns to be available, hence we check if the update touches any
-	// index columns
-	update.is_index_update = false;
-	for (auto &index : table.storage->info->indexes) {
-		if (index->IndexIsUpdated(update.columns)) {
-			update.is_index_update = true;
+	// for index updates we always turn any update into an insert and a delete
+	// we thus need all the columns to be available, hence we check if the update touches any index columns
+	update.update_is_del_and_insert = false;
+	table.storage->info->indexes.Scan([&](Index &index) {
+		if (index.IndexIsUpdated(update.columns)) {
+			update.update_is_del_and_insert = true;
+			return true;
+		}
+		return false;
+	});
+
+	// we also convert any updates on LIST columns into delete + insert
+	for (auto &col : update.columns) {
+		if (!TypeSupportsRegularUpdate(table.columns[col].type)) {
+			update.update_is_del_and_insert = true;
+			break;
 		}
 	}
-	if (update.is_index_update) {
+
+	if (update.update_is_del_and_insert) {
 		// the update updates a column required by an index, push projections for all columns
 		unordered_set<column_t> all_columns;
 		for (idx_t i = 0; i < table.storage->types.size(); i++) {

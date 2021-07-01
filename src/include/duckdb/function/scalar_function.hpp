@@ -36,7 +36,7 @@ public:
 	ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
 	               dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
-	               LogicalType varargs = LogicalType::INVALID)
+	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
 	    : BaseScalarFunction(name, arguments, return_type, has_side_effects, varargs), function(function), bind(bind),
 	      dependency(dependency), statistics(statistics) {
 	}
@@ -44,7 +44,7 @@ public:
 	ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
 	               dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
-	               LogicalType varargs = LogicalType::INVALID)
+	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
 	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, statistics,
 	                     varargs) {
 	}
@@ -77,6 +77,29 @@ public:
 	}
 	bool operator!=(const ScalarFunction &rhs) const {
 		return !(*this == rhs);
+	}
+
+	bool Equal(const ScalarFunction &rhs) const {
+		// number of types
+		if (this->arguments.size() != rhs.arguments.size()) {
+			return false;
+		}
+		// argument types
+		for (idx_t i = 0; i < this->arguments.size(); ++i) {
+			if (this->arguments[i] != rhs.arguments[i]) {
+				return false;
+			}
+		}
+		// return type
+		if (this->return_type != rhs.return_type) {
+			return false;
+		}
+		// varargs
+		if (this->varargs != rhs.varargs) {
+			return false;
+		}
+
+		return true; // they are equal
 	}
 
 private:

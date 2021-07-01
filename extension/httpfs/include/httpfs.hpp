@@ -36,16 +36,18 @@ public:
 	time_t last_modified;
 
 	std::unique_ptr<data_t[]> buffer;
-	constexpr static idx_t BUFFER_LEN = 10000; // FIXME make the buffer bigger
+	constexpr static idx_t BUFFER_LEN = 1000000;
 	idx_t buffer_available;
 	idx_t buffer_idx;
 	idx_t file_offset;
+	idx_t buffer_start;
+	idx_t buffer_end;
 };
 
 class HTTPFileSystem : public FileSystem {
 public:
-	std::unique_ptr<FileHandle> OpenFile(const char *path, uint8_t flags,
-	                                     FileLockType lock = FileLockType::NO_LOCK) override;
+	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
+	                                     FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
 
 	std::vector<std::string> Glob(const std::string &path) override {
 		return {path}; // FIXME
@@ -57,34 +59,28 @@ public:
 	                                            HeaderMap header_map = {}, idx_t file_offset = 0,
 	                                            char *buffer_out = nullptr, idx_t buffer_len = 0);
 
-	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override {
-		throw std::runtime_error("Read3"); // unused by parquet reader
-	}
+	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
-	int64_t GetFileSize(FileHandle &handle) override {
-		auto &sfh = (HTTPFileHandle &)handle;
-		return sfh.length;
-	}
+	// unsupported operations
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
+	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+	void Truncate(FileHandle &handle, int64_t new_size) override;
+	void FileSync(FileHandle &handle) override;
 
-	time_t GetLastModifiedTime(FileHandle &handle) override {
-		auto &sfh = (HTTPFileHandle &)handle;
-		return sfh.last_modified;
-	}
+	int64_t GetFileSize(FileHandle &handle) override;
 
-	bool FileExists(const string &filename) override {
-		try {
-			auto handle = OpenFile(filename.c_str(), FileFlags::FILE_FLAGS_READ);
-			auto &sfh = (HTTPFileHandle &)handle;
-			if (sfh.length == 0) {
-				throw std::runtime_error("not there this file");
-			}
-			return true;
-		} catch (...) {
-			return false;
-		};
-	}
+	time_t GetLastModifiedTime(FileHandle &handle) override;
+
+	bool FileExists(const string &filename) override;
 
 	static void Verify();
+
+	void Seek(FileHandle &handle, idx_t location) override;
+
+	bool CanHandleFile(const string &fpath) override;
+	bool OnDiskFile(FileHandle &handle) override {
+		return false;
+	}
 };
 
 } // namespace duckdb

@@ -15,8 +15,8 @@
 ***************************************/
 #include <stdlib.h>      /* malloc, calloc, free */
 #include <string.h>      /* memset */
-#include "error_private.h"
-#include "zstd_internal.h"
+#include "zstd/common/error_private.h"
+#include "zstd/common/zstd_internal.h"
 
 namespace duckdb_zstd {
 

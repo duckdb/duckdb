@@ -1,57 +1,57 @@
 # name: test/sql/aggregate/aggregates/test_arg_min_max.test
-# description: Test arg_min and arg_max operator
+# description: Test argmin and argmax operator
 # group: [aggregates]
 
 #Corner cases
 statement error
-select arg_min()
+select argmin()
 
 query I
-select arg_min(NULL,NULL)
+select argmin(NULL,NULL)
 ----
 NULL
 
 query I
-select arg_min(1,1)
+select argmin(1,1)
 ----
 1
 
 statement error
-select arg_min(*)
+select argmin(*)
 
 query I
-select arg_min(i,i) from range (100) tbl(i);
+select argmin(i,i) from range (100) tbl(i);
 ----
 0
 
 query I
-select arg_min(i,i) from range (100) tbl(i) where 1 = 0;
+select argmin(i,i) from range (100) tbl(i) where 1 = 0;
 ----
 NULL
 
 statement error
-select arg_max()
+select argmax()
 
 query I
-select arg_max(NULL,NULL)
+select argmax(NULL,NULL)
 ----
 NULL
 
 query I
-select arg_max(1,1)
+select argmax(1,1)
 ----
 1
 
 statement error
-select arg_max(*)
+select argmax(*)
 
 query I
-select arg_max(i,i) from range (100) tbl(i);
+select argmax(i,i) from range (100) tbl(i);
 ----
 99
 
 query I
-select arg_max(i,i) from range (100) tbl(i) where 1 = 0;
+select argmax(i,i) from range (100) tbl(i) where 1 = 0;
 ----
 NULL
 
@@ -62,12 +62,12 @@ statement ok
 insert into args values (1,1), (2,2), (8,8), (10,10)
 
 query II
-select arg_min(a,b), arg_max(a,b) from args;
+select argmin(a,b), argmax(a,b) from args;
 ----
 1.000000	10.000000
 
 query II
-select arg_min(a,b), arg_max(a,b) from args group by a%2;
+select argmin(a,b), argmax(a,b) from args group by a%2 ORDER BY argmin(a,b);
 ----
 1	1
 2	10
@@ -79,33 +79,33 @@ statement ok
 INSERT INTO blobs VALUES('\xaa\xff\xaa',5), ('\xAA\xFF\xAA\xAA\xFF\xAA',30), ('\xAA\xFF\xAA\xAA\xFF\xAA\xAA\xFF\xAA',20)
 
 query II
-select arg_min(b,a), arg_max(b,a)  from blobs ;
+select argmin(b,a), argmax(b,a)  from blobs ;
 ----
 \xAA\xFF\xAA	\xAA\xFF\xAA\xAA\xFF\xAA
 
 query II
-select arg_min(a,b), arg_max(a,b)  from blobs ;
+select argmin(a,b), argmax(a,b)  from blobs ;
 ----
 5	20
 
 # Window Function
 require vector_size 512
 
-query I
-select arg_min(a,b) over ( partition by a%2) from args;
+query I rowsort
+select argmin(a,b) over ( partition by a%2) from args;
 ----
-2
-2
-2
 1
+2
+2
+2
 
-query I
-select arg_max(a,b) over ( partition by a%2) from args;
+query I rowsort
+select argmax(a,b) over ( partition by a%2) from args;
 ----
-10
-10
-10
 1
+10
+10
+10
 
 statement ok
 create table names (name string, salary integer)
@@ -114,17 +114,23 @@ statement ok
 insert into names values ('Pedro',10), ('Hannes',20), ('Mark',15), ('Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff',30)
 
 query II
-select arg_min(name,salary),arg_max(name,salary)  from names;
+select argmin(name,salary),argmax(name,salary)  from names;
 ----
 Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
 
 query II
-select arg_min(salary,name),arg_max(salary,name)  from names;
+select argmin(salary,name),argmax(salary,name)  from names;
 ----
 20	10
 
 # test min_by max_by alias
 query II
 select min_by(name,salary),max_by(name,salary)  from names;
+----
+Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff
+
+# test arg_min arg_max alias
+query II
+select arg_min(name,salary),arg_max(name,salary)  from names;
 ----
 Pedro	Hubert-Blaine-Wolfeschlegelsteinhausenbergerdorff

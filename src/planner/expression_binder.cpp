@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -35,6 +36,8 @@ ExpressionBinder::~ExpressionBinder() {
 BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression) {
 	auto &expr_ref = **expr;
 	switch (expr_ref.expression_class) {
+	case ExpressionClass::BETWEEN:
+		return BindExpression((BetweenExpression &)expr_ref, depth);
 	case ExpressionClass::CASE:
 		return BindExpression((CaseExpression &)expr_ref, depth);
 	case ExpressionClass::CAST:
@@ -60,6 +63,8 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> *expr, 
 		return BindExpression((SubqueryExpression &)expr_ref, depth);
 	case ExpressionClass::PARAMETER:
 		return BindExpression((ParameterExpression &)expr_ref, depth);
+	case ExpressionClass::POSITIONAL_REFERENCE:
+		return BindExpression((PositionalReferenceExpression &)expr_ref, depth);
 	default:
 		throw NotImplementedException("Unimplemented expression class");
 	}
@@ -108,6 +113,48 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 	                                      [&](Expression &child) { ExtractCorrelatedExpressions(binder, child); });
 }
 
+static bool ContainsNullType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP: {
+		auto child_count = StructType::GetChildCount(type);
+		for (idx_t i = 0; i < child_count; i++) {
+			if (ContainsNullType(StructType::GetChildType(type, i))) {
+				return true;
+			}
+		}
+		return false;
+	}
+	case LogicalTypeId::LIST:
+		return ContainsNullType(ListType::GetChildType(type));
+	case LogicalTypeId::SQLNULL:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static LogicalType ExchangeNullType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::MAP: {
+		// we make a copy of the child types of the struct here
+		auto child_types = StructType::GetChildTypes(type);
+		for (auto &child_type : child_types) {
+			child_type.second = ExchangeNullType(child_type.second);
+		}
+		return type.id() == LogicalTypeId::MAP ? LogicalType::MAP(move(child_types))
+		                                       : LogicalType::STRUCT(move(child_types));
+	}
+	case LogicalTypeId::LIST:
+		return LogicalType::LIST(ExchangeNullType(ListType::GetChildType(type)));
+	case LogicalTypeId::SQLNULL:
+		return LogicalType::INTEGER;
+	default:
+		return type;
+	}
+}
+
 unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type,
                                               bool root_expression) {
 	// bind the main expression
@@ -128,10 +175,11 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		// the binder has a specific target type: add a cast to that type
 		result = BoundCastExpression::AddCastToType(move(result), target_type);
 	} else {
-		if (result->return_type.id() == LogicalTypeId::SQLNULL) {
-			// SQL NULL type is only used internally in the binder
-			// cast to INTEGER if we encounter it outside of the binder
-			result = BoundCastExpression::AddCastToType(move(result), LogicalType::INTEGER);
+		// SQL NULL type is only used internally in the binder
+		// cast to INTEGER if we encounter it outside of the binder
+		if (ContainsNullType(result->return_type)) {
+			auto result_type = ExchangeNullType(result->return_type);
+			result = BoundCastExpression::AddCastToType(move(result), result_type);
 		}
 	}
 	if (result_type) {
@@ -154,7 +202,7 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 		return result.error;
 	} else {
 		// successfully bound: replace the node with a BoundExpression
-		*expr = make_unique<BoundExpression>(move(result.expression), move(*expr));
+		*expr = make_unique<BoundExpression>(move(result.expression));
 		auto be = (BoundExpression *)expr->get();
 		D_ASSERT(be);
 		be->alias = alias;
@@ -180,6 +228,15 @@ void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr, un
 			}
 		}
 		binder.bind_context.BindColumn(colref, 0);
+	} else if (expr.type == ExpressionType::POSITIONAL_REFERENCE) {
+		auto &ref = (PositionalReferenceExpression &)expr;
+		if (ref.alias.empty()) {
+			string table_name, column_name;
+			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
+			if (error.empty()) {
+				ref.alias = column_name;
+			}
+		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    expr, [&](const ParsedExpression &child) { BindTableNames(binder, (ParsedExpression &)child, alias_map); });

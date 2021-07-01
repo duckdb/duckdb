@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-void PhysicalAlter::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalAlter::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	auto &catalog = Catalog::GetCatalog(context.client);
 	catalog.Alter(context.client, info.get());
 	state->finished = true;

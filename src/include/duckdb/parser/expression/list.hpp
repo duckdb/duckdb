@@ -1,3 +1,4 @@
+#include "duckdb/parser/expression/between_expression.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
 #include "duckdb/parser/expression/cast_expression.hpp"
@@ -11,6 +12,7 @@
 #include "duckdb/parser/expression/lambda_expression.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/expression/table_star_expression.hpp"

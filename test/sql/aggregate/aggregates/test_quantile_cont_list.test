@@ -1,0 +1,135 @@
+# name: test/sql/aggregate/aggregates/test_quantile_cont_list.test
+# description: Test QUANTILE_CONT operator with LIST parameters
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar quantiles
+statement ok
+create table quantiles as select range r, random() FROM range(0,1000000,100) union all values (NULL, 0.25), (NULL, 0.5), (NULL, 0.75) order by 2;
+
+# temporal types
+query I
+SELECT quantile_cont('2021-01-01'::TIMESTAMP + interval (r/100) hour, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[2021-04-15 03:45:00, 2021-07-28 07:30:00, 2021-11-09 11:15:00]
+
+query I
+SELECT quantile_cont('1990-01-01'::DATE + interval (r/100) day, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[1996-11-04 18:00:00, 2003-09-09 12:00:00, 2010-07-14 06:00:00]
+
+query I
+SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[00:41:39.75, 01:23:19.5, 02:04:59.25]
+
+statement error
+SELECT quantile_cont(interval (r/100) second, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[00:16:39, 01:23:19, 02:29:59]
+
+# single GROUP
+query R
+SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[249975.000000, 499950.000000, 749925.000000]
+
+# multiple groups
+query RR
+SELECT mod(r,1000) as g, quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	[249750.000000, 499500.000000, 749250.000000]
+100	[249850.000000, 499600.000000, 749350.000000]
+200	[249950.000000, 499700.000000, 749450.000000]
+300	[250050.000000, 499800.000000, 749550.000000]
+400	[250150.000000, 499900.000000, 749650.000000]
+500	[250250.000000, 500000.000000, 749750.000000]
+600	[250350.000000, 500100.000000, 749850.000000]
+700	[250450.000000, 500200.000000, 749950.000000]
+800	[250550.000000, 500300.000000, 750050.000000]
+900	[250650.000000, 500400.000000, 750150.000000]
+
+# constant input
+query R
+SELECT quantile_cont(1, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[1.000000, 1.000000, 1.000000]
+
+# empty input
+query R
+SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles WHERE 1=0
+----
+NULL
+
+# empty list
+query R
+SELECT quantile_cont(r, LIST_VALUE()) FROM quantiles
+----
+[]
+
+statement ok
+pragma threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+# single GROUP
+query R
+SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[249975.000000, 499950.000000, 749925.000000]
+
+# multiple groups
+query RR
+SELECT mod(r,1000) as g, quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	[249750.000000, 499500.000000, 749250.000000]
+100	[249850.000000, 499600.000000, 749350.000000]
+200	[249950.000000, 499700.000000, 749450.000000]
+300	[250050.000000, 499800.000000, 749550.000000]
+400	[250150.000000, 499900.000000, 749650.000000]
+500	[250250.000000, 500000.000000, 749750.000000]
+600	[250350.000000, 500100.000000, 749850.000000]
+700	[250450.000000, 500200.000000, 749950.000000]
+800	[250550.000000, 500300.000000, 750050.000000]
+900	[250650.000000, 500400.000000, 750150.000000]
+
+# constant input
+query R
+SELECT quantile_cont(1, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+----
+[1.000000, 1.000000, 1.000000]
+
+# empty input
+query R
+SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles WHERE 1=0
+----
+NULL
+
+# empty list
+query R
+SELECT quantile_cont(r, LIST_VALUE()) FROM quantiles
+----
+[]
+
+statement error
+SELECT quantile_cont(r, LIST_VALUE(-0.25, 0.5, 0.75)) FROM quantiles
+
+statement error
+SELECT quantile_cont(r, (0.25, 0.5, 1.1)) FROM quantiles
+
+statement error
+SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, NULL)) FROM quantiles
+
+statement error
+SELECT quantile_cont(r, LIST_VALUE("0.25", "0.5", "0.75")) FROM quantiles
+
+statement error
+SELECT quantile_cont(r::string, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+
+statement error
+SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75), 50) FROM quantiles

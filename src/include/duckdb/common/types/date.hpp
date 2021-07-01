@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
@@ -61,6 +62,9 @@ public:
 	//! Returns true if the specified (year, month, day) combination is a valid
 	//! date
 	static bool IsValid(int32_t year, int32_t month, int32_t day);
+
+	//! The max number of days in a month of a given year
+	static int32_t MonthDays(int32_t year, int32_t month);
 
 	//! Extract the epoch from the date (seconds since 1970-01-01)
 	static int64_t Epoch(date_t date);

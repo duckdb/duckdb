@@ -6,7 +6,6 @@ add_library_unity(
   comparison_operators.cpp
   vector_copy.cpp
   generators.cpp
-  gather.cpp
   vector_hash.cpp
   vector_storage.cpp
   null_operations.cpp

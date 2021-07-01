@@ -1,6 +1,7 @@
 #include "duckdb/planner/bind_context.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
@@ -156,6 +157,34 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 		return BindResult(error);
 	}
 	return binding->Bind(colref, depth);
+}
+
+string BindContext::BindColumn(PositionalReferenceExpression &ref, string &table_name, string &column_name) {
+	idx_t current_position = ref.index - 1;
+	idx_t total_columns = 0;
+	for (auto &entry : bindings_list) {
+		idx_t entry_column_count = entry.second->names.size();
+		if (current_position < entry_column_count) {
+			table_name = entry.first;
+			column_name = entry.second->names[current_position];
+			return string();
+		} else {
+			total_columns += entry_column_count;
+			current_position -= entry_column_count;
+		}
+	}
+	return StringUtil::Format("Positional reference %d out of range (total %d columns)", ref.index, total_columns);
+}
+
+BindResult BindContext::BindColumn(PositionalReferenceExpression &ref, idx_t depth) {
+	string table_name, column_name;
+
+	string error = BindColumn(ref, table_name, column_name);
+	if (!error.empty()) {
+		return BindResult(error);
+	}
+	auto column_ref = make_unique<ColumnRefExpression>(column_name, table_name);
+	return BindColumn(*column_ref, depth);
 }
 
 void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,

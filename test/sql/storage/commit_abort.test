@@ -6,11 +6,13 @@
 load __TEST_DIR__/commit_abort.db
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);
 
 statement ok
 INSERT INTO test VALUES (11, 22, 'hello'), (13, 22, 'world'), (12, 21, 'test'), (10, NULL, NULL);
-
 
 # start a transaction for con and con2
 statement ok con1
@@ -46,7 +48,30 @@ SELECT COUNT(*), COUNT(a), COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test
 ----
 6	6	4	75	75	17
 
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+14	10	con
+15	NULL	NULL
+
 restart
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+14	10	con
+15	NULL	NULL
 
 query IIIIII
 SELECT COUNT(*), COUNT(a), COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test
@@ -55,7 +80,20 @@ SELECT COUNT(*), COUNT(a), COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test
 
 restart
 
+statement ok
+PRAGMA enable_verification
+
 query IIIIII
 SELECT COUNT(*), COUNT(a), COUNT(b), SUM(a), SUM(b), SUM(LENGTH(c)) FROM test
 ----
 6	6	4	75	75	17
+
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+14	10	con
+15	NULL	NULL

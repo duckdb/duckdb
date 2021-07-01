@@ -48,19 +48,20 @@ public:
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
 
-	unordered_map<Expression *, size_t> ht;
+	unordered_map<Expression *, size_t> filter_indexes;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
-	void Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
 
 	void FinalizeImmediate(ClientContext &context, unique_ptr<GlobalOperatorState> gstate);
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	string ParamsToString() const override;
@@ -70,9 +71,9 @@ private:
 	idx_t radix_limit;
 
 private:
-	void FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate, bool immediate,
+	bool FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate, bool immediate,
 	                      Pipeline *pipeline);
-	bool ForceSingleHT(GlobalOperatorState &state);
+	bool ForceSingleHT(GlobalOperatorState &state) const;
 };
 
 } // namespace duckdb

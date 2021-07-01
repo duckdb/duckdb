@@ -60,10 +60,6 @@ struct ApproxCountDistinctFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
-struct ModeFun {
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
 struct ArgMinFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
@@ -75,10 +71,6 @@ struct ArgMaxFun {
 struct FirstFun {
 	static AggregateFunction GetFunction(const LogicalType &type);
 
-	static void RegisterFunction(BuiltinFunctions &set);
-};
-
-struct ArbitraryFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
@@ -99,6 +91,7 @@ struct MinByFun {
 };
 
 struct SumFun {
+	static AggregateFunction GetSumAggregate(PhysicalType type);
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

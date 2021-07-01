@@ -9,7 +9,7 @@
 
 #include "parquet_types.h"
 
-namespace parquet { namespace format {
+namespace duckdb_parquet { namespace format {
 
 class parquetConstants {
  public:

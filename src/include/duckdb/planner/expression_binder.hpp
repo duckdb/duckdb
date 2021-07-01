@@ -48,6 +48,11 @@ public:
 	ExpressionBinder(Binder &binder, ClientContext &context, bool replace_binder = false);
 	virtual ~ExpressionBinder();
 
+	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
+	//! be added. Defaults to INVALID.
+	LogicalType target_type;
+
+public:
 	unique_ptr<Expression> Bind(unique_ptr<ParsedExpression> &expr, LogicalType *result_type = nullptr,
 	                            bool root_expression = true);
 
@@ -67,10 +72,6 @@ public:
 
 	bool BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr);
 
-	//! The target type that should result from the binder. If the result is not of this type, a cast to this type will
-	//! be added. Defaults to INVALID.
-	LogicalType target_type;
-
 	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
@@ -78,6 +79,7 @@ protected:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
 
+	BindResult BindExpression(BetweenExpression &expr, idx_t depth);
 	BindResult BindExpression(CaseExpression &expr, idx_t depth);
 	BindResult BindExpression(CollateExpression &expr, idx_t depth);
 	BindResult BindExpression(CastExpression &expr, idx_t depth);
@@ -89,6 +91,7 @@ protected:
 	BindResult BindExpression(LambdaExpression &expr, idx_t depth);
 	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
+	BindResult BindExpression(PositionalReferenceExpression &ref, idx_t depth);
 	BindResult BindExpression(StarExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 

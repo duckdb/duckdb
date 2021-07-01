@@ -5,7 +5,7 @@ import glob
 import mimetypes
 import urllib.request
 
-api_url = 'https://api.github.com/repos/cwida/duckdb/'
+api_url = 'https://api.github.com/repos/duckdb/duckdb/'
 
 if (len(sys.argv) < 2):
 	print("Usage: [filename1] [filename2] ... ")
@@ -14,7 +14,7 @@ if (len(sys.argv) < 2):
 # this essentially should run on release tag builds to fill up release assets and master
 
 repo = os.getenv("GITHUB_REPOSITORY", "")
-if repo != "cwida/duckdb":
+if repo != "duckdb/duckdb":
 	print("Not running on forks. Exiting.")
 	exit(0)
 

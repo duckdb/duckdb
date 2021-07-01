@@ -1,0 +1,65 @@
+# name: test/sql/types/list/nested_list_updates.test
+# description: Test updates on nested lists with in-memory storage
+# group: [list]
+
+statement ok
+CREATE TABLE a(id INTEGER, b INTEGER[][]);
+
+statement ok
+INSERT INTO a VALUES (0, [[1, 2], NULL, [3, NULL]]), (1, NULL), (2, [[4, 5, 6, 7], [NULL]])
+
+query II
+SELECT * FROM a ORDER BY id
+----
+0	[[1, 2], NULL, [3, NULL]]
+1	NULL
+2	[[4, 5, 6, 7], [NULL]]
+
+# updates
+query I
+UPDATE a SET b=[[7, 8, 9], [10, 11]] WHERE b IS NULL
+----
+1
+
+query II
+SELECT * FROM a ORDER BY id
+----
+0	[[1, 2], NULL, [3, NULL]]
+1	[[7, 8, 9], [10, 11]]
+2	[[4, 5, 6, 7], [NULL]]
+
+query I
+UPDATE a SET b=NULL WHERE id>=1
+----
+2
+
+query II
+SELECT * FROM a ORDER BY id
+----
+0	[[1, 2], NULL, [3, NULL]]
+1	NULL
+2	NULL
+
+query I
+UPDATE a SET b=[[NULL], NULL, [NULL]] WHERE id=1
+----
+1
+
+query II
+SELECT * FROM a ORDER BY id
+----
+0	[[1, 2], NULL, [3, NULL]]
+1	[[NULL], NULL, [NULL]]
+2	NULL
+
+query I
+UPDATE a SET b=NULL
+----
+3
+
+query II
+SELECT * FROM a ORDER BY id
+----
+0	NULL
+1	NULL
+2	NULL

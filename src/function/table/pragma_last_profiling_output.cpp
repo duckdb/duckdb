@@ -1,9 +1,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/common/limits.hpp"
-#include "duckdb/function/table/sqlite_functions.hpp"
+#include "duckdb/function/table/system_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/constraints/bound_not_null_constraint.hpp"
+#include "duckdb/main/query_profiler.hpp"
 
 namespace duckdb {
 
@@ -55,7 +56,7 @@ static void SetValue(DataChunk &output, int index, int op_id, string name, doubl
 }
 
 unique_ptr<FunctionOperatorData> PragmaLastProfilingOutputInit(ClientContext &context, const FunctionData *bind_data,
-                                                               vector<column_t> &column_ids,
+                                                               const vector<column_t> &column_ids,
                                                                TableFilterCollection *filters) {
 	return make_unique<PragmaLastProfilingOutputOperatorData>();
 }
@@ -72,8 +73,8 @@ static void PragmaLastProfilingOutputFunction(ClientContext &context, const Func
 		DataChunk chunk;
 		chunk.Initialize(data.types);
 		int operator_counter = 1;
-		if (!context.query_profiler_history.GetPrevProfilers().empty()) {
-			for (auto op : context.query_profiler_history.GetPrevProfilers().back().second.GetTreeMap()) {
+		if (!context.query_profiler_history->GetPrevProfilers().empty()) {
+			for (auto op : context.query_profiler_history->GetPrevProfilers().back().second->GetTreeMap()) {
 				SetValue(chunk, chunk.size(), operator_counter++, op.second->name, op.second->info.time,
 				         op.second->info.elements, " ");
 				chunk.SetCardinality(chunk.size() + 1);

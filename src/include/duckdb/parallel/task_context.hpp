@@ -22,7 +22,7 @@ public:
 	}
 
 	//! Per-operator task info
-	unordered_map<PhysicalOperator *, ParallelState *> task_info;
+	unordered_map<const PhysicalOperator *, ParallelState *> task_info;
 };
 
 } // namespace duckdb

@@ -11,7 +11,8 @@ public:
 	idx_t chunk_index;
 };
 
-void PhysicalChunkScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalChunkScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                         PhysicalOperatorState *state_p) const {
 	auto state = (PhysicalChunkScanState *)state_p;
 	D_ASSERT(collection);
 	if (collection->Count() == 0) {

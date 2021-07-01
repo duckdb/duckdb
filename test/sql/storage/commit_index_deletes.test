@@ -1,0 +1,71 @@
+# name: test/sql/storage/commit_index_deletes.test
+# description: Test commit of index with deletes
+# group: [storage]
+
+# FIXME: this test fails right now because deleted tuples are not correctly removed
+# while checkpointing, which causes the start-up after checkpoint to fail during
+# primary index construction. It should be re-enabled when deleted tuples are properly vacuumed.
+mode skip
+
+# load the DB from disk
+load __TEST_DIR__/commit_abort.db
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER PRIMARY KEY, b INTEGER, c VARCHAR);
+
+statement ok
+INSERT INTO test VALUES (11, 22, 'hello'), (13, 22, 'world'), (12, 21, 'test'), (10, NULL, NULL);
+
+statement ok
+INSERT INTO test VALUES (14, 10, 'con')
+
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+14	10	con
+
+# delete the value again
+statement ok
+DELETE FROM test WHERE a=14
+
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+
+# now add the value back in, slightly differently
+statement ok
+INSERT INTO test VALUES (14, 11, 'bla')
+
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+14	11	bla
+
+restart
+
+statement ok
+PRAGMA enable_verification
+
+query III
+SELECT * FROM test ORDER BY a, b, c
+----
+10	NULL	NULL
+11	22	hello
+12	21	test
+13	22	world
+14	11	bla

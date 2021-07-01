@@ -8,6 +8,12 @@ statement ok
 PRAGMA default_null_order='NULLS LAST'
 
 statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+statement ok
 CREATE SCHEMA Sales;
 
 statement ok

@@ -1,0 +1,14 @@
+# name: test/sql/copy/parquet/parquet_1723.test_slow
+# description: CREATE TABLE from parquet crashes latest bleeding edge
+# group: [parquet]
+
+require parquet
+
+query I nosort query
+select * from 'test/sql/copy/parquet/data/leftdate3_192_loop_1.parquet'
+
+statement ok
+create table test as select * from 'test/sql/copy/parquet/data/leftdate3_192_loop_1.parquet'
+
+query I nosort query
+select * from test

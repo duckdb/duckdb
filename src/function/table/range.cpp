@@ -63,7 +63,7 @@ struct RangeFunctionState : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> RangeFunctionInit(ClientContext &context, const FunctionData *bind_data,
-                                                          vector<column_t> &column_ids,
+                                                          const vector<column_t> &column_ids,
                                                           TableFilterCollection *filters) {
 	return make_unique<RangeFunctionState>();
 }
@@ -123,6 +123,7 @@ void BuiltinFunctions::RegisterTableFunctions() {
 	RangeTableFunction::RegisterFunction(*this);
 	RepeatTableFunction::RegisterFunction(*this);
 	SummaryTableFunction::RegisterFunction(*this);
+	UnnestTableFunction::RegisterFunction(*this);
 }
 
 } // namespace duckdb

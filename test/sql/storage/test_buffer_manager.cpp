@@ -14,6 +14,7 @@ TEST_CASE("Test scanning a table and computing an aggregate over a table that ex
 
 	// set the maximum memory to 10MB
 	config->maximum_memory = 10000000;
+	config->maximum_threads = 1;
 
 	int64_t expected_sum;
 	Value sum;
@@ -52,6 +53,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
+	config->maximum_threads = 1;
 
 	uint64_t string_length = 64;
 	uint64_t desired_size = 10000000; // desired size is 10MB
@@ -118,6 +120,7 @@ TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager 
 
 	// maximum memory is 10MB
 	config->maximum_memory = 10000000;
+	config->maximum_threads = 1;
 
 	// create a table of size 10 times the buffer pool size
 	uint64_t size = 0, size_a, sum_a, sum_b;
@@ -166,6 +169,7 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 
 	DuckDB db(nullptr);
 	Connection con(db);
+	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=1"));
 
 	// initialize an in-memory database of size 10MB
 	uint64_t table_size = (1000 * 1000) / sizeof(int);

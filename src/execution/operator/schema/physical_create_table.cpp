@@ -13,7 +13,8 @@ PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry
       info(move(info)) {
 }
 
-void PhysicalCreateTable::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalCreateTable::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                           PhysicalOperatorState *state) const {
 	auto &catalog = Catalog::GetCatalog(context.client);
 	catalog.CreateTable(context.client, schema, info.get());
 	state->finished = true;

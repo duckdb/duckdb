@@ -38,8 +38,8 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool int
     : CatalogEntry(CatalogType::SCHEMA_ENTRY, catalog, move(name_p)),
       tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), pragma_functions(*catalog),
-      functions(*catalog, name == DEFAULT_SCHEMA ? make_unique<DefaultFunctionGenerator>(*catalog, this) : nullptr),
-      sequences(*catalog), collations(*catalog) {
+      functions(*catalog, make_unique<DefaultFunctionGenerator>(*catalog, this)), sequences(*catalog),
+      collations(*catalog) {
 	this->internal = internal;
 }
 

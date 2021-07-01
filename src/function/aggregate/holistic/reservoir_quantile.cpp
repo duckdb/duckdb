@@ -60,7 +60,7 @@ struct ReservoirQuantileOperation {
 		state->v = nullptr;
 		state->len = 0;
 		state->pos = 0;
-		state->r_samp = new BaseReservoirSampling();
+		state->r_samp = nullptr;
 	}
 
 	static void ResizeState(ReservoirQuantileState *state, idx_t new_len) {
@@ -89,17 +89,23 @@ struct ReservoirQuantileOperation {
 		if (state->pos == 0) {
 			ResizeState(state, bind_data->sample_size);
 		}
+		if (!state->r_samp) {
+			state->r_samp = new BaseReservoirSampling();
+		}
 		D_ASSERT(state->v);
 		FillReservoir<STATE, T>(state, bind_data->sample_size, data[idx]);
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (source.pos == 0) {
 			return;
 		}
 		if (target->pos == 0) {
 			ResizeState(target, source.len);
+		}
+		if (!target->r_samp) {
+			target->r_samp = new BaseReservoirSampling();
 		}
 		for (idx_t src_idx = 0; src_idx < source.pos; src_idx++) {
 			FillReservoir<STATE, T>(target, target->len, ((T *)source.v)[src_idx]);
@@ -224,12 +230,12 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 
 void ReservoirQuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet reservoir_quantile("reservoir_quantile");
-	reservoir_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT, LogicalType::INTEGER},
-	                                                 LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                                 nullptr, BindReservoirQuantileDecimal));
-	reservoir_quantile.AddFunction(AggregateFunction({LogicalType::DECIMAL, LogicalType::FLOAT}, LogicalType::DECIMAL,
-	                                                 nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                                 BindReservoirQuantileDecimal));
+	reservoir_quantile.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::FLOAT, LogicalType::INTEGER},
+	                                                 LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
+	                                                 nullptr, nullptr, BindReservoirQuantileDecimal));
+	reservoir_quantile.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::FLOAT},
+	                                                 LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
+	                                                 nullptr, nullptr, BindReservoirQuantileDecimal));
 	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::INT16));
 	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::INT32));
 	reservoir_quantile.AddFunction(GetReservoirQuantileAggregate(PhysicalType::INT64));

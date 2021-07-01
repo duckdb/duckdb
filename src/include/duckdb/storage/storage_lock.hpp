@@ -9,8 +9,8 @@
 #pragma once
 
 #include "duckdb/common/constants.hpp"
-#include <atomic>
-#include <mutex>
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 class StorageLock;
@@ -39,8 +39,8 @@ public:
 	unique_ptr<StorageLockKey> GetSharedLock();
 
 private:
-	std::mutex exclusive_lock;
-	std::atomic<idx_t> read_count;
+	mutex exclusive_lock;
+	atomic<idx_t> read_count;
 
 private:
 	//! Release an exclusive lock

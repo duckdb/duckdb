@@ -1,0 +1,128 @@
+# name: test/sql/update/null_update_merge.test
+# description: Test repeated updates that change the nullness of values
+# group: [update]
+
+# create a table
+statement ok
+CREATE TABLE test (id INTEGER, a INTEGER);
+
+statement ok
+INSERT INTO test VALUES (1, 1), (2, 2), (3, 3), (4, NULL);
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	1
+2	2
+3	3
+4	NULL
+
+statement ok
+UPDATE test SET a=CASE WHEN id=1 THEN 7 ELSE NULL END WHERE id <= 2
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	7
+2	NULL
+3	3
+4	NULL
+
+statement ok
+UPDATE test SET a=17 WHERE id > 2
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	7
+2	NULL
+3	17
+4	17
+
+statement ok
+UPDATE test SET a=CASE WHEN id=4 THEN 1 ELSE NULL END
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	NULL
+2	NULL
+3	NULL
+4	1
+
+statement ok
+UPDATE test SET a=2 WHERE id >= 2 AND id <= 3
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	NULL
+2	2
+3	2
+4	1
+
+statement ok
+UPDATE test SET a=NULL WHERE id >= 3
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	NULL
+2	2
+3	NULL
+4	NULL
+
+statement ok
+UPDATE test SET a=id WHERE id != 3
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	1
+2	2
+3	NULL
+4	4
+
+statement ok
+UPDATE test SET a=NULL WHERE id != 3
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	NULL
+2	NULL
+3	NULL
+4	NULL
+
+statement ok
+UPDATE test SET a=3 WHERE id != 2
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	3
+2	NULL
+3	3
+4	3
+
+statement ok
+UPDATE test SET a=7 WHERE id != 3
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	7
+2	7
+3	3
+4	7
+
+statement ok
+UPDATE test SET a=NULL
+
+query II
+SELECT * FROM test ORDER BY id;
+----
+1	NULL
+2	NULL
+3	NULL
+4	NULL

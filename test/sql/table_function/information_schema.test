@@ -2,19 +2,14 @@
 # description: Test information_schema functions
 # group: [table_function]
 
-query TTTTTTT rowsort schema_list
+statement ok
 SELECT * FROM information_schema.schemata;
-----
-
-query TTTTTTT rowsort schema_list
-SELECT * FROM information_schema_schemata();
-----
 
 statement ok
 CREATE SCHEMA scheme;
 
 query I
-SELECT COUNT(*) FROM information_schema_schemata() WHERE schema_name='scheme'
+SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='scheme'
 ----
 1
 
@@ -22,12 +17,12 @@ statement ok
 CREATE TABLE scheme.integers (i INTEGER);
 
 query T
-SELECT table_type FROM information_schema_tables() WHERE table_schema='scheme' AND table_name='integers'
+SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND table_name='integers'
 ----
 BASE TABLE
 
 query ITT
-SELECT ordinal_position, column_name, data_type FROM information_schema_columns() WHERE table_name='integers'
+SELECT ordinal_position, column_name, data_type FROM information_schema.columns WHERE table_name='integers'
 ----
 1	i	INTEGER
 
@@ -40,12 +35,12 @@ statement ok
 CREATE TEMPORARY TABLE reals (f FLOAT PRIMARY KEY, dec DECIMAL(16, 4), h HUGEINT, b BIGINT, t TINYINT, d DOUBLE NOT NULL)
 
 query T
-SELECT table_type FROM information_schema_tables() WHERE table_schema='temp' AND table_name='reals'
+SELECT table_type FROM information_schema.tables WHERE table_schema='temp' AND table_name='reals'
 ----
 LOCAL TEMPORARY
 
 query IIT
-SELECT numeric_precision, numeric_scale, is_nullable FROM information_schema_columns() WHERE table_name='reals' ORDER BY ordinal_position
+SELECT numeric_precision, numeric_scale, is_nullable FROM information_schema.columns WHERE table_name='reals' ORDER BY ordinal_position
 ----
 24	0	NO
 16	4	YES
@@ -58,7 +53,7 @@ statement ok
 CREATE VIEW scheme.vintegers AS SELECT * FROM scheme.integers;
 
 query T
-SELECT table_type FROM information_schema_tables() WHERE table_schema='scheme' AND table_name='vintegers'
+SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND table_name='vintegers'
 ----
 VIEW
 
@@ -68,7 +63,7 @@ SELECT table_type FROM information_schema.tables WHERE table_schema='scheme' AND
 VIEW
 
 query ITT
-SELECT ordinal_position, column_name, data_type FROM information_schema_columns() WHERE table_schema='scheme' AND table_name='vintegers'
+SELECT ordinal_position, column_name, data_type FROM information_schema.columns WHERE table_schema='scheme' AND table_name='vintegers'
 ----
 1	i	INTEGER
 
@@ -76,16 +71,16 @@ statement ok
 DROP SCHEMA scheme CASCADE;
 
 query I
-SELECT COUNT(*) FROM information_schema_schemata() WHERE schema_name='scheme'
+SELECT COUNT(*) FROM information_schema.schemata WHERE schema_name='scheme'
 ----
 0
 
 query I
-SELECT COUNT(*) FROM information_schema_tables() WHERE table_schema='scheme'
+SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='scheme'
 ----
 0
 
 query I
-SELECT COUNT(*) FROM information_schema_columns() WHERE table_schema='scheme'
+SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='scheme'
 ----
 0

@@ -29,7 +29,8 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 	}
 }
 
-void PhysicalFilter::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalFilter::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                      PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalFilterState *>(state_p);
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t initial_count;
@@ -62,7 +63,7 @@ string PhysicalFilter::ParamsToString() const {
 
 void PhysicalFilter::FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) {
 	auto &state = reinterpret_cast<PhysicalFilterState &>(state_p);
-	context.thread.profiler.Flush(this, &state.executor);
+	context.thread.profiler.Flush(this, &state.executor, "executor", 0);
 	if (!children.empty() && state.child_state) {
 		children[0]->FinalizeOperatorState(*state.child_state, context);
 	}

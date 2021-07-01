@@ -1,4 +1,4 @@
-library(testthat)
-library(DBI)
+library("testthat")
+library("DBI")
 
 test_check("duckdb")

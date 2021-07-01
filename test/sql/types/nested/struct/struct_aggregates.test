@@ -1,0 +1,40 @@
+# name: test/sql/types/nested/struct/struct_aggregates.test
+# description: Test structs with aggregations
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+query III
+select min(struct_pack(i :=  i, j := i + 2)), max(struct_pack(i :=  i, j := i + 2)), first(struct_pack(i :=  i, j := i + 2)) from range(10) tbl(i);
+----
+{'i': 0, 'j': 2}	{'i': 9, 'j': 11}	{'i': 0, 'j': 2}
+
+# Integer comparison, not string comparison
+query III
+select min(struct_pack(i := -i, j := -i - 2)), max(struct_pack(i := i + 2, j := i + 4)), first(struct_pack(i :=  i, j := i + 2)) from range(10) tbl(i);
+----
+{'i': -9, 'j': -11}	{'i': 11, 'j': 13}	{'i': 0, 'j': 2}
+
+query I
+select string_agg(struct_pack(i :=  i, j := i + 2), ',') from range(10) tbl(i);
+----
+{'i': 0, 'j': 2},{'i': 1, 'j': 3},{'i': 2, 'j': 4},{'i': 3, 'j': 5},{'i': 4, 'j': 6},{'i': 5, 'j': 7},{'i': 6, 'j': 8},{'i': 7, 'j': 9},{'i': 8, 'j': 10},{'i': 9, 'j': 11}
+
+# Integer STRUCTs with NULLs in various positions
+statement ok
+CREATE VIEW struct_int AS
+SELECT * FROM (VALUES
+	({'x': 1, 'y': 0}),
+	({'x': 1, 'y': 2}),
+	({'x': 1, 'y': NULL}),
+	({'x': NULL, 'y': 2}),
+	({'x': NULL, 'y': NULL}),
+	({'x': NULL, 'y': 0}),
+	(NULL)
+) tbl(i);
+
+query III
+select min(i), max(i), first(i) from struct_int;
+----
+{'x': 1, 'y': 0}	{'x': NULL, 'y': NULL}	{'x': 1, 'y': 0}

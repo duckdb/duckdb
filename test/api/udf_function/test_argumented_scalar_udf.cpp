@@ -260,20 +260,6 @@ TEST_CASE("UDF functions with arguments", "[udf_function][.]") {
 			}
 		}
 	}
-	SECTION("Cheking if the UDF functions are temporary") {
-		Connection con_NEW(db);
-		con_NEW.EnableQueryVerification();
-		for (LogicalType sql_type : all_sql_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
-			func_name = table_name;
-
-			REQUIRE_FAIL(con_NEW.Query("SELECT " + func_name + "_1(a) FROM " + table_name));
-
-			REQUIRE_FAIL(con_NEW.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name));
-
-			REQUIRE_FAIL(con_NEW.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name));
-		}
-	}
 
 	SECTION("Checking NULLs with UDF functions") {
 		for (LogicalType sql_type : all_sql_types) {

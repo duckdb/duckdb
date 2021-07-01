@@ -48,10 +48,23 @@ string StatementTypeToString(StatementType type) {
 		return "CALL";
 	case StatementType::SET_STATEMENT:
 		return "SET";
+	case StatementType::LOAD_STATEMENT:
+		return "LOAD";
 	case StatementType::INVALID_STATEMENT:
 		return "INVALID";
 	}
 	return "INVALID";
+}
+
+bool StatementTypeReturnChanges(StatementType type) {
+	switch (type) {
+	case StatementType::INSERT_STATEMENT:
+	case StatementType::UPDATE_STATEMENT:
+	case StatementType::DELETE_STATEMENT:
+		return true;
+	default:
+		return false;
+	}
 }
 
 } // namespace duckdb

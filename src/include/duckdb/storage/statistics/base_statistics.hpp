@@ -12,11 +12,13 @@
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+#include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class Serializer;
 class Deserializer;
 class Vector;
+class ValidityStatistics;
 
 class BaseStatistics {
 public:
@@ -25,10 +27,12 @@ public:
 
 	//! The type of the logical segment
 	LogicalType type;
-	//! Whether or not the segment can contain NULL values
-	bool has_null;
+	//! The validity stats of the column (if any)
+	unique_ptr<BaseStatistics> validity_stats;
 
 public:
+	bool CanHaveNull();
+
 	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
 
 	virtual void Merge(const BaseStatistics &other);

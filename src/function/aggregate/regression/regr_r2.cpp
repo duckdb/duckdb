@@ -33,7 +33,7 @@ struct RegrR2Operation {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		CorrOperation::Combine<CorrState, OP>(source.corr, &target->corr);
 		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop_x, &target->var_pop_x);
 		STDDevBaseOperation::Combine<StddevState, OP>(source.var_pop_y, &target->var_pop_y);

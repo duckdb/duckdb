@@ -124,17 +124,15 @@ void BenchmarkRunner::LogOutput(string message) {
 void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler<system_clock> profiler;
 	auto display_name = benchmark->DisplayName();
-	LogLine(string(display_name.size() + 6, '-'));
-	LogLine("|| " + display_name + " ||");
-	LogLine(string(display_name.size() + 6, '-'));
+	// LogLine(string(display_name.size() + 6, '-'));
+	// LogLine("|| " + display_name + " ||");
+	// LogLine(string(display_name.size() + 6, '-'));
 	auto state = benchmark->Initialize(configuration);
 	auto nruns = benchmark->NRuns();
 	for (size_t i = 0; i < nruns + 1; i++) {
 		bool hotrun = i > 0;
 		if (hotrun) {
-			Log(StringUtil::Format("%d/%d...", i, nruns));
-		} else {
-			Log("Cold run...");
+			Log(StringUtil::Format("%s\t%d\t", benchmark->name, i));
 		}
 		if (hotrun && benchmark->RequireReinit()) {
 			state = benchmark->Initialize(configuration);
@@ -169,8 +167,6 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 					LogResult(std::to_string(profiler.Elapsed()));
 				}
 			}
-		} else {
-			LogLine("DONE");
 		}
 	}
 	benchmark->Finalize();
@@ -178,6 +174,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 
 void BenchmarkRunner::RunBenchmarks() {
 	LogLine("Starting benchmark run.");
+	LogLine("name\trun\tnruns\ttiming");
 	for (auto &benchmark : benchmarks) {
 		RunBenchmark(benchmark);
 	}
@@ -296,6 +293,7 @@ ConfigurationError run_benchmarks() {
 				fprintf(stdout, "%s\n", query.c_str());
 			}
 		} else {
+			instance.LogLine("name\trun\ttiming");
 			for (const auto &benchmark_index : benchmark_indices) {
 				instance.RunBenchmark(benchmarks[benchmark_index]);
 			}

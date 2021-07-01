@@ -69,7 +69,7 @@ SELECT b, SUM(a), COUNT(*), SUM(a+2) FROM test GROUP BY b ORDER BY b;
 
 # group by alias
 query IR
-SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f;
+SELECT b % 2 AS f, SUM(a) FROM test GROUP BY f ORDER BY f;
 ----
 0	24.000000
 1	12.000000

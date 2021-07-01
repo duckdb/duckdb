@@ -63,8 +63,8 @@ SELECT * FROM test
 ----
 2	2
 
-# we can also update rows
-statement ok con2
+# cannot update an altered table
+statement error con2
 UPDATE test SET j=100
 
 query III con1
@@ -73,10 +73,8 @@ SELECT * FROM test
 1	1	NULL
 2	2	NULL
 
-query II con2
-SELECT * FROM test
-----
-2	100
+statement ok con1
+UPDATE test SET j=100
 
 statement ok con1
 COMMIT

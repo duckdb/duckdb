@@ -13,7 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/vector.hpp"
 
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -66,7 +66,7 @@ private:
 	//! The database instance
 	DatabaseInstance &db;
 	//! The current query number
-	std::atomic<transaction_t> current_query_number;
+	atomic<transaction_t> current_query_number;
 	//! The current start timestamp used by transactions
 	transaction_t current_start_timestamp;
 	//! The current transaction ID used by transactions

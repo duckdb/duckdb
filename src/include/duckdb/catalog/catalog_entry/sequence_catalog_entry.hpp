@@ -38,6 +38,8 @@ public:
 	uint64_t usage_count;
 	//! The sequence counter
 	int64_t counter;
+	//! The most recently returned value
+	int64_t last_value;
 	//! The increment value
 	int64_t increment;
 	//! The minimum value of the sequence

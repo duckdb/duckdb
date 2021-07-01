@@ -10,7 +10,6 @@ add_library_unity(
   sum.cpp
   product.cpp
   bool.cpp
-  mode.cpp
   arg_min_max.cpp
   skew.cpp
   kurtosis.cpp

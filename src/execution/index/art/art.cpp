@@ -1,23 +1,19 @@
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/bit_operations.hpp"
 #include <algorithm>
 #include <ctgmath>
 #include <cstring>
 
 namespace duckdb {
 
-ART::ART(vector<column_t> column_ids, vector<unique_ptr<Expression>> unbound_expressions, bool is_unique)
-    : Index(IndexType::ART, move(column_ids), move(unbound_expressions)), is_unique(is_unique) {
+ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>> &unbound_expressions, bool is_unique,
+         bool is_primary)
+    : Index(IndexType::ART, column_ids, unbound_expressions, is_unique, is_primary) {
 	tree = nullptr;
 	expression_result.Initialize(logical_types);
-	int n = 1;
-	//! little endian if true
-	if (*(char *)&n == 1) {
-		is_little_endian = true;
-	} else {
-		is_little_endian = false;
-	}
+	is_little_endian = IsLittleEndian();
 	switch (types[0]) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
@@ -279,8 +275,16 @@ void ART::VerifyAppend(DataChunk &chunk) {
 			continue;
 		}
 		if (Lookup(tree, *keys[i], 0) != nullptr) {
+			string key_name;
+			for (idx_t k = 0; k < expression_result.ColumnCount(); k++) {
+				if (k > 0) {
+					key_name += ", ";
+				}
+				key_name += unbound_expressions[k]->GetName() + ": " + expression_result.data[k].GetValue(i).ToString();
+			}
 			// node already exists in tree
-			throw ConstraintException("duplicate key value violates primary key or unique constraint");
+			throw ConstraintException("duplicate key \"%s\" violates %s constraint", key_name,
+			                          is_primary ? "primary key" : "unique");
 		}
 	}
 }
@@ -384,6 +388,15 @@ void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
 			continue;
 		}
 		Erase(tree, *keys[i], 0, row_identifiers[i]);
+#ifdef DEBUG
+		auto node = Lookup(tree, *keys[i], 0);
+		if (node) {
+			auto leaf = static_cast<Leaf *>(node);
+			for (idx_t k = 0; k < leaf->num_elements; k++) {
+				D_ASSERT(leaf->GetRowId(k) != row_identifiers[i]);
+			}
+		}
+#endif
 	}
 }
 
@@ -456,6 +469,8 @@ static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
 		return Key::CreateKey<uint32_t>(value.value_.uinteger, art.is_little_endian);
 	case PhysicalType::UINT64:
 		return Key::CreateKey<uint64_t>(value.value_.ubigint, art.is_little_endian);
+	case PhysicalType::INT128:
+		return Key::CreateKey<hugeint_t>(value.value_.hugeint, art.is_little_endian);
 	case PhysicalType::FLOAT:
 		return Key::CreateKey<float>(value.value_.float_, art.is_little_endian);
 	case PhysicalType::DOUBLE:

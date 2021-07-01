@@ -7,12 +7,15 @@
 
 namespace duckdb {
 
-Index::Index(IndexType type, vector<column_t> column_ids_p, vector<unique_ptr<Expression>> unbound_expressions)
-    : type(type), column_ids(move(column_ids_p)), unbound_expressions(move(unbound_expressions)) {
-	for (auto &expr : this->unbound_expressions) {
+Index::Index(IndexType type, const vector<column_t> &column_ids_p,
+             const vector<unique_ptr<Expression>> &unbound_expressions, bool is_unique, bool is_primary)
+    : type(type), column_ids(column_ids_p), is_unique(is_unique), is_primary(is_primary) {
+	for (auto &expr : unbound_expressions) {
 		types.push_back(expr->return_type.InternalType());
 		logical_types.push_back(expr->return_type);
-		bound_expressions.push_back(BindExpression(expr->Copy()));
+		auto unbound_expression = expr->Copy();
+		bound_expressions.push_back(BindExpression(unbound_expression->Copy()));
+		this->unbound_expressions.emplace_back(move(unbound_expression));
 	}
 	for (auto &bound_expr : bound_expressions) {
 		executor.AddExpression(*bound_expr);
@@ -23,7 +26,7 @@ Index::Index(IndexType type, vector<column_t> column_ids_p, vector<unique_ptr<Ex
 }
 
 void Index::InitializeLock(IndexLock &state) {
-	state.index_lock = std::unique_lock<mutex>(lock);
+	state.index_lock = unique_lock<mutex>(lock);
 }
 
 bool Index::Append(DataChunk &entries, Vector &row_identifiers) {
@@ -52,7 +55,7 @@ unique_ptr<Expression> Index::BindExpression(unique_ptr<Expression> expr) {
 	return expr;
 }
 
-bool Index::IndexIsUpdated(vector<column_t> &column_ids) {
+bool Index::IndexIsUpdated(const vector<column_t> &column_ids) const {
 	for (auto &column : column_ids) {
 		if (column_id_set.find(column) != column_id_set.end()) {
 			return true;

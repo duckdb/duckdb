@@ -1,0 +1,135 @@
+# name: test/sql/aggregate/aggregates/test_quantile_disc_list.test
+# description: Test QUANTILE_DISC operator with LIST quantiles
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar quantiles
+statement ok
+create table quantiles as select range r, random() FROM range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+# single GROUP
+query I
+SELECT quantile_disc(r, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles
+----
+[999, 4999, 8999]
+
+# multiple groups
+query II
+SELECT mod(r,10) as g, quantile_disc(r, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	[990, 4990, 8990]
+1	[991, 4991, 8991]
+2	[992, 4992, 8992]
+3	[993, 4993, 8993]
+4	[994, 4994, 8994]
+5	[995, 4995, 8995]
+6	[996, 4996, 8996]
+7	[997, 4997, 8997]
+8	[998, 4998, 8998]
+9	[999, 4999, 8999]
+
+# constant input
+query I
+SELECT quantile_disc(1, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles
+----
+[1, 1, 1]
+
+# empty input
+query I
+SELECT quantile_disc(r, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles WHERE 1=0
+----
+NULL
+
+# empty list
+query I
+SELECT quantile_disc(r, LIST_VALUE()) FROM quantiles
+----
+[]
+
+# temporal types
+query I
+SELECT quantile_disc('2021-01-01'::TIMESTAMP + interval (r) hour, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles
+----
+[2021-02-11 15:00:00, 2021-07-28 07:00:00, 2022-01-10 23:00:00]
+
+query I
+SELECT quantile_disc('1990-01-01'::DATE + interval (r) day, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles
+----
+[1992-09-26, 2003-09-09, 2014-08-22]
+
+query I
+SELECT quantile_disc('00:00:00'::TIME + interval (r) second, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles
+----
+[00:16:39, 01:23:19, 02:29:59]
+
+query I
+SELECT quantile_disc(interval (r) second, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles
+----
+[00:16:39, 01:23:19, 02:29:59]
+
+statement ok
+pragma threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+# single GROUP
+query I
+SELECT quantile_disc(r, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles
+----
+[999, 4999, 8999]
+
+# multiple groups
+query II
+SELECT mod(r,10) as g, quantile_disc(r, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles GROUP BY 1 ORDER BY 1
+----
+NULL	NULL
+0	[990, 4990, 8990]
+1	[991, 4991, 8991]
+2	[992, 4992, 8992]
+3	[993, 4993, 8993]
+4	[994, 4994, 8994]
+5	[995, 4995, 8995]
+6	[996, 4996, 8996]
+7	[997, 4997, 8997]
+8	[998, 4998, 8998]
+9	[999, 4999, 8999]
+
+# constant input
+query I
+SELECT quantile_disc(1, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles
+----
+[1, 1, 1]
+
+# empty input
+query I
+SELECT quantile_disc(r, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles WHERE 1=0
+----
+NULL
+
+# empty list
+query I
+SELECT quantile_disc(r, LIST_VALUE()) FROM quantiles
+----
+[]
+
+statement error
+SELECT quantile_disc(r, LIST_VALUE(-0.1, 0.5, 0.9)) FROM quantiles
+
+statement error
+SELECT quantile_disc(r, (0.1, 0.5, 1.1)) FROM quantiles
+
+statement error
+SELECT quantile_disc(r, LIST_VALUE(0.1, 0.5, NULL)) FROM quantiles
+
+statement error
+SELECT quantile_disc(r, LIST_VALUE("0.1", "0.5", "0.9")) FROM quantiles
+
+statement error
+SELECT quantile_disc(r::string, LIST_VALUE(0.1, 0.5, 0.9)) FROM quantiles
+
+statement error
+SELECT quantile_disc(r, LIST_VALUE(0.1, 0.5, 0.9), 50) FROM quantiles

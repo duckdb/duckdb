@@ -316,6 +316,7 @@ public:
 						false_count++;
 					}
 				}
+				base_idx = next;
 				continue;
 			} else {
 				// partially valid: need to check individual elements for validity

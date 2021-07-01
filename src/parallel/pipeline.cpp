@@ -9,7 +9,9 @@
 #include "duckdb/main/database.hpp"
 
 #include "duckdb/execution/operator/aggregate/physical_simple_aggregate.hpp"
+#include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
+#include "duckdb/execution/operator/order/physical_order.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
@@ -17,11 +19,11 @@ namespace duckdb {
 
 class PipelineTask : public Task {
 public:
-	explicit PipelineTask(Pipeline *pipeline_p) : pipeline(pipeline_p) {
+	explicit PipelineTask(shared_ptr<Pipeline> pipeline_p) : pipeline(move(pipeline_p)) {
 	}
 
 	TaskContext task;
-	Pipeline *pipeline;
+	shared_ptr<Pipeline> pipeline;
 
 public:
 	void Execute() override {
@@ -91,7 +93,7 @@ void Pipeline::Execute(TaskContext &task) {
 		auto lstate = sink->GetLocalSinkState(context);
 		// incrementally process the pipeline
 		DataChunk intermediate;
-		child->InitializeChunkEmpty(intermediate);
+		child->InitializeChunk(intermediate);
 		while (true) {
 			child->GetChunk(context, intermediate, state.get());
 			thread.profiler.StartOperator(sink);
@@ -113,16 +115,18 @@ void Pipeline::Execute(TaskContext &task) {
 
 void Pipeline::FinishTask() {
 	D_ASSERT(finished_tasks < total_tasks);
+	idx_t current_tasks = total_tasks;
 	idx_t current_finished = ++finished_tasks;
-	if (current_finished == total_tasks) {
+	if (current_finished == current_tasks) {
+		bool finish_pipeline = false;
 		try {
-			sink->Finalize(*this, executor.context, move(sink_state));
+			finish_pipeline = sink->Finalize(*this, executor.context, move(sink_state));
 		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
 		} catch (...) {
 			executor.PushError("Unknown exception in Finalize!");
 		}
-		if (current_finished == total_tasks) {
+		if (finish_pipeline) {
 			Finish();
 		}
 	}
@@ -130,10 +134,34 @@ void Pipeline::FinishTask() {
 
 void Pipeline::ScheduleSequentialTask() {
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	auto task = make_unique<PipelineTask>(this);
+	auto task = make_unique<PipelineTask>(shared_from_this());
 
 	this->total_tasks = 1;
 	scheduler.ScheduleTask(*executor.producer, move(task));
+}
+
+bool Pipeline::LaunchScanTasks(PhysicalOperator *op, idx_t max_threads, unique_ptr<ParallelState> pstate) {
+	// split the scan up into parts and schedule the parts
+	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
+	if (max_threads > executor.context.db->NumberOfThreads()) {
+		max_threads = executor.context.db->NumberOfThreads();
+	}
+	if (max_threads <= 1) {
+		// too small to parallelize
+		return false;
+	}
+
+	this->parallel_node = op;
+	this->parallel_state = move(pstate);
+
+	// launch a task for every thread
+	this->total_tasks = max_threads;
+	for (idx_t i = 0; i < max_threads; i++) {
+		auto task = make_unique<PipelineTask>(shared_from_this());
+		scheduler.ScheduleTask(*executor.producer, move(task));
+	}
+
+	return true;
 }
 
 bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
@@ -141,15 +169,20 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 	case PhysicalOperatorType::UNNEST:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
-	case PhysicalOperatorType::HASH_JOIN:
 	case PhysicalOperatorType::CROSS_PRODUCT:
 	case PhysicalOperatorType::STREAMING_SAMPLE:
 	case PhysicalOperatorType::INOUT_FUNCTION:
 		// filter, projection or hash probe: continue in children
 		return ScheduleOperator(op->children[0].get());
+	case PhysicalOperatorType::HASH_JOIN: {
+		// hash join; for now we can't safely parallelize right or full outer join probes
+		auto &join = (PhysicalHashJoin &)*op;
+		if (IsRightOuterJoin(join.join_type)) {
+			return false;
+		}
+		return ScheduleOperator(op->children[0].get());
+	}
 	case PhysicalOperatorType::TABLE_SCAN: {
-		// we reached a scan: split it up into parts and schedule the parts
-		auto &scheduler = TaskScheduler::GetScheduler(executor.context);
 		auto &get = (PhysicalTableScan &)*op;
 		if (!get.function.max_threads) {
 			// table function cannot be parallelized
@@ -158,23 +191,14 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 		D_ASSERT(get.function.init_parallel_state);
 		D_ASSERT(get.function.parallel_state_next);
 		idx_t max_threads = get.function.max_threads(executor.context, get.bind_data.get());
-		if (max_threads > executor.context.db->NumberOfThreads()) {
-			max_threads = executor.context.db->NumberOfThreads();
-		}
-		if (max_threads <= 1) {
-			// table is too small to parallelize
-			return false;
-		}
-		this->parallel_state = get.function.init_parallel_state(executor.context, get.bind_data.get());
-		this->parallel_node = op;
-
-		// launch a task for every thread
-		this->total_tasks = max_threads;
-		for (idx_t i = 0; i < max_threads; i++) {
-			auto task = make_unique<PipelineTask>(this);
-			scheduler.ScheduleTask(*executor.producer, move(task));
-		}
-		return true;
+		auto pstate = get.function.init_parallel_state(executor.context, get.bind_data.get());
+		return LaunchScanTasks(op, max_threads, move(pstate));
+	}
+	case PhysicalOperatorType::WINDOW: {
+		auto &win = (PhysicalWindow &)*op;
+		idx_t max_threads = win.MaxThreads(executor.context);
+		auto pstate = win.GetParallelState();
+		return LaunchScanTasks(op, max_threads, move(pstate));
 	}
 	case PhysicalOperatorType::HASH_GROUP_BY: {
 		// FIXME: parallelize scan of GROUP_BY HT
@@ -187,10 +211,18 @@ bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
 }
 
 void Pipeline::ClearParents() {
-	for (auto &parent : parents) {
+	for (auto &parent_entry : parents) {
+		auto parent = parent_entry.second.lock();
+		if (!parent) {
+			continue;
+		}
 		parent->dependencies.erase(this);
 	}
-	for (auto &dep : dependencies) {
+	for (auto &dep_entry : dependencies) {
+		auto dep = dep_entry.second.lock();
+		if (!dep) {
+			continue;
+		}
 		dep->parents.erase(this);
 	}
 	parents.clear();
@@ -270,9 +302,12 @@ void Pipeline::Schedule() {
 	ScheduleSequentialTask();
 }
 
-void Pipeline::AddDependency(Pipeline *pipeline) {
-	this->dependencies.insert(pipeline);
-	pipeline->parents.insert(this);
+void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
+	if (!pipeline) {
+		return;
+	}
+	dependencies[pipeline.get()] = weak_ptr<Pipeline>(pipeline);
+	pipeline->parents[this] = weak_ptr<Pipeline>(shared_from_this());
 }
 
 void Pipeline::CompleteDependency() {
@@ -288,7 +323,11 @@ void Pipeline::Finish() {
 	D_ASSERT(!finished);
 	finished = true;
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
-	for (auto &parent : parents) {
+	for (auto &parent_entry : parents) {
+		auto parent = parent_entry.second.lock();
+		if (!parent) {
+			continue;
+		}
 		// mark a dependency as completed for each of the parents
 		parent->CompleteDependency();
 	}

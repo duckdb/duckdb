@@ -1,0 +1,26 @@
+# name: test/sql/storage/types/map/map_storage.test
+# description: Test maps with persistent storage
+# group: [map]
+
+# load the DB from disk
+load __TEST_DIR__/map_storage_test.db
+
+statement ok
+CREATE TABLE a(b MAP(INTEGER,INTEGER));
+
+statement ok
+INSERT INTO a VALUES (MAP([1], [2])), (MAP([1, 2, 3], [4, 5, 6]));
+
+query I
+SELECT * FROM a;
+----
+{1=2}
+{1=4, 2=5, 3=6}
+
+restart
+
+query I
+SELECT * FROM a;
+----
+{1=2}
+{1=4, 2=5, 3=6}

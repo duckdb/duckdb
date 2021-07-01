@@ -89,7 +89,7 @@ idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const 
 				return base_offset + offset;
 			}
 		}
-		if (offset > haystack_size - needle_size) {
+		if (offset >= haystack_size - needle_size) {
 			return INVALID_INDEX;
 		}
 		sums_diff -= haystack[offset];

@@ -13,21 +13,18 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
-struct TableFilter;
 
 class SegmentStatistics {
 public:
-	SegmentStatistics(LogicalType type, idx_t type_size);
-	SegmentStatistics(LogicalType type, idx_t type_size, unique_ptr<BaseStatistics> statistics);
+	SegmentStatistics(LogicalType type);
+	SegmentStatistics(LogicalType type, unique_ptr<BaseStatistics> statistics);
 
 	LogicalType type;
-	idx_t type_size;
 
 	//! Type-specific statistics of the segment
 	unique_ptr<BaseStatistics> statistics;
 
 public:
-	bool CheckZonemap(TableFilter &filter);
 	void Reset();
 };
 

@@ -20,7 +20,7 @@ struct SumSetOperation {
 		state->isset = false;
 	}
 	template <class STATE>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		target->isset = source.isset || target->isset;
 		target->value += source.value;
 	}
@@ -129,7 +129,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 	return nullptr;
 }
 
-AggregateFunction GetSumAggregate(PhysicalType type) {
+AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16:
 		return AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
@@ -159,18 +159,18 @@ AggregateFunction GetSumAggregate(PhysicalType type) {
 unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunction &function,
                                         vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	function = GetSumAggregate(decimal_type.InternalType());
+	function = SumFun::GetSumAggregate(decimal_type.InternalType());
 	function.name = "sum";
 	function.arguments[0] = decimal_type;
-	function.return_type = LogicalType(LogicalTypeId::DECIMAL, Decimal::MAX_WIDTH_DECIMAL, decimal_type.scale());
+	function.return_type = LogicalType::DECIMAL(Decimal::MAX_WIDTH_DECIMAL, DecimalType::GetScale(decimal_type));
 	return nullptr;
 }
 
 void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet sum("sum");
 	// decimal
-	sum.AddFunction(AggregateFunction({LogicalType::DECIMAL}, LogicalType::DECIMAL, nullptr, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, BindDecimalSum));
+	sum.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
+	                                  nullptr, nullptr, nullptr, BindDecimalSum));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));

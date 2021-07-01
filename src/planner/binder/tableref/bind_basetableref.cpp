@@ -70,7 +70,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		for (auto &scan : config.replacement_scans) {
 			auto replacement_function = scan.function(ref.table_name, scan.data);
 			if (replacement_function) {
-				replacement_function->alias = ref.alias;
+				replacement_function->alias = ref.alias.empty() ? ref.table_name : ref.alias;
 				replacement_function->column_name_alias = ref.column_name_alias;
 				return Bind(*replacement_function);
 			}

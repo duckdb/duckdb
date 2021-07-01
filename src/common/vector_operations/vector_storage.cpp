@@ -70,7 +70,7 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 		CopyToStorageLoop<interval_t>(vdata, count, target);
 		break;
 	default:
-		throw NotImplementedException("Unimplemented type for CopyToStorage");
+		throw NotImplementedException("Unimplemented type for WriteToStorage");
 	}
 }
 
@@ -78,13 +78,8 @@ template <class T>
 static void ReadFromStorageLoop(data_ptr_t source, idx_t count, Vector &result) {
 	auto ldata = (T *)source;
 	auto result_data = FlatVector::GetData<T>(result);
-	auto &mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < count; i++) {
-		if (IsNullValue<T>(ldata[i])) {
-			mask.SetInvalid(i);
-		} else {
-			result_data[i] = ldata[i];
-		}
+		result_data[i] = ldata[i];
 	}
 }
 
@@ -135,7 +130,7 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 		ReadFromStorageLoop<interval_t>(source, count, result);
 		break;
 	default:
-		throw NotImplementedException("Unimplemented type for CopyToStorage");
+		throw NotImplementedException("Unimplemented type for ReadFromStorage");
 	}
 }
 

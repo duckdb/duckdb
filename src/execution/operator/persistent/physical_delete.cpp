@@ -3,7 +3,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/data_table.hpp"
 
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 
@@ -15,17 +15,16 @@ public:
 	DeleteGlobalState() : deleted_count(0) {
 	}
 
-	std::atomic<idx_t> deleted_count;
+	atomic<idx_t> deleted_count;
 };
 
 void PhysicalDelete::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                          DataChunk &input) {
+                          DataChunk &input) const {
 	auto &gstate = (DeleteGlobalState &)state;
 
 	// delete data in the base table
 	// the row ids are given to us as the last column of the child chunk
-	table.Delete(tableref, context.client, input.data[row_id_index], input.size());
-	gstate.deleted_count += input.size();
+	gstate.deleted_count += table.Delete(tableref, context.client, input.data[row_id_index], input.size());
 }
 
 unique_ptr<GlobalOperatorState> PhysicalDelete::GetGlobalState(ClientContext &context) {
@@ -35,7 +34,7 @@ unique_ptr<GlobalOperatorState> PhysicalDelete::GetGlobalState(ClientContext &co
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalDelete::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalDelete::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	auto &gstate = (DeleteGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);

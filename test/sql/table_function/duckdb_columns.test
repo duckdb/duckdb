@@ -1,0 +1,23 @@
+# name: test/sql/table_function/duckdb_columns.test
+# description: Test duckdb_columns function
+# group: [table_function]
+
+statement ok nosort duckdb_col
+SELECT * FROM duckdb_columns();
+
+statement ok nosort duckdb_col
+SELECT * FROM duckdb_columns;
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+CREATE TABLE test(i INTEGER NOT NULL, j DECIMAL(18, 3), k VARCHAR DEFAULT 'hello')
+
+query IIIIIIII
+select tables.table_name, column_name, data_type, column_default, is_nullable, numeric_precision, numeric_precision_radix, numeric_scale from duckdb_columns cols join duckdb_tables tables using (table_oid) ORDER BY 1, 2, 3;
+----
+integers	i	INTEGER	NULL	True	32	2	0
+test	i	INTEGER	NULL	False	32	2	0
+test	j	DECIMAL(18,3)	NULL	True	18	10	3
+test	k	VARCHAR	hello	True	NULL	NULL	NULL

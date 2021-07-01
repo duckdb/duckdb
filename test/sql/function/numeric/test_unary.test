@@ -43,6 +43,25 @@ SELECT -+-+-+-+-i FROM test
 ----
 -2
 
+# Test negation of minima
+statement ok
+CREATE TABLE minima (t TINYINT, s SMALLINT, i INTEGER, b BIGINT);
+
+statement ok
+INSERT INTO minima VALUES (-128, -32768, -2147483648, -9223372036854775808);
+
+statement error
+SELECT -t from minima;
+
+statement error
+SELECT -s from minima;
+
+statement error
+SELECT -i from minima;
+
+statement error
+SELECT -b from minima;
+
 # cannot apply these to a string
 statement error
 SELECT +'hello'

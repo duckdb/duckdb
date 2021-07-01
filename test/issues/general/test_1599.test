@@ -1,0 +1,67 @@
+# name: test/issues/general/test_1599.test
+# description: Issue 1599: Update + Transactions raises RuntimeError: Not implemented Error: operator
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+start transaction;
+
+statement ok
+CREATE TABLE t1 (i INTEGER, j INTEGER);
+
+statement ok
+CREATE TABLE t2 (i INTEGER, j INTEGER, id INTEGER);
+
+statement ok
+INSERT INTO t1 VALUES (0, 0);
+
+statement ok
+INSERT INTO t1 VALUES (1, 1);
+
+statement ok
+INSERT INTO t1 VALUES (2, 2);
+
+statement ok
+INSERT INTO t2 VALUES (0, 0, 0);
+
+statement ok
+INSERT INTO t2 VALUES (1, 1, 1);
+
+statement ok
+INSERT INTO t2 VALUES (2, 2, 2);
+
+statement ok
+ALTER TABLE t1 ADD COLUMN ref INTEGER;
+
+query III
+select * from t1
+----
+0	0	NULL
+1	1	NULL
+2	2	NULL
+
+statement ok
+UPDATE "t1" SET "ref" = (
+	SELECT "id"
+	FROM "t2"
+	WHERE "t2"."i" == "t1"."i" AND "t2"."j" == "t1"."j"
+);
+
+query III
+select * from t1
+----
+0	0	0
+1	1	1
+2	2	2
+
+statement ok
+commit;
+
+query III
+select * from t1
+----
+0	0	0
+1	1	1
+2	2	2

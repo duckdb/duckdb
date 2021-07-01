@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/common/enums/file_compression_type.hpp"
 
 #include <map>
 #include <sstream>
@@ -19,7 +20,10 @@
 
 namespace duckdb {
 struct CopyInfo;
+struct FileHandle;
 struct StrpTimeFormat;
+
+class FileSystem;
 
 //! The shifts array allows for linear searching of multi-byte values. For each position, it determines the next
 //! position given that we encounter a byte with the given value.
@@ -71,6 +75,8 @@ struct BufferedCSVReaderOptions {
 	bool has_header = false;
 	//! Whether or not the file has a header line
 	bool header = false;
+	//! Whether or not header names shall be normalized
+	bool normalize_names = false;
 	//! How many leading rows to skip
 	idx_t skip_rows = 0;
 	//! Expected number of columns
@@ -129,16 +135,15 @@ class BufferedCSVReader {
 public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
-	BufferedCSVReader(BufferedCSVReaderOptions options, const vector<LogicalType> &requested_types,
-	                  unique_ptr<std::istream> source);
 
+	FileSystem &fs;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
 	vector<string> col_names;
-	unique_ptr<std::istream> source;
+	unique_ptr<FileHandle> file_handle;
 	bool plain_file_source = false;
-	bool gzip_compressed = false;
 	idx_t file_size = 0;
+	FileCompressionType compression = FileCompressionType::UNCOMPRESSED;
 
 	unique_ptr<char[]> buffer;
 	idx_t buffer_size;
@@ -153,6 +158,7 @@ public:
 	idx_t sample_chunk_idx = 0;
 	bool jumping_samples = false;
 	bool end_of_file_reached = false;
+	bool bom_checked = false;
 
 	idx_t bytes_in_chunk = 0;
 	double bytes_per_line_avg = 0;
@@ -213,7 +219,7 @@ private:
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
 
-	unique_ptr<std::istream> OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options);
+	unique_ptr<FileHandle> OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options);
 };
 
 } // namespace duckdb

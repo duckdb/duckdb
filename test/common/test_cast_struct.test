@@ -1,7 +1,6 @@
 # name: test/common/test_cast_struct.test
-# description: Test hugeint casting structs
+# description: Test casting structs
 # group: [common]
-
 
 # struct to struct casts with different names
 query I
@@ -39,12 +38,12 @@ select struct_pack(b=>'hello'::string)::struct(a integer)
 query I
 select struct_pack(b=>'42'::double, c => 'asdf'::string)::struct(a1 integer, a2 string);
 ----
-<a1: 42, a2: asdf>
+{'a1': 42, 'a2': asdf}
 
 query I
 select ROW(42, 'asdf');
 ----
-<v1: 42, v2: asdf>
+{'v1': 42, 'v2': asdf}
 
 
 statement error
@@ -53,21 +52,21 @@ select ROW();
 query I
 select ROW(NULL);
 ----
-<v1: NULL>
+{'v1': NULL}
 
 query I
 select ROW(NULL, NULL);
 ----
-<v1: NULL, v2: NULL>
+{'v1': NULL, 'v2': NULL}
 
 # MB example
 query I
 SELECT CAST(ROW(1, 2) AS ROW(a INTEGER, b INTEGER))
 ----
-<a: 1, b: 2>
+{'a': 1, 'b': 2}
 
 query I
 select a::row(a integer, b string) r from (VALUES (ROW(1, 'asdf')), (ROW(4, 'fdsa'))) s(a);
 ----
-<a: 1, b: asdf>
-<a: 4, b: fdsa>
+{'a': 1, 'b': asdf}
+{'a': 4, 'b': fdsa}

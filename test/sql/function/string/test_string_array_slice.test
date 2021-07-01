@@ -1,0 +1,215 @@
+# name: test/sql/function/string/test_string_array_slice.test
+# description: String slicing test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT 'hello'[0:2]
+----
+he
+
+query I
+SELECT ('hello')[0:2]
+----
+he
+
+statement ok
+CREATE TABLE strings(s VARCHAR, off INTEGER, length INTEGER);
+
+statement ok
+INSERT INTO strings VALUES ('hello', 0, 2), ('world', 1, 3), ('b', 0, 1), (NULL, 1, 2)
+
+# test zero length
+query TT
+SELECT array_slice('🦆ab', 0, 0), array_slice('abc', 0, 0)
+----
+(empty)	(empty)
+
+# constant offset/length
+# normal slice
+query T
+SELECT array_slice(s, 0, 2) FROM strings
+----
+he
+wo
+NULL
+NULL
+
+# index out of range
+query T
+SELECT array_slice(s, 1, 3) FROM strings
+----
+el
+or
+NULL
+NULL
+
+# variable length offset/length
+query T
+SELECT array_slice(s, off, length+off) FROM strings
+----
+he
+orl
+b
+NULL
+
+query T
+SELECT array_slice(s, off, 2+off) FROM strings
+----
+he
+or
+NULL
+NULL
+
+query T
+SELECT array_slice(s, 0, length) FROM strings
+----
+he
+wor
+b
+NULL
+
+query T
+SELECT array_slice('hello', off, length+off) FROM strings
+----
+he
+ell
+h
+el
+
+# test substrings with constant nulls in different places
+query T
+SELECT array_slice(NULL::varchar, off, length+off) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT array_slice('hello', NULL, length+NULL) FROM strings
+----
+hello
+hello
+hello
+hello
+
+query T
+SELECT array_slice('hello', off, NULL+off) FROM strings
+----
+hello
+ello
+hello
+ello
+
+query T
+SELECT array_slice(NULL::varchar, NULL, length+NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT array_slice('hello', NULL, NULL+NULL) FROM strings
+----
+hello
+hello
+hello
+hello
+
+query T
+SELECT array_slice(NULL::varchar, off, NULL+off) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT array_slice(NULL::varchar, NULL, NULL+NULL) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+# fixed slice
+query T
+SELECT array_slice(s, -2, NULL) FROM strings
+----
+lo
+ld
+NULL
+NULL
+
+# negative length
+query T
+SELECT array_slice(s, 0, 1) FROM strings
+----
+h
+w
+b
+NULL
+
+# negative offset and negative length
+query T
+SELECT array_slice(s, -4, -2) FROM strings
+----
+el
+or
+NULL
+NULL
+
+# length 0
+query T
+SELECT array_slice(s, 1, 1) FROM strings
+----
+(empty)
+(empty)
+(empty)
+NULL
+
+# no end
+query T
+SELECT array_slice(s, 1, NULL) FROM strings
+----
+ello
+orld
+(empty)
+NULL
+
+# very large offset and length
+query T
+SELECT array_slice(s, (2147483647-1), 1) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT array_slice(s, (2147483647-1), -1) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT array_slice(s, (-2147483646-1), -1) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+
+query T
+SELECT array_slice(s, (-2147483646-1), -2147483647) FROM strings
+----
+NULL
+NULL
+NULL
+NULL

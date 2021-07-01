@@ -9,6 +9,7 @@ using namespace std;
 static void test_in_memory_initialization(string dbdir) {
 	FileSystem fs;
 	unique_ptr<DuckDB> db;
+	unique_ptr<Connection> con;
 	string in_memory_tmp = ".tmp";
 
 	// make sure the temporary folder does not exist
@@ -17,6 +18,11 @@ static void test_in_memory_initialization(string dbdir) {
 
 	// cannot create an in-memory database using ":memory:" argument
 	REQUIRE_NOTHROW(db = make_unique<DuckDB>(dbdir));
+	REQUIRE_NOTHROW(con = make_unique<Connection>(*db));
+
+	// force the in-memory directory to be created by creating a table bigger than the memory limit
+	REQUIRE_NO_FAIL(con->Query("PRAGMA memory_limit='1MB'"));
+	REQUIRE_NO_FAIL(con->Query("CREATE TABLE integers AS SELECT * FROM range(1000000)"));
 
 	// the temporary folder .tmp should be created in in-memory mode, but was not
 	REQUIRE(fs.DirectoryExists(in_memory_tmp));

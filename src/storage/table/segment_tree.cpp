@@ -8,7 +8,7 @@ SegmentBase *SegmentTree::GetRootSegment() {
 }
 
 SegmentBase *SegmentTree::GetLastSegment() {
-	return nodes.back().node;
+	return nodes.empty() ? nullptr : nodes.back().node;
 }
 
 SegmentBase *SegmentTree::GetSegment(idx_t row_number) {
@@ -17,12 +17,17 @@ SegmentBase *SegmentTree::GetSegment(idx_t row_number) {
 }
 
 idx_t SegmentTree::GetSegmentIndex(idx_t row_number) {
+	D_ASSERT(!nodes.empty());
+	D_ASSERT(row_number >= nodes[0].row_start);
+	D_ASSERT(row_number < nodes.back().row_start + nodes.back().node->count);
 	idx_t lower = 0;
 	idx_t upper = nodes.size() - 1;
 	// binary search to find the node
 	while (lower <= upper) {
 		idx_t index = (lower + upper) / 2;
+		D_ASSERT(index < nodes.size());
 		auto &entry = nodes[index];
+		D_ASSERT(entry.row_start == entry.node->start);
 		if (row_number < entry.row_start) {
 			upper = index - 1;
 		} else if (row_number >= entry.row_start + entry.node->count) {

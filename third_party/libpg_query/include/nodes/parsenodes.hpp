@@ -1971,4 +1971,14 @@ typedef struct PGLambdaFunction {
 	int location;                /* token location, or -1 if unknown */
 } PGLambdaFunction;
 
+/* ----------------------
+ *		Positional Reference
+ * ----------------------
+ */
+typedef struct PGPositionalReference {
+	PGNodeTag type;
+	int position;
+	int location;                /* token location, or -1 if unknown */
+} PGPositionalReference;
+
 }

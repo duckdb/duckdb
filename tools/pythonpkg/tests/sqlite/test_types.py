@@ -1,7 +1,7 @@
 #-*- coding: iso-8859-1 -*-
 # pysqlite2/test/types.py: tests for type conversion and detection
 #
-# Copyright (C) 2005 Gerhard H�ring <gh@ghaering.de>
+# Copyright (C) 2005 Gerhard Häring <gh@ghaering.de>
 #
 # This file is part of pyduckdb.
 #
@@ -28,13 +28,14 @@ import datetime
 import decimal
 import unittest
 import duckdb
+import sys
 
 
 class DuckDBTypeTests(unittest.TestCase):
     def setUp(self):
         self.con = duckdb.connect(":memory:")
         self.cur = self.con.cursor()
-        self.cur.execute("create table test(i bigint, s varchar, f double)")
+        self.cur.execute("create table test(i bigint, s varchar, f double, b BLOB)")
 
     def tearDown(self):
         self.cur.close()
@@ -81,6 +82,37 @@ class DuckDBTypeTests(unittest.TestCase):
         with self.assertRaises(RuntimeError) as context:
             self.cur.execute("insert into test(f) values (?)", (decimal.Decimal('inf'),))
 
+    def test_CheckBytesBlob(self):
+        val = b"Guglhupf"
+        self.cur.execute("insert into test(b) values (?)", (val,))
+        self.cur.execute("select b from test")
+        row = self.cur.fetchone()
+        self.assertEqual(row[0], val)
+
+    def test_CheckMemoryviewBlob(self):
+        sample = b"Guglhupf"
+        val = memoryview(sample)
+        self.cur.execute("insert into test(b) values (?)", (val,))
+        self.cur.execute("select b from test")
+        row = self.cur.fetchone()
+        self.assertEqual(row[0], sample)
+
+    def test_CheckMemoryviewFromhexBlob(self):
+        if sys.version_info.major < 3:
+            return
+        sample = bytes.fromhex('00FF0F2E3D4C5B6A798800FF00')
+        val = memoryview(sample)
+        self.cur.execute("insert into test(b) values (?)", (val,))
+        self.cur.execute("select b from test")
+        row = self.cur.fetchone()
+        self.assertEqual(row[0], sample)
+
+    def test_CheckNoneBlob(self):
+        val = None
+        self.cur.execute("insert into test(b) values (?)", (val,))
+        self.cur.execute("select b from test")
+        row = self.cur.fetchone()
+        self.assertEqual(row[0], val)
 
     def test_CheckUnicodeExecute(self):
         self.cur.execute(u"select 'Österreich'")

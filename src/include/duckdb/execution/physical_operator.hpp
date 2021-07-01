@@ -38,8 +38,6 @@ public:
 	DataChunk child_chunk;
 	//! State of the child of this operator
 	unique_ptr<PhysicalOperatorState> child_state;
-	//! The initial chunk
-	DataChunk initial_chunk;
 };
 
 //! PhysicalOperator is the base class of the physical operators present in the
@@ -93,9 +91,9 @@ public:
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.
-	virtual void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) = 0;
+	virtual void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const = 0;
 
-	void GetChunk(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state);
+	void GetChunk(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const;
 
 	//! Create a new empty instance of the operator state
 	virtual unique_ptr<PhysicalOperatorState> GetOperatorState() {

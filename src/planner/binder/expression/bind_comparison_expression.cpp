@@ -83,18 +83,19 @@ LogicalType BoundComparisonExpression::BindComparison(LogicalType left_type, Log
 			// target width does not fit in decimal: truncate the scale (if possible) to try and make it fit
 			max_width = Decimal::MAX_WIDTH_DECIMAL;
 		}
-		return LogicalType(LogicalTypeId::DECIMAL, max_width, max_scale);
+		return LogicalType::DECIMAL(max_width, max_scale);
 	}
 	case LogicalTypeId::VARCHAR:
 		// for comparison with strings, we prefer to bind to the numeric types
-		if (left_type.IsNumeric()) {
+		if (left_type.IsNumeric() || left_type.id() == LogicalTypeId::BOOLEAN) {
 			return left_type;
-		} else if (right_type.IsNumeric()) {
+		} else if (right_type.IsNumeric() || right_type.id() == LogicalTypeId::BOOLEAN) {
 			return right_type;
 		} else {
 			// else: check if collations are compatible
-			if (!left_type.collation().empty() && !right_type.collation().empty() &&
-			    left_type.collation() != right_type.collation()) {
+			auto left_collation = StringType::GetCollation(left_type);
+			auto right_collation = StringType::GetCollation(right_type);
+			if (!left_collation.empty() && !right_collation.empty() && left_collation != right_collation) {
 				throw BinderException("Cannot combine types with different collation!");
 			}
 		}
@@ -127,10 +128,9 @@ BindResult ExpressionBinder::BindExpression(ComparisonExpression &expr, idx_t de
 	right.expr = BoundCastExpression::AddCastToType(move(right.expr), input_type);
 	if (input_type.id() == LogicalTypeId::VARCHAR) {
 		// handle collation
-		left.expr =
-		    PushCollation(context, move(left.expr), input_type.collation(), expr.type == ExpressionType::COMPARE_EQUAL);
-		right.expr = PushCollation(context, move(right.expr), input_type.collation(),
-		                           expr.type == ExpressionType::COMPARE_EQUAL);
+		auto collation = StringType::GetCollation(input_type);
+		left.expr = PushCollation(context, move(left.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
+		right.expr = PushCollation(context, move(right.expr), collation, expr.type == ExpressionType::COMPARE_EQUAL);
 	}
 	// now create the bound comparison expression
 	return BindResult(make_unique<BoundComparisonExpression>(expr.type, move(left.expr), move(right.expr)));

@@ -5,7 +5,7 @@ import glob
 import mimetypes
 import urllib.request
 
-api_url = 'https://api.github.com/repos/cwida/duckdb/'
+api_url = 'https://api.github.com/repos/duckdb/duckdb/'
 
 if (len(sys.argv) < 2):
 	print("Usage: [filename1] [filename2] ... ")

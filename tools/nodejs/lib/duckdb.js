@@ -63,9 +63,9 @@ Database.prototype.exec = function() {
 }
 
 Database.prototype.get = function() {
-    throw 'get() is not implemented because its evil';
+    throw "get() is not implemented because it's evil";
 }
 
 Statement.prototype.get = function() {
-    throw 'get() is not implemented because its evil';
+    throw "get() is not implemented because it's evil";
 }

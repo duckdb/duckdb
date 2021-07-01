@@ -9,18 +9,22 @@ statement ok
 PRAGMA force_parallelism
 
 statement ok
+PRAGMA enable_profiling
+
+statement ok
+PRAGMA profiling_output='__TEST_DIR__/test.json'
+
+statement ok
+PRAGMA profiling_mode = detailed
+
+statement ok
 create  table t as select range a, range%10 b from range(100000);
 
 statement ok
 create table bool (a bool);
 
-loop i 0 5000
-
 statement ok
-insert into bool values (True),(False);
-
-endloop
-
+insert into bool select i from (values (True),(False)) tbl(i), range(5000);
 
 query I
 select regr_avgx(a, b) from t group by b%2;
@@ -142,4 +146,4 @@ select mode(a), mode(b) from t group by b%2;
 query I
 select histogram(b) from t;
 ----
-[<bucket: 0, count: 10000>, <bucket: 1, count: 10001>, <bucket: 2, count: 10001>, <bucket: 3, count: 10000>, <bucket: 4, count: 10000>, <bucket: 5, count: 10000>, <bucket: 6, count: 10000>, <bucket: 7, count: 10000>, <bucket: 8, count: 10000>, <bucket: 9, count: 10000>]
+{0=10000, 1=10001, 2=10001, 3=10000, 4=10000, 5=10000, 6=10000, 7=10000, 8=10000, 9=10000}

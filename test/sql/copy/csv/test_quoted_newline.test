@@ -7,7 +7,7 @@ statement ok
 CREATE TABLE test (a VARCHAR, b INTEGER);
 
 query I
-COPY test FROM 'test/sql/copy/csv/data/test/quoted_newline.csv';
+COPY test FROM 'test/sql/copy/csv/data/test/quoted_newline.csv' (DELIMITER ',', AUTO_DETECT 0);
 ----
 2
 
@@ -17,9 +17,10 @@ SELECT SUM(b) FROM test;
 11
 
 query T
-SELECT a FROM test ORDER BY a;
+SELECT string_split_regex(a, '[\r\n]+') FROM test ORDER BY a;
 ----
-2 values hashing to 6874b9164ab09fd0fb7ea177f1e603aa
+[hello, world]
+[what,,  brings, you here,  , today]
 
 statement ok
 DROP TABLE test;

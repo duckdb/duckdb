@@ -48,7 +48,7 @@ unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionC
 }
 
 void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                                   DataChunk &input) {
+                                   DataChunk &input) const {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)state;
 	gstate.right_chunks.Append(input);
 }
@@ -56,7 +56,7 @@ void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalOperatorStat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ClientContext &context,
+bool PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ClientContext &context,
                                        unique_ptr<GlobalOperatorState> state) {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*state;
 	if (IsRightOuterJoin(join_type)) {
@@ -64,6 +64,7 @@ void PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ClientContext &contex
 		memset(gstate.rhs_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.Count());
 	}
 	PhysicalSink::Finalize(pipeline, context, move(state));
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -90,7 +91,7 @@ public:
 };
 
 void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state_p) {
+                                               PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalBlockwiseNLJoinState *>(state_p);
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
 
@@ -170,8 +171,7 @@ void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataCh
 		// fill in the current element of the LHS into the chunk
 		D_ASSERT(chunk.ColumnCount() == lchunk.ColumnCount() + rchunk.ColumnCount());
 		for (idx_t i = 0; i < lchunk.ColumnCount(); i++) {
-			auto lvalue = lchunk.GetValue(i, state->left_position);
-			chunk.data[i].Reference(lvalue);
+			ConstantVector::Reference(chunk.data[i], lchunk.data[i], state->left_position, lchunk.size());
 		}
 		// for the RHS we just reference the entire vector
 		for (idx_t i = 0; i < rchunk.ColumnCount(); i++) {

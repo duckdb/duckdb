@@ -45,7 +45,7 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (!target->is_set) {
 			*target = source;
 		}
@@ -95,7 +95,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 
 	template <class STATE, class OP>
-	static void Combine(STATE source, STATE *target) {
+	static void Combine(const STATE &source, STATE *target) {
 		if (source.is_set && !target->is_set) {
 			SetValue(target, source.value, source.is_null);
 		}
@@ -115,6 +115,64 @@ struct FirstFunctionString : public FirstFunctionBase {
 		if (state->is_set && !state->is_null && !state->value.IsInlined()) {
 			delete[] state->value.GetDataUnsafe();
 		}
+	}
+};
+
+struct FirstStateValue {
+	Value *value;
+};
+
+struct FirstValueFunction {
+	template <class STATE>
+	static void Initialize(STATE *state) {
+		state->value = nullptr;
+	}
+
+	template <class STATE>
+	static void Destroy(STATE *state) {
+		if (state->value) {
+			delete state->value;
+		}
+	}
+	static bool IgnoreNull() {
+		return false;
+	}
+
+	static void Update(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector, idx_t count) {
+		auto &input = inputs[0];
+		VectorData sdata;
+		state_vector.Orrify(count, sdata);
+
+		auto states = (FirstStateValue **)sdata.data;
+		for (idx_t i = 0; i < count; i++) {
+			auto state = states[sdata.sel->get_index(i)];
+			if (!state->value) {
+				state->value = new Value(input.GetValue(i));
+			}
+		}
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE *target) {
+		if (source.value && !target->value) {
+			target->value = new Value(*source.value);
+		}
+	}
+
+	template <class T, class STATE>
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		if (!state->value) {
+			mask.SetInvalid(idx);
+		} else {
+			result.SetValue(idx, *state->value);
+		}
+	}
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, AggregateFunction &function,
+	                                     vector<unique_ptr<Expression>> &arguments) {
+		function.arguments[0] = arguments[0]->return_type;
+		function.return_type = arguments[0]->return_type;
+		return nullptr;
 	}
 };
 
@@ -180,7 +238,12 @@ AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
 		return function;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for FIRST aggregate");
+		return AggregateFunction(
+		    {type}, type, AggregateFunction::StateSize<FirstStateValue>,
+		    AggregateFunction::StateInitialize<FirstStateValue, FirstValueFunction>, FirstValueFunction::Update,
+		    AggregateFunction::StateCombine<FirstStateValue, FirstValueFunction>,
+		    AggregateFunction::StateFinalize<FirstStateValue, void, FirstValueFunction>, nullptr,
+		    FirstValueFunction::Bind, AggregateFunction::StateDestroy<FirstStateValue, FirstValueFunction>);
 	}
 }
 
@@ -201,19 +264,12 @@ void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 			first.AddFunction(FirstFun::GetFunction(type));
 		}
 	}
+	first.AddFunction(FirstFun::GetFunction(LogicalTypeId::LIST));
+	first.AddFunction(FirstFun::GetFunction(LogicalTypeId::STRUCT));
+	first.AddFunction(FirstFun::GetFunction(LogicalTypeId::MAP));
+	set.AddFunction(first);
+	first.name = "arbitrary";
 	set.AddFunction(first);
 }
 
-void ArbitraryFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet first("arbitrary");
-	for (const auto &type : LogicalType::ALL_TYPES) {
-		if (type.id() == LogicalTypeId::DECIMAL) {
-			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                    BindDecimalFirst));
-		} else {
-			first.AddFunction(FirstFun::GetFunction(type));
-		}
-	}
-	set.AddFunction(first);
-}
 } // namespace duckdb

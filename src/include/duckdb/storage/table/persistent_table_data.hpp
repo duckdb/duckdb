@@ -11,19 +11,18 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/storage/table/segment_tree.hpp"
+#include "duckdb/storage/data_pointer.hpp"
 
 namespace duckdb {
 class BaseStatistics;
-class PersistentSegment;
 
 class PersistentTableData {
 public:
 	explicit PersistentTableData(idx_t column_count);
 	~PersistentTableData();
 
+	vector<RowGroupPointer> row_groups;
 	vector<unique_ptr<BaseStatistics>> column_stats;
-	vector<vector<unique_ptr<PersistentSegment>>> table_data;
-	shared_ptr<SegmentTree> versions;
 };
 
 } // namespace duckdb

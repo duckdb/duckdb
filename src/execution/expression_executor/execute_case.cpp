@@ -8,28 +8,40 @@ namespace duckdb {
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
           SelectionVector &fside, idx_t fcount);
 
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundCaseExpression &expr,
+struct CaseExpressionState : public ExpressionState {
+	CaseExpressionState(const Expression &expr, ExpressionExecutorState &root)
+	    : ExpressionState(expr, root), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE) {
+	}
+
+	SelectionVector true_sel;
+	SelectionVector false_sel;
+};
+
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundCaseExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<ExpressionState>(expr, root);
+	auto result = make_unique<CaseExpressionState>(expr, root);
 	result->AddChild(expr.check.get());
 	result->AddChild(expr.result_if_true.get());
 	result->AddChild(expr.result_if_false.get());
 	result->Finalize();
-	return result;
+	return move(result);
 }
 
-void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *state, const SelectionVector *sel,
+void ExpressionExecutor::Execute(const BoundCaseExpression &expr, ExpressionState *state_p, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	Vector res_true, res_false;
-	res_true.Reference(state->intermediate_chunk.data[1]);
-	res_false.Reference(state->intermediate_chunk.data[2]);
+	auto state = (CaseExpressionState *)state_p;
+
+	state->intermediate_chunk.Reset();
+	auto &res_true = state->intermediate_chunk.data[1];
+	auto &res_false = state->intermediate_chunk.data[2];
 
 	auto check_state = state->child_states[0].get();
 	auto res_true_state = state->child_states[1].get();
 	auto res_false_state = state->child_states[2].get();
 
 	// first execute the check expression
-	SelectionVector true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE);
+	auto &true_sel = state->true_sel;
+	auto &false_sel = state->false_sel;
 	idx_t tcount = Select(*expr.check, check_state, sel, count, &true_sel, &false_sel);
 	idx_t fcount = count - tcount;
 	if (fcount == 0) {
@@ -52,6 +64,7 @@ void ExpressionExecutor::Execute(BoundCaseExpression &expr, ExpressionState *sta
 
 template <class T>
 void TemplatedFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
+	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto res = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Validity(result);
 	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -79,11 +92,38 @@ void TemplatedFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel
 	}
 }
 
+void ValidityFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto &result_mask = FlatVector::Validity(result);
+	if (vector.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		if (ConstantVector::IsNull(vector)) {
+			for (idx_t i = 0; i < count; i++) {
+				result_mask.SetInvalid(sel.get_index(i));
+			}
+		}
+	} else {
+		VectorData vdata;
+		vector.Orrify(count, vdata);
+		for (idx_t i = 0; i < count; i++) {
+			auto source_idx = vdata.sel->get_index(i);
+			auto res_idx = sel.get_index(i);
+
+			result_mask.Set(res_idx, vdata.validity.RowIsValid(source_idx));
+		}
+	}
+}
+
 template <class T>
 void TemplatedCaseLoop(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
                        SelectionVector &fside, idx_t fcount) {
 	TemplatedFillLoop<T>(res_true, result, tside, tcount);
 	TemplatedFillLoop<T>(res_false, result, fside, fcount);
+}
+
+void ValidityCaseLoop(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
+                      SelectionVector &fside, idx_t fcount) {
+	ValidityFillLoop(res_true, result, tside, tcount);
+	ValidityFillLoop(res_false, result, fside, fcount);
 }
 
 void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &tside, idx_t tcount,
@@ -130,20 +170,27 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 		StringVector::AddHeapReference(result, res_true);
 		StringVector::AddHeapReference(result, res_false);
 		break;
+	case PhysicalType::STRUCT: {
+		auto &res_true_entries = StructVector::GetEntries(res_true);
+		auto &res_false_entries = StructVector::GetEntries(res_false);
+		auto &result_entries = StructVector::GetEntries(result);
+		D_ASSERT(res_true_entries.size() == res_false_entries.size() &&
+		         res_true_entries.size() == result_entries.size());
+		ValidityCaseLoop(res_true, res_false, result, tside, tcount, fside, fcount);
+		for (idx_t i = 0; i < res_true_entries.size(); i++) {
+			Case(*res_true_entries[i], *res_false_entries[i], *result_entries[i], tside, tcount, fside, fcount);
+		}
+		break;
+	}
 	case PhysicalType::LIST: {
-		auto result_vector = make_unique<Vector>(result.GetType().child_types()[0].second);
-		ListVector::SetEntry(result, move(result_vector));
-
 		idx_t offset = 0;
-		if (ListVector::HasEntry(res_true)) {
-			auto &true_child = ListVector::GetEntry(res_true);
-			offset += ListVector::GetListSize(res_true);
-			ListVector::Append(result, true_child, ListVector::GetListSize(res_true));
-		}
-		if (ListVector::HasEntry(res_false)) {
-			auto &false_child = ListVector::GetEntry(res_false);
-			ListVector::Append(result, false_child, ListVector::GetListSize(res_false));
-		}
+
+		auto &true_child = ListVector::GetEntry(res_true);
+		offset += ListVector::GetListSize(res_true);
+		ListVector::Append(result, true_child, ListVector::GetListSize(res_true));
+
+		auto &false_child = ListVector::GetEntry(res_false);
+		ListVector::Append(result, false_child, ListVector::GetListSize(res_false));
 
 		// all the false offsets need to be incremented by true_child.count
 		TemplatedFillLoop<list_entry_t>(res_true, result, tside, tcount);
@@ -155,7 +202,7 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 
 		auto data = (list_entry_t *)fdata.data;
 		auto res = FlatVector::GetData<list_entry_t>(result);
-		auto &mask = FlatVector::Validity(ListVector::GetEntry(result));
+		auto &mask = FlatVector::Validity(result);
 
 		for (idx_t i = 0; i < fcount; i++) {
 			auto fidx = fdata.sel->get_index(i);
@@ -166,7 +213,8 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 			mask.Set(res_idx, fdata.validity.RowIsValid(fidx));
 		}
 
-		result.Verify(tcount + fcount);
+		result.Verify(tside, tcount);
+		result.Verify(fside, fcount);
 		break;
 	}
 	default:

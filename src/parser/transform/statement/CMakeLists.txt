@@ -17,6 +17,7 @@ add_library_unity(
   transform_drop.cpp
   transform_import.cpp
   transform_insert.cpp
+  transform_load.cpp
   transform_pragma.cpp
   transform_rename.cpp
   transform_select.cpp

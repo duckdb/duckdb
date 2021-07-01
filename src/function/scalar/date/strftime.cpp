@@ -91,6 +91,8 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		return len;
 	}
 	case StrTimeSpecifier::UTC_OFFSET:
+		// +00
+		return 3;
 	case StrTimeSpecifier::TZ_NAME:
 		// empty for now
 		return 0;
@@ -154,6 +156,7 @@ char *StrfTimeFormat::WriteString(char *target, const string_t &str) {
 
 // write a value in the range of 0..99 unpadded (e.g. "1", "2", ... "98", "99")
 char *StrfTimeFormat::Write2(char *target, uint8_t value) {
+	D_ASSERT(value < 100);
 	if (value >= 10) {
 		return WritePadded2(target, value);
 	} else {
@@ -164,6 +167,7 @@ char *StrfTimeFormat::Write2(char *target, uint8_t value) {
 
 // write a value in the range of 0..99 padded to 2 digits
 char *StrfTimeFormat::WritePadded2(char *target, int32_t value) {
+	D_ASSERT(value < 100);
 	auto index = static_cast<unsigned>(value * 2);
 	*target++ = duckdb_fmt::internal::data::digits[index];
 	*target++ = duckdb_fmt::internal::data::digits[index + 1];
@@ -172,6 +176,7 @@ char *StrfTimeFormat::WritePadded2(char *target, int32_t value) {
 
 // write a value in the range of 0..999 padded
 char *StrfTimeFormat::WritePadded3(char *target, uint32_t value) {
+	D_ASSERT(value < 1000);
 	if (value >= 100) {
 		WritePadded2(target + 1, value % 100);
 		*target = char(uint8_t('0') + value / 100);
@@ -198,11 +203,11 @@ bool StrfTimeFormat::IsDateSpecifier(StrTimeSpecifier specifier) {
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME:
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME:
-	case StrTimeSpecifier::WEEKDAY_DECIMAL:
 	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
+	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
 	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
-	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
+	case StrTimeSpecifier::WEEKDAY_DECIMAL:
 		return true;
 	default:
 		return false;
@@ -212,17 +217,17 @@ bool StrfTimeFormat::IsDateSpecifier(StrTimeSpecifier specifier) {
 char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date, char *target) {
 	switch (specifier) {
 	case StrTimeSpecifier::ABBREVIATED_WEEKDAY_NAME: {
-		date_t dow = Date::ExtractISODayOfTheWeek(date);
+		auto dow = Date::ExtractISODayOfTheWeek(date);
 		target = WriteString(target, Date::DAY_NAMES_ABBREVIATED[dow % 7]);
 		break;
 	}
 	case StrTimeSpecifier::FULL_WEEKDAY_NAME: {
-		date_t dow = Date::ExtractISODayOfTheWeek(date);
+		auto dow = Date::ExtractISODayOfTheWeek(date);
 		target = WriteString(target, Date::DAY_NAMES[dow % 7]);
 		break;
 	}
 	case StrTimeSpecifier::WEEKDAY_DECIMAL: {
-		date_t dow = Date::ExtractISODayOfTheWeek(date);
+		auto dow = Date::ExtractISODayOfTheWeek(date);
 		*target = char('0' + uint8_t(dow % 7));
 		target++;
 		break;
@@ -309,12 +314,16 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = WritePadded2(target, data[5]);
 		break;
 	case StrTimeSpecifier::MICROSECOND_PADDED:
-		target = WritePadded(target, data[6] * 1000, 6);
+		target = WritePadded(target, data[6], 6);
 		break;
 	case StrTimeSpecifier::MILLISECOND_PADDED:
-		target = WritePadded3(target, data[6]);
+		target = WritePadded3(target, data[6] / 1000);
 		break;
 	case StrTimeSpecifier::UTC_OFFSET:
+		*target++ = '+';
+		*target++ = '0';
+		*target++ = '0';
+		break;
 	case StrTimeSpecifier::TZ_NAME:
 		// always empty for now, FIXME when we have timestamp with tz
 		break;
@@ -587,7 +596,7 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 		return;
 	}
 
-	dtime_t time = 0;
+	dtime_t time(0);
 	UnaryExecutor::Execute<date_t, string_t>(args.data[0], result, args.size(), [&](date_t date) {
 		idx_t len = info.format.GetLength(date, time);
 		string_t target = StringVector::EmptyString(result, len);
@@ -632,16 +641,6 @@ void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
 }
 
 void StrpTimeFormat::AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) {
-	switch (specifier) {
-	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
-	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
-	case StrTimeSpecifier::WEEKDAY_DECIMAL:
-	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
-	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
-		throw NotImplementedException("Unimplemented specifier for strptime");
-	default:
-		break;
-	}
 	numeric_width.push_back(NumericSpecifierWidth(specifier));
 	StrTimeFormat::AddFormatSpecifier(move(preceding_literal), specifier);
 }
@@ -734,6 +733,12 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 	idx_t pos = 0;
 	TimeSpecifierAMOrPM ampm = TimeSpecifierAMOrPM::TIME_SPECIFIER_NONE;
 
+	// Year offset state (Year+W/j)
+	auto offset_specifier = StrTimeSpecifier::WEEKDAY_DECIMAL;
+	uint64_t weekno = 0;
+	uint64_t weekday = 0;
+	uint64_t yearday = 0;
+
 	for (idx_t i = 0;; i++) {
 		// first compare the literal
 		if (literals[i].size() > (size - pos) || memcmp(data + pos, literals[i].c_str(), literals[i].size()) != 0) {
@@ -772,6 +777,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				}
 				// day of the month
 				result_data[2] = number;
+				offset_specifier = specifiers[i];
 				break;
 			case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
 			case StrTimeSpecifier::MONTH_DECIMAL:
@@ -782,6 +788,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				}
 				// month number
 				result_data[1] = number;
+				offset_specifier = specifiers[i];
 				break;
 			case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
 			case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
@@ -850,7 +857,7 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					return false;
 				}
 				// milliseconds
-				result_data[6] = int32_t(number * 1000);
+				result_data[6] = number;
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
 				if (number >= 1000ULL) {
@@ -859,7 +866,67 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 					return false;
 				}
 				// milliseconds
-				result_data[6] = number;
+				result_data[6] = number * 1000;
+				break;
+			case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
+			case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST:
+				// m/d overrides WU/w but does not conflict
+				switch (offset_specifier) {
+				case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
+				case StrTimeSpecifier::DAY_OF_MONTH:
+				case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
+				case StrTimeSpecifier::MONTH_DECIMAL:
+					// Just validate, don't use
+					break;
+				case StrTimeSpecifier::WEEKDAY_DECIMAL:
+					// First offset specifier
+					offset_specifier = specifiers[i];
+					break;
+				default:
+					error_message = "Multiple year offsets specified";
+					error_position = start_pos;
+					return false;
+				}
+				if (number > 53) {
+					error_message = "Week out of range, expected a value between 0 and 53";
+					error_position = start_pos;
+					return false;
+				}
+				weekno = number;
+				break;
+			case StrTimeSpecifier::WEEKDAY_DECIMAL:
+				if (number > 6) {
+					error_message = "Weekday out of range, expected a value between 0 and 6";
+					error_position = start_pos;
+					return false;
+				}
+				weekday = number;
+				break;
+			case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
+			case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL:
+				// m/d overrides j but does not conflict
+				switch (offset_specifier) {
+				case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
+				case StrTimeSpecifier::DAY_OF_MONTH:
+				case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
+				case StrTimeSpecifier::MONTH_DECIMAL:
+					// Just validate, don't use
+					break;
+				case StrTimeSpecifier::WEEKDAY_DECIMAL:
+					// First offset specifier
+					offset_specifier = specifiers[i];
+					break;
+				default:
+					error_message = "Multiple year offsets specified";
+					error_position = start_pos;
+					return false;
+				}
+				if (number < 1 || number > 366) {
+					error_message = "Year day out of range, expected a value between 1 and 366";
+					error_position = start_pos;
+					return false;
+				}
+				yearday = number;
 				break;
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
@@ -928,6 +995,18 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				result_data[1] = month + 1;
 				break;
 			}
+			case StrTimeSpecifier::UTC_OFFSET: {
+				int hour_offset, minute_offset;
+				if (!Timestamp::TryParseUTCOffset(data, pos, size, hour_offset, minute_offset)) {
+					error_message = "Expected +HH[MM] or -HH[MM]";
+					error_position = pos;
+					return false;
+				}
+				result_data[3] -= hour_offset;
+				result_data[4] -= minute_offset;
+				break;
+			}
+
 			default:
 				throw NotImplementedException("Unsupported specifier for strptime");
 			}
@@ -961,6 +1040,39 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 			}
 		}
 	}
+	switch (offset_specifier) {
+	case StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST:
+	case StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST: {
+		// Adjust weekday to be 0-based for the week type
+		weekday = (weekday + 7 - int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_MON_FIRST)) % 7;
+		// Get the start of week 1, move back 7 days and then weekno * 7 + weekday gives the date
+		const auto jan1 = Date::FromDate(result_data[0], 1, 1);
+		auto yeardate = Date::GetMondayOfCurrentWeek(jan1);
+		yeardate -= int(offset_specifier == StrTimeSpecifier::WEEK_NUMBER_PADDED_SUN_FIRST);
+		// Is there a week 0?
+		yeardate -= 7 * int(yeardate >= jan1);
+		yeardate += weekno * 7 + weekday;
+		Date::Convert(yeardate, result_data[0], result_data[1], result_data[2]);
+		break;
+	}
+	case StrTimeSpecifier::DAY_OF_YEAR_PADDED:
+	case StrTimeSpecifier::DAY_OF_YEAR_DECIMAL: {
+		auto yeardate = Date::FromDate(result_data[0], 1, 1);
+		yeardate += yearday - 1;
+		Date::Convert(yeardate, result_data[0], result_data[1], result_data[2]);
+		break;
+	}
+	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
+	case StrTimeSpecifier::DAY_OF_MONTH:
+	case StrTimeSpecifier::MONTH_DECIMAL_PADDED:
+	case StrTimeSpecifier::MONTH_DECIMAL:
+		// m/d overrides UWw/j
+		break;
+	default:
+		D_ASSERT(offset_specifier == StrTimeSpecifier::WEEKDAY_DECIMAL);
+		break;
+	}
+
 	return true;
 }
 

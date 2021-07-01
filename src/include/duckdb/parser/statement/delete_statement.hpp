@@ -20,6 +20,7 @@ public:
 
 	unique_ptr<ParsedExpression> condition;
 	unique_ptr<TableRef> table;
+	vector<unique_ptr<TableRef>> using_clauses;
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;

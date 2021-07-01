@@ -23,7 +23,7 @@ struct AlterInfo;
 
 class ClientContext;
 
-typedef unordered_map<CatalogSet *, std::unique_lock<std::mutex>> set_lock_map_t;
+typedef unordered_map<CatalogSet *, unique_lock<mutex>> set_lock_map_t;
 
 struct MappingValue {
 	explicit MappingValue(idx_t index_) : index(index_), timestamp(0), deleted(false), parent(nullptr) {
@@ -52,6 +52,8 @@ public:
 
 	bool DropEntry(ClientContext &context, const string &name, bool cascade);
 
+	void CleanupEntry(CatalogEntry *catalog_entry);
+
 	//! Returns the entry with the specified name
 	CatalogEntry *GetEntry(ClientContext &context, const string &name);
 
@@ -63,32 +65,16 @@ public:
 	//! entry
 	void Undo(CatalogEntry *entry);
 
-	//! Scan the catalog set, invoking the callback method for every entry
-	template <class T>
-	void Scan(ClientContext &context, T &&callback) {
-		// lock the catalog set
-		std::lock_guard<std::mutex> lock(catalog_lock);
-		for (auto &kv : entries) {
-			auto entry = kv.second.get();
-			entry = GetEntryForTransaction(context, entry);
-			if (!entry->deleted) {
-				callback(entry);
-			}
-		}
-	}
-
 	//! Scan the catalog set, invoking the callback method for every committed entry
+	void Scan(const std::function<void(CatalogEntry *)> &callback);
+	//! Scan the catalog set, invoking the callback method for every entry
+	void Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback);
+
 	template <class T>
-	void Scan(T &&callback) {
-		// lock the catalog set
-		std::lock_guard<std::mutex> lock(catalog_lock);
-		for (auto &kv : entries) {
-			auto entry = kv.second.get();
-			entry = GetCommittedEntry(entry);
-			if (!entry->deleted) {
-				callback(entry);
-			}
-		}
+	vector<T *> GetEntries(ClientContext &context) {
+		vector<T *> result;
+		Scan(context, [&](CatalogEntry *entry) { result.push_back((T *)entry); });
+		return result;
 	}
 
 	static bool HasConflict(ClientContext &context, transaction_t timestamp);
@@ -110,6 +96,7 @@ private:
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
 	void DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
 	                       set_lock_map_t &lock_set);
+	CatalogEntry *CreateEntryInternal(ClientContext &context, unique_ptr<CatalogEntry> entry);
 	MappingValue *GetMapping(ClientContext &context, const string &name, bool allow_lowercase_alias,
 	                         bool get_latest = false);
 	void PutMapping(ClientContext &context, const string &name, idx_t entry_index);

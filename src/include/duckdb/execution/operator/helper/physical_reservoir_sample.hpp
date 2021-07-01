@@ -24,10 +24,11 @@ public:
 	unique_ptr<SampleOptions> options;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate, DataChunk &input) override;
+	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	          DataChunk &input) const override;
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 
 	string ParamsToString() const override;

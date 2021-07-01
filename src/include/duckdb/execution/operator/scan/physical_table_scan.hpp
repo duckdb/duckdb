@@ -37,7 +37,7 @@ public:
 	string GetName() const override;
 	string ParamsToString() const override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
 };
 

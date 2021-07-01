@@ -1,0 +1,148 @@
+# name: test/sql/types/list/list_cross_product.test
+# description: Test LIST in cross product/nlj
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE VIEW v1 AS SELECT * FROM (VALUES (1, [1, 2, 3]), (2, NULL), (3, [NULL, 3, 4])) tbl (a, b);
+
+# cross product
+query IIII
+SELECT * FROM v1 v, v1 w ORDER BY v.a, w.a;
+----
+1	[1, 2, 3]	1	[1, 2, 3]
+1	[1, 2, 3]	2	NULL
+1	[1, 2, 3]	3	[NULL, 3, 4]
+2	NULL	1	[1, 2, 3]
+2	NULL	2	NULL
+2	NULL	3	[NULL, 3, 4]
+3	[NULL, 3, 4]	1	[1, 2, 3]
+3	[NULL, 3, 4]	2	NULL
+3	[NULL, 3, 4]	3	[NULL, 3, 4]
+
+# nested loop join
+query IIII
+SELECT * FROM v1 v, v1 w WHERE v.a >= w.a ORDER BY v.a, w.a;
+----
+1	[1, 2, 3]	1	[1, 2, 3]
+2	NULL	1	[1, 2, 3]
+2	NULL	2	NULL
+3	[NULL, 3, 4]	1	[1, 2, 3]
+3	[NULL, 3, 4]	2	NULL
+3	[NULL, 3, 4]	3	[NULL, 3, 4]
+
+query IIII
+SELECT * FROM v1 v, v1 w WHERE v.a <> w.a ORDER BY v.a, w.a;
+----
+1	[1, 2, 3]	2	NULL
+1	[1, 2, 3]	3	[NULL, 3, 4]
+2	NULL	1	[1, 2, 3]
+2	NULL	3	[NULL, 3, 4]
+3	[NULL, 3, 4]	1	[1, 2, 3]
+3	[NULL, 3, 4]	2	NULL
+
+query IIII
+SELECT * FROM v1 v, v1 w WHERE v.a <> w.a OR v.a>w.a ORDER BY v.a, w.a;
+----
+1	[1, 2, 3]	2	NULL
+1	[1, 2, 3]	3	[NULL, 3, 4]
+2	NULL	1	[1, 2, 3]
+2	NULL	3	[NULL, 3, 4]
+3	[NULL, 3, 4]	1	[1, 2, 3]
+3	[NULL, 3, 4]	2	NULL
+
+# now with structs
+statement ok
+CREATE VIEW v2 AS SELECT * FROM (VALUES (1, {'a': [1, 2, 3]}), (2, NULL), (3, {'a': [NULL, 3, 4]})) tbl (a, b);
+
+query IIII
+SELECT * FROM v2 v, v2 w ORDER BY v.a, w.a;
+----
+1	{'a': [1, 2, 3]}	1	{'a': [1, 2, 3]}
+1	{'a': [1, 2, 3]}	2	NULL
+1	{'a': [1, 2, 3]}	3	{'a': [NULL, 3, 4]}
+2	NULL	1	{'a': [1, 2, 3]}
+2	NULL	2	NULL
+2	NULL	3	{'a': [NULL, 3, 4]}
+3	{'a': [NULL, 3, 4]}	1	{'a': [1, 2, 3]}
+3	{'a': [NULL, 3, 4]}	2	NULL
+3	{'a': [NULL, 3, 4]}	3	{'a': [NULL, 3, 4]}
+
+query IIII
+SELECT * FROM v2 v, v2 w WHERE v.a >= w.a ORDER BY v.a, w.a;
+----
+1	{'a': [1, 2, 3]}	1	{'a': [1, 2, 3]}
+2	NULL	1	{'a': [1, 2, 3]}
+2	NULL	2	NULL
+3	{'a': [NULL, 3, 4]}	1	{'a': [1, 2, 3]}
+3	{'a': [NULL, 3, 4]}	2	NULL
+3	{'a': [NULL, 3, 4]}	3	{'a': [NULL, 3, 4]}
+
+query IIII
+SELECT * FROM v2 v, v2 w WHERE v.a <> w.a ORDER BY v.a, w.a;
+----
+1	{'a': [1, 2, 3]}	2	NULL
+1	{'a': [1, 2, 3]}	3	{'a': [NULL, 3, 4]}
+2	NULL	1	{'a': [1, 2, 3]}
+2	NULL	3	{'a': [NULL, 3, 4]}
+3	{'a': [NULL, 3, 4]}	1	{'a': [1, 2, 3]}
+3	{'a': [NULL, 3, 4]}	2	NULL
+
+query IIII
+SELECT * FROM v2 v, v2 w WHERE v.a <> w.a OR v.a > w.a ORDER BY v.a, w.a;
+----
+1	{'a': [1, 2, 3]}	2	NULL
+1	{'a': [1, 2, 3]}	3	{'a': [NULL, 3, 4]}
+2	NULL	1	{'a': [1, 2, 3]}
+2	NULL	3	{'a': [NULL, 3, 4]}
+3	{'a': [NULL, 3, 4]}	1	{'a': [1, 2, 3]}
+3	{'a': [NULL, 3, 4]}	2	NULL
+
+# lists of lists
+statement ok
+CREATE VIEW v3 AS SELECT * FROM (VALUES (1, [[1, 2], [3]]), (2, NULL), (3, [[NULL, 3], [4]])) tbl (a, b);
+
+query IIII
+SELECT * FROM v3 v, v3 w ORDER BY v.a, w.a;
+----
+1	[[1, 2], [3]]	1	[[1, 2], [3]]
+1	[[1, 2], [3]]	2	NULL
+1	[[1, 2], [3]]	3	[[NULL, 3], [4]]
+2	NULL	1	[[1, 2], [3]]
+2	NULL	2	NULL
+2	NULL	3	[[NULL, 3], [4]]
+3	[[NULL, 3], [4]]	1	[[1, 2], [3]]
+3	[[NULL, 3], [4]]	2	NULL
+3	[[NULL, 3], [4]]	3	[[NULL, 3], [4]]
+
+query IIII
+SELECT * FROM v3 v, v3 w WHERE v.a >= w.a ORDER BY v.a, w.a;
+----
+1	[[1, 2], [3]]	1	[[1, 2], [3]]
+2	NULL	1	[[1, 2], [3]]
+2	NULL	2	NULL
+3	[[NULL, 3], [4]]	1	[[1, 2], [3]]
+3	[[NULL, 3], [4]]	2	NULL
+3	[[NULL, 3], [4]]	3	[[NULL, 3], [4]]
+
+query IIII
+SELECT * FROM v3 v, v3 w WHERE v.a <> w.a ORDER BY v.a, w.a;
+----
+1	[[1, 2], [3]]	2	NULL
+1	[[1, 2], [3]]	3	[[NULL, 3], [4]]
+2	NULL	1	[[1, 2], [3]]
+2	NULL	3	[[NULL, 3], [4]]
+3	[[NULL, 3], [4]]	1	[[1, 2], [3]]
+3	[[NULL, 3], [4]]	2	NULL
+
+query IIII
+SELECT * FROM v3 v, v3 w WHERE v.a <> w.a OR v.a > w.a ORDER BY v.a, w.a;
+----
+1	[[1, 2], [3]]	2	NULL
+1	[[1, 2], [3]]	3	[[NULL, 3], [4]]
+2	NULL	1	[[1, 2], [3]]
+2	NULL	3	[[NULL, 3], [4]]
+3	[[NULL, 3], [4]]	1	[[1, 2], [3]]
+3	[[NULL, 3], [4]]	2	NULL

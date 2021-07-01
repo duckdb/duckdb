@@ -9,7 +9,9 @@ int main() {
 }
 
 int32_t HelloWasm() {
-	duckdb::DuckDB db(nullptr);
+	duckdb::DBConfig config;
+	config.maximum_threads = 1;
+	duckdb::DuckDB db(nullptr, &config);
 	duckdb::Connection con(db);
 	auto result = con.Query("CREATE TABLE sometable AS SELECT x FROM generate_series(1,10000) AS a(x)");
 	if (!result->success) {

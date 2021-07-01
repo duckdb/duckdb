@@ -41,31 +41,12 @@ public:
 			data = unique_ptr<data_t[]>(new data_t[data_size]);
 		}
 	}
-	explicit VectorBuffer(VectorBufferType vectorBufferType, const LogicalType &type, VectorType vector_type)
-	    : vector_type(vector_type), type(type), buffer_type(vectorBufferType) {
+	explicit VectorBuffer(unique_ptr<data_t[]> data_p)
+	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data(move(data_p)) {
 	}
 	virtual ~VectorBuffer() {
 	}
 	VectorBuffer() {
-	}
-
-	VectorBuffer(VectorType vectorType, const LogicalType &type, idx_t data_size)
-	    : vector_type(vectorType), type(type), buffer_type(VectorBufferType::STANDARD_BUFFER) {
-		if (data_size > 0) {
-			data = unique_ptr<data_t[]>(new data_t[data_size]);
-		}
-	}
-	VectorBuffer(VectorType vectorType, const LogicalType &type) : vector_type(vectorType), type(type) {
-	}
-
-	VectorBuffer(VectorType vectorType, idx_t data_size)
-	    : vector_type(vectorType), buffer_type(VectorBufferType::STANDARD_BUFFER) {
-		if (data_size > 0) {
-			data = unique_ptr<data_t[]>(new data_t[data_size]);
-		}
-	}
-
-	VectorBuffer(VectorType vectorType) : vector_type(vectorType) {
 	}
 
 public:
@@ -76,42 +57,19 @@ public:
 		data = move(new_data);
 	}
 
-	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(PhysicalType type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	static buffer_ptr<VectorBuffer> CreateConstantVector(PhysicalType type);
-	static buffer_ptr<VectorBuffer> CreateConstantVector(VectorType vectorType, const LogicalType &logicalType);
-	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, const LogicalType &logicalType);
-	static buffer_ptr<VectorBuffer> CreateStandardVector(VectorType vectorType, PhysicalType type);
+	static buffer_ptr<VectorBuffer> CreateConstantVector(const LogicalType &logical_type);
+	static buffer_ptr<VectorBuffer> CreateStandardVector(const LogicalType &logical_type,
+	                                                     idx_t capacity = STANDARD_VECTOR_SIZE);
 
-	// Getters
-	inline VectorType GetVectorType() const {
-		return vector_type;
-	}
-	inline const LogicalType &GetType() const {
-		return type;
-	}
 	inline VectorBufferType GetBufferType() const {
 		return buffer_type;
 	}
 
-	// Setters
-	inline void SetVectorType(VectorType vector_type) {
-		this->vector_type = vector_type;
-	}
-	inline void SetType(const LogicalType &type) {
-		this->type = type;
-	}
-	inline void SetBufferType(VectorBufferType buffer_type) {
-		this->buffer_type = buffer_type;
-	}
-
 protected:
-	unique_ptr<data_t[]> data;
-	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
-	//! constant, if it is compressed)
-	VectorType vector_type;
-	//! The type of the elements stored in the vector (e.g. integer, float)
-	LogicalType type;
 	VectorBufferType buffer_type;
+	unique_ptr<data_t[]> data;
 };
 
 //! The DictionaryBuffer holds a selection vector
@@ -119,9 +77,6 @@ class DictionaryBuffer : public VectorBuffer {
 public:
 	explicit DictionaryBuffer(const SelectionVector &sel)
 	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(sel) {
-	}
-	DictionaryBuffer(const SelectionVector &sel, const LogicalType &type, VectorType vector_type)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER, type, vector_type), sel_vector(sel) {
 	}
 	explicit DictionaryBuffer(buffer_ptr<SelectionData> data)
 	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER), sel_vector(move(data)) {
@@ -131,9 +86,6 @@ public:
 	}
 
 public:
-	DictionaryBuffer(buffer_ptr<SelectionData> data, LogicalType type, VectorType vector_type)
-	    : VectorBuffer(VectorBufferType::DICTIONARY_BUFFER, type, vector_type), sel_vector(move(data)) {
-	}
 	const SelectionVector &GetSelVector() const {
 		return sel_vector;
 	}
@@ -180,36 +132,36 @@ private:
 class VectorStructBuffer : public VectorBuffer {
 public:
 	VectorStructBuffer();
+	VectorStructBuffer(const LogicalType &struct_type, idx_t capacity = STANDARD_VECTOR_SIZE);
 	~VectorStructBuffer() override;
 
 public:
-	const child_list_t<unique_ptr<Vector>> &GetChildren() const {
+	const vector<unique_ptr<Vector>> &GetChildren() const {
 		return children;
 	}
-	child_list_t<unique_ptr<Vector>> &GetChildren() {
+	vector<unique_ptr<Vector>> &GetChildren() {
 		return children;
-	}
-	void AddChild(string name, unique_ptr<Vector> vector) {
-		children.push_back(std::make_pair(name, move(vector)));
 	}
 
 private:
 	//! child vectors used for nested data
-	child_list_t<unique_ptr<Vector>> children;
+	vector<unique_ptr<Vector>> children;
 };
 
 class VectorListBuffer : public VectorBuffer {
 public:
-	VectorListBuffer();
+	VectorListBuffer(unique_ptr<Vector> vector, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
+	VectorListBuffer(const LogicalType &list_type, idx_t initial_capacity = STANDARD_VECTOR_SIZE);
 	~VectorListBuffer() override;
 
 public:
 	Vector &GetChild() {
 		return *child;
 	}
-	void SetChild(unique_ptr<Vector> new_child);
+	void Reserve(idx_t to_reserve);
 
-	void Append(const Vector &to_append, idx_t size, idx_t source_offset = 0);
+	void Append(const Vector &to_append, idx_t to_append_size, idx_t source_offset = 0);
+	void Append(const Vector &to_append, const SelectionVector &sel, idx_t to_append_size, idx_t source_offset = 0);
 
 	void PushBack(Value &insert);
 

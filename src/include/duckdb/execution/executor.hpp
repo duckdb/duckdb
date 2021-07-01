@@ -47,6 +47,7 @@ public:
 
 	//! Push a new error
 	void PushError(const string &exception);
+	bool GetError(string &exception);
 
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
@@ -60,14 +61,14 @@ private:
 
 	mutex executor_lock;
 	//! The pipelines of the current query
-	vector<unique_ptr<Pipeline>> pipelines;
+	vector<shared_ptr<Pipeline>> pipelines;
 	//! The producer of this query
 	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
 	vector<string> exceptions;
 
 	//! The amount of completed pipelines of the query
-	std::atomic<idx_t> completed_pipelines;
+	atomic<idx_t> completed_pipelines;
 	//! The total amount of pipelines in the query
 	idx_t total_pipelines;
 

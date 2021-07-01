@@ -246,20 +246,6 @@ TEST_CASE("Vectorized UDF functions using arguments", "[udf_function][.]") {
 			}
 		}
 	}
-	SECTION("Cheking if the Vectorized UDF functions are temporary") {
-		Connection con_test(db);
-		con_test.EnableQueryVerification();
-		for (LogicalType sql_type : all_sql_types) {
-			table_name = StringUtil::Lower(LogicalTypeIdToString(sql_type.id()));
-			func_name = table_name;
-
-			REQUIRE_FAIL(con_test.Query("SELECT " + func_name + "_1(a) FROM " + table_name));
-
-			REQUIRE_FAIL(con_test.Query("SELECT " + func_name + "_2(a, b) FROM " + table_name));
-
-			REQUIRE_FAIL(con_test.Query("SELECT " + func_name + "_3(a, b, c) FROM " + table_name));
-		}
-	}
 
 	SECTION("Cheking NULLs with Vectorized UDF functions") {
 		for (LogicalType sql_type : all_sql_types) {

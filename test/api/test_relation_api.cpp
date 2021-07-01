@@ -702,10 +702,9 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 
-	auto i1 = con.TableFunction("sqlite_master");
+	auto i1 = con.TableFunction("duckdb_tables");
 	result = i1->Execute();
-	REQUIRE(CHECK_COLUMN(result, 0, {"table"}));
-	REQUIRE(CHECK_COLUMN(result, 1, {"integers"}));
+	REQUIRE(CHECK_COLUMN(result, 0, {"main"}));
 
 	// function with parameters
 	auto i2 = con.TableFunction("pragma_table_info", {"integers"});
@@ -740,4 +739,27 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
 	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER); SELECT 42;--"}));
+}
+
+TEST_CASE("Test query relation", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	unique_ptr<QueryResult> result;
+	shared_ptr<Relation> tbl;
+
+	// create some tables
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+
+	REQUIRE_NOTHROW(tbl = con.RelationFromQuery("SELECT * FROM integers WHERE i >= 2"));
+	REQUIRE_NOTHROW(result = tbl->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));
+	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {3, 4}));
+
+	REQUIRE_NOTHROW(result = tbl->Alias("q1")->Join(tbl->Alias("q2")->Filter("i=3"), "q1.i=q2.i")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {3}));
+
+	REQUIRE_THROWS(tbl->Project("k+1"));
 }

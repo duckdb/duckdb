@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      CC: ccache gcc-10
-      CXX: ccache g++-10
+      CC: gcc-10
+      CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
 
@@ -28,13 +28,13 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Build
-      run: make debug
+      run: BUILD_ARROW_ABI_TEST=1 make debug
 
     - name: Test
-      run: make unit
+      run: make unittestci
 
   format-check:
     name: Format Check
@@ -97,11 +97,8 @@ jobs:
     - name: Build
       run: |
         python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1
-        cmake --build . --target duckdb --config Release
-        cmake --build . --target unittest --config Release
-        cmake --build . --target shell --config Release
-        cmake --build . --target jdbc --config Release
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
+        cmake --build . --config Release
 
     - name: Test
       run: test/Release/unittest.exe
@@ -131,8 +128,6 @@ jobs:
     - name: Duckdb.dll export symbols with C++ on Windows
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
 
-
-
   win-release-32:
     name: Windows (32 Bit)
     runs-on: windows-latest
@@ -149,11 +144,8 @@ jobs:
 
     - name: Build
       run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DJDBC_DRIVER=1
-        cmake --build . --target duckdb --config Release
-        cmake --build . --target unittest --config Release
-        cmake --build . --target shell --config Release
-        cmake --build . --target jdbc --config Release
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
+        cmake --build . --config Release
 
     - name: Test
       run: test/Release/unittest.exe
@@ -178,6 +170,34 @@ jobs:
           duckdb_cli-windows-i386.zip
           tools/jdbc/duckdb_jdbc.jar
 
+  mingw:
+     name: MingW (64 Bit)
+     runs-on: windows-latest
+     needs: linux-debug
+     defaults:
+       run:
+         shell: msys2 {0}
+     steps:
+       - uses: actions/checkout@v2
+       - uses: msys2/setup-msys2@v2
+         with:
+           msystem: MINGW64
+           update: true
+           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
+       # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
+       - name: Put MSYS2_MinGW64 on PATH
+         # there is not yet an environment variable for this path from msys2/setup-msys2
+         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
+
+       - name: Build
+         run: |
+           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_PARQUET_EXTENSION=1
+           cmake --build . --config Release
+
+       - name: Test
+         run: |
+           cp src/libduckdb.dll .
+           test/unittest.exe
 
   xcode-release:
     name: OSX Release
@@ -185,12 +205,16 @@ jobs:
     needs: linux-debug
 
     env:
+      BUILD_VISUALIZER: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
+      BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
       BUILD_HTTPFS: 1
+      OPENSSL_ROOT_DIR: /usr/local/opt/openssl/
+
 
     steps:
     - uses: actions/checkout@v2
@@ -251,13 +275,14 @@ jobs:
       run: make debug
 
     - name: Test
-      run: make unit
+      run: make unittestci
 
     - name: Amalgamation
       run: |
-        python scripts/amalgamation.py
+        python scripts/amalgamation.py --extended
+        python scripts/parquet_amalgamation.py
         cd src/amalgamation
-        clang++ -std=c++11 -emit-llvm -S duckdb.cpp
+        clang++ -std=c++11 -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
 
 
   linux-release-64:
@@ -267,9 +292,11 @@ jobs:
 
     env:
       GEN: ninja
+      BUILD_VISUALIZER: 1
       BUILD_BENCHMARK: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
+      BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
@@ -316,7 +343,8 @@ jobs:
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        zip -j duckdb_rest-linux-amd64.zip build/release/tools/rest/duckdb_rest_server
+        python scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
     - uses: actions/upload-artifact@v2
       with:
@@ -396,7 +424,7 @@ jobs:
         export TOOLCHAIN=`pwd`/rpi-tools
         mkdir -p build/release
         cd build/release
-        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
+        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
         cmake --build .
         file duckdb
 
@@ -443,6 +471,27 @@ jobs:
       run: make allunit
 
 
+  centos:
+    name: CentOS 7
+    runs-on: ubuntu-latest
+    container: centos:7
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: yum install -y gcc gcc-c++ git cmake make
+
+    - name: Build
+      run: make release
+
+    - name: Test
+      run: ./build/release/test/unittest
+
+
   release-assert:
     name: Release Assertions
     runs-on: ubuntu-20.04
@@ -454,7 +503,9 @@ jobs:
       GEN: ninja
       BUILD_ICU: 1
       BUILD_TPCH: 1
+      BUILD_TPCDS: 1
       BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -468,8 +519,83 @@ jobs:
       run: make relassert
 
     - name: Test
-      run: build/relassert/test/unittest "*"
+      run: |
+          build/relassert/test/unittest "*"
 
+  force-storage:
+    name: Force Storage
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_PARQUET: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Build
+      run: make reldebug
+
+    - name: Test
+      run: build/reldebug/test/unittest "*" --force-storage
+
+
+  threadsan:
+    name: Thread Sanitizer
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_VISUALIZER: 1
+      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Build
+      run: THREADSAN=1 make reldebug
+
+    - name: Test
+      run: |
+          build/reldebug/test/unittest --end-offset-percentage=10
+          build/reldebug/test/unittest --start-offset-percentage=10 --end-offset-percentage=20
+          build/reldebug/test/unittest --start-offset-percentage=20 --end-offset-percentage=30
+          build/reldebug/test/unittest --start-offset-percentage=30 --end-offset-percentage=40
+          build/reldebug/test/unittest --start-offset-percentage=40 --end-offset-percentage=50
+          build/reldebug/test/unittest --start-offset-percentage=50 --end-offset-percentage=60
+          build/reldebug/test/unittest --start-offset-percentage=60 --end-offset-percentage=70
+          build/reldebug/test/unittest --start-offset-percentage=70 --end-offset-percentage=80
+          build/reldebug/test/unittest --start-offset-percentage=80 --end-offset-percentage=90
+          build/reldebug/test/unittest --start-offset-percentage=90
+          build/reldebug/test/unittest "[intraquery]"
+          build/reldebug/test/unittest "[interquery]"
+          build/reldebug/test/unittest "[detailed_profiler]"
+          build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
   valgrind:
     name: Valgrind
@@ -494,7 +620,7 @@ jobs:
       run: make debug
 
     - name: Test
-      run: valgrind ./build/debug/test/unittest -s "Test TPC-H SF0.01"
+      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
 # borked somehow. needs investigation.
 #  codecov:
@@ -595,6 +721,7 @@ jobs:
 
     env:
       BUILD_JDBC: 1
+      FORCE_QUERY_LOG: sqlancer_log.tmp
       GEN: ninja
 
     steps:
@@ -616,7 +743,7 @@ jobs:
     - name: Test
       run: |
         cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        java -jar sqlancer/target/sqlancer-*.jar --num-threads 2 --random-seed 0 --timeout-seconds 600 duckdb
+        python3 scripts/run_sqlancer.py
 
 
   sqlancer_persistent:
@@ -626,6 +753,7 @@ jobs:
 
     env:
       BUILD_JDBC: 1
+      FORCE_QUERY_LOG: sqlancer_log.tmp
       GEN: ninja
 
     steps:
@@ -647,7 +775,7 @@ jobs:
     - name: Test
       run: |
         cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        java -Dduckdb.database.file=/tmp/lancer_duckdb_db -jar sqlancer/target/sqlancer-*.jar --num-threads 1 --random-seed 0 --timeout-seconds 600 duckdb
+        python3 scripts/run_sqlancer.py --persistent
 
 
   jdbc:
@@ -677,6 +805,51 @@ jobs:
     - name: Test
       run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
+
+  odbc:
+    name: ODBC
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      BUILD_ODBC: 1
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Dependencies
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev
+
+
+    - name: Install nanodbc
+      run: |
+        wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
+        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
+
+    - name: Install psqlodbc
+      run: |
+        git clone https://github.com/Mytherin/psqlodbc.git
+        (cd psqlodbc && make debug)
+
+    - name: Build
+      run: DISABLE_SANITIZER=1 make debug
+
+    # - name: Test nanodbc
+    #   run: NANODBC_TEST_CONNSTR_ODBC="DRIVER=./build/debug/tools/odbc/libduckdb_odbc.so" ./nanodbc/build/test/odbc_tests test_simple
+
+    - name: Test psqlodbc
+      run: |
+        echo -e "[ODBC]\nTrace = yes\nTraceFile = /tmp/odbctrace\n\n[DuckDB Driver]\nDriver = "`pwd`"/build/debug/tools/odbc/libduckdb_odbc.so" > odbcinst.ini
+        echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=:memory:\n" > odbc.ini
+        cd psqlodbc
+        export ODBCSYSINI=.. && export PSQLODBC_TEST_DSN="DuckDB"
+        (./build/debug/psql_odbc_test -f ../tools/odbc/supported_tests) || (cat /tmp/odbctrace; exit 1)
+
+
+
   linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
@@ -686,7 +859,7 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24"'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" && (pip install --prefer-binary "pyarrow>=4.0.0" || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
@@ -717,6 +890,39 @@ jobs:
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
         fi
 
+  linux-python3-httpfs:
+    name: Python 3 Linux with HTTPFS support
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+      CIBW_BEFORE_BUILD: 'yum install -y openssl-devel && pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+      CIBW_TEST_REQUIRES: 'pytest'
+      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=0.24" && (pip install --prefer-binary "pyarrow>=4.0.0" || true)'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      CIBW_ENVIRONMENT: 'BUILD_HTTPFS=1'
+      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+      TWINE_USERNAME: 'hfmuehleisen'
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+
+      - name: Install
+        run: pip install cibuildwheel twine
+
+      - name: Build
+        run: |
+          cd tools/pythonpkg
+          BUILD_HTTPFS=1 python setup.py sdist
+          mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+          cibuildwheel --output-dir wheelhouse duckdb_tarball
 
   linux-python2:
     name: Python 2 Linux
@@ -727,7 +933,7 @@ jobs:
       CIBW_BUILD: 'cp27-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24"'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" '
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
@@ -761,8 +967,9 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24"'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pyarrow>=4.0.0"'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
 
@@ -800,7 +1007,7 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24"'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" '
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
@@ -851,7 +1058,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
@@ -983,7 +1190,7 @@ jobs:
       run: ./scripts/node_build.sh 15
 
   linux-wasm-release:
-    name: WebAssembly Release 
+    name: WebAssembly Release
     runs-on: ubuntu-20.04
     needs: linux-debug
 

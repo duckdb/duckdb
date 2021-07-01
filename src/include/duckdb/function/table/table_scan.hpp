@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/function/table_function.hpp"
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;
@@ -27,7 +27,7 @@ struct TableScanBindData : public FunctionData {
 	vector<row_t> result_ids;
 
 	//! How many chunks we already scanned
-	std::atomic<idx_t> chunk_count;
+	atomic<idx_t> chunk_count;
 
 	unique_ptr<FunctionData> Copy() override {
 		auto result = make_unique<TableScanBindData>(table);

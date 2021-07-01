@@ -46,20 +46,6 @@ struct GreaterThanEquals {
 	}
 };
 
-struct DistinctFrom {
-	template <class T>
-	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
-		return ((left != right) && !left_null && !right_null) || (left_null != right_null);
-	}
-};
-
-struct NotDistinctFrom {
-	template <class T>
-	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
-		return ((left == right) && !left_null && !right_null) || (left_null && right_null);
-	}
-};
-
 struct LessThan {
 	template <class T>
 	static inline bool Operation(T left, T right) {
@@ -72,6 +58,54 @@ struct LessThanEquals {
 		return left <= right;
 	}
 };
+
+// Distinct semantics are from Postgres record sorting. NULL = NULL and not-NULL < NULL
+// Deferring to the non-distinct operations removes the need for further specialisation.
+// TODO: To reverse the semantics, swap left_null and right_null for comparisons
+struct DistinctFrom {
+	template <class T>
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return (left_null != right_null) || (!left_null && !right_null && (left != right));
+	}
+};
+
+struct NotDistinctFrom {
+	template <class T>
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return (left_null && right_null) || (!left_null && !right_null && (left == right));
+	}
+};
+
+struct DistinctGreaterThan {
+	template <class T>
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return GreaterThan::Operation(left_null, right_null) ||
+		       (!left_null && !right_null && GreaterThan::Operation(left, right));
+	}
+};
+
+struct DistinctGreaterThanEquals {
+	template <class T>
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return left_null || (!left_null && !right_null && GreaterThanEquals::Operation(left, right));
+	}
+};
+
+struct DistinctLessThan {
+	template <class T>
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return LessThan::Operation(left_null, right_null) ||
+		       (!left_null && !right_null && LessThan::Operation(left, right));
+	}
+};
+
+struct DistinctLessThanEquals {
+	template <class T>
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return right_null || (!left_null && !right_null && LessThanEquals::Operation(left, right));
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Specialized Boolean Comparison Operators
 //===--------------------------------------------------------------------===//
@@ -89,16 +123,16 @@ inline bool LessThan::Operation(bool left, bool right) {
 struct StringComparisonOperators {
 	template <bool INVERSE>
 	static inline bool EqualsOrNot(const string_t a, const string_t b) {
-		if (memcmp(&a, &b, sizeof(uint32_t) + string_t::PREFIX_LENGTH) == 0) {
-			// prefix and length are equal
-			if (a.IsInlined()) {
-				// small string: compare entire inlined string
-				if (memcmp(a.value.inlined.inlined, b.value.inlined.inlined, a.GetSize()) == 0) {
-					// entire string is equal
-					return INVERSE ? false : true;
-				}
-			} else {
-				// large string: check main data source
+		if (a.IsInlined()) {
+			// small string: compare entire string
+			if (memcmp(&a, &b, sizeof(string_t)) == 0) {
+				// entire string is equal
+				return INVERSE ? false : true;
+			}
+		} else {
+			// large string: first check prefix and length
+			if (memcmp(&a, &b, sizeof(uint32_t) + string_t::PREFIX_LENGTH) == 0) {
+				// prefix and length are equal: check main string
 				if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
 					// entire string is equal
 					return INVERSE ? false : true;
@@ -109,6 +143,7 @@ struct StringComparisonOperators {
 		return INVERSE ? true : false;
 	}
 };
+
 template <>
 inline bool Equals::Operation(string_t left, string_t right) {
 	return StringComparisonOperators::EqualsOrNot<false>(left, right);
@@ -120,13 +155,13 @@ inline bool NotEquals::Operation(string_t left, string_t right) {
 
 template <>
 inline bool NotDistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
-	return (StringComparisonOperators::EqualsOrNot<false>(left, right) && !left_null && !right_null) ||
-	       (left_null && right_null);
+	return (left_null && right_null) ||
+	       (!left_null && !right_null && StringComparisonOperators::EqualsOrNot<false>(left, right));
 }
 template <>
 inline bool DistinctFrom::Operation(string_t left, string_t right, bool left_null, bool right_null) {
-	return (StringComparisonOperators::EqualsOrNot<true>(left, right) && !left_null && !right_null) ||
-	       (left_null != right_null);
+	return (left_null != right_null) ||
+	       (!left_null && !right_null && StringComparisonOperators::EqualsOrNot<true>(left, right));
 }
 
 // compare up to shared length. if still the same, compare lengths
@@ -187,12 +222,16 @@ inline bool LessThanEquals::Operation(interval_t left, interval_t right) {
 
 template <>
 inline bool NotDistinctFrom::Operation(interval_t left, interval_t right, bool left_null, bool right_null) {
-	return (Interval::Equals(left, right) && !left_null && !right_null) || (left_null && right_null);
+	return (left_null && right_null) || (!left_null && !right_null && Interval::Equals(left, right));
 }
 template <>
 inline bool DistinctFrom::Operation(interval_t left, interval_t right, bool left_null, bool right_null) {
-	return (!Equals::Operation(left, right) && !left_null && !right_null) || (left_null != right_null);
+	return (left_null != right_null) || (!left_null && !right_null && !Equals::Operation(left, right));
 }
+inline bool operator<(const interval_t &lhs, const interval_t &rhs) {
+	return LessThan::Operation(lhs, rhs);
+}
+
 //===--------------------------------------------------------------------===//
 // Specialized Hugeint Comparison Operators
 //===--------------------------------------------------------------------===//

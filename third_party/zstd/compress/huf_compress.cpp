@@ -25,20 +25,20 @@
 ****************************************************************/
 #include <string.h>     /* memcpy, memset */
 #include <stdio.h>      /* printf (debug) */
-#include "../common/compiler.h"
-#include "../common/bitstream.h"
-#include "hist.h"
-#define FSE_STATIC_LINKING_ONLY   /* FSE_optimalTableLog_internal */
-#include "../common/fse.h"        /* header compression */
-#define HUF_STATIC_LINKING_ONLY
-#include "../common/huf.h"
-#include "../common/error_private.h"
+#include "zstd/common/compiler.h"
+#include "zstd/common/bitstream.h"
+#include "zstd/compress/hist.h"
+#include "zstd/common/fse.h"        /* header compression */
+#include "zstd/common/fse_static.h"
+#include "zstd/common/huf.h"
+#include "zstd/common/huf_static.h"
+#include "zstd/common/error_private.h"
 
 
 /* **************************************************************
 *  Error Management
 ****************************************************************/
-#define HUF_isError ERR_isError
+// #define HUF_isError ERR_isError
 #define HUF_STATIC_ASSERT(c) DEBUG_STATIC_ASSERT(c)   /* use only *after* variable declarations */
 
 
@@ -107,7 +107,7 @@ static size_t HUF_compressWeights (void* dst, size_t dstSize, const void* weight
 struct HUF_CElt_s {
   U16  val;
   BYTE nbBits;
-};   /* typedef'd to HUF_CElt within "huf.h" */
+};   /* typedef'd to HUF_CElt within "zstd/common/huf.h" */
 
 /*! HUF_writeCTable() :
     `CTable` : Huffman tree to save, using huf representation.

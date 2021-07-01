@@ -83,7 +83,9 @@ static unique_ptr<BaseStatistics> PropagateDatePartStatistics(vector<unique_ptr<
 	auto min_part = OP::template Operation<T, int64_t>(min);
 	auto max_part = OP::template Operation<T, int64_t>(max);
 	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(min_part), Value::BIGINT(max_part));
-	result->has_null = child_stats[0]->has_null;
+	if (child_stats[0]->validity_stats) {
+		result->validity_stats = child_stats[0]->validity_stats->Copy();
+	}
 	return move(result);
 }
 
@@ -94,9 +96,9 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 	auto result = make_unique<NumericStatistics>(LogicalType::BIGINT, Value::BIGINT(MIN), Value::BIGINT(MAX));
 	if (!child_stats[0]) {
 		// if there are no child stats, we don't know
-		result->has_null = true;
-	} else {
-		result->has_null = child_stats[0]->has_null;
+		result->validity_stats = make_unique<ValidityStatistics>(true);
+	} else if (child_stats[0]->validity_stats) {
+		result->validity_stats = child_stats[0]->validity_stats->Copy();
 	}
 	return move(result);
 }
@@ -540,7 +542,7 @@ struct TimeDatePart {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
 			// remove everything but the second & microsecond part
-			return input % Interval::MICROS_PER_MINUTE;
+			return input.micros % Interval::MICROS_PER_MINUTE;
 		}
 
 		template <class T>
@@ -582,7 +584,7 @@ struct TimeDatePart {
 	struct MinutesOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return (input % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
+			return (input.micros % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
 		}
 
 		template <class T>
@@ -596,7 +598,7 @@ struct TimeDatePart {
 	struct HoursOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			return input / Interval::MICROS_PER_HOUR;
+			return input.micros / Interval::MICROS_PER_HOUR;
 		}
 
 		template <class T>
@@ -740,7 +742,7 @@ template <>
 int64_t DateDatePart::MicrosecondsOperator::Operation(timestamp_t input) {
 	auto time = Timestamp::GetTime(input);
 	// remove everything but the second & microsecond part
-	return time % Interval::MICROS_PER_MINUTE;
+	return time.micros % Interval::MICROS_PER_MINUTE;
 }
 
 template <>
@@ -773,7 +775,7 @@ template <>
 int64_t DateDatePart::MinutesOperator::Operation(timestamp_t input) {
 	auto time = Timestamp::GetTime(input);
 	// remove the hour part, and truncate to minutes
-	return (time % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
+	return (time.micros % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
 }
 
 template <>
@@ -784,7 +786,7 @@ int64_t DateDatePart::MinutesOperator::Operation(interval_t input) {
 
 template <>
 int64_t DateDatePart::HoursOperator::Operation(timestamp_t input) {
-	return Timestamp::GetTime(input) / Interval::MICROS_PER_HOUR;
+	return Timestamp::GetTime(input).micros / Interval::MICROS_PER_HOUR;
 }
 
 template <>

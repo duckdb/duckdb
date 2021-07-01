@@ -30,7 +30,8 @@ struct TableScanOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                      const vector<column_t> &column_ids,
+                                                      TableFilterCollection *filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
@@ -53,7 +54,7 @@ static unique_ptr<BaseStatistics> TableScanStatistics(ClientContext &context, co
 }
 
 static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                              ParallelState *state, vector<column_t> &column_ids,
+                                                              ParallelState *state, const vector<column_t> &column_ids,
                                                               TableFilterCollection *filters) {
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
@@ -75,7 +76,7 @@ static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_
 
 struct ParallelTableFunctionScanState : public ParallelState {
 	ParallelTableScanState state;
-	std::mutex lock;
+	mutex lock;
 };
 
 idx_t TableScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
@@ -134,6 +135,9 @@ unique_ptr<NodeStatistics> TableScanCardinality(ClientContext &context, const Fu
 // Index Scan
 //===--------------------------------------------------------------------===//
 struct IndexScanOperatorData : public FunctionOperatorData {
+	explicit IndexScanOperatorData(data_ptr_t row_id_data) : row_ids(LOGICAL_ROW_TYPE, row_id_data) {
+	}
+
 	Vector row_ids;
 	ColumnFetchState fetch_state;
 	LocalScanState local_storage_state;
@@ -142,15 +146,16 @@ struct IndexScanOperatorData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, const FunctionData *bind_data_p,
-                                                      vector<column_t> &column_ids, TableFilterCollection *filters) {
-	auto result = make_unique<IndexScanOperatorData>();
-	auto &transaction = Transaction::GetTransaction(context);
+                                                      const vector<column_t> &column_ids,
+                                                      TableFilterCollection *filters) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	result->column_ids = column_ids;
-	result->row_ids.SetType(LOGICAL_ROW_TYPE);
+	data_ptr_t row_id_data = nullptr;
 	if (!bind_data.result_ids.empty()) {
-		FlatVector::SetData(result->row_ids, (data_ptr_t)&bind_data.result_ids[0]);
+		row_id_data = (data_ptr_t)&bind_data.result_ids[0];
 	}
+	auto result = make_unique<IndexScanOperatorData>(row_id_data);
+	auto &transaction = Transaction::GetTransaction(context);
+	result->column_ids = column_ids;
 	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state,
 	                                   filters->table_filters);
 
@@ -202,24 +207,22 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 	if (bind_data.is_index_scan) {
 		return;
 	}
-	if (filters.empty() || storage.info->indexes.empty()) {
+	if (filters.empty()) {
 		// no indexes or no filters: skip the pushdown
 		return;
 	}
-	// check all the indexes
-	for (size_t j = 0; j < storage.info->indexes.size(); j++) {
-		auto &index = storage.info->indexes[j];
-
+	// behold
+	storage.info->indexes.Scan([&](Index &index) {
 		// first rewrite the index expression so the ColumnBindings align with the column bindings of the current table
-		if (index->unbound_expressions.size() > 1) {
-			continue;
+		if (index.unbound_expressions.size() > 1) {
+			return false;
 		}
-		auto index_expression = index->unbound_expressions[0]->Copy();
+		auto index_expression = index.unbound_expressions[0]->Copy();
 		bool rewrite_possible = true;
-		RewriteIndexExpression(*index, get, *index_expression, rewrite_possible);
+		RewriteIndexExpression(index, get, *index_expression, rewrite_possible);
 		if (!rewrite_possible) {
 			// could not rewrite!
-			continue;
+			return false;
 		}
 
 		Value low_value, high_value, equal_value;
@@ -298,19 +301,19 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			if (!equal_value.is_null) {
 				// equality predicate
 				index_state =
-				    index->InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
+				    index.InitializeScanSinglePredicate(transaction, equal_value, ExpressionType::COMPARE_EQUAL);
 			} else if (!low_value.is_null && !high_value.is_null) {
 				// two-sided predicate
-				index_state = index->InitializeScanTwoPredicates(transaction, low_value, low_comparison_type,
-				                                                 high_value, high_comparison_type);
+				index_state = index.InitializeScanTwoPredicates(transaction, low_value, low_comparison_type, high_value,
+				                                                high_comparison_type);
 			} else if (!low_value.is_null) {
 				// less than predicate
-				index_state = index->InitializeScanSinglePredicate(transaction, low_value, low_comparison_type);
+				index_state = index.InitializeScanSinglePredicate(transaction, low_value, low_comparison_type);
 			} else {
 				D_ASSERT(!high_value.is_null);
-				index_state = index->InitializeScanSinglePredicate(transaction, high_value, high_comparison_type);
+				index_state = index.InitializeScanSinglePredicate(transaction, high_value, high_comparison_type);
 			}
-			if (index->Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
+			if (index.Scan(transaction, storage, *index_state, STANDARD_VECTOR_SIZE, bind_data.result_ids)) {
 				// use an index scan!
 				bind_data.is_index_scan = true;
 				get.function.init = IndexScanInit;
@@ -323,9 +326,10 @@ void TableScanPushdownComplexFilter(ClientContext &context, LogicalGet &get, Fun
 			} else {
 				bind_data.result_ids.clear();
 			}
-			return;
+			return true;
 		}
-	}
+		return false;
+	});
 }
 
 string TableScanToString(const FunctionData *bind_data_p) {

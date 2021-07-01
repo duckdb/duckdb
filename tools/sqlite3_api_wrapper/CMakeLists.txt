@@ -1,12 +1,17 @@
 include_directories(include)
 add_subdirectory(sqlite3)
 
+include_directories(sqlite3_udf_api/include)
+add_subdirectory(sqlite3_udf_api)
+
 add_extension_definitions()
 add_definitions(-DSQLITE_SHELL_IS_UTF8)
 
+include_directories(../../third_party/utf8proc/include)
+
 add_library(sqlite3_api_wrapper_static STATIC sqlite3_api_wrapper.cpp
                                               ${ALL_OBJECT_FILES})
-target_link_libraries(sqlite3_api_wrapper_static duckdb_static)
+target_link_libraries(sqlite3_api_wrapper_static duckdb_static utf8proc)
 link_threads(sqlite3_api_wrapper_static)
 
 link_extension_libraries(sqlite3_api_wrapper_static)
@@ -21,6 +26,9 @@ if(NOT WIN32)
 
   include_directories(../../third_party/catch)
 
-  add_executable(test_sqlite3_api_wrapper test_sqlite3_api_wrapper.cpp)
+  include_directories(test/include)
+  add_subdirectory(test)
+
+  add_executable(test_sqlite3_api_wrapper ${SQLITE_TEST_FILES})
   target_link_libraries(test_sqlite3_api_wrapper sqlite3_api_wrapper)
 endif()

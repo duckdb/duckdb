@@ -49,6 +49,7 @@ setMethod(
 #'   is chosen, the timestamp will be returned as it would appear in the specified time zone.
 #'   If `"force"` is chosen, the timestamp will have the same clock
 #'   time as the timestamp in the database, but with the new time zone.
+#' @param config Named list with DuckDB configuration flags
 #'
 #' @return `dbConnect()` returns an object of class
 #'   \linkS4class{duckdb_connection}.
@@ -74,7 +75,7 @@ setMethod(
            debug = getOption("duckdb.debug", FALSE),
            read_only = FALSE,
            timezone_out = "UTC",
-           tz_out_convert = c("with", "force")) {
+           tz_out_convert = c("with", "force"), config = list()) {
 
     check_flag(debug)
     timezone_out <- check_tz(timezone_out)
@@ -86,7 +87,7 @@ setMethod(
     # aha, a late comer. let's make a new instance.
     if (!missing_dbdir && dbdir != drv@dbdir) {
       duckdb_shutdown(drv)
-      drv <- duckdb(dbdir, read_only)
+      drv <- duckdb(dbdir, read_only, config)
     }
 
     conn <- duckdb_connection(drv, debug = debug)
@@ -136,11 +137,11 @@ setMethod(
 #'
 #' @import methods DBI
 #' @export
-duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE) {
+duckdb <- function(dbdir = DBDIR_MEMORY, read_only = FALSE, config=list()) {
   check_flag(read_only)
   new(
     "duckdb_driver",
-    database_ref = .Call(duckdb_startup_R, dbdir, read_only),
+    database_ref = .Call(duckdb_startup_R, dbdir, read_only, config),
     dbdir = dbdir,
     read_only = read_only
   )
@@ -206,7 +207,10 @@ setMethod(
 setMethod(
   "dbGetInfo", "duckdb_driver",
   function(dbObj, ...) {
-    list(driver.version = NA, client.version = NA)
+    con <- dbConnect(dbObj)
+    version <- dbGetQuery(con, "select library_version from pragma_version()")[[1]][[1]]
+    dbDisconnect(con)
+    list(driver.version = version, client.version = version, dbname=dbObj@dbdir)
   }
 )
 

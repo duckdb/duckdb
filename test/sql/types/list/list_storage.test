@@ -1,0 +1,46 @@
+# name: test/sql/types/list/list_storage.test
+# description: Test lists with in-memory storage
+# group: [list]
+
+statement ok
+CREATE TABLE a(b INTEGER[]);
+
+statement ok
+INSERT INTO a VALUES ([1, 2]), (NULL), ([3, 4, 5, 6]), ([NULL, 7]);
+
+query I
+SELECT * FROM a
+----
+[1, 2]
+NULL
+[3, 4, 5, 6]
+[NULL, 7]
+
+# nested lists
+statement ok
+CREATE TABLE b(b INTEGER[][]);
+
+statement ok
+INSERT INTO b VALUES ([[1, 2], [3, 4]]), (NULL), ([NULL, [7, 8, NULL], [2, 3]]), ([[NULL, 6], NULL, [1, 2, NULL]]);
+
+query I
+SELECT * FROM b
+----
+[[1, 2], [3, 4]]
+NULL
+[NULL, [7, 8, NULL], [2, 3]]
+[[NULL, 6], NULL, [1, 2, NULL]]
+
+statement ok
+CREATE TABLE c(b VARCHAR[]);
+
+statement ok
+INSERT INTO c VALUES (['hello', 'world']), (NULL), (['fejwfoaejwfoijwafew', 'b', 'c']), ([NULL, 'XXXXXXXXXXXXXXXXXXXXXXXX']);
+
+query I
+SELECT * FROM c
+----
+[hello, world]
+NULL
+[fejwfoaejwfoijwafew, b, c]
+[NULL, XXXXXXXXXXXXXXXXXXXXXXXX]

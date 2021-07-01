@@ -11,6 +11,7 @@
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/subquery_relation.hpp"
+#include "duckdb/main/relation/table_function_relation.hpp"
 #include "duckdb/main/relation/create_table_relation.hpp"
 #include "duckdb/main/relation/create_view_relation.hpp"
 #include "duckdb/main/relation/write_csv_relation.hpp"
@@ -268,6 +269,10 @@ void Relation::Update(const string &update, const string &condition) {
 
 void Relation::Delete(const string &condition) {
 	throw Exception("DELETE can only be used on base tables!");
+}
+
+shared_ptr<Relation> Relation::TableFunction(const std::string &fname, vector<Value> &values) {
+	return make_shared<TableFunctionRelation>(context, fname, values, shared_from_this());
 }
 
 string Relation::ToString() {

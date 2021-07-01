@@ -5,33 +5,26 @@
 statement ok
 PRAGMA enable_verification
 
+query I
+select histogram(NULL)
+----
+NULL
+
 # Empty Table
 query I
 SELECT histogram(i) FROM range(100) tbl(i) WHERE 1=0;
 ----
 NULL
 
-#Corner cases
-statement error
-select histogram()
-
-query I
-select histogram(NULL)
-----
-NULL
-
 query I
 select histogram(1)
 ----
-[<bucket: 1, count: 1>]
-
-statement error
-select histogram(*)
+{1=1}
 
 query I
 SELECT histogram(2) FROM range(100);
 ----
-[<bucket: 2, count: 100>]
+{2=100}
 
 statement ok
 CREATE TABLE hist_data (g INTEGER, e INTEGER)
@@ -43,27 +36,27 @@ INSERT INTO hist_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5,
 query T
 SELECT histogram(g) from hist_data
 ----
-[<bucket: 1, count: 2>, <bucket: 2, count: 3>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
+{1=2, 2=3, 3=1, 5=1}
 
 query T
 SELECT histogram(e) from hist_data
 ----
-[<bucket: 1, count: 1>, <bucket: 2, count: 1>, <bucket: 3, count: 1>, <bucket: 4, count: 1>, <bucket: 5, count: 1>, <bucket: 6, count: 1>]
+{1=1, 2=1, 3=1, 4=1, 5=1, 6=1}
 
 query I
 select histogram(g)
     from hist_data
-    group by g%2==0
+    group by g%2==0 ORDER BY g%2==0
 ----
-[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
-[<bucket: 2, count: 3>]
+{1=2, 3=1, 5=1}
+{2=3}
 
 query I
 select histogram(g)
     from hist_data
     where g < 3
 ----
-[<bucket: 1, count: 2>, <bucket: 2, count: 3>]
+{1=2, 2=3}
 
 statement ok
 create table names (name string)
@@ -74,20 +67,25 @@ insert into names values ('pedro'), ('pedro'), ('pedro'),('hannes'),('hannes'),(
 query I
 select histogram(name) from names;
 ----
-[<bucket: Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr., count: 1>, <bucket: hannes, count: 2>, <bucket: mark, count: 1>, <bucket: pedro, count: 3>]
+{Hubert Blaine Wolfeschlegelsteinhausenbergerdorff Sr.=1, hannes=2, mark=1, pedro=3}
 
 require vector_size 512
 
-query II
+query II rowsort
 select g,histogram(g) over (partition by g%2)
     from hist_data;
 ----
-2	[<bucket: 2, count: 3>]
-2	[<bucket: 2, count: 3>]
-2	[<bucket: 2, count: 3>]
-1	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
-1	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
-5	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
-3	[<bucket: 1, count: 2>, <bucket: 3, count: 1>, <bucket: 5, count: 1>]
+1	{1=2, 3=1, 5=1}
+1	{1=2, 3=1, 5=1}
+2	{2=3}
+2	{2=3}
+2	{2=3}
+3	{1=2, 3=1, 5=1}
+5	{1=2, 3=1, 5=1}
 
+#Corner cases
+statement error
+select histogram()
 
+statement error
+select histogram(*)

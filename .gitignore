@@ -74,6 +74,7 @@ m4/lt~obsolete.m4
 #==============================================================================#
 #m4/
 build/
+duckdb_benchmark_data/
 #*.m4
 *.o
 *.lo
@@ -173,6 +174,7 @@ local.properties
 
 # Clang language server (C/C++ tooling)
 /.cache/clangd
+.ccls-cache
 
 # Eclipse Core
 .project
@@ -297,6 +299,7 @@ docs
 
 # tests
 test/test.sql
+duckdb_benchmark_data/
 
 # SQLite logic tests
 test/evidence/
@@ -328,3 +331,7 @@ ub_*.cpp
 # python parquet files used in tests
 tools/pythonpkg/tests/unsigned.parquet
 tools/pythonpkg/tests/userdata1.parquet
+
+# node tests
+__nvm
+

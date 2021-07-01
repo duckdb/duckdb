@@ -10,7 +10,7 @@
 
 /* The purpose of this file is to have a single list of error strings embedded in binary */
 
-#include "error_private.h"
+#include "zstd/common/error_private.h"
 
 namespace duckdb_zstd {
 

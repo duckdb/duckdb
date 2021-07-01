@@ -8,11 +8,15 @@ namespace duckdb {
 
 class PhysicalLimitOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalLimitOperatorState(PhysicalOperator &op, PhysicalOperator *child, idx_t current_offset = 0)
+	PhysicalLimitOperatorState(PhysicalLimit &op, PhysicalOperator *child, idx_t current_offset = 0)
 	    : PhysicalOperatorState(op, child), current_offset(current_offset) {
+		this->limit = op.limit_expression ? INVALID_INDEX : op.limit_value;
+		this->offset = op.offset_expression ? INVALID_INDEX : op.offset_value;
 	}
 
 	idx_t current_offset;
+	idx_t limit;
+	idx_t offset;
 };
 
 uint64_t GetDelimiter(DataChunk &input, Expression *expr, uint64_t original_value) {
@@ -31,26 +35,29 @@ uint64_t GetDelimiter(DataChunk &input, Expression *expr, uint64_t original_valu
 	return limit_value.value_.ubigint;
 }
 
-void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) {
+void PhysicalLimit::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
+                                     PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalLimitOperatorState *>(state_p);
+	auto &limit = state->limit;
+	auto &offset = state->offset;
 
-	idx_t max_element = limit + offset;
-	if ((limit == 0 || state->current_offset >= max_element) && !(limit_expression || offset_expression)) {
-		return;
+	if (limit != INVALID_INDEX && offset != INVALID_INDEX) {
+		idx_t max_element = limit + offset;
+		if ((limit == 0 || state->current_offset >= max_element) && !(limit_expression || offset_expression)) {
+			return;
+		}
 	}
 
 	// get the next chunk from the child
 	do {
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (limit_expression) {
-			limit = GetDelimiter(state->child_chunk, limit_expression.get(), limit);
-			limit_expression.reset();
+		if (limit == INVALID_INDEX) {
+			limit = GetDelimiter(state->child_chunk, limit_expression.get(), 1ULL << 62ULL);
 		}
-		if (offset_expression) {
-			offset = GetDelimiter(state->child_chunk, offset_expression.get(), offset);
-			offset_expression.reset();
+		if (offset == INVALID_INDEX) {
+			offset = GetDelimiter(state->child_chunk, offset_expression.get(), 0);
 		}
-		max_element = limit + offset;
+		idx_t max_element = limit + offset;
 		if (state->child_chunk.size() == 0) {
 			return;
 		}

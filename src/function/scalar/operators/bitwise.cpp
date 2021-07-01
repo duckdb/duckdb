@@ -126,7 +126,7 @@ struct BitwiseXOROperator {
 };
 
 void BitwiseXorFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet functions("#");
+	ScalarFunctionSet functions("xor");
 	for (auto &type : LogicalType::INTEGRAL) {
 		functions.AddFunction(
 		    ScalarFunction({type, type}, type, GetScalarIntegerBinaryFunction<BitwiseXOROperator>(type)));

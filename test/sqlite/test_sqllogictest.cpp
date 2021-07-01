@@ -54,6 +54,7 @@
 #include <string>
 #include <vector>
 #include <iostream>
+#include <thread>
 
 using namespace duckdb;
 using namespace std;
@@ -62,6 +63,10 @@ using namespace std;
 
 struct SQLLogicTestRunner {
 public:
+	SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
+	}
+	~SQLLogicTestRunner();
+
 	void ExecuteFile(string script);
 	void LoadDatabase(string dbpath);
 
@@ -69,6 +74,7 @@ public:
 
 public:
 	string dbpath;
+	vector<string> loaded_databases;
 	unique_ptr<DuckDB> db;
 	unique_ptr<Connection> con;
 	unique_ptr<DBConfig> config;
@@ -663,6 +669,7 @@ void Query::ColumnCountMismatch(MaterializedQueryResult &result, int expected_co
 vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.Query("PRAGMA threads=" + to_string(std::thread::hardware_concurrency()));
 	fname = StringUtil::Replace(fname, "<FILE>:", "");
 
 	string struct_definition = "STRUCT_PACK(";
@@ -999,6 +1006,8 @@ void RestartCommand::Execute() {
 }
 
 void SQLLogicTestRunner::LoadDatabase(string dbpath) {
+	loaded_databases.push_back(dbpath);
+
 	// restart the database with the specified db path
 	db.reset();
 	con.reset();
@@ -1018,7 +1027,22 @@ string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	FileSystem fs;
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
 	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", fs.GetWorkingDirectory());
+	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
+
 	return input;
+}
+
+SQLLogicTestRunner::~SQLLogicTestRunner() {
+	for (auto &loaded_path : loaded_databases) {
+		if (loaded_path.empty()) {
+			continue;
+		}
+		// only delete database files that were created during the tests
+		if (!StringUtil::StartsWith(loaded_path, TestDirectoryPath())) {
+			continue;
+		}
+		DeleteDatabase(loaded_path);
+	}
 }
 
 void SQLLogicTestRunner::ExecuteFile(string script) {
@@ -1037,14 +1061,19 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	bool skip_execution = false;
 	vector<unique_ptr<Command>> loop_statements;
 
-	// for the original SQLite tests we skip the index (for now)
+	// for the original SQLite tests we convert floating point numbers to integers
+	// for our own tests this is undesirable since it hides certain errors
 	if (script.find("sqlite") != string::npos || script.find("sqllogictest") != string::npos) {
 		original_sqlite_test = true;
 	}
 
-	// initialize an in-memory database
-	db = make_unique<DuckDB>();
-	con = make_unique<Connection>(*db);
+	if (!dbpath.empty()) {
+		// delete the target database file, if it exists
+		DeleteDatabase(dbpath);
+	}
+
+	// initialize the database with the default dbpath
+	LoadDatabase(dbpath);
 
 	/*
 	** Read the entire script file contents into memory
@@ -1327,7 +1356,28 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		} else if (strcmp(sScript.azToken[0], "require") == 0) {
 			// require command
 			string param = StringUtil::Lower(sScript.azToken[1]);
-			if (param == "vector_size") {
+			// os specific stuff
+			if (param == "notmingw") {
+#ifdef __MINGW32__
+				return;
+#endif
+			} else if (param == "mingw") {
+#ifndef __MINGW32__
+				return;
+#endif
+			} else if (param == "notwindows") {
+#ifdef _WIN32
+				return;
+#endif
+			} else if (param == "windows") {
+#ifndef _WIN32
+				return;
+#endif
+			} else if (param == "noforcestorage") {
+				if (TestForceStorage()) {
+					return;
+				}
+			} else if (param == "vector_size") {
 				// require a specific vector size
 				int required_vector_size = std::stoi(sScript.azToken[2]);
 				if (STANDARD_VECTOR_SIZE < required_vector_size) {
@@ -1355,11 +1405,6 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			bool readonly = string(sScript.azToken[2]) == "readonly";
 			dbpath = ReplaceKeywords(sScript.azToken[1]);
-			if (dbpath.empty() || dbpath == ":memory:") {
-				fprintf(stderr, "%s:%d: load needs a database parameter: cannot load an in-memory database\n",
-				        zScriptFile, sScript.startLine);
-				FAIL();
-			}
 			if (!readonly) {
 				// delete the target database file, if it exists
 				DeleteDatabase(dbpath);
@@ -1418,7 +1463,14 @@ static void testRunner() {
 	// name if someone has a better idea...
 	auto name = Catch::getResultCapture().getCurrentTestName();
 	// fprintf(stderr, "%s\n", name.c_str());
-	SQLLogicTestRunner runner;
+	string initial_dbpath;
+	if (TestForceStorage()) {
+		auto storage_name = StringUtil::Replace(name, "/", "_");
+		storage_name = StringUtil::Replace(storage_name, ".", "_");
+		storage_name = StringUtil::Replace(storage_name, "\\", "_");
+		initial_dbpath = TestCreatePath(storage_name + ".db");
+	}
+	SQLLogicTestRunner runner(move(initial_dbpath));
 	runner.ExecuteFile(name);
 }
 
@@ -1510,7 +1562,7 @@ struct AutoRegTests {
 						return;
 					}
 				}
-				REGISTER_TEST_CASE(testRunner, path, "[sqlitelogic][.]");
+				REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
 			}
 		});
 		listFiles(fs, "test", [excludes](const string &path) {
@@ -1521,7 +1573,7 @@ struct AutoRegTests {
 					}
 				}
 				// parse the name / group from the test
-				REGISTER_TEST_CASE(testRunner, path, ParseGroupFromPath(path));
+				REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 			}
 		});
 	}

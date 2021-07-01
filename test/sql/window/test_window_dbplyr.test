@@ -14,7 +14,7 @@ statement ok
 INSERT INTO dbplyr_052 VALUES (1,1, 42),(2,1, 42),(3,1, 42),(2,2, 42),(3,2, 42),(4,2, 42)
 
 # this works fine because we order by the already-projected column in the innermost query
-query IR
+query IR rowsort
 SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS zzz67 FROM (SELECT x, g FROM dbplyr_052 ORDER BY x) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)
 ----
 3	1.000000
@@ -22,7 +22,7 @@ SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOU
 4	2.000000
 
 # this breaks because we add a fake projection that is not pruned
-query IR
+query IR rowsort
 SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS zzz67 FROM (SELECT x, g FROM dbplyr_052 ORDER BY w) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)
 ----
 3	1.000000
@@ -31,7 +31,7 @@ SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOU
 
 # this also breaks because we add a fake projection that is not pruned even if we already have that projection,
 # just with a different table name
-query IR
+query IR rowsort
 SELECT x, g FROM (SELECT x, g, SUM(x) OVER (PARTITION BY g ORDER BY x ROWS UNBOUNDED PRECEDING) AS zzz67 FROM (SELECT * FROM dbplyr_052 ORDER BY x) dbplyr_053) dbplyr_054 WHERE (zzz67 > 3.0)
 ----
 3	1.000000

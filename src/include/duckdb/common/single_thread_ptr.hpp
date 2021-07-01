@@ -145,7 +145,7 @@ struct _object_and_block : public RefCounter {
 	T object;
 
 	template <class... Args>
-	explicit _object_and_block(Args &&...args) : object(std::forward<Args>(args)...) {
+	explicit _object_and_block(Args &&... args) : object(std::forward<Args>(args)...) {
 	}
 };
 
@@ -176,7 +176,7 @@ inline bool operator!=(std::nullptr_t, const single_thread_ptr<T> &sp) noexcept 
 }
 
 template <class T, class... Args>
-single_thread_ptr<T> single_thread_make_shared(Args &&...args) {
+single_thread_ptr<T> single_thread_make_shared(Args &&... args) {
 	auto tmp_object = new _object_and_block<T>(std::forward<Args>(args)...);
 	return single_thread_ptr<T>(tmp_object, &(tmp_object->object));
 }

@@ -1,10 +1,11 @@
 #include "duckdb/execution/operator/persistent/physical_update.hpp"
-
+#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -16,8 +17,9 @@ public:
 	UpdateGlobalState() : updated_count(0) {
 	}
 
-	std::mutex lock;
+	mutex lock;
 	idx_t updated_count;
+	unordered_set<row_t> updated_columns;
 };
 
 class UpdateLocalState : public LocalSinkState {
@@ -42,7 +44,7 @@ public:
 };
 
 void PhysicalUpdate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                          DataChunk &chunk) {
+                          DataChunk &chunk) const {
 	auto &gstate = (UpdateGlobalState &)state;
 	auto &ustate = (UpdateLocalState &)lstate;
 
@@ -69,9 +71,28 @@ void PhysicalUpdate::Sink(ExecutionContext &context, GlobalOperatorState &state,
 	}
 
 	lock_guard<mutex> glock(gstate.lock);
-	if (is_index_update) {
-		// index update, perform a delete and an append instead
+	if (update_is_del_and_insert) {
+		// index update or update on complex type, perform a delete and an append instead
+
+		// figure out which rows have not yet been deleted in this update
+		// this is required since we might see the same row_id multiple times
+		// in the case of an UPDATE query that e.g. has joins
+		auto row_id_data = FlatVector::GetData<row_t>(row_ids);
+		SelectionVector sel(STANDARD_VECTOR_SIZE);
+		idx_t update_count = 0;
+		for (idx_t i = 0; i < update_chunk.size(); i++) {
+			auto row_id = row_id_data[i];
+			if (gstate.updated_columns.find(row_id) == gstate.updated_columns.end()) {
+				gstate.updated_columns.insert(row_id);
+				sel.set_index(update_count++, i);
+			}
+		}
+		if (update_count != update_chunk.size()) {
+			// we need to slice here
+			update_chunk.Slice(sel, update_count);
+		}
 		table.Delete(tableref, context.client, row_ids, update_chunk.size());
+		// for the append we need to arrange the columns in a specific manner (namely the "standard table order")
 		mock_chunk.SetCardinality(update_chunk);
 		for (idx_t i = 0; i < columns.size(); i++) {
 			mock_chunk.data[columns[i]].Reference(update_chunk.data[i]);
@@ -94,13 +115,18 @@ unique_ptr<LocalSinkState> PhysicalUpdate::GetLocalSinkState(ExecutionContext &c
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-void PhysicalUpdate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) {
+void PhysicalUpdate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	auto &gstate = (UpdateGlobalState &)*sink_state;
 
 	chunk.SetCardinality(1);
 	chunk.SetValue(0, 0, Value::BIGINT(gstate.updated_count));
 
 	state->finished = true;
+}
+void PhysicalUpdate::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
+	auto &state = (UpdateLocalState &)lstate;
+	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
+	context.client.profiler->Flush(context.thread.profiler);
 }
 
 } // namespace duckdb

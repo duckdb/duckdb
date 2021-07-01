@@ -1,0 +1,27 @@
+# name: test/issues/rigger/assertion_scale.test
+# description: SQLancer bug that detected an assertion triggered in type scale
+# group: [rigger]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE t0(c0 DOUBLE, c1 DOUBLE);;
+
+statement ok
+INSERT INTO t0 VALUES(0.0,-1570504255.0);
+
+statement ok
+CREATE VIEW v0(c0, c1) AS SELECT 888938716, '' FROM t0 GROUP BY t0.rowid, t0.rowid, t0.c1 ORDER BY 0.9507538105182436 OFFSET 686929302;
+
+statement ok
+COMMIT;
+
+statement ok
+SELECT MAX(agg0) FROM (SELECT MAX(v0.c1) AS agg0 FROM v0, t0 WHERE ((((UNICODE('b횐')) IS NOT NULL))AND((- ((0.8179740556303334)*(0.5235330721055326))))) UNION ALL SELECT MAX(v0.c1) AS agg0 FROM v0, t0 WHERE (NOT ((((UNICODE('b횐')) IS NOT NULL))AND((- ((0.8179740556303334)*(0.5235330721055326)))))) UNION ALL SELECT MAX(v0.c1) AS agg0 FROM v0, t0 WHERE ((((((UNICODE('b횐')) IS NOT NULL))AND((- ((0.8179740556303334)*(0.5235330721055326)))))) IS NULL)) as asdf;
+
+
+

@@ -168,7 +168,7 @@ void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, Ca
 
 	// add this catalog to the lock set, if it is not there yet
 	if (lock_set.find(this) == lock_set.end()) {
-		lock_set.insert(make_pair(this, std::unique_lock<mutex>(catalog_lock)));
+		lock_set.insert(make_pair(this, unique_lock<mutex>(catalog_lock)));
 	}
 
 	// create a new entry and replace the currently stored one
@@ -204,6 +204,19 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 	set_lock_map_t lock_set;
 	DropEntryInternal(context, entry_index, *entry, cascade, lock_set);
 	return true;
+}
+
+void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
+	// destroy the backed up entry: it is no longer required
+	D_ASSERT(catalog_entry->parent);
+	if (catalog_entry->parent->type != CatalogType::UPDATED_ENTRY) {
+		lock_guard<mutex> lock(catalog_lock);
+		if (!catalog_entry->deleted) {
+			// delete the entry from the dependency manager, if it is not deleted yet
+			catalog_entry->catalog->dependency_manager->EraseObject(catalog_entry);
+		}
+		catalog_entry->parent->child = move(catalog_entry->child);
+	}
 }
 
 idx_t CatalogSet::GetEntryIndex(CatalogEntry *entry) {
@@ -338,38 +351,61 @@ string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 	return result;
 }
 
+CatalogEntry *CatalogSet::CreateEntryInternal(ClientContext &context, unique_ptr<CatalogEntry> entry) {
+	if (mapping.find(entry->name) != mapping.end()) {
+		return nullptr;
+	}
+	auto &name = entry->name;
+	auto entry_index = current_entry++;
+	auto catalog_entry = entry.get();
+
+	entry->timestamp = 0;
+
+	PutMapping(context, name, entry_index);
+	mapping[name]->timestamp = 0;
+	entries[entry_index] = move(entry);
+	return catalog_entry;
+}
+
 CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
-	lock_guard<mutex> lock(catalog_lock);
-
+	unique_lock<mutex> lock(catalog_lock);
 	auto mapping_value = GetMapping(context, name, true);
-	if (mapping_value == nullptr || mapping_value->deleted) {
-		// no entry found with this name
-		if (defaults) {
-			// ... but this catalog set has a default map defined
-			// check if there is a default entry that we can create with this name
-			auto entry = defaults->CreateDefaultEntry(context, name);
-			if (entry) {
-				// there is a default entry!
-				auto entry_index = current_entry++;
-				auto catalog_entry = entry.get();
+	if (mapping_value != nullptr && !mapping_value->deleted) {
+		// we found an entry for this name
+		// check the version numbers
 
-				entry->timestamp = 0;
-
-				PutMapping(context, name, entry_index);
-				mapping[name]->timestamp = 0;
-				entries[entry_index] = move(entry);
-				return catalog_entry;
-			}
+		auto catalog_entry = entries[mapping_value->index].get();
+		CatalogEntry *current = GetEntryForTransaction(context, catalog_entry);
+		if (current->deleted || (current->name != name && !UseTimestamp(context, mapping_value->timestamp))) {
+			return nullptr;
 		}
+		return current;
+	}
+	// no entry found with this name, check for defaults
+	if (!defaults || defaults->created_all_entries) {
+		// no defaults either: return null
 		return nullptr;
 	}
-	auto catalog_entry = entries[mapping_value->index].get();
-	// if it does, we have to check version numbers
-	CatalogEntry *current = GetEntryForTransaction(context, catalog_entry);
-	if (current->deleted || (current->name != name && !UseTimestamp(context, mapping_value->timestamp))) {
+	// this catalog set has a default map defined
+	// check if there is a default entry that we can create with this name
+	lock.unlock();
+	auto entry = defaults->CreateDefaultEntry(context, name);
+
+	lock.lock();
+	if (!entry) {
+		// no default entry
 		return nullptr;
 	}
-	return current;
+	// there is a default entry! create it
+	auto result = CreateEntryInternal(context, move(entry));
+	if (result) {
+		return result;
+	}
+	// we found a default entry, but failed
+	// this means somebody else created the entry first
+	// just retry?
+	lock.unlock();
+	return GetEntry(context, name);
 }
 
 void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
@@ -384,6 +420,8 @@ CatalogEntry *CatalogSet::GetRootEntry(const string &name) {
 }
 
 void CatalogSet::Undo(CatalogEntry *entry) {
+	lock_guard<mutex> write_lock(catalog.write_lock);
+
 	lock_guard<mutex> lock(catalog_lock);
 
 	// entry has to be restored
@@ -430,6 +468,47 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 	}
 	// we mark the catalog as being modified, since this action can lead to e.g. tables being dropped
 	entry->catalog->ModifyCatalog();
+}
+
+void CatalogSet::Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback) {
+	// lock the catalog set
+	unique_lock<mutex> lock(catalog_lock);
+	if (defaults && !defaults->created_all_entries) {
+		// this catalog set has a default set defined:
+		auto default_entries = defaults->GetDefaultEntries();
+		for (auto &default_entry : default_entries) {
+			auto map_entry = mapping.find(default_entry);
+			if (map_entry == mapping.end()) {
+				// we unlock during the CreateEntry, since it might reference other catalog sets...
+				// specifically for views this can happen since the view will be bound
+				lock.unlock();
+				auto entry = defaults->CreateDefaultEntry(context, default_entry);
+
+				lock.lock();
+				CreateEntryInternal(context, move(entry));
+			}
+		}
+		defaults->created_all_entries = true;
+	}
+	for (auto &kv : entries) {
+		auto entry = kv.second.get();
+		entry = GetEntryForTransaction(context, entry);
+		if (!entry->deleted) {
+			callback(entry);
+		}
+	}
+}
+
+void CatalogSet::Scan(const std::function<void(CatalogEntry *)> &callback) {
+	// lock the catalog set
+	lock_guard<mutex> lock(catalog_lock);
+	for (auto &kv : entries) {
+		auto entry = kv.second.get();
+		entry = GetCommittedEntry(entry);
+		if (!entry->deleted) {
+			callback(entry);
+		}
+	}
 }
 
 } // namespace duckdb

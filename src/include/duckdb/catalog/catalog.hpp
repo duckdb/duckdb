@@ -13,7 +13,7 @@
 #include "duckdb/parser/query_error_context.hpp"
 
 #include <functional>
-#include <atomic>
+#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 struct CreateSchemaInfo;
@@ -64,10 +64,14 @@ public:
 	static Catalog &GetCatalog(ClientContext &context);
 	static Catalog &GetCatalog(DatabaseInstance &db);
 
+	DependencyManager &GetDependencyManager() {
+		return *dependency_manager;
+	}
+
 	//! Returns the current version of the catalog (incremented whenever anything changes, not stored between restarts)
 	idx_t GetCatalogVersion();
-	//! Trigger a modification in the catalog, increasing the catalog version
-	void ModifyCatalog();
+	//! Trigger a modification in the catalog, increasing the catalog version and returning the previous version
+	idx_t ModifyCatalog();
 
 	//! Creates a schema in the catalog.
 	CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
@@ -129,7 +133,7 @@ public:
 
 private:
 	//! The catalog version, incremented whenever anything changes in the catalog
-	std::atomic<idx_t> catalog_version;
+	atomic<idx_t> catalog_version;
 
 private:
 	void DropSchema(ClientContext &context, DropInfo *info);

@@ -15,6 +15,7 @@
 struct ArrowArray;
 
 namespace duckdb {
+class VectorCache;
 
 //!  A Data Chunk represents a set of vectors.
 /*!
@@ -38,6 +39,7 @@ class DataChunk {
 public:
 	//! Creates an empty DataChunk
 	DataChunk();
+	~DataChunk();
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
@@ -49,9 +51,9 @@ public:
 	DUCKDB_API idx_t ColumnCount() const {
 		return data.size();
 	}
-	void SetCardinality(idx_t count) {
+	void SetCardinality(idx_t count_p) {
 		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
-		this->count = count;
+		this->count = count_p;
 	}
 	void SetCardinality(const DataChunk &other) {
 		this->count = other.size();
@@ -62,14 +64,16 @@ public:
 
 	//! Set the DataChunk to reference another data chunk
 	DUCKDB_API void Reference(DataChunk &chunk);
+	//! Set the DataChunk to own the data of data chunk, destroying the other chunk in the process
+	DUCKDB_API void Move(DataChunk &chunk);
 
 	//! Initializes the DataChunk with the specified types to an empty DataChunk
 	//! This will create one vector of the specified type for each LogicalType in the
 	//! types list. The vector will be referencing vector to the data owned by
 	//! the DataChunk.
-	void Initialize(vector<LogicalType> &types);
+	void Initialize(const vector<LogicalType> &types);
 	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
-	void InitializeEmpty(vector<LogicalType> &types);
+	void InitializeEmpty(const vector<LogicalType> &types);
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk.
@@ -79,6 +83,8 @@ public:
 
 	//! Copies the data from this vector to another vector.
 	DUCKDB_API void Copy(DataChunk &other, idx_t offset = 0) const;
+	DUCKDB_API void Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count,
+	                     const idx_t offset = 0) const;
 
 	//! Turn all the vectors from the chunk into flat vectors
 	DUCKDB_API void Normalify();
@@ -118,6 +124,9 @@ public:
 	DUCKDB_API void ToArrowArray(ArrowArray *out_array);
 
 private:
+	//! The amount of tuples stored in the data chunk
 	idx_t count;
+	//! Vector caches, used to store data when ::Initialize is called
+	vector<VectorCache> vector_caches;
 };
 } // namespace duckdb

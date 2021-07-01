@@ -1,0 +1,136 @@
+# name: test/sql/types/list/list_of_struct.test
+# description: Test list of structs
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE a AS SELECT [{'a': 3, 'b': 'hello'}, NULL, {'a': NULL, 'b': 'thisisalongstring'}] l;
+
+query I
+SELECT * FROM a;
+----
+[{'a': 3, 'b': hello}, NULL, {'a': NULL, 'b': thisisalongstring}]
+
+statement ok
+INSERT INTO a VALUES (NULL)
+
+query I
+SELECT * FROM a;
+----
+[{'a': 3, 'b': hello}, NULL, {'a': NULL, 'b': thisisalongstring}]
+NULL
+
+statement ok
+INSERT INTO a VALUES ([{'a': 17, 'b': 'world'}])
+
+query I
+SELECT * FROM a;
+----
+[{'a': 3, 'b': hello}, NULL, {'a': NULL, 'b': thisisalongstring}]
+NULL
+[{'a': 17, 'b': world}]
+
+query I
+SELECT UNNEST(l) FROM a
+----
+{'a': 3, 'b': hello}
+NULL
+{'a': NULL, 'b': thisisalongstring}
+NULL
+{'a': 17, 'b': world}
+
+# list of nested structs with lists
+statement ok
+CREATE TABLE b AS SELECT [
+	{'a': {'a1': [1, 2, 3], 'a2': 17}, 'b': 'hello'},
+	NULL,
+	{'a': {'a1': [NULL, 4, 5], 'a2': NULL}, 'b': 'thisisalongstring'},
+	{'a': {'a1': NULL, 'a2': 22}, 'b': NULL},
+	{'a': NULL, 'b': 'aaaaaaaaaaaaaaaaaaaaaaaa'}] l;
+
+query I
+SELECT * FROM b;
+----
+[{'a': {'a1': [1, 2, 3], 'a2': 17}, 'b': hello}, NULL, {'a': {'a1': [NULL, 4, 5], 'a2': NULL}, 'b': thisisalongstring}, {'a': {'a1': NULL, 'a2': 22}, 'b': NULL}, {'a': NULL, 'b': aaaaaaaaaaaaaaaaaaaaaaaa}]
+
+query I
+SELECT UNNEST(l) FROM b;
+----
+{'a': {'a1': [1, 2, 3], 'a2': 17}, 'b': hello}
+NULL
+{'a': {'a1': [NULL, 4, 5], 'a2': NULL}, 'b': thisisalongstring}
+{'a': {'a1': NULL, 'a2': 22}, 'b': NULL}
+{'a': NULL, 'b': aaaaaaaaaaaaaaaaaaaaaaaa}
+
+query I
+SELECT UNNEST(l)['a']['a1'] FROM b;
+----
+[1, 2, 3]
+NULL
+[NULL, 4, 5]
+NULL
+NULL
+
+query I
+SELECT UNNEST(l)['a']['a2'] FROM b;
+----
+17
+NULL
+NULL
+22
+NULL
+
+statement ok
+INSERT INTO b VALUES (NULL), ([
+	{'a': {'a1': [6, 7, 8, 9], 'a2': 17}, 'b': 'world1'},
+	NULL,
+	{'a': {'a1': [10, 11, 12], 'a2': 22}, 'b': 'world2'}
+])
+
+query I
+SELECT * FROM b;
+----
+[{'a': {'a1': [1, 2, 3], 'a2': 17}, 'b': hello}, NULL, {'a': {'a1': [NULL, 4, 5], 'a2': NULL}, 'b': thisisalongstring}, {'a': {'a1': NULL, 'a2': 22}, 'b': NULL}, {'a': NULL, 'b': aaaaaaaaaaaaaaaaaaaaaaaa}]
+NULL
+[{'a': {'a1': [6, 7, 8, 9], 'a2': 17}, 'b': world1}, NULL, {'a': {'a1': [10, 11, 12], 'a2': 22}, 'b': world2}]
+
+query I
+SELECT UNNEST(l) FROM b;
+----
+{'a': {'a1': [1, 2, 3], 'a2': 17}, 'b': hello}
+NULL
+{'a': {'a1': [NULL, 4, 5], 'a2': NULL}, 'b': thisisalongstring}
+{'a': {'a1': NULL, 'a2': 22}, 'b': NULL}
+{'a': NULL, 'b': aaaaaaaaaaaaaaaaaaaaaaaa}
+NULL
+{'a': {'a1': [6, 7, 8, 9], 'a2': 17}, 'b': world1}
+NULL
+{'a': {'a1': [10, 11, 12], 'a2': 22}, 'b': world2}
+
+query I
+SELECT UNNEST(l)['a'] FROM b;
+----
+{'a1': [1, 2, 3], 'a2': 17}
+NULL
+{'a1': [NULL, 4, 5], 'a2': NULL}
+{'a1': NULL, 'a2': 22}
+NULL
+NULL
+{'a1': [6, 7, 8, 9], 'a2': 17}
+NULL
+{'a1': [10, 11, 12], 'a2': 22}
+
+query I
+SELECT UNNEST(l)['a']['a1'] FROM b;
+----
+[1, 2, 3]
+NULL
+[NULL, 4, 5]
+NULL
+NULL
+NULL
+[6, 7, 8, 9]
+NULL
+[10, 11, 12]

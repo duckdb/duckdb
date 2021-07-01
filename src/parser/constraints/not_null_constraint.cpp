@@ -5,7 +5,7 @@
 namespace duckdb {
 
 string NotNullConstraint::ToString() const {
-	return "NOT NULL Constraint";
+	return "NOT NULL";
 }
 
 unique_ptr<Constraint> NotNullConstraint::Copy() {

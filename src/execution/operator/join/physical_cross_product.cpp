@@ -19,7 +19,7 @@ public:
 	CrossProductGlobalState() {
 	}
 	ChunkCollection rhs_materialized;
-	std::mutex rhs_lock;
+	mutex rhs_lock;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalCrossProduct::GetGlobalState(ClientContext &context) {
@@ -27,7 +27,7 @@ unique_ptr<GlobalOperatorState> PhysicalCrossProduct::GetGlobalState(ClientConte
 }
 
 void PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                                DataChunk &input) {
+                                DataChunk &input) const {
 	auto &sink = (CrossProductGlobalState &)state;
 	lock_guard<mutex> client_guard(sink.rhs_lock);
 	sink.rhs_materialized.Append(input);
@@ -52,7 +52,7 @@ unique_ptr<PhysicalOperatorState> PhysicalCrossProduct::GetOperatorState() {
 }
 
 void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                            PhysicalOperatorState *state_p) {
+                                            PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalCrossProductOperatorState *>(state_p);
 	auto &sink = (CrossProductGlobalState &)*sink_state;
 	auto &right_collection = sink.rhs_materialized;
@@ -76,14 +76,16 @@ void PhysicalCrossProduct::GetChunkInternal(ExecutionContext &context, DataChunk
 	// now match the current vector of the left relation with the current row
 	// from the right relation
 	chunk.SetCardinality(left_chunk.size());
+	// create a reference to the vectors of the left column
 	for (idx_t i = 0; i < left_chunk.ColumnCount(); i++) {
-		// first duplicate the values of the left side
 		chunk.data[i].Reference(left_chunk.data[i]);
 	}
+	// duplicate the values on the right side
+	auto &right_chunk = right_collection.GetChunkForRow(state->right_position);
+	auto row_in_chunk = state->right_position % STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < right_collection.ColumnCount(); i++) {
-		// now create a reference to the vectors of the right chunk
-		auto rvalue = right_collection.GetValue(i, state->right_position);
-		chunk.data[left_chunk.ColumnCount() + i].Reference(rvalue);
+		ConstantVector::Reference(chunk.data[left_chunk.ColumnCount() + i], right_chunk.data[i], row_in_chunk,
+		                          right_chunk.size());
 	}
 
 	// for the next iteration, move to the next position on the right side

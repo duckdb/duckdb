@@ -1,5 +1,5 @@
 #include "duckdb/function/macro_function.hpp"
-
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"

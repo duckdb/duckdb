@@ -14,6 +14,8 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
+#include <limits>
+
 namespace duckdb {
 
 template <class OP>
@@ -152,7 +154,7 @@ static unique_ptr<BaseStatistics> PropagateNumericStats(ClientContext &context, 
 		expr.function.function = GetScalarIntegerFunction<BASEOP>(expr.return_type.InternalType());
 	}
 	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
-	stats->has_null = lstats.has_null || rstats.has_null;
+	stats->validity_stats = ValidityStatistics::Combine(lstats.validity_stats, rstats.validity_stats);
 	return move(stats);
 }
 
@@ -185,14 +187,15 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 		required_width = Decimal::MAX_WIDTH_DECIMAL;
 	}
 	// arithmetic between two decimal arguments: check the types of the input arguments
-	LogicalType result_type = LogicalType(LogicalTypeId::DECIMAL, required_width, max_scale);
+	LogicalType result_type = LogicalType::DECIMAL(required_width, max_scale);
 	// we cast all input types to the specified type
 	for (idx_t i = 0; i < arguments.size(); i++) {
 		// first check if the cast is necessary
 		// if the argument has a matching scale and internal type as the output type, no casting is necessary
 		auto &argument_type = arguments[i]->return_type;
-		if (argument_type.scale() == result_type.scale() &&
-		    argument_type.InternalType() == result_type.InternalType()) {
+		uint8_t width, scale;
+		argument_type.GetDecimalProperties(width, scale);
+		if (scale == DecimalType::GetScale(result_type) && argument_type.InternalType() == result_type.InternalType()) {
 			bound_function.arguments[i] = argument_type;
 		} else {
 			bound_function.arguments[i] = result_type;
@@ -281,19 +284,33 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // - [subtract]
 //===--------------------------------------------------------------------===//
+struct NegateOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA input) {
+		using Limits = std::numeric_limits<TR>;
+		auto cast = (TR)input;
+		if (Limits::is_integer && Limits::is_signed && Limits::lowest() == cast) {
+			throw OutOfRangeException("Overflow in negation of integer!");
+		}
+		return -cast;
+	}
+};
+
 unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
-	auto decimal_type = arguments[0]->return_type;
-	if (decimal_type.width() <= Decimal::MAX_WIDTH_INT16) {
+	auto &decimal_type = arguments[0]->return_type;
+	auto width = DecimalType::GetWidth(decimal_type);
+	if (width <= Decimal::MAX_WIDTH_INT16) {
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::SMALLINT);
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT32) {
+	} else if (width <= Decimal::MAX_WIDTH_INT32) {
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::INTEGER);
-	} else if (decimal_type.width() <= Decimal::MAX_WIDTH_INT64) {
+	} else if (width <= Decimal::MAX_WIDTH_INT64) {
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::BIGINT);
 	} else {
-		D_ASSERT(decimal_type.width() <= Decimal::MAX_WIDTH_INT128);
+		D_ASSERT(width <= Decimal::MAX_WIDTH_INT128);
 		bound_function.function = ScalarFunction::GetScalarUnaryFunction<NegateOperator>(LogicalTypeId::HUGEINT);
 	}
+	decimal_type.Verify();
 	bound_function.arguments[0] = decimal_type;
 	bound_function.return_type = decimal_type;
 	return nullptr;
@@ -338,7 +355,9 @@ static unique_ptr<BaseStatistics> NegateBindStatistics(ClientContext &context, B
 		}
 	}
 	auto stats = make_unique<NumericStatistics>(expr.return_type, move(new_min), move(new_max));
-	stats->has_null = istats.has_null;
+	if (istats.validity_stats) {
+		stats->validity_stats = istats.validity_stats->Copy();
+	}
 	return move(stats);
 }
 
@@ -461,7 +480,8 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 		    result_scale, Decimal::MAX_WIDTH_DECIMAL);
 	}
 	bool check_overflow = false;
-	if (result_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64) {
+	if (result_width > Decimal::MAX_WIDTH_INT64 && max_width <= Decimal::MAX_WIDTH_INT64 &&
+	    result_scale < Decimal::MAX_WIDTH_INT64) {
 		check_overflow = true;
 		result_width = Decimal::MAX_WIDTH_INT64;
 	}
@@ -469,7 +489,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 		check_overflow = true;
 		result_width = Decimal::MAX_WIDTH_DECIMAL;
 	}
-	LogicalType result_type = LogicalType(LogicalTypeId::DECIMAL, result_width, result_scale);
+	LogicalType result_type = LogicalType::DECIMAL(result_width, result_scale);
 	// since our scale is the summation of our input scales, we do not need to cast to the result scale
 	// however, we might need to cast to the correct internal type
 	for (idx_t i = 0; i < arguments.size(); i++) {
@@ -477,9 +497,13 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 		if (argument_type.InternalType() == result_type.InternalType()) {
 			bound_function.arguments[i] = argument_type;
 		} else {
-			bound_function.arguments[i] = LogicalType(LogicalTypeId::DECIMAL, result_width, argument_type.scale());
+			uint8_t width, scale;
+			argument_type.GetDecimalProperties(width, scale);
+
+			bound_function.arguments[i] = LogicalType::DECIMAL(result_width, scale);
 		}
 	}
+	result_type.Verify();
 	bound_function.return_type = result_type;
 	// now select the physical function to execute
 	if (check_overflow) {

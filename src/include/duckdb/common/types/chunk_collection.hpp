@@ -31,14 +31,17 @@ public:
 	DUCKDB_API vector<LogicalType> &Types() {
 		return types;
 	}
+	const vector<LogicalType> &Types() const {
+		return types;
+	}
 
 	//! The amount of rows in the ChunkCollection
-	DUCKDB_API const idx_t &Count() {
+	DUCKDB_API const idx_t &Count() const {
 		return count;
 	}
 
 	//! The amount of columns in the ChunkCollection
-	DUCKDB_API idx_t ColumnCount() {
+	DUCKDB_API idx_t ColumnCount() const {
 		return types.size();
 	}
 
@@ -76,12 +79,16 @@ public:
 		D_ASSERT(chunk_index < chunks.size());
 		return *chunks[chunk_index];
 	}
+	const DataChunk &GetChunk(idx_t chunk_index) const {
+		D_ASSERT(chunk_index < chunks.size());
+		return *chunks[chunk_index];
+	}
 
 	DUCKDB_API const vector<unique_ptr<DataChunk>> &Chunks() {
 		return chunks;
 	}
 
-	DUCKDB_API idx_t ChunkCount() {
+	DUCKDB_API idx_t ChunkCount() const {
 		return chunks.size();
 	}
 
@@ -102,7 +109,7 @@ public:
 	}
 
 	DUCKDB_API void Sort(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t result[]);
-	//! Reorders the rows in the collection according to the given indices. NB: order is changed!
+	//! Reorders the rows in the collection according to the given indices.
 	DUCKDB_API void Reorder(idx_t order[]);
 
 	DUCKDB_API void MaterializeSortedChunk(DataChunk &target, idx_t order[], idx_t start_offset);

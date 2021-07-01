@@ -19,7 +19,7 @@ unique_ptr<SetStatement> Transformer::TransformSet(duckdb_libpgquery::PGNode *no
 	D_ASSERT(stmt->args->head && stmt->args->head->data.ptr_value);
 	D_ASSERT(((duckdb_libpgquery::PGNode *)stmt->args->head->data.ptr_value)->type == duckdb_libpgquery::T_PGAConst);
 
-	auto value = TransformValue(((duckdb_libpgquery::PGAConst *)stmt->args->head->data.ptr_value)->val)->value;
+	auto value = TransformValue(((duckdb_libpgquery::PGAConst *)stmt->args->head->data.ptr_value)->val, 0)->value;
 
 	return make_unique<SetStatement>(name, value);
 }

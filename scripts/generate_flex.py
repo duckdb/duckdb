@@ -38,6 +38,17 @@ text = text + "\n} /* duckdb_libpgquery */\n"
 
 text = re.sub('[(]void[)][ ]*fprintf', '//', text)
 text = re.sub('exit[(]', 'throw std::runtime_error(msg); //', text)
+text = re.sub(r'\n\s*if\s*[(]\s*!\s*yyin\s*[)]\s*\n\s*yyin\s*=\s*stdin;\s*\n', '\n', text)
+text = re.sub(r'\n\s*if\s*[(]\s*!\s*yyout\s*[)]\s*\n\s*yyout\s*=\s*stdout;\s*\n', '\n', text)
+text = re.sub(r'[#]ifdef\s*YY_STDINIT\n\s*yyin = stdin;\n\s*yyout = stdout;\n[#]else\n\s*yyin = [(]FILE [*][)] 0;\n\s*yyout = [(]FILE [*][)] 0;\n[#]endif', '    yyin = (FILE *) 0;\n    yyout = (FILE *) 0;', text)
+
+if 'stdin;' in text:
+	print("STDIN not removed!")
+	# exit(1)
+
+if 'stdout' in text:
+	print("STDOUT not removed!")
+	# exit(1)
 
 if 'fprintf(' in text:
 	print("PRINTF not removed!")

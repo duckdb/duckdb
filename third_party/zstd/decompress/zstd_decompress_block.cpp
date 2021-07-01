@@ -15,16 +15,16 @@
 *  Dependencies
 *********************************************************/
 #include <string.h>      /* memcpy, memmove, memset */
-#include "../common/compiler.h"    /* prefetch */
-#include "../common/mem.h"         /* low level memory routines */
-#define FSE_STATIC_LINKING_ONLY
-#include "../common/fse.h"
-#define HUF_STATIC_LINKING_ONLY
-#include "../common/huf.h"
-#include "../common/zstd_internal.h"
-#include "zstd_decompress_internal.h"   /* ZSTD_DCtx */
-#include "zstd_ddict.h"  /* ZSTD_DDictDictContent */
-#include "zstd_decompress_block.h"
+#include "zstd/common/compiler.h"    /* prefetch */
+#include "zstd/common/mem.h"         /* low level memory routines */
+#include "zstd/common/fse.h"
+#include "zstd/common/fse_static.h"
+#include "zstd/common/huf.h"
+#include "zstd/common/huf_static.h"
+#include "zstd/common/zstd_internal.h"
+#include "zstd/decompress/zstd_decompress_internal.h"   /* ZSTD_DCtx */
+#include "zstd/decompress/zstd_ddict.h"  /* ZSTD_DDictDictContent */
+#include "zstd/decompress/zstd_decompress_block.h"
 namespace duckdb_zstd {
 /*_*******************************************************
 *  Macros

@@ -65,10 +65,19 @@ struct VectorOperations {
 	static void LessThan(Vector &A, Vector &B, Vector &result, idx_t count);
 	// result = A <= B
 	static void LessThanEquals(Vector &A, Vector &B, Vector &result, idx_t count);
+
 	// result = A != B with nulls being equal
 	static void DistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
-	// result = A == B with nulls being equal
+	// result := A == B with nulls being equal
 	static void NotDistinctFrom(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result := A > B with nulls being maximal
+	static void DistinctGreaterThan(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result := A >= B with nulls being maximal
+	static void DistinctGreaterThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result := A < B with nulls being maximal
+	static void DistinctLessThan(Vector &left, Vector &right, Vector &result, idx_t count);
+	// result := A <= B with nulls being maximal
+	static void DistinctLessThanEquals(Vector &left, Vector &right, Vector &result, idx_t count);
 
 	//===--------------------------------------------------------------------===//
 	// Select Comparisons
@@ -85,22 +94,48 @@ struct VectorOperations {
 	                      SelectionVector *true_sel, SelectionVector *false_sel);
 	static idx_t LessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
 	                            SelectionVector *true_sel, SelectionVector *false_sel);
-	// result = A != B with nulls being equal
-	static idx_t SelectDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                SelectionVector *true_sel, SelectionVector *false_sel);
-	// result = A == B with nulls being equal
-	static idx_t SelectNotDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                   SelectionVector *true_sel, SelectionVector *false_sel);
+
+	// true := A != B with nulls being equal
+	static idx_t DistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                          SelectionVector *true_sel, SelectionVector *false_sel);
+	// true := A == B with nulls being equal
+	static idx_t NotDistinctFrom(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                             SelectionVector *true_sel, SelectionVector *false_sel);
+	// true := A > B with nulls being maximal
+	static idx_t DistinctGreaterThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                                 SelectionVector *true_sel, SelectionVector *false_sel);
+	// true := A >= B with nulls being maximal
+	static idx_t DistinctGreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                                       SelectionVector *true_sel, SelectionVector *false_sel);
+	// true := A < B with nulls being maximal
+	static idx_t DistinctLessThan(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                              SelectionVector *true_sel, SelectionVector *false_sel);
+	// true := A <= B with nulls being maximal
+	static idx_t DistinctLessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                                    SelectionVector *true_sel, SelectionVector *false_sel);
 
 	//===--------------------------------------------------------------------===//
-	// Scatter methods
+	// Nested Comparisons
 	//===--------------------------------------------------------------------===//
-	// make sure dest.count is set for gather methods!
-	struct Gather {
-		//! dest.data[i] = ptr[i]. NullValue<T> is checked for and converted to the nullmask in dest. The source
-		//! addresses are incremented by the size of the type.
-		static void Set(Vector &source, Vector &dest, idx_t count);
-	};
+	// true := A != B with nulls being equal, inputs selected
+	static idx_t NestedNotEquals(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
+	                             SelectionVector *true_sel, SelectionVector *false_sel);
+	// true := A == B with nulls being equal, inputs selected
+	static idx_t NestedEquals(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
+	                          SelectionVector *true_sel, SelectionVector *false_sel);
+
+	// true := A > B with nulls being maximal, inputs selected
+	static idx_t NestedGreaterThan(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
+	                               SelectionVector *true_sel, SelectionVector *false_sel);
+	// true := A >= B with nulls being maximal, inputs selected
+	static idx_t NestedGreaterThanEquals(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
+	                                     idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
+	// true := A < B with nulls being maximal, inputs selected
+	static idx_t NestedLessThan(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel, idx_t count,
+	                            SelectionVector *true_sel, SelectionVector *false_sel);
+	// true := A <= B with nulls being maximal, inputs selected
+	static idx_t NestedLessThanEquals(Vector &left, Vector &right, idx_t vcount, const SelectionVector &sel,
+	                                  idx_t count, SelectionVector *true_sel, SelectionVector *false_sel);
 
 	//===--------------------------------------------------------------------===//
 	// Hash functions

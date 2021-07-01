@@ -9,6 +9,9 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
+PRAGMA threads=1
+
+statement ok
 PRAGMA default_null_order='NULLS LAST'
 
 statement ok
@@ -119,5 +122,3 @@ ORDER BY Sort, EmployeeID;
 275	>>>Michael Blythe	Sales Representative	4
 285	>>Syed Abbas	Pacific Sales Manager	3
 286	>>>Lynn Tsoflias	Sales Representative	4
-
-

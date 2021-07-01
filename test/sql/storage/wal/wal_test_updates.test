@@ -9,6 +9,9 @@ statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
 statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok
@@ -16,6 +19,13 @@ INSERT INTO test VALUES (11, 22), (13, 22), (12, 21)
 
 statement ok
 UPDATE test SET b=b+1 WHERE a=11
+
+query II
+SELECT a, b FROM test ORDER BY a
+----
+11	23
+12	21
+13	22
 
 statement ok
 UPDATE test SET b=b+1 WHERE a=11
@@ -31,6 +41,9 @@ restart
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
 
 query II
 SELECT a, b FROM test ORDER BY a

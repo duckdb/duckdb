@@ -1,0 +1,108 @@
+# name: test/sql/storage/types/struct/struct_large_nulls.test_slow
+# description: Test that we reclaim space when dropping tables with struct columns
+# group: [struct]
+
+load __TEST_DIR__/test_struct_large_nulls.db
+
+statement ok
+CREATE TABLE structs AS SELECT -i-1 id, {'i': -i-1, 'j': i::VARCHAR} c FROM range(10000000) tbl(i);
+
+statement ok
+INSERT INTO structs SELECT i id, {'i': i, 'j': i::VARCHAR} c FROM range(1000) tbl(i);
+
+query III
+SELECT COUNT(*), COUNT(c['i']), COUNT(c['j']) FROM structs
+----
+10001000	10001000	10001000
+
+query I
+SELECT COUNT(*) FROM structs WHERE c['i'] >= 0
+----
+1000
+
+# verify that no null values have crept their way into the stats
+query II
+select column_path, stats from pragma_storage_info('structs') where stats LIKE '%[Min: -2147483648, Max: -2147483648]%'
+----
+
+query I
+UPDATE structs SET id=NULL, c={'i': NULL, 'j': c['i']::VARCHAR} WHERE c['i'] >= 0 AND c['i'] % 4 = 0
+----
+250
+
+# verify that no null values have crept their way into the stats
+query II
+select column_path, stats from pragma_storage_info('structs') where stats LIKE '%[Min: -2147483648, Max: -2147483648]%'
+----
+
+query I
+UPDATE structs SET c={'i': c['i'], 'j': NULL} WHERE c['i'] >= 0 AND c['i'] % 4 = 1
+----
+250
+
+# verify that no null values have crept their way into the stats
+query II
+select column_path, stats from pragma_storage_info('structs') where stats LIKE '%[Min: -2147483648, Max: -2147483648]%'
+----
+
+query I
+UPDATE structs SET id=NULL, c={'i': NULL, 'j': NULL} WHERE c['i'] >= 0 AND c['i'] % 4 = 2
+----
+250
+
+# verify that no null values have crept their way into the stats
+query II
+select column_path, stats from pragma_storage_info('structs') where stats LIKE '%[Min: -2147483648, Max: -2147483648]%'
+----
+
+query I
+UPDATE structs SET id=NULL, c=NULL WHERE c['i'] >= 0 AND c['i'] % 4 = 3
+----
+250
+
+# verify that no null values have crept their way into the stats
+query II
+select column_path, stats from pragma_storage_info('structs') where stats LIKE '%[Min: -2147483648, Max: -2147483648]%'
+----
+
+# query the null values
+query I
+SELECT COUNT(*) FROM structs WHERE c IS NULL
+----
+250
+
+query I
+SELECT COUNT(*) FROM structs WHERE c['i'] IS NULL
+----
+750
+
+query I
+SELECT COUNT(*) FROM structs WHERE c['j'] IS NULL
+----
+750
+
+query I
+SELECT COUNT(c['j']) FROM structs WHERE (c['i'] >= 0 OR c['i'] IS NULL)
+----
+250
+
+query I nosort sum_result
+SELECT SUM(id) FROM structs WHERE id >= 0
+----
+
+query I nosort sum_result
+SELECT SUM(c['i']) FROM structs WHERE c['i'] >= 0
+----
+
+query I nosort sum_result_nofilter
+SELECT SUM(id) FROM structs
+----
+
+query I nosort sum_result_nofilter
+SELECT SUM(c['i']) FROM structs
+----
+
+query III
+SELECT COUNT(c['j']), MIN(c['j']), MAX(c['j']) FROM structs WHERE (c['i'] >= 0 OR c['i'] IS NULL)
+----
+250	0	996

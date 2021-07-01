@@ -4,14 +4,15 @@ namespace duckdb {
 
 class PhysicalTableInOutFunctionState : public PhysicalOperatorState {
 public:
-	PhysicalTableInOutFunctionState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child) {
+	PhysicalTableInOutFunctionState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), initialized(false) {
 		D_ASSERT(child);
 	}
 
 	unique_ptr<PhysicalOperatorState> child_state;
 	DataChunk child_chunk;
 	unique_ptr<FunctionOperatorData> operator_data;
-	bool initialized;
+	bool initialized = false;
 };
 
 // this implements a sorted window functions variant
@@ -23,7 +24,7 @@ PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types
 }
 
 void PhysicalTableInOutFunction::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                                  PhysicalOperatorState *state_p) {
+                                                  PhysicalOperatorState *state_p) const {
 	auto &state = (PhysicalTableInOutFunctionState &)*state_p;
 
 	if (!state.initialized) {
@@ -34,6 +35,7 @@ void PhysicalTableInOutFunction::GetChunkInternal(ExecutionContext &context, Dat
 	}
 
 	D_ASSERT(children.size() == 1);
+	state.child_chunk.Reset();
 	children[0]->GetChunkInternal(context, state.child_chunk, state.child_state.get());
 	function.function(context.client, bind_data.get(), state.operator_data.get(), &state.child_chunk, chunk);
 }

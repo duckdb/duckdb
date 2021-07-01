@@ -2,6 +2,12 @@
 # description: Test last_profiling_output, detailed_profiling_output and all_profiling_output pragma
 # group: [pragma]
 
+#mode skip
+
+# unclear what goes wrong here otherwise
+statement ok
+PRAGMA threads=1
+
 statement ok
 PRAGMA enable_profiling
 

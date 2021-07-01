@@ -24,3 +24,21 @@ SELECT g, MIN(h), MAX(h), SUM(h), FIRST(h) FROM hugeints GROUP BY g ORDER BY 1;
 ----
 1	-12	42	30	42
 2	-439847238974238975238975	1267650600228229401496703205376	1267650160380990427257727966401	1267650600228229401496703205376
+
+# first aggr gets confused otherwise
+statement ok
+PRAGMA threads=1
+
+# ungrouped aggregate
+query I
+SELECT FIRST(h) FROM hugeints;
+----
+42
+
+# grouped aggregate
+query II
+SELECT g, FIRST(h) FROM hugeints GROUP BY g ORDER BY 1;
+----
+1	42
+2	1267650600228229401496703205376
+

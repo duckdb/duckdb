@@ -11,7 +11,7 @@
  /*-*************************************
  *  Dependencies
  ***************************************/
-#include "zstd_compress_sequences.h"
+#include "zstd/compress/zstd_compress_sequences.h"
 
 namespace duckdb_zstd {
 /**

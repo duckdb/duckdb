@@ -1,0 +1,33 @@
+# name: test/sql/storage/checkpointed_self_append_tinyint.test
+# description: Test appending to a checkpointed table from itself with tinyint columns
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/checkpointed_self_append.db
+
+statement ok
+CREATE TABLE vals(i TINYINT)
+
+statement ok
+INSERT INTO vals SELECT (CASE WHEN i % 2 = 0 THEN NULL ELSE i % 100 END)::TINYINT i FROM range(200000) tbl(i)
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+----
+1	99	100000	200000
+
+statement ok
+CHECKPOINT
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+----
+1	99	100000	200000
+
+statement ok
+INSERT INTO vals SELECT * FROM vals;
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+----
+1	99	200000	400000

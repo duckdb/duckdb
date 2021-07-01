@@ -5,13 +5,15 @@
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
-TableFunctionRelation::TableFunctionRelation(ClientContext &context, string name_p, vector<Value> parameters_p)
-    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(move(name_p)), parameters(move(parameters_p)) {
+TableFunctionRelation::TableFunctionRelation(ClientContext &context, string name_p, vector<Value> parameters_p,
+                                             shared_ptr<Relation> input_relation_p)
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(move(name_p)), parameters(move(parameters_p)),
+      input_relation(move(input_relation_p)) {
 	context.TryBindRelation(*this, this->columns);
 }
 
@@ -24,12 +26,19 @@ unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
 
 unique_ptr<TableRef> TableFunctionRelation::GetTableRef() {
 	vector<unique_ptr<ParsedExpression>> children;
+	if (input_relation) { // input relation becomes first parameter if present, always
+		auto subquery = make_unique<SubqueryExpression>();
+		subquery->subquery = make_unique<SelectStatement>();
+		subquery->subquery->node = input_relation->GetQueryNode();
+		subquery->subquery_type = SubqueryType::SCALAR;
+		children.push_back(move(subquery));
+	}
 	for (auto &parameter : parameters) {
 		children.push_back(make_unique<ConstantExpression>(parameter));
 	}
 
 	auto table_function = make_unique<TableFunctionRef>();
-	auto function = make_unique<FunctionExpression>(name, children);
+	auto function = make_unique<FunctionExpression>(name, move(children));
 	table_function->function = move(function);
 	return move(table_function);
 }

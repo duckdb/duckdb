@@ -1,0 +1,48 @@
+# name: test/sql/window/test_moving_quantile.test_slow
+# description: Moving quantile performance
+# group: [window]
+
+require vector_size 512
+
+# Integer benchmark tables
+statement ok
+create table rank100 as
+    select b % 100 as a, b
+    from (
+        select * from range(0, 10000000) tbl(b)
+    ) q;
+
+#   Fixed frame
+statement ok
+prepare fwm as
+select sum(m)
+from (
+    select median(a) over (
+        order by b asc
+        rows between cast(?1 as integer) preceding and current row) as m
+    from rank100
+    ) q;
+
+#   Variable frame
+statement ok
+prepare vwm as
+select sum(m)
+from (
+    select median(a) over (
+        order by b asc
+        rows between mod(b * cast(?1 as integer), cast(?2 as integer)) preceding
+                 and cast(?3 as integer) - mod(b * cast(?1 as integer), cast(?2 as integer)) following
+        ) as m
+    from rank100
+    ) q;
+
+# Checksum the queries
+query I
+execute fwm(100)
+----
+494997500
+
+query I
+execute vwm(47, 511, 100)
+----
+494989867

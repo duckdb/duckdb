@@ -22,6 +22,8 @@ public:
 
 	bool recursing = false;
 	bool intermediate_empty = true;
+	std::shared_ptr<ChunkCollection> working_table;
+	ChunkCollection intermediate_table;
 };
 
 PhysicalRecursiveCTE::PhysicalRecursiveCTE(vector<LogicalType> types, bool union_all, unique_ptr<PhysicalOperator> top,
@@ -36,7 +38,7 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 
 // first exhaust non recursive term, then exhaust recursive term iteratively until no (new) rows are generated.
 void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                            PhysicalOperatorState *state_p) {
+                                            PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_p);
 
 	if (!state->ht) {
@@ -50,10 +52,10 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 			if (!union_all) {
 				idx_t match_count = ProbeHT(chunk, state);
 				if (match_count > 0) {
-					working_table->Append(chunk);
+					state->working_table->Append(chunk);
 				}
 			} else {
-				working_table->Append(chunk);
+				state->working_table->Append(chunk);
 			}
 
 			if (chunk.size() != 0) {
@@ -74,9 +76,9 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 				break;
 			}
 
-			working_table->Reset();
-			working_table->Merge(intermediate_table);
-			intermediate_table.Reset();
+			state->working_table->Reset();
+			state->working_table->Merge(state->intermediate_table);
+			state->intermediate_table.Reset();
 
 			ExecuteRecursivePipelines(context);
 			state->bottom_state = children[1]->GetOperatorState();
@@ -90,13 +92,13 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 			// intermediate tables.
 			idx_t match_count = ProbeHT(chunk, state);
 			if (match_count > 0) {
-				intermediate_table.Append(chunk);
+				state->intermediate_table.Append(chunk);
 				state->intermediate_empty = false;
 			} else {
 				continue;
 			}
 		} else {
-			intermediate_table.Append(chunk);
+			state->intermediate_table.Append(chunk);
 			state->intermediate_empty = false;
 		}
 
@@ -104,7 +106,7 @@ void PhysicalRecursiveCTE::GetChunkInternal(ExecutionContext &context, DataChunk
 	}
 }
 
-void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) {
+void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) const {
 	if (pipelines.empty()) {
 		return;
 	}
@@ -137,7 +139,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 	}
 }
 
-idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_p) {
+idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, PhysicalOperatorState *state_p) const {
 	auto state = reinterpret_cast<PhysicalRecursiveCTEState *>(state_p);
 
 	Vector dummy_addresses(LogicalType::POINTER);
@@ -156,6 +158,7 @@ unique_ptr<PhysicalOperatorState> PhysicalRecursiveCTE::GetOperatorState() {
 	auto state = make_unique<PhysicalRecursiveCTEState>(*this);
 	state->top_state = children[0]->GetOperatorState();
 	state->bottom_state = children[1]->GetOperatorState();
+	state->working_table = working_table;
 	return (move(state));
 }
 

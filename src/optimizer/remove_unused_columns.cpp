@@ -184,10 +184,10 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			auto &get = (LogicalGet &)op;
 			// for every table filter, push a column binding into the column references map to prevent the column from
 			// being projected out
-			for (auto &filter : get.table_filters) {
+			for (auto &filter : get.table_filters.filters) {
 				idx_t index = INVALID_INDEX;
 				for (idx_t i = 0; i < get.column_ids.size(); i++) {
-					if (get.column_ids[i] == filter.column_index) {
+					if (get.column_ids[i] == filter.first) {
 						index = i;
 						break;
 					}

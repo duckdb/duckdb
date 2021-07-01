@@ -3,31 +3,21 @@
 
 namespace duckdb {
 
-struct FunctionExpressionState : public ExpressionState {
-	FunctionExpressionState(Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
-	}
-
-	DataChunk arguments;
-};
-unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(BoundFunctionExpression &expr,
+unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<FunctionExpressionState>(expr, root);
+	auto result = make_unique<ExpressionState>(expr, root);
 	for (auto &child : expr.children) {
 		result->AddChild(child.get());
 	}
 	result->Finalize();
-	if (!result->types.empty()) {
-		result->arguments.InitializeEmpty(result->types);
-	}
-	return move(result);
+	return result;
 }
 
-void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState *state, const SelectionVector *sel,
-                                 idx_t count, Vector &result) {
-	auto &fstate = (FunctionExpressionState &)*state;
-	auto &arguments = fstate.arguments;
+void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,
+                                 const SelectionVector *sel, idx_t count, Vector &result) {
+	state->intermediate_chunk.Reset();
+	auto &arguments = state->intermediate_chunk;
 	if (!state->types.empty()) {
-		arguments.Reference(state->intermediate_chunk);
 		for (idx_t i = 0; i < expr.children.size(); i++) {
 			D_ASSERT(state->types[i] == expr.children[i]->return_type);
 			Execute(*expr.children[i], state->child_states[i].get(), sel, count, arguments.data[i]);
@@ -40,14 +30,9 @@ void ExpressionExecutor::Execute(BoundFunctionExpression &expr, ExpressionState 
 		arguments.Verify();
 	}
 	arguments.SetCardinality(count);
-	if (current_count >= next_sample) {
-		state->profiler.Start();
-	}
+	state->profiler.BeginSample();
 	expr.function.function(arguments, *state, result);
-	if (current_count >= next_sample) {
-		state->profiler.End();
-		state->time += state->profiler.Elapsed();
-	}
+	state->profiler.EndSample(count);
 	if (result.GetType() != expr.return_type) {
 		throw TypeMismatchException(expr.return_type, result.GetType(),
 		                            "expected function to return the former "

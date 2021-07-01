@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_cross_product.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
@@ -13,7 +14,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 		auto stats_left = PropagateExpression(condition.left);
 		auto stats_right = PropagateExpression(condition.right);
 		if (stats_left && stats_right) {
-			if (condition.null_values_are_equal && stats_left->has_null && stats_right->has_null) {
+			if (condition.null_values_are_equal && stats_left->CanHaveNull() && stats_right->CanHaveNull()) {
 				// null values are equal in this join, and both sides can have null values
 				// nothing to do here
 				continue;
@@ -180,7 +181,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		for (auto &binding : right_bindings) {
 			auto stats = statistics_map.find(binding);
 			if (stats != statistics_map.end()) {
-				stats->second->has_null = true;
+				stats->second->validity_stats = make_unique<ValidityStatistics>(true);
 			}
 		}
 	}
@@ -189,7 +190,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalJoin
 		for (auto &binding : left_bindings) {
 			auto stats = statistics_map.find(binding);
 			if (stats != statistics_map.end()) {
-				stats->second->has_null = true;
+				stats->second->validity_stats = make_unique<ValidityStatistics>(true);
 			}
 		}
 	}

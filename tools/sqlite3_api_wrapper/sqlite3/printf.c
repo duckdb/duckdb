@@ -53,8 +53,8 @@ void sqlite3StrAccumReset(StrAccum *p);
 /* The rest are extensions, not normally found in printf() */
 #define etSQLESCAPE 9 /* Strings with '\'' doubled.  %q */
 #define etSQLESCAPE2                                                                                                   \
-	10                  /* Strings with '\'' doubled and enclosed in '',                                               \
-	                      NULL pointers replaced by SQL NULL.  %Q */
+	10 /* Strings with '\'' doubled and enclosed in '',                                                                \
+	     NULL pointers replaced by SQL NULL.  %Q */
 #define etTOKEN      11 /* a pointer to a Token structure */
 #define etSRCLIST    12 /* a pointer to a SrcList */
 #define etPOINTER    13 /* The %p conversion */

@@ -26,8 +26,8 @@
 #include <limits>
 //#include <boost/scoped_array.hpp> // FUCK OFF
 
-#include <thrift/transport/TTransport.h>
-#include <thrift/transport/TVirtualTransport.h>
+#include "thrift/transport/TTransport.h"
+#include "thrift/transport/TVirtualTransport.h"
 
 #ifdef __GNUC__
 #define TDB_LIKELY(val) (__builtin_expect((val), 1))
@@ -37,7 +37,7 @@
 #define TDB_UNLIKELY(val) (val)
 #endif
 
-namespace apache {
+namespace duckdb_apache {
 namespace thrift {
 namespace transport {
 
@@ -82,7 +82,7 @@ public:
       rBase_ = new_rBase;
       return len;
     }
-    return apache::thrift::transport::readAll(*this, buf, len);
+    return duckdb_apache::thrift::transport::readAll(*this, buf, len);
   }
 
   /**
@@ -484,6 +484,6 @@ protected:
 };
 }
 }
-} // apache::thrift::transport
+} // duckdb_apache::thrift::transport
 
 #endif // #ifndef _THRIFT_TRANSPORT_TBUFFERTRANSPORTS_H_

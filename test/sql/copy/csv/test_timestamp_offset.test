@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/test_timestamp_offset.test
+# description: Test CSV with a timestamp with timestamp offset
+# group: [csv]
+
+query II
+SELECT col1, typeof(col1) FROM 'test/sql/copy/csv/data/test/timestampoffset.csv' t1(col1);
+----
+2020-12-30 00:25:58.745232	TIMESTAMP
+2020-12-30 01:25:58.745232	TIMESTAMP
+2020-12-30 02:25:58.745232	TIMESTAMP
+2020-12-30 03:25:58.745232	TIMESTAMP

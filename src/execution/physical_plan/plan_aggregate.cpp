@@ -59,7 +59,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 				return false;
 			}
 			// we had no stats before, so we have no clue if there are null values or not
-			stats->has_null = true;
+			stats->validity_stats = make_unique<ValidityStatistics>(true);
 		}
 		auto &nstats = (NumericStatistics &)*stats;
 

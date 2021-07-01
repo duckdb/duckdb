@@ -15,12 +15,12 @@
 /* *************************************
 *  Dependencies
 ***************************************/
-#include "mem.h"
-#include "error_private.h"       /* ERR_*, ERROR */
-#define FSE_STATIC_LINKING_ONLY  /* FSE_MIN_TABLELOG */
-#include "fse.h"
-#define HUF_STATIC_LINKING_ONLY  /* HUF_TABLELOG_ABSOLUTEMAX */
-#include "huf.h"
+#include "zstd/common/mem.h"
+#include "zstd/common/error_private.h"       /* ERR_*, ERROR */
+#include "zstd/common/fse.h"
+#include "zstd/common/fse_static.h"
+#include "zstd/common/huf.h"
+#include "zstd/common/huf_static.h"
 
 namespace duckdb_zstd {
 

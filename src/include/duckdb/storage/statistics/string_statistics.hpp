@@ -9,6 +9,8 @@
 #pragma once
 
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
@@ -39,7 +41,7 @@ public:
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
 	void Verify(Vector &vector, idx_t count) override;
 
-	bool CheckZonemap(ExpressionType comparison_type, const string &value);
+	FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const string &value);
 
 	string ToString() override;
 };

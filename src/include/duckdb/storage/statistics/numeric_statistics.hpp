@@ -10,12 +10,14 @@
 
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
+#include "duckdb/storage/statistics/validity_statistics.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/windows_undefs.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
 
@@ -31,7 +33,7 @@ public:
 
 public:
 	void Merge(const BaseStatistics &other) override;
-	bool CheckZonemap(ExpressionType comparison_type, const Value &constant);
+	FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const Value &constant);
 
 	unique_ptr<BaseStatistics> Copy() override;
 	void Serialize(Serializer &serializer) override;
@@ -83,5 +85,7 @@ template <>
 void NumericStatistics::Update<double>(SegmentStatistics &stats, double new_value);
 template <>
 void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t new_value);
+template <>
+void NumericStatistics::Update<list_entry_t>(SegmentStatistics &stats, list_entry_t new_value);
 
 } // namespace duckdb
