@@ -1,0 +1,19 @@
+# name: test/sql/types/nested/map/map_storage.test
+# description: Test maps with in-memory storage
+# group: [map]
+
+statement ok
+CREATE TABLE a(b MAP(INTEGER,INTEGER));
+
+query I
+SELECT * FROM a;
+----
+
+statement ok
+INSERT INTO a VALUES (MAP([1], [2])), (MAP([1, 2, 3], [4, 5, 6]));
+
+query I
+SELECT * FROM a;
+----
+{1=2}
+{1=4, 2=5, 3=6}
