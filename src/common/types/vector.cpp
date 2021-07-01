@@ -767,7 +767,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		break;
 	default:
 		Normalify(count);
-		data.sel = FlatVector::IncrementalSelectionVector(count, data.owned_sel);
+		data.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 		data.data = FlatVector::GetData(*this);
 		data.validity = FlatVector::Validity(*this);
 		break;
@@ -1195,10 +1195,6 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		break;
 	}
-}
-
-const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel) {
-	return &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {
