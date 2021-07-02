@@ -159,6 +159,8 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	skip.emplace_back("fixed.parquet");                //! Can't roundtrip Fixed-size Binaries
 	skip.emplace_back("leftdate3_192_loop_1.parquet"); //! This is just crazy slow
 	skip.emplace_back("bug687_nulls.parquet");         //! This is just crazy slow
+	skip.emplace_back("nullbyte.parquet");             //! Null byte in file
+	skip.emplace_back("nullbyte_multiple.parquet");    //! Null byte in file
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};

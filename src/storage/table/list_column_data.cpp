@@ -58,8 +58,11 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	auto list_entry = FetchListEntry(row_idx);
 	auto child_offset = list_entry.offset;
 
+	D_ASSERT(child_offset <= child_column->GetMaxEntry());
 	ColumnScanState child_state;
-	child_column->InitializeScanWithOffset(state, child_offset);
+	if (child_offset < child_column->GetMaxEntry()) {
+		child_column->InitializeScanWithOffset(child_state, child_offset);
+	}
 	state.child_states.push_back(move(child_state));
 }
 
@@ -102,7 +105,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 	if (child_scan_count > 0) {
 		auto &child_entry = ListVector::GetEntry(result);
 		D_ASSERT(child_entry.GetType().InternalType() == PhysicalType::STRUCT ||
-		         state.child_states[1].row_index + child_scan_count <= child_column->GetCount());
+		         state.child_states[1].row_index + child_scan_count <= child_column->GetMaxEntry());
 		child_column->ScanCount(state.child_states[1], child_entry, child_scan_count);
 	}
 	state.NextInternal(count);
@@ -159,7 +162,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 
 	// construct the list_entry_t entries to append to the column data
 	auto input_offsets = FlatVector::GetData<list_entry_t>(vector);
-	auto start_offset = child_column->GetCount();
+	auto start_offset = child_column->GetMaxEntry();
 	idx_t child_count = 0;
 
 	auto append_offsets = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
@@ -188,7 +191,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 
 	VectorData vdata;
 	vdata.validity = list_validity;
-	vdata.sel = FlatVector::IncrementalSelectionVector(count, vdata.owned_sel);
+	vdata.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	vdata.data = (data_ptr_t)append_offsets.get();
 
 	// append the list offsets
@@ -205,8 +208,8 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 void ListColumnData::RevertAppend(row_t start_row) {
 	ColumnData::RevertAppend(start_row);
 	validity.RevertAppend(start_row);
-	auto column_count = GetCount();
-	if (column_count > 0) {
+	auto column_count = GetMaxEntry();
+	if (column_count > start) {
 		// revert append in the child column
 		auto list_entry = FetchListEntry(column_count - 1);
 		child_column->RevertAppend(list_entry.offset + list_entry.length);
@@ -269,7 +272,7 @@ void ListColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state,
 		// seek the scan towards the specified position and read [length] entries
 		child_column->InitializeScanWithOffset(*child_state, original_offset);
 		D_ASSERT(child_type.InternalType() == PhysicalType::STRUCT ||
-		         child_state->row_index + child_scan_count <= child_column->GetCount());
+		         child_state->row_index + child_scan_count <= child_column->GetMaxEntry());
 		child_column->ScanCount(*child_state, child_scan, child_scan_count);
 
 		ListVector::Append(result, child_scan, child_scan_count);
@@ -281,50 +284,50 @@ void ListColumnData::CommitDropColumn() {
 	child_column->CommitDropColumn();
 }
 
-// struct StructColumnCheckpointState : public ColumnCheckpointState {
-// 	StructColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
-// 	    : ColumnCheckpointState(row_group, column_data, writer) {
-// 		global_stats = make_unique<StructStatistics>(column_data.type);
-// 	}
+struct ListColumnCheckpointState : public ColumnCheckpointState {
+	ListColumnCheckpointState(RowGroup &row_group, ColumnData &column_data, TableDataWriter &writer)
+	    : ColumnCheckpointState(row_group, column_data, writer) {
+		global_stats = make_unique<ListStatistics>(column_data.type);
+	}
 
-// 	unique_ptr<ColumnCheckpointState> validity_state;
-// 	vector<unique_ptr<ColumnCheckpointState>> child_states;
+	unique_ptr<ColumnCheckpointState> validity_state;
+	unique_ptr<ColumnCheckpointState> child_state;
 
-// public:
-// 	unique_ptr<BaseStatistics> GetStatistics() override {
-// 		auto stats = make_unique<StructStatistics>(column_data.type);
-// 		D_ASSERT(stats->child_stats.size() == child_states.size());
-// 		stats->validity_stats = validity_state->GetStatistics();
-// 		for (idx_t i = 0; i < child_states.size(); i++) {
-// 			stats->child_stats[i] = child_states[i]->GetStatistics();
-// 			D_ASSERT(stats->child_stats[i]);
-// 		}
-// 		return move(stats);
-// 	}
+public:
+	unique_ptr<BaseStatistics> GetStatistics() override {
+		auto stats = global_stats->Copy();
+		auto &list_stats = (ListStatistics &)*stats;
+		stats->validity_stats = validity_state->GetStatistics();
+		list_stats.child_stats = child_state->GetStatistics();
+		return stats;
+	}
 
-// 	void FlushToDisk() override {
-// 		validity_state->FlushToDisk();
-// 		for (auto &state : child_states) {
-// 			state->FlushToDisk();
-// 		}
-// 	}
-// };
+	void FlushToDisk() override {
+		ColumnCheckpointState::FlushToDisk();
+		validity_state->FlushToDisk();
+		child_state->FlushToDisk();
+	}
+};
 
 unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) {
-	throw NotImplementedException("List CreateCheckpointState");
-	// return make_unique<StructColumnCheckpointState>(row_group, *this, writer);
+	return make_unique<ListColumnCheckpointState>(row_group, *this, writer);
 }
 
 unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
-	throw NotImplementedException("List Checkpoint");
-}
+	auto validity_state = validity.Checkpoint(row_group, writer);
+	auto base_state = ColumnData::Checkpoint(row_group, writer);
+	auto child_state = child_column->Checkpoint(row_group, writer);
 
-void ListColumnData::Initialize(PersistentColumnData &column_data) {
-	throw NotImplementedException("List Initialize");
+	auto &checkpoint_state = (ListColumnCheckpointState &)*base_state;
+	checkpoint_state.validity_state = move(validity_state);
+	checkpoint_state.child_state = move(child_state);
+	return base_state;
 }
 
 void ListColumnData::DeserializeColumn(Deserializer &source) {
-	throw NotImplementedException("List Deserialize");
+	ColumnData::DeserializeColumn(source);
+	validity.DeserializeColumn(source);
+	child_column->DeserializeColumn(source);
 }
 
 void ListColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) {

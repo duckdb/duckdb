@@ -1,0 +1,41 @@
+# name: test/issues/general/test_1933.test
+# description: Issue 1933: use INTERVAL function Time out of bounds report error
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT DATE '2021-06-30' - INTERVAL '4' MONTH;
+----
+2021-02-28
+
+query I
+SELECT DATE '2021-08-31' + INTERVAL '1' MONTH;
+----
+2021-09-30
+
+query I
+SELECT DATE '2021-08-31' + INTERVAL '2' MONTH;
+----
+2021-10-31
+
+query I
+SELECT DATE '2021-08-31' + INTERVAL '3' MONTH;
+----
+2021-11-30
+
+query I
+SELECT DATE '2021-08-31' + INTERVAL '4' MONTH;
+----
+2021-12-31
+
+query I
+SELECT DATE '2021-08-31' - INTERVAL '6' MONTH;
+----
+2021-02-28
+
+query I
+SELECT DATE '2021-08-31' - INTERVAL '18' MONTH;
+----
+2020-02-29

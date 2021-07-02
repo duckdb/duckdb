@@ -2,8 +2,6 @@
 # description: Test list case
 # group: [list]
 
-require noforcestorage
-
 statement ok
 PRAGMA enable_verification
 

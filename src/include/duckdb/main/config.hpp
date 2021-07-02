@@ -16,6 +16,8 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/common/set.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -89,6 +91,11 @@ public:
 	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
+	//! Initialize the database with the standard set of DuckDB functions
+	//! You should probably not touch this unless you know what you are doing
+	bool initialize_default_database = true;
+	//! The set of disabled optimizers (default empty)
+	set<OptimizerType> disabled_optimizers;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

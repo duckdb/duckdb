@@ -25,7 +25,6 @@ class DatabaseInstance;
 class RowGroup;
 class TableDataWriter;
 class PersistentSegment;
-class PersistentColumnData;
 class Transaction;
 
 struct DataTableInfo;
@@ -51,7 +50,7 @@ public:
 
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
-	virtual idx_t GetCount();
+	virtual idx_t GetMaxEntry();
 
 	//! The root type of the column
 	const LogicalType &RootType() const;
@@ -99,8 +98,6 @@ public:
 
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
 	                            idx_t base_row_index, idx_t count, Vector &scan_vector);
-
-	virtual void Initialize(PersistentColumnData &column_data);
 
 	virtual void DeserializeColumn(Deserializer &source);
 	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,

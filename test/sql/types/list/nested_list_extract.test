@@ -2,8 +2,6 @@
 # description: Test nested list extract
 # group: [list]
 
-require noforcestorage
-
 # nesting level=2
 statement ok
 CREATE TABLE a(id INTEGER, b INTEGER[][]);

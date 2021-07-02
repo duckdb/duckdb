@@ -191,7 +191,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.format = "tdD";
 		break;
 	case LogicalTypeId::TIME:
-		child.format = "ttm";
+		child.format = "ttu";
 		break;
 	case LogicalTypeId::TIMESTAMP:
 		child.format = "tsu:";
@@ -204,6 +204,9 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
 		child.format = "tsm:";
+		break;
+	case LogicalTypeId::INTERVAL:
+		child.format = "tDm";
 		break;
 	case LogicalTypeId::DECIMAL: {
 		uint8_t width, scale;

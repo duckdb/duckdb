@@ -1,4 +1,16 @@
 #include "duckdb_odbc.hpp"
+#include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/types/string_type.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
+
+#include <algorithm>
+
+using duckdb::Decimal;
+using duckdb::DecimalType;
+using duckdb::hugeint_t;
+using duckdb::Store;
+using duckdb::string_t;
+using std::string;
 
 SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                      SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
@@ -23,7 +35,7 @@ SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, S
 		switch (target_type) {
 		case SQL_C_SLONG:
 			D_ASSERT(((size_t)buffer_length) >= sizeof(int));
-			duckdb::Store<int>(val.GetValue<int>(), (duckdb::data_ptr_t)target_value_ptr);
+			Store<int>(val.GetValue<int>(), (duckdb::data_ptr_t)target_value_ptr);
 			return SQL_SUCCESS;
 
 		case SQL_CHAR: {
@@ -34,6 +46,53 @@ SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, S
 			}
 			return SQL_SUCCESS;
 		}
+		case SQL_C_NUMERIC: {
+			SQL_NUMERIC_STRUCT *numeric = (SQL_NUMERIC_STRUCT *)target_value_ptr;
+			auto dataptr = (duckdb::data_ptr_t)numeric->val;
+			// reset numeric val to remove some garbage
+			memset(dataptr, '\0', SQL_MAX_NUMERIC_LEN);
+
+			numeric->sign = 1;
+			numeric->precision = numeric->scale = 0;
+
+			string str_val = val.ToString();
+			auto width = str_val.size();
+
+			if (str_val[0] == '-') {
+				numeric->sign = 0;
+				str_val.erase(std::remove(str_val.begin(), str_val.end(), '-'), str_val.end());
+				// uncounting negative signal '-'
+				--width;
+			}
+
+			auto pos_dot = str_val.find('.');
+			if (pos_dot != string::npos) {
+				str_val.erase(std::remove(str_val.begin(), str_val.end(), '.'), str_val.end());
+				numeric->scale = str_val.size() - pos_dot;
+
+				string str_fraction = str_val.substr(pos_dot);
+				// case all digits in fraction is 0, remove them
+				if (std::stoi(str_fraction) == 0) {
+					str_val.erase(str_val.begin() + pos_dot, str_val.end());
+				}
+				width = str_val.size();
+			}
+			numeric->precision = width;
+
+			string_t str_t(str_val.c_str(), width);
+			if (numeric->precision <= Decimal::MAX_WIDTH_INT64) {
+				int64_t val_i64;
+				duckdb::TryCast::Operation(str_t, val_i64);
+				memcpy(dataptr, &val_i64, sizeof(val_i64));
+			} else {
+				hugeint_t huge_int =
+				    duckdb::CastToDecimal::Operation<string_t, hugeint_t>(str_t, numeric->precision, numeric->scale);
+				memcpy(dataptr, &huge_int.lower, sizeof(huge_int.lower));
+				memcpy(dataptr + sizeof(huge_int.lower), &huge_int.upper, sizeof(huge_int.upper));
+			}
+			return SQL_SUCCESS;
+		}
+
 			// TODO other types
 		default:
 			return SQL_ERROR;

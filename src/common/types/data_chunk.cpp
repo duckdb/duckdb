@@ -15,6 +15,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/types/interval.hpp"
 
 namespace duckdb {
 
@@ -25,8 +26,8 @@ DataChunk::~DataChunk() {
 }
 
 void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
-	D_ASSERT(data.empty());     // can only be initialized once
-	D_ASSERT(types.size() > 0); // empty chunk not allowed
+	D_ASSERT(data.empty());   // can only be initialized once
+	D_ASSERT(!types.empty()); // empty chunk not allowed
 	for (idx_t i = 0; i < types.size(); i++) {
 		data.emplace_back(Vector(types[i], nullptr));
 	}
@@ -435,6 +436,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIME:
 		child_holder.vector = make_unique<Vector>(data);
 		child.n_buffers = 2;
 		child.buffers[1] = (void *)FlatVector::GetData(*child_holder.vector);
@@ -442,20 +444,6 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	case LogicalTypeId::SQLNULL:
 		child.n_buffers = 1;
 		break;
-	case LogicalTypeId::TIME: {
-		//! convert time from microseconds to milliseconds
-		child_holder.vector = make_unique<Vector>(data);
-
-		child.n_buffers = 2;
-		child_holder.data = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
-		child.buffers[1] = child_holder.data.get();
-		auto source_ptr = FlatVector::GetData<dtime_t>(*child_holder.vector);
-		auto target_ptr = (uint32_t *)child.buffers[1];
-		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
-			target_ptr[row_idx] = uint32_t(source_ptr[row_idx].micros / 1000);
-		}
-		break;
-	}
 	case LogicalTypeId::DECIMAL: {
 		child.n_buffers = 2;
 		child_holder.vector = make_unique<Vector>(data);
@@ -577,6 +565,19 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		auto struct_type = LogicalType::STRUCT(StructType::GetChildTypes(type));
 
 		SetStructMap(child_holder.children[0], struct_type, *child_holder.vector, size, &map_mask);
+		break;
+	}
+	case LogicalTypeId::INTERVAL: {
+		//! convert interval from month/days/ucs to milliseconds
+		child_holder.vector = make_unique<Vector>(data);
+		child.n_buffers = 2;
+		child_holder.data = unique_ptr<data_t[]>(new data_t[sizeof(int64_t) * (size)]);
+		child.buffers[1] = child_holder.data.get();
+		auto source_ptr = FlatVector::GetData<interval_t>(*child_holder.vector);
+		auto target_ptr = (int64_t *)child.buffers[1];
+		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
+			target_ptr[row_idx] = Interval::GetMilli(source_ptr[row_idx]);
+		}
 		break;
 	}
 	default:

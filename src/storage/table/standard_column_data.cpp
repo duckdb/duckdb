@@ -194,12 +194,6 @@ void StandardColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState 
 	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 
-void StandardColumnData::Initialize(PersistentColumnData &column_data) {
-	auto &persistent = (StandardPersistentColumnData &)column_data;
-	ColumnData::Initialize(column_data);
-	validity.Initialize(*persistent.validity);
-}
-
 void StandardColumnData::DeserializeColumn(Deserializer &source) {
 	ColumnData::DeserializeColumn(source);
 	validity.DeserializeColumn(source);

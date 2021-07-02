@@ -85,7 +85,7 @@ struct DateConvert {
 struct IntervalConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static int64_t ConvertValue(interval_t val) {
-		return Interval::GetMilli(val);
+		return Interval::GetNanoseconds(val);
 	}
 
 	template <class NUMPY_T>

@@ -23,8 +23,8 @@ bool StructColumnData::CheckZonemap(ColumnScanState &state, TableFilter &filter)
 	return false;
 }
 
-idx_t StructColumnData::GetCount() {
-	return sub_columns[0]->GetCount();
+idx_t StructColumnData::GetMaxEntry() {
+	return sub_columns[0]->GetMaxEntry();
 }
 
 void StructColumnData::InitializeScan(ColumnScanState &state) {
@@ -250,14 +250,6 @@ unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_gro
 		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, writer));
 	}
 	return move(checkpoint_state);
-}
-
-void StructColumnData::Initialize(PersistentColumnData &column_data) {
-	auto &persistent = (StructPersistentColumnData &)column_data;
-	validity.Initialize(*persistent.validity);
-	for (idx_t i = 0; i < sub_columns.size(); i++) {
-		sub_columns[i]->Initialize(*persistent.child_data[i]);
-	}
 }
 
 void StructColumnData::DeserializeColumn(Deserializer &source) {
