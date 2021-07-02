@@ -113,14 +113,14 @@ idx_t ColumnData::ScanVector(Transaction *transaction, idx_t vector_index, Colum
 	return scan_count;
 }
 
-template idx_t ColumnData::ScanVector<false, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
-                                                   Vector &result);
+template idx_t ColumnData::ScanVector<false, false>(Transaction *transaction, idx_t vector_index,
+                                                    ColumnScanState &state, Vector &result);
 template idx_t ColumnData::ScanVector<true, false>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
-                                                  Vector &result);
+                                                   Vector &result);
 template idx_t ColumnData::ScanVector<false, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
-                                                  Vector &result);
+                                                   Vector &result);
 template idx_t ColumnData::ScanVector<true, true>(Transaction *transaction, idx_t vector_index, ColumnScanState &state,
-                                                 Vector &result);
+                                                  Vector &result);
 
 idx_t ColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
 	return ScanVector<false, true>(&transaction, vector_index, state, result);
@@ -153,13 +153,15 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count)
 	return ScanVector(state, result, count);
 }
 
-void ColumnData::Select(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t &count, const TableFilter &filter) {
+void ColumnData::Select(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                        SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 	result.Normalify(scan_count);
 	UncompressedSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
 }
 
-void ColumnData::FilterScan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel, idx_t count) {
+void ColumnData::FilterScan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                            SelectionVector &sel, idx_t count) {
 	Scan(transaction, vector_index, state, result);
 	result.Slice(sel, count);
 }

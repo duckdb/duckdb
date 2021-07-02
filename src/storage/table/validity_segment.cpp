@@ -165,7 +165,6 @@ const validity_t ValiditySegment::UPPER_MASKS[] = {0x0,
                                                    0xfffffffffffffffe,
                                                    0xffffffffffffffff};
 
-
 ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id)
     : UncompressedSegment(db, PhysicalType::BIT, row_start) {
 	// figure out how many vectors we want to store in this block
@@ -240,7 +239,7 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 		auto result_data = (validity_t *)result_mask.GetData();
 		idx_t start_offset = start / ValidityMask::BITS_PER_VALUE;
 		idx_t entry_scan_count = (scan_count + ValidityMask::BITS_PER_VALUE - 1) / ValidityMask::BITS_PER_VALUE;
-		for(idx_t i = 0; i < entry_scan_count; i++) {
+		for (idx_t i = 0; i < entry_scan_count; i++) {
 			auto input_entry = input_data[start_offset + i];
 			if (!result_data && input_entry == ValidityMask::ValidityBuffer::MAX_ENTRY) {
 				continue;
@@ -257,8 +256,8 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 	}
 }
 
-
-void ValiditySegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void ValiditySegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result,
+                                  idx_t result_offset) {
 	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
 
 	auto &result_mask = FlatVector::Validity(result);
@@ -266,7 +265,7 @@ void ValiditySegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t sca
 
 #ifdef DEBUG
 	// this method relies on all the bits we are going to write to being set to valid
-	for(idx_t i = 0; i < scan_count; i++) {
+	for (idx_t i = 0; i < scan_count; i++) {
 		D_ASSERT(result_mask.RowIsValid(result_offset + i));
 	}
 #endif

@@ -20,11 +20,13 @@ public:
 	ConstantSegment(DatabaseInstance &db, SegmentStatistics &stats, idx_t row_start);
 
 	SegmentStatistics &stats;
+
 public:
 	void InitializeScan(ColumnScanState &state) override;
 
 	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) override;
-	void ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) override;
+	void ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result,
+	                 idx_t result_offset) override;
 
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) override;
 

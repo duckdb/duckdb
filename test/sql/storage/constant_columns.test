@@ -1,4 +1,4 @@
-# name: test/sql/storage/test_constant_columns.test
+# name: test/sql/storage/constant_columns.test
 # description: Test storage of constant columns (columns that all have the same value)
 # group: [storage]
 

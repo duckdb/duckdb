@@ -18,16 +18,16 @@ ConstantSegment::ConstantSegment(DatabaseInstance &db, SegmentStatistics &stats,
 // Scan
 //===--------------------------------------------------------------------===//
 void ScanFunctionValidity(ConstantSegment &segment, Vector &result) {
-	auto &validity = (ValidityStatistics &) *segment.stats.statistics;
+	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
 	if (validity.has_null) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
 	}
 }
 
-template<class T>
+template <class T>
 void ScanFunction(ConstantSegment &segment, Vector &result) {
-	auto &nstats = (NumericStatistics &) *segment.stats.statistics;
+	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
 
 	auto data = FlatVector::GetData<T>(result);
 	data[0] = nstats.min.GetValueUnsafe<T>();
@@ -76,7 +76,8 @@ void ConstantSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 	scan_function(*this, result);
 }
 
-void ConstantSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void ConstantSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result,
+                                  idx_t result_offset) {
 	// partial scan: fill in the rows as required
 	fill_function(*this, result, result_offset, scan_count);
 }
@@ -85,22 +86,22 @@ void ConstantSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t sca
 // Fetch Row
 //===--------------------------------------------------------------------===//
 void FillFunctionValidity(ConstantSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
-	auto &validity = (ValidityStatistics &) *segment.stats.statistics;
+	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
 	if (validity.has_null) {
 		auto &mask = FlatVector::Validity(result);
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			mask.SetInvalid(start_idx + i);
 		}
 	}
 }
 
-template<class T>
+template <class T>
 void FillFunction(ConstantSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
-	auto &nstats = (NumericStatistics &) *segment.stats.statistics;
+	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
 
 	auto data = FlatVector::GetData<T>(result);
 	auto constant_value = nstats.min.GetValueUnsafe<T>();
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		data[start_idx + i] = constant_value;
 	}
 }
@@ -150,5 +151,4 @@ idx_t ConstantSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t 
 	throw InternalException("Cannot append to a constant segment");
 }
 
-}
-
+} // namespace duckdb

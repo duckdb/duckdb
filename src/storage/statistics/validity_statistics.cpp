@@ -60,15 +60,15 @@ void ValidityStatistics::Verify(Vector &vector, idx_t count) {
 	if (!has_no_null) {
 		if (VectorOperations::HasNotNull(vector, count)) {
 			throw InternalException(
-				"Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",
-				vector.ToString(count));
+			    "Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",
+			    vector.ToString(count));
 		}
 	}
 	if (!has_null) {
 		if (VectorOperations::HasNull(vector, count)) {
 			throw InternalException(
-				"Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
-				vector.ToString(count));
+			    "Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
+			    vector.ToString(count));
 		}
 	}
 }

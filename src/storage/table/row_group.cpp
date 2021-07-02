@@ -320,7 +320,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 				} else {
 					if (SCAN_COMMITTED) {
 						columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
-													ALLOW_UPDATES);
+						                               ALLOW_UPDATES);
 					} else {
 						D_ASSERT(transaction);
 						D_ASSERT(ALLOW_UPDATES);
@@ -345,8 +345,9 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 				for (idx_t i = 0; i < table_filters->filters.size(); i++) {
 					auto tf_idx = adaptive_filter->permutation[i];
 					auto col_idx = column_ids[tf_idx];
-					columns[col_idx]->Select(*transaction, state.vector_index, state.column_scans[tf_idx], result.data[tf_idx], sel,
-											approved_tuple_count, *table_filters->filters[tf_idx]);
+					columns[col_idx]->Select(*transaction, state.vector_index, state.column_scans[tf_idx],
+					                         result.data[tf_idx], sel, approved_tuple_count,
+					                         *table_filters->filters[tf_idx]);
 				}
 				for (auto &table_filter : table_filters->filters) {
 					result.data[table_filter.first].Slice(sel, approved_tuple_count);
@@ -377,15 +378,14 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 							result_data[sel_idx] = this->start + current_row + sel.get_index(sel_idx);
 						}
 					} else {
-						columns[column]->FilterScan(*transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
-													approved_tuple_count);
+						columns[column]->FilterScan(*transaction, state.vector_index, state.column_scans[i],
+						                            result.data[i], sel, approved_tuple_count);
 					}
 				}
 			}
 			auto end_time = high_resolution_clock::now();
 			if (adaptive_filter && table_filters->filters.size() > 1) {
-				adaptive_filter->AdaptRuntimeStatistics(
-					duration_cast<duration<double>>(end_time - start_time).count());
+				adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
 			}
 			D_ASSERT(approved_tuple_count > 0);
 			count = approved_tuple_count;
