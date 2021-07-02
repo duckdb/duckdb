@@ -31,11 +31,11 @@ public:
 
 public:
 	typedef void (*scan_function_t)(ConstantSegment &segment, Vector &result);
-	typedef void (*fetch_function_t)(ConstantSegment &segment, Vector &result, idx_t result_idx);
+	typedef void (*fill_function_t)(ConstantSegment &segment, Vector &result, idx_t start_idx, idx_t count);
 
 private:
 	scan_function_t scan_function;
-	fetch_function_t fetch_function;
+	fill_function_t fill_function;
 };
 
 } // namespace duckdb

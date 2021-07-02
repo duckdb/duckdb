@@ -135,7 +135,7 @@ string BaseStatistics::ToString() {
 
 void BaseStatistics::Verify(Vector &vector, idx_t count) {
 	D_ASSERT(vector.GetType() == this->type);
-	if (!validity_stats) {
+	if (validity_stats) {
 		validity_stats->Verify(vector, count);
 	}
 }
