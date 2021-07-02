@@ -85,8 +85,14 @@ struct SortingState {
 class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(SortingState sorting_state, RowLayout payload_layout)
-	    : sorting_state(move(sorting_state)), payload_layout(move(payload_layout)), total_count(0), block_capacity(0),
-	      sorting_heap_capacity(0), payload_heap_capacity(0), external(false) {
+	    : sorting_state(move(sorting_state)), payload_layout(move(payload_layout)), total_count(0),
+	      sorting_heap_capacity(Storage::BLOCK_ALLOC_SIZE), payload_heap_capacity(Storage::BLOCK_ALLOC_SIZE),
+	      external(false) {
+		auto thinnest_row = MinValue(sorting_state.entry_size, payload_layout.GetRowWidth());
+		if (!sorting_state.all_constant) {
+			thinnest_row = MinValue(thinnest_row, sorting_state.blob_layout.GetRowWidth());
+		}
+		block_capacity = (Storage::BLOCK_ALLOC_SIZE + thinnest_row - 1) / thinnest_row;
 	}
 
 	~OrderGlobalState() override;
@@ -141,16 +147,16 @@ public:
 		// Radix sorting data
 		idx_t vectors_per_block =
 		    (Storage::BLOCK_ALLOC_SIZE / sorting_state.entry_size + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
-		sorting_data_radix = make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE,
+		radix_sorting_data = make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE,
 		                                                    sorting_state.entry_size);
 		// Blob sorting data
 		if (!sorting_state.all_constant) {
 			auto blob_row_width = sorting_state.blob_layout.GetRowWidth();
 			vectors_per_block =
 			    (Storage::BLOCK_ALLOC_SIZE / blob_row_width + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
-			sorting_data_blob = make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE,
+			blob_sorting_data = make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE,
 			                                                   blob_row_width);
-			sorting_data_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8, true);
+			blob_sorting_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8, true);
 		}
 		// Payload data
 		auto payload_row_width = payload_layout.GetRowWidth();
@@ -166,10 +172,10 @@ public:
 	//! Whether the localstate has collected enough data to perform an external sort
 	bool Full(ClientContext &context, const SortingState &sorting_state, const RowLayout &payload_layout) {
 		// Compute the size of the collected data (in bytes)
-		idx_t size_in_bytes = sorting_data_radix->count * sorting_state.entry_size;
+		idx_t size_in_bytes = radix_sorting_data->count * sorting_state.entry_size;
 		if (!sorting_state.all_constant) {
-			size_in_bytes += sorting_data_blob->count * sorting_state.blob_layout.GetRowWidth();
-			for (auto &block : sorting_data_heap->blocks) {
+			size_in_bytes += blob_sorting_data->count * sorting_state.blob_layout.GetRowWidth();
+			for (auto &block : blob_sorting_heap->blocks) {
 				size_in_bytes += block.byte_offset;
 			}
 		}
@@ -184,17 +190,16 @@ public:
 		auto &task_scheduler = TaskScheduler::GetScheduler(context);
 		idx_t max_memory = buffer_manager.GetMaxMemory();
 		idx_t num_threads = task_scheduler.NumberOfThreads();
-		// memory usage per thread should scale with max mem / num threads
-		// we take 10% of the max memory, to be VERY conservative
-		// TODO: make sure heap blocks are never bigger than 4GB
+		// Memory usage per thread should scale with max mem / num threads
+		// We take 10% of the max memory, to be VERY conservative
 		return size_in_bytes > (0.1 * max_memory / num_threads);
 	}
 
 	//! Radix/memcmp sortable data
-	unique_ptr<RowDataCollection> sorting_data_radix;
+	unique_ptr<RowDataCollection> radix_sorting_data;
 	//! Variable sized sorting data and accompanying heap
-	unique_ptr<RowDataCollection> sorting_data_blob;
-	unique_ptr<RowDataCollection> sorting_data_heap;
+	unique_ptr<RowDataCollection> blob_sorting_data;
+	unique_ptr<RowDataCollection> blob_sorting_heap;
 	//! Payload data and accompanying heap
 	unique_ptr<RowDataCollection> payload_data;
 	unique_ptr<RowDataCollection> payload_heap;
@@ -236,24 +241,24 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		lstate.Initialize(context.client, gstate);
 	}
 
-	// obtain sorting columns
+	// Obtain sorting columns
 	auto &sort = lstate.sort;
 	lstate.executor.Execute(input, sort);
 
-	// build and serialize sorting data
+	// Build and serialize sorting data to radix sortable rows
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(lstate.addresses);
-	lstate.sorting_data_radix->Build(sort.size(), data_pointers, nullptr);
+	lstate.radix_sorting_data->Build(sort.size(), data_pointers, nullptr);
 	for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
 		bool has_null = sorting_state.has_null[sort_col];
 		bool nulls_first = sorting_state.order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
 		bool desc = sorting_state.order_types[sort_col] == OrderType::DESCENDING;
 		// TODO: use actual string statistics
-		lstate.sorting_data_radix->SerializeVectorSortable(sort.data[sort_col], sort.size(), lstate.sel_ptr,
+		lstate.radix_sorting_data->SerializeVectorSortable(sort.data[sort_col], sort.size(), lstate.sel_ptr,
 		                                                   sort.size(), data_pointers, desc, has_null, nulls_first,
 		                                                   string_t::INLINE_LENGTH);
 	}
 
-	// also fully serialize variable size sorting columns
+	// Also fully serialize blob sorting columns (to be able to break ties
 	if (!sorting_state.all_constant) {
 		DataChunk blob_chunk;
 		blob_chunk.SetCardinality(sort.size());
@@ -262,18 +267,19 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 				blob_chunk.data.emplace_back(sort.data[sort_col]);
 			}
 		}
-		lstate.sorting_data_blob->Build(blob_chunk.size(), data_pointers, nullptr);
+		lstate.blob_sorting_data->Build(blob_chunk.size(), data_pointers, nullptr);
 		auto blob_data = blob_chunk.Orrify();
 		RowOperations::Scatter(blob_chunk, blob_data.get(), sorting_state.blob_layout, lstate.addresses,
-		                       *lstate.sorting_data_heap, lstate.sel_ptr, blob_chunk.size());
+		                       *lstate.blob_sorting_heap, lstate.sel_ptr, blob_chunk.size());
 	}
 
+	// Finally, serialize payload data
 	lstate.payload_data->Build(input.size(), data_pointers, nullptr);
 	auto input_data = input.Orrify();
 	RowOperations::Scatter(input, input_data.get(), payload_layout, lstate.addresses, *lstate.payload_heap,
 	                       lstate.sel_ptr, input.size());
 
-	// when sorting data reaches a certain size, we sort it
+	// When sorting data reaches a certain size, we sort it
 	if (lstate.Full(context.client, sorting_state, payload_layout)) {
 		gstate.external = true;
 		SortLocalState(context.client, lstate, gstate);
@@ -283,64 +289,50 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
-	if (!lstate.sorting_data_radix) {
+	if (!lstate.radix_sorting_data) {
 		return;
 	}
 
 	SortLocalState(context.client, lstate, gstate);
-
 	lock_guard<mutex> append_lock(gstate.lock);
 	for (auto &cb : lstate.sorted_blocks) {
 		gstate.sorted_blocks.push_back(move(cb));
 	}
 }
 
+//! Object that holds sorted rows, and an accompanying heap if there are blobs
 struct SortedData {
 public:
 	SortedData(const RowLayout &layout, BufferManager &buffer_manager, OrderGlobalState &state)
 	    : layout(layout), block_idx(0), entry_idx(0), buffer_manager(buffer_manager), state(state) {
 	}
-
+	//! Number of rows that this object holds
 	idx_t Count() {
 		idx_t count = std::accumulate(data_blocks.begin(), data_blocks.end(), 0,
 		                              [](idx_t a, const RowDataBlock &b) { return a + b.count; });
 		return count;
 	}
-
-	//! Initialize this to write data to during the merge
-	void InitializeWrite(const idx_t &heap_capacity_p) {
-		heap_capacity = heap_capacity_p;
-		CreateBlock();
-	}
-
-	//! Initialize new block to write to
-	void CreateBlock() {
-		data_blocks.emplace_back(buffer_manager, state.block_capacity, layout.GetRowWidth());
-		if (!layout.AllConstant() && state.external) {
-			heap_blocks.emplace_back(buffer_manager, heap_capacity / 8, 8);
-		}
-	}
-
-	inline data_ptr_t DataPtr() const {
-		D_ASSERT(data_blocks[block_idx].block->Readers() != 0 &&
-		         data_handle->handle->BlockId() == data_blocks[block_idx].block->BlockId());
-		return data_ptr + entry_idx * layout.GetRowWidth();
-	}
-
-	inline data_ptr_t HeapPtr() const {
-		D_ASSERT(!layout.AllConstant() && state.external);
-		D_ASSERT(heap_blocks[block_idx].block->Readers() != 0 &&
-		         heap_handle->handle->BlockId() == heap_blocks[block_idx].block->BlockId());
-		return heap_ptr + Load<idx_t>(DataPtr() + layout.GetHeapPointerOffset());
-	}
-
+	//! Pin the current block such that it can be read
 	void Pin() {
 		PinData();
 		if (!layout.AllConstant() && state.external) {
 			PinHeap();
 		}
 	}
-
+	//! Pointer to the row that is currently being read from
+	inline data_ptr_t DataPtr() const {
+		D_ASSERT(data_blocks[block_idx].block->Readers() != 0 &&
+		         data_handle->handle->BlockId() == data_blocks[block_idx].block->BlockId());
+		return data_ptr + entry_idx * layout.GetRowWidth();
+	}
+	//! Pointer to the heap row that corresponds to the current row
+	inline data_ptr_t HeapPtr() const {
+		D_ASSERT(!layout.AllConstant() && state.external);
+		D_ASSERT(heap_blocks[block_idx].block->Readers() != 0 &&
+		         heap_handle->handle->BlockId() == heap_blocks[block_idx].block->BlockId());
+		return heap_ptr + Load<idx_t>(DataPtr() + layout.GetHeapPointerOffset());
+	}
+	//! Advance one row
 	inline void Advance() {
 		entry_idx++;
 		if (entry_idx == data_blocks[block_idx].count) {
@@ -354,7 +346,14 @@ public:
 			}
 		}
 	}
-
+	//! Initialize new block to write to
+	void CreateBlock() {
+		data_blocks.emplace_back(buffer_manager, state.block_capacity, layout.GetRowWidth());
+		if (!layout.AllConstant() && state.external) {
+			heap_blocks.emplace_back(buffer_manager, heap_capacity / 8, 8);
+		}
+	}
+	//! Unpin blocks and reset read indices to the given indices
 	void UnpinAndReset(idx_t block_idx_to, idx_t entry_idx_to) {
 		data_handle = nullptr;
 		heap_handle = nullptr;
@@ -363,7 +362,7 @@ public:
 		block_idx = block_idx_to;
 		entry_idx = entry_idx_to;
 	}
-
+	//! Create a slice that holds the rows between the start and end indices
 	unique_ptr<SortedData> CreateSlice(idx_t start_block_index, idx_t start_entry_index, idx_t end_block_index,
 	                                   idx_t end_entry_index) {
 		// Add the corresponding blocks to the result
@@ -389,17 +388,20 @@ public:
 	//! Data and heap blocks
 	vector<RowDataBlock> data_blocks;
 	vector<RowDataBlock> heap_blocks;
+	//! Capacity (in bytes) of the heap blocks
+	idx_t heap_capacity;
 	//! Read indices
 	idx_t block_idx;
 	idx_t entry_idx;
 
 private:
+	//! Pin fixed-size row data
 	void PinData() {
 		D_ASSERT(block_idx < data_blocks.size());
 		data_handle = buffer_manager.Pin(data_blocks[block_idx].block);
 		data_ptr = data_handle->Ptr();
 	}
-
+	//! Pin the accompanying heap data (if any)
 	void PinHeap() {
 		D_ASSERT(!layout.AllConstant() && state.external);
 		heap_handle = buffer_manager.Pin(heap_blocks[block_idx].block);
@@ -416,66 +418,65 @@ private:
 	//! Pointers into the buffers being currently read
 	data_ptr_t data_ptr;
 	data_ptr_t heap_ptr;
-	//! Capacity (in bytes) of the heap blocks
-	idx_t heap_capacity;
 };
 
+//! Block that holds sorted rows: radix, blob and payload data
 struct SortedBlock {
 public:
 	SortedBlock(BufferManager &buffer_manager, OrderGlobalState &state)
 	    : block_idx(0), entry_idx(0), buffer_manager(buffer_manager), state(state), sorting_state(state.sorting_state),
 	      payload_layout(state.payload_layout) {
-		sorting_data_blob = make_unique<SortedData>(sorting_state.blob_layout, buffer_manager, state);
+		blob_sorting_data = make_unique<SortedData>(sorting_state.blob_layout, buffer_manager, state);
 		payload_data = make_unique<SortedData>(payload_layout, buffer_manager, state);
 	}
-
+	//! Number of rows that this object holds
 	idx_t Count() {
-		idx_t count = std::accumulate(sorting_data_radix.begin(), sorting_data_radix.end(), 0,
+		idx_t count = std::accumulate(radix_sorting_data.begin(), radix_sorting_data.end(), 0,
 		                              [](idx_t a, const RowDataBlock &b) { return a + b.count; });
 #ifdef DEBUG
 		if (!sorting_state.all_constant) {
-			D_ASSERT(count == sorting_data_blob->Count());
+			D_ASSERT(count == blob_sorting_data->Count());
 		}
 #endif
 		D_ASSERT(count == payload_data->Count());
 		return count;
 	}
-
+	//! The remaining number of rows to be read from this object
 	idx_t Remaining() {
 		idx_t remaining = 0;
-		if (block_idx < sorting_data_radix.size()) {
-			remaining += sorting_data_radix[block_idx].count - entry_idx;
-			for (idx_t i = block_idx + 1; i < sorting_data_radix.size(); i++) {
-				remaining += sorting_data_radix[i].count;
+		if (block_idx < radix_sorting_data.size()) {
+			remaining += radix_sorting_data[block_idx].count - entry_idx;
+			for (idx_t i = block_idx + 1; i < radix_sorting_data.size(); i++) {
+				remaining += radix_sorting_data[i].count;
 			}
 		}
 		return remaining;
 	}
-
 	//! Initialize this block to write data to
 	void InitializeWrite() {
 		CreateBlock();
 		if (!sorting_state.all_constant) {
-			sorting_data_blob->InitializeWrite(state.sorting_heap_capacity);
+			blob_sorting_data->heap_capacity = state.sorting_heap_capacity;
+			blob_sorting_data->CreateBlock();
 		}
-		payload_data->InitializeWrite(state.payload_heap_capacity);
+		payload_data->heap_capacity = state.payload_heap_capacity;
+		payload_data->CreateBlock();
 	}
-
 	//! Init new block to write to
 	void CreateBlock() {
-		sorting_data_radix.emplace_back(buffer_manager, state.block_capacity, sorting_state.entry_size);
+		radix_sorting_data.emplace_back(buffer_manager, state.block_capacity, sorting_state.entry_size);
 	}
 	//! Cleanup sorting data
 	void UnregisterSortingBlocks() {
-		for (auto &block : sorting_data_radix) {
+		for (auto &block : radix_sorting_data) {
 			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
 		}
 		if (!sorting_state.all_constant) {
-			for (auto &block : sorting_data_blob->data_blocks) {
+			for (auto &block : blob_sorting_data->data_blocks) {
 				buffer_manager.UnregisterBlock(block.block->BlockId(), true);
 			}
 			if (state.external) {
-				for (auto &block : sorting_data_blob->heap_blocks) {
+				for (auto &block : blob_sorting_data->heap_blocks) {
 					buffer_manager.UnregisterBlock(block.block->BlockId(), true);
 				}
 			}
@@ -494,19 +495,19 @@ public:
 			}
 		}
 	}
-
+	//! Fill this sorted block by appending the blocks held by a vector of sorted blocks
 	void AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blocks) {
 		D_ASSERT(Count() == 0);
 		for (auto &sb : sorted_blocks) {
-			for (auto &radix_block : sb->sorting_data_radix) {
-				sorting_data_radix.push_back(move(radix_block));
+			for (auto &radix_block : sb->radix_sorting_data) {
+				radix_sorting_data.push_back(move(radix_block));
 			}
 			if (!sorting_state.all_constant) {
-				for (auto &blob_block : sb->sorting_data_blob->data_blocks) {
-					sorting_data_blob->data_blocks.push_back(move(blob_block));
+				for (auto &blob_block : sb->blob_sorting_data->data_blocks) {
+					blob_sorting_data->data_blocks.push_back(move(blob_block));
 				}
-				for (auto &heap_block : sb->sorting_data_blob->heap_blocks) {
-					sorting_data_blob->heap_blocks.push_back(move(heap_block));
+				for (auto &heap_block : sb->blob_sorting_data->heap_blocks) {
+					blob_sorting_data->heap_blocks.push_back(move(heap_block));
 				}
 			}
 			for (auto &payload_data_block : sb->payload_data->data_blocks) {
@@ -519,49 +520,50 @@ public:
 			}
 		}
 	}
-
+	//! Locate the block and entry index of a row in this block,
+	//! given an index between 0 and the total number of rows in this block
 	void GlobalToLocalIndex(const idx_t &global_idx, idx_t &local_block_index, idx_t &local_entry_index) {
 		if (global_idx == Count()) {
-			local_block_index = sorting_data_radix.size() - 1;
-			local_entry_index = sorting_data_radix.back().count;
+			local_block_index = radix_sorting_data.size() - 1;
+			local_entry_index = radix_sorting_data.back().count;
 			return;
 		}
 		D_ASSERT(global_idx < Count());
 		local_entry_index = global_idx;
-		for (local_block_index = 0; local_block_index < sorting_data_radix.size(); local_block_index++) {
-			const idx_t &block_count = sorting_data_radix[local_block_index].count;
+		for (local_block_index = 0; local_block_index < radix_sorting_data.size(); local_block_index++) {
+			const idx_t &block_count = radix_sorting_data[local_block_index].count;
 			if (local_entry_index >= block_count) {
 				local_entry_index -= block_count;
 			} else {
 				break;
 			}
 		}
-		D_ASSERT(local_entry_index < sorting_data_radix[local_block_index].count);
+		D_ASSERT(local_entry_index < radix_sorting_data[local_block_index].count);
 	}
-
+	//! Create a slice that holds the rows between the start and end indices
 	unique_ptr<SortedBlock> CreateSlice(const idx_t start, const idx_t end) {
-		// identify blocks/entry indices of this slice
+		// Identify blocks/entry indices of this slice
 		idx_t start_block_index;
 		idx_t start_entry_index;
 		GlobalToLocalIndex(start, start_block_index, start_entry_index);
 		idx_t end_block_index;
 		idx_t end_entry_index;
 		GlobalToLocalIndex(end, end_block_index, end_entry_index);
-		// add the corresponding blocks to the result
+		// Add the corresponding blocks to the result
 		auto result = make_unique<SortedBlock>(buffer_manager, state);
 		for (idx_t i = start_block_index; i <= end_block_index; i++) {
-			result->sorting_data_radix.push_back(sorting_data_radix[i]);
+			result->radix_sorting_data.push_back(radix_sorting_data[i]);
 		}
-		// use start and end entry indices to set the boundaries
+		// Use start and end entry indices to set the boundaries
 		result->entry_idx = start_entry_index;
-		D_ASSERT(end_entry_index <= result->sorting_data_radix.back().count);
-		result->sorting_data_radix.back().count = end_entry_index;
-		// same for the var size sorting data
+		D_ASSERT(end_entry_index <= result->radix_sorting_data.back().count);
+		result->radix_sorting_data.back().count = end_entry_index;
+		// Same for the var size sorting data
 		if (!sorting_state.all_constant) {
-			result->sorting_data_blob =
-			    sorting_data_blob->CreateSlice(start_block_index, start_entry_index, end_block_index, end_entry_index);
+			result->blob_sorting_data =
+			    blob_sorting_data->CreateSlice(start_block_index, start_entry_index, end_block_index, end_entry_index);
 		}
-		// and the payload data
+		// And the payload data
 		result->payload_data =
 		    payload_data->CreateSlice(start_block_index, start_entry_index, end_block_index, end_entry_index);
 		D_ASSERT(result->Remaining() == end - start);
@@ -570,11 +572,11 @@ public:
 
 public:
 	//! Radix/memcmp sortable data
-	vector<RowDataBlock> sorting_data_radix;
+	vector<RowDataBlock> radix_sorting_data;
 	idx_t block_idx;
 	idx_t entry_idx;
 	//! Variable sized sorting data
-	unique_ptr<SortedData> sorting_data_blob;
+	unique_ptr<SortedData> blob_sorting_data;
 	//! Payload data
 	unique_ptr<SortedData> payload_data;
 
@@ -597,46 +599,20 @@ OrderGlobalState::~OrderGlobalState() {
 	sorted_blocks.clear();
 }
 
-static void ComputeCountAndCapacity(RowDataCollection &row_data, bool constant_size, idx_t &count, idx_t &capacity) {
+//! Concatenates the blocks in a RowDataCollection into a single block
+static RowDataBlock ConcatenateBlocks(BufferManager &buffer_manager, RowDataCollection &row_data) {
+	// Create block with the correct capacity
 	const idx_t &entry_size = row_data.entry_size;
-	count = 0;
-	idx_t total_size = 0;
-	for (const auto &block : row_data.blocks) {
-		count += block.count;
-		if (constant_size) {
-			total_size += block.count * entry_size;
-		} else {
-			total_size += block.byte_offset;
-		}
-	}
-
-	if (constant_size) {
-		capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / entry_size + 1, count);
-	} else {
-		capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / entry_size, total_size / entry_size + 1);
-	}
-}
-
-static RowDataBlock ConcatenateBlocks(BufferManager &buffer_manager, RowDataCollection &row_data, bool constant_size) {
-	idx_t total_count;
-	idx_t capacity;
-	ComputeCountAndCapacity(row_data, constant_size, total_count, capacity);
-	const idx_t &entry_size = row_data.entry_size;
-
+	idx_t capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / entry_size + 1, row_data.count * entry_size);
 	RowDataBlock new_block(buffer_manager, capacity, entry_size);
-	new_block.count = total_count;
+	new_block.count = row_data.count;
 	auto new_block_handle = buffer_manager.Pin(new_block.block);
 	data_ptr_t new_block_ptr = new_block_handle->Ptr();
-
+	// Copy the data of the blocks into a single block
 	for (auto &block : row_data.blocks) {
 		auto block_handle = buffer_manager.Pin(block.block);
-		if (constant_size) {
-			memcpy(new_block_ptr, block_handle->Ptr(), block.count * entry_size);
-			new_block_ptr += block.count * entry_size;
-		} else {
-			memcpy(new_block_ptr, block_handle->Ptr(), block.byte_offset);
-			new_block_ptr += block.byte_offset;
-		}
+		memcpy(new_block_ptr, block_handle->Ptr(), block.count * entry_size);
+		new_block_ptr += block.count * entry_size;
 		buffer_manager.UnregisterBlock(block.block->BlockId(), true);
 	}
 	row_data.blocks.clear();
@@ -644,27 +620,24 @@ static RowDataBlock ConcatenateBlocks(BufferManager &buffer_manager, RowDataColl
 	return new_block;
 }
 
-static inline bool IsValid(const idx_t &col_idx, const data_ptr_t row_ptr) {
+//! Whether a tie between two blobs can be broken
+static inline bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout) {
+	// Check if the blob is NULL
 	ValidityBytes row_mask(row_ptr);
 	idx_t entry_idx;
 	idx_t idx_in_entry;
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
-	return row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry);
-}
-
-static inline bool TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout) {
-	// Check if the blob is NULL
-	if (!IsValid(col_idx, row_ptr)) {
+	if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
 		// Can't break a NULL tie
 		return false;
 	}
-	// Check if it is too short
+	// Check if the string was inlined
 	switch (row_layout.GetTypes()[col_idx].InternalType()) {
 	case PhysicalType::VARCHAR: {
 		const auto &tie_col_offset = row_layout.GetOffsets()[col_idx];
 		string_t tie_string = Load<string_t>(row_ptr + tie_col_offset);
 		if (tie_string.GetSize() < string_t::INLINE_LENGTH) {
-			// No need to break the tie
+			// No need to break the tie - we already compared the full string
 			return false;
 		}
 		break;
@@ -688,6 +661,7 @@ static inline int TemplatedCompareVal(const T &left_val, const T &right_val, con
 	return order * comp_res;
 }
 
+//! Compare two blob values
 static inline int CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, const LogicalType &type,
                              const int &order) {
 	switch (type.InternalType()) {
@@ -701,6 +675,7 @@ static inline int CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, con
 	}
 }
 
+//! Unwizzles an offset into a pointer
 static inline void UnswizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data_ptr += sizeof(uint32_t) + string_t::PREFIX_LENGTH;
@@ -708,6 +683,7 @@ static inline void UnswizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &h
 	Store<data_ptr_t>(heap_ptr + Load<idx_t>(data_ptr), data_ptr);
 }
 
+//! Swizzles a pointer into an offset
 static inline void SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data_ptr += sizeof(uint32_t) + string_t::PREFIX_LENGTH;
@@ -715,6 +691,7 @@ static inline void SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &hea
 	Store<idx_t>(Load<data_ptr_t>(data_ptr) - heap_ptr, data_ptr);
 }
 
+//! Compares two blob values that were initially tied by their prefix
 static inline int BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData &right,
                                const SortingState &sorting_state, const bool &external) {
 	const idx_t &col_idx = sorting_state.sorting_to_blob_col.at(tie_col);
@@ -750,6 +727,7 @@ static inline int BreakBlobTie(const idx_t &tie_col, const SortedData &left, con
 	return result;
 }
 
+//! Calls std::sort on strings that are tied by their prefix after the radix sort
 static void SortTiedStrings(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &start,
                             const idx_t &end, const idx_t &tie_col, bool *ties, const data_ptr_t blob_ptr,
                             const SortingState &sorting_state) {
@@ -775,7 +753,7 @@ static void SortTiedStrings(BufferManager &buffer_manager, const data_ptr_t data
 	const auto &tie_col_offset = sorting_state.blob_layout.GetOffsets()[col_idx];
 	std::sort(entry_ptrs, entry_ptrs + end - start,
 	          [&blob_ptr, &order, &sorting_state, &tie_col_offset, &row_width](const data_ptr_t l, const data_ptr_t r) {
-		          // use indices to find strings in blob
+		          // Use indices to find strings in blob
 		          idx_t left_idx = Load<idx_t>(l + sorting_state.comparison_size);
 		          idx_t right_idx = Load<idx_t>(r + sorting_state.comparison_size);
 		          string_t left_val = Load<string_t>(blob_ptr + left_idx * row_width + tie_col_offset);
@@ -798,21 +776,21 @@ static void SortTiedStrings(BufferManager &buffer_manager, const data_ptr_t data
 		idx_t current_idx = Load<idx_t>(idx_ptr);
 		string_t current_val = Load<string_t>(blob_ptr + current_idx * row_width + tie_col_offset);
 		for (idx_t i = 0; i < end - start - 1; i++) {
-			// Load next entry
+			// Load next entry and compare
 			idx_ptr += sorting_state.entry_size;
 			idx_t next_idx = Load<idx_t>(idx_ptr);
 			string_t next_val = Load<string_t>(blob_ptr + next_idx * row_width + tie_col_offset);
-			// Compare
 			ties[start + i] = Equals::Operation<string_t>(current_val, next_val);
 			current_val = next_val;
 		}
 	}
 }
 
+//! Identifies sequences of rows that are tied by the prefix of a blob column, and sorts them
 static void SortTiedBlobs(BufferManager &buffer_manager, SortedBlock &sb, bool *ties, data_ptr_t dataptr,
                           const idx_t &count, const idx_t &tie_col, const SortingState &sorting_state) {
 	D_ASSERT(!ties[count - 1]);
-	auto &blob_block = sb.sorting_data_blob->data_blocks.back();
+	auto &blob_block = sb.blob_sorting_data->data_blocks.back();
 	auto blob_handle = buffer_manager.Pin(blob_block.block);
 	const data_ptr_t blob_ptr = blob_handle->Ptr();
 
@@ -838,6 +816,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, SortedBlock &sb, bool *
 	}
 }
 
+//! Returns whether there are any 'true' values in the ties[] array
 static bool AnyTies(bool ties[], const idx_t &count) {
 	D_ASSERT(!ties[count - 1]);
 	bool any_ties = false;
@@ -847,11 +826,12 @@ static bool AnyTies(bool ties[], const idx_t &count) {
 	return any_ties;
 }
 
+//! Compares subsequent rows to check for ties
 static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col_offset, const idx_t &tie_size,
                         bool ties[], const SortingState &sorting_state) {
 	D_ASSERT(!ties[count - 1]);
 	D_ASSERT(col_offset + tie_size <= sorting_state.comparison_size);
-	// align dataptr
+	// Align dataptr
 	dataptr += col_offset;
 	for (idx_t i = 0; i < count - 1; i++) {
 		ties[i] = ties[i] && memcmp(dataptr, dataptr + sorting_state.entry_size, tie_size) == 0;
@@ -871,18 +851,18 @@ static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const i
 	idx_t counts[256];
 	uint8_t byte;
 	for (idx_t offset = col_offset + sorting_size - 1; offset + 1 > col_offset; offset--) {
-		// init to 0
+		// Init counts to 0
 		memset(counts, 0, sizeof(counts));
-		// collect counts
+		// Collect counts
 		for (idx_t i = 0; i < count; i++) {
 			byte = *(dataptr + i * sorting_state.entry_size + offset);
 			counts[byte]++;
 		}
-		// compute offsets from counts
+		// Compute offsets from counts
 		for (idx_t val = 1; val < 256; val++) {
 			counts[val] = counts[val] + counts[val - 1];
 		}
-		// re-order the data in temporary array
+		// Re-order the data in temporary array
 		for (idx_t i = count; i > 0; i--) {
 			byte = *(dataptr + (i - 1) * sorting_state.entry_size + offset);
 			memcpy(temp + (counts[byte] - 1) * sorting_state.entry_size, dataptr + (i - 1) * sorting_state.entry_size,
@@ -892,12 +872,13 @@ static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const i
 		std::swap(dataptr, temp);
 		swap = !swap;
 	}
-	// move data back to original buffer (if it was swapped)
+	// Move data back to original buffer (if it was swapped)
 	if (swap) {
 		memcpy(temp, dataptr, count * sorting_state.entry_size);
 	}
 }
 
+//! Identifies sequences of rows that are tied, and calls radix sort on these
 static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t dataptr, const idx_t &count,
                               const idx_t &col_offset, const idx_t &sorting_size, bool ties[],
                               const SortingState &sorting_state) {
@@ -918,8 +899,9 @@ static void SubSortTiedTuples(BufferManager &buffer_manager, const data_ptr_t da
 	}
 }
 
+//! Sorts the data in a SortedBlock
 static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const SortingState &sorting_state) {
-	auto &block = sb.sorting_data_radix.back();
+	auto &block = sb.radix_sorting_data.back();
 	const auto &count = block.count;
 	auto handle = buffer_manager.Pin(block.block);
 	const auto dataptr = handle->Ptr();
@@ -980,6 +962,7 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 	}
 }
 
+//! Reorders SortedData according to the sorted key columns
 static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap,
                     OrderGlobalState &gstate) {
 	auto &unordered_data_block = sd.data_blocks.back();
@@ -1052,19 +1035,20 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t so
 //! Use the ordered sorting data to re-order the rest of the data
 static void ReOrder(ClientContext &context, SortedBlock &sb, OrderLocalState &lstate, OrderGlobalState &gstate) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	auto sorting_handle = buffer_manager.Pin(sb.sorting_data_radix.back().block);
+	auto sorting_handle = buffer_manager.Pin(sb.radix_sorting_data.back().block);
 	const data_ptr_t sorting_ptr = sorting_handle->Ptr() + gstate.sorting_state.comparison_size;
 	// Re-order variable size sorting columns
 	if (!gstate.sorting_state.all_constant) {
-		ReOrder(buffer_manager, *sb.sorting_data_blob, sorting_ptr, *lstate.sorting_data_heap, gstate);
+		ReOrder(buffer_manager, *sb.blob_sorting_data, sorting_ptr, *lstate.blob_sorting_heap, gstate);
 	}
 	// And the payload
 	ReOrder(buffer_manager, *sb.payload_data, sorting_ptr, *lstate.payload_heap, gstate);
 }
 
+//! Appends and sorts the data accumulated in a local sink state
 void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lstate, OrderGlobalState &gstate) const {
-	D_ASSERT(lstate.sorting_data_radix->count == lstate.payload_data->count);
-	if (lstate.sorting_data_radix->count == 0) {
+	D_ASSERT(lstate.radix_sorting_data->count == lstate.payload_data->count);
+	if (lstate.radix_sorting_data->count == 0) {
 		return;
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
@@ -1072,16 +1056,16 @@ void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lsta
 	// Move all data to a single SortedBlock
 	auto sb = make_unique<SortedBlock>(buffer_manager, gstate);
 	// Fixed-size sorting data
-	auto sorting_block = ConcatenateBlocks(buffer_manager, *lstate.sorting_data_radix, true);
-	sb->sorting_data_radix.push_back(move(sorting_block));
+	auto sorting_block = ConcatenateBlocks(buffer_manager, *lstate.radix_sorting_data);
+	sb->radix_sorting_data.push_back(move(sorting_block));
 	// Variable-size sorting data
 	if (!sorting_state.blob_layout.AllConstant()) {
-		auto &blob_data = *lstate.sorting_data_blob;
-		auto new_block = ConcatenateBlocks(buffer_manager, blob_data, true);
-		sb->sorting_data_blob->data_blocks.push_back(move(new_block));
+		auto &blob_data = *lstate.blob_sorting_data;
+		auto new_block = ConcatenateBlocks(buffer_manager, blob_data);
+		sb->blob_sorting_data->data_blocks.push_back(move(new_block));
 	}
 	// Payload data
-	auto payload_block = ConcatenateBlocks(buffer_manager, *lstate.payload_data, true);
+	auto payload_block = ConcatenateBlocks(buffer_manager, *lstate.payload_data);
 	sb->payload_data->data_blocks.push_back(move(payload_block));
 	// Now perform the actual sort
 	SortInMemory(buffer_manager, *sb, sorting_state);
@@ -1091,6 +1075,8 @@ void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lsta
 	lstate.sorted_blocks.push_back(move(sb));
 }
 
+//! Compares the tuples that a being read from in the 'left' and 'right blocks during merge sort
+//! (only in case we cannot simply 'memcmp' - if there are blob columns)
 inline int CompareTuple(const SortedBlock &left, const SortedBlock &right, const data_ptr_t &l_ptr,
                         const data_ptr_t &r_ptr, const SortingState &sorting_state, const bool &external_sort) {
 	// Compare the sorting columns one by one
@@ -1101,7 +1087,7 @@ inline int CompareTuple(const SortedBlock &left, const SortedBlock &right, const
 		comp_res = memcmp(l_ptr_offset, r_ptr_offset, sorting_state.column_sizes[col_idx]);
 		if (comp_res == 0 && !sorting_state.constant_size[col_idx]) {
 			comp_res =
-			    BreakBlobTie(col_idx, *left.sorting_data_blob, *right.sorting_data_blob, sorting_state, external_sort);
+			    BreakBlobTie(col_idx, *left.blob_sorting_data, *right.blob_sorting_data, sorting_state, external_sort);
 		}
 		if (comp_res != 0) {
 			break;
@@ -1121,12 +1107,12 @@ public:
 
 	void Execute() override {
 		ComputeWork();
-		D_ASSERT(left_block->sorting_data_radix.size() == left_block->payload_data->data_blocks.size());
-		D_ASSERT(right_block->sorting_data_radix.size() == right_block->payload_data->data_blocks.size());
+		D_ASSERT(left_block->radix_sorting_data.size() == left_block->payload_data->data_blocks.size());
+		D_ASSERT(right_block->radix_sorting_data.size() == right_block->payload_data->data_blocks.size());
 #ifdef DEBUG
 		if (!sorting_state.all_constant) {
-			D_ASSERT(left_block->sorting_data_radix.size() == left_block->sorting_data_blob->data_blocks.size());
-			D_ASSERT(right_block->sorting_data_radix.size() == right_block->sorting_data_blob->data_blocks.size());
+			D_ASSERT(left_block->radix_sorting_data.size() == left_block->blob_sorting_data->data_blocks.size());
+			D_ASSERT(right_block->radix_sorting_data.size() == right_block->blob_sorting_data->data_blocks.size());
 		}
 #endif
 		// Set up the write block
@@ -1154,12 +1140,12 @@ public:
 			// Actually merge the data (radix, blob, and payload)
 			Merge(next, left_smaller);
 			if (!sorting_state.all_constant) {
-				Merge(*result->sorting_data_blob, *left.sorting_data_blob, *right.sorting_data_blob, next, left_smaller,
+				Merge(*result->blob_sorting_data, *left.blob_sorting_data, *right.blob_sorting_data, next, left_smaller,
 				      next_entry_sizes);
-				D_ASSERT(left.block_idx == left.sorting_data_blob->block_idx &&
-				         left.entry_idx == left.sorting_data_blob->entry_idx);
-				D_ASSERT(right.block_idx == right.sorting_data_blob->block_idx &&
-				         right.entry_idx == right.sorting_data_blob->entry_idx);
+				D_ASSERT(left.block_idx == left.blob_sorting_data->block_idx &&
+				         left.entry_idx == left.blob_sorting_data->entry_idx);
+				D_ASSERT(right.block_idx == right.blob_sorting_data->block_idx &&
+				         right.entry_idx == right.blob_sorting_data->entry_idx);
 			}
 			Merge(*result->payload_data, *left.payload_data, *right.payload_data, next, left_smaller, next_entry_sizes);
 			D_ASSERT(left.block_idx == left.payload_data->block_idx && left.entry_idx == left.payload_data->entry_idx);
@@ -1190,6 +1176,7 @@ public:
 		}
 	}
 
+	//! Sets the left and right block that this task will merge
 	void ComputeWork() {
 		// Acquire global lock to compute next intersection
 		lock_guard<mutex> glock(state.lock);
@@ -1212,8 +1199,8 @@ public:
 			D_ASSERT(intersection == l_end + r_end);
 			// Unpin after finding the intersection
 			if (!sorting_state.blob_layout.AllConstant()) {
-				left.sorting_data_blob->UnpinAndReset(0, 0);
-				right.sorting_data_blob->UnpinAndReset(0, 0);
+				left.blob_sorting_data->UnpinAndReset(0, 0);
+				right.blob_sorting_data->UnpinAndReset(0, 0);
 			}
 		} else {
 			l_end = l_count;
@@ -1245,8 +1232,8 @@ public:
 		idx_t r_entry_idx;
 		r.GlobalToLocalIndex(r_idx, r_block_idx, r_entry_idx);
 
-		auto l_block_handle = buffer_manager.Pin(l.sorting_data_radix[l_block_idx].block);
-		auto r_block_handle = buffer_manager.Pin(r.sorting_data_radix[r_block_idx].block);
+		auto l_block_handle = buffer_manager.Pin(l.radix_sorting_data[l_block_idx].block);
+		auto r_block_handle = buffer_manager.Pin(r.radix_sorting_data[r_block_idx].block);
 		data_ptr_t l_ptr = l_block_handle->Ptr() + l_entry_idx * sorting_state.entry_size;
 		data_ptr_t r_ptr = r_block_handle->Ptr() + r_entry_idx * sorting_state.entry_size;
 
@@ -1254,17 +1241,18 @@ public:
 		if (sorting_state.all_constant) {
 			comp_res = memcmp(l_ptr, r_ptr, sorting_state.comparison_size);
 		} else {
-			l.sorting_data_blob->block_idx = l_block_idx;
-			l.sorting_data_blob->entry_idx = l_entry_idx;
-			l.sorting_data_blob->Pin();
-			r.sorting_data_blob->block_idx = r_block_idx;
-			r.sorting_data_blob->entry_idx = r_entry_idx;
-			r.sorting_data_blob->Pin();
+			l.blob_sorting_data->block_idx = l_block_idx;
+			l.blob_sorting_data->entry_idx = l_entry_idx;
+			l.blob_sorting_data->Pin();
+			r.blob_sorting_data->block_idx = r_block_idx;
+			r.blob_sorting_data->entry_idx = r_entry_idx;
+			r.blob_sorting_data->Pin();
 			comp_res = CompareTuple(l, r, l_ptr, r_ptr, sorting_state, state.external);
 		}
 		return comp_res;
 	}
 
+	//! Merge path
 	void ComputeIntersection(SortedBlock &l, SortedBlock &r, const idx_t sum, idx_t &l_idx, idx_t &r_idx) {
 		const idx_t l_count = l.Count();
 		const idx_t r_count = r.Count();
@@ -1322,7 +1310,7 @@ public:
 				right = middle - 1;
 			}
 		}
-		// shift by one (if needed)
+		// Shift by one (if needed)
 		if (l_idx == 0) {
 			comp_res = CompareUsingGlobalIndex(l, r, l_idx, r_idx);
 			if (comp_res > 0) {
@@ -1344,7 +1332,7 @@ public:
 		}
 	}
 
-	//! Computes how the next 'count' tuples should be merged
+	//! Computes how the next 'count' tuples should be merged by setting the 'left_smaller' array
 	void ComputeMerge(const idx_t &count, bool *left_smaller) {
 		auto &left = *left_block;
 		auto &right = *right_block;
@@ -1363,20 +1351,20 @@ public:
 		// Compute the merge of the next 'count' tuples
 		idx_t compared = 0;
 		while (compared < count) {
-			const bool l_done = l_block_idx == left.sorting_data_radix.size();
-			const bool r_done = r_block_idx == right.sorting_data_radix.size();
+			const bool l_done = l_block_idx == left.radix_sorting_data.size();
+			const bool r_done = r_block_idx == right.radix_sorting_data.size();
 			if (l_done || r_done) {
 				// One of the sides is exhausted, no need to compare
 				break;
 			}
 			// Pin the radix sorting data
 			if (!l_done) {
-				l_radix_block = &left.sorting_data_radix[l_block_idx];
+				l_radix_block = &left.radix_sorting_data[l_block_idx];
 				l_radix_handle = buffer_manager.Pin(l_radix_block->block);
 				l_radix_ptr = l_radix_handle->Ptr() + l_entry_idx * sorting_state.entry_size;
 			}
 			if (!r_done) {
-				r_radix_block = &right.sorting_data_radix[r_block_idx];
+				r_radix_block = &right.radix_sorting_data[r_block_idx];
 				r_radix_handle = buffer_manager.Pin(r_radix_block->block);
 				r_radix_ptr = r_radix_handle->Ptr() + r_entry_idx * sorting_state.entry_size;
 			}
@@ -1390,7 +1378,7 @@ public:
 					const bool &l_smaller = left_smaller[compared];
 					const bool r_smaller = !l_smaller;
 					left_smaller[compared] = l_smaller;
-					// use comparison bool (0 or 1) to increment entries and pointers
+					// Use comparison bool (0 or 1) to increment entries and pointers
 					l_entry_idx += l_smaller;
 					r_entry_idx += r_smaller;
 					l_radix_ptr += l_smaller * sorting_state.entry_size;
@@ -1399,10 +1387,10 @@ public:
 			} else {
 				// Pin the blob data
 				if (!l_done) {
-					left.sorting_data_blob->Pin();
+					left.blob_sorting_data->Pin();
 				}
 				if (!r_done) {
-					right.sorting_data_blob->Pin();
+					right.blob_sorting_data->Pin();
 				}
 				// Merge with variable size sorting columns
 				for (; compared < count && l_entry_idx < l_count && r_entry_idx < r_count; compared++) {
@@ -1411,11 +1399,11 @@ public:
 					if (left_smaller[compared]) {
 						l_entry_idx++;
 						l_radix_ptr += sorting_state.entry_size;
-						left.sorting_data_blob->Advance();
+						left.blob_sorting_data->Advance();
 					} else {
 						r_entry_idx++;
 						r_radix_ptr += sorting_state.entry_size;
-						right.sorting_data_blob->Advance();
+						right.blob_sorting_data->Advance();
 					}
 				}
 			}
@@ -1431,12 +1419,12 @@ public:
 		}
 		// Reset block indices before the actual merge
 		if (!sorting_state.all_constant) {
-			left.sorting_data_blob->UnpinAndReset(left.block_idx, left.entry_idx);
-			right.sorting_data_blob->UnpinAndReset(right.block_idx, right.entry_idx);
+			left.blob_sorting_data->UnpinAndReset(left.block_idx, left.entry_idx);
+			right.blob_sorting_data->UnpinAndReset(right.block_idx, right.entry_idx);
 		}
 	}
 
-	//! Merges the radix sorting blocks
+	//! Merges the radix sorting blocks according to the 'left_smaller' array
 	void Merge(const idx_t &count, const bool left_smaller[]) {
 		auto &left = *left_block;
 		auto &right = *right_block;
@@ -1448,62 +1436,62 @@ public:
 		data_ptr_t l_ptr;
 		data_ptr_t r_ptr;
 
-		RowDataBlock *result_block = &result->sorting_data_radix.back();
+		RowDataBlock *result_block = &result->radix_sorting_data.back();
 		auto result_handle = buffer_manager.Pin(result_block->block);
 		data_ptr_t result_ptr = result_handle->Ptr() + result_block->count * sorting_state.entry_size;
 
 		idx_t copied = 0;
 		while (copied < count) {
-			const bool l_done = left.block_idx == left.sorting_data_radix.size();
-			const bool r_done = right.block_idx == right.sorting_data_radix.size();
-			// pin the blocks
+			const bool l_done = left.block_idx == left.radix_sorting_data.size();
+			const bool r_done = right.block_idx == right.radix_sorting_data.size();
+			// Pin the radix sortable blocks
 			if (!l_done) {
-				l_block = &left.sorting_data_radix[left.block_idx];
+				l_block = &left.radix_sorting_data[left.block_idx];
 				l_block_handle = buffer_manager.Pin(l_block->block);
 				l_ptr = l_block_handle->Ptr() + left.entry_idx * sorting_state.entry_size;
 			}
 			if (!r_done) {
-				r_block = &right.sorting_data_radix[right.block_idx];
+				r_block = &right.radix_sorting_data[right.block_idx];
 				r_block_handle = buffer_manager.Pin(r_block->block);
 				r_ptr = r_block_handle->Ptr() + right.entry_idx * sorting_state.entry_size;
 			}
 			const idx_t &l_count = !l_done ? l_block->count : 0;
 			const idx_t &r_count = !r_done ? r_block->count : 0;
 
-			// create new result block (if needed)
+			// Create new result block (if needed)
 			if (result_block->count == result_block->capacity) {
 				result->CreateBlock();
-				result_block = &result->sorting_data_radix.back();
+				result_block = &result->radix_sorting_data.back();
 				result_handle = buffer_manager.Pin(result_block->block);
 				result_ptr = result_handle->Ptr();
 			}
-			// copy using computed merge
+			// Copy using computed merge
 			if (!l_done && !r_done) {
-				// neither left nor right side is exhausted
-				MergeConstantSize(l_ptr, left.entry_idx, l_count, r_ptr, right.entry_idx, r_count, result_block,
-				                  result_ptr, sorting_state.entry_size, left_smaller, copied, count);
+				// Both sides have data - merge
+				MergeRows(l_ptr, left.entry_idx, l_count, r_ptr, right.entry_idx, r_count, result_block, result_ptr,
+				          sorting_state.entry_size, left_smaller, copied, count);
 			} else if (r_done) {
-				// right side is exhausted
-				FlushConstantSize(l_ptr, left.entry_idx, l_count, result_block, result_ptr, sorting_state.entry_size,
-				                  copied, count);
+				// Right side is exhausted
+				FlushRows(l_ptr, left.entry_idx, l_count, result_block, result_ptr, sorting_state.entry_size, copied,
+				          count);
 			} else {
-				// left side is exhausted
-				FlushConstantSize(r_ptr, right.entry_idx, r_count, result_block, result_ptr, sorting_state.entry_size,
-				                  copied, count);
+				// Left side is exhausted
+				FlushRows(r_ptr, right.entry_idx, r_count, result_block, result_ptr, sorting_state.entry_size, copied,
+				          count);
 			}
-			// move to the next block (if needed)
-			if (!l_done && left.entry_idx == left.sorting_data_radix[left.block_idx].count) {
+			// Move to the next block (if needed)
+			if (!l_done && left.entry_idx == left.radix_sorting_data[left.block_idx].count) {
 				left.block_idx++;
 				left.entry_idx = 0;
 			}
-			if (!r_done && right.entry_idx == right.sorting_data_radix[right.block_idx].count) {
+			if (!r_done && right.entry_idx == right.radix_sorting_data[right.block_idx].count) {
 				right.block_idx++;
 				right.entry_idx = 0;
 			}
 		}
 	}
 
-	//! Merges SortedData
+	//! Merges SortedData according to the 'left_smaller' array
 	void Merge(SortedData &result_data, SortedData &l_data, SortedData &r_data, const idx_t &count,
 	           const bool left_smaller[], idx_t next_entry_sizes[]) {
 		const auto &layout = result_data.layout;
@@ -1567,16 +1555,16 @@ public:
 				// If all constant size, or if we are doing an in-memory sort, we do not need to touch the heap
 				if (!l_done && !r_done) {
 					// Both sides have data - merge
-					MergeConstantSize(l_ptr, l_data.entry_idx, l_count, r_ptr, r_data.entry_idx, r_count,
-					                  result_data_block, result_data_ptr, row_width, left_smaller, copied, count);
+					MergeRows(l_ptr, l_data.entry_idx, l_count, r_ptr, r_data.entry_idx, r_count, result_data_block,
+					          result_data_ptr, row_width, left_smaller, copied, count);
 				} else if (r_done) {
 					// Right side is exhausted
-					FlushConstantSize(l_ptr, l_data.entry_idx, l_count, result_data_block, result_data_ptr, row_width,
-					                  copied, count);
+					FlushRows(l_ptr, l_data.entry_idx, l_count, result_data_block, result_data_ptr, row_width, copied,
+					          count);
 				} else {
 					// Left side is exhausted
-					FlushConstantSize(r_ptr, r_data.entry_idx, r_count, result_data_block, result_data_ptr, row_width,
-					                  copied, count);
+					FlushRows(r_ptr, r_data.entry_idx, r_count, result_data_block, result_data_ptr, row_width, copied,
+					          count);
 				}
 			} else {
 				// External sorting with variable size data. Pin the heap blocks too
@@ -1596,8 +1584,8 @@ public:
 					data_ptr_t result_data_ptr_copy = result_data_ptr;
 					idx_t copied_copy = copied;
 					// Merge row data
-					MergeConstantSize(l_ptr, l_idx_copy, l_count, r_ptr, r_idx_copy, r_count, result_data_block,
-					                  result_data_ptr_copy, row_width, left_smaller, copied_copy, count);
+					MergeRows(l_ptr, l_idx_copy, l_count, r_ptr, r_idx_copy, r_count, result_data_block,
+					          result_data_ptr_copy, row_width, left_smaller, copied_copy, count);
 					const idx_t merged = copied_copy - copied;
 					// Compute the entry sizes and number of heap bytes that will be copied
 					idx_t copy_bytes = 0;
@@ -1656,17 +1644,15 @@ public:
 					copied += merged;
 				} else if (r_done) {
 					// Right side is exhausted - flush left
-					FlushVariableSize(buffer_manager, layout, l_count, l_ptr, l_data.entry_idx, l_heap_ptr,
-					                  result_data_block, result_data_ptr, result_heap_block, *result_heap_handle,
-					                  result_heap_ptr, copied, count);
+					FlushBlobs(buffer_manager, layout, l_count, l_ptr, l_data.entry_idx, l_heap_ptr, result_data_block,
+					           result_data_ptr, result_heap_block, *result_heap_handle, result_heap_ptr, copied, count);
 				} else {
 					// Left side is exhausted - flush right
-					FlushVariableSize(buffer_manager, layout, r_count, r_ptr, r_data.entry_idx, r_heap_ptr,
-					                  result_data_block, result_data_ptr, result_heap_block, *result_heap_handle,
-					                  result_heap_ptr, copied, count);
+					FlushBlobs(buffer_manager, layout, r_count, r_ptr, r_data.entry_idx, r_heap_ptr, result_data_block,
+					           result_data_ptr, result_heap_block, *result_heap_handle, result_heap_ptr, copied, count);
 				}
 			}
-			// move to new data blocks (if needed)
+			// Move to new data blocks (if needed)
 			if (l_data.block_idx < l_data.data_blocks.size() &&
 			    l_data.entry_idx == l_data.data_blocks[l_data.block_idx].count) {
 				l_data.block_idx++;
@@ -1680,60 +1666,62 @@ public:
 		}
 	}
 
-	static void MergeConstantSize(data_ptr_t &l_ptr, idx_t &l_entry_idx, const idx_t &l_count, data_ptr_t &r_ptr,
-	                              idx_t &r_entry_idx, const idx_t &r_count, RowDataBlock *target_block,
-	                              data_ptr_t &target_ptr, const idx_t &entry_size, const bool left_smaller[],
-	                              idx_t &copied, const idx_t &count) {
+	//! Merges constant size rows
+	static void MergeRows(data_ptr_t &l_ptr, idx_t &l_entry_idx, const idx_t &l_count, data_ptr_t &r_ptr,
+	                      idx_t &r_entry_idx, const idx_t &r_count, RowDataBlock *target_block, data_ptr_t &target_ptr,
+	                      const idx_t &entry_size, const bool *left_smaller, idx_t &copied, const idx_t &count) {
 		const idx_t next = MinValue(count - copied, target_block->capacity - target_block->count);
 		idx_t i;
 		for (i = 0; i < next && l_entry_idx < l_count && r_entry_idx < r_count; i++) {
 			const bool &l_smaller = left_smaller[copied + i];
 			const bool r_smaller = !l_smaller;
-			// use comparison bool (0 or 1) to copy an entry from either side
+			// Use comparison bool (0 or 1) to copy an entry from either side
 			memcpy(target_ptr, l_ptr, l_smaller * entry_size);
 			memcpy(target_ptr, r_ptr, r_smaller * entry_size);
 			target_ptr += entry_size;
-			// use the comparison bool to increment entries and pointers
+			// Use the comparison bool to increment entries and pointers
 			l_entry_idx += l_smaller;
 			r_entry_idx += r_smaller;
 			l_ptr += l_smaller * entry_size;
 			r_ptr += r_smaller * entry_size;
 		}
-		// update counts
+		// Update counts
 		target_block->count += i;
 		copied += i;
 	}
 
-	static void FlushConstantSize(data_ptr_t &source_ptr, idx_t &source_entry_idx, const idx_t &source_count,
-	                              RowDataBlock *target_block, data_ptr_t &target_ptr, const idx_t &entry_size,
-	                              idx_t &copied, const idx_t &count) {
-		// compute how many entries we can fit
+	//! Flushes constant size rows
+	static void FlushRows(data_ptr_t &source_ptr, idx_t &source_entry_idx, const idx_t &source_count,
+	                      RowDataBlock *target_block, data_ptr_t &target_ptr, const idx_t &entry_size, idx_t &copied,
+	                      const idx_t &count) {
+		// Compute how many entries we can fit
 		idx_t next = MinValue(count - copied, target_block->capacity - target_block->count);
 		next = MinValue(next, source_count - source_entry_idx);
-		// copy them all in a single memcpy
+		// Copy them all in a single memcpy
 		const idx_t copy_bytes = next * entry_size;
 		memcpy(target_ptr, source_ptr, copy_bytes);
 		target_ptr += copy_bytes;
 		source_ptr += copy_bytes;
-		// update counts
+		// Update counts
 		source_entry_idx += next;
 		target_block->count += next;
 		copied += next;
 	}
 
-	static void FlushVariableSize(BufferManager &buffer_manager, const RowLayout &layout, const idx_t &source_count,
-	                              data_ptr_t &source_data_ptr, idx_t &source_entry_idx, data_ptr_t &source_heap_ptr,
-	                              RowDataBlock *target_data_block, data_ptr_t &target_data_ptr,
-	                              RowDataBlock *target_heap_block, BufferHandle &target_heap_handle,
-	                              data_ptr_t &target_heap_ptr, idx_t &copied, const idx_t &count) {
+	//! Flushes blob rows and accompanying heap
+	static void FlushBlobs(BufferManager &buffer_manager, const RowLayout &layout, const idx_t &source_count,
+	                       data_ptr_t &source_data_ptr, idx_t &source_entry_idx, data_ptr_t &source_heap_ptr,
+	                       RowDataBlock *target_data_block, data_ptr_t &target_data_ptr,
+	                       RowDataBlock *target_heap_block, BufferHandle &target_heap_handle,
+	                       data_ptr_t &target_heap_ptr, idx_t &copied, const idx_t &count) {
 		const idx_t row_width = layout.GetRowWidth();
 		const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
 		idx_t source_entry_idx_copy = source_entry_idx;
 		data_ptr_t target_data_ptr_copy = target_data_ptr;
 		idx_t copied_copy = copied;
 		// Flush row data
-		FlushConstantSize(source_data_ptr, source_entry_idx_copy, source_count, target_data_block, target_data_ptr_copy,
-		                  row_width, copied_copy, count);
+		FlushRows(source_data_ptr, source_entry_idx_copy, source_count, target_data_block, target_data_ptr_copy,
+		          row_width, copied_copy, count);
 		const idx_t flushed = copied_copy - copied;
 		// Compute the entry sizes and number of heap bytes that will be copied
 		idx_t copy_bytes = 0;
@@ -1790,18 +1778,18 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	}
 	// Set total count
 	for (auto &sb : state.sorted_blocks) {
-		state.total_count += sb->sorting_data_radix.back().count;
+		state.total_count += sb->radix_sorting_data.back().count;
 	}
 	// Use the data that we have to determine which block size to use during the merge
 	const auto &sorting_state = state.sorting_state;
 	for (auto &sb : state.sorted_blocks) {
-		auto &block = sb->sorting_data_radix.back();
+		auto &block = sb->radix_sorting_data.back();
 		state.block_capacity = MaxValue(state.block_capacity, block.capacity);
 	}
 	// Sorting heap data
 	if (!sorting_state.all_constant && state.external) {
 		for (auto &sb : state.sorted_blocks) {
-			auto &heap_block = sb->sorting_data_blob->heap_blocks.back();
+			auto &heap_block = sb->blob_sorting_data->heap_blocks.back();
 			state.sorting_heap_capacity =
 			    MaxValue(state.sorting_heap_capacity, heap_block.capacity * heap_block.entry_size);
 		}
@@ -1857,11 +1845,10 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 		auto &right = *state.sorted_blocks[block_idx + 1];
 		const idx_t count = left.Count() + right.Count();
 		num_tasks += (count + tuples_per_block - 1) / tuples_per_block;
-		// allocate room for merge results
+		// Allocate room for merge results
 		state.sorted_blocks_temp.emplace_back();
 	}
-
-	// schedule the tasks
+	// Schedule the tasks
 	pipeline.total_tasks += num_tasks;
 	for (idx_t tnum = 0; tnum < num_tasks; tnum++) {
 		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state);
@@ -1891,6 +1878,7 @@ unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
 }
 
+//! Scans the payload of the final SortedBlock result
 static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperatorState &state, OrderGlobalState &gstate,
                  const idx_t &scan_count) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
@@ -1936,8 +1924,6 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 		RowOperations::Gather(state.addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, chunk.data[col_idx],
 		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, scan_count, col_offset, col_idx);
 	}
-	chunk.SetCardinality(scan_count);
-	chunk.Verify();
 }
 
 void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
@@ -1957,6 +1943,8 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 
 	auto next = MinValue((idx_t)STANDARD_VECTOR_SIZE, gstate.total_count - state.global_entry_idx);
 	Scan(context.client, chunk, state, gstate, next);
+	chunk.SetCardinality(next);
+	chunk.Verify();
 }
 
 string PhysicalOrder::ParamsToString() const {
