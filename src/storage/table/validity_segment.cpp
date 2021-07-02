@@ -230,6 +230,7 @@ idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t 
 }
 
 void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+	result.Normalify(scan_count);
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
 		// aligned scan: no need to do anything fancy
 		// note: this is only an optimization which avoids having to do messy bitshifting in the common case

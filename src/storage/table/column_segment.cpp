@@ -30,7 +30,6 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t start_row, idx_t scan_cou
 	D_ASSERT(start_row + scan_count <= this->count);
 	if (entire_vector) {
 		D_ASSERT(result_offset == 0);
-		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 		data->Scan(state, start_row, scan_count, result);
 	} else {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
