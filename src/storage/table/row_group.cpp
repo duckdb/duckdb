@@ -374,7 +374,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
 						auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
 						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
-							result_data[sel_idx] = current_row + sel.get_index(sel_idx);
+							result_data[sel_idx] = this->start + current_row + sel.get_index(sel_idx);
 						}
 					} else {
 						columns[column]->FilterScan(*transaction, state.vector_index, state.column_scans[i], result.data[i], sel,
