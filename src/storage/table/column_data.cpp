@@ -45,9 +45,9 @@ const LogicalType &ColumnData::RootType() const {
 	return type;
 }
 
-idx_t ColumnData::GetCount() {
+idx_t ColumnData::GetMaxEntry() {
 	auto last_segment = data.GetLastSegment();
-	return last_segment ? last_segment->start + last_segment->count : 0;
+	return last_segment ? last_segment->start + last_segment->count : start;
 }
 
 void ColumnData::InitializeScan(ColumnScanState &state) {
@@ -68,6 +68,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		state.current->InitializeScan(state);
 		state.initialized = true;
 	}
+	D_ASSERT(state.current->type == type);
 	idx_t row_index = state.row_index;
 	idx_t initial_remaining = remaining;
 	while (remaining > 0) {
@@ -527,18 +528,6 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	return checkpoint_state;
 }
 
-void ColumnData::Initialize(PersistentColumnData &column_data) {
-	// load persistent segments
-	idx_t segment_rows = 0;
-	for (auto &segment : column_data.segments) {
-		segment_rows += segment->count;
-		data.AppendSegment(move(segment));
-	}
-	if (segment_rows != column_data.total_rows) {
-		throw Exception("Segment rows does not match total rows stored in column...");
-	}
-}
-
 void ColumnData::DeserializeColumn(Deserializer &source) {
 	// load the data pointers for the column
 	idx_t data_pointer_count = source.Read<idx_t>();
@@ -641,7 +630,7 @@ void ColumnData::Verify(RowGroup &parent) {
 			root = root->next.get();
 		}
 	} else {
-		if (type.id() != LogicalTypeId::STRUCT) {
+		if (type.InternalType() != PhysicalType::STRUCT) {
 			D_ASSERT(parent.count == 0);
 		}
 	}

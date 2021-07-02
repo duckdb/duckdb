@@ -26,7 +26,7 @@ public:
 
 public:
 	bool CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
-	idx_t GetCount() override;
+	idx_t GetMaxEntry() override;
 
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
@@ -48,7 +48,6 @@ public:
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
 	void CommitDropColumn() override;
-	void Initialize(PersistentColumnData &column_data) override;
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer) override;

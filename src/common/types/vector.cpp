@@ -767,7 +767,7 @@ void Vector::Orrify(idx_t count, VectorData &data) {
 		break;
 	default:
 		Normalify(count);
-		data.sel = FlatVector::IncrementalSelectionVector(count, data.owned_sel);
+		data.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 		data.data = FlatVector::GetData(*this);
 		data.validity = FlatVector::Validity(*this);
 		break;
@@ -825,6 +825,27 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			}
 			break;
 		}
+		case PhysicalType::LIST: {
+			auto &child = ListVector::GetEntry(*this);
+			auto list_size = ListVector::GetListSize(*this);
+
+			// serialize the list entries in a flat array
+			auto data = unique_ptr<list_entry_t[]>(new list_entry_t[count]);
+			auto source_array = (list_entry_t *)vdata.data;
+			for (idx_t i = 0; i < count; i++) {
+				auto idx = vdata.sel->get_index(i);
+				auto source = source_array[idx];
+				data[i].offset = source.offset;
+				data[i].length = source.length;
+			}
+
+			// write the list size
+			serializer.Write<idx_t>(list_size);
+			serializer.WriteData((data_ptr_t)data.get(), count * sizeof(list_entry_t));
+
+			child.Serialize(list_size, serializer);
+			break;
+		}
 		default:
 			throw NotImplementedException("Unimplemented variable width type for Vector::Serialize!");
 		}
@@ -869,6 +890,22 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 			for (auto &entry : entries) {
 				entry->Deserialize(count, source);
 			}
+			break;
+		}
+		case PhysicalType::LIST: {
+			// read the list size
+			auto list_size = source.Read<idx_t>();
+			ListVector::Reserve(*this, list_size);
+			ListVector::SetListSize(*this, list_size);
+
+			// read the list entry
+			auto list_entries = FlatVector::GetData(*this);
+			source.ReadData(list_entries, count * sizeof(list_entry_t));
+
+			// deserialize the child vector
+			auto &child = ListVector::GetEntry(*this);
+			child.Deserialize(list_size, source);
+
 			break;
 		}
 		default:
@@ -1158,17 +1195,6 @@ void ConstantVector::Reference(Vector &vector, Vector &source, idx_t position, i
 		D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 		break;
 	}
-}
-
-const SelectionVector *FlatVector::IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel) {
-	if (count <= STANDARD_VECTOR_SIZE) {
-		return &FlatVector::INCREMENTAL_SELECTION_VECTOR;
-	}
-	owned_sel.Initialize(count);
-	for (idx_t i = 0; i < count; i++) {
-		owned_sel.set_index(i, i);
-	}
-	return &owned_sel;
 }
 
 string_t StringVector::AddString(Vector &vector, const char *data, idx_t len) {

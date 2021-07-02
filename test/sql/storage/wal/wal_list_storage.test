@@ -1,0 +1,124 @@
+# name: test/sql/storage/wal/wal_list_storage.test
+# description: Test lists with persistent storage
+# group: [wal]
+
+load __TEST_DIR__/list_storage_test.db
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+statement ok
+CREATE TABLE a(b INTEGER[]);
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+query I
+SELECT * FROM a
+----
+
+statement ok
+INSERT INTO a VALUES ([1, 2]), (NULL), ([3, 4, 5, 6]), ([NULL, 7]);
+
+query I
+SELECT * FROM a
+----
+[1, 2]
+NULL
+[3, 4, 5, 6]
+[NULL, 7]
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+query I
+SELECT * FROM a
+----
+[1, 2]
+NULL
+[3, 4, 5, 6]
+[NULL, 7]
+
+# nested lists
+statement ok
+CREATE TABLE b(b INTEGER[][]);
+
+statement ok
+INSERT INTO b VALUES ([[1, 2], [3, 4]]), (NULL), ([NULL, [7, 8, NULL], [2, 3]]), ([[NULL, 6], NULL, [1, 2, NULL]]);
+
+query I
+SELECT * FROM b
+----
+[[1, 2], [3, 4]]
+NULL
+[NULL, [7, 8, NULL], [2, 3]]
+[[NULL, 6], NULL, [1, 2, NULL]]
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+query I
+SELECT * FROM b
+----
+[[1, 2], [3, 4]]
+NULL
+[NULL, [7, 8, NULL], [2, 3]]
+[[NULL, 6], NULL, [1, 2, NULL]]
+
+statement ok
+CREATE TABLE c(b VARCHAR[]);
+
+statement ok
+INSERT INTO c VALUES (['hello', 'world']), (NULL), (['fejwfoaejwfoijwafew', 'b', 'c']), ([NULL, 'XXXXXXXXXXXXXXXXXXXXXXXX']);
+
+query I
+SELECT * FROM c
+----
+[hello, world]
+NULL
+[fejwfoaejwfoijwafew, b, c]
+[NULL, XXXXXXXXXXXXXXXXXXXXXXXX]
+
+restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+query I
+SELECT * FROM c
+----
+[hello, world]
+NULL
+[fejwfoaejwfoijwafew, b, c]
+[NULL, XXXXXXXXXXXXXXXXXXXXXXXX]
+
+restart
+
+query I
+SELECT * FROM c
+----
+[hello, world]
+NULL
+[fejwfoaejwfoijwafew, b, c]
+[NULL, XXXXXXXXXXXXXXXXXXXXXXXX]
