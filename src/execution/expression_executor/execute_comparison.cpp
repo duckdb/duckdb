@@ -4,6 +4,8 @@
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 
+#include <algorithm>
+
 namespace duckdb {
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundComparisonExpression &expr,
