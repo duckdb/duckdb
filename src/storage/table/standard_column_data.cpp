@@ -104,8 +104,9 @@ idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &re
 		ColumnScanState child_state;
 		state.child_states.push_back(move(child_state));
 	}
+	auto scan_count = ColumnData::Fetch(state, row_id, result);
 	validity.Fetch(state.child_states[0], row_id, result);
-	return ColumnData::Fetch(state, row_id, result);
+	return scan_count;
 }
 
 void StandardColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
