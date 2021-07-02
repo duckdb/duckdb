@@ -193,7 +193,7 @@ unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size) {
 	return Pin(block);
 }
 
-void BufferManager::ReAllocate(shared_ptr<BlockHandle> handle, idx_t alloc_size) {
+void BufferManager::ReAllocate(const shared_ptr<BlockHandle> &handle, idx_t alloc_size) {
 	lock_guard<mutex> lock(handle->lock);
 	D_ASSERT(handle->readers == 1);
 	if (alloc_size > handle->memory_usage) {
