@@ -1,0 +1,60 @@
+# name: test/sql/storage/types/list/store_list_of_struct.test
+# description: Test storing of a list of structs
+# group: [list]
+
+load __TEST_DIR__/list_of_struct.db
+
+statement ok
+CREATE TABLE a(id INTEGER, b ROW(a INTEGER, b INTEGER)[]);
+
+query II
+SELECT * FROM a;
+----
+
+restart
+
+query II
+SELECT * FROM a;
+----
+
+statement ok
+INSERT INTO a VALUES (1, [{'a': 3, 'b': 7}, {'a': NULL, 'b': 7}, NULL]), (2, []), (3, NULL), (4, [NULL, {'a': 7, 'b': NULL}, {'a': 1, 'b': 1}])
+
+query II
+SELECT * FROM a ORDER BY id;
+----
+1	[{'a': 3, 'b': 7}, {'a': NULL, 'b': 7}, NULL]
+2	[]
+3	NULL
+4	[NULL, {'a': 7, 'b': NULL}, {'a': 1, 'b': 1}]
+
+restart
+
+query II
+SELECT * FROM a ORDER BY id;
+----
+1	[{'a': 3, 'b': 7}, {'a': NULL, 'b': 7}, NULL]
+2	[]
+3	NULL
+4	[NULL, {'a': 7, 'b': NULL}, {'a': 1, 'b': 1}]
+
+statement ok
+UPDATE a SET b=[] WHERE id=3
+
+query II
+SELECT * FROM a ORDER BY id;
+----
+1	[{'a': 3, 'b': 7}, {'a': NULL, 'b': 7}, NULL]
+2	[]
+3	[]
+4	[NULL, {'a': 7, 'b': NULL}, {'a': 1, 'b': 1}]
+
+restart
+
+query II
+SELECT * FROM a ORDER BY id;
+----
+1	[{'a': 3, 'b': 7}, {'a': NULL, 'b': 7}, NULL]
+2	[]
+3	[]
+4	[NULL, {'a': 7, 'b': NULL}, {'a': 1, 'b': 1}]

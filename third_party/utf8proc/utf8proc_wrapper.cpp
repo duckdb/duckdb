@@ -21,30 +21,51 @@ namespace duckdb {
 //	3	U+000800	U+00FFFF		1110xxxx
 //	4	U+010000	U+10FFFF		11110xxx
 
-UnicodeType Utf8Proc::Analyze(const char *s, size_t len) {
+static void AssignInvalidUTF8Reason(UnicodeInvalidReason *invalid_reason, size_t *invalid_pos, size_t pos, UnicodeInvalidReason reason) {
+	if (invalid_reason) {
+		*invalid_reason = reason;
+	}
+	if (invalid_pos) {
+		*invalid_pos = pos;
+	}
+}
+
+UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *invalid_reason, size_t *invalid_pos) {
 	UnicodeType type = UnicodeType::ASCII;
 	char c;
 	for (size_t i = 0; i < len; i++) {
 		c = s[i];
 		if (c == '\0') {
+			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::NULL_BYTE);
 			return UnicodeType::INVALID;
 		}
 		// 1 Byte / ASCII
-		if ((c & 0x80) == 0)
+		if ((c & 0x80) == 0) {
 			continue;
+		}
 		type = UnicodeType::UNICODE;
-		if ((s[++i] & 0xC0) != 0x80)
+		if ((s[++i] & 0xC0) != 0x80) {
+			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
 			return UnicodeType::INVALID;
-		if ((c & 0xE0) == 0xC0)
+		}
+		if ((c & 0xE0) == 0xC0) {
 			continue;
-		if ((s[++i] & 0xC0) != 0x80)
+		}
+		if ((s[++i] & 0xC0) != 0x80) {
+			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
 			return UnicodeType::INVALID;
-		if ((c & 0xF0) == 0xE0)
+		}
+		if ((c & 0xF0) == 0xE0) {
 			continue;
-		if ((s[++i] & 0xC0) != 0x80)
+		}
+		if ((s[++i] & 0xC0) != 0x80) {
+			AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
 			return UnicodeType::INVALID;
-		if ((c & 0xF8) == 0xF0)
+		}
+		if ((c & 0xF8) == 0xF0) {
 			continue;
+		}
+		AssignInvalidUTF8Reason(invalid_reason, invalid_pos, i, UnicodeInvalidReason::BYTE_MISMATCH);
 		return UnicodeType::INVALID;
 	}
 

@@ -10,7 +10,4 @@ PersistentTableData::PersistentTableData(idx_t column_count) {
 PersistentTableData::~PersistentTableData() {
 }
 
-PersistentColumnData::~PersistentColumnData() {
-}
-
 } // namespace duckdb

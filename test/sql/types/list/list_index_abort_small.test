@@ -1,4 +1,4 @@
-# name: test/sql/types/list/list_index_abort.test_slow
+# name: test/sql/types/list/list_index_abort_small.test
 # description: Test abort of list insertion in a primary key index
 # group: [list]
 
@@ -15,7 +15,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-INSERT INTO a SELECT i id, NULL c FROM range(2, 250000, 1) tbl(i)
+INSERT INTO a SELECT i id, NULL c FROM range(2, 2500, 1) tbl(i)
 
 statement error
 INSERT INTO a VALUES (1, [4, 5])
@@ -38,7 +38,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-INSERT INTO a SELECT i id, [-i, i, 33] c FROM range(-2, -250000, -1) tbl(i)
+INSERT INTO a SELECT i id, [-i, i, 33] c FROM range(-2, -2500, -1) tbl(i)
 
 statement error
 INSERT INTO a VALUES (1, [4, 5])
@@ -61,7 +61,7 @@ statement ok
 BEGIN TRANSACTION
 
 statement ok
-INSERT INTO a SELECT i id, [1, 2, 3, 4, 5, i, -33] c FROM range(250000, 500000, 1) tbl(i)
+INSERT INTO a SELECT i id, [1, 2, 3, 4, 5, i, -33] c FROM range(2500, 5000, 1) tbl(i)
 
 statement error
 INSERT INTO a VALUES (1, [4, 5])
