@@ -28,6 +28,9 @@ idx_t StructColumnData::GetMaxEntry() {
 }
 
 void StructColumnData::InitializeScan(ColumnScanState &state) {
+	state.row_index = 0;
+	state.current = nullptr;
+
 	// initialize the validity segment
 	ColumnScanState validity_state;
 	validity.InitializeScan(validity_state);
@@ -42,6 +45,9 @@ void StructColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+	state.row_index = row_idx;
+	state.current = nullptr;
+
 	// initialize the validity segment
 	ColumnScanState validity_state;
 	validity.InitializeScanWithOffset(validity_state, row_idx);

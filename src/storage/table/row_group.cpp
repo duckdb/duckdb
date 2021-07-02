@@ -359,8 +359,12 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 				D_ASSERT(table_filters);
 				result.Reset();
 				for (idx_t i = 0; i < column_ids.size(); i++) {
+					auto col_idx = column_ids[i];
+					if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+						continue;
+					}
 					if (table_filters->filters.find(i) == table_filters->filters.end()) {
-						state.column_scans[i].NextVector();
+						columns[col_idx]->Skip(state.column_scans[i]);
 					}
 				}
 				state.vector_index++;
