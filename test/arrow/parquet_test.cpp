@@ -153,17 +153,17 @@ TEST_CASE("Test Parquet Long Files", "[arrow]") {
 
 TEST_CASE("Test Parquet Files", "[arrow]") {
 
-	std::vector<std::string> skip {"aws2.parquet"};    //! Not supported by arrow
-	skip.emplace_back("datapage_v2.snappy.parquet");   //! Not supported by arrow
-	skip.emplace_back("broken-arrow.parquet");         //! Arrow can't read this
-	skip.emplace_back("nan-float.parquet");            //! Can't roundtrip NaNs
-	skip.emplace_back("fixed.parquet");                //! Can't roundtrip Fixed-size Binaries
-	skip.emplace_back("leftdate3_192_loop_1.parquet"); //! This is just crazy slow
-	skip.emplace_back("bug687_nulls.parquet");         //! This is just crazy slow
+	std::vector<std::string> skip {"aws2.parquet"};         //! Not supported by arrow
+	skip.emplace_back("datapage_v2.snappy.parquet");        //! Not supported by arrow
+	skip.emplace_back("broken-arrow.parquet");              //! Arrow can't read this
+	skip.emplace_back("nan-float.parquet");                 //! Can't roundtrip NaNs
+	skip.emplace_back("fixed.parquet");                     //! Can't roundtrip Fixed-size Binaries
+	skip.emplace_back("leftdate3_192_loop_1.parquet");      //! This is just crazy slow
+	skip.emplace_back("bug687_nulls.parquet");              //! This is just crazy slow
 	skip.emplace_back("lz4_raw_compressed.parquet");        //! Arrow can't read this
 	skip.emplace_back("lz4_raw_compressed_larger.parquet"); //! Arrow can't read this
-	skip.emplace_back("nullbyte.parquet");             //! Null byte in file
-	skip.emplace_back("nullbyte_multiple.parquet");    //! Null byte in file
+	skip.emplace_back("nullbyte.parquet");                  //! Null byte in file
+	skip.emplace_back("nullbyte_multiple.parquet");         //! Null byte in file
 
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
