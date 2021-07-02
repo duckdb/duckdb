@@ -45,8 +45,10 @@ public:
 	virtual void InitializeScan(ColumnScanState &state) {
 	}
 	//! Scans a vector of "scan_count" entries starting at position "start"
-	//! Store it in result with offset "result_offset"
-	virtual void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) = 0;
+	virtual void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) = 0;
+	//! Scans a vector of "scan_count" entries starting at position "start", storing it at "result_offset"
+	//! If this function is used, the result should be a flat vector, as more scans might follow on the same vector
+	virtual void ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) = 0;
 
 	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
 	                            idx_t &approved_tuple_count, ValidityMask &mask);

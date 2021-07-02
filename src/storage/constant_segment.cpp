@@ -71,14 +71,14 @@ ConstantSegment::scan_function_t GetScanFunction(PhysicalType type) {
 void ConstantSegment::InitializeScan(ColumnScanState &state) {
 }
 
-void ConstantSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
-	if (result_offset > 0) {
-		// there are already rows in this segment: fill in the remaining rows
-		fill_function(*this, result, result_offset, scan_count);
-	} else {
-		// fresh scan: emit a constant vector
-		scan_function(*this, result);
-	}
+void ConstantSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+	// fresh scan: emit a constant vector
+	scan_function(*this, result);
+}
+
+void ConstantSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+	// partial scan: fill in the rows as required
+	fill_function(*this, result, result_offset, scan_count);
 }
 
 //===--------------------------------------------------------------------===//

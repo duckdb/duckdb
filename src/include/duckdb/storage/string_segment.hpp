@@ -58,7 +58,8 @@ public:
 
 	//! Scans a vector of "scan_count" entries starting at position "start"
 	//! Store it in result with offset "result_offset"
-	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) override;
+	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) override;
+	void ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) override;
 
 	//! Fetch a single value and append it to the vector
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) override;

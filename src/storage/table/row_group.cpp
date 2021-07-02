@@ -290,12 +290,12 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row - current_row);
-		// idx_t vector_offset = (current_row - state.base_row) / STANDARD_VECTOR_SIZE;
-		// //! first check the zonemap if we have to scan this partition
+
+		//! first check the zonemap if we have to scan this partition
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
-		// // second, scan the version chunk manager to figure out which tuples to load for this transaction
+		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
 		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 		if (SCAN_DELETES) {
@@ -353,7 +353,15 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 				}
 			}
 			if (approved_tuple_count == 0) {
+				// all rows were filtered out by the table filters
+				// skip this vector in all the scans that were not scanned yet
+				D_ASSERT(table_filters);
 				result.Reset();
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					if (table_filters->filters.find(i) == table_filters->filters.end()) {
+						state.column_scans[i].NextVector();
+					}
+				}
 				state.vector_index++;
 				continue;
 			}

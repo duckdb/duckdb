@@ -95,6 +95,7 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 		data[i].offset -= first_entry.offset;
 	}
 
+	D_ASSERT(last_entry.offset >= first_entry.offset);
 	idx_t child_scan_count = last_entry.offset + last_entry.length - first_entry.offset;
 	ListVector::Reserve(result, child_scan_count);
 

@@ -5,69 +5,6 @@
 
 namespace duckdb {
 
-ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id)
-    : UncompressedSegment(db, PhysicalType::BIT, row_start) {
-	// figure out how many vectors we want to store in this block
-
-	auto vector_size = ValidityMask::STANDARD_MASK_SIZE;
-	this->max_tuples = Storage::BLOCK_SIZE / vector_size * STANDARD_VECTOR_SIZE;
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	if (block_id == INVALID_BLOCK) {
-		// no block id specified: allocate a buffer for the uncompressed segment
-		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
-		// pin the block and initialize
-		auto handle = buffer_manager.Pin(block);
-		memset(handle->node->buffer, 0xFF, Storage::BLOCK_SIZE);
-	} else {
-		this->block = buffer_manager.RegisterBlock(block_id);
-	}
-}
-
-ValiditySegment::~ValiditySegment() {
-}
-
-void ValiditySegment::InitializeScan(ColumnScanState &state) {
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	state.primary_handle = buffer_manager.Pin(block);
-}
-
-void ValiditySegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	D_ASSERT(row_id >= 0 && row_id < row_t(this->tuple_count));
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto handle = buffer_manager.Pin(block);
-	ValidityMask mask((validity_t *)handle->node->buffer);
-	if (!mask.RowIsValidUnsafe(row_id)) {
-		FlatVector::SetNull(result, result_idx, true);
-	}
-}
-
-idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t vcount) {
-	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
-
-	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - tuple_count);
-	if (data.validity.AllValid()) {
-		// no null values: skip append
-		tuple_count += append_count;
-		validity_stats.has_no_null = true;
-		return append_count;
-	}
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto handle = buffer_manager.Pin(block);
-
-	ValidityMask mask((validity_t *)handle->node->buffer);
-	for (idx_t i = 0; i < append_count; i++) {
-		auto idx = data.sel->get_index(offset + i);
-		if (!data.validity.RowIsValidUnsafe(idx)) {
-			mask.SetInvalidUnsafe(tuple_count + i);
-			validity_stats.has_null = true;
-		} else {
-			validity_stats.has_no_null = true;
-		}
-	}
-	tuple_count += append_count;
-	return append_count;
-}
-
 // LOWER_MASKS contains masks with all the lower bits set until a specific value
 // LOWER_MASKS[0] has the 0 lowest bits set, i.e.:
 // 0b0000000000000000000000000000000000000000000000000000000000000000,
@@ -228,13 +165,110 @@ const validity_t ValiditySegment::UPPER_MASKS[] = {0x0,
                                                    0xfffffffffffffffe,
                                                    0xffffffffffffffff};
 
-void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+
+ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id)
+    : UncompressedSegment(db, PhysicalType::BIT, row_start) {
+	// figure out how many vectors we want to store in this block
+
+	auto vector_size = ValidityMask::STANDARD_MASK_SIZE;
+	this->max_tuples = Storage::BLOCK_SIZE / vector_size * STANDARD_VECTOR_SIZE;
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	if (block_id == INVALID_BLOCK) {
+		// no block id specified: allocate a buffer for the uncompressed segment
+		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+		// pin the block and initialize
+		auto handle = buffer_manager.Pin(block);
+		memset(handle->node->buffer, 0xFF, Storage::BLOCK_SIZE);
+	} else {
+		this->block = buffer_manager.RegisterBlock(block_id);
+	}
+}
+
+ValiditySegment::~ValiditySegment() {
+}
+
+void ValiditySegment::InitializeScan(ColumnScanState &state) {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	state.primary_handle = buffer_manager.Pin(block);
+}
+
+void ValiditySegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+	D_ASSERT(row_id >= 0 && row_id < row_t(this->tuple_count));
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto handle = buffer_manager.Pin(block);
+	ValidityMask mask((validity_t *)handle->node->buffer);
+	if (!mask.RowIsValidUnsafe(row_id)) {
+		FlatVector::SetNull(result, result_idx, true);
+	}
+}
+
+idx_t ValiditySegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t vcount) {
+	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
+
+	idx_t append_count = MinValue<idx_t>(vcount, max_tuples - tuple_count);
+	if (data.validity.AllValid()) {
+		// no null values: skip append
+		tuple_count += append_count;
+		validity_stats.has_no_null = true;
+		return append_count;
+	}
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto handle = buffer_manager.Pin(block);
+
+	ValidityMask mask((validity_t *)handle->node->buffer);
+	for (idx_t i = 0; i < append_count; i++) {
+		auto idx = data.sel->get_index(offset + i);
+		if (!data.validity.RowIsValidUnsafe(idx)) {
+			mask.SetInvalidUnsafe(tuple_count + i);
+			validity_stats.has_null = true;
+		} else {
+			validity_stats.has_no_null = true;
+		}
+	}
+	tuple_count += append_count;
+	return append_count;
+}
+
+void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+	if (start % ValidityMask::BITS_PER_VALUE == 0) {
+		// aligned scan: no need to do anything fancy
+		// note: this is only an optimization which avoids having to do messy bitshifting in the common case
+		// it is not required for correctness
+		auto &result_mask = FlatVector::Validity(result);
+		auto input_data = (validity_t *)state.primary_handle->node->buffer;
+		auto result_data = (validity_t *)result_mask.GetData();
+		idx_t start_offset = start / ValidityMask::BITS_PER_VALUE;
+		idx_t entry_scan_count = (scan_count + ValidityMask::BITS_PER_VALUE - 1) / ValidityMask::BITS_PER_VALUE;
+		for(idx_t i = 0; i < entry_scan_count; i++) {
+			auto input_entry = input_data[start_offset + i];
+			if (!result_data && input_entry == ValidityMask::ValidityBuffer::MAX_ENTRY) {
+				continue;
+			}
+			if (!result_data) {
+				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count));
+				result_data = (validity_t *)result_mask.GetData();
+			}
+			result_data[i] = input_entry;
+		}
+	} else {
+		// unaligned scan: fall back to scan_partial which does bitshift tricks
+		ScanPartial(state, start, scan_count, result, 0);
+	}
+}
+
+
+void ValiditySegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
 
-	result.Normalify(scan_count);
 	auto &result_mask = FlatVector::Validity(result);
 	auto input_data = (validity_t *)state.primary_handle->node->buffer;
 
+#ifdef DEBUG
+	// this method relies on all the bits we are going to write to being set to valid
+	for(idx_t i = 0; i < scan_count; i++) {
+		D_ASSERT(result_mask.RowIsValid(result_offset + i));
+	}
+#endif
 #if STANDARD_VECTOR_SIZE < 128
 	// fallback for tiny vector sizes
 	// the bitwise ops we use below don't work if the vector size is too small
@@ -318,7 +352,7 @@ void ValiditySegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count
 		// now finally we can merge the input mask with the result mask
 		if (input_mask != ValidityMask::ValidityBuffer::MAX_ENTRY) {
 			if (!result_data) {
-				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, scan_count));
+				result_mask.Initialize(MaxValue<idx_t>(STANDARD_VECTOR_SIZE, result_offset + scan_count));
 				result_data = (validity_t *)result_mask.GetData();
 			}
 			result_data[current_result_idx] &= input_mask;
