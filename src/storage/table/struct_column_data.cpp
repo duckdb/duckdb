@@ -133,7 +133,7 @@ void StructColumnData::RevertAppend(row_t start_row) {
 	}
 }
 
-void StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+idx_t StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	// fetch validity mask
 	auto &child_entries = StructVector::GetEntries(result);
 	// insert any child states that are required
@@ -142,11 +142,12 @@ void StructColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &resul
 		state.child_states.push_back(move(child_state));
 	}
 	// fetch the validity state
-	validity.Fetch(state.child_states[0], row_id, result);
+	idx_t scan_count = validity.Fetch(state.child_states[0], row_id, result);
 	// fetch the sub-column states
 	for (idx_t i = 0; i < child_entries.size(); i++) {
 		sub_columns[i]->Fetch(state.child_states[i + 1], row_id, *child_entries[i]);
 	}
+	return scan_count;
 }
 
 void StructColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,

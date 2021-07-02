@@ -98,14 +98,14 @@ void StandardColumnData::RevertAppend(row_t start_row) {
 	validity.RevertAppend(start_row);
 }
 
-void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	// fetch validity mask
 	if (state.child_states.empty()) {
 		ColumnScanState child_state;
 		state.child_states.push_back(move(child_state));
 	}
 	validity.Fetch(state.child_states[0], row_id, result);
-	ColumnData::Fetch(state, row_id, result);
+	return ColumnData::Fetch(state, row_id, result);
 }
 
 void StandardColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,

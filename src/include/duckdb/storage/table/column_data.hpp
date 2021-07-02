@@ -82,7 +82,7 @@ public:
 	virtual void RevertAppend(row_t start_row);
 
 	//! Fetch the vector from the column data that belongs to this specific row
-	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
+	virtual idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
 	virtual void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
 	                      idx_t result_idx);

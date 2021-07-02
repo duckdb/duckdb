@@ -216,7 +216,7 @@ void ListColumnData::RevertAppend(row_t start_row) {
 	}
 }
 
-void ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	throw NotImplementedException("List Fetch");
 }
 

@@ -38,7 +38,7 @@ public:
 	void InitializeAppend(ColumnAppendState &state) override;
 	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
 	void RevertAppend(row_t start_row) override;
-	void Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
+	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
 	              idx_t result_idx) override;
 	void Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t offset,
