@@ -61,7 +61,7 @@ struct SortingState {
 			comparison_size += col_size;
 		}
 		entry_size = comparison_size + sizeof(idx_t);
-		blob_layout.Initialize(blob_layout_types);
+		blob_layout.Initialize(blob_layout_types, false);
 	}
 
 	idx_t column_count;
@@ -213,7 +213,7 @@ public:
 
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
 	RowLayout payload_layout;
-	payload_layout.Initialize(types);
+	payload_layout.Initialize(types, false);
 	auto state = make_unique<OrderGlobalState>(SortingState(orders), payload_layout);
 	state->external = context.force_external;
 	return move(state);
@@ -333,8 +333,8 @@ public:
 		return heap_ptr + Load<idx_t>(DataPtr() + layout.GetHeapPointerOffset());
 	}
 	//! Advance one row
-	inline void Advance() {
-		entry_idx++;
+	inline void Advance(const bool &adv) {
+		entry_idx += adv;
 		if (entry_idx == data_blocks[block_idx].count) {
 			block_idx++;
 			entry_idx = 0;
@@ -603,7 +603,7 @@ OrderGlobalState::~OrderGlobalState() {
 static RowDataBlock ConcatenateBlocks(BufferManager &buffer_manager, RowDataCollection &row_data) {
 	// Create block with the correct capacity
 	const idx_t &entry_size = row_data.entry_size;
-	idx_t capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / entry_size + 1, row_data.count * entry_size);
+	idx_t capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / entry_size + 1, row_data.count);
 	RowDataBlock new_block(buffer_manager, capacity, entry_size);
 	new_block.count = row_data.count;
 	auto new_block_handle = buffer_manager.Pin(new_block.block);
@@ -1377,7 +1377,6 @@ public:
 					left_smaller[compared] = memcmp(l_radix_ptr, r_radix_ptr, sorting_state.comparison_size) < 0;
 					const bool &l_smaller = left_smaller[compared];
 					const bool r_smaller = !l_smaller;
-					left_smaller[compared] = l_smaller;
 					// Use comparison bool (0 or 1) to increment entries and pointers
 					l_entry_idx += l_smaller;
 					r_entry_idx += r_smaller;
@@ -1396,15 +1395,15 @@ public:
 				for (; compared < count && l_entry_idx < l_count && r_entry_idx < r_count; compared++) {
 					left_smaller[compared] =
 					    CompareTuple(left, right, l_radix_ptr, r_radix_ptr, sorting_state, state.external) < 0;
-					if (left_smaller[compared]) {
-						l_entry_idx++;
-						l_radix_ptr += sorting_state.entry_size;
-						left.blob_sorting_data->Advance();
-					} else {
-						r_entry_idx++;
-						r_radix_ptr += sorting_state.entry_size;
-						right.blob_sorting_data->Advance();
-					}
+					const bool &l_smaller = left_smaller[compared];
+					const bool r_smaller = !l_smaller;
+					// Use comparison bool (0 or 1) to increment entries and pointers
+					l_entry_idx += l_smaller;
+					r_entry_idx += r_smaller;
+					l_radix_ptr += l_smaller * sorting_state.entry_size;
+					r_radix_ptr += r_smaller * sorting_state.entry_size;
+					left.blob_sorting_data->Advance(l_smaller);
+					right.blob_sorting_data->Advance(r_smaller);
 				}
 			}
 			// Move to the next block (if needed)

@@ -29,7 +29,7 @@ RowLayout::RowLayout()
     : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_pointer_offset(0) {
 }
 
-void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p) {
+void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align) {
 	offsets.clear();
 	types = move(types_p);
 
@@ -64,7 +64,9 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p)
 
 	// Alignment padding for aggregates
 #ifndef DUCKDB_ALLOW_UNDEFINED
-	row_width = Align(row_width);
+	if (align) {
+		row_width = Align(row_width);
+	}
 #endif
 	data_width = row_width - flag_width;
 
@@ -81,16 +83,18 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p)
 
 	// Alignment padding for the next row
 #ifndef DUCKDB_ALLOW_UNDEFINED
-	row_width = Align(row_width);
+	if (align) {
+		row_width = Align(row_width);
+	}
 #endif
 }
 
-void RowLayout::Initialize(vector<LogicalType> types_p) {
-	Initialize(move(types_p), Aggregates());
+void RowLayout::Initialize(vector<LogicalType> types_p, bool align) {
+	Initialize(move(types_p), Aggregates(), align);
 }
 
-void RowLayout::Initialize(Aggregates aggregates_p) {
-	Initialize(vector<LogicalType>(), move(aggregates_p));
+void RowLayout::Initialize(Aggregates aggregates_p, bool align) {
+	Initialize(vector<LogicalType>(), move(aggregates_p), align);
 }
 
 } // namespace duckdb
