@@ -154,7 +154,7 @@ mode unskip
 mode skip 
 
 query IIIIII
-SELECT * FROM parquet_scan('data/parquet-testing/nonnullable.impala.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nonnullable.impala.parquet') limit 50 
 ----
 8	[-1]	[[-1, -2], []]	{key: [k1], value: [-1]}	[{key: [], value: []}, {key: [k1], value: [1]}, {key: [], value: []}, {key: [], value: []}]	{a: -1, B: [-1], c: {D: [[{e: -1, f: nonnullable}]]}, G: {key: [], value: []}}	
 
@@ -327,7 +327,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/apkwan.parquet') limit 50
 mode unskip 
 
 query II
-SELECT * FROM parquet_scan('data/parquet-testing/nested_lists.snappy.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nested_lists.snappy.parquet') limit 50 
 ----
 [[[a, b], [c]], [NULL, [d]]]	1
 [[[a, b], [c, d]], [NULL, [e]]]	1
@@ -336,7 +336,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/nested_lists.snappy.parquet') l
 mode skip 
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/nulls.snappy.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nulls.snappy.parquet') limit 50 
 ----
 {b_c_int: NULL}	
 {b_c_int: NULL}	
@@ -449,7 +449,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/byte_array_decimal.parquet') li
 mode unskip 
 
 query II
-SELECT * FROM parquet_scan('data/parquet-testing/list_columns.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/list_columns.parquet') limit 50 
 ----
 [1, 2, 3]	[abc, efg, hij]	
 [NULL, 1]	NULL	
@@ -461,13 +461,13 @@ SELECT * FROM parquet_scan('data/parquet-testing/timestamp-ms.parquet') limit 50
 2020-10-05 17:21:49	
 
 query IIIIIIIIIII
-SELECT * FROM parquet_scan('data/parquet-testing/alltypes_dictionary.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_dictionary.parquet') limit 50 
 ----
 0	True	0	0	0	0	0.0	0.0	01/01/09	0	2009-01-01 00:00:00	
 1	False	1	1	1	10	1.100000023841858	10.1	01/01/09	1	2009-01-01 00:01:00	
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/binary.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/binary.parquet') limit 50 
 ----
 \x00
 \x01
@@ -483,7 +483,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/binary.parquet') limit 50
 \x0B
 
 query IIII
-SELECT * FROM parquet_scan('data/parquet-testing/nation.dict-malformed.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nation.dict-malformed.parquet') limit 50 
 ----
 0	ALGERIA	0	 haggle. carefully final deposits detect slyly agai	
 1	ARGENTINA	1	al foxes promise slyly according to the regular accounts. bold requests alon	
@@ -568,7 +568,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/lineitem-top10000.gzip.parquet'
 mode skip 
 
 query III
-SELECT * FROM parquet_scan('data/parquet-testing/nested_maps.snappy.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nested_maps.snappy.parquet') limit 50 
 ----
 {key: [a], value: [{key: [1, 2], value: [True, False]}]}	1	1.0	
 {key: [], value: [{key: [1], value: [True]}]}	1	1.0	
@@ -580,7 +580,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/nested_maps.snappy.parquet') li
 mode unskip 
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/dict-page-offset-zero.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/dict-page-offset-zero.parquet') limit 50 
 ----
 1552	
 1552	
@@ -643,14 +643,14 @@ SELECT * FROM parquet_scan('data/parquet-testing/bug1618_struct_strings.parquet'
 {'str_field': NULL, 'f64_field': 1.230000}
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/single_nan.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/single_nan.parquet') limit 50 
 ----
 NULL	
 
 mode skip 
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/int64_decimal.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/int64_decimal.parquet') limit 50 
 ----
 1.00	
 2.00	
@@ -734,7 +734,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/filter_bug1391.parquet') limit 
 257	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	XYZ	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	141	Therapies CBU	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	7	Ward/Unit	NULL	NULL	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	1900-01-01 00:00:00.000	9999-12-31 00:00:00.000	CODE	
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/fixed_length_decimal_legacy.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/fixed_length_decimal_legacy.parquet') limit 50 
 ----
 1.00	
 2.00	
@@ -767,7 +767,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/timestamp.parquet') limit 50
 2020-10-05 17:21:49.48844
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/fixed_length_decimal.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/fixed_length_decimal.parquet') limit 50 
 ----
 1.00	
 2.00	
@@ -966,7 +966,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/bug1589.parquet') limit 50
 mode skip 
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/hadoop_lz4_compressed_larger.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/hadoop_lz4_compressed_larger.parquet') limit 50 
 ----
 c7ce6bef-d5b0-4863-b199-8ea8c7fb117b	
 e8fb9197-cb9f-4118-b67f-fbfa65f61843	
@@ -1024,7 +1024,7 @@ mode unskip
 mode skip 
 
 query III
-SELECT * FROM parquet_scan('data/parquet-testing/non_hadoop_lz4_compressed.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/non_hadoop_lz4_compressed.parquet') limit 50 
 ----
 1593604800	abc	42.0	
 1593604800	def	7.7	
@@ -1034,7 +1034,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/non_hadoop_lz4_compressed.parqu
 mode unskip 
 
 query IIIIIIIIIII
-SELECT * FROM parquet_scan('data/parquet-testing/alltypes_plain.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.parquet') limit 50 
 ----
 4	True	0	0	0	0	0.0	0.0	03/01/09	0	2009-03-01 00:00:00	
 5	False	1	1	1	10	1.100000023841858	10.1	03/01/09	1	2009-03-01 00:01:00	
@@ -1048,7 +1048,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/alltypes_plain.parquet') limit 
 mode skip 
 
 query II
-SELECT * FROM parquet_scan('data/parquet-testing/repeated_no_annotation.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/repeated_no_annotation.parquet') limit 50 
 ----
 1	NULL	
 2	NULL	
@@ -1131,7 +1131,7 @@ NULL
 mode skip 
 
 query IIIIII
-SELECT * FROM parquet_scan('data/parquet-testing/nullable.impala.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nullable.impala.parquet') limit 50 
 ----
 1	[1, 2, 3]	[[1, 2], [3, 4]]	{key: [k1, k2], value: [1, 100]}	[{key: [k1], value: [1]}]	{A: 1, : [1], C: {d: [[{E: 10, F: aaa}, {E: -10, F: bb}], [{E: 11, F: c}]]}, g: {key: [foo], value: [{H: {i: [1.1]}}]}}	
 2	[NULL, 1, 2, NULL, 3, NULL]	[[NULL, 1, 2, NULL], [3, NULL, 4], [], NULL]	{key: [k1, k2], value: [2, NULL]}	[{key: [k3, k1], value: [NULL, 1]}, NULL, {key: [], value: []}]	{A: NULL, : [NULL], C: {d: [[{E: NULL, F: NULL}, {E: 10, F: aaa}, {E: NULL, F: NULL}, {E: -10, F: bb}, {E: NULL, F: NULL}], [{E: 11, F: c}, NULL], [], NULL]}, g: {key: [g1, g2, g3, g4, g5], value: [{H: {i: [2.2, NULL]}}, {H: {i: []}}, NULL, {H: {i: NULL}}, {H: NULL}]}}	
@@ -1146,7 +1146,7 @@ mode unskip
 mode skip 
 
 query III
-SELECT * FROM parquet_scan('data/parquet-testing/hadoop_lz4_compressed.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/hadoop_lz4_compressed.parquet') limit 50 
 ----
 1593604800	abc	42.0	
 1593604800	def	7.7	
@@ -1161,7 +1161,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/fixed.parquet') limit 50
 \x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\x0A\x0B\x0C\x0D\x0E\x0F
 
 query IIIIIIIIIII
-SELECT * FROM parquet_scan('data/parquet-testing/alltypes_plain.snappy.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_plain.snappy.parquet') limit 50 
 ----
 6	True	0	0	0	0	0.0	0.0	04/01/09	0	2009-04-01 00:00:00	
 7	False	1	1	1	10	1.100000023841858	10.1	04/01/09	1	2009-04-01 00:01:00	
@@ -1169,7 +1169,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/alltypes_plain.snappy.parquet')
 mode skip 
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/decimal/int32_decimal.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/decimal/arrow/int32_decimal.parquet') limit 50 
 ----
 1.00	
 2.00	
@@ -1211,7 +1211,7 @@ NULL	NULL	NULL	NULL	0E-17
 mode skip 
 
 query I
-SELECT * FROM parquet_scan('data/parquet-testing/decimal/byte_array_decimal.parquet') limit 50 
+SELECT * FROM parquet_scan('data/parquet-testing/decimal/arrow/byte_array_decimal.parquet') limit 50 
 ----
 1.00	
 2.00	

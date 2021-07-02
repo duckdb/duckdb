@@ -42,7 +42,7 @@ Via	1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)
 
 # this was a hard one
 query II
-SELECT * FROM parquet_scan('data/parquet-testing/nested_lists.snappy.parquet')
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/nested_lists.snappy.parquet')
 ----
 [[[a, b], [c]], [NULL, [d]]]	1
 [[[a, b], [c, d]], [NULL, [e]]]	1
@@ -55,7 +55,7 @@ SELECT * FROM parquet_scan('data/parquet-testing/nested_lists.snappy.parquet')
 #2  [[[a, b], [c, d], [e]], [None, [f]]]  1
 
 query I
-SELECT unnest(a) FROM parquet_scan('data/parquet-testing/nested_lists.snappy.parquet')
+SELECT unnest(a) FROM parquet_scan('data/parquet-testing/arrow/nested_lists.snappy.parquet')
 ----
 [[a, b], [c]]
 [NULL, [d]]
@@ -72,7 +72,7 @@ SELECT unnest(a) FROM parquet_scan('data/parquet-testing/nested_lists.snappy.par
 
 
 query II
-SELECT * FROM parquet_scan('data/parquet-testing/list_columns.parquet')
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/list_columns.parquet')
 ----
 [1, 2, 3]	[abc, efg, hij]
 [NULL, 1]	NULL

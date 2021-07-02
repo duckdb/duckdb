@@ -154,14 +154,11 @@ TEST_CASE("Test Parquet Long Files", "[arrow]") {
 TEST_CASE("Test Parquet Files", "[arrow]") {
 
 	std::vector<std::string> skip {"aws2.parquet"};         //! Not supported by arrow
-	skip.emplace_back("datapage_v2.snappy.parquet");        //! Not supported by arrow
 	skip.emplace_back("broken-arrow.parquet");              //! Arrow can't read this
 	skip.emplace_back("nan-float.parquet");                 //! Can't roundtrip NaNs
 	skip.emplace_back("fixed.parquet");                     //! Can't roundtrip Fixed-size Binaries
 	skip.emplace_back("leftdate3_192_loop_1.parquet");      //! This is just crazy slow
 	skip.emplace_back("bug687_nulls.parquet");              //! This is just crazy slow
-	skip.emplace_back("lz4_raw_compressed.parquet");        //! Arrow can't read this
-	skip.emplace_back("lz4_raw_compressed_larger.parquet"); //! Arrow can't read this
 	skip.emplace_back("nullbyte.parquet");                  //! Null byte in file
 	skip.emplace_back("nullbyte_multiple.parquet");         //! Null byte in file
 
@@ -170,6 +167,23 @@ TEST_CASE("Test Parquet Files", "[arrow]") {
 	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
 
 	auto parquet_files = fs.Glob("data/parquet-testing/*.parquet");
+	for (auto &parquet_path : parquet_files) {
+		REQUIRE(RoundTrip(parquet_path, skip, conn));
+	}
+}
+
+TEST_CASE("Test Arrow Parquet Files", "[arrow]") {
+
+	std::vector<std::string> skip {"datapage_v2.snappy.parquet"};         //! Not supported by arrow
+	skip.emplace_back("lz4_raw_compressed.parquet");        //! Arrow can't read this
+	skip.emplace_back("lz4_raw_compressed_larger.parquet"); //! Arrow can't read this
+
+
+	duckdb::DuckDB db;
+	duckdb::Connection conn {db};
+	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
+
+	auto parquet_files = fs.Glob("data/parquet-testing/arrow/*.parquet");
 	for (auto &parquet_path : parquet_files) {
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}

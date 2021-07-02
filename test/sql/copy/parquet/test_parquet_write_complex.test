@@ -6,12 +6,12 @@ require parquet
 
 # alltypes_dictionary: scan as parquet
 query I nosort alltypes_dictionary
-SELECT * FROM parquet_scan('data/parquet-testing/alltypes_dictionary.parquet');
+SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_dictionary.parquet');
 ----
 
 # rewrite the file
 statement ok
-COPY (SELECT * FROM parquet_scan('data/parquet-testing/alltypes_dictionary.parquet')) TO '__TEST_DIR__/alltypes_dictionary.parquet' (FORMAT 'PARQUET')
+COPY (SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_dictionary.parquet')) TO '__TEST_DIR__/alltypes_dictionary.parquet' (FORMAT 'PARQUET')
 
 # verify that the rewritten file has the same values again
 query I nosort alltypes_dictionary

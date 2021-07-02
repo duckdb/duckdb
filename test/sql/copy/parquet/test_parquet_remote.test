@@ -22,52 +22,52 @@ SELECT * FROM PARQUET_SCAN('https://duckdb.org');
 statement error
 SELECT * FROM PARQUET_SCAN('https://duckdb.org/');
 
-#
-## straightforward
-#query IIII
-#SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 10;
-#----
-#1	Amanda	Jordan	ajordan0@com.com
-#2	Albert	Freeman	afreeman1@is.gd
-#3	Evelyn	Morgan	emorgan2@altervista.org
-#4	Denise	Riley	driley3@gmpg.org
-#5	Carlos	Burns	cburns4@miitbeian.gov.cn
-#6	Kathryn	White	kwhite5@google.com
-#7	Samuel	Holmes	sholmes6@foxnews.com
-#8	Harry	Howell	hhowell7@eepurl.com
-#9	Jose	Foster	jfoster8@yelp.com
-#10	Emily	Stewart	estewart9@opensource.org
-#
-#
-## with redirects
-#query IIII
-#SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/cwida/duckdb/blob/master/data/parquet-testing/userdata1.parquet?raw=true') LIMIT 10;
-#----
-#1	Amanda	Jordan	ajordan0@com.com
-#2	Albert	Freeman	afreeman1@is.gd
-#3	Evelyn	Morgan	emorgan2@altervista.org
-#4	Denise	Riley	driley3@gmpg.org
-#5	Carlos	Burns	cburns4@miitbeian.gov.cn
-#6	Kathryn	White	kwhite5@google.com
-#7	Samuel	Holmes	sholmes6@foxnews.com
-#8	Harry	Howell	hhowell7@eepurl.com
-#9	Jose	Foster	jfoster8@yelp.com
-#10	Emily	Stewart	estewart9@opensource.org
-#
-## with explicit port nr
-#query IIII
-#SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com:443/cwida/duckdb/blob/master/data/parquet-testing/userdata1.parquet?raw=true') LIMIT 10;
-#----
-#1	Amanda	Jordan	ajordan0@com.com
-#2	Albert	Freeman	afreeman1@is.gd
-#3	Evelyn	Morgan	emorgan2@altervista.org
-#4	Denise	Riley	driley3@gmpg.org
-#5	Carlos	Burns	cburns4@miitbeian.gov.cn
-#6	Kathryn	White	kwhite5@google.com
-#7	Samuel	Holmes	sholmes6@foxnews.com
-#8	Harry	Howell	hhowell7@eepurl.com
-#9	Jose	Foster	jfoster8@yelp.com
-#10	Emily	Stewart	estewart9@opensource.org
+
+# straightforward
+query IIII
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/test/sql/copy/parquet/data/userdata1.parquet') LIMIT 10;
+----
+1	Amanda	Jordan	ajordan0@com.com
+2	Albert	Freeman	afreeman1@is.gd
+3	Evelyn	Morgan	emorgan2@altervista.org
+4	Denise	Riley	driley3@gmpg.org
+5	Carlos	Burns	cburns4@miitbeian.gov.cn
+6	Kathryn	White	kwhite5@google.com
+7	Samuel	Holmes	sholmes6@foxnews.com
+8	Harry	Howell	hhowell7@eepurl.com
+9	Jose	Foster	jfoster8@yelp.com
+10	Emily	Stewart	estewart9@opensource.org
+
+
+# with redirects
+query IIII
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com/cwida/duckdb/blob/master/test/sql/copy/parquet/data/userdata1.parquet?raw=true') LIMIT 10;
+----
+1	Amanda	Jordan	ajordan0@com.com
+2	Albert	Freeman	afreeman1@is.gd
+3	Evelyn	Morgan	emorgan2@altervista.org
+4	Denise	Riley	driley3@gmpg.org
+5	Carlos	Burns	cburns4@miitbeian.gov.cn
+6	Kathryn	White	kwhite5@google.com
+7	Samuel	Holmes	sholmes6@foxnews.com
+8	Harry	Howell	hhowell7@eepurl.com
+9	Jose	Foster	jfoster8@yelp.com
+10	Emily	Stewart	estewart9@opensource.org
+
+# with explicit port nr
+query IIII
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://github.com:443/cwida/duckdb/blob/master/test/sql/copy/parquet/data/userdata1.parquet?raw=true') LIMIT 10;
+----
+1	Amanda	Jordan	ajordan0@com.com
+2	Albert	Freeman	afreeman1@is.gd
+3	Evelyn	Morgan	emorgan2@altervista.org
+4	Denise	Riley	driley3@gmpg.org
+5	Carlos	Burns	cburns4@miitbeian.gov.cn
+6	Kathryn	White	kwhite5@google.com
+7	Samuel	Holmes	sholmes6@foxnews.com
+8	Harry	Howell	hhowell7@eepurl.com
+9	Jose	Foster	jfoster8@yelp.com
+10	Emily	Stewart	estewart9@opensource.org
 
 #
 #statement ok
