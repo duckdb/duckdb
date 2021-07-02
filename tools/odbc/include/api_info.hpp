@@ -14,7 +14,7 @@ namespace duckdb {
 
 struct ApiInfo {
 
-private: 
+private:
 	// fill all supported functions in this array
 	static const std::vector<SQLUSMALLINT> all_supported_functions;
 
@@ -34,7 +34,6 @@ private:
 	static void SetFunctionSupported(SQLUSMALLINT *flags, int function_id);
 
 public:
-
 	static SQLRETURN GetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr);
 
 	static SQLRETURN GetFunctions30(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr);
@@ -45,4 +44,4 @@ public:
 
 }; // end ApiInfo struct
 
-} // end namespace
+} // namespace duckdb
