@@ -189,7 +189,7 @@ void ListColumnData::Append(BaseStatistics &stats_p, ColumnAppendState &state, V
 
 	VectorData vdata;
 	vdata.validity = list_validity;
-	vdata.sel = FlatVector::IncrementalSelectionVector(count, vdata.owned_sel);
+	vdata.sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	vdata.data = (data_ptr_t)append_offsets.get();
 
 	// append the list offsets
