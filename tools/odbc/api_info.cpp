@@ -20,7 +20,7 @@ SQLRETURN SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type) {
 /*** ApiInfo private attributes ********************************/
 
 // fill all supported functions in this array
-const std::vector<SQLUSMALLINT> ApiInfo::all_supported_functions = {
+const std::vector<SQLUSMALLINT> ApiInfo::ALL_SUPPORTED_FUNCTIONS = {
     SQL_API_SQLALLOCHANDLE,    SQL_API_SQLFREEHANDLE,   SQL_API_SQLGETCONNECTATTR, SQL_API_SQLSETENVATTR,
     SQL_API_SQLSETCONNECTATTR, SQL_API_SQLSETSTMTATTR,  SQL_API_SQLDRIVERCONNECT,  SQL_API_SQLCONNECT,
     SQL_API_SQLGETINFO,        SQL_API_SQLENDTRAN,      SQL_API_SQLDISCONNECT,     SQL_API_SQLTABLES,
@@ -30,7 +30,7 @@ const std::vector<SQLUSMALLINT> ApiInfo::all_supported_functions = {
     SQL_API_SQLBINDPARAMETER,  SQL_API_SQLGETDATA,      SQL_API_SQLFETCH,          SQL_API_SQLEXECUTE,
     SQL_API_SQLNUMRESULTCOLS,  SQL_API_SQLGETTYPEINFO};
 
-const std::vector<SQLUSMALLINT> ApiInfo::odbc3_supported_functions = {
+const std::vector<SQLUSMALLINT> ApiInfo::ODBC3_SUPPORTED_FUNCTIONS = {
     SQL_API_SQLALLOCHANDLE,    SQL_API_SQLFREEHANDLE,   SQL_API_SQLGETCONNECTATTR, SQL_API_SQLSETENVATTR,
     SQL_API_SQLSETCONNECTATTR, SQL_API_SQLSETSTMTATTR,  SQL_API_SQLDRIVERCONNECT,  SQL_API_SQLCONNECT,
     SQL_API_SQLGETINFO,        SQL_API_SQLENDTRAN,      SQL_API_SQLDISCONNECT,     SQL_API_SQLTABLES,
@@ -40,7 +40,7 @@ const std::vector<SQLUSMALLINT> ApiInfo::odbc3_supported_functions = {
     SQL_API_SQLBINDPARAMETER,  SQL_API_SQLGETDATA,      SQL_API_SQLFETCH,          SQL_API_SQLEXECUTE,
     SQL_API_SQLNUMRESULTCOLS,  SQL_API_SQLGETTYPEINFO};
 
-const std::vector<SQLSMALLINT> ApiInfo::odbc_supported_sql_types = {SQL_CHAR,
+const std::vector<SQLSMALLINT> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {SQL_CHAR,
                                                                     SQL_TINYINT,
                                                                     SQL_SMALLINT,
                                                                     SQL_INTEGER,
@@ -71,7 +71,7 @@ const std::vector<SQLSMALLINT> ApiInfo::odbc_supported_sql_types = {SQL_CHAR,
                                                                     SQL_INTERVAL_MINUTE_TO_SECOND};
 
 // Map DuckDB LogicalTypes to ODBC SQL Types
-const std::map<duckdb::LogicalTypeId, SQLSMALLINT, ApiInfo::LogicalTypeCmp> ApiInfo::map_sql_types = {
+const std::map<duckdb::LogicalTypeId, SQLSMALLINT, ApiInfo::LogicalTypeCmp> ApiInfo::MAP_SQL_TYPES = {
     {LogicalTypeId::BOOLEAN, SQL_CHAR},        {LogicalTypeId::TINYINT, SQL_TINYINT},
     {LogicalTypeId::UTINYINT, SQL_TINYINT},    {LogicalTypeId::SMALLINT, SQL_SMALLINT},
     {LogicalTypeId::USMALLINT, SQL_SMALLINT},  {LogicalTypeId::INTEGER, SQL_INTEGER},
@@ -90,8 +90,8 @@ SQLRETURN ApiInfo::GetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function
 	if (function_id == SQL_API_ALL_FUNCTIONS) {
 		memset(supported_ptr, SQL_FALSE, sizeof(SQLSMALLINT) * NUM_FUNC_SUPPORTED);
 		idx_t func_idx;
-		for (idx_t i = 0; i < all_supported_functions.size(); ++i) {
-			func_idx = all_supported_functions[i];
+		for (idx_t i = 0; i < ALL_SUPPORTED_FUNCTIONS.size(); ++i) {
+			func_idx = ALL_SUPPORTED_FUNCTIONS[i];
 			supported_ptr[func_idx] = SQL_TRUE;
 		}
 
@@ -151,23 +151,23 @@ SQLRETURN ApiInfo::GetFunctions30(SQLHDBC connection_handle, SQLUSMALLINT functi
 		return SQL_ERROR;
 	}
 	memset(supported_ptr, 0, sizeof(UWORD) * SQL_API_ODBC3_ALL_FUNCTIONS_SIZE);
-	for (idx_t i = 0; i < odbc3_supported_functions.size(); ++i) {
-		SetFunctionSupported(supported_ptr, odbc3_supported_functions[i]);
+	for (idx_t i = 0; i < ODBC3_SUPPORTED_FUNCTIONS.size(); ++i) {
+		SetFunctionSupported(supported_ptr, ODBC3_SUPPORTED_FUNCTIONS[i]);
 	}
 	return SQL_SUCCESS;
 }
 
 SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
-	auto it = map_sql_types.find(type_id);
-	if (it != map_sql_types.end()) {
+	auto it = MAP_SQL_TYPES.find(type_id);
+	if (it != MAP_SQL_TYPES.end()) {
 		return it->second;
 	}
 	return SQL_UNKNOWN_TYPE;
 }
 
 SQLRETURN ApiInfo::CheckDataType(SQLSMALLINT data_type) {
-	for (idx_t i = 0; i < odbc_supported_sql_types.size(); ++i) {
-		if (odbc_supported_sql_types[i] == data_type) {
+	for (idx_t i = 0; i < ODBC_SUPPORTED_SQL_TYPES.size(); ++i) {
+		if (ODBC_SUPPORTED_SQL_TYPES[i] == data_type) {
 			return SQL_SUCCESS;
 		}
 	}

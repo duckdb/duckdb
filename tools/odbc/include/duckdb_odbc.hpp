@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DUCKDB_ODBC_HPP
+#define DUCKDB_ODBC_HPP
 
 // needs to be first because BOOL
 #include "duckdb.hpp"
@@ -36,7 +37,7 @@ SQLRETURN SQLDisconnect(SQLHDBC connection_handle);
 
 // statements
 SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1, SQLCHAR *schema_name,
-                    SQLSMALLINT name_length2, SQLCHAR *table_name, SQLSMALLINT name_length3, SQLCHAR *TableType,
+                    SQLSMALLINT name_length2, SQLCHAR *table_name, SQLSMALLINT name_length3, SQLCHAR *table_type,
                     SQLSMALLINT name_length4);
 SQLRETURN SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1, SQLCHAR *schema_name,
                      SQLSMALLINT name_length2, SQLCHAR *table_name, SQLSMALLINT name_length3, SQLCHAR *column_name,
@@ -75,7 +76,7 @@ SQLRETURN SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type);
 namespace duckdb {
 enum OdbcHandleType { ENV, DBC, STMT };
 struct OdbcHandle {
-	OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
+	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
 	OdbcHandleType type;
 };
 
@@ -85,7 +86,7 @@ struct OdbcHandleEnv : public OdbcHandle {
 };
 
 struct OdbcHandleDbc : public OdbcHandle {
-	OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
+	explicit OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
 		D_ASSERT(env_p);
 		D_ASSERT(env_p->db);
 	};
@@ -108,7 +109,8 @@ struct OdbcBoundCol {
 };
 
 struct OdbcHandleStmt : public OdbcHandle {
-	OdbcHandleStmt(OdbcHandleDbc *dbc_p) : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
+	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p)
+	    : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
 		D_ASSERT(dbc_p);
 		D_ASSERT(dbc_p->conn);
 	};
@@ -196,3 +198,5 @@ SQLRETURN WithStatementResult(SQLHANDLE &statement_handle, T &&lambda) {
 }
 
 } // namespace duckdb
+
+#endif // DUCKDB_ODBC_HPP

@@ -1,4 +1,5 @@
-#pragma once
+#ifndef API_INFO_HPP
+#define API_INFO_HPP
 
 #include "duckdb.hpp"
 
@@ -16,12 +17,12 @@ struct ApiInfo {
 
 private:
 	// fill all supported functions in this array
-	static const std::vector<SQLUSMALLINT> all_supported_functions;
+	static const std::vector<SQLUSMALLINT> ALL_SUPPORTED_FUNCTIONS;
 
 	// fill ODBC3 supported functions in this array
-	static const std::vector<SQLUSMALLINT> odbc3_supported_functions;
+	static const std::vector<SQLUSMALLINT> ODBC3_SUPPORTED_FUNCTIONS;
 
-	static const std::vector<SQLSMALLINT> odbc_supported_sql_types;
+	static const std::vector<SQLSMALLINT> ODBC_SUPPORTED_SQL_TYPES;
 
 	struct LogicalTypeCmp {
 		bool operator()(const LogicalTypeId a, const LogicalTypeId b) const {
@@ -29,7 +30,7 @@ private:
 		}
 	};
 	// Map DuckDB LogicalTypes to ODBC SQL Types
-	static const std::map<duckdb::LogicalTypeId, SQLSMALLINT, LogicalTypeCmp> map_sql_types;
+	static const std::map<duckdb::LogicalTypeId, SQLSMALLINT, LogicalTypeCmp> MAP_SQL_TYPES;
 
 	static void SetFunctionSupported(SQLUSMALLINT *flags, int function_id);
 
@@ -45,3 +46,5 @@ public:
 }; // end ApiInfo struct
 
 } // namespace duckdb
+
+#endif // API_INFO_HPP
