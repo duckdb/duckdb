@@ -166,6 +166,10 @@ unique_ptr<BaseStatistics> NumericStatistics::Copy() {
 	return move(stats);
 }
 
+bool NumericStatistics::IsConstant() {
+	return max <= min;
+}
+
 void NumericStatistics::Serialize(Serializer &serializer) {
 	BaseStatistics::Serialize(serializer);
 	min.Serialize(serializer);

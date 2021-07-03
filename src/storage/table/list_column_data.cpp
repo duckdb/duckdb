@@ -66,17 +66,17 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	state.child_states.push_back(move(child_state));
 }
 
-void ListColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
-	ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ListColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
 }
 
-void ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
-	ScanCount(state, result, STANDARD_VECTOR_SIZE);
+idx_t ListColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
+	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
 }
 
-void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
 	if (count == 0) {
-		return;
+		return 0;
 	}
 	// updates not supported for lists
 	D_ASSERT(!updates);
@@ -98,6 +98,7 @@ void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 		data[i].offset -= first_entry.offset;
 	}
 
+	D_ASSERT(last_entry.offset >= first_entry.offset);
 	idx_t child_scan_count = last_entry.offset + last_entry.length - first_entry.offset;
 	ListVector::Reserve(result, child_scan_count);
 
@@ -111,6 +112,7 @@ void ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t cou
 	state.child_states[0].NextInternal(count);
 
 	ListVector::SetListSize(result, child_scan_count);
+	return scan_count;
 }
 
 void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
@@ -214,7 +216,7 @@ void ListColumnData::RevertAppend(row_t start_row) {
 	}
 }
 
-void ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	throw NotImplementedException("List Fetch");
 }
 

@@ -54,24 +54,28 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 	state.child_states.push_back(move(child_state));
 }
 
-void StandardColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+idx_t StandardColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
-	ColumnData::Scan(transaction, vector_index, state, result);
+	auto scan_count = ColumnData::Scan(transaction, vector_index, state, result);
 	validity.Scan(transaction, vector_index, state.child_states[0], result);
 	state.NextVector();
+	return scan_count;
 }
 
-void StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) {
+idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result,
+                                        bool allow_updates) {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
-	ColumnData::ScanCommitted(vector_index, state, result, allow_updates);
+	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates);
 	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
 	state.NextVector();
+	return scan_count;
 }
 
-void StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
-	ColumnData::ScanCount(state, result, count);
+idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+	auto scan_count = ColumnData::ScanCount(state, result, count);
 	validity.ScanCount(state.child_states[0], result, count);
 	state.Next(count);
+	return scan_count;
 }
 
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
@@ -94,14 +98,15 @@ void StandardColumnData::RevertAppend(row_t start_row) {
 	validity.RevertAppend(start_row);
 }
 
-void StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
+idx_t StandardColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	// fetch validity mask
 	if (state.child_states.empty()) {
 		ColumnScanState child_state;
 		state.child_states.push_back(move(child_state));
 	}
+	auto scan_count = ColumnData::Fetch(state, row_id, result);
 	validity.Fetch(state.child_states[0], row_id, result);
-	ColumnData::Fetch(state, row_id, result);
+	return scan_count;
 }
 
 void StandardColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,

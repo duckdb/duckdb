@@ -45,7 +45,13 @@ void NumericSegment::InitializeScan(ColumnScanState &state) {
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void NumericSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void NumericSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+	// FIXME: we should be able to do a zero-copy here
+	ScanPartial(state, start, scan_count, result, 0);
+}
+
+void NumericSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result,
+                                 idx_t result_offset) {
 	D_ASSERT(start <= tuple_count);
 	D_ASSERT(start + scan_count <= tuple_count);
 
