@@ -14,6 +14,7 @@ ExternalProject_Add(
     ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/utf8proc_ep-install/lib/libutf8proc.a
     ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/zstd_ep-install/lib/libzstd.a
     ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/snappy_ep/src/snappy_ep-install/lib/libsnappy.a
+    ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/lz4_ep-prefix/include/liblz4.a
   CONFIGURE_COMMAND
     ${CMAKE_COMMAND} -G${CMAKE_GENERATOR} -DCMAKE_BUILD_TYPE=Debug
     -DBUILD_WARNING_LEVEL=PRODUCTION -DCMAKE_CXX_COMPILER=${CMAKE_CXX_COMPILER}
@@ -31,7 +32,7 @@ ExternalProject_Add(
     -DARROW_HDFS=OFF -DARROW_IPC=ON -DARROW_JSON=ON -DARROW_CSV=OFF
     -DARROW_JEMALLOC=OFF -DARROW_ORC=OFF -DARROW_PARQUET=ON
     -DARROW_PROTOBUF_USE_SHARED=OFF -DARROW_USE_GLOG=OFF -DARROW_SIMD_LEVEL=NONE
-    -DARROW_RUNTIME_SIMD_LEVEL=NONE -DARROW_WITH_BROTLI=OFF -DARROW_WITH_LZ4=OFF
+    -DARROW_RUNTIME_SIMD_LEVEL=NONE -DARROW_WITH_BROTLI=OFF -DARROW_WITH_LZ4=ON
     -DARROW_WITH_PROTOBUF=OFF -DARROW_WITH_RAPIDJSON=OFF -DARROW_WITH_SNAPPY=ON
     -DARROW_WITH_ZLIB=ON -DARROW_WITH_ZSTD=ON -DBOOST_SOURCE=AUTO
     <SOURCE_DIR>/cpp
@@ -56,6 +57,10 @@ set(install_zstd
 
 set(install_snappy
     ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/snappy_ep/src/snappy_ep-install/lib/libsnappy.a
+)
+
+set(install_lz4
+    ${CMAKE_BINARY_DIR}/third_party/arrow/src/arrow_ep-build/lz4_ep-prefix/include/liblz4.a
 )
 
 ExternalProject_Add(
@@ -117,4 +122,5 @@ target_link_libraries(
   ${install_zstd}
   ${install_thrift}
   ${install_utf8_proc}
+  ${install_lz4}
   Threads::Threads)

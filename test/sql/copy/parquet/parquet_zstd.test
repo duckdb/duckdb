@@ -5,7 +5,7 @@
 require parquet
 
 query TTT
-select * from parquet_scan('test/sql/copy/parquet/data/zstd.parquet') order by 1
+select * from parquet_scan('data/parquet-testing/zstd.parquet') order by 1
 ----
 NULL	bar	0
 -1	foo	1
