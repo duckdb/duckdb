@@ -81,8 +81,8 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 
 string ViewCatalogEntry::ToSQL() {
 	if (sql.empty()) {
-		//! Create dummy sql with view name so pragma view_tables don't complain
-		return "create view " + name + "as select * from tbl";
+		//! Return empty sql with view name so pragma view_tables don't complain
+		return sql;
 	}
 	return sql + "\n;";
 }
