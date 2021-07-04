@@ -70,17 +70,6 @@ const std::vector<SQLSMALLINT> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {SQL_CHAR,
                                                                     SQL_INTERVAL_HOUR_TO_SECOND,
                                                                     SQL_INTERVAL_MINUTE_TO_SECOND};
 
-// Map DuckDB LogicalTypes to ODBC SQL Types
-const std::map<duckdb::LogicalTypeId, SQLSMALLINT, ApiInfo::LogicalTypeCmp> ApiInfo::MAP_SQL_TYPES = {
-    {LogicalTypeId::BOOLEAN, SQL_CHAR},        {LogicalTypeId::TINYINT, SQL_TINYINT},
-    {LogicalTypeId::UTINYINT, SQL_TINYINT},    {LogicalTypeId::SMALLINT, SQL_SMALLINT},
-    {LogicalTypeId::USMALLINT, SQL_SMALLINT},  {LogicalTypeId::INTEGER, SQL_INTEGER},
-    {LogicalTypeId::UINTEGER, SQL_INTEGER},    {LogicalTypeId::BIGINT, SQL_BIGINT},
-    {LogicalTypeId::UBIGINT, SQL_BIGINT},      {LogicalTypeId::FLOAT, SQL_FLOAT},
-    {LogicalTypeId::DOUBLE, SQL_DOUBLE},       {LogicalTypeId::DATE, SQL_DATE},
-    {LogicalTypeId::TIMESTAMP, SQL_TIMESTAMP}, {LogicalTypeId::TIME, SQL_TIME},
-    {LogicalTypeId::VARCHAR, SQL_VARCHAR},     {LogicalTypeId::INTERVAL, SQL_TIME}};
-
 void ApiInfo::SetFunctionSupported(SQLUSMALLINT *flags, int function_id) {
 	flags[function_id >> 4] |= (1 << (function_id & 0xF));
 }
@@ -158,11 +147,42 @@ SQLRETURN ApiInfo::GetFunctions30(SQLHDBC connection_handle, SQLUSMALLINT functi
 }
 
 SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
-	auto it = MAP_SQL_TYPES.find(type_id);
-	if (it != MAP_SQL_TYPES.end()) {
-		return it->second;
+	switch (type_id) {
+	case LogicalTypeId::BOOLEAN:
+		return SQL_CHAR;
+	case LogicalTypeId::TINYINT:
+		return SQL_TINYINT;
+	case LogicalTypeId::UTINYINT:
+		return SQL_TINYINT;
+	case LogicalTypeId::SMALLINT:
+		return SQL_SMALLINT;
+	case LogicalTypeId::USMALLINT:
+		return SQL_SMALLINT;
+	case LogicalTypeId::INTEGER:
+		return SQL_INTEGER;
+	case LogicalTypeId::UINTEGER:
+		return SQL_INTEGER;
+	case LogicalTypeId::BIGINT:
+		return SQL_BIGINT;
+	case LogicalTypeId::UBIGINT:
+		return SQL_BIGINT;
+	case LogicalTypeId::FLOAT:
+		return SQL_FLOAT;
+	case LogicalTypeId::DOUBLE:
+		return SQL_DOUBLE;
+	case LogicalTypeId::DATE:
+		return SQL_DATE;
+	case LogicalTypeId::TIMESTAMP:
+		return SQL_TIMESTAMP;
+	case LogicalTypeId::TIME:
+		return SQL_TIME;
+	case LogicalTypeId::VARCHAR:
+		return SQL_VARCHAR;
+	case LogicalTypeId::INTERVAL:
+		return SQL_TIME;
+	default:
+		return SQL_UNKNOWN_TYPE;
 	}
-	return SQL_UNKNOWN_TYPE;
 }
 
 SQLRETURN ApiInfo::CheckDataType(SQLSMALLINT data_type) {

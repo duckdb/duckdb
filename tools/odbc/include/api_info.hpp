@@ -24,14 +24,6 @@ private:
 
 	static const std::vector<SQLSMALLINT> ODBC_SUPPORTED_SQL_TYPES;
 
-	struct LogicalTypeCmp {
-		bool operator()(const LogicalTypeId a, const LogicalTypeId b) const {
-			return a < b;
-		}
-	};
-	// Map DuckDB LogicalTypes to ODBC SQL Types
-	static const std::map<duckdb::LogicalTypeId, SQLSMALLINT, LogicalTypeCmp> MAP_SQL_TYPES;
-
 	static void SetFunctionSupported(SQLUSMALLINT *flags, int function_id);
 
 public:
