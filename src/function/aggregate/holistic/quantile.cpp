@@ -659,7 +659,8 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimal(ClientContext &context, A
 }
 
 AggregateFunction GetMedianAggregate(const LogicalType &type) {
-	auto fun = GetDiscreteQuantileAggregateFunction(type);
+	auto fun = (type.id() != LogicalTypeId::INTERVAL) ? GetContinuousQuantileAggregateFunction(type)
+	                                                  : GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindMedian;
 	return fun;
 }
