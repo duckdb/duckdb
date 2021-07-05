@@ -1,5 +1,6 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
+#include "api_info.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -10,6 +11,7 @@ using duckdb::Decimal;
 using duckdb::hugeint_t;
 using duckdb::idx_t;
 using duckdb::Load;
+using duckdb::LogicalType;
 using duckdb::string_t;
 using duckdb::Value;
 
@@ -238,14 +240,20 @@ SQLRETURN SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, 
 				*name_length_ptr = out_len;
 			}
 		}
+
+		LogicalType col_type = stmt->stmt->GetTypes()[column_number - 1];
+
 		if (data_type_ptr) {
-			*data_type_ptr = SQL_UNKNOWN_TYPE; // TODO
+			*data_type_ptr = duckdb::ApiInfo::FindRelatedSQLType(col_type.id());
 		}
 		if (column_size_ptr) {
 			*column_size_ptr = 0;
 		}
 		if (decimal_digits_ptr) {
 			*decimal_digits_ptr = 0;
+			if (col_type.id() == duckdb::LogicalTypeId::DECIMAL) {
+				*decimal_digits_ptr = duckdb::DecimalType::GetScale(col_type);
+			}
 		}
 		if (nullable_ptr) {
 			*nullable_ptr = SQL_NULLABLE_UNKNOWN;
