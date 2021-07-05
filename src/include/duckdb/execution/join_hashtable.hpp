@@ -140,6 +140,8 @@ public:
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 	//! Scan the HT to construct the final full outer join result after
 	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
+	//! Fill the pointer with all the addresses from the hashtable
+	idx_t FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
 	idx_t size() {
 		return count;
 	}
