@@ -50,3 +50,43 @@ jobs:
       with:
         github-token: ${{ secrets.GH_TOKEN }}
         path-to-lcov: ./lcov.info
+
+  codecov:
+    name: CodeCov
+    runs-on: ubuntu-20.04
+    env:
+      GEN: ninja
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Before Install
+        run: |
+          pip install requests
+          sudo apt-get install g++
+
+      - name: Run Tests
+        env:
+          API_KEY: ${{ secrets.CODECOV_API_KEY }}
+        run: |
+          mkdir -p build/coverage
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage -fprofile-arcs -ftest-coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          build/coverage/test/unittest test/sql/projection/test_simple_projection.test
+          gcov -o src
+          bash <(curl -s https://codecov.io/bash)
+
+      - name: Upstream to Standards
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        if: ${{ github.event_name == 'push'}}
+        run: |
+          wget --header "Authorization: token ${GH_TOKEN}" \
+          --header "Accept: application/vnd.github.v3.raw" \
+          https://api.github.com/repos/codecov/standards/contents/upstream.sh
+          bash upstream.sh
