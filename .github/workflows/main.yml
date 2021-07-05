@@ -48,8 +48,8 @@ jobs:
     - name: Coveralls
       uses: coverallsapp/github-action@master
       with:
-        github-token: ${{ secrets.GH_TOKEN }}
         path-to-lcov: ./lcov.info
+        github-token: ${{ secrets.GH_TOKEN }}
 
   codecov:
     name: CodeCov
