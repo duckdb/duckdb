@@ -9,6 +9,7 @@ add_library_unity(
   buffer_manager.cpp
   checkpoint_manager.cpp
   block.cpp
+  constant_segment.cpp
   data_table.cpp
   index.cpp
   local_storage.cpp

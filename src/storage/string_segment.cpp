@@ -59,7 +59,12 @@ void StringSegment::ReadString(string_t *result_data, Vector &result, data_ptr_t
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void StringSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void StringSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+	ScanPartial(state, start, scan_count, result, 0);
+}
+
+void StringSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result,
+                                idx_t result_offset) {
 	D_ASSERT(RowRangeIsValid(start, scan_count));
 
 	// clear any previously locked buffers and get the primary buffer handle

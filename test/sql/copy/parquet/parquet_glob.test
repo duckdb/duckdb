@@ -8,44 +8,44 @@ statement ok
 PRAGMA enable_verification
 
 query I
-select count(*) from parquet_scan('*/sql/*/parquet/*/glob/t?.parquet')
+select count(*) from parquet_scan('data/parquet-testing/glob/t?.parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('*/sql/*/parquet/*/glob/t[0-9].parquet')
+select count(*) from parquet_scan('data/parquet-testing/glob/t[0-9].parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('test/sql/copy/parquet/data/glob/*')
+select count(*) from parquet_scan('data/parquet-testing/glob/*')
 ----
 2
 
 query I
-select count(*) from parquet_scan('test/sql/copy/parquet/data/glob/*.parquet')
+select count(*) from parquet_scan('data/parquet-testing/glob/*.parquet')
 ----
 2
 
 query I
-select count(*) from parquet_scan('test/sql/copy/parquet/data/g*/*.parquet')
+select count(*) from parquet_scan('data/parquet-testing/g*/*.parquet')
 ----
 3
 
 query I
-select count(*) from parquet_scan('test/sql/copy/parquet/data/g*/t1.parquet')
+select count(*) from parquet_scan('data/parquet-testing/g*/t1.parquet')
 ----
 2
 
 # abs path
 query I
-select count(*) from parquet_scan('__WORKING_DIRECTORY__/test/sql/copy/parquet/data/g*/t1.parquet')
+select count(*) from parquet_scan('__WORKING_DIRECTORY__/data/parquet-testing/g*/t1.parquet')
 ----
 2
 
 # forward slashes
 query I
-select count(*) from parquet_scan('test\sql\copy\parquet\data\g*\t1.parquet')
+select count(*) from parquet_scan('data\parquet-testing\g*\t1.parquet')
 ----
 2
 
@@ -54,14 +54,14 @@ select count(*) from parquet_scan('')
 
 # schema mismatch in parquet glob
 statement error
-select count(*) from parquet_scan('test/sql/copy/parquet/data/*.parquet')
+select count(*) from parquet_scan('data/parquet-testing/*.parquet')
 
 # parquet glob with COPY FROM
 statement ok
 CREATE TABLE vals (i INTEGER, j BLOB)
 
 statement ok
-COPY vals FROM '*/sql/*/parquet/*/glob/t?.parquet' (FORMAT PARQUET);
+COPY vals FROM 'data/parquet-testing/glob/t?.parquet' (FORMAT PARQUET);
 
 query II
 SELECT * FROM vals ORDER BY 1, 2

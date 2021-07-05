@@ -290,12 +290,12 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row - current_row);
-		// idx_t vector_offset = (current_row - state.base_row) / STANDARD_VECTOR_SIZE;
-		// //! first check the zonemap if we have to scan this partition
+
+		//! first check the zonemap if we have to scan this partition
 		if (!CheckZonemapSegments(state)) {
 			continue;
 		}
-		// // second, scan the version chunk manager to figure out which tuples to load for this transaction
+		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
 		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 		if (SCAN_DELETES) {
@@ -309,60 +309,92 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 		} else {
 			count = max_count;
 		}
-		idx_t approved_tuple_count = count;
-
-		for (idx_t i = 0; i < column_ids.size(); i++) {
-			auto column = column_ids[i];
-			if (column == COLUMN_IDENTIFIER_ROW_ID) {
-				// scan row id
-				D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-				result.data[i].Sequence(this->start + current_row, 1);
-			} else {
-				if (SCAN_COMMITTED) {
-					columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
-					                               ALLOW_UPDATES);
+		if (count == max_count && !table_filters) {
+			// scan all vectors completely: full scan without deletions or table filters
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				auto column = column_ids[i];
+				if (column == COLUMN_IDENTIFIER_ROW_ID) {
+					// scan row id
+					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
+					result.data[i].Sequence(this->start + current_row, 1);
 				} else {
-					D_ASSERT(transaction);
-					D_ASSERT(ALLOW_UPDATES);
-					columns[column]->Scan(*transaction, state.vector_index, state.column_scans[i], result.data[i]);
+					if (SCAN_COMMITTED) {
+						columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
+						                               ALLOW_UPDATES);
+					} else {
+						D_ASSERT(transaction);
+						D_ASSERT(ALLOW_UPDATES);
+						columns[column]->Scan(*transaction, state.vector_index, state.column_scans[i], result.data[i]);
+					}
 				}
 			}
-		}
-		if (table_filters) {
+		} else {
+			// partial scan: we have deletions or table filters
+			idx_t approved_tuple_count = count;
 			SelectionVector sel;
 			if (count != max_count) {
 				sel.Initialize(valid_sel);
 			} else {
 				sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
 			}
-			//! First, we scan the columns with filters, fetch their data and generate a selection vector.
+			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
 			//! get runtime statistics
 			auto start_time = high_resolution_clock::now();
-			for (idx_t i = 0; i < adaptive_filter->permutation.size(); i++) {
-				auto tf_idx = adaptive_filter->permutation[i];
-				D_ASSERT(table_filters->filters.count(tf_idx) == 1);
-				auto &filter = table_filters->filters[tf_idx];
-				UncompressedSegment::FilterSelection(sel, result.data[tf_idx], *filter, approved_tuple_count,
-				                                     FlatVector::Validity(result.data[tf_idx]));
+			if (table_filters) {
+				D_ASSERT(ALLOW_UPDATES);
+				for (idx_t i = 0; i < table_filters->filters.size(); i++) {
+					auto tf_idx = adaptive_filter->permutation[i];
+					auto col_idx = column_ids[tf_idx];
+					columns[col_idx]->Select(*transaction, state.vector_index, state.column_scans[tf_idx],
+					                         result.data[tf_idx], sel, approved_tuple_count,
+					                         *table_filters->filters[tf_idx]);
+				}
+				for (auto &table_filter : table_filters->filters) {
+					result.data[table_filter.first].Slice(sel, approved_tuple_count);
+				}
 			}
-			auto end_time = high_resolution_clock::now();
-			if (adaptive_filter && adaptive_filter->permutation.size() > 1) {
-				adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
-			}
-
 			if (approved_tuple_count == 0) {
+				// all rows were filtered out by the table filters
+				// skip this vector in all the scans that were not scanned yet
+				D_ASSERT(table_filters);
 				result.Reset();
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					auto col_idx = column_ids[i];
+					if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+						continue;
+					}
+					if (table_filters->filters.find(i) == table_filters->filters.end()) {
+						columns[col_idx]->Skip(state.column_scans[i]);
+					}
+				}
 				state.vector_index++;
 				continue;
 			}
-			if (approved_tuple_count != max_count) {
-				result.Slice(sel, approved_tuple_count);
+			//! Now we use the selection vector to fetch data for the other columns.
+			for (idx_t i = 0; i < column_ids.size(); i++) {
+				if (!table_filters || table_filters->filters.find(i) == table_filters->filters.end()) {
+					auto column = column_ids[i];
+					if (column == COLUMN_IDENTIFIER_ROW_ID) {
+						D_ASSERT(result.data[i].GetType().InternalType() == PhysicalType::INT64);
+						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
+						auto result_data = (int64_t *)FlatVector::GetData(result.data[i]);
+						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
+							result_data[sel_idx] = this->start + current_row + sel.get_index(sel_idx);
+						}
+					} else {
+						columns[column]->FilterScan(*transaction, state.vector_index, state.column_scans[i],
+						                            result.data[i], sel, approved_tuple_count);
+					}
+				}
 			}
-		} else if (count != max_count) {
-			result.Slice(valid_sel, count);
+			auto end_time = high_resolution_clock::now();
+			if (adaptive_filter && table_filters->filters.size() > 1) {
+				adaptive_filter->AdaptRuntimeStatistics(duration_cast<duration<double>>(end_time - start_time).count());
+			}
+			D_ASSERT(approved_tuple_count > 0);
+			count = approved_tuple_count;
 		}
-		D_ASSERT(approved_tuple_count > 0);
-		result.SetCardinality(approved_tuple_count);
+		result.SetCardinality(count);
 		state.vector_index++;
 		break;
 	}

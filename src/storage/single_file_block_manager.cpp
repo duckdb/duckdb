@@ -211,6 +211,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 }
 
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
+	D_ASSERT(block_id >= 0);
 	modified_blocks.insert(block_id);
 }
 

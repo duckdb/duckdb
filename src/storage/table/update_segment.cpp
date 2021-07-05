@@ -324,6 +324,8 @@ void UpdateSegment::FetchCommittedRange(idx_t start_row, idx_t count, Vector &re
 	if (!root) {
 		return;
 	}
+	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+
 	idx_t end_row = start_row + count;
 	idx_t start_vector = start_row / STANDARD_VECTOR_SIZE;
 	idx_t end_vector = (end_row - 1) / STANDARD_VECTOR_SIZE;
