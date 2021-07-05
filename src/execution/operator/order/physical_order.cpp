@@ -1608,12 +1608,12 @@ public:
 						entry_size =
 						    l_smaller * Load<idx_t>(l_heap_ptr_copy) + r_smaller * Load<idx_t>(r_heap_ptr_copy);
 						D_ASSERT(entry_size >= sizeof(idx_t));
+						D_ASSERT(l_heap_ptr_copy - l_heap_handle->Ptr() + l_smaller * entry_size <=
+						         l_data.heap_blocks[l_data.block_idx].byte_offset);
+						D_ASSERT(r_heap_ptr_copy - r_heap_handle->Ptr() + r_smaller * entry_size <=
+						         r_data.heap_blocks[r_data.block_idx].byte_offset);
 						l_heap_ptr_copy += l_smaller * entry_size;
 						r_heap_ptr_copy += r_smaller * entry_size;
-						D_ASSERT((idx_t)(l_heap_ptr_copy - l_heap_handle->Ptr()) <=
-						         l_data.heap_blocks[l_data.block_idx].byte_offset);
-						D_ASSERT((idx_t)(r_heap_ptr_copy - r_heap_handle->Ptr()) <=
-						         r_data.heap_blocks[r_data.block_idx].byte_offset);
 						copy_bytes += entry_size;
 					}
 					// Reallocate result heap block size (if needed)
