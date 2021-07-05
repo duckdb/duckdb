@@ -61,6 +61,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Install
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov
+
       - name: Set up Python 3.9
         uses: actions/setup-python@v2
         with:
@@ -71,15 +74,24 @@ jobs:
           pip install requests
           sudo apt-get install g++
 
+      - name: Coverage Reset
+        run: |
+          lcov --zerocounters --directory .
+          lcov --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
+
       - name: Run Tests
         env:
           API_KEY: ${{ secrets.CODECOV_API_KEY }}
         run: |
           mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage -fprofile-arcs -ftest-coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
           build/coverage/test/unittest test/sql/projection/test_simple_projection.test
-          gcov -abcfu -s src -o build/coverage
-          bash <(curl -s https://codecov.io/bash)
+
+      - name: Generate Coverage
+        run: |
+          lcov --directory . --base-directory . --no-external --capture --output-file coverage.info
+          lcov --remove coverage.info '/usr*' '*/cl.hpp' 'tools/*' 'benchmark/*' 'examples/*' 'third_party/*' 'test/*' -o lcov.info
+          bash <(curl -s https://codecov.io/bash) -f lcov.info
 
       - name: Upstream to Standards
         env:
