@@ -10,47 +10,58 @@
 
 namespace duckdb {
 
-FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsiz)
-    : allocator(allocator), type(type), malloced_buffer(nullptr) {
+FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, bool use_direct_io, uint64_t bufsiz)
+    : allocator(allocator), type(type), align_for_direct_io(type == FileBufferType::BLOCK && use_direct_io),
+      malloced_buffer(nullptr) {
 	SetMallocedSize(bufsiz);
 	malloced_buffer = allocator.AllocateData(malloced_size);
 	Construct(bufsiz);
 }
 
 void FileBuffer::SetMallocedSize(uint64_t &bufsiz) {
-	const int sector_size = Storage::SECTOR_SIZE;
-	// round up to the nearest sector_size, this is only really necessary if the file buffer will be used for Direct IO
-	if (bufsiz % sector_size != 0) {
-		bufsiz += sector_size - (bufsiz % sector_size);
+	bufsiz += Storage::BLOCK_HEADER_SIZE;
+	if (align_for_direct_io) {
+		const int sector_size = Storage::SECTOR_SIZE;
+		// round up to the nearest sector_size if using direct io
+		if (bufsiz % sector_size != 0) {
+			bufsiz += sector_size - (bufsiz % sector_size);
+		}
+		D_ASSERT(bufsiz % sector_size == 0);
+		D_ASSERT(bufsiz >= sector_size);
+		// we add (sector_size - 1) to ensure that we can align the buffer to sector_size
+		malloced_size = bufsiz + (sector_size - 1);
+	} else {
+		malloced_size = bufsiz;
 	}
-	D_ASSERT(bufsiz % sector_size == 0);
-	D_ASSERT(bufsiz >= sector_size);
-	// we add (sector_size - 1) to ensure that we can align the buffer to sector_size
-	malloced_size = bufsiz + (sector_size - 1);
 }
 
 void FileBuffer::Construct(uint64_t bufsiz) {
-	const int sector_size = Storage::SECTOR_SIZE;
-	if (!malloced_buffer) {
-		throw std::bad_alloc();
+	if (align_for_direct_io) {
+		const int sector_size = Storage::SECTOR_SIZE;
+		if (!malloced_buffer) {
+			throw std::bad_alloc();
+		}
+		// round to multiple of sector_size
+		uint64_t num = (uint64_t)malloced_buffer;
+		uint64_t remainder = num % sector_size;
+		if (remainder != 0) {
+			num = num + sector_size - remainder;
+		}
+		D_ASSERT(num % sector_size == 0);
+		D_ASSERT(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (sector_size - 1)));
+		D_ASSERT(num >= (uint64_t)malloced_buffer);
+		// construct the FileBuffer object
+		internal_buffer = (data_ptr_t)num;
+	} else {
+		internal_buffer = malloced_buffer;
 	}
-	// round to multiple of sector_size
-	uint64_t num = (uint64_t)malloced_buffer;
-	uint64_t remainder = num % sector_size;
-	if (remainder != 0) {
-		num = num + sector_size - remainder;
-	}
-	D_ASSERT(num % sector_size == 0);
-	D_ASSERT(num + bufsiz <= ((uint64_t)malloced_buffer + bufsiz + (sector_size - 1)));
-	D_ASSERT(num >= (uint64_t)malloced_buffer);
-	// construct the FileBuffer object
-	internal_buffer = (data_ptr_t)num;
 	internal_size = bufsiz;
 	buffer = internal_buffer + Storage::BLOCK_HEADER_SIZE;
 	size = internal_size - Storage::BLOCK_HEADER_SIZE;
 }
 
 void FileBuffer::Resize(uint64_t bufsiz) {
+	D_ASSERT(type == FileBufferType::MANAGED_BUFFER);
 	SetMallocedSize(bufsiz);
 	malloced_buffer = allocator.ReallocateData(malloced_buffer, malloced_size);
 	Construct(bufsiz);

@@ -13,10 +13,11 @@
 #include "duckdb/common/file_buffer.hpp"
 
 namespace duckdb {
+class DatabaseInstance;
 
 class Block : public FileBuffer {
 public:
-	Block(Allocator &allocator, block_id_t id);
+	Block(DatabaseInstance &db, block_id_t id);
 
 	block_id_t id;
 };

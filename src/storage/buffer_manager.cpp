@@ -45,7 +45,7 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
 	auto &block_manager = BlockManager::GetBlockManager(handle->db);
 	if (handle->block_id < MAXIMUM_BLOCK) {
-		auto block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
+		auto block = make_unique<Block>(handle->db, handle->block_id);
 		block_manager.Read(*block);
 		handle->buffer = move(block);
 	} else {
