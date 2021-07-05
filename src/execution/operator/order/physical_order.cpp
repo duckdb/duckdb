@@ -1570,14 +1570,14 @@ public:
 				if (!l_done) {
 					l_heap_handle = buffer_manager.Pin(l_data.heap_blocks[l_data.block_idx].block);
 					l_heap_ptr = l_heap_handle->Ptr() + Load<idx_t>(l_ptr + heap_pointer_offset);
-					D_ASSERT(l_heap_ptr - l_heap_handle->Ptr() > 0);
+					D_ASSERT(l_heap_ptr - l_heap_handle->Ptr() >= 0);
 					D_ASSERT((idx_t)(l_heap_ptr - l_heap_handle->Ptr()) <
 					         l_data.heap_blocks[l_data.block_idx].byte_offset);
 				}
 				if (!r_done) {
 					r_heap_handle = buffer_manager.Pin(r_data.heap_blocks[r_data.block_idx].block);
 					r_heap_ptr = r_heap_handle->Ptr() + Load<idx_t>(r_ptr + heap_pointer_offset);
-					D_ASSERT(r_heap_ptr - r_heap_handle->Ptr() > 0);
+					D_ASSERT(r_heap_ptr - r_heap_handle->Ptr() >= 0);
 					D_ASSERT((idx_t)(r_heap_ptr - r_heap_handle->Ptr()) <
 					         r_data.heap_blocks[r_data.block_idx].byte_offset);
 				}
