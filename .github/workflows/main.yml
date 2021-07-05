@@ -56,6 +56,7 @@ jobs:
     runs-on: ubuntu-20.04
     env:
       GEN: ninja
+      API_KEY: ${{ secrets.CODECOV_API_KEY }}
     steps:
       - uses: actions/checkout@v2
         with:
@@ -80,8 +81,6 @@ jobs:
           lcov --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
 
       - name: Run Tests
-        env:
-          API_KEY: ${{ secrets.CODECOV_API_KEY }}
         run: |
           mkdir -p build/coverage
           (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
@@ -94,8 +93,6 @@ jobs:
           bash <(curl -s https://codecov.io/bash) -f lcov.info
 
       - name: Upstream to Standards
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         if: ${{ github.event_name == 'push'}}
         run: |
           wget --header "Authorization: token ${GH_TOKEN}" \
