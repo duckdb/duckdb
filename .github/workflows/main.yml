@@ -78,7 +78,7 @@ jobs:
           mkdir -p build/coverage
           (cd build/coverage && cmake -E env CXXFLAGS="--coverage -fprofile-arcs -ftest-coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
           build/coverage/test/unittest test/sql/projection/test_simple_projection.test
-          gcov -abcfu -s src
+          gcov -abcfu -s src -o build/coverage
           bash <(curl -s https://codecov.io/bash)
 
       - name: Upstream to Standards
