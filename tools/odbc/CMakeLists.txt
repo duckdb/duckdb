@@ -17,4 +17,7 @@ add_library(
   result.cpp
   api_info.cpp
   statement_functions.cpp)
+
+set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
+
 target_link_libraries(duckdb_odbc duckdb_static)

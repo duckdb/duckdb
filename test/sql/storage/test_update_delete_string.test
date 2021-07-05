@@ -77,6 +77,12 @@ NULL	NULL
 
 restart
 
+query II
+SELECT a, b FROM test ORDER BY a
+----
+NULL	NULL
+13	abcdefgh
+
 statement ok
 INSERT INTO test VALUES (12, NULL)
 

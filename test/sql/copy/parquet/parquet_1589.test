@@ -8,9 +8,9 @@ require parquet
 # pragma enable_verification
 
 query I
-SELECT backlink_count FROM parquet_scan('test/sql/copy/parquet/data/bug1589.parquet') LIMIT 1
+SELECT backlink_count FROM parquet_scan('data/parquet-testing/bug1589.parquet') LIMIT 1
 ----
 NULL
 
 statement ok
-SELECT * FROM parquet_scan('test/sql/copy/parquet/data/bug1589.parquet')
+SELECT * FROM parquet_scan('data/parquet-testing/bug1589.parquet')

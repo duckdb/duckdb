@@ -28,45 +28,100 @@ INSERT INTO integers SELECT * FROM integers
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
 
+query I con1
+SELECT COUNT(*) FROM integers WHERE i=1
+----
+16
+
 # 64 -> 128
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
+
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+32	32
 
 # 128 -> 256
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
 
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+64	64
+
 # 256 -> 512
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
+
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+128	128
 
 # 512 -> 1024
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
 
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+256	256
+
 # 1024 -> 2048
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
+
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+512	512
 
 # 2048 -> 4096
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
 
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+1024	1024
+
 # 4096 -> 8192
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
+
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+2048	2048
 
 # 8192 -> 16384
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
 
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+4096	4096
+
 # 16384 -> 32768
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
 
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+8192	8192
+
 # 32768 -> 65536
 statement ok con1
 INSERT INTO integers SELECT * FROM integers
+
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+16384	16384
 
 # 65536 -> 131072
 statement ok con1
@@ -81,14 +136,36 @@ SELECT COUNT(*) FROM integers
 query R con1
 SELECT SUM(i) FROM integers
 ----
-327680.000000
+327680
+
+query II con1
+SELECT COUNT(*), COUNT(DISTINCT ROWID) FROM integers WHERE i=1
+----
+32768	32768
+
+query I con1
+SELECT COUNT(*) FROM integers WHERE i=2
+----
+32768
+
+query I con1
+SELECT COUNT(*) FROM integers WHERE i=3
+----
+32768
+
+query I con1
+SELECT COUNT(*) FROM integers WHERE i=4
+----
+32768
 
 # now delete some tuples
 statement ok con1
 BEGIN TRANSACTION;
 
-statement ok con1
+query I con1
 DELETE FROM integers WHERE i=1
+----
+32768
 
 # check the updated count and sum
 query I con1

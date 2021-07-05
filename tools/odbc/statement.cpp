@@ -154,9 +154,9 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 		}
 		stmt->res.reset();
 		stmt->chunk.reset();
-		stmt->stmt.reset();
+		// stmt->stmt.reset(); // the statment can be reuse in prepared statement
 		stmt->bound_cols.clear();
-		stmt->params.clear();
+		// stmt->params.clear(); // parameters can be reuse in prepared statement
 		return SQL_SUCCESS;
 	});
 }

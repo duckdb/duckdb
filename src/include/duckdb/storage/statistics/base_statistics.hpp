@@ -32,6 +32,11 @@ public:
 
 public:
 	bool CanHaveNull();
+	bool CanHaveNoNull();
+
+	virtual bool IsConstant() {
+		return false;
+	}
 
 	static unique_ptr<BaseStatistics> CreateEmpty(LogicalType type);
 

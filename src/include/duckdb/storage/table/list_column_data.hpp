@@ -30,16 +30,16 @@ public:
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
 
-	void Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) override;
-	void ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) override;
-	void ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+	idx_t Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) override;
+	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates) override;
+	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
 
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
 	void Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) override;
 	void RevertAppend(row_t start_row) override;
-	void Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
+	idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result) override;
 	void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
 	              idx_t result_idx) override;
 	void Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids, idx_t offset,
@@ -49,7 +49,6 @@ public:
 	unique_ptr<BaseStatistics> GetUpdateStatistics() override;
 
 	void CommitDropColumn() override;
-	void Initialize(PersistentColumnData &column_data) override;
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer) override;

@@ -1,0 +1,101 @@
+# name: test/sql/types/list/list_index_abort_small_nested.test
+# description: Test abort of list insertion in a primary key index
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE a(id INTEGER PRIMARY KEY, c INT[][]);
+
+statement ok
+INSERT INTO a VALUES (1, [[1, 2, 3], [4, 5]])
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO a SELECT i id, NULL c FROM range(2, 2500, 1) tbl(i)
+
+statement error
+INSERT INTO a VALUES (1, [[4, 5]])
+
+statement ok
+ROLLBACK
+
+query I
+SELECT c FROM a WHERE id=1
+----
+[[1, 2, 3], [4, 5]]
+
+query II
+SELECT * FROM a
+----
+1	[[1, 2, 3], [4, 5]]
+
+# now with non-null values
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO a SELECT i id, [[-i], [i, 33]] c FROM range(-2, -2500, -1) tbl(i)
+
+statement error
+INSERT INTO a VALUES (1, [[4, 5]])
+
+statement ok
+ROLLBACK
+
+query I
+SELECT c FROM a WHERE id=1
+----
+[[1, 2, 3], [4, 5]]
+
+query II
+SELECT * FROM a
+----
+1	[[1, 2, 3], [4, 5]]
+
+# bigger lists
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO a SELECT i id, [[1, 2], [3, 4], [5, i, -33]] c FROM range(2500, 5000, 1) tbl(i)
+
+statement error
+INSERT INTO a VALUES (1, [[4, 5]])
+
+statement ok
+ROLLBACK
+
+query I
+SELECT c FROM a WHERE id=1
+----
+[[1, 2, 3], [4, 5]]
+
+query II
+SELECT * FROM a
+----
+1	[[1, 2, 3], [4, 5]]
+
+statement ok
+INSERT INTO a VALUES (2, [[4, 5]])
+
+statement ok
+INSERT INTO a VALUES (3, NULL)
+
+statement ok
+INSERT INTO a VALUES (4, [NULL])
+
+statement ok
+INSERT INTO a VALUES (5, [[NULL], [NULL]])
+
+query II
+SELECT * FROM a
+----
+1	[[1, 2, 3], [4, 5]]
+2	[[4, 5]]
+3	NULL
+4	[NULL]
+5	[[NULL], [NULL]]
