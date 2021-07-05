@@ -111,7 +111,7 @@ public:
 	vector<shared_ptr<BlockHandle>> heap_blocks;
 	vector<unique_ptr<BufferHandle>> pinned_blocks;
 
-	//! Total count - set after PhysicalOrder::Finalize is called
+	//! Total count - get set in PhysicalOrder::Finalize
 	idx_t total_count;
 	//! Capacity (number of rows) used to initialize blocks
 	idx_t block_capacity;
@@ -1614,8 +1614,7 @@ public:
 					if (result_heap_block->byte_offset + copy_bytes >
 					    result_heap_block->capacity * result_heap_block->entry_size) {
 						idx_t new_capacity =
-						    (result_heap_block->byte_offset + copy_bytes + result_heap_block->entry_size) /
-						    result_heap_block->entry_size;
+						    (result_heap_block->byte_offset + copy_bytes) / result_heap_block->entry_size + 1;
 						buffer_manager.ReAllocate(result_heap_block->block,
 						                          new_capacity * result_heap_block->entry_size);
 						result_heap_block->capacity = new_capacity;
@@ -1737,8 +1736,7 @@ public:
 		}
 		// Reallocate result heap block size (if needed)
 		if (target_heap_block->byte_offset + copy_bytes > target_heap_block->capacity * target_heap_block->entry_size) {
-			idx_t new_capacity = (target_heap_block->byte_offset + copy_bytes + target_heap_block->entry_size) /
-			                     target_heap_block->entry_size;
+			idx_t new_capacity = (target_heap_block->byte_offset + copy_bytes) / target_heap_block->entry_size + 1;
 			buffer_manager.ReAllocate(target_heap_block->block, new_capacity * target_heap_block->entry_size);
 			target_heap_block->capacity = new_capacity;
 			target_heap_ptr = target_heap_handle.Ptr() + target_heap_block->byte_offset;
