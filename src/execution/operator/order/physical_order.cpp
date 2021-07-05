@@ -1570,10 +1570,16 @@ public:
 				if (!l_done) {
 					l_heap_handle = buffer_manager.Pin(l_data.heap_blocks[l_data.block_idx].block);
 					l_heap_ptr = l_heap_handle->Ptr() + Load<idx_t>(l_ptr + heap_pointer_offset);
+					D_ASSERT(l_heap_ptr - l_heap_handle->Ptr() > 0);
+					D_ASSERT((idx_t)(l_heap_ptr - l_heap_handle->Ptr()) <
+					         l_data.heap_blocks[l_data.block_idx].byte_offset);
 				}
 				if (!r_done) {
 					r_heap_handle = buffer_manager.Pin(r_data.heap_blocks[r_data.block_idx].block);
 					r_heap_ptr = r_heap_handle->Ptr() + Load<idx_t>(r_ptr + heap_pointer_offset);
+					D_ASSERT(r_heap_ptr - r_heap_handle->Ptr() > 0);
+					D_ASSERT((idx_t)(r_heap_ptr - r_heap_handle->Ptr()) <
+					         r_data.heap_blocks[r_data.block_idx].byte_offset);
 				}
 				// Both the row and heap data need to be dealt with
 				if (!l_done && !r_done) {
@@ -1649,6 +1655,7 @@ public:
 					FlushBlobs(buffer_manager, layout, r_count, r_ptr, r_data.entry_idx, r_heap_ptr, result_data_block,
 					           result_data_ptr, result_heap_block, *result_heap_handle, result_heap_ptr, copied, count);
 				}
+				D_ASSERT(result_data_block->count == result_heap_block->count);
 			}
 			// Move to new data blocks (if needed)
 			if (l_data.block_idx < l_data.data_blocks.size() &&
