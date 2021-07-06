@@ -7,10 +7,9 @@
 namespace duckdb {
 
 ManagedBuffer::ManagedBuffer(DatabaseInstance &db, idx_t size, bool can_destroy, block_id_t id)
-    : FileBuffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER, DBConfig::GetConfig(db).use_direct_io, size),
-      db(db), can_destroy(can_destroy), id(id) {
+    : FileBuffer(Allocator::Get(db), FileBufferType::MANAGED_BUFFER, size), db(db), can_destroy(can_destroy), id(id) {
 	D_ASSERT(id >= MAXIMUM_BLOCK);
-	D_ASSERT(size >= Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(size >= Storage::BLOCK_SIZE);
 }
 
 } // namespace duckdb

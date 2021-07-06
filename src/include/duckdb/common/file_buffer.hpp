@@ -23,14 +23,12 @@ public:
 	//! FileSystemConstants::FILE_BUFFER_BLOCK_SIZE. The content in this buffer can be written to FileHandles that have
 	//! been opened with DIRECT_IO on all operating systems, however, the entire buffer must be written to the file.
 	//! Note that the returned size is 8 bytes less than the allocation size to account for the checksum.
-	FileBuffer(Allocator &allocator, FileBufferType type, bool use_direct_io, uint64_t bufsiz);
+	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsiz);
 	virtual ~FileBuffer();
 
 	Allocator &allocator;
 	//! The type of the buffer
 	FileBufferType type;
-	//! Whether or not this block must be aligned for direct IO
-	bool align_for_direct_io;
 	//! The buffer that users can write to
 	data_ptr_t buffer;
 	//! The size of the portion that users can write to, this is equivalent to internal_size - BLOCK_HEADER_SIZE

@@ -17,7 +17,7 @@ class DatabaseInstance;
 
 class Block : public FileBuffer {
 public:
-	Block(DatabaseInstance &db, block_id_t id);
+	Block(Allocator &allocator, block_id_t id);
 
 	block_id_t id;
 };

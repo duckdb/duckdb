@@ -86,13 +86,12 @@ class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(SortingState sorting_state, RowLayout payload_layout)
 	    : sorting_state(move(sorting_state)), payload_layout(move(payload_layout)), total_count(0),
-	      sorting_heap_capacity(Storage::BLOCK_ALLOC_SIZE), payload_heap_capacity(Storage::BLOCK_ALLOC_SIZE),
-	      external(false) {
+	      sorting_heap_capacity(Storage::BLOCK_SIZE), payload_heap_capacity(Storage::BLOCK_SIZE), external(false) {
 		auto thinnest_row = MinValue(sorting_state.entry_size, payload_layout.GetRowWidth());
 		if (!sorting_state.all_constant) {
 			thinnest_row = MinValue(thinnest_row, sorting_state.blob_layout.GetRowWidth());
 		}
-		block_capacity = (Storage::BLOCK_ALLOC_SIZE + thinnest_row - 1) / thinnest_row;
+		block_capacity = (Storage::BLOCK_SIZE + thinnest_row - 1) / thinnest_row;
 	}
 
 	~OrderGlobalState() override;
@@ -146,25 +145,23 @@ public:
 		auto &payload_layout = gstate.payload_layout;
 		// Radix sorting data
 		idx_t vectors_per_block =
-		    (Storage::BLOCK_ALLOC_SIZE / sorting_state.entry_size + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
+		    (Storage::BLOCK_SIZE / sorting_state.entry_size + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
 		radix_sorting_data = make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE,
 		                                                    sorting_state.entry_size);
 		// Blob sorting data
 		if (!sorting_state.all_constant) {
 			auto blob_row_width = sorting_state.blob_layout.GetRowWidth();
-			vectors_per_block =
-			    (Storage::BLOCK_ALLOC_SIZE / blob_row_width + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
+			vectors_per_block = (Storage::BLOCK_SIZE / blob_row_width + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
 			blob_sorting_data = make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE,
 			                                                   blob_row_width);
-			blob_sorting_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8, true);
+			blob_sorting_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 		}
 		// Payload data
 		auto payload_row_width = payload_layout.GetRowWidth();
-		vectors_per_block =
-		    (Storage::BLOCK_ALLOC_SIZE / payload_row_width + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
+		vectors_per_block = (Storage::BLOCK_SIZE / payload_row_width + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
 		payload_data =
 		    make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, payload_row_width);
-		payload_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8, true);
+		payload_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 		// Init done
 		initialized = true;
 	}
@@ -350,7 +347,7 @@ public:
 	void CreateBlock() {
 		data_blocks.emplace_back(buffer_manager, state.block_capacity, layout.GetRowWidth());
 		if (!layout.AllConstant() && state.external) {
-			heap_blocks.emplace_back(buffer_manager, heap_capacity / 8, 8);
+			heap_blocks.emplace_back(buffer_manager, heap_capacity, 1);
 		}
 	}
 	//! Unpin blocks and reset read indices to the given indices
@@ -603,7 +600,7 @@ OrderGlobalState::~OrderGlobalState() {
 static RowDataBlock ConcatenateBlocks(BufferManager &buffer_manager, RowDataCollection &row_data) {
 	// Create block with the correct capacity
 	const idx_t &entry_size = row_data.entry_size;
-	idx_t capacity = MaxValue(Storage::BLOCK_ALLOC_SIZE / entry_size + 1, row_data.count);
+	idx_t capacity = MaxValue(Storage::BLOCK_SIZE / entry_size + 1, row_data.count);
 	RowDataBlock new_block(buffer_manager, capacity, entry_size);
 	new_block.count = row_data.count;
 	auto new_block_handle = buffer_manager.Pin(new_block.block);
@@ -741,8 +738,7 @@ static void SortTiedStrings(BufferManager &buffer_manager, const data_ptr_t data
 		return;
 	}
 	// Fill pointer array for sorting
-	auto ptr_block =
-	    buffer_manager.Allocate(MaxValue((end - start) * sizeof(data_ptr_t), (idx_t)Storage::BLOCK_ALLOC_SIZE));
+	auto ptr_block = buffer_manager.Allocate(MaxValue((end - start) * sizeof(data_ptr_t), (idx_t)Storage::BLOCK_SIZE));
 	auto entry_ptrs = (data_ptr_t *)ptr_block->Ptr();
 	for (idx_t i = start; i < end; i++) {
 		entry_ptrs[i - start] = row_ptr;
@@ -762,7 +758,7 @@ static void SortTiedStrings(BufferManager &buffer_manager, const data_ptr_t data
 	          });
 	// Re-order
 	auto temp_block =
-	    buffer_manager.Allocate(MaxValue((end - start) * sorting_state.entry_size, (idx_t)Storage::BLOCK_ALLOC_SIZE));
+	    buffer_manager.Allocate(MaxValue((end - start) * sorting_state.entry_size, (idx_t)Storage::BLOCK_SIZE));
 	data_ptr_t temp_ptr = temp_block->Ptr();
 	for (idx_t i = 0; i < end - start; i++) {
 		memcpy(temp_ptr, entry_ptrs[i], sorting_state.entry_size);
@@ -843,8 +839,7 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 //! Textbook LSD radix sort
 static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const idx_t &count, const idx_t &col_offset,
                       const idx_t &sorting_size, const SortingState &sorting_state) {
-	auto temp_block =
-	    buffer_manager.Allocate(MaxValue(count * sorting_state.entry_size, (idx_t)Storage::BLOCK_ALLOC_SIZE));
+	auto temp_block = buffer_manager.Allocate(MaxValue(count * sorting_state.entry_size, (idx_t)Storage::BLOCK_SIZE));
 	data_ptr_t temp = temp_block->Ptr();
 	bool swap = false;
 
@@ -931,7 +926,7 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 		if (!ties) {
 			// This is the first sort
 			RadixSort(buffer_manager, dataptr, count, col_offset, sorting_size, sorting_state);
-			ties_handle = buffer_manager.Allocate(MaxValue(count, (idx_t)Storage::BLOCK_ALLOC_SIZE));
+			ties_handle = buffer_manager.Allocate(MaxValue(count, (idx_t)Storage::BLOCK_SIZE));
 			ties = (bool *)ties_handle->Ptr();
 			std::fill_n(ties, count - 1, true);
 			ties[count - 1] = false;
@@ -994,8 +989,8 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t so
 		// Create a single heap block to store the ordered heap
 		idx_t total_byte_offset = std::accumulate(heap.blocks.begin(), heap.blocks.end(), 0,
 		                                          [](idx_t a, const RowDataBlock &b) { return a + b.byte_offset; });
-		idx_t heap_block_size = MaxValue(total_byte_offset, (idx_t)Storage::BLOCK_ALLOC_SIZE);
-		RowDataBlock ordered_heap_block(buffer_manager, heap_block_size / 8, 8);
+		idx_t heap_BLOCK_SIZE = MaxValue(total_byte_offset, (idx_t)Storage::BLOCK_SIZE);
+		RowDataBlock ordered_heap_block(buffer_manager, heap_BLOCK_SIZE, 1);
 		ordered_heap_block.count = count;
 		ordered_heap_block.byte_offset = total_byte_offset;
 		auto ordered_heap_handle = buffer_manager.Pin(ordered_heap_block.block);

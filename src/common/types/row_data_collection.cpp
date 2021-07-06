@@ -11,7 +11,7 @@ RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_
                                      bool keep_pinned)
     : buffer_manager(buffer_manager), count(0), block_capacity(block_capacity), entry_size(entry_size),
       is_little_endian(IsLittleEndian()), keep_pinned(keep_pinned) {
-	D_ASSERT(block_capacity * entry_size >= Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(block_capacity * entry_size >= Storage::BLOCK_SIZE);
 }
 
 template <class T>
@@ -704,7 +704,7 @@ void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx
 }
 
 void RowDataCollection::Merge(RowDataCollection &other) {
-	RowDataCollection temp(buffer_manager, Storage::BLOCK_ALLOC_SIZE, 1);
+	RowDataCollection temp(buffer_manager, Storage::BLOCK_SIZE, 1);
 	{
 		//	One lock at a time to avoid deadlocks
 		lock_guard<mutex> read_lock(other.rc_lock);

@@ -20,7 +20,7 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr
 	D_ASSERT(alloc_size >= Storage::BLOCK_SIZE);
 	buffer = move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
-	memory_usage = alloc_size;
+	memory_usage = alloc_size + Storage::BLOCK_HEADER_SIZE;
 }
 
 BlockHandle::~BlockHandle() {
@@ -45,7 +45,7 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
 	auto &block_manager = BlockManager::GetBlockManager(handle->db);
 	if (handle->block_id < MAXIMUM_BLOCK) {
-		auto block = make_unique<Block>(handle->db, handle->block_id);
+		auto block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
 		block_manager.Read(*block);
 		handle->buffer = move(block);
 	} else {
@@ -196,16 +196,19 @@ unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size) {
 void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t alloc_size) {
 	lock_guard<mutex> lock(handle->lock);
 	D_ASSERT(handle->readers == 1);
-	if (alloc_size > handle->memory_usage) {
-		idx_t required_memory = alloc_size - handle->memory_usage;
+	auto total_size = alloc_size + Storage::BLOCK_HEADER_SIZE;
+	uint64_t required_memory = total_size - handle->memory_usage;
+	if (total_size > handle->memory_usage) {
 		// evict blocks until we have space to increase the size of this block
 		if (!EvictBlocks(required_memory, maximum_memory)) {
 			throw OutOfRangeException("Not enough memory to complete operation: failed to increase block size");
 		}
+	} else {
+		current_memory += required_memory;
 	}
 	// re-allocate the buffer size and update its memory usage
 	handle->buffer->Resize(alloc_size);
-	handle->memory_usage = alloc_size;
+	handle->memory_usage = total_size;
 }
 
 unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
@@ -336,7 +339,7 @@ void BufferManager::RequireTemporaryDirectory() {
 void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	RequireTemporaryDirectory();
 
-	D_ASSERT(buffer.size + Storage::BLOCK_HEADER_SIZE >= Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(buffer.size >= Storage::BLOCK_SIZE);
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
 	// create the file and write the size followed by the buffer contents
@@ -357,7 +360,7 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	handle->Read(&alloc_size, sizeof(idx_t), 0);
 
 	// now allocate a buffer of this size and read the data into that buffer
-	auto buffer = make_unique<ManagedBuffer>(db, alloc_size + Storage::BLOCK_HEADER_SIZE, false, id);
+	auto buffer = make_unique<ManagedBuffer>(db, alloc_size, false, id);
 	buffer->Read(*handle, sizeof(idx_t));
 	return move(buffer);
 }

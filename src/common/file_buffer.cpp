@@ -10,17 +10,19 @@
 
 namespace duckdb {
 
-FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, bool use_direct_io, uint64_t bufsiz)
-    : allocator(allocator), type(type), align_for_direct_io(type == FileBufferType::BLOCK && use_direct_io),
-      malloced_buffer(nullptr) {
+FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsiz)
+    : allocator(allocator), type(type), malloced_buffer(nullptr) {
 	SetMallocedSize(bufsiz);
 	malloced_buffer = allocator.AllocateData(malloced_size);
 	Construct(bufsiz);
 }
 
 void FileBuffer::SetMallocedSize(uint64_t &bufsiz) {
-	bufsiz += Storage::BLOCK_HEADER_SIZE;
-	if (true) {
+	// make room for the block header (if this is not the db file header)
+	if (type == FileBufferType::MANAGED_BUFFER && bufsiz != Storage::FILE_HEADER_SIZE) {
+		bufsiz += Storage::BLOCK_HEADER_SIZE;
+	}
+	if (type == FileBufferType::BLOCK) {
 		const int sector_size = Storage::SECTOR_SIZE;
 		// round up to the nearest sector_size
 		if (bufsiz % sector_size != 0) {
@@ -39,7 +41,7 @@ void FileBuffer::Construct(uint64_t bufsiz) {
 	if (!malloced_buffer) {
 		throw std::bad_alloc();
 	}
-	if (true) {
+	if (type == FileBufferType::BLOCK) {
 		const int sector_size = Storage::SECTOR_SIZE;
 		// round to multiple of sector_size
 		uint64_t num = (uint64_t)malloced_buffer;
