@@ -20,9 +20,9 @@ FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, bool use_direc
 
 void FileBuffer::SetMallocedSize(uint64_t &bufsiz) {
 	bufsiz += Storage::BLOCK_HEADER_SIZE;
-	if (align_for_direct_io) {
+	if (true) {
 		const int sector_size = Storage::SECTOR_SIZE;
-		// round up to the nearest sector_size if using direct io
+		// round up to the nearest sector_size
 		if (bufsiz % sector_size != 0) {
 			bufsiz += sector_size - (bufsiz % sector_size);
 		}
@@ -36,11 +36,11 @@ void FileBuffer::SetMallocedSize(uint64_t &bufsiz) {
 }
 
 void FileBuffer::Construct(uint64_t bufsiz) {
-	if (align_for_direct_io) {
+	if (!malloced_buffer) {
+		throw std::bad_alloc();
+	}
+	if (true) {
 		const int sector_size = Storage::SECTOR_SIZE;
-		if (!malloced_buffer) {
-			throw std::bad_alloc();
-		}
 		// round to multiple of sector_size
 		uint64_t num = (uint64_t)malloced_buffer;
 		uint64_t remainder = num % sector_size;
@@ -52,10 +52,11 @@ void FileBuffer::Construct(uint64_t bufsiz) {
 		D_ASSERT(num >= (uint64_t)malloced_buffer);
 		// construct the FileBuffer object
 		internal_buffer = (data_ptr_t)num;
+		internal_size = bufsiz;
 	} else {
 		internal_buffer = malloced_buffer;
+		internal_size = malloced_size;
 	}
-	internal_size = bufsiz;
 	buffer = internal_buffer + Storage::BLOCK_HEADER_SIZE;
 	size = internal_size - Storage::BLOCK_HEADER_SIZE;
 }
