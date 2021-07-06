@@ -13,7 +13,6 @@
 #include "duckdb/common/file_buffer.hpp"
 
 namespace duckdb {
-class DatabaseInstance;
 
 class Block : public FileBuffer {
 public:
