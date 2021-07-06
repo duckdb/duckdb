@@ -625,8 +625,8 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 		for (idx_t i = 0; i < remaining; i++) {
 			if (block.byte_offset + entry_sizes[i] > block_capacity * entry_size) {
 				while (entry_sizes[i] > block_capacity * entry_size) {
-					// if an entry does not fit, increase entry size until it does
-					entry_size *= 2;
+					// if an entry does not fit, increase capacity until it does
+					block_capacity *= 2;
 				}
 				break;
 			}
