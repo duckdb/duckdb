@@ -16,50 +16,50 @@ SELECT r % 2, r, median(r) over (partition by r % 2 order by r) FROM quantiles O
 NULL	NULL	NULL
 NULL	NULL	NULL
 NULL	NULL	NULL
-0	0	0
-0	2	0
-0	4	2
-0	6	2
-0	8	4
-1	1	1
-1	3	1
-1	5	3
-1	7	3
-1	9	5
+0	0	0.000000
+0	2	1.000000
+0	4	2.000000
+0	6	3.000000
+0	8	4.000000
+1	1	1.000000
+1	3	2.000000
+1	5	3.000000
+1	7	4.000000
+1	9	5.000000
 
 query II
 SELECT r, median(r) over (order by r rows between 1 preceding and 1 following) FROM quantiles ORDER BY 1, 2
 ----
 NULL	NULL
 NULL	NULL
-NULL	0
-0	0
-1	1
-2	2
-3	3
-4	4
-5	5
-6	6
-7	7
-8	8
-9	8
+NULL	0.000000
+0	0.500000
+1	1.000000
+2	2.000000
+3	3.000000
+4	4.000000
+5	5.000000
+6	6.000000
+7	7.000000
+8	8.000000
+9	8.500000
 
 query II
 SELECT r, median(r) over (order by r rows between 1 preceding and 3 following) FROM quantiles ORDER BY 1, 2
 ----
-NULL	0
-NULL	0
-NULL	1
-0	1
-1	2
-2	3
-3	4
-4	5
-5	6
-6	7
-7	7
-8	8
-9	8
+NULL	0.000000
+NULL	0.500000
+NULL	1.000000
+0	1.500000
+1	2.000000
+2	3.000000
+3	4.000000
+4	5.000000
+5	6.000000
+6	7.000000
+7	7.500000
+8	8.000000
+9	8.500000
 
 query II
 SELECT r, quantile(r, 0.5) over (order by r rows between 1 preceding and 3 following) FROM quantiles ORDER BY 1, 2
@@ -80,23 +80,23 @@ NULL	1
 
 # Scattered NULLs
 query IIII
-SELECT r, r / 3, n, median(n) over (partition by r % 3 order by r)
+SELECT r % 3, r, n, median(n) over (partition by r % 3 order by r)
 FROM (SELECT r, CASE r % 2 WHEN 0 THEN r ELSE NULL END AS n FROM quantiles) nulls
-ORDER BY 1
+ORDER BY 1, 2
 ----
 NULL	NULL	NULL	NULL
 NULL	NULL	NULL	NULL
 NULL	NULL	NULL	NULL
-0	0	0	0
-1	0	NULL	NULL
-2	0	2	2
-3	1	NULL	0
-4	1	4	4
-5	1	NULL	2
-6	2	6	0
-7	2	NULL	4
-8	2	8	2
-9	3	NULL	0
+0	0	0	0.000000
+0	3	NULL	0.000000
+0	6	6	3.000000
+0	9	NULL	3.000000
+1	1	NULL	NULL
+1	4	4	4.000000
+1	7	NULL	4.000000
+2	2	2	2.000000
+2	5	NULL	2.000000
+2	8	8	5.000000
 
 query III
 SELECT r, n, median(n) over (order by r rows between 1 preceding and 1 following)
@@ -105,36 +105,36 @@ ORDER BY 1
 ----
 NULL	NULL	NULL
 NULL	NULL	NULL
-NULL	NULL	0
-0	0	0
-1	NULL	0
-2	2	2
-3	NULL	2
-4	4	4
-5	NULL	4
-6	6	6
-7	NULL	6
-8	8	8
-9	NULL	8
+NULL	NULL	0.000000
+0	0	0.000000
+1	NULL	1.000000
+2	2	2.000000
+3	NULL	3.000000
+4	4	4.000000
+5	NULL	5.000000
+6	6	6.000000
+7	NULL	7.000000
+8	8	8.000000
+9	NULL	8.000000
 
 query III
 SELECT r, n, median(n) over (order by r rows between 1 preceding and 3 following)
 FROM (SELECT r, CASE r % 2 WHEN 0 THEN r ELSE NULL END AS n FROM quantiles) nulls
 ORDER BY 1
 ----
-NULL	NULL	0
-NULL	NULL	0
-NULL	NULL	0
-0	0	0
-1	NULL	2
-2	2	2
-3	NULL	4
-4	4	4
-5	NULL	6
-6	6	6
-7	NULL	6
-8	8	8
-9	NULL	8
+NULL	NULL	0.000000
+NULL	NULL	0.000000
+NULL	NULL	1.000000
+0	0	1.000000
+1	NULL	2.000000
+2	2	3.000000
+3	NULL	4.000000
+4	4	5.000000
+5	NULL	6.000000
+6	6	7.000000
+7	NULL	7.000000
+8	8	8.000000
+9	NULL	8.000000
 
 query III
 SELECT r, n, median(n) over (order by r rows between unbounded preceding and unbounded following)
