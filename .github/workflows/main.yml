@@ -667,6 +667,7 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_API_KEY }} # not required for public repos
           files: lcov.info
+          fail_ci_if_error: true
 
   vector-sizes:
     name: Vector Sizes
