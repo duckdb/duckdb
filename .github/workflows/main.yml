@@ -622,33 +622,52 @@ jobs:
     - name: Test
       run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
-# borked somehow. needs investigation.
-#  codecov:
-#    name: Code Coverage
-#    runs-on: ubuntu-20.04
-#    needs: linux-debug
-#
-#    env:
-#      GEN: ninja
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#
-#    - uses: actions/setup-python@v2
-#      with:
-#        python-version: '3.7'
-#
-#    - name: Install
-#      run: pip install --user cpp-coveralls
-#
-#
-#    - name: Coverage
-#      run: |
-#        mkdir -p build/coverage
-#        (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
-#        build/coverage/test/unittest
-#        ~/.local/bin/coveralls -b build/coverage --exclude-pattern '.*CMake.*' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp' > /dev/null
+  codecov:
+    name: CodeCov
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      GEN: ninja
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
+      - name: Install
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Before Install
+        run: |
+          pip install requests
+          sudo apt-get install g++
+
+      - name: Coverage Reset
+        run: |
+          lcov --zerocounters --directory .
+          lcov --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
+
+      - name: Run Tests
+        run: |
+          mkdir -p build/coverage
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          build/coverage/test/unittest
+
+      - name: Generate Coverage
+        run: |
+          lcov --directory . --base-directory . --no-external --capture --output-file coverage.info
+          lcov --remove coverage.info '/usr*' '*/cl.hpp' '*/tools/*' '*/benchmark/*' '*/examples/*' '*/third_party/*' '*/test/*' '*/extension/*' -o lcov.info
+
+      - name: CodeCov Upload
+        uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_API_KEY }} # not required for public repos
+          files: lcov.info
+          fail_ci_if_error: true
 
   vector-sizes:
     name: Vector Sizes
