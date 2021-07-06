@@ -85,13 +85,10 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 	}
 }
 
-template <class INPUT_TYPE, class STATE>
-static bool ReplaceIndex(STATE *state, const INPUT_TYPE *fdata, const idx_t k, const FrameBounds &frame,
-                         const FrameBounds &prev) {
+template <class STATE>
+static idx_t ReplaceIndex(STATE *state, const FrameBounds &frame, const FrameBounds &prev) {
 	D_ASSERT(state->v);
 	auto index = (idx_t *)state->v;
-
-	auto same = false;
 
 	idx_t j = 0;
 	for (idx_t p = 0; p < (prev.second - prev.first); ++p) {
@@ -105,6 +102,16 @@ static bool ReplaceIndex(STATE *state, const INPUT_TYPE *fdata, const idx_t k, c
 		}
 	}
 	index[j] = frame.second - 1;
+
+	return j;
+}
+
+template <class INPUT_TYPE, class STATE>
+static inline bool ReplacementValid(STATE *state, const INPUT_TYPE *fdata, const idx_t j, const idx_t k) {
+	auto same = false;
+
+	D_ASSERT(state->v);
+	auto index = (idx_t *)state->v;
 
 	auto curr = fdata[index[j]];
 	if (k < j) {
@@ -276,7 +283,8 @@ struct DiscreteQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 
 		if (dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
-			same = ReplaceIndex<INPUT_TYPE>(state, data, offset, frame, prev);
+			auto j = ReplaceIndex(state, frame, prev);
+			same = ReplacementValid(state, data, j, offset);
 		} else {
 			ReuseIndexes(index, frame, prev);
 		}
@@ -469,6 +477,79 @@ struct ContinuousQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 		auto v_t = (SAVE_TYPE *)state->v;
 		target[idx] = Interpolate<SAVE_TYPE, RESULT_TYPE>(v_t, bind_data->quantiles[0], state->pos);
 	}
+
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
+	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
+	                   const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result, ValidityMask &rmask) {
+		//  Lazily initialise frame state
+		state->pos = frame.second - frame.first;
+		state->template Resize<idx_t>(state->pos);
+
+		D_ASSERT(state->v);
+		auto index = (idx_t *)state->v;
+
+		D_ASSERT(bind_data_p);
+		auto bind_data = (QuantileBindData *)bind_data_p;
+
+		// Find the two positions needed
+		const auto q = bind_data->quantiles[0];
+		auto RN = ((double)(state->pos - 1) * q);
+		auto FRN = idx_t(floor(RN));
+		auto CRN = idx_t(ceil(RN));
+
+		// ceiling/unusable/floor
+		int next = 0;
+		idx_t offset = 0;
+		if (dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+			//  Fixed frame size
+			offset = ReplaceIndex(state, frame, prev);
+			if (ReplacementValid(state, data, offset, FRN)) {
+				next = 1;
+			} else if (ReplacementValid(state, data, offset, CRN)) {
+				next = -1;
+			}
+		} else {
+			ReuseIndexes(index, frame, prev);
+		}
+
+		IndirectLess<INPUT_TYPE> lt(data);
+		auto lo = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(state->moving);
+		auto hi = lo;
+		if (next == 0) {
+			auto valid = state->pos;
+			if (!dmask.AllValid()) {
+				IndirectNotNull not_null(dmask, MinValue(frame.first, prev.first));
+				valid = std::partition(index, index + valid, not_null) - index;
+			}
+			if (valid) {
+				// Update the floor/ceiling
+				RN = ((double)(valid - 1) * q);
+				FRN = idx_t(floor(RN));
+				CRN = idx_t(ceil(RN));
+				std::nth_element(index, index + FRN, index + valid, lt);
+				std::nth_element(index + CRN, index + CRN, index + valid, lt);
+				lo = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[FRN]]);
+				hi = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[CRN]]);
+			} else {
+				rmask.Set(0, false);
+				return;
+			}
+		} else if (FRN < CRN) {
+			//	Needs interpolation
+			if (next > 0) {
+				// Floor is reusable, select ceiling
+				std::nth_element(index + offset + next, index + offset + next, index + state->pos, lt);
+				hi = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[offset + next]]);
+			} else {
+				// Ceiling is reusable, select floor
+				std::nth_element(index, index + offset + next, index + offset, lt);
+				lo = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[offset + next]]);
+			}
+		}
+		auto delta = hi - lo;
+		result[0] = RESULT_TYPE(lo + delta * (RN - FRN));
+		state->moving = data[index[CRN]];
+	}
 };
 
 template <typename INPUT_TYPE, typename TARGET_TYPE>
@@ -476,7 +557,9 @@ AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType 
                                                               const LogicalType &target_type) {
 	using STATE = QuantileState<INPUT_TYPE>;
 	using OP = ContinuousQuantileOperation<INPUT_TYPE>;
-	return AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
+	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
+	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
+	return fun;
 }
 
 AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type) {
