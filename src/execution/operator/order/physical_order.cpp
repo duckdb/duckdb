@@ -989,8 +989,8 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t so
 		// Create a single heap block to store the ordered heap
 		idx_t total_byte_offset = std::accumulate(heap.blocks.begin(), heap.blocks.end(), 0,
 		                                          [](idx_t a, const RowDataBlock &b) { return a + b.byte_offset; });
-		idx_t heap_BLOCK_SIZE = MaxValue(total_byte_offset, (idx_t)Storage::BLOCK_SIZE);
-		RowDataBlock ordered_heap_block(buffer_manager, heap_BLOCK_SIZE, 1);
+		idx_t heap_block_size = MaxValue(total_byte_offset, (idx_t)Storage::BLOCK_SIZE);
+		RowDataBlock ordered_heap_block(buffer_manager, heap_block_size, 1);
 		ordered_heap_block.count = count;
 		ordered_heap_block.byte_offset = total_byte_offset;
 		auto ordered_heap_handle = buffer_manager.Pin(ordered_heap_block.block);
@@ -1534,6 +1534,12 @@ public:
 			const idx_t &r_count = !r_done ? r_data.data_blocks[r_data.block_idx].count : 0;
 			// Create new result data block (if needed)
 			if (result_data_block->count == result_data_block->capacity) {
+				if (!layout.AllConstant() && state.external) {
+					// Shrink down the last heap block to fit the data exactly
+					idx_t new_capacity = MaxValue(result_heap_block->byte_offset, (idx_t)Storage::BLOCK_SIZE);
+					buffer_manager.ReAllocate(result_heap_block->block, new_capacity);
+					result_heap_block->capacity = new_capacity;
+				}
 				result_data.CreateBlock();
 				result_data_block = &result_data.data_blocks.back();
 				result_data_handle = buffer_manager.Pin(result_data_block->block);
@@ -1612,17 +1618,13 @@ public:
 						copy_bytes += entry_size;
 					}
 					// Reallocate result heap block size (if needed)
-					if (result_heap_block->byte_offset + copy_bytes >
-					    result_heap_block->capacity * result_heap_block->entry_size) {
-						idx_t new_capacity =
-						    (result_heap_block->byte_offset + copy_bytes) / result_heap_block->entry_size + 1;
-						buffer_manager.ReAllocate(result_heap_block->block,
-						                          new_capacity * result_heap_block->entry_size);
+					if (result_heap_block->byte_offset + copy_bytes > result_heap_block->capacity) {
+						idx_t new_capacity = result_heap_block->byte_offset + copy_bytes;
+						buffer_manager.ReAllocate(result_heap_block->block, new_capacity);
 						result_heap_block->capacity = new_capacity;
 						result_heap_ptr = result_heap_handle->Ptr() + result_heap_block->byte_offset;
 					}
-					D_ASSERT(result_heap_block->byte_offset + copy_bytes <=
-					         result_heap_block->capacity * result_heap_block->entry_size);
+					D_ASSERT(result_heap_block->byte_offset + copy_bytes <= result_heap_block->capacity);
 					// Now copy the heap data
 					for (idx_t i = 0; i < merged; i++) {
 						const bool &l_smaller = left_smaller[copied + i];
@@ -1737,14 +1739,13 @@ public:
 			copy_bytes += entry_size;
 		}
 		// Reallocate result heap block size (if needed)
-		if (target_heap_block->byte_offset + copy_bytes > target_heap_block->capacity * target_heap_block->entry_size) {
-			idx_t new_capacity = (target_heap_block->byte_offset + copy_bytes) / target_heap_block->entry_size + 1;
-			buffer_manager.ReAllocate(target_heap_block->block, new_capacity * target_heap_block->entry_size);
+		if (target_heap_block->byte_offset + copy_bytes > target_heap_block->capacity) {
+			idx_t new_capacity = target_heap_block->byte_offset + copy_bytes;
+			buffer_manager.ReAllocate(target_heap_block->block, new_capacity);
 			target_heap_block->capacity = new_capacity;
 			target_heap_ptr = target_heap_handle.Ptr() + target_heap_block->byte_offset;
 		}
-		D_ASSERT(target_heap_block->byte_offset + copy_bytes <=
-		         target_heap_block->capacity * target_heap_block->entry_size);
+		D_ASSERT(target_heap_block->byte_offset + copy_bytes <= target_heap_block->capacity);
 		// Copy the heap data in one go
 		memcpy(target_heap_ptr, source_heap_ptr, copy_bytes);
 		target_heap_ptr += copy_bytes;
@@ -1754,7 +1755,7 @@ public:
 		// Update result indices and pointers
 		target_heap_block->count += flushed;
 		target_heap_block->byte_offset += copy_bytes;
-		D_ASSERT(target_heap_block->byte_offset <= target_heap_block->capacity * target_heap_block->entry_size);
+		D_ASSERT(target_heap_block->byte_offset <= target_heap_block->capacity);
 	}
 
 private:
@@ -1789,8 +1790,7 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	if (!sorting_state.all_constant && state.external) {
 		for (auto &sb : state.sorted_blocks) {
 			auto &heap_block = sb->blob_sorting_data->heap_blocks.back();
-			state.sorting_heap_capacity =
-			    MaxValue(state.sorting_heap_capacity, heap_block.capacity * heap_block.entry_size);
+			state.sorting_heap_capacity = MaxValue(state.sorting_heap_capacity, heap_block.capacity);
 		}
 	}
 	// Payload heap data
@@ -1798,8 +1798,7 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	if (!payload_layout.AllConstant() && state.external) {
 		for (auto &sb : state.sorted_blocks) {
 			auto &heap_block = sb->payload_data->heap_blocks.back();
-			state.payload_heap_capacity =
-			    MaxValue(state.sorting_heap_capacity, heap_block.capacity * heap_block.entry_size);
+			state.payload_heap_capacity = MaxValue(state.sorting_heap_capacity, heap_block.capacity);
 		}
 	}
 	// Start the merge or finish if a merge is not necessary
