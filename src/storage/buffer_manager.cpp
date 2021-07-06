@@ -194,10 +194,11 @@ unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size) {
 }
 
 void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t alloc_size) {
+	D_ASSERT(alloc_size >= Storage::BLOCK_SIZE);
 	lock_guard<mutex> lock(handle->lock);
 	D_ASSERT(handle->readers == 1);
 	auto total_size = alloc_size + Storage::BLOCK_HEADER_SIZE;
-	uint64_t required_memory = total_size - handle->memory_usage;
+	int64_t required_memory = total_size - handle->memory_usage;
 	if (required_memory > 0) {
 		// evict blocks until we have space to increase the size of this block
 		if (!EvictBlocks(required_memory, maximum_memory)) {
