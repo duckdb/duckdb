@@ -50,5 +50,5 @@ jobs:
       - name: Generate Coverage
         run: |
           lcov --directory . --base-directory . --no-external --capture --output-file coverage.info
-          lcov --remove coverage.info '/usr*' '*/cl.hpp' 'tools/*' 'benchmark/*' 'examples/*' 'third_party/*' 'test/*' -o lcov.info
+          lcov --remove coverage.info '/usr*' '*/cl.hpp' 'tools/*' 'benchmark/*' 'examples/*' 'third_party/*' 'test/*' 'extension/*' -o lcov.info
           bash <(curl -s https://codecov.io/bash) -f lcov.info
