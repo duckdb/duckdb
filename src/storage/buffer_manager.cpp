@@ -175,7 +175,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 
 shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t alloc_size, bool can_destroy) {
 	// first evict blocks until we have enough memory to store this buffer
-	if (!EvictBlocks(alloc_size, maximum_memory)) {
+	if (!EvictBlocks(alloc_size + Storage::BLOCK_HEADER_SIZE, maximum_memory)) {
 		throw OutOfRangeException("Not enough memory to complete operation: could not allocate block of %lld bytes",
 		                          alloc_size);
 	}
@@ -198,16 +198,17 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t alloc_size
 	D_ASSERT(handle->readers == 1);
 	auto total_size = alloc_size + Storage::BLOCK_HEADER_SIZE;
 	uint64_t required_memory = total_size - handle->memory_usage;
-	if (total_size > handle->memory_usage) {
+	if (required_memory > 0) {
 		// evict blocks until we have space to increase the size of this block
 		if (!EvictBlocks(required_memory, maximum_memory)) {
 			throw OutOfRangeException("Not enough memory to complete operation: failed to increase block size");
 		}
-	} else {
-		current_memory += required_memory;
 	}
 	// re-allocate the buffer size and update its memory usage
 	handle->buffer->Resize(alloc_size);
+	if (required_memory < 0) {
+		current_memory += required_memory;
+	}
 	handle->memory_usage = total_size;
 }
 
