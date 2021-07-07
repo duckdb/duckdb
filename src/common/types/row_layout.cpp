@@ -47,7 +47,9 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p,
 		// When unswizzled the pointer lives here.
 		// When swizzled, the pointer is replaced by an offset.
 		heap_pointer_offset = row_width;
-		row_width += sizeof(data_ptr_t);
+		// The 8 byte pointer will be replaced with an 8 byte idx_t when swizzled.
+		// However, this cannot be sizeof(data_ptr_t), since 32 bit builds use 4 byte pointers.
+		row_width += sizeof(idx_t);
 	}
 
 	// Data columns. No alignment required.
