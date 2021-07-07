@@ -1,5 +1,7 @@
 #include "duckdb_odbc.hpp"
 
+using std::string;
+
 SQLRETURN SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle, SQLHANDLE *output_handle_ptr) {
 	switch (handle_type) {
 	case SQL_HANDLE_DBC: {
@@ -74,6 +76,30 @@ SQLRETURN SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOI
 	}
 }
 
+/**
+ * Get the new database name from the DSN string.
+ * TODO this can used to get configuration properties for the database
+ */
+static void GetDatabaseName(SQLCHAR *dsn, string &new_db_name) {
+	string dsn_str((char *)dsn);
+
+	auto pos_db = dsn_str.find("Database");
+	if(pos_db != string::npos) {
+		auto pos_equal = dsn_str.find('=', pos_db);
+		if(pos_equal == string::npos) {
+			// an equal '=' char must be present (syntax error)
+			return;
+		}
+
+		auto pos_end_db = dsn_str.find(';', pos_equal);
+		if(pos_end_db == string::npos) {
+			// there is no ';', reached the string end
+			pos_end_db = dsn_str.size();
+		}
+		new_db_name = dsn_str.substr(pos_equal + 1, pos_end_db - pos_equal - 1);
+	}
+}
+
 SQLRETURN SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_handle, SQLCHAR *in_connection_string,
                            SQLSMALLINT string_length1, SQLCHAR *out_connection_string, SQLSMALLINT buffer_length,
                            SQLSMALLINT *string_length2_ptr, SQLUSMALLINT driver_completion) {
@@ -85,7 +111,14 @@ SQLRETURN SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_handle, SQL
 	if (dbc->type != duckdb::OdbcHandleType::DBC) {
 		return SQL_ERROR;
 	}
-	if (!dbc->conn) {
+
+	string db_name;
+	GetDatabaseName(in_connection_string, db_name);
+	if (!db_name.empty()) {
+		dbc->env->db = duckdb::make_unique<duckdb::DuckDB>(db_name);
+	}
+
+	if (!dbc->conn || !db_name.empty()) {
 		dbc->conn = duckdb::make_unique<duckdb::Connection>(*dbc->env->db);
 		dbc->conn->SetAutoCommit(dbc->autocommit);
 	}
