@@ -19,13 +19,10 @@ timestamp_t Cast::Operation(date_t date) {
 
 using FrameBounds = std::pair<idx_t, idx_t>;
 
-template <class SAVE_TYPE>
 struct QuantileState {
 	data_ptr_t v;
 	idx_t len;
 	idx_t pos;
-
-	SAVE_TYPE moving;
 
 	QuantileState() : v(nullptr), len(0), pos(0) {
 	}
@@ -107,17 +104,19 @@ static idx_t ReplaceIndex(STATE *state, const FrameBounds &frame, const FrameBou
 }
 
 template <class INPUT_TYPE, class STATE>
-static inline bool ReplacementValid(STATE *state, const INPUT_TYPE *fdata, const idx_t j, const idx_t k) {
+static inline bool CanReplace(STATE *state, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0, const idx_t k1) {
 	auto same = false;
 
 	D_ASSERT(state->v);
 	auto index = (idx_t *)state->v;
 
 	auto curr = fdata[index[j]];
-	if (k < j) {
-		same = state->moving < curr;
-	} else if (j < k) {
-		same = curr < state->moving;
+	if (k1 < j) {
+		auto hi = fdata[index[k1]];
+		same = hi < curr;
+	} else if (j < k0) {
+		auto lo = fdata[index[k0]];
+		same = curr < lo;
 	}
 
 	return same;
@@ -284,7 +283,7 @@ struct DiscreteQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 		if (dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
 			auto j = ReplaceIndex(state, frame, prev);
-			same = ReplacementValid(state, data, j, offset);
+			same = CanReplace(state, data, j, offset, offset);
 		} else {
 			ReuseIndexes(index, frame, prev);
 		}
@@ -299,18 +298,17 @@ struct DiscreteQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 			if (valid) {
 				IndirectLess<INPUT_TYPE> lt(data);
 				std::nth_element(index, index + offset, index + valid, lt);
-				state->moving = SAVE_TYPE(data[index[offset]]);
 			} else {
 				rmask.Set(0, false);
 			}
 		}
-		result[0] = RESULT_TYPE(state->moving);
+		result[0] = RESULT_TYPE(data[index[offset]]);
 	}
 };
 
 template <typename INPUT_TYPE>
 AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &type) {
-	using STATE = QuantileState<INPUT_TYPE>;
+	using STATE = QuantileState;
 	using OP = DiscreteQuantileOperation<INPUT_TYPE>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
@@ -390,7 +388,7 @@ struct DiscreteQuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 
 template <typename INPUT_TYPE>
 AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalType &type) {
-	using STATE = QuantileState<INPUT_TYPE>;
+	using STATE = QuantileState;
 	using OP = DiscreteQuantileListOperation<INPUT_TYPE>;
 	return QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 }
@@ -497,25 +495,16 @@ struct ContinuousQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 		auto FRN = idx_t(floor(RN));
 		auto CRN = idx_t(ceil(RN));
 
-		// ceiling/unusable/floor
-		int next = 0;
-		idx_t offset = 0;
+		bool same = false;
 		if (dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
-			offset = ReplaceIndex(state, frame, prev);
-			if (ReplacementValid(state, data, offset, FRN)) {
-				next = 1;
-			} else if (ReplacementValid(state, data, offset, CRN)) {
-				next = -1;
-			}
+			auto j = ReplaceIndex(state, frame, prev);
+			same = CanReplace(state, data, j, FRN, CRN);
 		} else {
 			ReuseIndexes(index, frame, prev);
 		}
 
-		IndirectLess<INPUT_TYPE> lt(data);
-		auto lo = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(state->moving);
-		auto hi = lo;
-		if (next == 0) {
+		if (!same) {
 			auto valid = state->pos;
 			if (!dmask.AllValid()) {
 				IndirectNotNull not_null(dmask, MinValue(frame.first, prev.first));
@@ -526,36 +515,30 @@ struct ContinuousQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 				RN = ((double)(valid - 1) * q);
 				FRN = idx_t(floor(RN));
 				CRN = idx_t(ceil(RN));
+				IndirectLess<INPUT_TYPE> lt(data);
 				std::nth_element(index, index + FRN, index + valid, lt);
-				std::nth_element(index + CRN, index + CRN, index + valid, lt);
-				lo = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[FRN]]);
-				hi = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[CRN]]);
+				if (CRN != FRN) {
+					std::nth_element(index + CRN, index + CRN, index + valid, lt);
+				}
 			} else {
 				rmask.Set(0, false);
-				return;
-			}
-		} else if (FRN < CRN) {
-			//	Needs interpolation
-			if (next > 0) {
-				// Floor is reusable, select ceiling
-				std::nth_element(index + offset + next, index + offset + next, index + state->pos, lt);
-				hi = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[offset + next]]);
-			} else {
-				// Ceiling is reusable, select floor
-				std::nth_element(index, index + offset + next, index + offset, lt);
-				lo = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[offset + next]]);
 			}
 		}
-		auto delta = hi - lo;
-		result[0] = RESULT_TYPE(lo + delta * (RN - FRN));
-		state->moving = data[index[CRN]];
+		if (CRN != FRN) {
+			auto lo = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[FRN]]);
+			auto hi = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[CRN]]);
+			auto delta = hi - lo;
+			result[0] = RESULT_TYPE(lo + delta * (RN - FRN));
+		} else {
+			result[0] = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[FRN]]);
+		}
 	}
 };
 
 template <typename INPUT_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType &input_type,
                                                               const LogicalType &target_type) {
-	using STATE = QuantileState<INPUT_TYPE>;
+	using STATE = QuantileState;
 	using OP = ContinuousQuantileOperation<INPUT_TYPE>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
@@ -633,7 +616,7 @@ struct ContinuousQuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 template <typename INPUT_TYPE, typename CHILD_TYPE>
 AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalType &input_type,
                                                                   const LogicalType &result_type) {
-	using STATE = QuantileState<INPUT_TYPE>;
+	using STATE = QuantileState;
 	using OP = ContinuousQuantileListOperation<INPUT_TYPE, CHILD_TYPE>;
 	return QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);
 }
