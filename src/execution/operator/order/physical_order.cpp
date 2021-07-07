@@ -431,11 +431,9 @@ public:
 	idx_t Count() {
 		idx_t count = std::accumulate(radix_sorting_data.begin(), radix_sorting_data.end(), 0,
 		                              [](idx_t a, const RowDataBlock &b) { return a + b.count; });
-#ifdef DEBUG
 		if (!sorting_state.all_constant) {
 			D_ASSERT(count == blob_sorting_data->Count());
 		}
-#endif
 		D_ASSERT(count == payload_data->Count());
 		return count;
 	}
@@ -1102,17 +1100,15 @@ public:
 		ComputeWork();
 		D_ASSERT(left_block->radix_sorting_data.size() == left_block->payload_data->data_blocks.size());
 		D_ASSERT(right_block->radix_sorting_data.size() == right_block->payload_data->data_blocks.size());
-#ifdef DEBUG
 		if (!sorting_state.all_constant) {
 			D_ASSERT(left_block->radix_sorting_data.size() == left_block->blob_sorting_data->data_blocks.size());
 			D_ASSERT(right_block->radix_sorting_data.size() == right_block->blob_sorting_data->data_blocks.size());
 		}
-#endif
 		// Set up the write block
 		result->InitializeWrite();
 		// Initialize arrays to store merge data
-		bool left_smaller[PhysicalOrder::MERGE_STRIDE];
-		idx_t next_entry_sizes[PhysicalOrder::MERGE_STRIDE];
+		bool left_smaller[STANDARD_VECTOR_SIZE];
+		idx_t next_entry_sizes[STANDARD_VECTOR_SIZE];
 		// Merge loop
 		auto &left = *left_block;
 		auto &right = *right_block;
@@ -1125,7 +1121,7 @@ public:
 				// Done
 				break;
 			}
-			const idx_t next = MinValue(l_remaining + r_remaining, PhysicalOrder::MERGE_STRIDE);
+			const idx_t next = MinValue(l_remaining + r_remaining, (idx_t)STANDARD_VECTOR_SIZE);
 			if (l_remaining != 0 && r_remaining != 0) {
 				// Compute the merge (not needed if one side is exhausted)
 				ComputeMerge(next, left_smaller);

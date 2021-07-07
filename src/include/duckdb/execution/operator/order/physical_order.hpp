@@ -45,9 +45,6 @@ public:
 
 	string ParamsToString() const override;
 
-	//! Tuples are merged in strides of size MERGE_STRIDE
-	constexpr static idx_t MERGE_STRIDE = 1024;
-
 	//! Schedule merge tasks until all blocks are merged
 	static void ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state);
 
