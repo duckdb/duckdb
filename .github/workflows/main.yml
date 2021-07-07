@@ -846,10 +846,10 @@ jobs:
         echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=:memory:\n" > odbc.ini
         cd psqlodbc
         export ODBCSYSINI=.. && export PSQLODBC_TEST_DSN="DuckDB"
-		# creating contrib_regression database used by some tests
-        (./build/debug/reset-db < sampletables.sql) || (cat /tmp/odbctrace; exit 1)
-		# run supported tests
-        (./build/debug/psql_odbc_test -f ../tools/odbc/supported_tests) || (cat /tmp/odbctrace; exit 1)
+	
+	(./build/debug/reset-db < sampletables.sql) || (cat /tmp/odbctrace; exit 1)
+
+	(./build/debug/psql_odbc_test -f ../tools/odbc/supported_tests) || (cat /tmp/odbctrace; exit 1)
 
 
 
