@@ -188,8 +188,8 @@ public:
 		idx_t max_memory = buffer_manager.GetMaxMemory();
 		idx_t num_threads = task_scheduler.NumberOfThreads();
 		// Memory usage per thread should scale with max mem / num threads
-		// We take 10% of the max memory, to be VERY conservative
-		return size_in_bytes > (0.1 * max_memory / num_threads);
+		// We take 15% of the max memory, to be VERY conservative
+		return size_in_bytes > (0.15 * max_memory / num_threads);
 	}
 
 	//! Radix/memcmp sortable data
@@ -348,6 +348,7 @@ public:
 		data_blocks.emplace_back(buffer_manager, state.block_capacity, layout.GetRowWidth());
 		if (!layout.AllConstant() && state.external) {
 			heap_blocks.emplace_back(buffer_manager, heap_capacity, 1);
+			D_ASSERT(data_blocks.size() == heap_blocks.size());
 		}
 	}
 	//! Unpin blocks and reset read indices to the given indices
@@ -906,19 +907,14 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 		Store<idx_t>(i, idx_dataptr);
 		idx_dataptr += sorting_state.entry_size;
 	}
-	// All constant size sorting columns: just radix sort the whole thing
-	if (sorting_state.all_constant) {
-		RadixSort(buffer_manager, dataptr, count, 0, sorting_state.comparison_size, sorting_state);
-		return;
-	}
-	// Variable size sorting columns: radix sort and break ties
+	// Radix sort and break ties until no more ties, or until all columns are sorted
 	idx_t sorting_size = 0;
 	idx_t col_offset = 0;
 	unique_ptr<BufferHandle> ties_handle;
 	bool *ties = nullptr;
 	for (idx_t i = 0; i < sorting_state.column_count; i++) {
 		sorting_size += sorting_state.column_sizes[i];
-		if (sorting_state.constant_size[i] && i < sorting_state.column_count - 1) {
+		if (sorting_state.constant_size[i] && i < sorting_state.column_count - 1 && sorting_size < 32) {
 			// Add columns to the sorting size until we reach a variable size column, or the last column
 			continue;
 		}
@@ -946,10 +942,12 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 			break;
 		}
 
-		SortTiedBlobs(buffer_manager, sb, ties, dataptr, count, i, sorting_state);
-		if (!AnyTies(ties, count)) {
-			// No more ties after tie-breaking, stop
-			break;
+		if (!sorting_state.constant_size[i]) {
+			SortTiedBlobs(buffer_manager, sb, ties, dataptr, count, i, sorting_state);
+			if (!AnyTies(ties, count)) {
+				// No more ties after tie-breaking, stop
+				break;
+			}
 		}
 
 		col_offset += sorting_size;
@@ -1141,11 +1139,13 @@ public:
 				         left.entry_idx == left.blob_sorting_data->entry_idx);
 				D_ASSERT(right.block_idx == right.blob_sorting_data->block_idx &&
 				         right.entry_idx == right.blob_sorting_data->entry_idx);
+				D_ASSERT(result->radix_sorting_data.size() == result->blob_sorting_data->data_blocks.size());
 			}
 			Merge(*result->payload_data, *left.payload_data, *right.payload_data, next, left_smaller, next_entry_sizes);
 			D_ASSERT(left.block_idx == left.payload_data->block_idx && left.entry_idx == left.payload_data->entry_idx);
 			D_ASSERT(right.block_idx == right.payload_data->block_idx &&
 			         right.entry_idx == right.payload_data->entry_idx);
+			D_ASSERT(result->radix_sorting_data.size() == result->payload_data->data_blocks.size());
 		}
 		D_ASSERT(result->Count() == l_count + r_count);
 
@@ -1656,13 +1656,11 @@ public:
 				D_ASSERT(result_data_block->count == result_heap_block->count);
 			}
 			// Move to new data blocks (if needed)
-			if (l_data.block_idx < l_data.data_blocks.size() &&
-			    l_data.entry_idx == l_data.data_blocks[l_data.block_idx].count) {
+			if (!l_done && l_data.entry_idx == l_data.data_blocks[l_data.block_idx].count) {
 				l_data.block_idx++;
 				l_data.entry_idx = 0;
 			}
-			if (r_data.block_idx < r_data.data_blocks.size() &&
-			    r_data.entry_idx == r_data.data_blocks[r_data.block_idx].count) {
+			if (!r_done && r_data.entry_idx == r_data.data_blocks[r_data.block_idx].count) {
 				r_data.block_idx++;
 				r_data.entry_idx = 0;
 			}
