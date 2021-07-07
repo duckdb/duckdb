@@ -1542,12 +1542,12 @@ public:
 			const idx_t &r_count = !r_done ? r_data.data_blocks[r_data.block_idx].count : 0;
 			// Create new result data block (if needed)
 			if (result_data_block->count == result_data_block->capacity) {
+				// Shrink down the last heap block to fit the data
 				if (!layout.AllConstant() && state.external &&
-				    result_heap_block->byte_offset < result_heap_block->capacity) {
-					// Shrink down the last heap block to fit the data exactly
-					idx_t new_capacity = MaxValue(result_heap_block->byte_offset, (idx_t)Storage::BLOCK_SIZE);
-					buffer_manager.ReAllocate(result_heap_block->block, new_capacity);
-					result_heap_block->capacity = new_capacity;
+				    result_heap_block->byte_offset < result_heap_block->capacity &&
+				    result_heap_block->byte_offset >= Storage::BLOCK_SIZE) {
+					buffer_manager.ReAllocate(result_heap_block->block, result_heap_block->byte_offset);
+					result_heap_block->capacity = result_heap_block->byte_offset;
 				}
 				result_data.CreateBlock();
 				result_data_block = &result_data.data_blocks.back();
