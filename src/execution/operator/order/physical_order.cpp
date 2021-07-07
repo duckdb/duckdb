@@ -305,8 +305,12 @@ public:
 	}
 	//! Number of rows that this object holds
 	idx_t Count() {
-		idx_t count = std::accumulate(data_blocks.begin(), data_blocks.end(), 0,
+		idx_t count = std::accumulate(data_blocks.begin(), data_blocks.end(), (idx_t)0,
 		                              [](idx_t a, const RowDataBlock &b) { return a + b.count; });
+		if (!layout.AllConstant() && state.external) {
+			D_ASSERT(count == std::accumulate(heap_blocks.begin(), heap_blocks.end(), (idx_t)0,
+			                                  [](idx_t a, const RowDataBlock &b) { return a + b.count; }));
+		}
 		return count;
 	}
 	//! Pin the current block such that it can be read
@@ -1098,19 +1102,21 @@ public:
 
 	void Execute() override {
 		ComputeWork();
-		D_ASSERT(left_block->radix_sorting_data.size() == left_block->payload_data->data_blocks.size());
-		D_ASSERT(right_block->radix_sorting_data.size() == right_block->payload_data->data_blocks.size());
-		if (!state.payload_layout.AllConstant()) {
-			D_ASSERT(left_block->payload_data->data_blocks.size() == left_block->payload_data->heap_blocks.size());
-			D_ASSERT(right_block->payload_data->data_blocks.size() == right_block->payload_data->heap_blocks.size());
+		auto &left = *left_block;
+		auto &right = *right_block;
+		D_ASSERT(left.radix_sorting_data.size() == left.payload_data->data_blocks.size());
+		D_ASSERT(right.radix_sorting_data.size() == right.payload_data->data_blocks.size());
+		if (!state.payload_layout.AllConstant() && state.external) {
+			D_ASSERT(left.payload_data->data_blocks.size() == left.payload_data->heap_blocks.size());
+			D_ASSERT(right.payload_data->data_blocks.size() == right.payload_data->heap_blocks.size());
 		}
 		if (!sorting_state.all_constant) {
-			D_ASSERT(left_block->radix_sorting_data.size() == left_block->blob_sorting_data->data_blocks.size());
-			D_ASSERT(right_block->radix_sorting_data.size() == right_block->blob_sorting_data->data_blocks.size());
-			D_ASSERT(left_block->blob_sorting_data->data_blocks.size() ==
-			         left_block->blob_sorting_data->heap_blocks.size());
-			D_ASSERT(right_block->blob_sorting_data->data_blocks.size() ==
-			         right_block->blob_sorting_data->heap_blocks.size());
+			D_ASSERT(left.radix_sorting_data.size() == left.blob_sorting_data->data_blocks.size());
+			D_ASSERT(right.radix_sorting_data.size() == right.blob_sorting_data->data_blocks.size());
+			if (state.external) {
+				D_ASSERT(left.blob_sorting_data->data_blocks.size() == left.blob_sorting_data->heap_blocks.size());
+				D_ASSERT(right.blob_sorting_data->data_blocks.size() == right.blob_sorting_data->heap_blocks.size());
+			}
 		}
 		// Set up the write block
 		result->InitializeWrite();
@@ -1118,8 +1124,6 @@ public:
 		bool left_smaller[STANDARD_VECTOR_SIZE];
 		idx_t next_entry_sizes[STANDARD_VECTOR_SIZE];
 		// Merge loop
-		auto &left = *left_block;
-		auto &right = *right_block;
 		auto l_count = left.Remaining();
 		auto r_count = right.Remaining();
 		while (true) {
