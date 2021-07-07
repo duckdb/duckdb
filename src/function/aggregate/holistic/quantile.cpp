@@ -24,6 +24,11 @@ struct QuantileState {
 	idx_t len;
 	idx_t pos;
 
+	// List temporaries
+	std::vector<idx_t> disturbed;
+	std::vector<idx_t> lower;
+	std::vector<idx_t> upper;
+
 	QuantileState() : v(nullptr), len(0), pos(0) {
 	}
 
@@ -146,10 +151,16 @@ struct IndirectLess {
 };
 
 struct QuantileBindData : public FunctionData {
-	explicit QuantileBindData(float quantile_p) : quantiles(1, quantile_p) {
+	explicit QuantileBindData(float quantile_p) : quantiles(1, quantile_p), order(1, 0) {
 	}
 
 	explicit QuantileBindData(const vector<float> &quantiles_p) : quantiles(quantiles_p) {
+		for (idx_t i = 0; i < quantiles.size(); ++i) {
+			order.push_back(i);
+		}
+
+		IndirectLess<float> lt(quantiles.data());
+		std::sort(order.begin(), order.end(), lt);
 	}
 
 	unique_ptr<FunctionData> Copy() override {
@@ -162,6 +173,7 @@ struct QuantileBindData : public FunctionData {
 	}
 
 	vector<float> quantiles;
+	vector<idx_t> order;
 };
 
 template <typename SAVE_TYPE>
@@ -387,13 +399,90 @@ struct DiscreteQuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 		}
 		target[idx].length = bind_data->quantiles.size();
 	}
+
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
+	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &list) {
+		D_ASSERT(bind_data_p);
+		auto bind_data = (QuantileBindData *)bind_data_p;
+
+		// Result is a constant LIST<RESULT_TYPE> with a fixed size
+		auto ldata = ConstantVector::GetData<list_entry_t>(list);
+		auto &lmask = ConstantVector::Validity(list);
+		ldata[0].offset = 0;
+		ldata[0].length = bind_data->quantiles.size();
+
+		ListVector::SetListSize(list, ldata[0].length);
+		auto &result = ListVector::GetEntry(list);
+		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+
+		//  Lazily initialise frame state
+		state->pos = frame.second - frame.first;
+		state->template Resize<idx_t>(state->pos);
+
+		D_ASSERT(state->v);
+		auto index = (idx_t *)state->v;
+
+		bool fixed = false;
+		auto j = state->pos;
+		auto valid = state->pos;
+		if (dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+			//  Fixed frame size
+			j = ReplaceIndex(state, frame, prev);
+			fixed = true;
+		} else {
+			ReuseIndexes(index, frame, prev);
+			if (!dmask.AllValid()) {
+				IndirectNotNull not_null(dmask, MinValue(frame.first, prev.first));
+				valid = std::partition(index, index + valid, not_null) - index;
+			}
+		}
+
+		if (!valid) {
+			lmask.Set(0, false);
+			return;
+		}
+
+		// First pass: Fill in the undisturbed values and find the islands of stability.
+		state->disturbed.clear();
+		state->lower.clear();
+		state->upper.clear();
+		idx_t lb = 0;
+		for (idx_t i = 0; i < bind_data->order.size(); ++i) {
+			const auto q = bind_data->order[i];
+			const auto &quantile = bind_data->quantiles[q];
+			auto offset = (idx_t)(double(valid - 1) * quantile);
+			if (fixed && CanReplace(state, data, j, offset, offset)) {
+				rdata[q] = RESULT_TYPE(data[index[offset]]);
+				state->upper.resize(state->lower.size(), offset);
+				lb = offset + 1;
+			} else {
+				state->disturbed.push_back(q);
+				state->lower.push_back(lb);
+			}
+		}
+		state->upper.resize(state->lower.size(), valid);
+
+		//	Second pass: select the disturbed values
+		IndirectLess<INPUT_TYPE> lt(data);
+		for (idx_t i = 0; i < state->disturbed.size(); ++i) {
+			const auto &q = state->disturbed[i];
+			const auto &quantile = bind_data->quantiles[q];
+			const auto offset = (idx_t)(double(valid - 1) * quantile);
+
+			std::nth_element(index + state->lower[i], index + offset, index + state->upper[i], lt);
+			rdata[q] = RESULT_TYPE(data[index[offset]]);
+		}
+	}
 };
 
 template <typename INPUT_TYPE>
 AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalType &type) {
 	using STATE = QuantileState;
 	using OP = DiscreteQuantileListOperation<INPUT_TYPE>;
-	return QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
+	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
+	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
+	return fun;
 }
 
 AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &type) {
