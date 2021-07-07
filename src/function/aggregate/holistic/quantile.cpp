@@ -267,7 +267,10 @@ struct DiscreteQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result, ValidityMask &rmask) {
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result) {
+		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
+		auto &rmask = ConstantVector::Validity(result);
+
 		//  Lazily initialise frame state
 		state->pos = frame.second - frame.first;
 		state->template Resize<idx_t>(state->pos);
@@ -302,7 +305,7 @@ struct DiscreteQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 				rmask.Set(0, false);
 			}
 		}
-		result[0] = RESULT_TYPE(data[index[offset]]);
+		rdata[0] = RESULT_TYPE(data[index[offset]]);
 	}
 };
 
@@ -478,7 +481,10 @@ struct ContinuousQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result, ValidityMask &rmask) {
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result) {
+		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
+		auto &rmask = ConstantVector::Validity(result);
+
 		//  Lazily initialise frame state
 		state->pos = frame.second - frame.first;
 		state->template Resize<idx_t>(state->pos);
@@ -528,9 +534,9 @@ struct ContinuousQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 			auto lo = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[FRN]]);
 			auto hi = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[CRN]]);
 			auto delta = hi - lo;
-			result[0] = RESULT_TYPE(lo + delta * (RN - FRN));
+			rdata[0] = RESULT_TYPE(lo + delta * (RN - FRN));
 		} else {
-			result[0] = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[FRN]]);
+			rdata[0] = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[FRN]]);
 		}
 	}
 };
