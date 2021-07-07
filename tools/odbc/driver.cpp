@@ -84,15 +84,15 @@ static void GetDatabaseName(SQLCHAR *dsn, string &new_db_name) {
 	string dsn_str((char *)dsn);
 
 	auto pos_db = dsn_str.find("Database");
-	if(pos_db != string::npos) {
+	if (pos_db != string::npos) {
 		auto pos_equal = dsn_str.find('=', pos_db);
-		if(pos_equal == string::npos) {
+		if (pos_equal == string::npos) {
 			// an equal '=' char must be present (syntax error)
 			return;
 		}
 
 		auto pos_end_db = dsn_str.find(';', pos_equal);
-		if(pos_end_db == string::npos) {
+		if (pos_end_db == string::npos) {
 			// there is no ';', reached the string end
 			pos_end_db = dsn_str.size();
 		}

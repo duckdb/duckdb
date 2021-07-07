@@ -127,7 +127,7 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 			return SQL_ERROR;
 		}
 
-		if(parameter_number > stmt->params.size()) {
+		if (parameter_number > stmt->params.size()) {
 			// need to resize because SQLFreeStmt might clear it before
 			stmt->params.resize(parameter_number);
 		}
