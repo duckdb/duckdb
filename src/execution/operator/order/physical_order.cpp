@@ -1100,9 +1100,17 @@ public:
 		ComputeWork();
 		D_ASSERT(left_block->radix_sorting_data.size() == left_block->payload_data->data_blocks.size());
 		D_ASSERT(right_block->radix_sorting_data.size() == right_block->payload_data->data_blocks.size());
+		if (!state.payload_layout.AllConstant()) {
+			D_ASSERT(left_block->payload_data->data_blocks.size() == left_block->payload_data->heap_blocks.size());
+			D_ASSERT(right_block->payload_data->data_blocks.size() == right_block->payload_data->heap_blocks.size());
+		}
 		if (!sorting_state.all_constant) {
 			D_ASSERT(left_block->radix_sorting_data.size() == left_block->blob_sorting_data->data_blocks.size());
 			D_ASSERT(right_block->radix_sorting_data.size() == right_block->blob_sorting_data->data_blocks.size());
+			D_ASSERT(left_block->blob_sorting_data->data_blocks.size() ==
+			         left_block->blob_sorting_data->heap_blocks.size());
+			D_ASSERT(right_block->blob_sorting_data->data_blocks.size() ==
+			         right_block->blob_sorting_data->heap_blocks.size());
 		}
 		// Set up the write block
 		result->InitializeWrite();
