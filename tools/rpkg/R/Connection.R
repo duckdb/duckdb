@@ -222,7 +222,7 @@ setMethod(
     dbGetQuery(
       conn,
       SQL(
-        "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
+        "SELECT name FROM sqlite_master WHERE type='table' OR type='view' ORDER BY name"
       )
     )[[1]]
   }
