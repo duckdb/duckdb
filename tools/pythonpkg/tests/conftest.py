@@ -7,11 +7,10 @@ import duckdb
 
 @pytest.fixture(scope="function")
 def duckdb_empty_cursor(request):
-    test_dbfarm = tmp_path.resolve().as_posix()
-
     connection = duckdb.connect('')
     cursor = connection.cursor()
     return cursor
+
 
 @pytest.fixture(scope="function")
 def duckdb_cursor(request):
