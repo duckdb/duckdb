@@ -8,12 +8,14 @@ namespace duckdb {
 
 using JoinRelationTreeNode = JoinRelationSetManager::JoinRelationTreeNode;
 
+// LCOV_EXCL_START
 string JoinRelationSet::ToString() const {
 	string result = "[";
 	result += StringUtil::Join(relations, count, ", ", [](const idx_t &relation) { return to_string(relation); });
 	result += "]";
 	return result;
 }
+// LCOV_EXCL_STOP
 
 //! Returns true if sub is a subset of super
 bool JoinRelationSet::IsSubset(JoinRelationSet *super, JoinRelationSet *sub) {

@@ -52,9 +52,9 @@ void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, Expressi
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		VectorOperations::NotDistinctFrom(left, right, result, count);
 		break;
-	default:
-		throw NotImplementedException("Unknown comparison type!");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unknown comparison type!");
+	} // LCOV_EXCL_STOP
 }
 
 template <typename OP>
@@ -99,9 +99,9 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 		return NestedSelectOperation<OP>(left, right, sel, count, true_sel, false_sel);
-	default:
+	default: // LCOV_EXCL_START
 		throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
-	}
+	} // LCOV_EXCL_STOP
 }
 
 struct NestedSelector {
@@ -298,9 +298,9 @@ idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, Expressi
 		return VectorOperations::DistinctFrom(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		return VectorOperations::NotDistinctFrom(left, right, sel, count, true_sel, false_sel);
-	default:
-		throw NotImplementedException("Unknown comparison type!");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unknown comparison type!");
+	} // LCOV_EXCL_STOP
 }
 
 } // namespace duckdb

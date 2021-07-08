@@ -156,8 +156,6 @@ string ExpressionTypeToOperator(ExpressionType type) {
 		return "AND";
 	case ExpressionType::CONJUNCTION_OR:
 		return "OR";
-	case ExpressionType::STAR:
-		return "*";
 	default:
 		return "";
 	}
@@ -184,10 +182,9 @@ ExpressionType NegateComparisionExpression(ExpressionType type) {
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		negated_type = ExpressionType::COMPARE_LESSTHAN;
 		break;
-
-	default:
-		throw Exception("Unsupported comparison type in negation");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unsupported comparison type in negation");
+	} // LCOV_EXCL_STOP
 	return negated_type;
 }
 
@@ -212,10 +209,9 @@ ExpressionType FlipComparisionExpression(ExpressionType type) {
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		flipped_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
 		break;
-
-	default:
-		throw Exception("Unsupported comparison type in flip");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unsupported comparison type in flip");
+	} // LCOV_EXCL_STOP
 	return flipped_type;
 }
 

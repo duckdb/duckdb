@@ -172,6 +172,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	profiler->EndPhase();
 
 	auto plan = move(planner.plan);
+#ifdef DEBUG
+	D_ASSERT(!plan->ToString().empty());
+#endif
 	// extract the result column names from the plan
 	result->read_only = planner.read_only;
 	result->requires_valid_transaction = planner.requires_valid_transaction;
@@ -187,6 +190,10 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		plan = optimizer.Optimize(move(plan));
 		D_ASSERT(plan);
 		profiler->EndPhase();
+
+#ifdef DEBUG
+		D_ASSERT(!plan->ToString().empty());
+#endif
 	}
 
 	profiler->StartPhase("physical_planner");
@@ -195,6 +202,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	auto physical_plan = physical_planner.CreatePlan(move(plan));
 	profiler->EndPhase();
 
+#ifdef DEBUG
+	D_ASSERT(!physical_plan->ToString().empty());
+#endif
 	result->plan = move(physical_plan);
 	return result;
 }
