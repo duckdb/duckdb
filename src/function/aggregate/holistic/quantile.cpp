@@ -455,11 +455,11 @@ struct DiscreteQuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 			if (fixed && CanReplace(state, data, j, offset, offset)) {
 				rdata[q] = RESULT_TYPE(data[index[offset]]);
 				state->upper.resize(state->lower.size(), offset);
-				lb = offset + 1;
 			} else {
 				state->disturbed.push_back(q);
-				state->lower.push_back(lb);
+				state->lower.push_back(std::min(lb, offset));
 			}
+			lb = offset + 1;
 		}
 		state->upper.resize(state->lower.size(), valid);
 

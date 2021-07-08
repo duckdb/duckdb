@@ -9,7 +9,7 @@ statement ok
 create table rank100 as
     select b % 100 as a, b
     from (
-        select * from range(0, 1000) tbl(b)
+        select * from range(0, 10000000) tbl(b)
     ) q;
 
 #   Fixed continuous single
@@ -57,11 +57,6 @@ from (
         rows between cast(?1 as integer) preceding and current row) as iqr
     from rank100
     ) q;
-
-query II
-execute fixed_disc_iqr(97)
-----
-[0, 0, 0]	[26, 50, 74]
 
 # Checksum the queries
 query I
