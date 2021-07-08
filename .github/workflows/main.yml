@@ -665,7 +665,6 @@ jobs:
       - name: CodeCov Upload
         uses: codecov/codecov-action@v1
         with:
-          token: ${{ secrets.CODECOV_API_KEY }} # not required for public repos
           files: lcov.info
           fail_ci_if_error: true
 
