@@ -35,7 +35,8 @@ static idx_t GetSortingColSize(const LogicalType &type) {
 			// Nested types get an additional validity byte for every nested layer
 			switch (type.InternalType()) {
 			case PhysicalType::LIST:
-				return 1 + GetSortingColSize(ListType::GetChildType(type));
+				// Lists get another byte to denote the empty list
+				return 2 + GetSortingColSize(ListType::GetChildType(type));
 				break;
 			case PhysicalType::MAP:
 			case PhysicalType::STRUCT:
@@ -275,7 +276,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		// TODO: use actual string statistics
 		lstate.radix_sorting_data->SerializeVectorSortable(sort.data[sort_col], sort.size(), lstate.sel_ptr,
 		                                                   sort.size(), data_pointers, desc, has_null, nulls_first,
-		                                                   string_t::INLINE_LENGTH);
+		                                                   string_t::INLINE_LENGTH, sorting_state.column_sizes[sort_col]);
 	}
 
 	// Also fully serialize blob sorting columns (to be able to break ties

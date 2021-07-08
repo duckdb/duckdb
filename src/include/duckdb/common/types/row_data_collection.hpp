@@ -61,7 +61,7 @@ public:
 public:
 	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
 	                             data_ptr_t key_locations[], bool desc, bool has_null, bool nulls_first,
-	                             idx_t prefix_len, idx_t offset);
+	                             idx_t prefix_len, idx_t width, idx_t offset = 0);
 
 	static void ComputeEntrySizes(Vector &v, VectorData &vdata, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
 	                              const SelectionVector &sel, idx_t offset = 0);
@@ -94,7 +94,8 @@ private:
 	                                   const bool nulls_first, const idx_t prefix_len, const idx_t offset);
 	void SerializeListVectorSortable(Vector &v, VectorData &vdata, const SelectionVector &sel, idx_t add_count,
 	                                 data_ptr_t key_locations[], const bool desc, const bool has_null,
-	                                 const bool nulls_first, const idx_t prefix_len, const idx_t offset);
+	                                 const bool nulls_first, const idx_t prefix_len, const idx_t width,
+	                                 const idx_t offset);
 
 	static void ComputeStringEntrySizes(VectorData &col, idx_t entry_sizes[], const idx_t ser_count,
 	                                    const SelectionVector &sel, const idx_t offset);
