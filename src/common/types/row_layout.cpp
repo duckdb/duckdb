@@ -59,8 +59,9 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p,
 		if (TypeIsConstantSize(internal_type) || internal_type == PhysicalType::VARCHAR) {
 			row_width += GetTypeIdSize(type.InternalType());
 		} else {
-			// Variable size types use pointers to the actual data.
-			row_width += sizeof(data_ptr_t);
+			// Variable size types use pointers to the actual data (can be swizzled).
+			// Again, we would use sizeof(data_ptr_t), but this is not guaranteed to be equal to sizeof(idx_t).
+			row_width += sizeof(idx_t);
 		}
 	}
 
