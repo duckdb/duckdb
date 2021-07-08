@@ -16,9 +16,9 @@ IndexCatalogEntry::~IndexCatalogEntry() {
 }
 
 string IndexCatalogEntry::ToSQL() {
-	if (sql.empty()) {
-		throw NotImplementedException("Cannot convert INDEX to SQL because it was not created with a SQL statement");
-	}
+	if (sql.empty()) { // LCOV_EXCL_START
+		throw InternalException("Cannot convert INDEX to SQL because it was not created with a SQL statement");
+	} // LCOV_EXCL_STOP
 	return sql;
 }
 

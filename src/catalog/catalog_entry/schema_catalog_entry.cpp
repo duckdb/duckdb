@@ -146,9 +146,9 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
 		                                                                          (CreateAggregateFunctionInfo *)info);
 		break;
-	default:
-		throw CatalogException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
+	} // LCOV_EXCL_STOP
 	return AddEntry(context, move(function), info->on_conflict);
 }
 
@@ -167,9 +167,9 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
 	}
-	if (!set.DropEntry(context, info->name, info->cascade)) {
+	if (!set.DropEntry(context, info->name, info->cascade)) { // LCOV_EXCL_START
 		throw InternalException("Could not drop element because of an internal error");
-	}
+	} // LCOV_EXCL_STOP
 }
 
 void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
@@ -249,9 +249,9 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 		return sequences;
 	case CatalogType::COLLATION_ENTRY:
 		return collations;
-	default:
-		throw CatalogException("Unsupported catalog type in schema");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unsupported catalog type in schema");
+	} // LCOV_EXCL_STOP
 }
 
 } // namespace duckdb

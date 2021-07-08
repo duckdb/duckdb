@@ -130,9 +130,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto change_type_info = (ChangeColumnTypeInfo *)table_info;
 		return ChangeColumnType(context, *change_type_info);
 	}
-	default:
+	default: // LCOV_EXCL_START
 		throw InternalException("Unrecognized alter table type!");
-	}
+	} // LCOV_EXCL_STOP
 }
 
 static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
@@ -185,9 +185,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 			}
 			break;
 		}
-		default:
-			throw CatalogException("Unsupported constraint for entry!");
-		}
+		default: // LCOV_EXCL_START
+			throw InternalException("Unsupported constraint for entry!");
+		} // LCOV_EXCL_STOP
 		create_info->constraints.push_back(move(copy));
 	}
 	auto binder = Binder::CreateBinder(context);
@@ -286,9 +286,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			create_info->constraints.push_back(move(copy));
 			break;
 		}
-		default:
+		default: // LCOV_EXCL_START
 			throw InternalException("Unsupported constraint for entry!");
-		}
+		} // LCOV_EXCL_STOP
 	}
 
 	auto binder = Binder::CreateBinder(context);
@@ -360,9 +360,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			}
 			break;
 		}
-		default:
+		default: // LCOV_EXCL_START
 			throw InternalException("Unsupported constraint for entry!");
-		}
+		} // LCOV_EXCL_STOP
 		create_info->constraints.push_back(move(constraint));
 	}
 
@@ -397,18 +397,6 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 		types.push_back(it.type);
 	}
 	return types;
-}
-
-vector<LogicalType> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
-	vector<LogicalType> result;
-	for (auto &index : column_ids) {
-		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(LOGICAL_ROW_TYPE);
-		} else {
-			result.push_back(columns[index].type);
-		}
-	}
-	return result;
 }
 
 void TableCatalogEntry::Serialize(Serializer &serializer) {

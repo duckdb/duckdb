@@ -118,8 +118,6 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "BOUND_FUNCTION";
 	case ExpressionType::BOUND_AGGREGATE:
 		return "BOUND_AGGREGATE";
-	case ExpressionType::INVALID:
-		return "INVALID";
 	case ExpressionType::ARRAY_CONSTRUCTOR:
 		return "ARRAY_CONSTRUCTOR";
 	case ExpressionType::TABLE_STAR:
@@ -132,9 +130,11 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "POSITIONAL_REFERENCE";
 	case ExpressionType::LAMBDA:
 		return "LAMBDA";
+	case ExpressionType::INVALID: // LCOV_EXCL_START
+		break;
 	}
 	return "INVALID";
-}
+} // LCOV_EXCL_STOP
 
 string ExpressionTypeToOperator(ExpressionType type) {
 	switch (type) {

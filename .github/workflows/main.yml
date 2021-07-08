@@ -654,13 +654,13 @@ jobs:
       - name: Run Tests
         run: |
           mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_ARROW_ABI_TEST=1 -DBUILD_PARQUET_EXTENSION=1 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
           build/coverage/test/unittest
 
       - name: Generate Coverage
         run: |
           lcov --directory . --base-directory . --no-external --capture --output-file coverage.info
-          lcov --remove coverage.info '/usr*' '*/cl.hpp' '*/tools/*' '*/benchmark/*' '*/examples/*' '*/third_party/*' '*/test/*' '*/extension/*' -o lcov.info
+          lcov --remove coverage.info '/usr*' '*/cl.hpp' '*/tools/*' '*/benchmark/*' '*/examples/*' '*/third_party/*' '*/test/*' -o lcov.info
 
       - name: CodeCov Upload
         uses: codecov/codecov-action@v1

@@ -32,12 +32,12 @@ string CatalogTypeToString(CatalogType type) {
 		return "Prepared Statement";
 	case CatalogType::SEQUENCE_ENTRY:
 		return "Sequence";
-	case CatalogType::INVALID:
+	case CatalogType::INVALID: // LCOV_EXCL_START
 	case CatalogType::DELETED_ENTRY:
 	case CatalogType::UPDATED_ENTRY:
-		return "Invalid";
+		break;
 	}
-	return "Unknown";
-}
+	return "INVALID";
+} // LCOV_EXCL_STOP
 
 } // namespace duckdb

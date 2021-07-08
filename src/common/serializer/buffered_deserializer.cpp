@@ -12,9 +12,9 @@ BufferedDeserializer::BufferedDeserializer(BufferedSerializer &serializer)
 }
 
 void BufferedDeserializer::ReadData(data_ptr_t buffer, idx_t read_size) {
-	if (ptr + read_size > endptr) {
+	if (ptr + read_size > endptr) { // LCOV_EXCL_START
 		throw SerializationException("Failed to deserialize: not enough data in buffer to fulfill read request");
-	}
+	} // LCOV_EXCL_STOP
 	memcpy(buffer, ptr, read_size);
 	ptr += read_size;
 }

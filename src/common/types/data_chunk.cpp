@@ -226,9 +226,9 @@ void DataChunk::Verify() {
 #endif
 }
 
-void DataChunk::Print() {
+void DataChunk::Print() { // LCOV_EXCL_START
 	Printer::Print(ToString());
-}
+} // LCOV_EXCL_STOP
 
 struct DuckDBArrowArrayChildHolder {
 	ArrowArray array;

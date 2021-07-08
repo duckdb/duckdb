@@ -50,11 +50,11 @@ string StatementTypeToString(StatementType type) {
 		return "SET";
 	case StatementType::LOAD_STATEMENT:
 		return "LOAD";
-	case StatementType::INVALID_STATEMENT:
-		return "INVALID";
+	case StatementType::INVALID_STATEMENT:  // LCOV_EXCL_START
+		break;
 	}
 	return "INVALID";
-}
+} // LCOV_EXCL_STOP
 
 bool StatementTypeReturnChanges(StatementType type) {
 	switch (type) {

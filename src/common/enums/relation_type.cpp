@@ -50,10 +50,12 @@ string RelationTypeToString(RelationType type) {
 		return "TABLE_FUNCTION_RELATION";
 	case RelationType::VIEW_RELATION:
 		return "VIEW_RELATION";
-	case RelationType::INVALID_RELATION:
-	default:
-		return "INVALID_RELATION";
+	case RelationType::QUERY_RELATION:
+		return "QUERY_RELATION";
+	case RelationType::INVALID_RELATION: // LCOV_EXCL_START
+		break;
 	}
-}
+	return "INVALID_RELATION";
+}  // LCOV_EXCL_STOP
 
 } // namespace duckdb

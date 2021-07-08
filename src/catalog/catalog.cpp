@@ -135,9 +135,7 @@ CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *in
 }
 
 void Catalog::DropSchema(ClientContext &context, DropInfo *info) {
-	if (info->name.empty()) {
-		throw CatalogException("Schema not specified");
-	}
+	D_ASSERT(!info->name.empty());
 	ModifyCatalog();
 	if (!schemas->DropEntry(context, info->name, info->cascade)) {
 		if (!info->if_exists) {
@@ -170,9 +168,7 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name,
                                        QueryErrorContext error_context) {
-	if (schema_name.empty()) {
-		throw CatalogException("Schema not specified");
-	}
+	D_ASSERT(!schema_name.empty());
 	if (schema_name == TEMP_SCHEMA) {
 		return context.temporary_objects.get();
 	}
@@ -192,9 +188,9 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
                                 bool if_exists, QueryErrorContext error_context) {
 	if (schema_name.empty()) {
 		// no schema provided: check the catalog search path in order
-		if (context.catalog_search_path.empty()) {
+		if (context.catalog_search_path.empty()) { // LCOV_EXCL_START
 			throw InternalException("Empty catalog search path");
-		}
+		} // LCOV_EXCL_STOP
 		schema_name = DEFAULT_SCHEMA;
 		for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
 			auto entry = GetEntry(context, type, context.catalog_search_path[i], name, true);
@@ -205,19 +201,6 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
 	}
 	auto schema = GetSchema(context, schema_name, error_context);
 	return schema->GetEntry(context, type, name, if_exists, error_context);
-}
-
-template <>
-ViewCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name, const string &name, bool if_exists,
-                                    QueryErrorContext error_context) {
-	auto entry = GetEntry(context, CatalogType::VIEW_ENTRY, move(schema_name), name, if_exists);
-	if (!entry) {
-		return nullptr;
-	}
-	if (entry->type != CatalogType::VIEW_ENTRY) {
-		throw CatalogException("%s is not a view", name);
-	}
-	return (ViewCatalogEntry *)entry;
 }
 
 template <>
