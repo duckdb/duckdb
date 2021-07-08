@@ -11,7 +11,8 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 		if (stmt->chunk) {
 			stmt->chunk.reset();
 		}
-		stmt->params.resize(0);
+		// we should not clear the parameters because of SQLExecDirect may reuse them
+		// stmt->params.resize(0);
 		stmt->bound_cols.resize(0);
 
 		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
