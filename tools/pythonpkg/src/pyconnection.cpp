@@ -323,7 +323,7 @@ DuckDBPyConnection *DuckDBPyConnection::Rollback() {
 py::object DuckDBPyConnection::GetAttr(const py::str &key) {
 	if (key.cast<string>() == "description") {
 		if (!result) {
-			throw std::runtime_error("no open result set");
+			return py::none();
 		}
 		return result->Description();
 	}
