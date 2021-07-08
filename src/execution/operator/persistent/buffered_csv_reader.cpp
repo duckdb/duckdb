@@ -123,11 +123,16 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
+BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, BufferedCSVReaderOptions options_p,
+					const vector<LogicalType> &requested_types)
+    : fs(fs_p), options(move(options_p)), buffer_size(0), position(0), start(0) {
+	file_handle = OpenCSV(options);
+	Initialize(requested_types);
+}
+
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : fs(FileSystem::GetFileSystem(context)), options(move(options_p)), buffer_size(0), position(0), start(0) {
-	file_handle = OpenCSV(context, options);
-	Initialize(requested_types);
+    : BufferedCSVReader(FileSystem::GetFileSystem(context), move(options_p), requested_types) {
 }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
@@ -151,7 +156,7 @@ void BufferedCSVReader::PrepareComplexParser() {
 	quote_search = TextSearchShiftArray(options.quote);
 }
 
-unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options) {
+unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(const BufferedCSVReaderOptions &options) {
 	this->compression = FileCompressionType::UNCOMPRESSED;
 	if (options.compression == "infer" || options.compression == "auto") {
 		this->compression = FileCompressionType::AUTO_DETECT;
