@@ -531,13 +531,13 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 	}
 }
 
-template <class INPUT_TYPE, class TARGET_TYPE>
+template <class INPUT_TYPE, class TARGET_TYPE, bool DISCRETE>
 static TARGET_TYPE Interpolate(INPUT_TYPE *v_t, const float q, const idx_t n) {
 	const auto RN = ((double)(n - 1) * q);
 	const auto FRN = idx_t(floor(RN));
 	const auto CRN = idx_t(ceil(RN));
 
-	if (CRN == FRN) {
+	if (DISCRETE || CRN == FRN) {
 		std::nth_element(v_t, v_t + FRN, v_t + n);
 		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
 	} else {
@@ -545,6 +545,22 @@ static TARGET_TYPE Interpolate(INPUT_TYPE *v_t, const float q, const idx_t n) {
 		std::nth_element(v_t + FRN, v_t + CRN, v_t + n);
 		auto lo = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
 		auto hi = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[CRN]);
+		auto delta = hi - lo;
+		return lo + delta * (RN - FRN);
+	}
+}
+
+template <class INPUT_TYPE, class TARGET_TYPE, bool DISCRETE>
+static TARGET_TYPE Interpolate(const INPUT_TYPE *v_t, const idx_t *index, const float q, const idx_t n) {
+	const auto RN = ((double)(n - 1) * q);
+	const auto FRN = idx_t(floor(RN));
+	const auto CRN = idx_t(ceil(RN));
+
+	if (DISCRETE || CRN == FRN) {
+		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]]);
+	} else {
+		auto lo = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]]);
+		auto hi = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[CRN]]);
 		auto delta = hi - lo;
 		return lo + delta * (RN - FRN);
 	}
@@ -565,7 +581,7 @@ struct ContinuousQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 		auto bind_data = (QuantileBindData *)bind_data_p;
 		D_ASSERT(bind_data->quantiles.size() == 1);
 		auto v_t = (SAVE_TYPE *)state->v;
-		target[idx] = Interpolate<SAVE_TYPE, RESULT_TYPE>(v_t, bind_data->quantiles[0], state->pos);
+		target[idx] = Interpolate<SAVE_TYPE, RESULT_TYPE, false>(v_t, bind_data->quantiles[0], state->pos);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -586,14 +602,14 @@ struct ContinuousQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 
 		// Find the two positions needed
 		const auto q = bind_data->quantiles[0];
-		auto RN = ((double)(state->pos - 1) * q);
-		auto FRN = idx_t(floor(RN));
-		auto CRN = idx_t(ceil(RN));
 
 		bool same = false;
 		if (dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
-			auto j = ReplaceIndex(state, frame, prev);
+			const auto RN = ((double)(state->pos - 1) * q);
+			const auto FRN = idx_t(floor(RN));
+			const auto CRN = idx_t(ceil(RN));
+			const auto j = ReplaceIndex(state, frame, prev);
 			same = CanReplace(state, data, j, FRN, CRN);
 		} else {
 			ReuseIndexes(index, frame, prev);
@@ -607,25 +623,20 @@ struct ContinuousQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 			}
 			if (valid) {
 				// Update the floor/ceiling
-				RN = ((double)(valid - 1) * q);
-				FRN = idx_t(floor(RN));
-				CRN = idx_t(ceil(RN));
+				const auto RN = ((double)(valid - 1) * q);
+				const auto FRN = idx_t(floor(RN));
+				const auto CRN = idx_t(ceil(RN));
 				IndirectLess<INPUT_TYPE> lt(data);
 				std::nth_element(index, index + FRN, index + valid, lt);
 				if (CRN != FRN) {
 					std::nth_element(index + CRN, index + CRN, index + valid, lt);
 				}
+				rdata[0] = Interpolate<INPUT_TYPE, RESULT_TYPE, false>(data, index, q, valid);
 			} else {
 				rmask.Set(0, false);
 			}
-		}
-		if (CRN != FRN) {
-			auto lo = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[FRN]]);
-			auto hi = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[CRN]]);
-			auto delta = hi - lo;
-			rdata[0] = RESULT_TYPE(lo + delta * (RN - FRN));
 		} else {
-			rdata[0] = Cast::Operation<INPUT_TYPE, RESULT_TYPE>(data[index[FRN]]);
+			rdata[0] = Interpolate<INPUT_TYPE, RESULT_TYPE, false>(data, index, q, state->pos);
 		}
 	}
 };
@@ -700,11 +711,95 @@ struct ContinuousQuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 		target[idx].offset = ListVector::GetListSize(result_list);
 		auto v_t = (SAVE_TYPE *)state->v;
 		for (const auto &quantile : bind_data->quantiles) {
-			auto child = Interpolate<SAVE_TYPE, CHILD_TYPE>(v_t, quantile, state->pos);
+			auto child = Interpolate<SAVE_TYPE, CHILD_TYPE, false>(v_t, quantile, state->pos);
 			auto val = Value::CreateValue(child);
 			ListVector::PushBack(result_list, val);
 		}
 		target[idx].length = bind_data->quantiles.size();
+	}
+
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
+	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &list) {
+		D_ASSERT(bind_data_p);
+		auto bind_data = (QuantileBindData *)bind_data_p;
+
+		// Result is a constant LIST<RESULT_TYPE> with a fixed size
+		auto ldata = ConstantVector::GetData<list_entry_t>(list);
+		auto &lmask = ConstantVector::Validity(list);
+		ldata[0].offset = 0;
+		ldata[0].length = bind_data->quantiles.size();
+
+		ListVector::SetListSize(list, ldata[0].length);
+		auto &result = ListVector::GetEntry(list);
+		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+
+		//  Lazily initialise frame state
+		state->pos = frame.second - frame.first;
+		state->template Resize<idx_t>(state->pos);
+
+		D_ASSERT(state->v);
+		auto index = (idx_t *)state->v;
+
+		bool fixed = false;
+		auto j = state->pos;
+		auto valid = state->pos;
+		if (dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+			//  Fixed frame size
+			j = ReplaceIndex(state, frame, prev);
+			fixed = true;
+		} else {
+			ReuseIndexes(index, frame, prev);
+			if (!dmask.AllValid()) {
+				IndirectNotNull not_null(dmask, MinValue(frame.first, prev.first));
+				valid = std::partition(index, index + valid, not_null) - index;
+			}
+		}
+
+		if (!valid) {
+			lmask.Set(0, false);
+			return;
+		}
+
+		// First pass: Fill in the undisturbed values and find the islands of stability.
+		state->disturbed.clear();
+		state->lower.clear();
+		state->upper.clear();
+		idx_t lb = 0;
+		for (idx_t i = 0; i < bind_data->order.size(); ++i) {
+			const auto q = bind_data->order[i];
+			const auto &quantile = bind_data->quantiles[q];
+			const auto RN = ((double)(state->pos - 1) * quantile);
+			const auto FRN = idx_t(floor(RN));
+			const auto CRN = idx_t(ceil(RN));
+
+			if (fixed && CanReplace(state, data, j, FRN, CRN)) {
+				rdata[q] = Interpolate<INPUT_TYPE, RESULT_TYPE, false>(data, index, quantile, state->pos);
+				state->upper.resize(state->lower.size(), FRN);
+				lb = CRN + 1;
+			} else {
+				state->disturbed.push_back(q);
+				state->lower.push_back(lb);
+			}
+		}
+		state->upper.resize(state->lower.size(), valid);
+
+		//	Second pass: select the disturbed values
+		IndirectLess<INPUT_TYPE> lt(data);
+		for (idx_t i = 0; i < state->disturbed.size(); ++i) {
+			const auto &q = state->disturbed[i];
+			const auto &quantile = bind_data->quantiles[q];
+			// Update the floor/ceiling
+			const auto RN = ((double)(valid - 1) * quantile);
+			const auto FRN = idx_t(floor(RN));
+			const auto CRN = idx_t(ceil(RN));
+			IndirectLess<INPUT_TYPE> lt(data);
+			std::nth_element(index + state->lower[i], index + FRN, index + state->upper[i], lt);
+			if (CRN != FRN) {
+				std::nth_element(index + CRN, index + CRN, index + state->upper[i], lt);
+			}
+			rdata[q] = Interpolate<INPUT_TYPE, RESULT_TYPE, false>(data, index, quantile, valid);
+		}
 	}
 };
 
@@ -713,7 +808,9 @@ AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalT
                                                                   const LogicalType &result_type) {
 	using STATE = QuantileState;
 	using OP = ContinuousQuantileListOperation<INPUT_TYPE, CHILD_TYPE>;
-	return QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);
+	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);
+	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, CHILD_TYPE, OP>;
+	return fun;
 }
 
 AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &type) {
