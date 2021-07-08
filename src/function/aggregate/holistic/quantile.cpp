@@ -278,11 +278,16 @@ struct QuantileOperation {
 };
 
 template <class STATE_TYPE, class RESULT_TYPE, class OP>
-static void ExecuteListFinalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
+static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+
+	D_ASSERT(bind_data_p);
+	auto bind_data = (QuantileBindData *)bind_data_p;
+	ListVector::SetListSize(result, 0);
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ListVector::Reserve(result, bind_data->quantiles.size());
 
 		auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
@@ -291,6 +296,7 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data, Vector 
 	} else {
 		D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
+		ListVector::Reserve(result, count * bind_data->quantiles.size());
 
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
@@ -450,18 +456,27 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 			mask.SetInvalid(idx);
 			return;
 		}
-		D_ASSERT(state->v);
+
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
-		target[idx].offset = ListVector::GetListSize(result_list);
+
+		auto &result = ListVector::GetEntry(result_list);
+		auto ridx = ListVector::GetListSize(result_list);
+		ListVector::Reserve(result_list, ridx + bind_data->quantiles.size());
+		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
+
+		D_ASSERT(state->v);
 		auto v_t = (SAVE_TYPE *)state->v;
+
+		target[idx].offset = ridx;
 		for (const auto &quantile : bind_data->quantiles) {
 			Interpolator<SAVE_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);
-			auto child = interp(v_t);
-			auto val = Value::CreateValue(child);
-			ListVector::PushBack(result_list, val);
+			rdata[ridx] = interp(v_t);
+			++ridx;
 		}
 		target[idx].length = bind_data->quantiles.size();
+
+		ListVector::SetListSize(result_list, ridx);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -470,12 +485,13 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
 
-		// Result is a constant LIST<RESULT_TYPE> with a fixed size
+		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		auto ldata = ConstantVector::GetData<RESULT_TYPE>(list);
 		auto &lmask = ConstantVector::Validity(list);
 		ldata[0].offset = 0;
 		ldata[0].length = bind_data->quantiles.size();
 
+		ListVector::Reserve(list, ldata[0].length);
 		ListVector::SetListSize(list, ldata[0].length);
 		auto &result = ListVector::GetEntry(list);
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
