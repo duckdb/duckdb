@@ -952,24 +952,28 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanS
 }
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
                                        std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-                                       DataChunk &output) {
+                                       DataChunk &output, idx_t start) {
 	for (idx_t idx = 0; idx < scan_state.column_ids.size(); idx++) {
 		auto col_idx = scan_state.column_ids[idx];
-		std::pair<idx_t, idx_t> arrow_convert_idx {0, 0};
-		auto &array = *scan_state.chunk->arrow_array.children[col_idx];
-		if (!array.release) {
-			throw InvalidInputException("arrow_scan: released array passed");
-		}
-		if (array.length != scan_state.chunk->arrow_array.length) {
-			throw InvalidInputException("arrow_scan: array length mismatch");
-		}
-		if (array.dictionary) {
-			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
-			                              col_idx, arrow_convert_idx);
+		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+			output.data[idx].Sequence(start, start + output.size());
 		} else {
-			SetValidityMask(output.data[idx], array, scan_state, output.size(), -1);
-			ColumnArrowToDuckDB(output.data[idx], array, scan_state, output.size(), arrow_convert_data, col_idx,
-			                    arrow_convert_idx);
+			std::pair<idx_t, idx_t> arrow_convert_idx {0, 0};
+			auto &array = *scan_state.chunk->arrow_array.children[col_idx];
+			if (!array.release) {
+				throw InvalidInputException("arrow_scan: released array passed");
+			}
+			if (array.length != scan_state.chunk->arrow_array.length) {
+				throw InvalidInputException("arrow_scan: array length mismatch");
+			}
+			if (array.dictionary) {
+				ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
+				                              col_idx, arrow_convert_idx);
+			} else {
+				SetValidityMask(output.data[idx], array, scan_state, output.size(), -1);
+				ColumnArrowToDuckDB(output.data[idx], array, scan_state, output.size(), arrow_convert_data, col_idx,
+				                    arrow_convert_idx);
+			}
 		}
 	}
 }
@@ -994,7 +998,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
 	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.arrow_convert_data, output);
+	ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
 	output.Verify();
 	state.chunk_offset += output.size();
 }
@@ -1011,7 +1015,7 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
 	data.lines_read += output_size;
 	output.SetCardinality(output_size);
-	ArrowToDuckDB(state, data.arrow_convert_data, output);
+	ArrowToDuckDB(state, data.arrow_convert_data, output, data.lines_read - output_size);
 	output.Verify();
 	state.chunk_offset += output.size();
 }
