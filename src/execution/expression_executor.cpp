@@ -120,9 +120,9 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 		return InitializeState((const BoundOperatorExpression &)expr, state);
 	case ExpressionClass::BOUND_PARAMETER:
 		return InitializeState((const BoundParameterExpression &)expr, state);
-	default:
-		throw NotImplementedException("Attempting to initialize state of expression of unknown type!");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Attempting to initialize state of expression of unknown type!");
+	} // LCOV_EXCL_STOP
 }
 
 void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
@@ -161,9 +161,9 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 	case ExpressionClass::BOUND_PARAMETER:
 		Execute((const BoundParameterExpression &)expr, state, sel, count, result);
 		break;
-	default:
-		throw NotImplementedException("Attempting to execute expression of unknown type!");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Attempting to execute expression of unknown type!");
+	} // LCOV_EXCL_STOP
 	Verify(expr, result, count);
 }
 

@@ -10,7 +10,7 @@ namespace duckdb {
 void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                            PhysicalOperatorState *state) const {
 	if (column_ids.empty()) {
-		throw NotImplementedException("CREATE INDEX does not refer to any columns in the base table!");
+		throw BinderException("CREATE INDEX does not refer to any columns in the base table!");
 	}
 
 	auto &schema = *table.schema;
@@ -26,10 +26,10 @@ void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk 
 		index = make_unique<ART>(column_ids, unbound_expressions, info->unique);
 		break;
 	}
-	default:
+	default: // LCOV_EXCL_START
 		D_ASSERT(0);
-		throw NotImplementedException("Unimplemented index type");
-	}
+		throw InternalException("Unimplemented index type");
+	} // LCOV_EXCL_STOP
 	index_entry->index = index.get();
 	index_entry->info = table.storage->info;
 	table.storage->AddIndex(move(index), expressions);

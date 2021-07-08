@@ -421,9 +421,9 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	case JoinType::SINGLE:
 		NextSingleJoin(keys, left, result);
 		break;
-	default:
-		throw Exception("Unhandled join type in JoinHashTable");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unhandled join type in JoinHashTable");
+	} // LCOV_EXCL_STOP
 }
 
 idx_t ScanStructure::ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel) {

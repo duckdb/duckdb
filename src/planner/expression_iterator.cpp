@@ -120,11 +120,11 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	case ExpressionClass::BOUND_REF:
 		// these node types have no children
 		break;
-	default:
+	default: // LCOV_EXCL_START
 		// called on non BoundExpression type!
 		D_ASSERT(0);
 		break;
-	}
+	} // LCOV_EXCL_STOP
 }
 
 void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,

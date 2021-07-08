@@ -82,29 +82,34 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		log->WriteCreateMacro((MacroCatalogEntry *)parent);
 		break;
 	case CatalogType::DELETED_ENTRY:
-		if (entry->type == CatalogType::TABLE_ENTRY) {
+		switch(entry->type) {
+		case CatalogType::TABLE_ENTRY: {
 			auto table_entry = (TableCatalogEntry *)entry;
 			table_entry->CommitDrop();
 			log->WriteDropTable(table_entry);
-		} else if (entry->type == CatalogType::SCHEMA_ENTRY) {
-			log->WriteDropSchema((SchemaCatalogEntry *)entry);
-		} else if (entry->type == CatalogType::VIEW_ENTRY) {
-			log->WriteDropView((ViewCatalogEntry *)entry);
-		} else if (entry->type == CatalogType::SEQUENCE_ENTRY) {
-			log->WriteDropSequence((SequenceCatalogEntry *)entry);
-		} else if (entry->type == CatalogType::MACRO_ENTRY) {
-			log->WriteDropMacro((MacroCatalogEntry *)entry);
-		} else if (entry->type == CatalogType::INDEX_ENTRY) {
-			// do nothing, indexes aren't (yet) persisted to disk
-		} else if (entry->type == CatalogType::PREPARED_STATEMENT) {
-			// do nothing, prepared statements aren't persisted to disk
-		} else if (entry->type == CatalogType::SCALAR_FUNCTION_ENTRY) {
-			// do nothing, functions aren't persisted to disk
-		} else {
-			throw NotImplementedException("Don't know how to drop this type!");
+			break;
 		}
+		case CatalogType::SCHEMA_ENTRY:
+			log->WriteDropSchema((SchemaCatalogEntry *)entry);
+			break;
+		case CatalogType::VIEW_ENTRY:
+			log->WriteDropView((ViewCatalogEntry *)entry);
+			break;
+		case CatalogType::SEQUENCE_ENTRY:
+			log->WriteDropSequence((SequenceCatalogEntry *)entry);
+			break;
+		case CatalogType::MACRO_ENTRY:
+			log->WriteDropMacro((MacroCatalogEntry *)entry);
+			break;
+		case CatalogType::INDEX_ENTRY:
+		case CatalogType::PREPARED_STATEMENT:
+		case CatalogType::SCALAR_FUNCTION_ENTRY:
+			// do nothing, indexes/prepared statements/functions aren't persisted to disk
+			break;
+		default: // LCOV_EXCL_START
+			throw InternalException("Don't know how to drop this type!");
+		} // LCOV_EXCL_STOP
 		break;
-
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::PREPARED_STATEMENT:
 	case CatalogType::AGGREGATE_FUNCTION_ENTRY:
@@ -115,9 +120,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::COLLATION_ENTRY:
 		// do nothing, these entries are not persisted to disk
 		break;
-	default:
-		throw NotImplementedException("UndoBuffer - don't know how to write this entry to the WAL");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("UndoBuffer - don't know how to write this entry to the WAL");
+	} // LCOV_EXCL_STOP
 }
 
 void CommitState::WriteDelete(DeleteInfo *info) {
@@ -238,9 +243,9 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		info->version_number = commit_id;
 		break;
 	}
-	default:
-		throw NotImplementedException("UndoBuffer - don't know how to commit this type!");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("UndoBuffer - don't know how to commit this type!");
+	} // LCOV_EXCL_STOP
 }
 
 void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
@@ -276,9 +281,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		info->version_number = transaction_id;
 		break;
 	}
-	default:
-		throw NotImplementedException("UndoBuffer - don't know how to revert commit of this type!");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("UndoBuffer - don't know how to revert commit of this type!");
+	} // LCOV_EXCL_STOP
 }
 
 template void CommitState::CommitEntry<true>(UndoFlags type, data_ptr_t data);

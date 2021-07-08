@@ -46,9 +46,9 @@ void ConcurrentQueue::Enqueue(ProducerToken &token, unique_ptr<Task> task) {
 	lock_guard<mutex> producer_lock(token.producer_lock);
 	if (q.enqueue(token.token->queue_token, move(task))) {
 		semaphore.signal();
-	} else {
+	} else { // LCOV_EXCL_START
 		throw InternalException("Could not schedule task!");
-	}
+	} // LCOV_EXCL_STOP
 }
 
 bool ConcurrentQueue::DequeueFromProducer(ProducerToken &token, unique_ptr<Task> &task) {
