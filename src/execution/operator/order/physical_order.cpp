@@ -1,7 +1,6 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/types.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
@@ -22,6 +21,37 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+static idx_t GetSortingColSize(const LogicalType &type) {
+	auto physical_type = type.InternalType();
+	if (TypeIsConstantSize(physical_type)) {
+		return GetTypeIdSize(physical_type);
+	} else {
+		switch (physical_type) {
+		case PhysicalType::VARCHAR:
+			// TODO: make use of statistics
+			return string_t::INLINE_LENGTH;
+			break;
+		case PhysicalType::LIST: {
+			// Nested types get an additional validity byte for every nested layer
+			switch (type.InternalType()) {
+			case PhysicalType::LIST:
+				return 1 + GetSortingColSize(ListType::GetChildType(type));
+				break;
+			case PhysicalType::MAP:
+			case PhysicalType::STRUCT:
+				return 1 + GetSortingColSize(StructType::GetChildType(type, 0));
+				break;
+			default:
+				throw NotImplementedException("Unable to order column with nested type %s", type.ToString());
+			}
+			break;
+		}
+		default:
+			throw NotImplementedException("Unable to order column with type %s", type.ToString());
+		}
+	}
+}
+
 struct SortingState {
 	explicit SortingState(const vector<BoundOrderByNode> &orders)
 	    : column_count(orders.size()), all_constant(true), comparison_size(0), entry_size(0) {
@@ -47,14 +77,7 @@ struct SortingState {
 			if (TypeIsConstantSize(physical_type)) {
 				col_size += GetTypeIdSize(physical_type);
 			} else {
-				switch (physical_type) {
-				case PhysicalType::VARCHAR:
-					// TODO: make use of statistics
-					col_size += string_t::INLINE_LENGTH;
-					break;
-				default:
-					throw NotImplementedException("Unable to order column with type %s", expr.return_type.ToString());
-				}
+				col_size += GetSortingColSize(expr.return_type);
 				sorting_to_blob_col[i] = blob_layout_types.size();
 				blob_layout_types.push_back(expr.return_type);
 			}
