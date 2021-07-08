@@ -13,9 +13,9 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 	for (auto &dependency : dependencies) {
 		idx_t entry_index;
 		CatalogEntry *catalog_entry;
-		if (!dependency->set->GetEntryInternal(context, dependency->name, entry_index, catalog_entry)) {
+		if (!dependency->set->GetEntryInternal(context, dependency->name, entry_index, catalog_entry)) { // LCOV_EXCL_START
 			throw InternalException("Dependency has already been deleted?");
-		}
+		} // LCOV_EXCL_STOP
 	}
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
 	auto dependency_type = object->type == CatalogType::INDEX_ENTRY ? DependencyType::DEPENDENCY_AUTOMATIC
@@ -116,20 +116,6 @@ void DependencyManager::EraseObjectInternal(CatalogEntry *object) {
 	// erase the dependents and dependencies for this object
 	dependents_map.erase(object);
 	dependencies_map.erase(object);
-}
-
-void DependencyManager::ClearDependencies(CatalogSet &set) {
-	// obtain the writing lock
-	lock_guard<mutex> write_lock(catalog.write_lock);
-
-	// iterate over the objects in the CatalogSet
-	for (auto &entry : set.entries) {
-		CatalogEntry *centry = entry.second.get();
-		while (centry) {
-			EraseObjectInternal(centry);
-			centry = centry->child.get();
-		}
-	}
 }
 
 void DependencyManager::Scan(const std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> &callback) {

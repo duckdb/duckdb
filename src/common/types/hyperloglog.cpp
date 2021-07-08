@@ -17,16 +17,16 @@ HyperLogLog::~HyperLogLog() {
 }
 
 void HyperLogLog::Add(data_ptr_t element, idx_t size) {
-	if (duckdb_hll::hll_add((duckdb_hll::robj *)hll, element, size) == HLL_C_ERR) {
-		throw Exception("Could not add to HLL?");
-	}
+	if (duckdb_hll::hll_add((duckdb_hll::robj *)hll, element, size) == HLL_C_ERR) { // LCOV_EXCL_START
+		throw InternalException("Could not add to HLL?");
+	} // LCOV_EXCL_STOP
 }
 
 idx_t HyperLogLog::Count() {
 	size_t result; // exception from size_t ban
-	if (duckdb_hll::hll_count((duckdb_hll::robj *)hll, &result) != HLL_C_OK) {
-		throw Exception("Could not count HLL?");
-	}
+	if (duckdb_hll::hll_count((duckdb_hll::robj *)hll, &result) != HLL_C_OK) { // LCOV_EXCL_START
+		throw InternalException("Could not count HLL?");
+	} // LCOV_EXCL_STOP
 	return result;
 }
 
@@ -35,9 +35,9 @@ unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog &other) {
 	hlls[0] = (duckdb_hll::robj *)hll;
 	hlls[1] = (duckdb_hll::robj *)other.hll;
 	auto new_hll = duckdb_hll::hll_merge(hlls, 2);
-	if (!new_hll) {
-		throw Exception("Could not merge HLLs");
-	}
+	if (!new_hll) { // LCOV_EXCL_START
+		throw InternalException("Could not merge HLLs");
+	} // LCOV_EXCL_STOP
 	return unique_ptr<HyperLogLog>(new HyperLogLog((void *)new_hll));
 }
 
@@ -61,9 +61,9 @@ unique_ptr<HyperLogLog> HyperLogLog::Merge(HyperLogLog logs[], idx_t count) {
 		hlls[i] = (duckdb_hll::robj *)logs[i].hll;
 	}
 	auto new_hll = duckdb_hll::hll_merge(hlls, count);
-	if (!new_hll) {
-		throw Exception("Could not merge HLLs");
-	}
+	if (!new_hll) { // LCOV_EXCL_START
+		throw InternalException("Could not merge HLLs");
+	} // LCOV_EXCL_STOP
 	return unique_ptr<HyperLogLog>(new HyperLogLog((void *)new_hll));
 }
 

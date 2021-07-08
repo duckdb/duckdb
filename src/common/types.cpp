@@ -440,13 +440,13 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::STRUCT;
 	} else if (lower_str == "map") {
 		return LogicalTypeId::MAP;
-	} else if (lower_str == "utinyint") {
+	} else if (lower_str == "utinyint" || lower_str == "uint8") {
 		return LogicalTypeId::UTINYINT;
-	} else if (lower_str == "usmallint") {
+	} else if (lower_str == "usmallint" || lower_str == "uint16") {
 		return LogicalTypeId::USMALLINT;
-	} else if (lower_str == "uinteger") {
+	} else if (lower_str == "uinteger" || lower_str == "uint32") {
 		return LogicalTypeId::UINTEGER;
-	} else if (lower_str == "ubigint") {
+	} else if (lower_str == "ubigint" || lower_str == "uint64") {
 		return LogicalTypeId::UBIGINT;
 	} else {
 		throw NotImplementedException("DataType %s not supported yet...\n", str);
