@@ -124,7 +124,7 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 }
 
 BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, BufferedCSVReaderOptions options_p,
-					const vector<LogicalType> &requested_types)
+                                     const vector<LogicalType> &requested_types)
     : fs(fs_p), options(move(options_p)), buffer_size(0), position(0), start(0) {
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);

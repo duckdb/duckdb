@@ -40,7 +40,7 @@ int main(int argc, const char **argv) {
 	DataChunk result;
 	result.Initialize(reader.sql_types);
 
-	while(true) {
+	while (true) {
 		result.Reset();
 		reader.ParseCSV(result);
 		if (result.size() == 0) {
