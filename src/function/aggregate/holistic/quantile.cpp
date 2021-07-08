@@ -457,7 +457,7 @@ struct DiscreteQuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 				state->upper.resize(state->lower.size(), offset);
 			} else {
 				state->disturbed.push_back(q);
-				state->lower.push_back(std::min(lb, offset));
+				state->lower.push_back(MinValue(lb, offset));
 			}
 			lb = offset + 1;
 		}
@@ -776,11 +776,11 @@ struct ContinuousQuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 			if (fixed && CanReplace(state, data, j, FRN, CRN)) {
 				rdata[q] = Interpolate<INPUT_TYPE, RESULT_TYPE, false>(data, index, quantile, state->pos);
 				state->upper.resize(state->lower.size(), FRN);
-				lb = CRN + 1;
 			} else {
 				state->disturbed.push_back(q);
-				state->lower.push_back(lb);
+				state->lower.push_back(MinValue(lb, FRN));
 			}
+			lb = CRN + 1;
 		}
 		state->upper.resize(state->lower.size(), valid);
 
