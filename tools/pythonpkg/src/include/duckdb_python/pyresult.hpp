@@ -27,11 +27,11 @@ public:
 
 	py::list Fetchall();
 
-	py::dict FetchNumpy(bool stream = false);
+	py::dict FetchNumpy(bool stream = false, idx_t vectors_per_chunk = 1);
 
 	py::object FetchDF();
 
-	py::object FetchDFChunk();
+	py::object FetchDFChunk(idx_t vectors_per_chunk);
 
 	py::object FetchArrowTable();
 
