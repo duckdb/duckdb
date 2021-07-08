@@ -87,9 +87,9 @@ bool ParsedExpression::Equals(const BaseExpression *other) const {
 		return SubqueryExpression::Equals((SubqueryExpression *)this, (SubqueryExpression *)other);
 	case ExpressionClass::WINDOW:
 		return WindowExpression::Equals((WindowExpression *)this, (WindowExpression *)other);
-	default:
+	default: // LCOV_EXCL_START
 		throw SerializationException("Unsupported type for expression comparison!");
-	}
+	} // LCOV_EXCL_STOP
 }
 
 hash_t ParsedExpression::Hash() const {
@@ -165,9 +165,9 @@ unique_ptr<ParsedExpression> ParsedExpression::Deserialize(Deserializer &source)
 	case ExpressionClass::WINDOW:
 		result = WindowExpression::Deserialize(type, source);
 		break;
-	default:
+	default: // LCOV_EXCL_START
 		throw SerializationException("Unsupported type for expression deserialization!");
-	}
+	} // LCOV_EXCL_STOP
 	result->alias = alias;
 	return result;
 }

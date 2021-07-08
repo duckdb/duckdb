@@ -19,14 +19,14 @@ unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
 		return CheckConstraint::Deserialize(source);
 	case ConstraintType::UNIQUE:
 		return UniqueConstraint::Deserialize(source);
-	default:
+	default: // LCOV_EXCL_START
 		// don't know how to serialize this constraint type
 		return nullptr;
-	}
+	} // LCOV_EXCL_STOP
 }
 
-void Constraint::Print() {
+void Constraint::Print() { // LCOV_EXCL_START
 	Printer::Print(ToString());
-}
+} // LCOV_EXCL_STOP
 
 } // namespace duckdb
