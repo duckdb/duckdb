@@ -107,7 +107,7 @@ public:
 	vector<vector<unique_ptr<SortedBlock>>> sorted_blocks_temp;
 	unique_ptr<SortedBlock> odd_one_out = nullptr;
 	//! Pinned heap data (if sorting in memory)
-	vector<shared_ptr<BlockHandle>> heap_blocks;
+	vector<RowDataBlock> heap_blocks;
 	vector<unique_ptr<BufferHandle>> pinned_blocks;
 
 	//! Total count - get set in PhysicalOrder::Finalize
@@ -278,7 +278,6 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 
 	// When sorting data reaches a certain size, we sort it
 	if (lstate.Full(context.client, sorting_state, payload_layout)) {
-		gstate.external = true;
 		SortLocalState(context.client, lstate, gstate);
 	}
 }
@@ -383,6 +382,22 @@ public:
 			result->heap_blocks.back().count = end_entry_index;
 		}
 		return result;
+	}
+
+	void Unswizzle() {
+		if (layout.AllConstant()) {
+			return;
+		}
+		for (idx_t i = 0; i < data_blocks.size(); i++) {
+			auto &data_block = data_blocks[i];
+			auto &heap_block = heap_blocks[i];
+			auto data_handle_p = buffer_manager.Pin(data_block.block);
+			auto heap_handle_p = buffer_manager.Pin(heap_block.block);
+			RowOperations::UnswizzleHeapPointer(layout, data_handle_p->Ptr(), heap_handle_p->Ptr(), data_block.count);
+			RowOperations::UnswizzleColumns(layout, data_handle_p->Ptr(), data_block.count);
+			state.heap_blocks.push_back(move(heap_block));
+			state.pinned_blocks.push_back(move(heap_handle_p));
+		}
 	}
 
 	//! Layout of this data
@@ -567,6 +582,21 @@ public:
 		result->payload_data =
 		    payload_data->CreateSlice(start_block_index, start_entry_index, end_block_index, end_entry_index);
 		D_ASSERT(result->Remaining() == end - start);
+		return result;
+	}
+
+	idx_t HeapSize() const {
+		idx_t result = 0;
+		if (!sorting_state.all_constant) {
+			for (auto &block : blob_sorting_data->heap_blocks) {
+				result += block.capacity;
+			}
+		}
+		if (!payload_layout.AllConstant()) {
+			for (auto &block : payload_data->heap_blocks) {
+				result += block.capacity;
+			}
+		}
 		return result;
 	}
 
@@ -983,7 +1013,7 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t so
 	sd.data_blocks.clear();
 	sd.data_blocks.push_back(move(ordered_data_block));
 	// Deal with the heap (if necessary)
-	if (!sd.layout.AllConstant() && gstate.external) {
+	if (!sd.layout.AllConstant()) {
 		// Swizzle the column pointers to offsets
 		RowOperations::SwizzleColumns(sd.layout, ordered_data_handle->Ptr(), count);
 		// Create a single heap block to store the ordered heap
@@ -1011,14 +1041,6 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t so
 		sd.heap_blocks.push_back(move(ordered_heap_block));
 		for (auto &block : heap.blocks) {
 			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
-		}
-	} else {
-		// Keep heap blocks pinned (move handles to the global state)
-		D_ASSERT(heap.blocks.size() == heap.pinned_blocks.size());
-		lock_guard<mutex> lock(gstate.lock);
-		for (idx_t i = 0; i < heap.blocks.size(); i++) {
-			gstate.pinned_blocks.push_back(move(heap.pinned_blocks[i]));
-			gstate.heap_blocks.push_back(move(heap.blocks[i].block));
 		}
 	}
 	// Reset the localstate heap
@@ -1787,6 +1809,13 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	for (auto &sb : state.sorted_blocks) {
 		state.total_count += sb->radix_sorting_data.back().count;
 	}
+	// Determine if we need to use do an external sort
+	idx_t total_heap_size =
+	    std::accumulate(state.sorted_blocks.begin(), state.sorted_blocks.end(), (idx_t)0,
+	                    [](idx_t a, const unique_ptr<SortedBlock> &b) { return a + b->HeapSize(); });
+	if (total_heap_size > 0.25 * BufferManager::GetBufferManager(context).GetMaxMemory()) {
+		state.external = true;
+	}
 	// Use the data that we have to determine which block size to use during the merge
 	const auto &sorting_state = state.sorting_state;
 	for (auto &sb : state.sorted_blocks) {
@@ -1806,6 +1835,13 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 		for (auto &sb : state.sorted_blocks) {
 			auto &heap_block = sb->payload_data->heap_blocks.back();
 			state.payload_heap_capacity = MaxValue(state.sorting_heap_capacity, heap_block.capacity);
+		}
+	}
+	// Unswizzle and pin heap blocks if we can fit everything in memory
+	if (!state.external) {
+		for (auto &sb : state.sorted_blocks) {
+			sb->blob_sorting_data->Unswizzle();
+			sb->payload_data->Unswizzle();
 		}
 	}
 	// Start the merge or finish if a merge is not necessary
