@@ -398,6 +398,7 @@ public:
 			state.heap_blocks.push_back(move(heap_block));
 			state.pinned_blocks.push_back(move(heap_handle_p));
 		}
+		heap_blocks.clear();
 	}
 
 	//! Layout of this data
@@ -1366,9 +1367,7 @@ public:
 		idx_t r_block_idx = right.block_idx;
 		idx_t l_entry_idx = left.entry_idx;
 		idx_t r_entry_idx = right.entry_idx;
-		// Data blocks and handles for both sides
-		RowDataBlock *l_radix_block;
-		RowDataBlock *r_radix_block;
+		// Data handles and pointers for both sides
 		unique_ptr<BufferHandle> l_radix_handle;
 		unique_ptr<BufferHandle> r_radix_handle;
 		data_ptr_t l_radix_ptr;
@@ -1376,6 +1375,25 @@ public:
 		// Compute the merge of the next 'count' tuples
 		idx_t compared = 0;
 		while (compared < count) {
+			// Move to the next block (if needed)
+			if (l_block_idx < left.radix_sorting_data.size() &&
+			    l_entry_idx == left.radix_sorting_data[l_block_idx].count) {
+				l_block_idx++;
+				l_entry_idx = 0;
+				if (!sorting_state.all_constant) {
+					left.blob_sorting_data->block_idx = l_block_idx;
+					left.blob_sorting_data->entry_idx = l_entry_idx;
+				}
+			}
+			if (r_block_idx < right.radix_sorting_data.size() &&
+			    r_entry_idx == right.radix_sorting_data[r_block_idx].count) {
+				r_block_idx++;
+				r_entry_idx = 0;
+				if (!sorting_state.all_constant) {
+					right.blob_sorting_data->block_idx = r_block_idx;
+					right.blob_sorting_data->entry_idx = r_entry_idx;
+				}
+			}
 			const bool l_done = l_block_idx == left.radix_sorting_data.size();
 			const bool r_done = r_block_idx == right.radix_sorting_data.size();
 			if (l_done || r_done) {
@@ -1384,17 +1402,15 @@ public:
 			}
 			// Pin the radix sorting data
 			if (!l_done) {
-				l_radix_block = &left.radix_sorting_data[l_block_idx];
-				l_radix_handle = buffer_manager.Pin(l_radix_block->block);
+				l_radix_handle = buffer_manager.Pin(left.radix_sorting_data[l_block_idx].block);
 				l_radix_ptr = l_radix_handle->Ptr() + l_entry_idx * sorting_state.entry_size;
 			}
 			if (!r_done) {
-				r_radix_block = &right.radix_sorting_data[r_block_idx];
-				r_radix_handle = buffer_manager.Pin(r_radix_block->block);
+				r_radix_handle = buffer_manager.Pin(right.radix_sorting_data[r_block_idx].block);
 				r_radix_ptr = r_radix_handle->Ptr() + r_entry_idx * sorting_state.entry_size;
 			}
-			const idx_t &l_count = !l_done ? l_radix_block->count : 0;
-			const idx_t &r_count = !r_done ? r_radix_block->count : 0;
+			const idx_t &l_count = !l_done ? left.radix_sorting_data[l_block_idx].count : 0;
+			const idx_t &r_count = !r_done ? right.radix_sorting_data[r_block_idx].count : 0;
 			// Compute the merge
 			if (sorting_state.all_constant) {
 				// All sorting columns are constant size
@@ -1418,6 +1434,10 @@ public:
 				}
 				// Merge with variable size sorting columns
 				for (; compared < count && l_entry_idx < l_count && r_entry_idx < r_count; compared++) {
+					D_ASSERT(l_block_idx == left.blob_sorting_data->block_idx &&
+					         l_entry_idx == left.blob_sorting_data->entry_idx);
+					D_ASSERT(r_block_idx == right.blob_sorting_data->block_idx &&
+					         r_entry_idx == right.blob_sorting_data->entry_idx);
 					left_smaller[compared] =
 					    CompareTuple(left, right, l_radix_ptr, r_radix_ptr, sorting_state, state.external) < 0;
 					const bool &l_smaller = left_smaller[compared];
@@ -1430,15 +1450,6 @@ public:
 					left.blob_sorting_data->Advance(l_smaller);
 					right.blob_sorting_data->Advance(r_smaller);
 				}
-			}
-			// Move to the next block (if needed)
-			if (!l_done && l_entry_idx == l_count) {
-				l_block_idx++;
-				l_entry_idx = 0;
-			}
-			if (!r_done && r_entry_idx == r_count) {
-				r_block_idx++;
-				r_entry_idx = 0;
 			}
 		}
 		// Reset block indices before the actual merge
@@ -1466,6 +1477,17 @@ public:
 
 		idx_t copied = 0;
 		while (copied < count) {
+			// Move to the next block (if needed)
+			if (left.block_idx < left.radix_sorting_data.size() &&
+			    left.entry_idx == left.radix_sorting_data[left.block_idx].count) {
+				left.block_idx++;
+				left.entry_idx = 0;
+			}
+			if (right.block_idx < right.radix_sorting_data.size() &&
+			    right.entry_idx == right.radix_sorting_data[right.block_idx].count) {
+				right.block_idx++;
+				right.entry_idx = 0;
+			}
 			const bool l_done = left.block_idx == left.radix_sorting_data.size();
 			const bool r_done = right.block_idx == right.radix_sorting_data.size();
 			// Pin the radix sortable blocks
@@ -1481,7 +1503,6 @@ public:
 			}
 			const idx_t &l_count = !l_done ? l_block->count : 0;
 			const idx_t &r_count = !r_done ? r_block->count : 0;
-
 			// Create new result block (if needed)
 			if (result_block->count == result_block->capacity) {
 				result->CreateBlock();
@@ -1502,15 +1523,6 @@ public:
 				// Left side is exhausted
 				FlushRows(r_ptr, right.entry_idx, r_count, result_block, result_ptr, sorting_state.entry_size, copied,
 				          count);
-			}
-			// Move to the next block (if needed)
-			if (!l_done && left.entry_idx == left.radix_sorting_data[left.block_idx].count) {
-				left.block_idx++;
-				left.entry_idx = 0;
-			}
-			if (!r_done && right.entry_idx == right.radix_sorting_data[right.block_idx].count) {
-				right.block_idx++;
-				right.entry_idx = 0;
 			}
 		}
 	}
@@ -1549,6 +1561,17 @@ public:
 
 		idx_t copied = 0;
 		while (copied < count) {
+			// Move to new data blocks (if needed)
+			if (l_data.block_idx < l_data.data_blocks.size() &&
+			    l_data.entry_idx == l_data.data_blocks[l_data.block_idx].count) {
+				l_data.block_idx++;
+				l_data.entry_idx = 0;
+			}
+			if (r_data.block_idx < r_data.data_blocks.size() &&
+			    r_data.entry_idx == r_data.data_blocks[r_data.block_idx].count) {
+				r_data.block_idx++;
+				r_data.entry_idx = 0;
+			}
 			const bool l_done = l_data.block_idx == l_data.data_blocks.size();
 			const bool r_done = r_data.block_idx == r_data.data_blocks.size();
 			// Pin the row data blocks
@@ -1684,15 +1707,6 @@ public:
 					           result_data_ptr, result_heap_block, *result_heap_handle, result_heap_ptr, copied, count);
 				}
 				D_ASSERT(result_data_block->count == result_heap_block->count);
-			}
-			// Move to new data blocks (if needed)
-			if (!l_done && l_data.entry_idx == l_data.data_blocks[l_data.block_idx].count) {
-				l_data.block_idx++;
-				l_data.entry_idx = 0;
-			}
-			if (!r_done && r_data.entry_idx == r_data.data_blocks[r_data.block_idx].count) {
-				r_data.block_idx++;
-				r_data.entry_idx = 0;
 			}
 		}
 	}
