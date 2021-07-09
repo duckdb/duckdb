@@ -131,28 +131,29 @@ void RowDataCollection::SerializeListVectorSortable(Vector &v, VectorData &vdata
 		for (idx_t i = 0; i < add_count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx) + offset;
+			data_ptr_t key_location = key_locations[i] + 1;
 			// write validity and according value
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
 				key_locations[i]++;
 				auto &list_entry = list_data[source_idx];
 				if (list_entry.length > 0) {
-					// denote that the list is not empty with a 0
-					key_locations[0][0] = 0;
+					// denote that the list is not empty with a 1
+					key_locations[i][0] = 1;
 					key_locations[i]++;
 					SerializeVectorSortable(child_vector, list_size, FlatVector::INCREMENTAL_SELECTION_VECTOR, 1,
 					                        key_locations + i, false, has_null, false, prefix_len, width - 1,
 					                        list_entry.offset);
 				} else {
-					// denote that the list is empty with a 1
-					key_locations[0][0] = 1;
+					// denote that the list is empty with a 0
+					key_locations[i][0] = 0;
 					key_locations[i]++;
 					memset(key_locations[i], '\0', width - 2);
 				}
 				// invert bits if desc
 				if (desc) {
-					for (idx_t s = 1; s < width + 1; s++) {
-						*(key_locations[i] + s) = ~*(key_locations[i] + s);
+					for (idx_t s = 0; s < width - 1; s++) {
+						*(key_location + s) = ~*(key_location + s);
 					}
 				}
 			} else {
@@ -166,13 +167,14 @@ void RowDataCollection::SerializeListVectorSortable(Vector &v, VectorData &vdata
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx) + offset;
 			auto &list_entry = list_data[source_idx];
+			data_ptr_t key_location = key_locations[i] + 1;
 			SerializeVectorSortable(child_vector, list_size, FlatVector::INCREMENTAL_SELECTION_VECTOR, 1,
 			                        key_locations + i, false, has_null, false, prefix_len, width - 1,
 			                        list_entry.offset);
 			// invert bits if desc
 			if (desc) {
 				for (idx_t s = 0; s < width; s++) {
-					*(key_locations[i] + s) = ~*(key_locations[i] + s);
+					*(key_location + s) = ~*(key_location + s);
 				}
 			}
 		}

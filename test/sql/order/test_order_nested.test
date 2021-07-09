@@ -1,0 +1,105 @@
+# name: test/sql/order/test_order_nest.test
+# description: Test ORDER BY keyword (nested types)
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test0 (i INT[])
+
+statement ok
+INSERT INTO test0 VALUES ([2]), ([1]), ([1, 2]), ([]), ([2, 2]), ([NULL]), (NULL), ([2, 3])
+
+query T
+SELECT * FROM test0 ORDER BY i
+----
+NULL
+[]
+[1]
+[1, 2]
+[2]
+[2, 2]
+[2, 3]
+[NULL]
+
+query T
+SELECT * FROM test0 ORDER BY i DESC
+----
+NULL
+[NULL]
+[2, 3]
+[2, 2]
+[2]
+[1, 2]
+[1]
+[]
+
+statement ok
+CREATE TABLE test1 (i VARCHAR[])
+
+statement ok
+INSERT INTO test1 VALUES (['2']), (['1']), (['1', '2']), ([]), (['2', '2']), ([NULL]), (NULL), (['2', '3'])
+
+query T
+SELECT * FROM test1 ORDER BY i
+----
+NULL
+[]
+[1]
+[1, 2]
+[2]
+[2, 2]
+[2, 3]
+[NULL]
+
+query T
+SELECT * FROM test1 ORDER BY i DESC
+----
+NULL
+[NULL]
+[2, 3]
+[2, 2]
+[2]
+[1, 2]
+[1]
+[]
+
+statement ok
+CREATE TABLE test2 (i INT[][])
+
+statement ok
+INSERT INTO test2 VALUES ([[2]]), ([[1]]), ([NULL, []]), ([[1], [2]]), ([]), ([[]]), ([[2], [2]]), ([NULL]), (NULL), ([[2], [3]])
+
+query T
+SELECT * FROM test2 ORDER BY i
+----
+NULL
+[]
+[[]]
+[[1]]
+[[1], [2]]
+[[2]]
+[[2], [2]]
+[[2], [3]]
+[NULL]
+[NULL, []]
+
+query T
+SELECT * FROM test2 ORDER BY i DESC
+----
+NULL
+[NULL, []]
+[NULL]
+[[2], [3]]
+[[2], [2]]
+[[2]]
+[[1], [2]]
+[[1]]
+[[]]
+[]
+
+
+
+
+
