@@ -83,7 +83,7 @@ private:
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanState &scan_state,
 	                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-	                          DataChunk &output);
+	                          DataChunk &output, idx_t start);
 
 	//! -----Single Thread Functions:-----
 	//! Initialize Single Thread Scan
