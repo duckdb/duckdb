@@ -1,5 +1,5 @@
 import pytest
-
+import duckdb
 
 class TestType(object):
 
@@ -72,6 +72,16 @@ class TestType(object):
         cur_chunk = query.fetch_df_chunk(100)
         assert(cur_chunk['a'][0] == 7168)
         assert(len(cur_chunk) == 2832)
+
+        # These shouldn't throw errors (Just emmit empty chunks)
+        cur_chunk = query.fetch_df_chunk(100)
+        assert(len(cur_chunk) == 0)
+
+        cur_chunk = query.fetch_df_chunk(0)
+        assert(len(cur_chunk) == 0)
+
+        cur_chunk = query.fetch_df_chunk()
+        assert(len(cur_chunk) == 0)
 
     def test_fetch_df_chunk_negative_parameter(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE table t as select range a from range(100);")
