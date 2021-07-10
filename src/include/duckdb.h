@@ -132,8 +132,25 @@ typedef void *duckdb_database;
 typedef void *duckdb_connection;
 typedef void *duckdb_prepared_statement;
 typedef void *duckdb_appender;
+typedef void *duckdb_arrow;
+// we don't need to spell out the schema/array in here
+// because it's a common interface, users can consume
+// the data in their own logic.
+typedef void *duckdb_arrow_schema;
+typedef void *duckdb_arrow_array;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
+
+//! query duckdb result as arrow data structure
+DUCKDB_API duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result);
+//! get arrow schema
+DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema);
+//! get arrow data array
+DUCKDB_API duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *out_array);
+//! get arrow error message
+DUCKDB_API const char *duckdb_query_arrow_error(duckdb_arrow result);
+//! Destroys the arrow result
+DUCKDB_API void duckdb_destroy_arrow(duckdb_arrow *result);
 
 //! Opens a database file at the given path (nullptr for in-memory). Returns DuckDBSuccess on success, or DuckDBError on
 //! failure. [OUT: database]
