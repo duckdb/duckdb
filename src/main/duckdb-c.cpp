@@ -1,6 +1,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/arrow.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/appender.hpp"
 
@@ -374,7 +375,7 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!success) {
 		return DuckDBError;
 	}
-	if (wrapper->current_chunk->size() == 0) {
+	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
 	if (wrapper->current_array && wrapper->current_array->release) {
@@ -560,6 +561,19 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	auto mat_res = (MaterializedQueryResult *)result.get();
 	return duckdb_translate_result(mat_res, out_result);
+}
+
+duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement, duckdb_arrow *out_result) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
+		return DuckDBError;
+	}
+	auto arrow_wrapper = new ArrowResultWrapper();
+	auto result = wrapper->statement->Execute(wrapper->values, false);
+	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+	arrow_wrapper->result = unique_ptr<MaterializedQueryResult>(static_cast<MaterializedQueryResult*>(result.release()));
+	*out_result = (duckdb_arrow)wrapper;
+	return DuckDBSuccess;
 }
 
 void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {

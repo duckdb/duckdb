@@ -146,6 +146,8 @@ DUCKDB_API duckdb_state duckdb_query_arrow(duckdb_connection connection, const c
 //! get arrow schema
 DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema);
 //! get arrow data array
+//! This function can be called multiple time to get next chunks, which will free the previous out_array.
+//! So consume the out_array before call this function again
 DUCKDB_API duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *out_array);
 //! get arrow error message
 DUCKDB_API const char *duckdb_query_arrow_error(duckdb_arrow result);
@@ -242,6 +244,10 @@ DUCKDB_API duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_stat
 //! Executes the prepared statements with currently bound parameters
 DUCKDB_API duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement,
                                                 duckdb_result *out_result);
+
+//! Executes the prepared statements with currently bound parameters and return arrow result
+DUCKDB_API duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement,
+                                                duckdb_arrow *out_result);
 
 //! Destroys the specified prepared statement descriptor
 DUCKDB_API void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement);
