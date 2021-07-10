@@ -219,6 +219,7 @@ DUCKDB_API void duckdb_free(void *ptr);
 DUCKDB_API duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                                        duckdb_prepared_statement *out_prepared_statement);
 
+DUCKDB_API const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement);
 DUCKDB_API duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t *nparams_out);
 
 //! binds parameters to prepared statement
@@ -247,7 +248,7 @@ DUCKDB_API duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepar
 
 //! Executes the prepared statements with currently bound parameters and return arrow result
 DUCKDB_API duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement,
-                                                duckdb_arrow *out_result);
+                                                      duckdb_arrow *out_result);
 
 //! Destroys the specified prepared statement descriptor
 DUCKDB_API void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement);

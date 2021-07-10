@@ -1,6 +1,7 @@
 #include "catch.hpp"
 #include "duckdb.h"
 #include "test_helpers.hpp"
+#include "duckdb/common/arrow.hpp"
 #include "duckdb/common/exception.hpp"
 
 using namespace duckdb;
@@ -395,9 +396,17 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	// fail prepare API calls
 	REQUIRE(duckdb_prepare(NULL, "SELECT 42", &stmt) == DuckDBError);
 	REQUIRE(duckdb_prepare(tester.connection, NULL, &stmt) == DuckDBError);
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT * from INVALID_TABLE", &stmt) == DuckDBError);
+	REQUIRE(duckdb_prepare_error(stmt) != nullptr);
 	REQUIRE(duckdb_bind_boolean(NULL, 0, true) == DuckDBError);
 	REQUIRE(duckdb_execute_prepared(NULL, &res) == DuckDBError);
 	duckdb_destroy_prepare(NULL);
+
+	// fail to query arrow
+	duckdb_arrow out_arrow;
+	REQUIRE(duckdb_query_arrow(tester.connection, "SELECT * from INVALID_TABLE", &out_arrow) == DuckDBError);
+	REQUIRE(duckdb_query_arrow_error(out_arrow) != nullptr);
+	duckdb_destroy_arrow(&out_arrow);
 }
 
 TEST_CASE("Test prepared statements in C API", "[capi][.]") {
@@ -644,4 +653,81 @@ TEST_CASE("Test appender statements in C API", "[capi][.]") {
 
 	status = duckdb_appender_destroy(nullptr);
 	REQUIRE(status == DuckDBError);
+}
+
+TEST_CASE("Test arrow in C API", "[capi][.]") {
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
+	duckdb_prepared_statement stmt = nullptr;
+	duckdb_arrow arrow_result;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	// test query arrow
+	{
+		REQUIRE(duckdb_query_arrow(tester.connection, "SELECT 42 AS VALUE", &arrow_result) == DuckDBSuccess);
+		duckdb_arrow_schema schema;
+		REQUIRE(duckdb_query_arrow_schema(arrow_result, &schema) == DuckDBSuccess);
+		ArrowSchema *arrow_schema = (ArrowSchema *)schema;
+		REQUIRE(string(arrow_schema->name) == "VALUE");
+		duckdb_arrow_array array;
+		REQUIRE(duckdb_query_arrow_array(arrow_result, &array) == DuckDBSuccess);
+		ArrowArray *arrow_array = (ArrowArray *)array;
+		REQUIRE(arrow_array->length == 1);
+		duckdb_arrow_array null_array;
+		REQUIRE(duckdb_query_arrow_array(arrow_result, &null_array) == DuckDBSuccess);
+		arrow_array = (ArrowArray *)null_array;
+		REQUIRE(arrow_array->length == 0);
+		duckdb_destroy_arrow(&arrow_result);
+	}
+
+	// test multiple chunks
+	{
+		// create table that consists of multiple chunks
+		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
+		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test(a INTEGER)"));
+		for (size_t i = 0; i < 500; i++) {
+			REQUIRE_NO_FAIL(
+			    tester.Query("INSERT INTO test VALUES (1); INSERT INTO test VALUES (2); INSERT INTO test VALUES "
+			                 "(3); INSERT INTO test VALUES (4); INSERT INTO test VALUES (5);"));
+		}
+		REQUIRE_NO_FAIL(tester.Query("COMMIT"));
+
+		REQUIRE(duckdb_query_arrow(tester.connection, "SELECT CAST(a AS INTEGER) AS a FROM test ORDER BY a",
+		                           &arrow_result) == DuckDBSuccess);
+		duckdb_arrow_schema schema;
+		REQUIRE(duckdb_query_arrow_schema(arrow_result, &schema) == DuckDBSuccess);
+		ArrowSchema *arrow_schema = (ArrowSchema *)schema;
+		REQUIRE(string(arrow_schema->name) == "a");
+		int total_count = 0;
+		while (true) {
+			duckdb_arrow_array array;
+			REQUIRE(duckdb_query_arrow_array(arrow_result, &array) == DuckDBSuccess);
+			if (array == nullptr) {
+				REQUIRE(total_count == 2500);
+				break;
+			}
+			ArrowArray *arrow_array = (ArrowArray *)array;
+			REQUIRE(arrow_array->length > 0);
+			total_count += arrow_array->length;
+		}
+		duckdb_destroy_arrow(&arrow_result);
+	}
+
+	// test prepare query arrow
+	{
+		REQUIRE(duckdb_prepare(tester.connection, "SELECT CAST($1 AS BIGINT)", &stmt) == DuckDBSuccess);
+		REQUIRE(stmt != nullptr);
+		REQUIRE(duckdb_execute_prepared_arrow(stmt, &arrow_result) == DuckDBSuccess);
+		duckdb_arrow_schema schema;
+		REQUIRE(duckdb_query_arrow_schema(arrow_result, &schema) == DuckDBSuccess);
+		ArrowSchema *arrow_schema = (ArrowSchema *)schema;
+		REQUIRE(string(arrow_schema->name) == "VALUE");
+		duckdb_arrow_array array;
+		REQUIRE(duckdb_query_arrow_array(arrow_result, &array) == DuckDBSuccess);
+		ArrowArray *arrow_array = (ArrowArray *)array;
+		REQUIRE(arrow_array->length == 1);
+		duckdb_destroy_arrow(&arrow_result);
+	}
 }

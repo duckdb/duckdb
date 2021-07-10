@@ -345,8 +345,8 @@ struct ArrowResultWrapper {
 	}
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	ArrowSchema* schema;
-	ArrowArray* current_array;
+	ArrowSchema *schema;
+	ArrowArray *current_array;
 };
 } // namespace duckdb
 
@@ -355,7 +355,7 @@ duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query,
 	auto wrapper = new ArrowResultWrapper();
 	wrapper->result = conn->Query(query);
 	*out_result = (duckdb_arrow)wrapper;
-	return DuckDBSuccess;
+	return wrapper->result->success ? DuckDBSuccess : DuckDBError;
 }
 
 duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema) {
@@ -466,6 +466,14 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 	return wrapper->statement->success ? DuckDBSuccess : DuckDBError;
 }
 
+const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || wrapper->statement->success) {
+		return nullptr;
+	}
+	return wrapper->statement->error.c_str();
+}
+
 duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t *nparams_out) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
 	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
@@ -571,9 +579,10 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	auto arrow_wrapper = new ArrowResultWrapper();
 	auto result = wrapper->statement->Execute(wrapper->values, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
-	arrow_wrapper->result = unique_ptr<MaterializedQueryResult>(static_cast<MaterializedQueryResult*>(result.release()));
+	arrow_wrapper->result =
+	    unique_ptr<MaterializedQueryResult>(static_cast<MaterializedQueryResult *>(result.release()));
 	*out_result = (duckdb_arrow)wrapper;
-	return DuckDBSuccess;
+	return arrow_wrapper->result->success ? DuckDBSuccess : DuckDBError;
 }
 
 void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {
