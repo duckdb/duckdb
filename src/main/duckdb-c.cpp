@@ -331,22 +331,12 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 
 namespace duckdb {
 struct ArrowResultWrapper {
-	ArrowResultWrapper() : result(nullptr), current_chunk(nullptr), schema(nullptr), current_array(nullptr) {
+	ArrowResultWrapper() : result(nullptr), current_chunk(nullptr) {
 	}
 	~ArrowResultWrapper() {
-		if (schema && schema->release) {
-			schema->release(schema);
-			schema = nullptr;
-		}
-		if (current_array && current_array->release) {
-			current_array->release(current_array);
-			current_array = nullptr;
-		}
 	}
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
-	ArrowSchema *schema;
-	ArrowArray *current_array;
 };
 } // namespace duckdb
 
@@ -359,17 +349,18 @@ duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query,
 }
 
 duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema) {
-	auto wrapper = (ArrowResultWrapper *)result;
-	if (wrapper->schema && wrapper->schema->release) {
-		wrapper->schema->release(wrapper->schema);
+	if (!out_schema) {
+		return DuckDBSuccess;
 	}
-	wrapper->schema = new ArrowSchema();
-	wrapper->result->ToArrowSchema(wrapper->schema);
-	*out_schema = (duckdb_arrow_schema)wrapper->schema;
+	auto wrapper = (ArrowResultWrapper *)result;
+	wrapper->result->ToArrowSchema((ArrowSchema *)*out_schema);
 	return DuckDBSuccess;
 }
 
 duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *out_array) {
+	if (!out_array) {
+		return DuckDBSuccess;
+	}
 	auto wrapper = (ArrowResultWrapper *)result;
 	auto success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->error);
 	if (!success) {
@@ -378,12 +369,7 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
-	if (wrapper->current_array && wrapper->current_array->release) {
-		wrapper->current_array->release(wrapper->current_array);
-	}
-	wrapper->current_array = new ArrowArray();
-	wrapper->current_chunk->ToArrowArray(wrapper->current_array);
-	*out_array = (duckdb_arrow_array)wrapper->current_array;
+	wrapper->current_chunk->ToArrowArray((ArrowArray *)*out_array);
 	return DuckDBSuccess;
 }
 
@@ -393,14 +379,11 @@ const char *duckdb_query_arrow_error(duckdb_arrow result) {
 }
 
 void duckdb_destroy_arrow(duckdb_arrow *result) {
-	if (!result) {
-		return;
-	}
-	auto wrapper = (ArrowResultWrapper *)*result;
-	if (wrapper) {
+	if (*result) {
+		auto wrapper = (ArrowResultWrapper *)*result;
 		delete wrapper;
+		*result = nullptr;
 	}
-	*result = nullptr;
 }
 
 static void duckdb_destroy_column(duckdb_column column, idx_t count) {
