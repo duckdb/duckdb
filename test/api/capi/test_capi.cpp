@@ -396,8 +396,13 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	// fail prepare API calls
 	REQUIRE(duckdb_prepare(NULL, "SELECT 42", &stmt) == DuckDBError);
 	REQUIRE(duckdb_prepare(tester.connection, NULL, &stmt) == DuckDBError);
+	REQUIRE(stmt == nullptr);
+
 	REQUIRE(duckdb_prepare(tester.connection, "SELECT * from INVALID_TABLE", &stmt) == DuckDBError);
+	REQUIRE(stmt != nullptr);
 	REQUIRE(duckdb_prepare_error(stmt) != nullptr);
+	duckdb_destroy_prepare(&stmt);
+
 	REQUIRE(duckdb_bind_boolean(NULL, 0, true) == DuckDBError);
 	REQUIRE(duckdb_execute_prepared(NULL, &res) == DuckDBError);
 	duckdb_destroy_prepare(NULL);
