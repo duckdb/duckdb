@@ -660,7 +660,7 @@ TEST_CASE("Test appender statements in C API", "[capi][.]") {
 	REQUIRE(status == DuckDBError);
 }
 
-TEST_CASE("Test arrow in C API", "[capi][.]") {
+TEST_CASE("Test arrow in C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
 	duckdb_prepared_statement stmt = nullptr;
@@ -675,15 +675,14 @@ TEST_CASE("Test arrow in C API", "[capi][.]") {
 		duckdb_arrow_schema schema;
 		REQUIRE(duckdb_query_arrow_schema(arrow_result, &schema) == DuckDBSuccess);
 		ArrowSchema *arrow_schema = (ArrowSchema *)schema;
-		REQUIRE(string(arrow_schema->name) == "VALUE");
-		duckdb_arrow_array array;
+		REQUIRE(string(arrow_schema->name) == "duckdb_query_result");
+		duckdb_arrow_array array = nullptr;
 		REQUIRE(duckdb_query_arrow_array(arrow_result, &array) == DuckDBSuccess);
 		ArrowArray *arrow_array = (ArrowArray *)array;
 		REQUIRE(arrow_array->length == 1);
-		duckdb_arrow_array null_array;
+		duckdb_arrow_array null_array = nullptr;
 		REQUIRE(duckdb_query_arrow_array(arrow_result, &null_array) == DuckDBSuccess);
-		arrow_array = (ArrowArray *)null_array;
-		REQUIRE(arrow_array->length == 0);
+		REQUIRE(null_array == nullptr);
 		duckdb_destroy_arrow(&arrow_result);
 	}
 
@@ -704,10 +703,10 @@ TEST_CASE("Test arrow in C API", "[capi][.]") {
 		duckdb_arrow_schema schema;
 		REQUIRE(duckdb_query_arrow_schema(arrow_result, &schema) == DuckDBSuccess);
 		ArrowSchema *arrow_schema = (ArrowSchema *)schema;
-		REQUIRE(string(arrow_schema->name) == "a");
+		REQUIRE(arrow_schema->release != nullptr);
 		int total_count = 0;
 		while (true) {
-			duckdb_arrow_array array;
+			duckdb_arrow_array array = nullptr;
 			REQUIRE(duckdb_query_arrow_array(arrow_result, &array) == DuckDBSuccess);
 			if (array == nullptr) {
 				REQUIRE(total_count == 2500);
@@ -724,11 +723,12 @@ TEST_CASE("Test arrow in C API", "[capi][.]") {
 	{
 		REQUIRE(duckdb_prepare(tester.connection, "SELECT CAST($1 AS BIGINT)", &stmt) == DuckDBSuccess);
 		REQUIRE(stmt != nullptr);
+		REQUIRE(duckdb_bind_int64(stmt, 1, 42) == DuckDBSuccess);
 		REQUIRE(duckdb_execute_prepared_arrow(stmt, &arrow_result) == DuckDBSuccess);
 		duckdb_arrow_schema schema;
 		REQUIRE(duckdb_query_arrow_schema(arrow_result, &schema) == DuckDBSuccess);
 		ArrowSchema *arrow_schema = (ArrowSchema *)schema;
-		REQUIRE(string(arrow_schema->name) == "VALUE");
+		REQUIRE(string(arrow_schema->format) == "+s");
 		duckdb_arrow_array array;
 		REQUIRE(duckdb_query_arrow_array(arrow_result, &array) == DuckDBSuccess);
 		ArrowArray *arrow_array = (ArrowArray *)array;

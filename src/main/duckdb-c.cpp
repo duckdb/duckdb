@@ -581,7 +581,7 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	arrow_wrapper->result =
 	    unique_ptr<MaterializedQueryResult>(static_cast<MaterializedQueryResult *>(result.release()));
-	*out_result = (duckdb_arrow)wrapper;
+	*out_result = (duckdb_arrow)arrow_wrapper;
 	return arrow_wrapper->result->success ? DuckDBSuccess : DuckDBError;
 }
 
