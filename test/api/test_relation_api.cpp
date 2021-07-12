@@ -21,6 +21,13 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = tbl->Project("i + 1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
 
+	REQUIRE_NOTHROW(result = tbl->Project(vector<string> {"i + 1", "i + 2"})->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {3, 4, 5}));
+
+	REQUIRE_NOTHROW(result = tbl->Project(vector<string> {"i + 1"}, {"i"})->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4}));
+
 	// we support * expressions
 	REQUIRE_NOTHROW(result = tbl->Project("*")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
@@ -49,6 +56,10 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(proj = filter->Project("i + 1"));
 	REQUIRE_NOTHROW(result = proj->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
+
+	// multi filter
+	REQUIRE_NOTHROW(result = tbl->Filter(vector<string>{"i <> 2", "i <> 3"})->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	// we can reuse the same filter again and perform a different projection
 	REQUIRE_NOTHROW(proj = filter->Project("i * 10"));
@@ -97,6 +108,8 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 
 	// now test ordering
 	REQUIRE_NOTHROW(result = proj->Order("a DESC")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
+	REQUIRE_NOTHROW(result = proj->Order(vector<string>{"a DESC", "a ASC"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
 
 	// top n
@@ -163,6 +176,20 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 
 	// test explain
 	REQUIRE_NO_FAIL(multi_join->Explain());
+
+	// incorrect API usage
+	REQUIRE_THROWS(tbl->Project(vector<string> {})->Execute());
+	REQUIRE_THROWS(tbl->Project(vector<string> {"1, 2, 3"})->Execute());
+	REQUIRE_THROWS(tbl->Project(vector<string> {""})->Execute());
+	REQUIRE_THROWS(tbl->Filter("i=1, i=2")->Execute());
+	REQUIRE_THROWS(tbl->Filter(vector<string> {})->Execute());
+	REQUIRE_THROWS(tbl->Filter(vector<string> {"1, 2, 3"})->Execute());
+	REQUIRE_THROWS(tbl->Filter(vector<string> {""})->Execute());
+	REQUIRE_THROWS(tbl->Order(vector<string> {})->Execute());
+	REQUIRE_THROWS(tbl->Order(vector<string> {"1, 2, 3"})->Execute());
+	REQUIRE_THROWS(tbl->Join(tbl, "")->Execute());
+	REQUIRE_THROWS(tbl->Join(tbl, "a, a+1")->Execute());
+	REQUIRE_THROWS(tbl->Join(tbl, "a, bla.bla")->Execute());
 }
 
 TEST_CASE("Test combinations of set operations", "[relation_api]") {
@@ -329,7 +356,7 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 
 	// create some tables
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES (1), (2), (3)"));
+	REQUIRE_NOTHROW(con.Table("integers")->Insert({{Value::INTEGER(1)}, {Value::INTEGER(2)}, {Value::INTEGER(3)}}));
 
 	// simple view creation
 	REQUIRE_NOTHROW(tbl = con.Table("integers"));
@@ -372,12 +399,17 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 	result = con.Query("SELECT i+1 FROM integers UNION SELECT i+10 FROM integers ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4, 11, 12, 13}));
 
-	tbl->Project("i + 1")->CreateView("test1");
-	tbl->Project("i + 10")->CreateView("test2");
+	REQUIRE_NOTHROW(tbl->Project("i + 1")->CreateView("test1"));
+	REQUIRE_NOTHROW(tbl->Project("i + 10")->CreateView("test2"));
 	result = con.Query("SELECT * FROM test1 UNION SELECT * FROM test2 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4, 11, 12, 13}));
 
+	// project <> alias column count mismatch
 	REQUIRE_THROWS(proj->Project("i + 1, i + 2", "i"));
+	// view already exists
+	REQUIRE_THROWS(tbl->Project("i + 10")->CreateView("test2", false));
+	// table already exists
+	REQUIRE_THROWS(tbl->Project("i + 10")->Create("test2"));
 }
 
 TEST_CASE("Test table creations using the relation API", "[relation_api]") {
@@ -463,6 +495,11 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = tbl->Aggregate("SUM(i), SUM(j)")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {18}));
+
+	REQUIRE_NOTHROW(result = tbl->Aggregate(vector<string>{"SUM(i)", "SUM(j)"})->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {4}));
+	REQUIRE(CHECK_COLUMN(result, 1, {18}));
+
 	// we cannot put aggregates in a Project clause
 	REQUIRE_THROWS(result = tbl->Project("SUM(i), SUM(j)")->Execute());
 	REQUIRE_THROWS(result = tbl->Project("i, SUM(j)")->Execute());
@@ -473,6 +510,10 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE_NOTHROW(result = tbl->Aggregate("SUM(j), i")->Order("2")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {12, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
+	// explicitly grouped aggregate
+	REQUIRE_NOTHROW(result = tbl->Aggregate(vector<string>{"SUM(j)"}, vector<string>{"i"})->Order("1")->Execute());
+	REQUIRE(CHECK_COLUMN(result, 0, {6, 12}));
+
 	// grouped aggregates can be expressions
 	REQUIRE_NOTHROW(result = tbl->Aggregate("i+1 AS i, SUM(j)")->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3}));

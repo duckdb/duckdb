@@ -235,11 +235,6 @@ void Relation::WriteCSV(const string &csv_file) {
 	}
 }
 
-void Relation::Head(idx_t limit) {
-	auto limit_node = Limit(limit);
-	limit_node->Execute()->Print();
-}
-
 shared_ptr<Relation> Relation::CreateView(const string &name, bool replace, bool temporary) {
 	auto view = make_shared<CreateViewRelation>(shared_from_this(), name, replace, temporary);
 	auto res = view->Execute();
@@ -292,9 +287,14 @@ string Relation::ToString() {
 	return str;
 }
 
-void Relation::Print() {
+void Relation::Head(idx_t limit) { // LCOV_EXCL_START
+	auto limit_node = Limit(limit);
+	limit_node->Execute()->Print();
+} // LCOV_EXCL_STOP
+
+void Relation::Print() { // LCOV_EXCL_START
 	Printer::Print(ToString());
-}
+} // LCOV_EXCL_STOP
 
 string Relation::RenderWhitespace(idx_t depth) {
 	return string(depth * 2, ' ');
