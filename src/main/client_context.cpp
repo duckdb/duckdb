@@ -93,9 +93,9 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 		return chunk;
 	} catch (std::exception &ex) {
 		open_result->error = ex.what();
-	} catch (...) {
+	} catch (...) { // LCOV_EXCL_START
 		open_result->error = "Unhandled exception in Fetch";
-	}
+	} // LCOV_EXCL_STOP
 	open_result->success = false;
 	CleanupInternal(*lock);
 	return nullptr;
@@ -130,9 +130,9 @@ string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
 			}
 		} catch (std::exception &ex) {
 			error = ex.what();
-		} catch (...) {
+		} catch (...) { // LCOV_EXCL_START
 			error = "Unhandled exception!";
-		}
+		} // LCOV_EXCL_STOP
 	}
 	return error;
 }
@@ -665,9 +665,9 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
 		try {
 			RunStatementInternal(lock, explain_q, move(explain_stmt), false);
-		} catch (std::exception &ex) {
+		} catch (std::exception &ex) { // LCOV_EXCL_START
 			return "EXPLAIN failed but query did not (" + string(ex.what()) + ")";
-		}
+		} // LCOV_EXCL_STOP
 	}
 
 	// now execute the copied statement
@@ -712,18 +712,18 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	results.push_back(move(unoptimized_result));
 	vector<string> names = {"Copied Result", "Deserialized Result", "Unoptimized Result"};
 	for (idx_t i = 0; i < results.size(); i++) {
-		if (original_result->success != results[i]->success) {
+		if (original_result->success != results[i]->success) { // LCOV_EXCL_START
 			string result = names[i] + " differs from original result!\n";
 			result += "Original Result:\n" + original_result->ToString();
 			result += names[i] + ":\n" + results[i]->ToString();
 			return result;
-		}
-		if (!original_result->collection.Equals(results[i]->collection)) {
+		} // LCOV_EXCL_STOP
+		if (!original_result->collection.Equals(results[i]->collection)) { // LCOV_EXCL_START
 			string result = names[i] + " differs from original result!\n";
 			result += "Original Result:\n" + original_result->ToString();
 			result += names[i] + ":\n" + results[i]->ToString();
 			return result;
-		}
+		} // LCOV_EXCL_STOP
 	}
 
 	return "";
@@ -863,6 +863,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	if (query_verification_enabled) {
 		// run the ToString method of any relation we run, mostly to ensure it doesn't crash
 		relation->ToString();
+		relation->GetAlias();
 		if (relation->IsReadOnly()) {
 			// verify read only statements by running a select statement
 			auto select = make_unique<SelectStatement>();

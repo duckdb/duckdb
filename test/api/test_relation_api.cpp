@@ -450,6 +450,7 @@ TEST_CASE("Test table deletions and updates", "[relation_api]") {
 TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 
 	// create a table
@@ -674,6 +675,7 @@ TEST_CASE("We cannot mix statements from multiple databases", "[relation_api]") 
 TEST_CASE("Test view relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -703,6 +705,7 @@ TEST_CASE("Test view relations", "[relation_api]") {
 TEST_CASE("Test table function relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
@@ -738,6 +741,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
+	con.EnableQueryVerification();
 	unique_ptr<QueryResult> result;
 
 	// write a bunch of values to a CSV

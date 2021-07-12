@@ -276,7 +276,7 @@ TEST_CASE("Test various appender types", "[appender]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE type_table(a BOOL, b UINT8, c UINT16, d UINT32, e UINT64, f FLOAT)"));
 	{
 		Appender appender(con, "type_table");
-		appender.AppendRow(true, 1, 2, 3, 4, 5);
+		appender.AppendRow(true, uint8_t(1), uint16_t(2), uint32_t(3), uint64_t(4), 5.0f);
 	}
 	result = con.Query("SELECT * FROM type_table");
 	REQUIRE(CHECK_COLUMN(result, 0, {true}));
@@ -288,7 +288,7 @@ TEST_CASE("Test various appender types", "[appender]") {
 	// too many rows
 	{
 		Appender appender(con, "type_table");
-		REQUIRE_THROWS(appender.AppendRow(true, 1, 2, 3, 4, 5, nullptr));
+		REQUIRE_THROWS(appender.AppendRow(true, uint8_t(1), uint16_t(2), uint32_t(3), uint64_t(4), 5.0f, nullptr));
 	}
 	{
 		Appender appender(con, "type_table");
