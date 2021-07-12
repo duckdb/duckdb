@@ -99,7 +99,32 @@ NULL
 [[]]
 []
 
+statement ok
+CREATE TABLE test3 (s STRUCT(i INTEGER, j INTEGER));
 
+statement ok
+INSERT INTO test3 values ({'i': 2, 'j': NULL}), ({'i': 1, 'j': NULL}), ({'i': 2, 'j': 3}), ({'i': 1, 'j': 2}), ({'i': 2, 'j': 2}), ({'i': NULL, 'j': NULL}), (NULL), ({'i': 2, 'j': 3})
 
+query T
+SELECT * FROM test3 ORDER BY s
+----
+NULL
+{'i': 1, 'j': 2}
+{'i': 1, 'j': NULL}
+{'i': 2, 'j': 2}
+{'i': 2, 'j': 3}
+{'i': 2, 'j': 3}
+{'i': 2, 'j': NULL}
+{'i': NULL, 'j': NULL}
 
-
+query T
+SELECT * FROM test3 ORDER BY s DESC
+----
+NULL
+{'i': NULL, 'j': NULL}
+{'i': 2, 'j': NULL}
+{'i': 2, 'j': 3}
+{'i': 2, 'j': 3}
+{'i': 2, 'j': 2}
+{'i': 1, 'j': NULL}
+{'i': 1, 'j': 2}

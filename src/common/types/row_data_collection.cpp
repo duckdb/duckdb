@@ -167,15 +167,63 @@ void RowDataCollection::SerializeListVectorSortable(Vector &v, VectorData &vdata
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx) + offset;
 			auto &list_entry = list_data[source_idx];
-			data_ptr_t key_location = key_locations[i] + 1;
-			SerializeVectorSortable(child_vector, list_size, FlatVector::INCREMENTAL_SELECTION_VECTOR, 1,
-			                        key_locations + i, false, has_null, false, prefix_len, width - 1,
-			                        list_entry.offset);
+			data_ptr_t key_location = key_locations[i];
+			if (list_entry.length > 0) {
+				// denote that the list is not empty with a 1
+				key_locations[i][0] = 1;
+				key_locations[i]++;
+				SerializeVectorSortable(child_vector, list_size, FlatVector::INCREMENTAL_SELECTION_VECTOR, 1,
+				                        key_locations + i, false, has_null, false, prefix_len, width - 1,
+				                        list_entry.offset);
+			} else {
+				// denote that the list is empty with a 0
+				key_locations[i][0] = 0;
+				key_locations[i]++;
+				memset(key_locations[i], '\0', width - 1);
+			}
 			// invert bits if desc
 			if (desc) {
 				for (idx_t s = 0; s < width; s++) {
 					*(key_location + s) = ~*(key_location + s);
 				}
+			}
+		}
+	}
+}
+
+void RowDataCollection::SerializeStructVectorSortable(Vector &v, VectorData &vdata, idx_t vcount,
+                                                      const SelectionVector &sel, idx_t add_count,
+                                                      data_ptr_t key_locations[], const bool desc, const bool has_null,
+                                                      const bool nulls_first, const idx_t prefix_len, idx_t width,
+                                                      const idx_t offset) {
+	// serialize null values
+	if (has_null) {
+		auto &validity = vdata.validity;
+		const data_t valid = nulls_first ? 1 : 0;
+		const data_t invalid = 1 - valid;
+
+		for (idx_t i = 0; i < add_count; i++) {
+			auto idx = sel.get_index(i);
+			auto source_idx = vdata.sel->get_index(idx) + offset;
+			// write validity and according value
+			if (validity.RowIsValid(source_idx)) {
+				key_locations[i][0] = valid;
+			} else {
+				key_locations[i][0] = invalid;
+			}
+			key_locations[i]++;
+		}
+		width--;
+	}
+	// serialize the struct
+	auto &child_vector = *StructVector::GetEntries(v)[0];
+	SerializeVectorSortable(child_vector, vcount, FlatVector::INCREMENTAL_SELECTION_VECTOR, add_count, key_locations,
+	                        false, has_null, false, prefix_len, width, offset);
+	// invert bits if desc
+	if (desc) {
+		for (idx_t i = 0; i < add_count; i++) {
+			for (idx_t s = 0; s < width; s++) {
+				*(key_locations[i] - width + s) = ~*(key_locations[i] - width + s);
 			}
 		}
 	}
@@ -247,6 +295,10 @@ void RowDataCollection::SerializeVectorSortable(Vector &v, idx_t vcount, const S
 	case PhysicalType::LIST:
 		SerializeListVectorSortable(v, vdata, sel, ser_count, key_locations, desc, has_null, nulls_first, prefix_len,
 		                            width, offset);
+		break;
+	case PhysicalType::STRUCT:
+		SerializeStructVectorSortable(v, vdata, vcount, sel, ser_count, key_locations, desc, has_null, nulls_first,
+		                              prefix_len, width, offset);
 		break;
 	default:
 		throw NotImplementedException("Cannot ORDER BY column with type %s", v.GetType().ToString());

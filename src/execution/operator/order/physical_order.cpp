@@ -30,23 +30,12 @@ static idx_t GetSortingColSize(const LogicalType &type) {
 		case PhysicalType::VARCHAR:
 			// TODO: make use of statistics
 			return string_t::INLINE_LENGTH;
-			break;
-		case PhysicalType::LIST: {
-			// Nested types get an additional validity byte for every nested layer
-			switch (type.InternalType()) {
-			case PhysicalType::LIST:
-				// Lists get another byte to denote the empty list
-				return 2 + GetSortingColSize(ListType::GetChildType(type));
-				break;
-			case PhysicalType::MAP:
-			case PhysicalType::STRUCT:
-				return 1 + GetSortingColSize(StructType::GetChildType(type, 0));
-				break;
-			default:
-				throw NotImplementedException("Unable to order column with nested type %s", type.ToString());
-			}
-			break;
-		}
+		case PhysicalType::LIST:
+			// Lists get another byte to denote the empty list
+			return 2 + GetSortingColSize(ListType::GetChildType(type));
+		case PhysicalType::MAP:
+		case PhysicalType::STRUCT:
+			return 1 + GetSortingColSize(StructType::GetChildType(type, 0));
 		default:
 			throw NotImplementedException("Unable to order column with type %s", type.ToString());
 		}
@@ -711,20 +700,68 @@ static inline int TemplatedCompareVal(const data_ptr_t &left_ptr, const data_ptr
 }
 
 template <class T>
+static inline int TemplatedCompareAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr) {
+	auto result = TemplatedCompareVal<T>(left_ptr, right_ptr);
+	left_ptr += sizeof(T);
+	right_ptr += sizeof(T);
+	return result;
+}
+
+template <class T>
 static inline int TemplatedCompareListLoop(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const idx_t &count) {
-	// Now compare the values
 	int comp_res = 0;
 	for (idx_t i = 0; i < count; i++) {
-		comp_res = TemplatedCompareVal<T>(left_ptr, right_ptr);
+		comp_res = TemplatedCompareAndAdvance<T>(left_ptr, right_ptr);
 		if (comp_res != 0) {
 			break;
 		}
-		left_ptr += sizeof(T);
-		right_ptr += sizeof(T);
 	}
 	return comp_res;
 }
 
+//! Compares two struct values at the given pointers (recursive)
+static inline int CompareStructVal(data_ptr_t &left_ptr, data_ptr_t &right_ptr,
+                                   const child_list_t<LogicalType> &types) {
+	idx_t count = types.size();
+	// Load validity masks
+	ValidityBytes left_validity(left_ptr);
+	ValidityBytes right_validity(right_ptr);
+	left_ptr += (count + 7) / 8;
+	right_ptr += (count + 7) / 8;
+	// Compute maximum number of comparisons until the tie must break
+	bool left_valid;
+	bool right_valid;
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	for (idx_t i = 0; i < count; i++) {
+		ValidityBytes::GetEntryIndex(i, entry_idx, idx_in_entry);
+		left_valid = left_validity.RowIsValid(left_validity.GetValidityEntry(entry_idx), idx_in_entry);
+		right_valid = right_validity.RowIsValid(right_validity.GetValidityEntry(entry_idx), idx_in_entry);
+		if (left_valid != right_valid) {
+			count = i;
+			break;
+		}
+	}
+	int comp_res = 0;
+	for (idx_t i = 0; i < count; i++) {
+		comp_res = PhysicalOrder::CompareVal(left_ptr, right_ptr, types[i].second);
+		if (comp_res != 0) {
+			break;
+		}
+	}
+	// All values that we looped over were equal
+	if (left_valid != right_valid) {
+		// Nulls last is the norm within lists
+		if (left_valid) {
+			comp_res = -1;
+		} else {
+			comp_res = 1;
+		}
+	}
+	return comp_res;
+}
+
+//! Compare two list values at the pointers (can be recursive)
 static inline int CompareListVal(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const LogicalType &type) {
 	// Load list lengths
 	auto left_len = Load<idx_t>(left_ptr);
@@ -856,19 +893,49 @@ static inline int CompareListVal(data_ptr_t &left_ptr, data_ptr_t &right_ptr, co
 	return comp_res;
 }
 
-//! Compare two blob values
-static inline int CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, const LogicalType &type) {
+int PhysicalOrder::CompareVal(data_ptr_t &l_ptr, data_ptr_t &r_ptr, const LogicalType &type) {
 	switch (type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedCompareAndAdvance<int8_t>(l_ptr, r_ptr);
+	case PhysicalType::INT16:
+		return TemplatedCompareAndAdvance<int16_t>(l_ptr, r_ptr);
+	case PhysicalType::INT32:
+		return TemplatedCompareAndAdvance<int32_t>(l_ptr, r_ptr);
+	case PhysicalType::INT64:
+		return TemplatedCompareAndAdvance<int64_t>(l_ptr, r_ptr);
+	case PhysicalType::UINT8:
+		return TemplatedCompareAndAdvance<uint8_t>(l_ptr, r_ptr);
+	case PhysicalType::UINT16:
+		return TemplatedCompareAndAdvance<uint16_t>(l_ptr, r_ptr);
+	case PhysicalType::UINT32:
+		return TemplatedCompareAndAdvance<uint32_t>(l_ptr, r_ptr);
+	case PhysicalType::UINT64:
+		return TemplatedCompareAndAdvance<uint64_t>(l_ptr, r_ptr);
+	case PhysicalType::INT128:
+		return TemplatedCompareAndAdvance<hugeint_t>(l_ptr, r_ptr);
+	case PhysicalType::FLOAT:
+		return TemplatedCompareAndAdvance<float>(l_ptr, r_ptr);
+	case PhysicalType::DOUBLE:
+		return TemplatedCompareAndAdvance<double>(l_ptr, r_ptr);
+	case PhysicalType::INTERVAL:
+		return TemplatedCompareAndAdvance<interval_t>(l_ptr, r_ptr);
 	case PhysicalType::VARCHAR:
-		return TemplatedCompareVal<string_t>(l_ptr, r_ptr);
-	case PhysicalType::LIST: {
-		auto l_ptr_copy = l_ptr;
-		auto r_ptr_copy = r_ptr;
-		return CompareListVal(l_ptr_copy, r_ptr_copy, ListType::GetChildType(type));
-	}
+		return TemplatedCompareAndAdvance<string_t>(l_ptr, r_ptr);
+	case PhysicalType::LIST:
+		return CompareListVal(l_ptr, r_ptr, ListType::GetChildType(type));
+	case PhysicalType::STRUCT:
+		return CompareStructVal(l_ptr, r_ptr, StructType::GetChildTypes(type));
 	default:
 		throw NotImplementedException("Unimplemented CompareVal for type %s", type.ToString());
 	}
+}
+
+//! Compare two blob values (
+static inline int CompareValConst(const data_ptr_t l_ptr, const data_ptr_t r_ptr, const LogicalType &type) {
+	auto l_ptr_copy = l_ptr;
+	auto r_ptr_copy = r_ptr;
+	return PhysicalOrder::CompareVal(l_ptr_copy, r_ptr_copy, type);
 }
 
 //! Unwizzles an offset into a pointer
@@ -913,12 +980,12 @@ static inline int BreakBlobTie(const idx_t &tie_col, const SortedData &left, con
 		UnswizzleSingleValue(l_data_ptr, l_heap_ptr, type);
 		UnswizzleSingleValue(r_data_ptr, r_heap_ptr, type);
 		// Compare
-		result = CompareVal(l_data_ptr, r_data_ptr, type);
+		result = CompareValConst(l_data_ptr, r_data_ptr, type);
 		// Swizzle the pointers back to offsets
 		SwizzleSingleValue(l_data_ptr, l_heap_ptr, type);
 		SwizzleSingleValue(r_data_ptr, r_heap_ptr, type);
 	} else {
-		result = CompareVal(l_data_ptr, r_data_ptr, type);
+		result = CompareValConst(l_data_ptr, r_data_ptr, type);
 	}
 	return order * result;
 }
@@ -955,7 +1022,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 			          idx_t right_idx = Load<idx_t>(r + sorting_state.comparison_size);
 			          data_ptr_t left_ptr = blob_ptr + left_idx * row_width + tie_col_offset;
 			          data_ptr_t right_ptr = blob_ptr + right_idx * row_width + tie_col_offset;
-			          return order * CompareVal(left_ptr, right_ptr, logical_type) < 0;
+			          return order * CompareValConst(left_ptr, right_ptr, logical_type) < 0;
 		          });
 	} else {
 		std::sort(entry_ptrs, entry_ptrs + end - start,
@@ -965,7 +1032,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 			          idx_t right_idx = Load<idx_t>(r + sorting_state.comparison_size);
 			          data_ptr_t left_ptr = Load<data_ptr_t>(blob_ptr + left_idx * row_width + tie_col_offset);
 			          data_ptr_t right_ptr = Load<data_ptr_t>(blob_ptr + right_idx * row_width + tie_col_offset);
-			          return order * CompareVal(left_ptr, right_ptr, logical_type) < 0;
+			          return order * CompareValConst(left_ptr, right_ptr, logical_type) < 0;
 		          });
 	}
 	// Re-order
@@ -986,7 +1053,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 			// Load next entry and compare
 			idx_ptr += sorting_state.entry_size;
 			data_ptr_t next_ptr = blob_ptr + Load<idx_t>(idx_ptr) * row_width + tie_col_offset;
-			ties[start + i] = CompareVal(current_ptr, next_ptr, logical_type) == 0;
+			ties[start + i] = CompareValConst(current_ptr, next_ptr, logical_type) == 0;
 			current_ptr = next_ptr;
 		}
 	}
