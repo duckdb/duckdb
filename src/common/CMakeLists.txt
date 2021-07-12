@@ -21,6 +21,7 @@ add_library_unity(
   file_buffer.cpp
   file_system.cpp
   gzip_file_system.cpp
+  pipe_file_system.cpp
   limits.cpp
   printer.cpp
   progress_bar.cpp
