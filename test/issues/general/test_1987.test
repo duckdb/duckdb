@@ -1,0 +1,72 @@
+# name: test/issues/general/test_1987.test
+# description: Issue 1987: Casting decimal column to integer requires explicit 0 decimal specifier
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table test (consumption decimal(14,5));
+
+statement ok
+insert into test values(17953.2)
+
+query I
+select * from test where cast(consumption as int) = 17953
+----
+17953.2
+
+query I
+select * from test where cast(consumption as int) = 17953.0
+----
+17953.2
+
+query I
+select * from test where cast(consumption as int) = 17953::decimal(18,5)
+----
+17953.2
+
+query I
+select * from test where consumption = (17953.2::decimal(18,5))
+----
+17953.2
+
+query I
+select * from test where consumption::decimal(6,1) = 17953.2
+----
+17953.2
+
+query I
+select * from test where consumption::decimal(6,1) = (17953.2::decimal(10,2))
+----
+17953.2
+
+query I
+select * from test where consumption::decimal(6,1)::varchar = '17953.2'
+----
+17953.2
+
+query I
+select * from test where consumption::varchar::decimal(6,1) = 17953.2
+----
+17953.2
+
+# decimal with scale=0
+statement ok
+drop table test
+
+statement ok
+create table test (consumption decimal(14,0));
+
+statement ok
+insert into test values(17953)
+
+query I
+select * from test where cast(consumption as int) = 17953
+----
+17953
+
+query I
+select * from test where cast(consumption as int) = 17953.0
+----
+17953
