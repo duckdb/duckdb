@@ -113,9 +113,7 @@ CatalogEntry *Catalog::CreateCollation(ClientContext &context, SchemaCatalogEntr
 }
 
 CatalogEntry *Catalog::CreateSchema(ClientContext &context, CreateSchemaInfo *info) {
-	if (info->schema.empty()) {
-		throw CatalogException("Schema not specified");
-	}
+	D_ASSERT(!info->schema.empty());
 	if (info->schema == TEMP_SCHEMA) {
 		throw CatalogException("Cannot create built-in schema \"%s\"", info->schema);
 	}
@@ -151,15 +149,7 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 		DropSchema(context, info);
 	} else {
 		if (info->schema.empty()) {
-			// invalid schema: check the search path
 			info->schema = DEFAULT_SCHEMA;
-			for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
-				auto entry = GetEntry(context, info->type, context.catalog_search_path[i], info->name, true);
-				if (entry) {
-					info->schema = context.catalog_search_path[i];
-					break;
-				}
-			}
 		}
 		auto schema = GetSchema(context, info->schema);
 		schema->DropEntry(context, info);

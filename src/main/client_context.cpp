@@ -842,6 +842,9 @@ void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 }
 
 void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
+#ifdef DEBUG
+	D_ASSERT(!relation.ToString().empty());
+#endif
 	RunFunctionInTransaction([&]() {
 		// bind the expressions
 		auto binder = Binder::CreateBinder(*this);

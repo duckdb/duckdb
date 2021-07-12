@@ -5,6 +5,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Value <--> String Utilities
 //===--------------------------------------------------------------------===//
+// LCOV_EXCL_START
 string LogicalOperatorToString(LogicalOperatorType type) {
 	switch (type) {
 	case LogicalOperatorType::LOGICAL_GET:
@@ -103,10 +104,11 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "SET";
 	case LogicalOperatorType::LOGICAL_LOAD:
 		return "LOAD";
-	case LogicalOperatorType::LOGICAL_INVALID: // LCOV_EXCL_START
+	case LogicalOperatorType::LOGICAL_INVALID:
 		break;
 	}
 	return "INVALID";
-} // LCOV_EXCL_STOP
+}
+// LCOV_EXCL_STOP
 
 } // namespace duckdb

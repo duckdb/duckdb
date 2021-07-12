@@ -4,6 +4,7 @@
 
 namespace duckdb {
 
+// LCOV_EXCL_START
 string ExpressionTypeToString(ExpressionType type) {
 	switch (type) {
 	case ExpressionType::OPERATOR_CAST:
@@ -130,11 +131,12 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "POSITIONAL_REFERENCE";
 	case ExpressionType::LAMBDA:
 		return "LAMBDA";
-	case ExpressionType::INVALID: // LCOV_EXCL_START
+	case ExpressionType::INVALID:
 		break;
 	}
 	return "INVALID";
-} // LCOV_EXCL_STOP
+}
+// LCOV_EXCL_STOP
 
 string ExpressionTypeToOperator(ExpressionType type) {
 	switch (type) {

@@ -2,6 +2,7 @@
 
 namespace duckdb {
 
+// LCOV_EXCL_START
 string StatementTypeToString(StatementType type) {
 	switch (type) {
 	case StatementType::SELECT_STATEMENT:
@@ -50,11 +51,12 @@ string StatementTypeToString(StatementType type) {
 		return "SET";
 	case StatementType::LOAD_STATEMENT:
 		return "LOAD";
-	case StatementType::INVALID_STATEMENT:  // LCOV_EXCL_START
+	case StatementType::INVALID_STATEMENT:
 		break;
 	}
 	return "INVALID";
-} // LCOV_EXCL_STOP
+}
+// LCOV_EXCL_STOP
 
 bool StatementTypeReturnChanges(StatementType type) {
 	switch (type) {

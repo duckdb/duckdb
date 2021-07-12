@@ -2,6 +2,7 @@
 
 namespace duckdb {
 
+// LCOV_EXCL_START
 string PhysicalOperatorToString(PhysicalOperatorType type) {
 	switch (type) {
 	case PhysicalOperatorType::TABLE_SCAN:
@@ -106,10 +107,11 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "LOAD";
 	case PhysicalOperatorType::INOUT_FUNCTION:
 		return "INOUT_FUNCTION";
-	case PhysicalOperatorType::INVALID: // LCOV_EXCL_START
+	case PhysicalOperatorType::INVALID:
 		break;
 	}
 	return "INVALID";
-} // LCOV_EXCL_STOP
+}
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
