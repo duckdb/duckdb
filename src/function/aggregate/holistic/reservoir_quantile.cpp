@@ -166,19 +166,13 @@ AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState, hugeint_t, hugeint_t,
 		                                                   ReservoirQuantileOperation<hugeint_t>>(LogicalType::HUGEINT,
 		                                                                                          LogicalType::HUGEINT);
-	case PhysicalType::FLOAT:
-		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState, float, float,
-		                                                   ReservoirQuantileOperation<float>>(LogicalType::FLOAT,
-		                                                                                      LogicalType::FLOAT);
-
 	case PhysicalType::DOUBLE:
 		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState, double, double,
 		                                                   ReservoirQuantileOperation<double>>(LogicalType::DOUBLE,
 		                                                                                       LogicalType::DOUBLE);
-
-	default:
-		throw NotImplementedException("Unimplemented quantile aggregate");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unimplemented quantile aggregate");
+	} // LCOV_EXCL_STOP
 }
 
 unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, AggregateFunction &function,

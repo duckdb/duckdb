@@ -121,9 +121,9 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		case StrTimeSpecifier::SECOND_DECIMAL:
 			len += sec >= 10;
 			break;
-		default:
-			break;
-		}
+		default: // LCOV_EXCL_START
+			throw InternalException("Time specifier mismatch");
+		} // LCOV_EXCL_STOP
 		return len;
 	}
 	case StrTimeSpecifier::DAY_OF_MONTH:
@@ -132,9 +132,9 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		return NumericHelper::UnsignedLength<uint32_t>(Date::ExtractDayOfTheYear(date));
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
 		return NumericHelper::UnsignedLength<uint32_t>(Date::ExtractYear(date) % 100);
-	default:
-		throw NotImplementedException("Unimplemented specifier for GetSpecifierLength");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unimplemented specifier for GetSpecifierLength");
+	} // LCOV_EXCL_STOP
 }
 
 //! Returns the total length of the date formatted by this format specifier
@@ -249,9 +249,9 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 		NumericHelper::FormatUnsigned(doy, target);
 		break;
 	}
-	default:
-		throw NotImplementedException("Unimplemented date specifier for strftime");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unimplemented date specifier for strftime");
+	} // LCOV_EXCL_STOP
 	return target;
 }
 
@@ -359,9 +359,9 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = Write2(target, data[5]);
 		break;
 	}
-	default:
-		throw NotImplementedException("Unimplemented specifier for WriteStandardSpecifier in strftime");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unimplemented specifier for WriteStandardSpecifier in strftime");
+	} // LCOV_EXCL_STOP
 	return target;
 }
 
@@ -442,7 +442,7 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 					specifier = StrTimeSpecifier::DAY_OF_YEAR_DECIMAL;
 					break;
 				default:
-					return "Unrecognized format for strftime/strptime: %-" + string(format_char, 1);
+					return "Unrecognized format for strftime/strptime: %-" + string(1, format_char);
 				}
 			} else {
 				switch (format_char) {
@@ -542,7 +542,7 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 					continue;
 				}
 				default:
-					return "Unrecognized format for strftime/strptime: %" + string(format_char, 1);
+					return "Unrecognized format for strftime/strptime: %" + string(1, format_char);
 				}
 			}
 			format.AddFormatSpecifier(move(current_literal), specifier);

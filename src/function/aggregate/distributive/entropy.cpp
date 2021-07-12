@@ -146,9 +146,9 @@ AggregateFunction GetEntropyFunction(PhysicalType type) {
 		                                                   EntropyFunctionString>(LogicalType::VARCHAR,
 		                                                                          LogicalType::DOUBLE);
 
-	default:
-		throw NotImplementedException("Unimplemented approximate_count aggregate");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unimplemented approximate_count aggregate");
+	} // LCOV_EXCL_STOP
 }
 
 void EntropyFun::RegisterFunction(BuiltinFunctions &set) {
