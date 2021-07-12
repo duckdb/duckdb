@@ -376,6 +376,8 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 	tbl->Project("i + 10")->CreateView("test2");
 	result = con.Query("SELECT * FROM test1 UNION SELECT * FROM test2 ORDER BY 1");
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 3, 4, 11, 12, 13}));
+
+	REQUIRE_THROWS(proj->Project("i + 1, i + 2", "i"));
 }
 
 TEST_CASE("Test table creations using the relation API", "[relation_api]") {
@@ -664,6 +666,7 @@ TEST_CASE("We cannot mix statements from multiple databases", "[relation_api]") 
 	REQUIRE_THROWS(i2->Except(i1));
 	REQUIRE_THROWS(i2->Intersect(i1));
 	REQUIRE_THROWS(i2->Join(i1, "i"));
+	REQUIRE_THROWS(i2->Join(i1, "i1.i=i2.i"));
 
 	// FIXME: what about a wrapper to scan data from other databases/connections?
 }
@@ -721,6 +724,13 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 1, {1}));
 	REQUIRE(CHECK_COLUMN(result, 2, {"regetni"}));
 
+	// table function that takes a relation as input
+	auto values = con.Values("(42)", {"i"});
+	auto summary = values->TableFunction("summary", vector<Value>{});
+	result = summary->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {"[42]"}));
+	REQUIRE(CHECK_COLUMN(result, 1, {"42"}));
+
 	// non-existant table function
 	REQUIRE_THROWS(con.TableFunction("blabla"));
 }
@@ -738,6 +748,11 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	// now scan the CSV file
 	auto csv_scan = con.ReadCSV(csv_file, {"i INTEGER"});
 	result = csv_scan->Execute();
+	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
+
+	// with auto detect
+	auto auto_csv_scan = con.ReadCSV(csv_file);
+	result = auto_csv_scan->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
 	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER); SELECT 42;--"}));
@@ -764,4 +779,8 @@ TEST_CASE("Test query relation", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {3}));
 
 	REQUIRE_THROWS(tbl->Project("k+1"));
+	// multiple queries
+	REQUIRE_THROWS(con.RelationFromQuery("SELECT 42; SELECT 84"));
+	// not a select statement
+	REQUIRE_THROWS(con.RelationFromQuery("DELETE FROM tbl"));
 }

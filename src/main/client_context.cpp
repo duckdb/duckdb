@@ -843,6 +843,7 @@ void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 
 void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns) {
 #ifdef DEBUG
+	D_ASSERT(!relation.GetAlias().empty());
 	D_ASSERT(!relation.ToString().empty());
 #endif
 	RunFunctionInTransaction([&]() {
@@ -890,9 +891,11 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 		}
 	}
 	// result mismatch
-	string err_str = "Result mismatch in query!\nExpected the following columns: ";
+	string err_str = "Result mismatch in query!\nExpected the following columns: [";
 	for (idx_t i = 0; i < expected_columns.size(); i++) {
-		err_str += i == 0 ? "[" : ", ";
+		if (i > 0) {
+			err_str += ", ";
+		}
 		err_str += expected_columns[i].name + " " + expected_columns[i].type.ToString();
 	}
 	err_str += "]\nBut result contained the following: ";
