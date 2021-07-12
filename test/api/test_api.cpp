@@ -200,6 +200,40 @@ TEST_CASE("Test multiple result sets", "[api]") {
 	REQUIRE(!result->next);
 }
 
+TEST_CASE("Test streaming API errors", "[api]") {
+	unique_ptr<QueryResult> result, result2;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// multiple streaming result
+	result = con.SendQuery("SELECT 42;");
+	result2 = con.SendQuery("SELECT 42;");
+	// "result" is invalidated
+	REQUIRE_THROWS(CHECK_COLUMN(result, 0, {42}));
+	// "result2" we can read
+	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
+
+	// streaming result followed by non-streaming result
+	result = con.SendQuery("SELECT 42;");
+	result2 = con.Query("SELECT 42;");
+	// "result" is invalidated
+	REQUIRE_THROWS(CHECK_COLUMN(result, 0, {42}));
+	// "result2" we can read
+	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
+
+	// error in query
+	result = con.SendQuery("SELECT 'hello'::INT;");
+	REQUIRE(!result->ToString().empty());
+	result = ((StreamQueryResult &) *result).Materialize();
+	REQUIRE_FAIL(result);
+
+	// error in stream that only happens after fetching
+	result = con.SendQuery("SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
+	result = ((StreamQueryResult &) *result).Materialize();
+	REQUIRE_FAIL(result);
+}
+
 TEST_CASE("Test fetch API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
