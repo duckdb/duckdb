@@ -5,6 +5,12 @@
 statement ok
 PRAGMA enable_verification
 
+# first iteration runs externally, second runs normally
+statement ok
+PRAGMA force_external
+
+loop i 0 2
+
 # string that is longer than Storage::BLOCK_SIZE - this tests whether RowDataCollection dynamically increases block capacity
 statement ok
 select range % 2 i, string_agg('thisstringis200characterslong..........................................................................................................................................................................') s from range(100000) group by i order by i
@@ -449,3 +455,53 @@ ORDER BY Sort, EmployeeID;
 275	>>>Michael Blythe	Sales Representative	4
 285	>>Syed Abbas	Pacific Sales Manager	3
 286	>>>Lynn Tsoflias	Sales Representative	4
+
+statement ok
+DROP TABLE t0;
+
+statement ok
+DROP TABLE test0;
+
+statement ok
+DROP TABLE test1;
+
+statement ok
+DROP TABLE test2;
+
+statement ok
+DROP TABLE test2_1;
+
+statement ok
+DROP TABLE test3;
+
+statement ok
+DROP TABLE test3_1;
+
+statement ok
+DROP TABLE test4;
+
+statement ok
+DROP TABLE tpch_q1_agg;
+
+statement ok
+DROP table test5;
+
+statement ok
+DROP TABLE test6;
+
+statement ok
+DROP table test7;
+
+statement ok
+DROP table test8;
+
+statement ok
+DROP TABLE test9;
+
+statement ok
+DROP TABLE DirectReports;
+
+statement ok
+PRAGMA disable_force_external
+
+endloop
