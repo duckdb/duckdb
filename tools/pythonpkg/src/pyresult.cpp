@@ -204,8 +204,12 @@ py::dict DuckDBPyResult::FetchNumpy(bool stream, idx_t vectors_per_chunk) {
 				conversion.Append(*chunk);
 			}
 		} else {
+			auto stream_result = (StreamQueryResult *)result.get();
 			for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
-				auto chunk = result->FetchRaw();
+				if (!stream_result->is_open) {
+					break;
+				}
+				auto chunk = stream_result->FetchRaw();
 				if (!chunk || chunk->size() == 0) {
 					//! finished
 					break;
