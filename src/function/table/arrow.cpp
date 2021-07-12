@@ -463,7 +463,6 @@ static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets)
 	}
 }
 
-
 void DirectConversion(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, int64_t nested_offset) {
 	auto internal_type = GetTypeIdSize(vector.GetType().InternalType());
 	auto data_ptr = (data_ptr_t)array.buffers[1] + internal_type * (scan_state.chunk_offset + array.offset);
