@@ -16,6 +16,11 @@ select approx_count_distinct(NULL)
 0
 
 query I
+select approx_count_distinct('hello')
+----
+1
+
+query I
 select approx_count_distinct(10) from range(100);
 ----
 1

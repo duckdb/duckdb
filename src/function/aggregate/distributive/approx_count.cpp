@@ -130,9 +130,9 @@ AggregateFunction GetApproxCountDistinctFunction(PhysicalType type) {
 		                                                   ApproxCountDistinctFunctionString>(LogicalType::VARCHAR,
 		                                                                                      LogicalType::BIGINT);
 
-	default:
-		throw NotImplementedException("Unimplemented approximate_count aggregate");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unimplemented approximate_count aggregate");
+	} // LCOV_EXCL_STOP
 }
 
 void ApproxCountDistinctFun::RegisterFunction(BuiltinFunctions &set) {

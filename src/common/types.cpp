@@ -73,9 +73,9 @@ PhysicalType LogicalType::GetInternalType() {
 			return PhysicalType::INT64;
 		} else if (width <= Decimal::MAX_WIDTH_INT128) {
 			return PhysicalType::INT128;
-		} else {
-			throw NotImplementedException("Widths bigger than 38 are not supported");
-		}
+		} else { // LCOV_EXCL_START
+			throw InternalException("Widths bigger than 38 are not supported");
+		} // LCOV_EXCL_STOP
 	}
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
@@ -99,9 +99,9 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
 		return PhysicalType::INVALID;
-	default:
+	default: // LCOV_EXCL_START
 		throw ConversionException("Invalid LogicalType %s", ToString());
-	}
+	} // LCOV_EXCL_STOP
 }
 
 const LogicalType LogicalType::INVALID = LogicalType(LogicalTypeId::INVALID);
@@ -159,6 +159,7 @@ const vector<LogicalType> LogicalType::ALL_TYPES = {
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
 const PhysicalType ROW_TYPE = PhysicalType::INT64;
 
+// LCOV_EXCL_START
 string TypeIdToString(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::BOOL:
@@ -201,10 +202,48 @@ string TypeIdToString(PhysicalType type) {
 		return "INVALID";
 	case PhysicalType::BIT:
 		return "BIT";
-	default:
-		throw ConversionException("Invalid PhysicalType %s", type);
+	case PhysicalType::NA:
+		return "NA";
+	case PhysicalType::HALF_FLOAT:
+		return "HALF_FLOAT";
+	case PhysicalType::STRING:
+		return "ARROW_STRING";
+	case PhysicalType::BINARY:
+		return "BINARY";
+	case PhysicalType::FIXED_SIZE_BINARY:
+		return "FIXED_SIZE_BINARY";
+	case PhysicalType::DATE32:
+		return "DATE32";
+	case PhysicalType::DATE64:
+		return "DATE64";
+	case PhysicalType::TIMESTAMP:
+		return "TIMESTAMP";
+	case PhysicalType::TIME32:
+		return "TIME32";
+	case PhysicalType::TIME64:
+		return "TIME64";
+	case PhysicalType::UNION:
+		return "UNION";
+	case PhysicalType::DICTIONARY:
+		return "DICTIONARY";
+	case PhysicalType::MAP:
+		return "MAP";
+	case PhysicalType::EXTENSION:
+		return "EXTENSION";
+	case PhysicalType::FIXED_SIZE_LIST:
+		return "FIXED_SIZE_LIST";
+	case PhysicalType::DURATION:
+		return "DURATION";
+	case PhysicalType::LARGE_STRING:
+		return "LARGE_STRING";
+	case PhysicalType::LARGE_BINARY:
+		return "LARGE_BINARY";
+	case PhysicalType::LARGE_LIST:
+		return "LARGE_LIST";
 	}
+	return "INVALID";
 }
+// LCOV_EXCL_STOP
 
 idx_t GetTypeIdSize(PhysicalType type) {
 	switch (type) {
@@ -245,10 +284,9 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return sizeof(list_entry_t); // offset + len
-
-	default:
-		throw ConversionException("Invalid PhysicalType %s", type);
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Invalid PhysicalType for GetTypeIdSize");
+	} // LCOV_EXCL_STOP
 }
 
 bool TypeIsConstantSize(PhysicalType type) {
@@ -267,6 +305,7 @@ bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 
+// LCOV_EXCL_START
 string LogicalTypeIdToString(LogicalTypeId id) {
 	switch (id) {
 	case LogicalTypeId::BOOLEAN:
@@ -373,7 +412,7 @@ string LogicalType::ToString() const {
 			return "MAP<?>";
 		}
 		if (child_types.size() != 2) {
-			throw Exception("Map needs exactly two child elements");
+			throw InternalException("Map needs exactly two child elements");
 		}
 		return "MAP<" + ListType::GetChildType(child_types[0].second).ToString() + ", " +
 		       ListType::GetChildType(child_types[1].second).ToString() + ">";
@@ -393,6 +432,7 @@ string LogicalType::ToString() const {
 		return LogicalTypeIdToString(id_);
 	}
 }
+// LCOV_EXCL_STOP
 
 LogicalTypeId TransformStringToLogicalType(const string &str) {
 	auto lower_str = StringUtil::Lower(str);
@@ -554,131 +594,6 @@ bool LogicalType::GetDecimalProperties(uint8_t &width, uint8_t &scale) const {
 		return false;
 	}
 	return true;
-}
-
-bool LogicalType::IsMoreGenericThan(LogicalType &other) const {
-	if (other.id() == id_) {
-		return false;
-	}
-
-	if (other.id() == LogicalTypeId::SQLNULL) {
-		return true;
-	}
-
-	// all integer types can cast from INTEGER
-	// this is because INTEGER is the smallest type considered by the automatic csv sniffer
-	switch (id_) {
-	case LogicalTypeId::SMALLINT:
-		switch (other.id()) {
-		case LogicalTypeId::BOOLEAN:
-		case LogicalTypeId::TINYINT:
-			return true;
-		default:
-			return false;
-		}
-	case LogicalTypeId::INTEGER:
-		switch (other.id()) {
-		case LogicalTypeId::BOOLEAN:
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::SMALLINT:
-			return true;
-		default:
-			return false;
-		}
-	case LogicalTypeId::BIGINT:
-		switch (other.id()) {
-		case LogicalTypeId::BOOLEAN:
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
-			return true;
-		default:
-			return false;
-		}
-	case LogicalTypeId::HUGEINT:
-		switch (other.id()) {
-		case LogicalTypeId::BOOLEAN:
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::BIGINT:
-			return true;
-		default:
-			return false;
-		}
-	case LogicalTypeId::FLOAT:
-		switch (other.id()) {
-		case LogicalTypeId::BOOLEAN:
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::BIGINT:
-			return true;
-		default:
-			return false;
-		}
-	case LogicalTypeId::DOUBLE:
-		switch (other.id()) {
-		case LogicalTypeId::BOOLEAN:
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::BIGINT:
-		case LogicalTypeId::FLOAT:
-			return true;
-		default:
-			return false;
-		}
-	case LogicalTypeId::DATE:
-		return false;
-	case LogicalTypeId::TIMESTAMP: {
-		switch (other.id()) {
-		case LogicalTypeId::TIMESTAMP_NS:
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::DATE:
-			return true;
-		default:
-			return false;
-		}
-	}
-	case LogicalTypeId::TIMESTAMP_NS: {
-		switch (other.id()) {
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIMESTAMP_MS:
-		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::DATE:
-			return true;
-		default:
-			return false;
-		}
-	}
-	case LogicalTypeId::TIMESTAMP_MS: {
-		switch (other.id()) {
-		case LogicalTypeId::TIMESTAMP_SEC:
-		case LogicalTypeId::TIMESTAMP:
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::DATE:
-			return true;
-		default:
-			return false;
-		}
-	}
-	case LogicalTypeId::TIMESTAMP_SEC: {
-		switch (other.id()) {
-		case LogicalTypeId::TIME:
-		case LogicalTypeId::DATE:
-			return true;
-		default:
-			return false;
-		}
-	}
-
-	case LogicalTypeId::VARCHAR:
-		return true;
-	default:
-		return false;
-	}
 }
 
 LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalType &right) {
@@ -1013,9 +928,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 		return ListTypeInfo::Deserialize(source);
 	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
 		return StructTypeInfo::Deserialize(source);
-	default:
-		throw NotImplementedException("Unimplemented type info in ExtraTypeInfo::Deserialize");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
+	} // LCOV_EXCL_STOP
 }
 
 //===--------------------------------------------------------------------===//

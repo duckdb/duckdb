@@ -52,3 +52,14 @@ SELECT AVG(1, 2, 3)
 statement error
 SELECT AVG(AVG(1))
 
+# empty average
+statement ok
+CREATE TABLE vals(i INTEGER, j DOUBLE, k HUGEINT);
+
+statement ok
+INSERT INTO vals VALUES (NULL, NULL, NULL)
+
+query III
+SELECT AVG(i), AVG(j), AVG(k) FROM vals;
+----
+NULL	NULL	NULL

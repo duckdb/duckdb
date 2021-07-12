@@ -123,9 +123,9 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 	case PhysicalType::INT128:
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
 		    LogicalType::HUGEINT, LogicalType::DOUBLE);
-	default:
-		throw NotImplementedException("Unimplemented average aggregate");
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unimplemented average aggregate");
+	} // LCOV_EXCL_STOP
 }
 
 unique_ptr<FunctionData> BindDecimalAvg(ClientContext &context, AggregateFunction &function,
