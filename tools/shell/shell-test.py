@@ -18,11 +18,15 @@ def test_exception(command, input, stdout, stderr, errmsg):
      print(stderr)
      raise Exception(errmsg)
 
-def test(cmd, out=None, err=None, extra_commands=None):
+def test(cmd, out=None, err=None, extra_commands=None, input_file=None):
      command = [sys.argv[1], '--batch', '-init', '/dev/null']
      if extra_commands:
           command += extra_commands
-     res = subprocess.run(command, capture_output=True, input=bytearray(cmd, 'utf8'))
+     if input_file:
+          command += [cmd]
+          res = subprocess.run(command, capture_output=True, input=open(input_file, 'rb').read())
+     else:
+          res = subprocess.run(command, capture_output=True, input=bytearray(cmd, 'utf8'))
      stdout = res.stdout.decode('utf8').strip()
      stderr = res.stderr.decode('utf8').strip()
 
@@ -517,3 +521,17 @@ select 42;
 ''', out='42')
 
 test('/* ;;;;;; */ select 42;', out='42')
+
+if os.name != 'nt':
+     test('''
+     create table mytable as select * from
+     read_csv('/dev/stdin',
+       columns=STRUCT_PACK(foo := 'INTEGER', bar := 'INTEGER', baz := 'VARCHAR'),
+       AUTO_DETECT='false'
+     );
+     select * from mytable limit 1;
+     ''',
+     extra_commands=['-csv', ':memory:'],
+     input_file='test/sql/copy/csv/data/test/test.csv',
+     out='''foo,bar,baz
+0,0," test"''')

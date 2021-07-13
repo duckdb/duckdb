@@ -1,6 +1,10 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
+#include "duckdb/common/types/row_layout.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
