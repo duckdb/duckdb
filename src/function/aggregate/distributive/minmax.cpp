@@ -278,7 +278,7 @@ static bool TemplatedOptimumValue(Vector &left, idx_t lidx, idx_t lcount, Vector
 	case PhysicalType::STRUCT:
 		return TemplatedOptimumStruct<OP>(left, lidx, lcount, right, ridx, rcount);
 	default:
-		throw InvalidTypeException(left.GetType(), "Invalid type for distinct comparison");
+		throw InternalException("Invalid type for distinct comparison");
 	}
 }
 

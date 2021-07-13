@@ -9,6 +9,18 @@ SELECT AVG(3), AVG(NULL)
 3
 NULL
 
+query RR
+SELECT AVG(3::SMALLINT), AVG(NULL::SMALLINT)
+----
+3
+NULL
+
+query RR
+SELECT AVG(3::DOUBLE), AVG(NULL::DOUBLE)
+----
+3
+NULL
+
 # test average on sequence
 statement ok
 CREATE SEQUENCE seq;
