@@ -107,9 +107,9 @@ void Pipeline::Execute(TaskContext &task) {
 		child->FinalizeOperatorState(*state, context);
 	} catch (std::exception &ex) {
 		executor.PushError(ex.what());
-	} catch (...) {
+	} catch (...) { // LCOV_EXCL_START
 		executor.PushError("Unknown exception in pipeline!");
-	}
+	} // LCOV_EXCL_STOP
 	executor.Flush(thread);
 }
 
@@ -123,9 +123,9 @@ void Pipeline::FinishTask() {
 			finish_pipeline = sink->Finalize(*this, executor.context, move(sink_state));
 		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
-		} catch (...) {
+		} catch (...) { // LCOV_EXCL_START
 			executor.PushError("Unknown exception in Finalize!");
-		}
+		} // LCOV_EXCL_STOP
 		if (finish_pipeline) {
 			Finish();
 		}
