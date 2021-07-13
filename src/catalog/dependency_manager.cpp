@@ -13,7 +13,8 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 	for (auto &dependency : dependencies) {
 		idx_t entry_index;
 		CatalogEntry *catalog_entry;
-		if (!dependency->set->GetEntryInternal(context, dependency->name, entry_index, catalog_entry)) { // LCOV_EXCL_START
+		if (!dependency->set->GetEntryInternal(context, dependency->name, entry_index,
+		                                       catalog_entry)) { // LCOV_EXCL_START
 			throw InternalException("Dependency has already been deleted?");
 		} // LCOV_EXCL_STOP
 	}

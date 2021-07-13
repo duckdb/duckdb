@@ -715,7 +715,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 			result += "Original Result:\n" + original_result->ToString();
 			result += names[i] + ":\n" + results[i]->ToString();
 			return result;
-		} // LCOV_EXCL_STOP
+		}                                                                  // LCOV_EXCL_STOP
 		if (!original_result->collection.Equals(results[i]->collection)) { // LCOV_EXCL_START
 			string result = names[i] + " differs from original result!\n";
 			result += "Original Result:\n" + original_result->ToString();

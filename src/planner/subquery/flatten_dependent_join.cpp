@@ -314,8 +314,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		throw ParserException("ORDER BY not supported in correlated subquery");
 	default: // LCOV_EXCL_START
-		throw InternalException("Logical operator type \"%s\" for dependent join",
-		                              LogicalOperatorToString(plan->type));
+		throw InternalException("Logical operator type \"%s\" for dependent join", LogicalOperatorToString(plan->type));
 	} // LCOV_EXCL_STOP
 }
 

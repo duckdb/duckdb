@@ -58,7 +58,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {2, 4}));
 
 	// multi filter
-	REQUIRE_NOTHROW(result = tbl->Filter(vector<string>{"i <> 2", "i <> 3"})->Execute());
+	REQUIRE_NOTHROW(result = tbl->Filter(vector<string> {"i <> 2", "i <> 3"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1}));
 
 	// we can reuse the same filter again and perform a different projection
@@ -109,7 +109,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	// now test ordering
 	REQUIRE_NOTHROW(result = proj->Order("a DESC")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
-	REQUIRE_NOTHROW(result = proj->Order(vector<string>{"a DESC", "a ASC"})->Execute());
+	REQUIRE_NOTHROW(result = proj->Order(vector<string> {"a DESC", "a ASC"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4, 2}));
 
 	// top n
@@ -497,7 +497,7 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {18}));
 
-	REQUIRE_NOTHROW(result = tbl->Aggregate(vector<string>{"SUM(i)", "SUM(j)"})->Execute());
+	REQUIRE_NOTHROW(result = tbl->Aggregate(vector<string> {"SUM(i)", "SUM(j)"})->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {4}));
 	REQUIRE(CHECK_COLUMN(result, 1, {18}));
 
@@ -512,7 +512,7 @@ TEST_CASE("Test aggregates in relation API", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {12, 6}));
 	REQUIRE(CHECK_COLUMN(result, 1, {1, 2}));
 	// explicitly grouped aggregate
-	REQUIRE_NOTHROW(result = tbl->Aggregate(vector<string>{"SUM(j)"}, vector<string>{"i"})->Order("1")->Execute());
+	REQUIRE_NOTHROW(result = tbl->Aggregate(vector<string> {"SUM(j)"}, vector<string> {"i"})->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {6, 12}));
 
 	// grouped aggregates can be expressions
@@ -771,7 +771,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 
 	// table function that takes a relation as input
 	auto values = con.Values("(42)", {"i"});
-	auto summary = values->TableFunction("summary", vector<Value>{});
+	auto summary = values->TableFunction("summary", vector<Value> {});
 	result = summary->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {"[42]"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"42"}));

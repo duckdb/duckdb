@@ -23,7 +23,7 @@ void HyperLogLog::Add(data_ptr_t element, idx_t size) {
 }
 
 idx_t HyperLogLog::Count() {
-	size_t result; // exception from size_t ban
+	size_t result;                                                             // exception from size_t ban
 	if (duckdb_hll::hll_count((duckdb_hll::robj *)hll, &result) != HLL_C_OK) { // LCOV_EXCL_START
 		throw InternalException("Could not count HLL?");
 	} // LCOV_EXCL_STOP

@@ -14,7 +14,7 @@ ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>
 	tree = nullptr;
 	expression_result.Initialize(logical_types);
 	is_little_endian = IsLittleEndian();
-	for(idx_t i = 0; i < types.size(); i++) {
+	for (idx_t i = 0; i < types.size(); i++) {
 		switch (types[i]) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:

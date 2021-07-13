@@ -82,7 +82,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		log->WriteCreateMacro((MacroCatalogEntry *)parent);
 		break;
 	case CatalogType::DELETED_ENTRY:
-		switch(entry->type) {
+		switch (entry->type) {
 		case CatalogType::TABLE_ENTRY: {
 			auto table_entry = (TableCatalogEntry *)entry;
 			table_entry->CommitDrop();

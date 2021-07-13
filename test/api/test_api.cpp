@@ -225,12 +225,13 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// error in query
 	result = con.SendQuery("SELECT 'hello'::INT;");
 	REQUIRE(!result->ToString().empty());
-	result = ((StreamQueryResult &) *result).Materialize();
+	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 
 	// error in stream that only happens after fetching
-	result = con.SendQuery("SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
-	while(result->success) {
+	result = con.SendQuery(
+	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
+	while (result->success) {
 		auto chunk = result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
@@ -240,21 +241,23 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	REQUIRE_FAIL(result);
 
 	// same query but call Materialize
-	result = con.SendQuery("SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
+	result = con.SendQuery(
+	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
 	REQUIRE(!result->ToString().empty());
-	result = ((StreamQueryResult &) *result).Materialize();
+	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 
 	// same query but call materialize after fetching
-	result = con.SendQuery("SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
-	while(result->success) {
+	result = con.SendQuery(
+	    "SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);");
+	while (result->success) {
 		auto chunk = result->Fetch();
 		if (!chunk || chunk->size() == 0) {
 			break;
 		}
 	}
 	REQUIRE(!result->ToString().empty());
-	result = ((StreamQueryResult &) *result).Materialize();
+	result = ((StreamQueryResult &)*result).Materialize();
 	REQUIRE_FAIL(result);
 }
 

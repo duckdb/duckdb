@@ -23,13 +23,13 @@ TEST_CASE("Test DB config configuration", "[api]") {
 
 	set<ConfigurationOptionType> skip_invalid;
 
-	for(auto &option : options) {
+	for (auto &option : options) {
 		auto op = config.GetOptionByName(option.name);
 		REQUIRE(op);
 
 		auto entry = test_options.find(option.type);
 		if (entry != test_options.end()) {
-			for(auto &str_val : entry->second) {
+			for (auto &str_val : entry->second) {
 				Value val(str_val);
 				REQUIRE_NOTHROW(config.SetOption(option, val));
 			}

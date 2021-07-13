@@ -91,7 +91,7 @@ bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 	} catch (std::exception &ex) { // LCOV_EXCL_START
 		Printer::Print(StringUtil::Format("Exception in WAL playback during initial read: %s\n", ex.what()));
 		return false;
-	} catch(...) {
+	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback during initial read");
 		return false;
 	} // LCOV_EXCL_STOP
@@ -138,7 +138,7 @@ bool WriteAheadLog::Replay(DatabaseInstance &database, string &path) {
 		Printer::Print(StringUtil::Format("Exception in WAL playback: %s\n", ex.what()));
 		// exception thrown in WAL replay: rollback
 		con.Rollback();
-	} catch(...) {
+	} catch (...) {
 		Printer::Print("Unknown Exception in WAL playback: %s\n");
 		// exception thrown in WAL replay: rollback
 		con.Rollback();

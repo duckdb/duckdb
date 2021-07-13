@@ -153,7 +153,8 @@ const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::BIGINT,   LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,
     LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,      LogicalType::INTERVAL,
     LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,  LogicalType::USMALLINT,
-    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME, LogicalTypeId::LIST, LogicalTypeId::STRUCT, LogicalTypeId::MAP};
+    LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,      LogicalTypeId::LIST,
+    LogicalTypeId::STRUCT, LogicalTypeId::MAP};
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
 const PhysicalType ROW_TYPE = PhysicalType::INT64;
@@ -283,7 +284,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return sizeof(list_entry_t); // offset + len
-	default: // LCOV_EXCL_START
+	default:                         // LCOV_EXCL_START
 		throw InternalException("Invalid PhysicalType for GetTypeIdSize");
 	} // LCOV_EXCL_STOP
 }

@@ -123,7 +123,7 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 			break;
 		default: // LCOV_EXCL_START
 			throw InternalException("Unsupported type for propagate sum stats");
-		}  // LCOV_EXCL_STOP
+		} // LCOV_EXCL_STOP
 	}
 	return nullptr;
 }

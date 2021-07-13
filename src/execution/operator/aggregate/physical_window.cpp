@@ -513,8 +513,8 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		bounds.window_start = bounds.peer_start;
 		break;
 	case WindowBoundary::UNBOUNDED_FOLLOWING: // LCOV_EXCL_START
-		D_ASSERT(0); // disallowed
-		break; // LCOV_EXCL_STOP
+		D_ASSERT(0);                          // disallowed
+		break;                                // LCOV_EXCL_STOP
 	case WindowBoundary::EXPR_PRECEDING: {
 		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
 		bounds.window_start =
