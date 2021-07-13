@@ -339,13 +339,13 @@ string Pipeline::ToString() const {
 	auto node = this->child;
 	while (node) {
 		str = PhysicalOperatorToString(node->type) + " -> " + str;
-		node = node->children[0].get();
+		node = node->children.empty() ? nullptr : node->children[0].get();
 	}
 	return str;
 }
 
-void Pipeline::Print() const {
+void Pipeline::Print() const { // LCOV_EXCL_START
 	Printer::Print(ToString());
-}
+} // LCOV_EXCL_STOP
 
 } // namespace duckdb
