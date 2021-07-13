@@ -452,18 +452,14 @@ void ArrowToDuckDBMapList(Vector &vector, ArrowArray &array, ArrowScanState &sca
 }
 template <class T>
 static void SetVectorString(Vector &vector, idx_t size, char *cdata, T *offsets) {
+	auto strings = FlatVector::GetData<string_t>(vector);
 	for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 		if (FlatVector::IsNull(vector, row_idx)) {
 			continue;
 		}
 		auto cptr = cdata + offsets[row_idx];
 		auto str_len = offsets[row_idx + 1] - offsets[row_idx];
-
-		auto utf_type = Utf8Proc::Analyze(cptr, str_len);
-		if (utf_type == UnicodeType::INVALID) {
-			throw std::runtime_error("Invalid UTF8 string encoding");
-		}
-		FlatVector::GetData<string_t>(vector)[row_idx] = StringVector::AddString(vector, cptr, str_len);
+		strings[row_idx] = string_t(cptr, str_len);
 	}
 }
 
