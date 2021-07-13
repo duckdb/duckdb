@@ -1,0 +1,1 @@
+lcov_excl_line = InternalException|LCOV_EXCL_LINE
