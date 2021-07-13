@@ -97,9 +97,9 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 			max_negative = numeric_stats.min.GetValueUnsafe<int64_t>();
 			max_positive = numeric_stats.max.GetValueUnsafe<int64_t>();
 			break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unsupported type for propagate sum stats");
-		} // LCOV_EXCL_STOP
+		}
 		auto max_sum_negative = max_negative * hugeint_t(node_stats->max_cardinality);
 		auto max_sum_positive = max_positive * hugeint_t(node_stats->max_cardinality);
 		if (max_sum_positive >= NumericLimits<int64_t>::Maximum() ||
@@ -121,9 +121,9 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 			        LogicalType::BIGINT, LogicalType::HUGEINT);
 			expr.function.name = "sum";
 			break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unsupported type for propagate sum stats");
-		} // LCOV_EXCL_STOP
+		}
 	}
 	return nullptr;
 }
@@ -150,9 +150,9 @@ AggregateFunction SumFun::GetSumAggregate(PhysicalType type) {
 	case PhysicalType::INT128:
 		return AggregateFunction::UnaryAggregate<SumState<hugeint_t>, hugeint_t, hugeint_t, HugeintSumOperation>(
 		    LogicalType::HUGEINT, LogicalType::HUGEINT);
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented sum aggregate");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 unique_ptr<FunctionData> BindDecimalSum(ClientContext &context, AggregateFunction &function,

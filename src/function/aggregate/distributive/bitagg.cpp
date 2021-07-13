@@ -33,9 +33,9 @@ static AggregateFunction GetBitfieldUnaryAggregate(LogicalType type) {
 		return AggregateFunction::UnaryAggregate<BitState<uint32_t>, uint32_t, uint32_t, OP>(type, type);
 	case LogicalTypeId::UBIGINT:
 		return AggregateFunction::UnaryAggregate<BitState<uint64_t>, uint64_t, uint64_t, OP>(type, type);
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented bitfield type for unary aggregate");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 struct BitAndOperation {

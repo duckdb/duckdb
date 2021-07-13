@@ -117,9 +117,9 @@ AggregateFunction GetApproximateQuantileAggregateFunction(PhysicalType type) {
 		                                                   ApproxQuantileOperation<double>>(LogicalType::DOUBLE,
 		                                                                                    LogicalType::DOUBLE);
 
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented quantile aggregate");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFunction &function,

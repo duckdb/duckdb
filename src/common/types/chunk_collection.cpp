@@ -396,9 +396,9 @@ void ChunkCollection::SetValue(idx_t column, idx_t index, const Value &value) {
 	chunks[LocateChunk(index)]->SetValue(column, index % STANDARD_VECTOR_SIZE, value);
 }
 
-void ChunkCollection::Print() { // LCOV_EXCL_START
+void ChunkCollection::Print() {
 	Printer::Print(ToString());
-} // LCOV_EXCL_STOP
+}
 
 bool ChunkCollection::Equals(ChunkCollection &other) {
 	if (count != other.count) {

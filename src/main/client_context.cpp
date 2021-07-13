@@ -83,9 +83,9 @@ void ClientContext::Cleanup() {
 
 unique_ptr<DataChunk> ClientContext::Fetch() {
 	auto lock = LockContext();
-	if (!open_result) { // LCOV_EXCL_START
+	if (!open_result) {
 		throw InternalException("Fetch was called, but there is no open result (or the result was previously closed)");
-	} // LCOV_EXCL_STOP
+	}
 	try {
 		// fetch the chunk and return it
 		auto chunk = FetchInternal(*lock);

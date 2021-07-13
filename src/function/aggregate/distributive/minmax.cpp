@@ -49,9 +49,9 @@ static AggregateFunction GetUnaryAggregate(LogicalType type) {
 		return AggregateFunction::UnaryAggregate<MinMaxState<double>, double, double, OP>(type, type);
 	case LogicalTypeId::INTERVAL:
 		return AggregateFunction::UnaryAggregate<MinMaxState<interval_t>, interval_t, interval_t, OP>(type, type);
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented type for min/max aggregate");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 struct MinMaxBase {

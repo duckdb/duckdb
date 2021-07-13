@@ -67,9 +67,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		Resize<aggr_ht_entry_32>(STANDARD_VECTOR_SIZE * 2);
 		break;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unknown HT entry width");
-	} // LCOV_EXCL_STOP
+	}
 
 	// create additional hash tables for distinct aggrs
 	auto &aggregates = layout.GetAggregates();
@@ -210,9 +210,9 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 
 	D_ASSERT(!is_finalized);
 
-	if (size <= capacity) { // LCOV_EXCL_START
+	if (size <= capacity) {
 		throw InternalException("Cannot downsize a hash table!");
-	} // LCOV_EXCL_STOP
+	}
 	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 
 	// size needs to be a power of 2
@@ -370,9 +370,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	D_ASSERT(!is_finalized);
 
-	if (entries + groups.size() > MaxCapacity()) { // LCOV_EXCL_START
+	if (entries + groups.size() > MaxCapacity()) {
 		throw InternalException("Hash table capacity reached");
-	} // LCOV_EXCL_STOP
+	}
 
 	// resize at 50% capacity, also need to fit the entire vector
 	if (capacity - entries <= groups.size() || entries > capacity / LOAD_FACTOR) {
@@ -512,9 +512,9 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &g
 		return FindOrCreateGroupsInternal<aggr_ht_entry_64>(groups, group_hashes, addresses_out, new_groups_out);
 	case HtEntryType::HT_WIDTH_32:
 		return FindOrCreateGroupsInternal<aggr_ht_entry_32>(groups, group_hashes, addresses_out, new_groups_out);
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unknown HT entry width");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses) {

@@ -527,9 +527,9 @@ void QueryProfiler::Render(const QueryProfiler::TreeNode &node, std::ostream &ss
 	renderer.Render(node, ss);
 }
 
-void QueryProfiler::Print() { // LCOV_EXCL_START
+void QueryProfiler::Print() {
 	Printer::Print(ToString());
-} // LCOV_EXCL_STOP
+}
 
 vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() const {
 	vector<PhaseTimingItem> result;

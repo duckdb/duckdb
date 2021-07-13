@@ -512,9 +512,8 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 	case WindowBoundary::CURRENT_ROW_RANGE:
 		bounds.window_start = bounds.peer_start;
 		break;
-	case WindowBoundary::UNBOUNDED_FOLLOWING: // LCOV_EXCL_START
-		D_ASSERT(0);                          // disallowed
-		break;                                // LCOV_EXCL_STOP
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		throw InternalException("UNBOUNDED_FOLLOWING cannot be the start expression of a window");
 	case WindowBoundary::EXPR_PRECEDING: {
 		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
 		bounds.window_start =
@@ -529,14 +528,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
 		break;
 	}
-	default: // LCOV_EXCL_START
-		throw InternalException("Unsupported boundary");
-	} // LCOV_EXCL_STOP
+	default:
+		throw InternalException("Unsupported window start boundary");
+	}
 
 	switch (wexpr->end) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
-		D_ASSERT(0); // disallowed
-		break;
+		throw InternalException("UNBOUNDED_PRECEDING cannot be the start expression of a window");
 	case WindowBoundary::CURRENT_ROW_ROWS:
 		bounds.window_end = row_idx + 1;
 		break;
@@ -557,11 +555,10 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		bounds.window_end =
 		    row_idx +
 		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
-
 		break;
-	default: // LCOV_EXCL_START
-		throw InternalException("Unsupported boundary");
-	} // LCOV_EXCL_STOP
+	default:
+		throw InternalException("Unsupported window end boundary");
+	}
 
 	// clamp windows to partitions if they should exceed
 	if (bounds.window_start < (int64_t)bounds.partition_start) {
@@ -577,9 +574,9 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		bounds.window_end = bounds.partition_end;
 	}
 
-	if (bounds.window_start < 0 || bounds.window_end < 0) { // LCOV_EXCL_START
+	if (bounds.window_start < 0 || bounds.window_end < 0) {
 		throw InternalException("Failed to compute window boundaries");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
@@ -755,9 +752,9 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			res = payload_collection.GetValue(0, bounds.window_end - 1);
 			break;
 		}
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
-		} // LCOV_EXCL_STOP
+		}
 
 		output.SetValue(output_col, row_idx, res);
 	}

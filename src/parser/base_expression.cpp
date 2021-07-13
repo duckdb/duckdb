@@ -4,9 +4,9 @@
 
 namespace duckdb {
 
-void BaseExpression::Print() { // LCOV_EXCL_START
+void BaseExpression::Print() {
 	Printer::Print(ToString());
-} // LCOV_EXCL_STOP
+}
 
 string BaseExpression::GetName() const {
 	return !alias.empty() ? alias : ToString();

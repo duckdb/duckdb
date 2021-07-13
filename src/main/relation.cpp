@@ -290,9 +290,9 @@ void Relation::Head(idx_t limit) { // LCOV_EXCL_START
 	limit_node->Execute()->Print();
 } // LCOV_EXCL_STOP
 
-void Relation::Print() { // LCOV_EXCL_START
+void Relation::Print() {
 	Printer::Print(ToString());
-} // LCOV_EXCL_STOP
+}
 
 string Relation::RenderWhitespace(idx_t depth) {
 	return string(depth * 2, ' ');

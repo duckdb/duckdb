@@ -30,9 +30,9 @@ void BufferedFileReader::ReadData(data_ptr_t target_buffer, uint64_t read_size) 
 			// read data into buffer
 			offset = 0;
 			read_data = fs.Read(*handle, data.get(), FILE_BUFFER_SIZE);
-			if (read_data == 0) { // LCOV_EXCL_START
+			if (read_data == 0) {
 				throw SerializationException("not enough data in file to deserialize result");
-			} // LCOV_EXCL_STOP
+			}
 		} else {
 			return;
 		}

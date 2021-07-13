@@ -45,9 +45,9 @@ void ExpressionExecutor::Execute(const BoundConjunctionExpression &expr, Express
 			case ExpressionType::CONJUNCTION_OR:
 				VectorOperations::Or(current_result, result, intermediate, count);
 				break;
-			default: // LCOV_EXCL_START
+			default:
 				throw InternalException("Unknown conjunction type!");
-			} // LCOV_EXCL_STOP
+			}
 			result.Reference(intermediate);
 		}
 	}

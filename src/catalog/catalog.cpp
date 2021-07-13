@@ -178,9 +178,9 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
                                 bool if_exists, QueryErrorContext error_context) {
 	if (schema_name.empty()) {
 		// no schema provided: check the catalog search path in order
-		if (context.catalog_search_path.empty()) { // LCOV_EXCL_START
+		if (context.catalog_search_path.empty()) {
 			throw InternalException("Empty catalog search path");
-		} // LCOV_EXCL_STOP
+		}
 		schema_name = DEFAULT_SCHEMA;
 		for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
 			auto entry = GetEntry(context, type, context.catalog_search_path[i], name, true);

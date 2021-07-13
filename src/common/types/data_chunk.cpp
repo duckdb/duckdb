@@ -47,9 +47,9 @@ void DataChunk::Reset() {
 	if (data.empty()) {
 		return;
 	}
-	if (vector_caches.size() != data.size()) { // LCOV_EXCL_START
+	if (vector_caches.size() != data.size()) {
 		throw InternalException("VectorCache and column count mismatch in DataChunk::Reset");
-	} // LCOV_EXCL_STOP
+	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].ResetFromCache(vector_caches[i]);
 	}
@@ -114,9 +114,9 @@ void DataChunk::Append(const DataChunk &other) {
 	if (other.size() == 0) {
 		return;
 	}
-	if (ColumnCount() != other.ColumnCount()) { // LCOV_EXCL_START
+	if (ColumnCount() != other.ColumnCount()) {
 		throw InternalException("Column counts of appending chunk doesn't match!");
-	} // LCOV_EXCL_STOP
+	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(other.data[i], data[i], other.size(), 0, size());
@@ -226,9 +226,9 @@ void DataChunk::Verify() {
 #endif
 }
 
-void DataChunk::Print() { // LCOV_EXCL_START
+void DataChunk::Print() {
 	Printer::Print(ToString());
-} // LCOV_EXCL_STOP
+}
 
 struct DuckDBArrowArrayChildHolder {
 	ArrowArray array;

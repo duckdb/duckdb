@@ -221,9 +221,9 @@ AggregateFunction GetHistogramFunction(PhysicalType type) {
 		                         HistogramFinalize<string>, nullptr, HistogramBindFunction,
 		                         AggregateFunction::StateDestroy<HistogramAggState<string>, HistogramFunction>);
 
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented histogram aggregate");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void HistogramFun::RegisterFunction(BuiltinFunctions &set) {

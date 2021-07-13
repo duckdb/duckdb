@@ -34,9 +34,9 @@ static idx_t MergeJoinSwitch(L_ARG &l, R_ARG &r) {
 		return MJ::template Operation<interval_t>(l, r);
 	case PhysicalType::VARCHAR:
 		return MJ::template Operation<string_t>(l, r);
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Type not implemented for merge join!");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 template <class T, class L_ARG, class R_ARG>
@@ -50,9 +50,9 @@ static idx_t MergeJoinComparisonSwitch(L_ARG &l, R_ARG &r, ExpressionType compar
 		return MergeJoinSwitch<typename T::GreaterThan, L_ARG, R_ARG>(l, r);
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		return MergeJoinSwitch<typename T::GreaterThanEquals, L_ARG, R_ARG>(l, r);
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented comparison type for merge join!");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 idx_t MergeJoinComplex::Perform(MergeInfo &l, MergeInfo &r, ExpressionType comparison_type) {

@@ -170,9 +170,9 @@ AggregateFunction GetReservoirQuantileAggregateFunction(PhysicalType type) {
 		return AggregateFunction::UnaryAggregateDestructor<ReservoirQuantileState, double, double,
 		                                                   ReservoirQuantileOperation<double>>(LogicalType::DOUBLE,
 		                                                                                       LogicalType::DOUBLE);
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented quantile aggregate");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 unique_ptr<FunctionData> BindReservoirQuantile(ClientContext &context, AggregateFunction &function,

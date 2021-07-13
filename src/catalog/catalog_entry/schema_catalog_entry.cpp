@@ -146,9 +146,9 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		function = make_unique_base<StandardEntry, AggregateFunctionCatalogEntry>(catalog, this,
 		                                                                          (CreateAggregateFunctionInfo *)info);
 		break;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
-	} // LCOV_EXCL_STOP
+	}
 	return AddEntry(context, move(function), info->on_conflict);
 }
 

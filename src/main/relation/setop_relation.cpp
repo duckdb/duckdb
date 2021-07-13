@@ -42,9 +42,9 @@ string SetOpRelation::ToString(idx_t depth) {
 	case SetOperationType::INTERSECT:
 		str += "Intersect";
 		break;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unknown setop type");
-	} // LCOV_EXCL_STOP
+	}
 	return str + "\n" + left->ToString(depth + 1) + right->ToString(depth + 1);
 }
 

@@ -152,9 +152,9 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	case PhysicalType::VARCHAR:
 		TemplatedGenerateKeys<string_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Invalid type for index");
-	} // LCOV_EXCL_STOP
+	}
 
 	for (idx_t i = 1; i < input.ColumnCount(); i++) {
 		// for each of the remaining columns, concatenate
@@ -195,9 +195,9 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 		case PhysicalType::VARCHAR:
 			ConcatenateKeys<string_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Invalid type for index");
-		} // LCOV_EXCL_STOP
+		}
 	}
 }
 
@@ -481,9 +481,9 @@ static unique_ptr<Key> CreateKey(ART &art, PhysicalType type, Value &value) {
 	case PhysicalType::VARCHAR:
 		return Key::CreateKey<string_t>(string_t(value.str_value.c_str(), value.str_value.size()),
 		                                art.is_little_endian);
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Invalid type for index");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 bool ART::SearchEqual(ARTIndexScanState *state, idx_t max_count, vector<row_t> &result_ids) {
@@ -838,9 +838,9 @@ bool ART::Scan(Transaction &transaction, DataTable &table, IndexScanState &table
 		case ExpressionType::COMPARE_LESSTHAN:
 			success = SearchLess(state, false, max_count, row_ids);
 			break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Operation not implemented");
-		} // LCOV_EXCL_STOP
+		}
 	} else {
 		lock_guard<mutex> l(lock);
 		// two predicates

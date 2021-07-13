@@ -13,10 +13,9 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 	for (auto &dependency : dependencies) {
 		idx_t entry_index;
 		CatalogEntry *catalog_entry;
-		if (!dependency->set->GetEntryInternal(context, dependency->name, entry_index,
-		                                       catalog_entry)) { // LCOV_EXCL_START
+		if (!dependency->set->GetEntryInternal(context, dependency->name, entry_index, catalog_entry)) {
 			throw InternalException("Dependency has already been deleted?");
-		} // LCOV_EXCL_STOP
+		}
 	}
 	// indexes do not require CASCADE to be dropped, they are simply always dropped along with the table
 	auto dependency_type = object->type == CatalogType::INDEX_ENTRY ? DependencyType::DEPENDENCY_AUTOMATIC

@@ -74,9 +74,9 @@ bool QueryResult::Equals(QueryResult &other) {
 	}
 }
 
-void QueryResult::Print() { // LCOV_EXCL_START
+void QueryResult::Print() {
 	Printer::Print(ToString());
-} // LCOV_EXCL_STOP
+}
 
 string QueryResult::HeaderToString() {
 	string result;
@@ -274,9 +274,9 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		SetArrowMapFormat(root_holder, child, type);
 		break;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unsupported Arrow type " + type.ToString());
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {

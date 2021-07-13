@@ -147,9 +147,9 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 		}
 		break;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented type for UNNEST");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,

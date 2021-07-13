@@ -73,9 +73,9 @@ Value WindowSegmentTree::AggegateFinal() {
 
 void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
 	const auto size = end - begin;
-	if (size >= STANDARD_VECTOR_SIZE) { // LCOV_EXCL_START
+	if (size >= STANDARD_VECTOR_SIZE) {
 		throw InternalException("Cannot compute window aggregation: bounds are too large");
-	} // LCOV_EXCL_STOP
+	}
 
 	const idx_t start_in_vector = begin % STANDARD_VECTOR_SIZE;
 	const auto input_count = input_ref->ColumnCount();
@@ -111,9 +111,9 @@ void WindowSegmentTree::WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end) 
 		return;
 	}
 
-	if (end - begin >= STANDARD_VECTOR_SIZE) { // LCOV_EXCL_START
+	if (end - begin >= STANDARD_VECTOR_SIZE) {
 		throw InternalException("Cannot compute window aggregation: bounds are too large");
-	} // LCOV_EXCL_STOP
+	}
 
 	Vector s(statep, 0);
 	if (l_idx == 0) {

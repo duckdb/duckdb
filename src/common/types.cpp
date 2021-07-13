@@ -73,9 +73,9 @@ PhysicalType LogicalType::GetInternalType() {
 			return PhysicalType::INT64;
 		} else if (width <= Decimal::MAX_WIDTH_INT128) {
 			return PhysicalType::INT128;
-		} else { // LCOV_EXCL_START
+		} else {
 			throw InternalException("Widths bigger than 38 are not supported");
-		} // LCOV_EXCL_STOP
+		}
 	}
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::CHAR:
@@ -99,9 +99,9 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
 		return PhysicalType::INVALID;
-	default: // LCOV_EXCL_START
-		throw ConversionException("Invalid LogicalType %s", ToString());
-	} // LCOV_EXCL_STOP
+	default:
+		throw InternalException("Invalid LogicalType %s", ToString());
+	}
 }
 
 const LogicalType LogicalType::INVALID = LogicalType(LogicalTypeId::INVALID);
@@ -284,9 +284,9 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return sizeof(list_entry_t); // offset + len
-	default:                         // LCOV_EXCL_START
+	default:
 		throw InternalException("Invalid PhysicalType for GetTypeIdSize");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 bool TypeIsConstantSize(PhysicalType type) {
@@ -928,9 +928,9 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 		return ListTypeInfo::Deserialize(source);
 	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
 		return StructTypeInfo::Deserialize(source);
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 //===--------------------------------------------------------------------===//

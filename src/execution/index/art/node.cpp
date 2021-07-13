@@ -49,10 +49,9 @@ void Node::InsertLeaf(ART &art, unique_ptr<Node> &node, uint8_t key, unique_ptr<
 	case NodeType::N256:
 		Node256::Insert(art, node, key, new_node);
 		break;
-	default: // LCOV_EXCL_START
-		D_ASSERT(0);
-		break;
-	} // LCOV_EXCL_STOP
+	default:
+		throw InternalException("Unrecognized leaf type for insert");
+	}
 }
 
 void Node::Erase(ART &art, unique_ptr<Node> &node, idx_t pos) {
@@ -72,10 +71,9 @@ void Node::Erase(ART &art, unique_ptr<Node> &node, idx_t pos) {
 	case NodeType::N256:
 		Node256::Erase(art, node, pos);
 		break;
-	default: // LCOV_EXCL_START
-		D_ASSERT(0);
-		break;
-	} // LCOV_EXCL_STOP
+	default:
+		throw InternalException("Unrecognized leaf type for erase");
+	}
 }
 
 } // namespace duckdb

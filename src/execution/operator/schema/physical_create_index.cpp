@@ -26,10 +26,9 @@ void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk 
 		index = make_unique<ART>(column_ids, unbound_expressions, info->unique);
 		break;
 	}
-	default: // LCOV_EXCL_START
-		D_ASSERT(0);
+	default:
 		throw InternalException("Unimplemented index type");
-	} // LCOV_EXCL_STOP
+	}
 	index_entry->index = index.get();
 	index_entry->info = table.storage->info;
 	table.storage->AddIndex(move(index), expressions);

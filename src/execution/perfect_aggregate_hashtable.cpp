@@ -81,9 +81,9 @@ static void ComputeGroupLocation(Vector &group, Value &min, uintptr_t *address_d
 	case PhysicalType::INT64:
 		ComputeGroupLocationTemplated<int64_t>(vdata, min, address_data, current_shift, count);
 		break;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unsupported group type for perfect aggregate hash table");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) {
@@ -213,9 +213,9 @@ static void ReconstructGroupVector(uint32_t group_values[], Value &min, idx_t re
 	case PhysicalType::INT64:
 		ReconstructGroupVectorTemplated<int64_t>(group_values, min, mask, shift, entry_count, result);
 		break;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Invalid type for perfect aggregate HT group");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void PerfectAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {

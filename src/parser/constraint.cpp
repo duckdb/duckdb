@@ -19,14 +19,13 @@ unique_ptr<Constraint> Constraint::Deserialize(Deserializer &source) {
 		return CheckConstraint::Deserialize(source);
 	case ConstraintType::UNIQUE:
 		return UniqueConstraint::Deserialize(source);
-	default: // LCOV_EXCL_START
-		// don't know how to serialize this constraint type
-		return nullptr;
-	} // LCOV_EXCL_STOP
+	default:
+		throw InternalException("Unrecognized constraint type for serialization");
+	}
 }
 
-void Constraint::Print() { // LCOV_EXCL_START
+void Constraint::Print() {
 	Printer::Print(ToString());
-} // LCOV_EXCL_STOP
+}
 
 } // namespace duckdb

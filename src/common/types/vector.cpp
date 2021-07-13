@@ -31,9 +31,9 @@ Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(move(type_p), true, 
 
 Vector::Vector(LogicalType type_p, data_ptr_t dataptr)
     : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
-	if (dataptr && type.id() == LogicalTypeId::INVALID) { // LCOV_EXCL_START
+	if (dataptr && type.id() == LogicalTypeId::INVALID) {
 		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 Vector::Vector(const VectorCache &cache) : type(cache.GetType()) {
@@ -349,9 +349,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		case PhysicalType::INT128:
 			((hugeint_t *)data)[index] = val.value_.hugeint;
 			break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Widths bigger than 38 are not supported");
-		} // LCOV_EXCL_STOP
+		}
 		break;
 	case LogicalTypeId::FLOAT:
 		((float *)data)[index] = val.value_.float_;
@@ -400,9 +400,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		entry.offset = offset;
 		break;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented type for Vector::SetValue");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 Value Vector::GetValue(idx_t index) const {
@@ -423,9 +423,9 @@ Value Vector::GetValue(idx_t index) const {
 		SequenceVector::GetSequence(*this, start, increment);
 		return Value::Numeric(GetType(), start + increment * index);
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented vector type for Vector::GetValue");
-	} // LCOV_EXCL_STOP
+	}
 
 	if (!validity.RowIsValid(index)) {
 		return Value(GetType());
@@ -475,9 +475,9 @@ Value Vector::GetValue(idx_t index) const {
 			return Value::DECIMAL(((int64_t *)data)[index], width, scale);
 		case PhysicalType::INT128:
 			return Value::DECIMAL(((hugeint_t *)data)[index], width, scale);
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Widths bigger than 38 are not supported");
-		} // LCOV_EXCL_STOP
+		}
 	}
 	case LogicalTypeId::HASH:
 		return Value::HASH(((hash_t *)data)[index]);
@@ -518,9 +518,9 @@ Value Vector::GetValue(idx_t index) const {
 		}
 		return ret;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented type for value access");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 // LCOV_EXCL_START
@@ -702,9 +702,9 @@ void Vector::Normalify(idx_t count) {
 			}
 			auxiliary = move(normalified_buffer);
 		} break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unimplemented type for VectorOperations::Normalify");
-		} // LCOV_EXCL_STOP
+		}
 		break;
 	}
 	case VectorType::SEQUENCE_VECTOR: {
@@ -716,9 +716,9 @@ void Vector::Normalify(idx_t count) {
 		VectorOperations::GenerateSequence(*this, count, start, increment);
 		break;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented type for normalify");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void Vector::Normalify(const SelectionVector &sel, idx_t count) {
@@ -735,9 +735,9 @@ void Vector::Normalify(const SelectionVector &sel, idx_t count) {
 		VectorOperations::GenerateSequence(*this, count, sel, start, increment);
 		break;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented type for normalify with selection vector");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void Vector::Orrify(idx_t count, VectorData &data) {
@@ -848,9 +848,9 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			child.Serialize(list_size, serializer);
 			break;
 		}
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unimplemented variable width type for Vector::Serialize!");
-		} // LCOV_EXCL_STOP
+		}
 	}
 }
 
@@ -910,9 +910,9 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 
 			break;
 		}
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
-		} // LCOV_EXCL_STOP
+		}
 	}
 }
 

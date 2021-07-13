@@ -184,9 +184,9 @@ ExpressionType NegateComparisionExpression(ExpressionType type) {
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		negated_type = ExpressionType::COMPARE_LESSTHAN;
 		break;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unsupported comparison type in negation");
-	} // LCOV_EXCL_STOP
+	}
 	return negated_type;
 }
 
@@ -211,9 +211,9 @@ ExpressionType FlipComparisionExpression(ExpressionType type) {
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 		flipped_type = ExpressionType::COMPARE_LESSTHANOREQUALTO;
 		break;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unsupported comparison type in flip");
-	} // LCOV_EXCL_STOP
+	}
 	return flipped_type;
 }
 

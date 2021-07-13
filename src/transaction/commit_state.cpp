@@ -106,9 +106,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		case CatalogType::SCALAR_FUNCTION_ENTRY:
 			// do nothing, indexes/prepared statements/functions aren't persisted to disk
 			break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Don't know how to drop this type!");
-		} // LCOV_EXCL_STOP
+		}
 		break;
 	case CatalogType::INDEX_ENTRY:
 	case CatalogType::PREPARED_STATEMENT:
@@ -120,9 +120,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::COLLATION_ENTRY:
 		// do nothing, these entries are not persisted to disk
 		break;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("UndoBuffer - don't know how to write this entry to the WAL");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void CommitState::WriteDelete(DeleteInfo *info) {
@@ -243,9 +243,9 @@ void CommitState::CommitEntry(UndoFlags type, data_ptr_t data) {
 		info->version_number = commit_id;
 		break;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("UndoBuffer - don't know how to commit this type!");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
@@ -281,9 +281,9 @@ void CommitState::RevertCommit(UndoFlags type, data_ptr_t data) {
 		info->version_number = transaction_id;
 		break;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("UndoBuffer - don't know how to revert commit of this type!");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 template void CommitState::CommitEntry<true>(UndoFlags type, data_ptr_t data);

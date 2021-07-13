@@ -107,8 +107,8 @@ void LogicalOperator::Verify() {
 #endif
 }
 
-void LogicalOperator::Print() { // LCOV_EXCL_START
+void LogicalOperator::Print() {
 	Printer::Print(ToString());
-} // LCOV_EXCL_STOP
+}
 
 } // namespace duckdb

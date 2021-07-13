@@ -120,9 +120,9 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	case ExpressionClass::BOUND_REF:
 		// these node types have no children
 		break;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("ExpressionIterator used on unbound expression");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void ExpressionIterator::EnumerateExpression(unique_ptr<Expression> &expr,

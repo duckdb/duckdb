@@ -151,9 +151,9 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_UNNEST:
 		result = VisitReplace((BoundUnnestExpression &)expr, expression);
 		break;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unrecognized expression type in logical operator visitor");
-	} // LCOV_EXCL_STOP
+	}
 	if (result) {
 		*expression = move(result);
 	} else {

@@ -121,9 +121,9 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		case StrTimeSpecifier::SECOND_DECIMAL:
 			len += sec >= 10;
 			break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Time specifier mismatch");
-		} // LCOV_EXCL_STOP
+		}
 		return len;
 	}
 	case StrTimeSpecifier::DAY_OF_MONTH:
@@ -132,9 +132,9 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		return NumericHelper::UnsignedLength<uint32_t>(Date::ExtractDayOfTheYear(date));
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
 		return NumericHelper::UnsignedLength<uint32_t>(Date::ExtractYear(date) % 100);
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented specifier for GetSpecifierLength");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 //! Returns the total length of the date formatted by this format specifier
@@ -249,9 +249,9 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 		NumericHelper::FormatUnsigned(doy, target);
 		break;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented date specifier for strftime");
-	} // LCOV_EXCL_STOP
+	}
 	return target;
 }
 
@@ -359,9 +359,9 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = Write2(target, data[5]);
 		break;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unimplemented specifier for WriteStandardSpecifier in strftime");
-	} // LCOV_EXCL_STOP
+	}
 	return target;
 }
 

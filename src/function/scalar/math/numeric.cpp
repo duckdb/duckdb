@@ -310,9 +310,9 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 		case LogicalTypeId::DECIMAL:
 			bind_func = BindGenericRoundFunctionDecimal<CeilDecimalOperator>;
 			break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unimplemented numeric type for function \"ceil\"");
-		} // LCOV_EXCL_STOP
+		}
 		ceil.AddFunction(ScalarFunction({type}, type, func, false, bind_func));
 	}
 
@@ -366,9 +366,9 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 		case LogicalTypeId::DECIMAL:
 			bind_func = BindGenericRoundFunctionDecimal<FloorDecimalOperator>;
 			break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unimplemented numeric type for function \"floor\"");
-		} // LCOV_EXCL_STOP
+		}
 		floor.AddFunction(ScalarFunction({type}, type, func, false, bind_func));
 	}
 	set.AddFunction(floor);
@@ -572,9 +572,9 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 			bind_func = BindGenericRoundFunctionDecimal<RoundDecimalOperator>;
 			bind_prec_func = BindDecimalRoundPrecision;
 			break;
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unimplemented numeric type for function \"floor\"");
-		} // LCOV_EXCL_STOP
+		}
 		round.AddFunction(ScalarFunction({type}, type, round_func, false, bind_func));
 		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, false, bind_prec_func));
 	}

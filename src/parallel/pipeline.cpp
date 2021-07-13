@@ -344,8 +344,8 @@ string Pipeline::ToString() const {
 	return str;
 }
 
-void Pipeline::Print() const { // LCOV_EXCL_START
+void Pipeline::Print() const {
 	Printer::Print(ToString());
-} // LCOV_EXCL_STOP
+}
 
 } // namespace duckdb
