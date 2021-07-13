@@ -117,9 +117,11 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		}
 	}
 	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
-	if (!out->columns) {
+	if (!out->columns) { // LCOV_EXCL_START
+		// malloc failure
 		return DuckDBError;
-	}
+	} // LCOV_EXCL_STOP
+
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(out->columns, 0, sizeof(duckdb_column) * out->column_count);
 	for (idx_t i = 0; i < out->column_count; i++) {
@@ -127,10 +129,10 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		out->columns[i].name = strdup(result->names[i].c_str());
 		out->columns[i].nullmask = (bool *)malloc(sizeof(bool) * out->row_count);
 		out->columns[i].data = malloc(GetCTypeSize(out->columns[i].type) * out->row_count);
-		if (!out->columns[i].nullmask || !out->columns[i].name || !out->columns[i].data) {
+		if (!out->columns[i].nullmask || !out->columns[i].name || !out->columns[i].data) { // LCOV_EXCL_START
 			// malloc failure
 			return DuckDBError;
-		}
+		} // LCOV_EXCL_STOP
 		// memset data to 0 for VARCHAR columns for safe deletion later
 		if (result->types[i].InternalType() == PhysicalType::VARCHAR) {
 			memset(out->columns[i].data, 0, GetCTypeSize(out->columns[i].type) * out->row_count);

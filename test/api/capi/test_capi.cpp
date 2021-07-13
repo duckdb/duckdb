@@ -400,7 +400,7 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	duckdb_destroy_prepare(NULL);
 }
 
-TEST_CASE("Test prepared statements in C API", "[capi][.]") {
+TEST_CASE("Test prepared statements in C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
 	duckdb_result res;
@@ -549,7 +549,7 @@ TEST_CASE("Test prepared statements in C API", "[capi][.]") {
 	duckdb_free(malloced_data);
 }
 
-TEST_CASE("Test appender statements in C API", "[capi][.]") {
+TEST_CASE("Test appender statements in C API", "[capi]") {
 	CAPITester tester;
 	unique_ptr<CAPIResult> result;
 	duckdb_state status;
