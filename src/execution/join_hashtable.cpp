@@ -1,13 +1,12 @@
 #include "duckdb/execution/join_hashtable.hpp"
 
-#include "duckdb/storage/buffer_manager.hpp"
-
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -55,8 +54,8 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	entry_size = layout.GetRowWidth();
 
 	// compute the per-block capacity of this HT
-	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
-	string_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8);
+	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
+	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -312,7 +311,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 void JoinHashTable::Finalize() {
 	// the build has finished, now iterate over all the nodes and construct the final hash table
 	// select a HT that has at least 50% empty space
-	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_ALLOC_SIZE / sizeof(data_ptr_t)) + 1));
+	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
 	// size needs to be a power of 2
 	D_ASSERT((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
