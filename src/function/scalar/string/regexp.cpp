@@ -12,8 +12,7 @@
 
 namespace duckdb {
 
-RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options,
-                                             string constant_string_p)
+RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, string constant_string_p)
     : options(options), constant_string(move(constant_string_p)) {
 	if (!constant_string.empty()) {
 		constant_pattern = make_unique<RE2>(constant_string, options);

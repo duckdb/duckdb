@@ -713,7 +713,8 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBError);
 
 	// many types
-	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE many_types(bool boolean, t TINYINT, s SMALLINT, b BIGINT, ut UTINYINT, us USMALLINT, ui UINTEGER, ub UBIGINT, uf REAL, ud DOUBLE, txt VARCHAR, blb BLOB)"));
+	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE many_types(bool boolean, t TINYINT, s SMALLINT, b BIGINT, ut UTINYINT, "
+	                             "us USMALLINT, ui UINTEGER, ub UBIGINT, uf REAL, ud DOUBLE, txt VARCHAR, blb BLOB)"));
 	duckdb_appender tappender;
 
 	status = duckdb_appender_create(tester.connection, nullptr, "many_types", &tappender);
@@ -815,7 +816,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	result = tester.Query("SELECT * FROM many_types");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->Fetch<bool>(0, 0) == true);
-	REQUIRE(result->Fetch<int8_t>(1, 0) ==  1);
+	REQUIRE(result->Fetch<int8_t>(1, 0) == 1);
 	REQUIRE(result->Fetch<int16_t>(2, 0) == 1);
 	REQUIRE(result->Fetch<int64_t>(3, 0) == 1);
 	REQUIRE(result->Fetch<uint8_t>(4, 0) == 1);

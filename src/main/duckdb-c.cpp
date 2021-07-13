@@ -937,7 +937,7 @@ duckdb_state duckdb_appender_destroy(duckdb_appender *appender) {
 	return DuckDBSuccess;
 }
 
-template<class FUN>
+template <class FUN>
 duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&function) {
 	if (!appender) {
 		return DuckDBError;
@@ -952,18 +952,14 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 }
 
 duckdb_state duckdb_appender_begin_row(duckdb_appender appender) {
-	return duckdb_appender_run_function(appender, [&](Appender &appender) {
-		appender.BeginRow();
-	});
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.BeginRow(); });
 }
 
 duckdb_state duckdb_appender_end_row(duckdb_appender appender) {
-	return duckdb_appender_run_function(appender, [&](Appender &appender) {
-		appender.EndRow();
-	});
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.EndRow(); });
 }
 
-template<class T>
+template <class T>
 duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 	if (!appender) {
 		return DuckDBError;
@@ -1037,13 +1033,9 @@ duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_
 }
 
 duckdb_state duckdb_appender_flush(duckdb_appender appender) {
-	return duckdb_appender_run_function(appender, [&](Appender &appender) {
-		appender.Flush();
-	});
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.Flush(); });
 }
 
 duckdb_state duckdb_appender_close(duckdb_appender appender) {
-	return duckdb_appender_run_function(appender, [&](Appender &appender) {
-		appender.Close();
-	});
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.Close(); });
 }
