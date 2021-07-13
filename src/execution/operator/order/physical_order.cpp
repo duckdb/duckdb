@@ -946,9 +946,9 @@ static inline int CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, con
 		return TemplatedCompareVal<string_t>(l_ptr, r_ptr);
 	case PhysicalType::LIST:
 	case PhysicalType::STRUCT: {
-		auto l_ptr_copy = l_ptr;
-		auto r_ptr_copy = r_ptr;
-		return PhysicalOrder::CompareValAndAdvance(l_ptr_copy, r_ptr_copy, type);
+		auto l_nested_ptr = Load<data_ptr_t>(l_ptr);
+		auto r_nested_ptr = Load<data_ptr_t>(r_ptr);
+		return PhysicalOrder::CompareValAndAdvance(l_nested_ptr, r_nested_ptr, type);
 	}
 	default:
 		throw NotImplementedException("Unimplemented CompareVal for type %s", type.ToString());
@@ -1031,27 +1031,15 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 	const int order = sorting_state.order_types[tie_col] == OrderType::DESCENDING ? -1 : 1;
 	const auto &tie_col_offset = sorting_state.blob_layout.GetOffsets()[col_idx];
 	auto logical_type = sorting_state.blob_layout.GetTypes()[col_idx];
-	if (logical_type.InternalType() == PhysicalType::VARCHAR) {
-		std::sort(entry_ptrs, entry_ptrs + end - start,
-		          [&blob_ptr, &order, &sorting_state, &tie_col_offset, &row_width, &logical_type](const data_ptr_t l,
-		                                                                                          const data_ptr_t r) {
-			          idx_t left_idx = Load<idx_t>(l + sorting_state.comparison_size);
-			          idx_t right_idx = Load<idx_t>(r + sorting_state.comparison_size);
-			          data_ptr_t left_ptr = blob_ptr + left_idx * row_width + tie_col_offset;
-			          data_ptr_t right_ptr = blob_ptr + right_idx * row_width + tie_col_offset;
-			          return order * CompareVal(left_ptr, right_ptr, logical_type) < 0;
-		          });
-	} else {
-		std::sort(entry_ptrs, entry_ptrs + end - start,
-		          [&blob_ptr, &order, &sorting_state, &tie_col_offset, &row_width, &logical_type](const data_ptr_t l,
-		                                                                                          const data_ptr_t r) {
-			          idx_t left_idx = Load<idx_t>(l + sorting_state.comparison_size);
-			          idx_t right_idx = Load<idx_t>(r + sorting_state.comparison_size);
-			          data_ptr_t left_ptr = Load<data_ptr_t>(blob_ptr + left_idx * row_width + tie_col_offset);
-			          data_ptr_t right_ptr = Load<data_ptr_t>(blob_ptr + right_idx * row_width + tie_col_offset);
-			          return order * CompareVal(left_ptr, right_ptr, logical_type) < 0;
-		          });
-	}
+	std::sort(entry_ptrs, entry_ptrs + end - start,
+	          [&blob_ptr, &order, &sorting_state, &tie_col_offset, &row_width, &logical_type](const data_ptr_t l,
+	                                                                                          const data_ptr_t r) {
+		          idx_t left_idx = Load<idx_t>(l + sorting_state.comparison_size);
+		          idx_t right_idx = Load<idx_t>(r + sorting_state.comparison_size);
+		          data_ptr_t left_ptr = blob_ptr + left_idx * row_width + tie_col_offset;
+		          data_ptr_t right_ptr = blob_ptr + right_idx * row_width + tie_col_offset;
+		          return order * CompareVal(left_ptr, right_ptr, logical_type) < 0;
+	          });
 	// Re-order
 	auto temp_block =
 	    buffer_manager.Allocate(MaxValue((end - start) * sorting_state.entry_size, (idx_t)Storage::BLOCK_SIZE));

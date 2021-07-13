@@ -46,7 +46,17 @@ select i from test order by list_value(i) desc;
 100000 values hashing to 6a720b227e361303445c41f7ff4a8109
 
 query T
+select i from test order by list_value(0, i) desc;
+----
+100000 values hashing to 6a720b227e361303445c41f7ff4a8109
+
+query T
 select i from test order by struct_pack(i) desc;
+----
+100000 values hashing to 6a720b227e361303445c41f7ff4a8109
+
+query T
+select i from test order by struct_pack(a:=0, i) desc;
 ----
 100000 values hashing to 6a720b227e361303445c41f7ff4a8109
 
