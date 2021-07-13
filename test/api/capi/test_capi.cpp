@@ -387,17 +387,17 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->IsNull(0, 0));
 	duckdb_time time_val = result->Fetch<duckdb_time>(0, 1);
-	REQUIRE(time_val.hour == 12);
-	REQUIRE(time_val.min == 0);
-	REQUIRE(time_val.sec == 30);
-	REQUIRE(time_val.micros == 123400);
-	REQUIRE(result->Fetch<string>(0, 1) == Value::TIME(12, 0, 30, 123400).ToString());
-	time_val = result->Fetch<duckdb_time>(0, 2);
 	REQUIRE(time_val.hour == 2);
 	REQUIRE(time_val.min == 30);
 	REQUIRE(time_val.sec == 1);
 	REQUIRE(time_val.micros == 0);
-	REQUIRE(result->Fetch<string>(0, 2) == Value::TIME(2, 30, 1, 0).ToString());
+	REQUIRE(result->Fetch<string>(0, 1) == Value::TIME(2, 30, 1, 0).ToString());
+	time_val = result->Fetch<duckdb_time>(0, 2);
+	REQUIRE(time_val.hour == 12);
+	REQUIRE(time_val.min == 0);
+	REQUIRE(time_val.sec == 30);
+	REQUIRE(time_val.micros == 123400);
+	REQUIRE(result->Fetch<string>(0, 2) == Value::TIME(12, 0, 30, 123400).ToString());
 
 	// blob columns
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE blobs(b BLOB)"));
