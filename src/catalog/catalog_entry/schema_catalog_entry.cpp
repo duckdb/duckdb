@@ -167,9 +167,9 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 		throw CatalogException("Existing object %s is of type %s, trying to replace with type %s", info->name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info->type));
 	}
-	if (!set.DropEntry(context, info->name, info->cascade)) { // LCOV_EXCL_START
+	if (!set.DropEntry(context, info->name, info->cascade)) {
 		throw InternalException("Could not drop element because of an internal error");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
@@ -249,9 +249,9 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 		return sequences;
 	case CatalogType::COLLATION_ENTRY:
 		return collations;
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unsupported catalog type in schema");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 } // namespace duckdb

@@ -1,1 +1,1 @@
-lcov_excl_line = default:|InternalException|NotImplementedException|LCOV_EXCL_LINE
+lcov_excl_line = default:|InternalException|NotImplementedException|LCOV_EXCL_LINE|Printer

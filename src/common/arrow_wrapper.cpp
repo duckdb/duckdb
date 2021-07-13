@@ -38,15 +38,17 @@ ArrowArrayStreamWrapper::~ArrowArrayStreamWrapper() {
 
 void ArrowArrayStreamWrapper::GetSchema(ArrowSchemaWrapper &schema) {
 	D_ASSERT(arrow_array_stream.get_schema);
-	if (arrow_array_stream.get_schema(&arrow_array_stream, &schema.arrow_schema)) { // LCOV_EXCL_START
+	// LCOV_EXCL_START
+	if (arrow_array_stream.get_schema(&arrow_array_stream, &schema.arrow_schema)) {
 		throw InvalidInputException("arrow_scan: get_schema failed(): %s", string(GetError()));
-	}                                   // LCOV_EXCL_STOP
-	if (!schema.arrow_schema.release) { // LCOV_EXCL_START
+	}
+	if (!schema.arrow_schema.release) {
 		throw InvalidInputException("arrow_scan: released schema passed");
-	}                                         // LCOV_EXCL_STOP
-	if (schema.arrow_schema.n_children < 1) { // LCOV_EXCL_START
+	}
+	if (schema.arrow_schema.n_children < 1) {
 		throw InvalidInputException("arrow_scan: empty schema passed");
-	} // LCOV_EXCL_STOP
+	}
+	// LCOV_EXCL_STOP
 }
 
 unique_ptr<ArrowArrayWrapper> ArrowArrayStreamWrapper::GetNextChunk() {

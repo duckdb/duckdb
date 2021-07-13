@@ -130,9 +130,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 		auto change_type_info = (ChangeColumnTypeInfo *)table_info;
 		return ChangeColumnType(context, *change_type_info);
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unrecognized alter table type!");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
@@ -185,9 +185,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 			}
 			break;
 		}
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unsupported constraint for entry!");
-		} // LCOV_EXCL_STOP
+		}
 		create_info->constraints.push_back(move(copy));
 	}
 	auto binder = Binder::CreateBinder(context);
@@ -286,9 +286,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 			create_info->constraints.push_back(move(copy));
 			break;
 		}
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unsupported constraint for entry!");
-		} // LCOV_EXCL_STOP
+		}
 	}
 
 	auto binder = Binder::CreateBinder(context);
@@ -360,9 +360,9 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			}
 			break;
 		}
-		default: // LCOV_EXCL_START
+		default:
 			throw InternalException("Unsupported constraint for entry!");
-		} // LCOV_EXCL_STOP
+		}
 		create_info->constraints.push_back(move(constraint));
 	}
 

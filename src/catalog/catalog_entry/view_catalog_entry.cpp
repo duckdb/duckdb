@@ -38,9 +38,9 @@ unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, Al
 		copied_view->name = rename_info->new_view_name;
 		return copied_view;
 	}
-	default: // LCOV_EXCL_START
+	default:
 		throw InternalException("Unrecognized alter view type!");
-	} // LCOV_EXCL_STOP
+	}
 }
 
 void ViewCatalogEntry::Serialize(Serializer &serializer) {
