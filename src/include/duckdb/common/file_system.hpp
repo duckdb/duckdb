@@ -26,6 +26,25 @@ class ClientContext;
 class DatabaseInstance;
 class FileSystem;
 
+enum class FileType {
+	//! Regular file
+	FILE_TYPE_REGULAR,
+	//! Directory
+	FILE_TYPE_DIR,
+	//! FIFO named pipe
+	FILE_TYPE_FIFO,
+	//! Socket
+	FILE_TYPE_SOCKET,
+	//! Symbolic link
+	FILE_TYPE_LINK,
+	//! Block device
+	FILE_TYPE_BLOCKDEV,
+	//! Character device
+	FILE_TYPE_CHARDEV,
+	//! Unknown or invalid file handle
+	FILE_TYPE_INVALID,
+};
+
 struct FileHandle {
 public:
 	FileHandle(FileSystem &file_system, string path) : file_system(file_system), path(path) {
@@ -48,6 +67,7 @@ public:
 	bool CanSeek();
 	bool OnDiskFile();
 	idx_t GetFileSize();
+	FileType GetType();
 
 protected:
 	virtual void Close() = 0;
@@ -104,6 +124,8 @@ public:
 	virtual int64_t GetFileSize(FileHandle &handle);
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
 	virtual time_t GetLastModifiedTime(FileHandle &handle);
+	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
+	virtual FileType GetFileType(FileHandle &handle);
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	virtual void Truncate(FileHandle &handle, int64_t new_size);
@@ -202,6 +224,9 @@ public:
 	}
 	time_t GetLastModifiedTime(FileHandle &handle) override {
 		return handle.file_system.GetLastModifiedTime(handle);
+	}
+	FileType GetFileType(FileHandle &handle) override {
+		return handle.file_system.GetFileType(handle);
 	}
 
 	void Truncate(FileHandle &handle, int64_t new_size) override {

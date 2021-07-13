@@ -162,7 +162,7 @@ py::list DuckDBPyResult::Fetchall() {
 	return res;
 }
 
-py::dict DuckDBPyResult::FetchNumpy(bool stream) {
+py::dict DuckDBPyResult::FetchNumpy(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
 		throw std::runtime_error("result closed");
 	}
@@ -184,21 +184,36 @@ py::dict DuckDBPyResult::FetchNumpy(bool stream) {
 			}
 			materialized.collection.Reset();
 		} else {
-			conversion.Append(*materialized.Fetch());
+			for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
+				auto chunk = materialized.Fetch();
+				if (!chunk || chunk->size() == 0) {
+					//! finished
+					break;
+				}
+				conversion.Append(*chunk);
+			}
 		}
 	} else {
 		if (!stream) {
 			while (true) {
 				auto chunk = result->FetchRaw();
 				if (!chunk || chunk->size() == 0) {
-					// finished
+					//! finished
 					break;
 				}
 				conversion.Append(*chunk);
 			}
 		} else {
-			auto chunk = result->FetchRaw();
-			if (chunk && chunk->size() > 0) {
+			auto stream_result = (StreamQueryResult *)result.get();
+			for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
+				if (!stream_result->is_open) {
+					break;
+				}
+				auto chunk = stream_result->FetchRaw();
+				if (!chunk || chunk->size() == 0) {
+					//! finished
+					break;
+				}
 				conversion.Append(*chunk);
 			}
 		}
@@ -216,8 +231,8 @@ py::object DuckDBPyResult::FetchDF() {
 	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpy());
 }
 
-py::object DuckDBPyResult::FetchDFChunk() {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpy(true));
+py::object DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
+	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpy(true, num_of_vectors));
 }
 
 py::object DuckDBPyResult::FetchArrowTable() {
