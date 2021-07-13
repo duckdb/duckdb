@@ -177,7 +177,7 @@ public:
 			function = &ScalarFunction::UnaryFunction<double, double, OP>;
 			break;
 		default:
-			throw NotImplementedException("Unimplemented type for GetScalarUnaryFunction");
+			throw InternalException("Unimplemented type for GetScalarUnaryFunction");
 		}
 		return function;
 	}
@@ -220,7 +220,7 @@ public:
 			function = &ScalarFunction::UnaryFunction<double, TR, OP>;
 			break;
 		default:
-			throw NotImplementedException("Unimplemented type for GetScalarUnaryFunctionFixedReturn");
+			throw InternalException("Unimplemented type for GetScalarUnaryFunctionFixedReturn");
 		}
 		return function;
 	}

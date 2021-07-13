@@ -6,6 +6,10 @@
 
 namespace duckdb {
 
+string TableRef::ToString() const {
+	return string();
+}
+
 bool TableRef::Equals(const TableRef *other) const {
 	return other && type == other->type && alias == other->alias &&
 	       SampleOptions::Equals(sample.get(), other->sample.get());

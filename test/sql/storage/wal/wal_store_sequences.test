@@ -53,10 +53,8 @@ SELECT nextval('seq_cycle')
 ----
 3
 
-query I
+statement error
 SELECT nextval('seq2')
-----
-2
 
 # again
 restart

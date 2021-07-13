@@ -110,8 +110,7 @@ unique_ptr<FunctionData> BindNextAfter(ClientContext &context, ScalarFunction &f
 	    (arguments[0]->return_type != LogicalType::FLOAT && arguments[0]->return_type != LogicalType::DOUBLE)) {
 		throw NotImplementedException("Unimplemented type for NextAfter Function");
 	}
-
-	return make_unique<FunctionData>();
+	return nullptr;
 }
 
 void NextAfterFun::RegisterFunction(BuiltinFunctions &set) {
