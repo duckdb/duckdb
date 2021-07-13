@@ -24,9 +24,9 @@ def test(cmd, out=None, err=None, extra_commands=None, input_file=None):
           command += extra_commands
      if input_file:
           command += [cmd]
-          res = subprocess.run(command, input=open(input_file, 'rb').read(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+          res = subprocess.run(command, input=open(input_file, 'rb').read(), stdout=subprocess.PIPE, stderr=subprocess.PIPE))
      else:
-          res = subprocess.run(command, input=bytearray(cmd, 'utf8')), stdout=subprocess.PIPE, stderr=subprocess.PIPE
+          res = subprocess.run(command, input=bytearray(cmd, 'utf8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
      stdout = res.stdout.decode('utf8').strip()
      stderr = res.stderr.decode('utf8').strip()
 
