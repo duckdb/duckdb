@@ -809,6 +809,7 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 
 	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER); SELECT 42;--"}));
+	REQUIRE_THROWS(con.ReadCSV(csv_file, {"i INTEGER, j INTEGER"}));
 }
 
 TEST_CASE("Test query relation", "[relation_api]") {

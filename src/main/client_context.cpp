@@ -304,6 +304,7 @@ void ClientContext::HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &sta
 
 unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 	auto lock = LockContext();
+
 	auto statements = ParseStatementsInternal(*lock, query);
 	if (statements.size() != 1) {
 		throw Exception("ExtractPlan can only prepare a single statement");

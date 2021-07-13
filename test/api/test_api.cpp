@@ -426,3 +426,35 @@ TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
 	REQUIRE_NO_FAIL(con2->Query("COMMIT"));
 	REQUIRE_NO_FAIL(con3->Query("COMMIT"));
 }
+
+TEST_CASE("Test connection API", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// extract a plan node
+	REQUIRE_NOTHROW(con.ExtractPlan("SELECT 42"));
+	// can only extract one statement at a time
+	REQUIRE_THROWS(con.ExtractPlan("SELECT 42; SELECT 84"));
+
+	// append to a table
+	con.Query("CREATE TABLE integers(i integer);");
+	auto table_info = con.TableInfo("integers");
+
+	DataChunk chunk;
+	REQUIRE_NOTHROW(con.Append(*table_info, chunk));
+
+	// no transaction active
+	REQUIRE_THROWS(con.Commit());
+	REQUIRE_THROWS(con.Rollback());
+
+	// cannot start a transaction within a transaction
+	REQUIRE_NOTHROW(con.BeginTransaction());
+	REQUIRE_THROWS(con.BeginTransaction());
+
+	con.SetAutoCommit(false);
+	REQUIRE(!con.IsAutoCommit());
+
+	con.SetAutoCommit(true);
+	REQUIRE(con.IsAutoCommit());
+}
