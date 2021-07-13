@@ -56,10 +56,10 @@ TransactionManager::~TransactionManager() {
 Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	// obtain the transaction lock during this function
 	lock_guard<mutex> lock(transaction_lock);
-	if (current_start_timestamp >= TRANSACTION_ID_START) {
-		throw Exception("Cannot start more transactions, ran out of "
+	if (current_start_timestamp >= TRANSACTION_ID_START) { // LCOV_EXCL_START
+		throw InternalException("Cannot start more transactions, ran out of "
 		                "transaction identifiers!");
-	}
+	} // LCOV_EXCL_STOP
 
 	// obtain the start time and transaction ID of this transaction
 	transaction_t start_time = current_start_timestamp++;
