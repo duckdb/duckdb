@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
@@ -67,15 +66,15 @@ struct RowOperations {
 	// Out-of-Core Operators
 	//===--------------------------------------------------------------------===//
 	//! Swizzles blob pointers to offset within heap row
-	static void SwizzleColumns(const RowLayout &layout, const data_ptr_t &base_row_ptr, const idx_t &count);
+	static void SwizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count);
 	//! Swizzles the base pointer of each row to offset within heap block
-	static void SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t &heap_base_ptr,
-	                               const idx_t &count);
+	static void SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+	                               const idx_t count);
 	//! Swizzles the base offset of each row back to a pointer
-	static void UnswizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t &heap_base_ptr,
-	                                 const idx_t &count);
+	static void UnswizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+	                                 const idx_t count);
 	//! Unswizzles offsets back to pointers to blobs
-	static void UnswizzleColumns(const RowLayout &layout, const data_ptr_t &base_row_ptr, const idx_t &count);
+	static void UnswizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count);
 };
 
 } // namespace duckdb

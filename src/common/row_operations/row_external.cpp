@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t &base_row_ptr, const idx_t &count) {
+void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count) {
 	const idx_t row_width = layout.GetRowWidth();
 	const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
 	// Swizzle the blob columns one by one
@@ -55,8 +55,8 @@ void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t &ba
 	}
 }
 
-void RowOperations::SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t &heap_base_ptr,
-                                       const idx_t &count) {
+void RowOperations::SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+                                       const idx_t count) {
 	const idx_t row_width = layout.GetRowWidth();
 	const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
 	idx_t cumulative_offset = 0;
@@ -67,8 +67,8 @@ void RowOperations::SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_p
 	}
 }
 
-void RowOperations::UnswizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t &heap_base_ptr,
-                                         const idx_t &count) {
+void RowOperations::UnswizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+                                         const idx_t count) {
 	const idx_t row_width = layout.GetRowWidth();
 	const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
 	for (idx_t i = 0; i < count; i++) {
@@ -79,7 +79,7 @@ void RowOperations::UnswizzleHeapPointer(const RowLayout &layout, data_ptr_t row
 	}
 }
 
-void RowOperations::UnswizzleColumns(const RowLayout &layout, const data_ptr_t &base_row_ptr, const idx_t &count) {
+void RowOperations::UnswizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count) {
 	const idx_t row_width = layout.GetRowWidth();
 	const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
 	// Unswizzle the columns one by one
