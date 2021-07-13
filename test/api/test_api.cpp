@@ -1,5 +1,6 @@
 #include "catch.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/parser/parser.hpp"
 
 #include <chrono>
 #include <thread>
@@ -457,4 +458,9 @@ TEST_CASE("Test connection API", "[api]") {
 
 	con.SetAutoCommit(true);
 	REQUIRE(con.IsAutoCommit());
+}
+
+TEST_CASE("Test parser tokenize", "[api]") {
+	Parser parser;
+	REQUIRE_NOTHROW(parser.Tokenize("SELECT * FROM table WHERE i+1=3 AND j='hello'; --tokenize example query"));
 }

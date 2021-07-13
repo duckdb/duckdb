@@ -616,6 +616,8 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		// check that the hashes are equivalent too
 		D_ASSERT(orig_expr_list[i]->Hash() == de_expr_list[i]->Hash());
 		D_ASSERT(orig_expr_list[i]->Hash() == cp_expr_list[i]->Hash());
+
+		D_ASSERT(!orig_expr_list[i]->Equals(nullptr));
 	}
 	// now perform additional checking within the expressions
 	for (idx_t outer_idx = 0; outer_idx < orig_expr_list.size(); outer_idx++) {

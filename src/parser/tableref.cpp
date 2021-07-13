@@ -51,7 +51,7 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &source) {
 		break;
 	case TableReferenceType::CTE:
 	case TableReferenceType::INVALID:
-		return nullptr;
+		throw InternalException("Unsupported type for TableRef::Deserialize");
 	}
 	result->alias = alias;
 	result->sample = move(sample);

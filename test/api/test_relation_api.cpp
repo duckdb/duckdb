@@ -188,6 +188,8 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_THROWS(tbl->Filter(vector<string> {""})->Execute());
 	REQUIRE_THROWS(tbl->Order(vector<string> {})->Execute());
 	REQUIRE_THROWS(tbl->Order(vector<string> {"1, 2, 3"})->Execute());
+	REQUIRE_THROWS(tbl->Order("1 LIMIT 3")->Execute());
+	REQUIRE_THROWS(tbl->Order("1; SELECT 42")->Execute());
 	REQUIRE_THROWS(tbl->Join(tbl, "")->Execute());
 	REQUIRE_THROWS(tbl->Join(tbl, "a, a+1")->Execute());
 	REQUIRE_THROWS(tbl->Join(tbl, "a, bla.bla")->Execute());

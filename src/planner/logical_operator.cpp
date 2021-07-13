@@ -88,6 +88,8 @@ void LogicalOperator::Verify() {
 		D_ASSERT(expressions[expr_idx]->ToString() == copy->ToString());
 		D_ASSERT(original_hash == copy_hash);
 		D_ASSERT(Expression::Equals(expressions[expr_idx].get(), copy.get()));
+
+		D_ASSERT(!Expression::Equals(expressions[expr_idx].get(), nullptr));
 		for (idx_t other_idx = 0; other_idx < expr_idx; other_idx++) {
 			// comparison with other expressions
 			auto other_hash = expressions[other_idx]->Hash();
