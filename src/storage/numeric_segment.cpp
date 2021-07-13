@@ -27,7 +27,7 @@ NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t ro
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified: allocate a buffer for the uncompressed segment
-		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_SIZE, false);
 	} else {
 		this->block = buffer_manager.RegisterBlock(block_id);
 	}

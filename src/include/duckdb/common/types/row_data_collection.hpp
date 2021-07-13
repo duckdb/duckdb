@@ -17,21 +17,19 @@
 namespace duckdb {
 
 struct RowDataBlock {
-	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size, idx_t added_capacity = 0)
+	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
-		capacity += added_capacity;
 		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
 	}
+	//! The buffer block handle
 	shared_ptr<BlockHandle> block;
-	const idx_t capacity;
+	//! Capacity (number of entries) and entry size that fit in this block
+	idx_t capacity;
 	const idx_t entry_size;
+	//! Number of entries currently in this block
 	idx_t count;
+	//! Write offset (if variable size entries)
 	idx_t byte_offset;
-
-	RowDataBlock(const RowDataBlock &other)
-	    : block(other.block), capacity(other.capacity), entry_size(other.entry_size), count(other.count),
-	      byte_offset(other.byte_offset) {
-	}
 };
 
 struct BlockAppendEntry {
@@ -43,7 +41,7 @@ struct BlockAppendEntry {
 
 class RowDataCollection {
 public:
-	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size);
+	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size, bool keep_pinned = false);
 
 	mutex rc_lock;
 
@@ -57,6 +55,8 @@ public:
 	idx_t entry_size;
 	//! The blocks holding the main data
 	vector<RowDataBlock> blocks;
+	//! The blocks that this collection currently has pinned
+	vector<unique_ptr<BufferHandle>> pinned_blocks;
 
 public:
 	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
@@ -109,6 +109,8 @@ private:
 
 	//! Whether the system is little endian
 	const bool is_little_endian;
+	//! Whether the blocks should stay pinned (necessary for e.g. a heap)
+	bool keep_pinned;
 };
 
 } // namespace duckdb

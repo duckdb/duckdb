@@ -61,6 +61,20 @@ struct RowOperations {
 	static idx_t Match(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
 	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
 	                   idx_t &no_match_count);
+
+	//===--------------------------------------------------------------------===//
+	// Out-of-Core Operators
+	//===--------------------------------------------------------------------===//
+	//! Swizzles blob pointers to offset within heap row
+	static void SwizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count);
+	//! Swizzles the base pointer of each row to offset within heap block
+	static void SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+	                               const idx_t count);
+	//! Swizzles the base offset of each row back to a pointer
+	static void UnswizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+	                                 const idx_t count);
+	//! Unswizzles offsets back to pointers to blobs
+	static void UnswizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count);
 };
 
 } // namespace duckdb

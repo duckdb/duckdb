@@ -7,10 +7,11 @@ namespace duckdb {
 
 using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
-RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size)
+RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size,
+                                     bool keep_pinned)
     : buffer_manager(buffer_manager), count(0), block_capacity(block_capacity), entry_size(entry_size),
-      is_little_endian(IsLittleEndian()) {
-	D_ASSERT(block_capacity * entry_size >= Storage::BLOCK_ALLOC_SIZE);
+      is_little_endian(IsLittleEndian()), keep_pinned(keep_pinned) {
+	D_ASSERT(block_capacity * entry_size >= Storage::BLOCK_SIZE);
 }
 
 template <class T>
@@ -160,13 +161,12 @@ void RowDataCollection::SerializeVectorSortable(Vector &v, idx_t vcount, const S
 
 void RowDataCollection::ComputeStringEntrySizes(VectorData &vdata, idx_t entry_sizes[], const idx_t ser_count,
                                                 const SelectionVector &sel, const idx_t offset) {
-	const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 	auto strings = (string_t *)vdata.data;
 	for (idx_t i = 0; i < ser_count; i++) {
 		auto idx = sel.get_index(i);
 		auto str_idx = vdata.sel->get_index(idx) + offset;
 		if (vdata.validity.RowIsValid(str_idx)) {
-			entry_sizes[i] += string_prefix_len + strings[str_idx].GetSize();
+			entry_sizes[i] += sizeof(uint32_t) + strings[str_idx].GetSize();
 		}
 	}
 }
@@ -397,7 +397,6 @@ void RowDataCollection::SerializeStringVector(Vector &v, idx_t vcount, const Sel
 	VectorData vdata;
 	v.Orrify(vcount, vdata);
 
-	const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 	auto strings = (string_t *)vdata.data;
 	if (!validitymask_locations) {
 		for (idx_t i = 0; i < ser_count; i++) {
@@ -407,7 +406,7 @@ void RowDataCollection::SerializeStringVector(Vector &v, idx_t vcount, const Sel
 				auto &string_entry = strings[source_idx];
 				// store string size
 				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
-				key_locations[i] += string_prefix_len;
+				key_locations[i] += sizeof(uint32_t);
 				// store the string
 				memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
 				key_locations[i] += string_entry.GetSize();
@@ -423,7 +422,7 @@ void RowDataCollection::SerializeStringVector(Vector &v, idx_t vcount, const Sel
 				auto &string_entry = strings[source_idx];
 				// store string size
 				Store<uint32_t>(string_entry.GetSize(), key_locations[i]);
-				key_locations[i] += string_prefix_len;
+				key_locations[i] += sizeof(uint32_t);
 				// store the string
 				memcpy(key_locations[i], string_entry.GetDataUnsafe(), string_entry.GetSize());
 				key_locations[i] += string_entry.GetSize();
@@ -626,8 +625,8 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 		for (idx_t i = 0; i < remaining; i++) {
 			if (block.byte_offset + entry_sizes[i] > block_capacity * entry_size) {
 				while (entry_sizes[i] > block_capacity * entry_size) {
-					// if an entry does not fit, increase entry size until it does
-					entry_size *= 2;
+					// if an entry does not fit, increase capacity until it does
+					block_capacity *= 2;
 				}
 				break;
 			}
@@ -676,10 +675,13 @@ void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx
 			remaining -= append_count;
 
 			if (new_block.count > 0) {
-				// it can be that no tuples fit the block (huge entry e.g. large string)
-				// in this case we do not add them
+				// in case 0 tuples fit the block (huge entry, e.g. large string) we do not add
 				blocks.push_back(move(new_block));
-				handles.push_back(move(handle));
+				if (keep_pinned) {
+					pinned_blocks.push_back(move(handle));
+				} else {
+					handles.push_back(move(handle));
+				}
 			}
 		}
 	}
@@ -702,7 +704,7 @@ void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx
 }
 
 void RowDataCollection::Merge(RowDataCollection &other) {
-	RowDataCollection temp(buffer_manager, Storage::BLOCK_ALLOC_SIZE, 1);
+	RowDataCollection temp(buffer_manager, Storage::BLOCK_SIZE, 1);
 	{
 		//	One lock at a time to avoid deadlocks
 		lock_guard<mutex> read_lock(other.rc_lock);
@@ -737,7 +739,6 @@ static void TemplatedDeserializeIntoVector(Vector &v, const idx_t count, const S
 static void DeserializeIntoStringVector(Vector &v, const idx_t vcount, const SelectionVector &sel,
                                         data_ptr_t *key_locations) {
 	const auto &validity = FlatVector::Validity(v);
-	const idx_t string_prefix_len = string_t::PREFIX_LENGTH;
 	auto target = FlatVector::GetData<string_t>(v);
 
 	for (idx_t i = 0; i < vcount; i++) {
@@ -746,7 +747,7 @@ static void DeserializeIntoStringVector(Vector &v, const idx_t vcount, const Sel
 			continue;
 		}
 		auto len = Load<uint32_t>(key_locations[i]);
-		key_locations[i] += string_prefix_len;
+		key_locations[i] += sizeof(uint32_t);
 		target[col_idx] = StringVector::AddStringOrBlob(v, string_t((const char *)key_locations[i], len));
 		key_locations[i] += len;
 	}

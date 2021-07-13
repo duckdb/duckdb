@@ -1,5 +1,5 @@
 # name: test/sql/order/test_order_parallel.test_slow
-# description: Test ORDER BY keyword with multiple threads
+# description: Test ORDER BY keyword with multiple threads (internal and external sorting)
 # group: [order]
 
 statement ok
@@ -8,9 +8,11 @@ PRAGMA force_parallelism
 statement ok
 PRAGMA threads=4
 
-# make sure this does not use too much memory
+# first iteration runs externally, second runs normally
 statement ok
-PRAGMA memory_limit='150MB'
+PRAGMA force_external
+
+loop i 0 2
 
 statement ok
 create table test as (select range i from range(100000));
@@ -27,6 +29,11 @@ select cast(i as varchar) from test order by i desc;
 ----
 100000 values hashing to 6a720b227e361303445c41f7ff4a8109
 
+query T
+select cast(i + 1000000000000 as varchar) from test order by i desc;
+----
+100000 values hashing to fd8914b27c93792cac93f3f8ee479a89
+
 # variable size sorting
 query T
 select i from test order by cast(i as varchar) desc;
@@ -35,7 +42,7 @@ select i from test order by cast(i as varchar) desc;
 
 # the same, but with large prefix string so ties need to be broken
 query T
-select i from test order by cast(i + 100000000 as varchar) desc;
+select i from test order by cast(i + 1000000000000 as varchar) desc;
 ----
 100000 values hashing to 6a720b227e361303445c41f7ff4a8109
 
@@ -80,36 +87,44 @@ select * from test order by cast(i % 1000 as varchar), i % 100, i % 10, cast(i a
 
 # same complex sort orders but with many ties due to the large prefix
 query T
-select * from test order by cast(i + 100000000 as varchar) nulls first
+select * from test order by cast(i + 1000000000000 as varchar) nulls first
 ----
 100001 values hashing to 9642fae1704358551de522343cfbc99e
 
 query T
-select * from test order by i % 10, cast(i + 100000000 as varchar)
+select * from test order by i % 10, cast(i + 1000000000000 as varchar)
 ----
 100001 values hashing to 6860685f6aa75f5a1ca3c47174b3da65
 
 query T
-select * from test order by cast(i % 10 + 100000000 as varchar), i
+select * from test order by cast(i % 10 + 1000000000000 as varchar), i
 ----
 100001 values hashing to 6860685f6aa75f5a1ca3c47174b3da65
 
 query T
-select * from test order by cast(i % 100 + 100000000 as varchar), i % 10, cast(i + 100000000 as varchar) nulls first
+select * from test order by cast(i % 100 + 1000000000000 as varchar), i % 10, cast(i + 1000000000000 as varchar) nulls first
 ----
 100001 values hashing to fae9b116ca4c8e280da063f78b28e78f
 
 query T
-select * from test order by cast(i % 1000 + 100000000 as varchar), i % 100, cast(i % 10 + 100000000 as varchar), i
+select * from test order by cast(i % 1000 + 1000000000000 as varchar), i % 100, cast(i % 10 + 1000000000000 as varchar), i
 ----
 100001 values hashing to c694f8aa434f0617970c6f3540b20863
 
 query T
-select * from test order by i % 100, cast(i % 10 + 100000000 as varchar), cast(i + 100000000 as varchar)
+select * from test order by i % 100, cast(i % 10 + 1000000000000 as varchar), cast(i + 1000000000000 as varchar)
 ----
 100001 values hashing to fae9b116ca4c8e280da063f78b28e78f
 
 query T
-select * from test order by cast(i % 1000 + 100000000 as varchar), i % 100, i % 10, cast(i + 100000000 as varchar)
+select * from test order by cast(i % 1000 + 1000000000000 as varchar), i % 100, i % 10, cast(i + 1000000000000 as varchar)
 ----
 100001 values hashing to c694f8aa434f0617970c6f3540b20863
+
+statement ok
+drop table test
+
+statement ok
+PRAGMA disable_force_external
+
+endloop

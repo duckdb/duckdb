@@ -16,7 +16,7 @@ StringSegment::StringSegment(DatabaseInstance &db, idx_t row_start, block_id_t b
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// start off with an empty string segment: allocate space for it
-		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_SIZE, false);
 		auto handle = buffer_manager.Pin(block);
 		SetDictionaryOffset(*handle, sizeof(idx_t));
 	} else {
@@ -80,7 +80,7 @@ void StringSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_
 }
 
 string_location_t StringSegment::FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset) {
-	D_ASSERT(dict_offset >= 0 && dict_offset <= Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(dict_offset >= 0 && dict_offset <= Storage::BLOCK_SIZE);
 	if (dict_offset == 0) {
 		return string_location_t(INVALID_BLOCK, 0);
 	}
@@ -254,7 +254,7 @@ void StringSegment::WriteStringMemory(string_t string, block_id_t &result_block,
 	if (!head || head->offset + total_length >= head->size) {
 		// string does not fit, allocate space for it
 		// create a new string block
-		idx_t alloc_size = MaxValue<idx_t>(total_length, Storage::BLOCK_ALLOC_SIZE);
+		idx_t alloc_size = MaxValue<idx_t>(total_length, Storage::BLOCK_SIZE);
 		auto new_block = make_unique<StringBlock>();
 		new_block->offset = 0;
 		new_block->size = alloc_size;
@@ -298,7 +298,7 @@ string_t StringSegment::ReadString(Vector &result, block_id_t block, int32_t off
 		offset += sizeof(uint32_t);
 
 		// allocate a buffer to store the string
-		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_ALLOC_SIZE, length + sizeof(uint32_t));
+		auto alloc_size = MaxValue<idx_t>(Storage::BLOCK_SIZE, length + sizeof(uint32_t));
 		auto target_handle = buffer_manager.Allocate(alloc_size);
 		auto target_ptr = target_handle->node->buffer;
 		// write the length in this block as well
