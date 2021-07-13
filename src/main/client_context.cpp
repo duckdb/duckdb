@@ -857,6 +857,8 @@ void ClientContext::TryBindRelation(Relation &relation, vector<ColumnDefinition>
 
 unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relation) {
 	auto lock = LockContext();
+	InitialCleanup(*lock);
+
 	string query;
 	if (query_verification_enabled) {
 		// run the ToString method of any relation we run, mostly to ensure it doesn't crash

@@ -268,6 +268,10 @@ TEST_CASE("Test fetch API", "[api]") {
 
 	unique_ptr<QueryResult> result;
 
+	// fetch from an error
+	result = con.Query("SELECT 'hello'::INT");
+	REQUIRE_THROWS(result->Fetch());
+
 	result = con.SendQuery("CREATE TABLE test (a INTEGER);");
 
 	result = con.Query("select a from test where 1 <> 1");

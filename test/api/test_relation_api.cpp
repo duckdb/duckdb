@@ -359,6 +359,11 @@ TEST_CASE("Test view creation of relations", "[relation_api]") {
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
 	REQUIRE_NOTHROW(con.Table("integers")->Insert({{Value::INTEGER(1)}, {Value::INTEGER(2)}, {Value::INTEGER(3)}}));
 
+	// insertion failure because of primary key
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE tbl_pk(i INTEGER PRIMARY KEY)"));
+	REQUIRE_NOTHROW(con.Table("tbl_pk")->Insert({{Value::INTEGER(1)}, {Value::INTEGER(2)}, {Value::INTEGER(3)}}));
+	REQUIRE_THROWS(con.Table("tbl_pk")->Insert({{Value::INTEGER(1)}, {Value::INTEGER(2)}, {Value::INTEGER(3)}}));
+
 	// simple view creation
 	REQUIRE_NOTHROW(tbl = con.Table("integers"));
 	REQUIRE_NOTHROW(result = tbl->Query("test", "SELECT * FROM test"));
@@ -790,6 +795,8 @@ TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	auto csv_file = TestCreatePath("relationtest.csv");
 
 	con.Values("(1), (2), (3)", {"i"})->WriteCSV(csv_file);
+
+	REQUIRE_THROWS(con.Values("(1), (2), (3)", {"i"})->WriteCSV("//fef//gw/g/bla/bla"));
 
 	// now scan the CSV file
 	auto csv_scan = con.ReadCSV(csv_file, {"i INTEGER"});

@@ -23,6 +23,8 @@ TEST_CASE("Test DB config configuration", "[api]") {
 
 	set<ConfigurationOptionType> skip_invalid;
 
+	REQUIRE(config.GetOptionByName("unknownoption") == nullptr);
+
 	for (auto &option : options) {
 		auto op = config.GetOptionByName(option.name);
 		REQUIRE(op);
