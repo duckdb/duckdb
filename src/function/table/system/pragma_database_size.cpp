@@ -4,6 +4,7 @@
 #include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
