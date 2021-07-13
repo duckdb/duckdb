@@ -13512,6 +13512,9 @@ static int run_schema_dump_query(
     }
     sqlite3_free(zErr);
     free(zQ2);
+  } else if( zErr ){
+    sqlite3_free(zErr);
+    zErr = 0;
   }
   return rc;
 }
