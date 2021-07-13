@@ -1515,10 +1515,12 @@ double sqlite3_value_double(sqlite3_value *pVal) {
 		if (TryCast::Operation<string_t, double>(pVal->str_t, res)) {
 			return res;
 		}
+		break;
 	default:
-		pVal->db->errCode = SQLITE_MISMATCH;
-		return 0.0;
+		break;
 	}
+	pVal->db->errCode = SQLITE_MISMATCH;
+	return 0.0;
 }
 
 int sqlite3_value_int(sqlite3_value *pVal) {
@@ -1543,15 +1545,18 @@ sqlite3_int64 sqlite3_value_int64(sqlite3_value *pVal) {
 		if (TryCast::Operation<double, int64_t>(pVal->u.r, res)) {
 			return res;
 		}
+		break;
 	case SQLiteTypeValue::TEXT:
 	case SQLiteTypeValue::BLOB:
 		if (TryCast::Operation<string_t, int64_t>(pVal->str_t, res)) {
 			return res;
 		}
+		break;
 	default:
-		pVal->db->errCode = SQLITE_MISMATCH;
-		return 0;
+		break;
 	}
+	pVal->db->errCode = SQLITE_MISMATCH;
+	return 0;
 }
 
 void *sqlite3_value_pointer(sqlite3_value *, const char *) {
