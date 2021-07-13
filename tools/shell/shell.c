@@ -17629,6 +17629,8 @@ static int do_meta_command(char *zLine, ShellState *p){
   }else
 
   if( c=='f' && strncmp(azArg[0], "fullschema", n)==0 ){
+    raw_printf(stderr, "No STAT tables available\n");
+    return;
     ShellState data;
     char *zErrMsg = 0;
     int doStats = 0;
