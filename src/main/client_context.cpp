@@ -83,10 +83,9 @@ void ClientContext::Cleanup() {
 
 unique_ptr<DataChunk> ClientContext::Fetch() {
 	auto lock = LockContext();
-	if (!open_result) {
-		// no result to fetch from
-		throw Exception("Fetch was called, but there is no open result (or the result was previously closed)");
-	}
+	if (!open_result) { // LCOV_EXCL_START
+		throw InternalException("Fetch was called, but there is no open result (or the result was previously closed)");
+	} // LCOV_EXCL_STOP
 	try {
 		// fetch the chunk and return it
 		auto chunk = FetchInternal(*lock);
@@ -173,7 +172,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 
 	auto plan = move(planner.plan);
 #ifdef DEBUG
-	D_ASSERT(!plan->ToString().empty());
+	plan->Verify();
 #endif
 	// extract the result column names from the plan
 	result->read_only = planner.read_only;
@@ -192,7 +191,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 		profiler->EndPhase();
 
 #ifdef DEBUG
-		D_ASSERT(!plan->ToString().empty());
+		plan->Verify();
 #endif
 	}
 
@@ -210,7 +209,6 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 }
 
 int ClientContext::GetProgress() {
-	//	auto my_progress_bar = progress_bar;
 	if (!progress_bar) {
 		return -1;
 	}

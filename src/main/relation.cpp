@@ -75,9 +75,8 @@ shared_ptr<Relation> Relation::Filter(const string &expression) {
 shared_ptr<Relation> Relation::Filter(const vector<string> &expressions) {
 	// if there are multiple expressions, we AND them together
 	auto expression_list = StringListToExpressionList(expressions);
-	if (expression_list.empty()) {
-		throw ParserException("Zero filter conditions provided");
-	}
+	D_ASSERT(!expression_list.empty());
+
 	auto expr = move(expression_list[0]);
 	for (idx_t i = 1; i < expression_list.size(); i++) {
 		expr =
@@ -112,9 +111,8 @@ shared_ptr<Relation> Relation::Order(const vector<string> &expressions) {
 
 shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const string &condition, JoinType type) {
 	auto expression_list = Parser::ParseExpressionList(condition);
-	if (expression_list.empty()) {
-		throw ParserException("Expected a single expression as join condition");
-	}
+	D_ASSERT(!expression_list.empty());
+
 	if (expression_list.size() > 1 || expression_list[0]->type == ExpressionType::COLUMN_REF) {
 		// multiple columns or single column ref: the condition is a USING list
 		vector<string> using_columns;

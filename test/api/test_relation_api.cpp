@@ -182,6 +182,7 @@ TEST_CASE("Test simple relation API", "[relation_api]") {
 	REQUIRE_THROWS(tbl->Project(vector<string> {"1, 2, 3"})->Execute());
 	REQUIRE_THROWS(tbl->Project(vector<string> {""})->Execute());
 	REQUIRE_THROWS(tbl->Filter("i=1, i=2")->Execute());
+	REQUIRE_THROWS(tbl->Filter("")->Execute());
 	REQUIRE_THROWS(tbl->Filter(vector<string> {})->Execute());
 	REQUIRE_THROWS(tbl->Filter(vector<string> {"1, 2, 3"})->Execute());
 	REQUIRE_THROWS(tbl->Filter(vector<string> {""})->Execute());
@@ -641,8 +642,8 @@ TEST_CASE("Test interaction of relations with schema changes", "[relation_api]")
 
 	// but what if we recreate an incompatible table?
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i VARCHAR)"));
-	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ('hello')"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i VARCHAR, j INTEGER)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO integers VALUES ('hello', 3)"));
 
 	// this results in a binding error!
 	REQUIRE_FAIL(tbl_scan->Execute());
@@ -658,17 +659,17 @@ TEST_CASE("Test interaction of relations with schema changes", "[relation_api]")
 
 	// change type of column
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i DATE)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i DATE, j INTEGER)"));
 	REQUIRE_FAIL(tbl->Execute());
 
 	// different name also results in an error
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(k VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(k VARCHAR, j INTEGER)"));
 	REQUIRE_FAIL(tbl->Execute());
 
 	// but once we go back to the original table it works again!
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
-	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i VARCHAR)"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i VARCHAR, j INTEGER)"));
 	REQUIRE_NO_FAIL(tbl->Execute());
 }
 

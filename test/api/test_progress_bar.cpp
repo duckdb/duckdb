@@ -51,6 +51,9 @@ TEST_CASE("Test Progress Bar Fast", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	TestProgressBar test_progress(con.context.get());
+
+	REQUIRE_NOTHROW(con.context->GetProgress());
+
 	REQUIRE_NO_FAIL(con.Query("create  table tbl as select range a, mod(range,10) b from range(10000);"));
 	REQUIRE_NO_FAIL(con.Query("create  table tbl_2 as select range a from range(10000);"));
 

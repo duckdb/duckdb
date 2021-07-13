@@ -151,9 +151,9 @@ void LogicalOperatorVisitor::VisitExpression(unique_ptr<Expression> *expression)
 	case ExpressionClass::BOUND_UNNEST:
 		result = VisitReplace((BoundUnnestExpression &)expr, expression);
 		break;
-	default:
-		D_ASSERT(0);
-	}
+	default: // LCOV_EXCL_START
+		throw InternalException("Unrecognized expression type in logical operator visitor");
+	} // LCOV_EXCL_STOP
 	if (result) {
 		*expression = move(result);
 	} else {
@@ -166,6 +166,9 @@ void LogicalOperatorVisitor::VisitExpressionChildren(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) { VisitExpression(&expr); });
 }
 
+// these are all default methods that can be overriden
+// we don't care about coverage here
+// LCOV_EXCL_START
 unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundAggregateExpression &expr,
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
@@ -245,5 +248,7 @@ unique_ptr<Expression> LogicalOperatorVisitor::VisitReplace(BoundUnnestExpressio
                                                             unique_ptr<Expression> *expr_ptr) {
 	return nullptr;
 }
+
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
