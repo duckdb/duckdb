@@ -8,6 +8,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/common/types/string_heap.hpp"
