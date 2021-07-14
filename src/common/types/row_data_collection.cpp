@@ -829,7 +829,7 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 			}
 		}
 	}
-
+	// return the unique pointers to the handles because they must stay pinned
 	return handles;
 }
 
