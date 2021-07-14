@@ -310,8 +310,6 @@ enum class PhysicalType : uint8_t {
 
 	// DuckDB Extensions
 	VARCHAR = 200, // our own string representation, different from STRING and LARGE_STRING above
-	POINTER = 202,
-	HASH = 203,
 	INT128 = 204, // 128-bit integers
 
 	/// Boolean as 1 bit, LSB bit-packed ordering
@@ -526,10 +524,6 @@ PhysicalType GetTypeId() {
 		return PhysicalType::UINT64;
 	} else if (std::is_same<T, hugeint_t>()) {
 		return PhysicalType::INT128;
-	} else if (std::is_same<T, uint64_t>()) {
-		return PhysicalType::HASH;
-	} else if (std::is_same<T, uintptr_t>()) {
-		return PhysicalType::POINTER;
 	} else if (std::is_same<T, float>()) {
 		return PhysicalType::FLOAT;
 	} else if (std::is_same<T, double>()) {

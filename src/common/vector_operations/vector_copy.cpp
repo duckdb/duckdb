@@ -103,7 +103,6 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	case PhysicalType::INT32:
 		TemplatedCopy<int32_t>(source, *sel, target, source_offset, target_offset, copy_count);
 		break;
-	case PhysicalType::HASH:
 	case PhysicalType::INT64:
 		TemplatedCopy<int64_t>(source, *sel, target, source_offset, target_offset, copy_count);
 		break;
@@ -121,9 +120,6 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		break;
 	case PhysicalType::INT128:
 		TemplatedCopy<hugeint_t>(source, *sel, target, source_offset, target_offset, copy_count);
-		break;
-	case PhysicalType::POINTER:
-		TemplatedCopy<uintptr_t>(source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedCopy<float>(source, *sel, target, source_offset, target_offset, copy_count);

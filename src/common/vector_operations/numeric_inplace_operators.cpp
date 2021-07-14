@@ -15,7 +15,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 
 void VectorOperations::AddInPlace(Vector &input, int64_t right, idx_t count) {
-	D_ASSERT(input.GetType().InternalType() == PhysicalType::POINTER);
+	D_ASSERT(input.GetType().id() == LogicalTypeId::POINTER);
 	if (right == 0) {
 		return;
 	}

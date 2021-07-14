@@ -280,10 +280,6 @@ void RowDataCollection::SerializeVectorSortable(Vector &v, idx_t vcount, const S
 		TemplatedSerializeVectorSortable<double>(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first,
 		                                         offset);
 		break;
-	case PhysicalType::HASH:
-		TemplatedSerializeVectorSortable<hash_t>(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first,
-		                                         offset);
-		break;
 	case PhysicalType::INTERVAL:
 		TemplatedSerializeVectorSortable<interval_t>(vdata, sel, ser_count, key_locations, desc, has_null, nulls_first,
 		                                             offset);
@@ -516,9 +512,6 @@ void RowDataCollection::SerializeVectorData(VectorData &vdata, PhysicalType type
 		break;
 	case PhysicalType::DOUBLE:
 		TemplatedSerializeVData<double>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
-		break;
-	case PhysicalType::HASH:
-		TemplatedSerializeVData<hash_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	case PhysicalType::INTERVAL:
 		TemplatedSerializeVData<interval_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations,
@@ -1047,9 +1040,6 @@ void RowDataCollection::DeserializeIntoVector(Vector &v, const idx_t &vcount, co
 		break;
 	case PhysicalType::DOUBLE:
 		TemplatedDeserializeIntoVector<double>(v, vcount, sel, key_locations);
-		break;
-	case PhysicalType::HASH:
-		TemplatedDeserializeIntoVector<hash_t>(v, vcount, sel, key_locations);
 		break;
 	case PhysicalType::INTERVAL:
 		TemplatedDeserializeIntoVector<interval_t>(v, vcount, sel, key_locations);

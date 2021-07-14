@@ -262,8 +262,6 @@ static bool TemplatedOptimumValue(Vector &left, idx_t lidx, idx_t lcount, Vector
 		return TemplatedOptimumType<uint64_t, OP>(left, lidx, lcount, right, ridx, rcount);
 	case PhysicalType::INT128:
 		return TemplatedOptimumType<hugeint_t, OP>(left, lidx, lcount, right, ridx, rcount);
-	case PhysicalType::POINTER:
-		return TemplatedOptimumType<uintptr_t, OP>(left, lidx, lcount, right, ridx, rcount);
 	case PhysicalType::FLOAT:
 		return TemplatedOptimumType<float, OP>(left, lidx, lcount, right, ridx, rcount);
 	case PhysicalType::DOUBLE:
