@@ -100,7 +100,7 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 	case PhysicalType::STRUCT:
 		return NestedSelectOperation<OP>(left, right, sel, count, true_sel, false_sel);
 	default:
-		throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
+		throw InternalException("Invalid type for comparison");
 	}
 }
 

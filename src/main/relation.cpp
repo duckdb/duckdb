@@ -285,10 +285,16 @@ string Relation::ToString() {
 	return str;
 }
 
-void Relation::Head(idx_t limit) { // LCOV_EXCL_START
+// LCOV_EXCL_START
+unique_ptr<QueryNode> Relation::GetQueryNode() {
+	throw InternalException("Cannot create a query node from this node type");
+}
+
+void Relation::Head(idx_t limit) {
 	auto limit_node = Limit(limit);
 	limit_node->Execute()->Print();
-} // LCOV_EXCL_STOP
+}
+// LCOV_EXCL_STOP
 
 void Relation::Print() {
 	Printer::Print(ToString());

@@ -512,8 +512,6 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 	case WindowBoundary::CURRENT_ROW_RANGE:
 		bounds.window_start = bounds.peer_start;
 		break;
-	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		throw InternalException("UNBOUNDED_FOLLOWING cannot be the start expression of a window");
 	case WindowBoundary::EXPR_PRECEDING: {
 		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
 		bounds.window_start =
@@ -533,8 +531,6 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 	}
 
 	switch (wexpr->end) {
-	case WindowBoundary::UNBOUNDED_PRECEDING:
-		throw InternalException("UNBOUNDED_PRECEDING cannot be the start expression of a window");
 	case WindowBoundary::CURRENT_ROW_ROWS:
 		bounds.window_end = row_idx + 1;
 		break;
