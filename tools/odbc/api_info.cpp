@@ -56,6 +56,8 @@ const std::vector<SQLSMALLINT> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {SQL_CHAR,
                                                                     SQL_FLOAT,
                                                                     SQL_DOUBLE,
                                                                     SQL_VARCHAR,
+                                                                    SQL_BINARY,
+                                                                    SQL_VARBINARY,
                                                                     SQL_INTERVAL_MONTH,
                                                                     SQL_INTERVAL_YEAR,
                                                                     SQL_INTERVAL_YEAR_TO_MONTH,
@@ -178,6 +180,8 @@ SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
 		return SQL_TIME;
 	case LogicalTypeId::VARCHAR:
 		return SQL_VARCHAR;
+	case LogicalTypeId::BLOB:
+		return SQL_VARBINARY;
 	case LogicalTypeId::INTERVAL:
 		return SQL_TIME;
 	default:
