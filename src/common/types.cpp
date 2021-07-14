@@ -266,10 +266,6 @@ bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 
-bool TypeIsNested(PhysicalType type) {
-	return (type == PhysicalType::LIST || type == PhysicalType::STRUCT || type == PhysicalType::MAP);
-}
-
 string LogicalTypeIdToString(LogicalTypeId id) {
 	switch (id) {
 	case LogicalTypeId::BOOLEAN:

@@ -64,8 +64,14 @@ struct SortingState {
 			column_sizes.push_back(0);
 			auto &col_size = column_sizes.back();
 
-			stats.push_back(expr.stats ? expr.stats.get() : nullptr);
-			has_null.push_back(true); // TODO: make use of statistics
+			if (expr.stats) {
+				stats.push_back(expr.stats.get());
+				has_null.push_back(stats.back()->CanHaveNull());
+			} else {
+				stats.push_back(nullptr);
+				// No stats - we must assume that there are nulls
+				has_null.push_back(true);
+			}
 
 			col_size += has_null.back() ? 1 : 0;
 			if (TypeIsConstantSize(physical_type)) {
