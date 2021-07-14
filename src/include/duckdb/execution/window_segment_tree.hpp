@@ -23,14 +23,14 @@ public:
 	~WindowSegmentTree();
 
 	//! First row contains the result.
-	const Vector &Compute(idx_t start, idx_t end);
+	void Compute(Vector &result, idx_t rid, idx_t start, idx_t end);
 
 private:
 	void ConstructTree();
 	void ExtractFrame(idx_t begin, idx_t end);
 	void WindowSegmentValue(idx_t l_idx, idx_t begin, idx_t end);
 	void AggregateInit();
-	const Vector &AggegateFinal();
+	void AggegateFinal(Vector &result, idx_t rid);
 
 	//! The aggregate that the window function is computed over
 	AggregateFunction aggregate;
@@ -47,8 +47,6 @@ private:
 	Vector statep;
 	//! The frame boundaries, used for the window functions
 	FrameBounds frame;
-	//! Reused result value container for the window functions (20% of runtime)
-	Vector result;
 	//! Reused result state container for the window functions
 	Vector statev;
 

@@ -278,7 +278,7 @@ struct QuantileOperation {
 };
 
 template <class STATE_TYPE, class RESULT_TYPE, class OP>
-static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count) {
+static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count, idx_t offset) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	D_ASSERT(bind_data_p);
@@ -302,7 +302,7 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vecto
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &mask = FlatVector::Validity(result);
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[i], rdata, mask, i);
+			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[i], rdata, mask, i + offset);
 		}
 	}
 
@@ -340,9 +340,9 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result) {
-		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-		auto &rmask = ConstantVector::Validity(result);
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t ridx) {
+		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+		auto &rmask = FlatVector::Validity(result);
 
 		//  Lazily initialise frame state
 		const auto prev_valid = state->pos == (prev.second - prev.first);
@@ -380,13 +380,13 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
 				if (interp.CRN != interp.FRN) {
 					std::nth_element(index + interp.CRN, index + interp.CRN, index + interp.n, lt);
 				}
-				rdata[0] = interp(data, index);
+				rdata[ridx] = interp(data, index);
 			} else {
-				rmask.Set(0, false);
+				rmask.Set(ridx, false);
 			}
 		} else {
 			Interpolator<INPUT_TYPE, RESULT_TYPE, DISCRETE> interp(q, state->pos);
-			rdata[0] = interp(data, index);
+			rdata[ridx] = interp(data, index);
 		}
 	}
 };
@@ -481,18 +481,19 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &list) {
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &list, idx_t lidx) {
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
-		auto ldata = ConstantVector::GetData<RESULT_TYPE>(list);
-		auto &lmask = ConstantVector::Validity(list);
-		ldata[0].offset = 0;
-		ldata[0].length = bind_data->quantiles.size();
+		auto ldata = FlatVector::GetData<RESULT_TYPE>(list);
+		auto &lmask = FlatVector::Validity(list);
+		auto &lentry = ldata[lidx];
+		lentry.offset = ListVector::GetListSize(list);
+		lentry.length = bind_data->quantiles.size();
 
-		ListVector::Reserve(list, ldata[0].length);
-		ListVector::SetListSize(list, ldata[0].length);
+		ListVector::Reserve(list, lentry.offset + lentry.length);
+		ListVector::SetListSize(list, lentry.offset + lentry.length);
 		auto &result = ListVector::GetEntry(list);
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
@@ -519,7 +520,7 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 		}
 
 		if (!state->pos) {
-			lmask.Set(0, false);
+			lmask.Set(lidx, false);
 			return;
 		}
 
@@ -534,7 +535,7 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 			Interpolator<INPUT_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);
 
 			if (fixed && CanReplace(state, data, j, interp.FRN, interp.CRN)) {
-				rdata[q] = interp(data, index);
+				rdata[lentry.offset + q] = interp(data, index);
 				state->upper.resize(state->lower.size(), interp.FRN);
 			} else {
 				state->disturbed.push_back(q);
@@ -555,7 +556,7 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 			if (interp.CRN != interp.FRN) {
 				std::nth_element(index + interp.CRN, index + interp.CRN, index + state->upper[i], lt);
 			}
-			rdata[q] = interp(data, index);
+			rdata[lentry.offset + q] = interp(data, index);
 		}
 	}
 };

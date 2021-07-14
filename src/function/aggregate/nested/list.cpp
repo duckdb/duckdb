@@ -66,17 +66,15 @@ static void ListCombineFunction(Vector &state, Vector &combined, idx_t count) {
 	}
 }
 
-static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count) {
+static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count, idx_t offset) {
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
 	auto states = (ListAggState **)sdata.data;
 
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
-	auto &mask = (result.GetVectorType() == VectorType::CONSTANT_VECTOR) ? ConstantVector::Validity(result)
-	                                                                     : FlatVector::Validity(result);
-	size_t total_len = 0;
-	ListVector::SetListSize(result, total_len);
+	auto &mask = FlatVector::Validity(result);
+	size_t total_len = ListVector::GetListSize(result);
 	for (idx_t i = 0; i < count; i++) {
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->list_vector) {
@@ -87,8 +85,9 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 		auto list_struct_data = FlatVector::GetData<list_entry_t>(result);
 		auto &state_lv = *state->list_vector;
 		auto state_lv_count = ListVector::GetListSize(state_lv);
-		list_struct_data[i].length = state_lv_count;
-		list_struct_data[i].offset = total_len;
+		const auto rid = i + offset;
+		list_struct_data[rid].length = state_lv_count;
+		list_struct_data[rid].offset = total_len;
 		total_len += state_lv_count;
 	}
 
@@ -101,8 +100,6 @@ static void ListFinalize(Vector &state_vector, FunctionData *, Vector &result, i
 		auto &list_vec_to_append = ListVector::GetEntry(list_vec);
 		ListVector::Append(result, list_vec_to_append, ListVector::GetListSize(list_vec));
 	}
-
-	result.Verify(count);
 }
 
 unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunction &function,
