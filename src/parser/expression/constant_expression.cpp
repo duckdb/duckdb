@@ -35,7 +35,7 @@ void ConstantExpression::Serialize(Serializer &serializer) {
 
 unique_ptr<ParsedExpression> ConstantExpression::Deserialize(ExpressionType type, Deserializer &source) {
 	Value value = Value::Deserialize(source);
-	return make_unique<ConstantExpression>(value);
+	return make_unique<ConstantExpression>(move(value));
 }
 
 } // namespace duckdb

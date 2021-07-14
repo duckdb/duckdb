@@ -29,9 +29,9 @@ SELECT INTERVAL '2Y 1 month 1 M 3S 20mS';
 2 years 1 month 00:01:03.02
 
 query T
-SELECT INTERVAL '2Y 1 month 02:01:03.02';
+SELECT INTERVAL '2Y 1 month 02:01:03';
 ----
-2 years 1 month 02:01:03.02
+2 years 1 month 02:01:03
 
 query T
 SELECT INTERVAL '2Y 1 month 1M 3S 20mS'::VARCHAR;
