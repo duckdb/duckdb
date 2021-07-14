@@ -147,14 +147,16 @@ SQLRETURN SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT r
                         SQLSMALLINT *text_length_ptr) {
 
 	if (!handle) {
-		return SQL_ERROR;
+		std::string msg_str("Handle is NULL.");
+		duckdb::OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
+		return SQL_INVALID_HANDLE;
 	}
-	if (rec_number != 1) { // TODO is it just trying increasing rec numbers?
+	if (rec_number < 0 || buffer_length < 0) {
 		return SQL_ERROR;
 	}
 
 	if (sql_state) {
-		*sql_state = 0;
+		*sql_state = '\0';
 	}
 
 	if (native_error_ptr) {
@@ -166,31 +168,35 @@ SQLRETURN SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT r
 	switch (handle_type) {
 	case SQL_HANDLE_DBC: {
 		// TODO return connection errors here
-		return SQL_ERROR;
+		return SQL_NO_DATA;
 	}
-	case SQL_HANDLE_DESC:
-		throw std::runtime_error("SQL_HANDLE_DESC");
+	case SQL_HANDLE_DESC: {
+		// throw std::runtime_error("SQL_HANDLE_DESC");
+		return SQL_NO_DATA;
+	}
 	case SQL_HANDLE_ENV: {
 		// dont think we can have errors here
-		return SQL_ERROR;
+		return SQL_NO_DATA;
 	}
 	case SQL_HANDLE_STMT: {
 		if (hdl->type != duckdb::OdbcHandleType::STMT) {
-			return SQL_ERROR;
+			std::string msg_str("Handle type is not a OdbcHandleStmt.");
+			duckdb::OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
+			return SQL_SUCCESS;
 		}
+
 		auto *stmt = (duckdb::OdbcHandleStmt *)hdl;
-		if (stmt->stmt && !stmt->stmt->success) {
-			duckdb::OdbcUtils::WriteString(stmt->stmt->error, message_text, buffer_length, text_length_ptr);
+		// Errors should be placed at the stmt->error_messages
+		if ((size_t)rec_number <= stmt->error_messages.size()) {
+			duckdb::OdbcUtils::WriteString(stmt->error_messages[rec_number - 1], message_text, buffer_length,
+			                               text_length_ptr);
 			return SQL_SUCCESS;
+		} else {
+			return SQL_NO_DATA;
 		}
-		if (stmt->res && !stmt->res->success) {
-			duckdb::OdbcUtils::WriteString(stmt->res->error, message_text, buffer_length, text_length_ptr);
-			return SQL_SUCCESS;
-		}
-		return SQL_ERROR;
 	}
 	default:
-		return SQL_ERROR;
+		return SQL_INVALID_HANDLE;
 	}
 }
 

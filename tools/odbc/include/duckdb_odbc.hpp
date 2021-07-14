@@ -124,6 +124,9 @@ struct OdbcHandleStmt : public OdbcHandle {
 	bool open;
 	row_t chunk_row;
 	SQLULEN *rows_fetched_ptr;
+
+	// append all statement messages error here
+	vector<std::string> error_messages;
 };
 
 struct OdbcUtils {
