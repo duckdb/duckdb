@@ -131,8 +131,6 @@ public:
 	vector<ExpressionType> predicates;
 	//! Data column layout
 	RowLayout layout;
-	//! Size of the validity vector for each tuple.
-	idx_t validity_size;
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
 	//! The total tuple size
@@ -149,8 +147,6 @@ public:
 	bool has_null;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
-	//! The amount of entries stored per block
-	idx_t block_capacity;
 
 	struct {
 		mutex mj_lock;

@@ -53,7 +53,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	entry_size = layout.GetRowWidth();
 
 	// compute the per-block capacity of this HT
-	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
+	idx_t block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
 	block_collection = make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size);
 	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 }
