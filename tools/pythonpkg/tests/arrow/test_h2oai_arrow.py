@@ -4,11 +4,15 @@ import sys
 try:
     import pyarrow
     import pyarrow.csv
-
+    import requests
     import numpy as np
     can_run = True
 except:
     can_run = False
+
+def download_file(url,name):
+    r = requests.get(url, allow_redirects=True)
+    open(name, 'wb').write(r.content)
 
 def group_by(con,parallel):
     if (parallel):
@@ -138,8 +142,10 @@ def join(con,parallel):
 
 class TestH2OAIArrow(object):
     def test_group_by(self, duckdb_cursor):
+        if not can_run:
+            return
         con = duckdb.connect()
-        os.system('wget https://github.com/cwida/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz')
+        download_file('https://github.com/cwida/duckdb-data/releases/download/v1.0/G1_1e7_1e2_5_0.csv.gz','G1_1e7_1e2_5_0.csv.gz')
         arrow_table = pyarrow.Table.from_batches(pyarrow.csv.read_csv('G1_1e7_1e2_5_0.csv.gz').to_batches(2500000))
         con.register_arrow("x", arrow_table)
         os.system('rm G1_1e7_1e2_5_0.csv.gz')
@@ -148,10 +154,12 @@ class TestH2OAIArrow(object):
         group_by(con,False)
 
     def test_join(self,duckdb_cursor):
-        os.system('wget https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz')
-        os.system('wget https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz')
-        os.system('wget https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz')
-        os.system('wget https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz')
+        if not can_run:
+            return
+        download_file('https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_NA_0_0.csv.gz','J1_1e7_NA_0_0.csv.gz')
+        download_file('https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e1_0_0.csv.gz','J1_1e7_1e1_0_0.csv.gz')
+        download_file('https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e4_0_0.csv.gz','J1_1e7_1e4_0_0.csv.gz')
+        download_file('https://github.com/cwida/duckdb-data/releases/download/v1.0/J1_1e7_1e7_0_0.csv.gz','J1_1e7_1e7_0_0.csv.gz')
         
         con = duckdb.connect()
         arrow_table = pyarrow.Table.from_batches(pyarrow.csv.read_csv('J1_1e7_NA_0_0.csv.gz').to_batches(2500000))
