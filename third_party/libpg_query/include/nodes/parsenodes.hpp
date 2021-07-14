@@ -1981,4 +1981,20 @@ typedef struct PGPositionalReference {
 	int location;                /* token location, or -1 if unknown */
 } PGPositionalReference;
 
+/* ----------------------
+ *		Enum Statement
+ * ----------------------
+ */
+
+typedef struct PGCreateEnumStmt
+{
+	PGNodeTag		type;
+	PGList	   *typeName;		/* qualified name (list of Value strings) */
+	PGList	   *vals;			/* enum values (list of Value strings) */
+} PGCreateEnumStmt;
+
+
+
+
+
 }

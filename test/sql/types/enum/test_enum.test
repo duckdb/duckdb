@@ -1,0 +1,9 @@
+# name: test/sql/types/enum/test_enum.test
+# description: ENUM tests
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
