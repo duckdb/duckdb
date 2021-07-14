@@ -39,7 +39,8 @@ std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
 	return table;
 }
 
-std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow::Table &table) {
+std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow::Table &table,
+                                                 const std::string &query = "", const std::string &view_name = "") {
 	std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
 
 	auto batch_reader = arrow::TableBatchReader(table);
@@ -52,7 +53,11 @@ std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
 	params.push_back(duckdb::Value::UBIGINT(1000000));
-	return conn.TableFunction("arrow_scan", params)->Execute();
+	if (query.empty()) {
+		return conn.TableFunction("arrow_scan", params)->Execute();
+	}
+	conn.TableFunction("arrow_scan", params)->CreateView(view_name);
+	return conn.Query(query);
 }
 
 bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connection &conn) {
@@ -218,4 +223,25 @@ TEST_CASE("Test Parquet Files Glob", "[arrow]") {
 	for (auto &parquet_path : parquet_files) {
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
+}
+
+TEST_CASE("Test Parquet Files H2O", "[arrow]") {
+
+	std::vector<std::string> skip;
+
+	duckdb::DuckDB db;
+	duckdb::Connection conn {db};
+	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
+
+	//! Impossible to round-trip Dictionaries so we just validate a query result
+	std::string parquet_path = "data/parquet-testing/h2oai/h2oai_group_small.parquet";
+	auto table = ReadParquetFile(parquet_path);
+	auto query = "SELECT COUNT(*), sum(v1) AS v1, sum(v3) AS v3 FROM (SELECT id3, sum(v1) AS v1, avg(v3) AS v3 FROM x "
+	             "GROUP BY id3) as t;";
+	auto result = ArrowToDuck(conn, *table, query, "x");
+
+	REQUIRE(result->success);
+	REQUIRE(CHECK_COLUMN(result, 0, {9080}));
+	REQUIRE(CHECK_COLUMN(result, 1, {28425.000000}));
+	REQUIRE(CHECK_COLUMN(result, 2, {432406.286770}));
 }
