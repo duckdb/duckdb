@@ -1116,9 +1116,6 @@ void Value::Serialize(Serializer &serializer) {
 		case PhysicalType::DOUBLE:
 			serializer.Write<double>(value_.double_);
 			break;
-		case PhysicalType::POINTER:
-			serializer.Write<uintptr_t>(value_.pointer);
-			break;
 		case PhysicalType::INTERVAL:
 			serializer.Write<interval_t>(value_.interval);
 			break;
@@ -1175,9 +1172,6 @@ Value Value::Deserialize(Deserializer &source) {
 		break;
 	case PhysicalType::DOUBLE:
 		new_value.value_.double_ = source.Read<double>();
-		break;
-	case PhysicalType::POINTER:
-		new_value.value_.pointer = source.Read<uint64_t>();
 		break;
 	case PhysicalType::INTERVAL:
 		new_value.value_.interval = source.Read<interval_t>();

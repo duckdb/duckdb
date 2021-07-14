@@ -683,9 +683,6 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 	case PhysicalType::INT128:
 		TemplatedDistinctExecute<hugeint_t, OP>(left, right, result, count);
 		break;
-	case PhysicalType::POINTER:
-		TemplatedDistinctExecute<uintptr_t, OP>(left, right, result, count);
-		break;
 	case PhysicalType::FLOAT:
 		TemplatedDistinctExecute<float, OP>(left, right, result, count);
 		break;
@@ -732,8 +729,6 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, idx_t
 		return DistinctSelect<uint64_t, uint64_t, OP, DENSE>(left, right, vcount, sel, count, true_sel, false_sel);
 	case PhysicalType::INT128:
 		return DistinctSelect<hugeint_t, hugeint_t, OP, DENSE>(left, right, vcount, sel, count, true_sel, false_sel);
-	case PhysicalType::POINTER:
-		return DistinctSelect<uintptr_t, uintptr_t, OP, DENSE>(left, right, vcount, sel, count, true_sel, false_sel);
 	case PhysicalType::FLOAT:
 		return DistinctSelect<float, float, OP, DENSE>(left, right, vcount, sel, count, true_sel, false_sel);
 	case PhysicalType::DOUBLE:

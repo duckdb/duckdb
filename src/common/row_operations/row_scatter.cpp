@@ -209,9 +209,6 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 		case PhysicalType::INTERVAL:
 			TemplatedScatter<interval_t>(col, rows, sel, count, col_offset, col_no);
 			break;
-		case PhysicalType::HASH:
-			TemplatedScatter<hash_t>(col, rows, sel, count, col_offset, col_no);
-			break;
 		case PhysicalType::VARCHAR:
 			ScatterStringVector(col, rows, data_locations, sel, count, col_offset, col_no);
 			break;
