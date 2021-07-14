@@ -80,9 +80,9 @@ duckdb_state duckdb_set_config(duckdb_config config, const char *name, const cha
 		return DuckDBError;
 	}
 	try {
-		auto db_config = (DBConfig *) config;
+		auto db_config = (DBConfig *)config;
 		db_config->SetOption(*config_option, Value(option));
-	} catch(...) {
+	} catch (...) {
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
@@ -93,7 +93,7 @@ void duckdb_destroy_config(duckdb_config *config) {
 		return;
 	}
 	if (*config) {
-		auto db_config = (DBConfig *) *config;
+		auto db_config = (DBConfig *)*config;
 		delete db_config;
 		*config = nullptr;
 	}
@@ -102,7 +102,7 @@ void duckdb_destroy_config(duckdb_config *config) {
 duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_config config, char **error) {
 	auto wrapper = new DatabaseData();
 	try {
-		auto db_config = (DBConfig *) config;
+		auto db_config = (DBConfig *)config;
 		wrapper->database = new DuckDB(path, db_config);
 	} catch (std::exception &ex) {
 		if (error) {
@@ -110,7 +110,7 @@ duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_conf
 		}
 		delete wrapper;
 		return DuckDBError;
-	} catch(...) { // LCOV_EXCL_START
+	} catch (...) { // LCOV_EXCL_START
 		if (error) {
 			*error = strdup("Unknown error");
 		}

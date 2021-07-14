@@ -163,7 +163,8 @@ DUCKDB_API void duckdb_destroy_config(duckdb_config *config);
 DUCKDB_API duckdb_state duckdb_open(const char *path, duckdb_database *out_database);
 //! Opens a database file at the given path using the specified configuration
 //! If error is set the error will be reported
-DUCKDB_API duckdb_state duckdb_open_ext(const char *path, duckdb_database *out_database, duckdb_config config, char **error);
+DUCKDB_API duckdb_state duckdb_open_ext(const char *path, duckdb_database *out_database, duckdb_config config,
+                                        char **error);
 //! Closes the database.
 DUCKDB_API void duckdb_close(duckdb_database *database);
 

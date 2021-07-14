@@ -766,7 +766,7 @@ TEST_CASE("Test C API config", "[capi]") {
 
 	// enumerate config options
 	auto config_count = duckdb_config_count();
-	for(size_t i = 0; i < config_count; i++) {
+	for (size_t i = 0; i < config_count; i++) {
 		const char *name = nullptr;
 		const char *description = nullptr;
 		duckdb_get_config_flag(i, &name, &description);
