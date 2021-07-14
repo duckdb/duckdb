@@ -226,9 +226,6 @@ TEST_CASE("Test Parquet Files Glob", "[arrow]") {
 }
 
 TEST_CASE("Test Parquet Files H2O", "[arrow]") {
-
-	std::vector<std::string> skip;
-
 	duckdb::DuckDB db;
 	duckdb::Connection conn {db};
 	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
@@ -241,7 +238,7 @@ TEST_CASE("Test Parquet Files H2O", "[arrow]") {
 	auto result = ArrowToDuck(conn, *table, query, "x");
 
 	REQUIRE(result->success);
-	REQUIRE(CHECK_COLUMN(result, 0, {9080}));
-	REQUIRE(CHECK_COLUMN(result, 1, {28425.000000}));
-	REQUIRE(CHECK_COLUMN(result, 2, {432406.286770}));
+	REQUIRE(CHECK_COLUMN(result, 0, {9081}));
+	REQUIRE(CHECK_COLUMN(result, 1, {28427.000000}));
+	REQUIRE(CHECK_COLUMN(result, 2, {432502.450130}));
 }
