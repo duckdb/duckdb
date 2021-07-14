@@ -20,6 +20,12 @@ CREATE TABLE lineitem_d AS (
   FROM lineitem
 );
 
+# first iteration runs externally, second runs normally
+statement ok
+PRAGMA force_external
+
+loop i 0 2
+
 # use lag to find rows that are out of place
 query IIIIIIIIIIIIIIIII nosort q0
 with lineitem_ord as (select * from lineitem_d order by l_extendedprice),
@@ -76,3 +82,8 @@ query IIIII nosort q4
 with rownum_window as (select l_extendedprice, list_value(l_shipinstruct), list_value(l_shipmode), list_value(l_comment), row_number() over (order by l_extendedprice) from lineitem_d)
 select * from rownum_window order by l_extendedprice
 ----
+
+statement ok
+PRAGMA disable_force_external
+
+endloop

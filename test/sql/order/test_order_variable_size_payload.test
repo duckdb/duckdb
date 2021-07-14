@@ -5,8 +5,13 @@
 statement ok
 PRAGMA enable_verification
 
-# payload string that is longer than the 8MB initial string size - this tests whether RowDataCollection dynamically increases block capacity
-# TODO: test a mix of long and short strings
+# first iteration runs externally, second runs normally
+statement ok
+PRAGMA force_external
+
+loop i 0 2
+
+# string that is longer than Storage::BLOCK_SIZE - this tests whether RowDataCollection dynamically increases block capacity
 statement ok
 select range % 2 i, string_agg('thisstringis200characterslong..........................................................................................................................................................................') s from range(100000) group by i order by i
 
@@ -28,7 +33,7 @@ NULL
 NULL
 a
 
-# strings longer than the 8 character prefix
+# strings longer than the 12 character prefix
 statement ok
 CREATE TABLE test0 (job VARCHAR, name VARCHAR)
 
@@ -49,7 +54,7 @@ statement ok
 CREATE TABLE test1 (s VARCHAR)
 
 statement ok
-INSERT INTO test1 VALUES ('2'), (NULL), ('355555552'), ('1'), ('35555556'), ('10'), ('355555553'), ('355555551')
+INSERT INTO test1 VALUES ('2'), (NULL), ('3555555555552'), ('1'), ('355555555556'), ('10'), ('3555555555553'), ('3555555555551')
 
 query I
 SELECT * FROM test1 ORDER BY s
@@ -58,10 +63,10 @@ NULL
 1
 10
 2
-355555551
-355555552
-355555553
-35555556
+3555555555551
+3555555555552
+3555555555553
+355555555556
 
 # sort on 10000 strings
 statement ok
@@ -413,3 +418,90 @@ query TT
 SELECT i, list(j) FROM test9 GROUP BY i ORDER BY i;
 ----
 8 values hashing to fc909a9ac472ea404c0bceecf7f1f3d6
+
+statement ok
+CREATE TABLE DirectReports
+(
+    EmployeeID smallint,
+    Name varchar NOT NULL,
+    Title varchar NOT NULL,
+    EmployeeLevel int NOT NULL,
+    Sort varchar NOT NULL
+);
+
+statement ok
+INSERT INTO DirectReports VALUES
+(1, 'Ken Sánchez', 'Chief Executive Officer', 1, 'Ken Sánchez'),
+(273, '>Brian Welcker', 'Vice President of Sales', 2, 'Ken Sánchez>Brian Welcker'),
+(274, '>>Stephen Jiang', 'North American Sales Manager', 3, 'Ken Sánchez>Brian Welcker>Stephen Jiang'),
+(285, '>>Syed Abbas', 'Pacific Sales Manager', 3, 'Ken Sánchez>Brian Welcker>Syed Abbas'),
+(16, '>>David Bradley', 'Marketing Manager', 3, 'Ken Sánchez>Brian Welcker>David Bradley'),
+(275, '>>>Michael Blythe', 'Sales Representative', 4, 'Ken Sánchez>Brian Welcker>Stephen Jiang>Michael Blythe'),
+(276, '>>>Linda Mitchell', 'Sales Representative', 4, 'Ken Sánchez>Brian Welcker>Stephen Jiang>Linda Mitchell'),
+(286, '>>>Lynn Tsoflias', 'Sales Representative', 4, 'Ken Sánchez>Brian Welcker>Syed Abbas>Lynn Tsoflias'),
+(23, '>>>Mary Gibson', 'Marketing Specialist', 4, 'Ken Sánchez>Brian Welcker>David Bradley>Mary Gibson');
+
+query IIII
+SELECT EmployeeID, Name, Title, EmployeeLevel
+FROM DirectReports
+ORDER BY Sort, EmployeeID;
+----
+1	Ken Sánchez	Chief Executive Officer	1
+273	>Brian Welcker	Vice President of Sales	2
+16	>>David Bradley	Marketing Manager	3
+23	>>>Mary Gibson	Marketing Specialist	4
+274	>>Stephen Jiang	North American Sales Manager	3
+276	>>>Linda Mitchell	Sales Representative	4
+275	>>>Michael Blythe	Sales Representative	4
+285	>>Syed Abbas	Pacific Sales Manager	3
+286	>>>Lynn Tsoflias	Sales Representative	4
+
+statement ok
+DROP TABLE t0;
+
+statement ok
+DROP TABLE test0;
+
+statement ok
+DROP TABLE test1;
+
+statement ok
+DROP TABLE test2;
+
+statement ok
+DROP TABLE test2_1;
+
+statement ok
+DROP TABLE test3;
+
+statement ok
+DROP TABLE test3_1;
+
+statement ok
+DROP TABLE test4;
+
+statement ok
+DROP TABLE tpch_q1_agg;
+
+statement ok
+DROP table test5;
+
+statement ok
+DROP TABLE test6;
+
+statement ok
+DROP table test7;
+
+statement ok
+DROP table test8;
+
+statement ok
+DROP TABLE test9;
+
+statement ok
+DROP TABLE DirectReports;
+
+statement ok
+PRAGMA disable_force_external
+
+endloop

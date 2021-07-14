@@ -85,8 +85,6 @@ static idx_t TemplatedSelectOperation(Vector &left, Vector &right, const Selecti
 		return BinaryExecutor::Select<uint64_t, uint64_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::INT128:
 		return BinaryExecutor::Select<hugeint_t, hugeint_t, OP>(left, right, sel, count, true_sel, false_sel);
-	case PhysicalType::POINTER:
-		return BinaryExecutor::Select<uintptr_t, uintptr_t, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::FLOAT:
 		return BinaryExecutor::Select<float, float, OP>(left, right, sel, count, true_sel, false_sel);
 	case PhysicalType::DOUBLE:

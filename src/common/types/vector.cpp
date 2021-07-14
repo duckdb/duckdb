@@ -670,12 +670,6 @@ void Vector::Normalify(idx_t count) {
 		case PhysicalType::DOUBLE:
 			TemplatedFlattenConstantVector<double>(data, old_data, count);
 			break;
-		case PhysicalType::HASH:
-			TemplatedFlattenConstantVector<hash_t>(data, old_data, count);
-			break;
-		case PhysicalType::POINTER:
-			TemplatedFlattenConstantVector<uintptr_t>(data, old_data, count);
-			break;
 		case PhysicalType::INTERVAL:
 			TemplatedFlattenConstantVector<interval_t>(data, old_data, count);
 			break;

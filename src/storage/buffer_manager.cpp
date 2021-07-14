@@ -1,9 +1,9 @@
 #include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 
+#include "duckdb/common/allocator.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/parallel/concurrentqueue.hpp"
-#include "duckdb/common/allocator.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -20,7 +20,7 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr
 	D_ASSERT(alloc_size >= Storage::BLOCK_SIZE);
 	buffer = move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
-	memory_usage = alloc_size;
+	memory_usage = alloc_size + Storage::BLOCK_HEADER_SIZE;
 }
 
 BlockHandle::~BlockHandle() {
@@ -175,7 +175,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 
 shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t alloc_size, bool can_destroy) {
 	// first evict blocks until we have enough memory to store this buffer
-	if (!EvictBlocks(alloc_size, maximum_memory)) {
+	if (!EvictBlocks(alloc_size + Storage::BLOCK_HEADER_SIZE, maximum_memory)) {
 		throw OutOfRangeException("Not enough memory to complete operation: could not allocate block of %lld bytes",
 		                          alloc_size);
 	}
@@ -191,6 +191,26 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t alloc_size, bool can
 unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size) {
 	auto block = RegisterMemory(alloc_size, true);
 	return Pin(block);
+}
+
+void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t alloc_size) {
+	D_ASSERT(alloc_size >= Storage::BLOCK_SIZE);
+	lock_guard<mutex> lock(handle->lock);
+	D_ASSERT(handle->readers == 1);
+	auto total_size = alloc_size + Storage::BLOCK_HEADER_SIZE;
+	int64_t required_memory = total_size - handle->memory_usage;
+	if (required_memory > 0) {
+		// evict blocks until we have space to increase the size of this block
+		if (!EvictBlocks(required_memory, maximum_memory)) {
+			throw OutOfRangeException("Not enough memory to complete operation: failed to increase block size");
+		}
+	}
+	// re-allocate the buffer size and update its memory usage
+	handle->buffer->Resize(alloc_size);
+	if (required_memory < 0) {
+		current_memory += required_memory;
+	}
+	handle->memory_usage = total_size;
 }
 
 unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
@@ -321,7 +341,7 @@ void BufferManager::RequireTemporaryDirectory() {
 void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 	RequireTemporaryDirectory();
 
-	D_ASSERT(buffer.size + Storage::BLOCK_HEADER_SIZE >= Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(buffer.size >= Storage::BLOCK_SIZE);
 	// get the path to write to
 	auto path = GetTemporaryPath(buffer.id);
 	// create the file and write the size followed by the buffer contents
@@ -342,7 +362,7 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	handle->Read(&alloc_size, sizeof(idx_t), 0);
 
 	// now allocate a buffer of this size and read the data into that buffer
-	auto buffer = make_unique<ManagedBuffer>(db, alloc_size + Storage::BLOCK_HEADER_SIZE, false, id);
+	auto buffer = make_unique<ManagedBuffer>(db, alloc_size, false, id);
 	buffer->Read(*handle, sizeof(idx_t));
 	return move(buffer);
 }

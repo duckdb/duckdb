@@ -9,9 +9,9 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/planner/expression.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 class BoundAggregateExpression;
@@ -48,11 +48,11 @@ public:
 
 public:
 	//! Initializes the RowLayout with the specified types and aggregates to an empty RowLayout
-	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p);
+	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align = true);
 	//! Initializes the RowLayout with the specified types to an empty RowLayout
-	void Initialize(vector<LogicalType> types);
+	void Initialize(vector<LogicalType> types, bool align = true);
 	//! Initializes the RowLayout with the specified aggregates to an empty RowLayout
-	void Initialize(Aggregates aggregates_p);
+	void Initialize(Aggregates aggregates_p, bool align = true);
 	//! Returns the number of data columns
 	inline idx_t ColumnCount() const {
 		return types.size();
@@ -93,6 +93,13 @@ public:
 	inline const vector<idx_t> &GetOffsets() const {
 		return offsets;
 	}
+	//! Returns whether all columns in this layout are constant size
+	inline bool AllConstant() const {
+		return all_constant;
+	}
+	inline idx_t GetHeapPointerOffset() const {
+		return heap_pointer_offset;
+	}
 
 private:
 	//! The types of the data columns
@@ -109,6 +116,10 @@ private:
 	idx_t row_width;
 	//! The offsets to the columns and aggregate data in each row
 	vector<idx_t> offsets;
+	//! Whether all columns in this layout are constant size
+	bool all_constant;
+	//! Offset to the pointer to the heap for each row
+	idx_t heap_pointer_offset;
 };
 
 } // namespace duckdb
