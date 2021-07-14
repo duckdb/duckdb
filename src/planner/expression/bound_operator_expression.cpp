@@ -1,5 +1,6 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
 

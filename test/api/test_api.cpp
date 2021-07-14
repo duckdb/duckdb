@@ -226,7 +226,7 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// error in query
 	result = con.SendQuery("SELECT 'hello'::INT;");
 	REQUIRE(!result->ToString().empty());
-	result = ((StreamQueryResult &)*result).Materialize();
+	REQUIRE(result->type == QueryResultType::MATERIALIZED_RESULT);
 	REQUIRE_FAIL(result);
 
 	// error in stream that only happens after fetching
