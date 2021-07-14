@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
 
