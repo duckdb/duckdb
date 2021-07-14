@@ -6,35 +6,35 @@
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
-    struct OdbcInterval {
-    public:
-        static bool GetInterval(Value &value, interval_t &interval, OdbcHandleStmt *stmt);
+struct OdbcInterval {
+public:
+	static bool GetInterval(Value &value, interval_t &interval, OdbcHandleStmt *stmt);
 
-        static void SetSignal(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetSignal(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetYear(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetYear(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetMonth(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetMonth(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetDay(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetDay(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetHour(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetHour(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetMinute(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetMinute(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetSecond(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetSecond(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetDayToHour(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetDayToHour(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetDayToMinute(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetDayToMinute(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetDayToSecond(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetDayToSecond(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetHourToMinute(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetHourToMinute(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetHourToSecond(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+	static void SetHourToSecond(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
-        static void SetMinuteToSecond(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
-    };
-} // end namespace
+	static void SetMinuteToSecond(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+};
+} // namespace duckdb
 #endif
