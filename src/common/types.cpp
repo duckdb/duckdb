@@ -254,7 +254,8 @@ idx_t GetTypeIdSize(PhysicalType type) {
 
 bool TypeIsConstantSize(PhysicalType type) {
 	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) ||
-	       (type >= PhysicalType::FIXED_SIZE_BINARY && type <= PhysicalType::INTERVAL) || type == PhysicalType::INTERVAL || type == PhysicalType::INT128;
+	       (type >= PhysicalType::FIXED_SIZE_BINARY && type <= PhysicalType::INTERVAL) ||
+	       type == PhysicalType::INTERVAL || type == PhysicalType::INT128;
 }
 bool TypeIsIntegral(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
