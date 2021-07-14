@@ -43,8 +43,6 @@ class RowDataCollection {
 public:
 	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size, bool keep_pinned = false);
 
-	mutex rc_lock;
-
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The total number of stored entries
@@ -66,8 +64,6 @@ public:
 	                              const SelectionVector &sel, idx_t offset = 0);
 	static void ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
 	                              const SelectionVector &sel, idx_t offset = 0);
-	static void ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size, const SelectionVector &sel,
-	                              idx_t ser_count);
 
 	static void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
 	                                idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
@@ -76,7 +72,7 @@ public:
 	                            data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset = 0);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining, idx_t entry_sizes[]);
-	void Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]);
+	vector<unique_ptr<BufferHandle>> Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]);
 
 	void Merge(RowDataCollection &other);
 
@@ -106,6 +102,8 @@ private:
 	                                  idx_t offset);
 	static void SerializeListVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
 	                                data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset);
+
+	mutex rdc_lock;
 
 	//! Whether the system is little endian
 	const bool is_little_endian;

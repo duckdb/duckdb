@@ -196,7 +196,6 @@ void RowDataCollection::ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], 
 	// add struct validitymask size
 	const idx_t struct_validitymask_size = (num_children + 7) / 8;
 	for (idx_t i = 0; i < ser_count; i++) {
-		// FIXME: don't serialize if the struct is NULL?
 		entry_sizes[i] += struct_validitymask_size;
 	}
 	// compute size of child vectors
@@ -289,22 +288,6 @@ void RowDataCollection::ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t 
 	ComputeEntrySizes(v, vdata, entry_sizes, vcount, ser_count, sel, offset);
 }
 
-void RowDataCollection::ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size,
-                                          const SelectionVector &sel, idx_t ser_count) {
-	// fill array with constant portion of payload entry size
-	std::fill_n(entry_sizes, input.size(), entry_size);
-
-	// compute size of the constant portion of the payload columns
-	VectorData vdata;
-	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
-		auto physical_type = input.data[col_idx].GetType().InternalType();
-		if (TypeIsConstantSize(physical_type)) {
-			continue;
-		}
-		ComputeEntrySizes(input.data[col_idx], entry_sizes, input.size(), ser_count, sel);
-	}
-}
-
 template <class T>
 static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &sel, idx_t count, idx_t col_idx,
                                     data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset) {
@@ -319,8 +302,10 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 			key_locations[i] += sizeof(T);
 		}
 	} else {
-		const auto byte_offset = col_idx / 8;
-		const auto bit = ~(1UL << (col_idx % 8));
+		idx_t entry_idx;
+		idx_t idx_in_entry;
+		ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+		const auto bit = ~(1UL << idx_in_entry);
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx) + offset;
@@ -331,7 +316,7 @@ static void TemplatedSerializeVData(VectorData &vdata, const SelectionVector &se
 
 			// set the validitymask
 			if (!vdata.validity.RowIsValid(source_idx)) {
-				*(validitymask_locations[i] + byte_offset) &= bit;
+				*(validitymask_locations[i] + entry_idx) &= bit;
 			}
 		}
 	}
@@ -413,8 +398,10 @@ void RowDataCollection::SerializeStringVector(Vector &v, idx_t vcount, const Sel
 			}
 		}
 	} else {
-		auto byte_offset = col_idx / 8;
-		const auto bit = ~(1UL << (col_idx % 8));
+		idx_t entry_idx;
+		idx_t idx_in_entry;
+		ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+		const auto bit = ~(1UL << idx_in_entry);
 		for (idx_t i = 0; i < ser_count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx) + offset;
@@ -428,7 +415,7 @@ void RowDataCollection::SerializeStringVector(Vector &v, idx_t vcount, const Sel
 				key_locations[i] += string_entry.GetSize();
 			} else {
 				// set the validitymask
-				*(validitymask_locations[i] + byte_offset) &= bit;
+				*(validitymask_locations[i] + entry_idx) &= bit;
 			}
 		}
 	}
@@ -461,8 +448,10 @@ void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const Sel
 	}
 
 	// the whole struct itself can be NULL
-	auto byte_offset = col_idx / 8;
-	const auto bit = ~(1UL << (col_idx % 8));
+	idx_t entry_idx;
+	idx_t idx_in_entry;
+	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+	const auto bit = ~(1UL << idx_in_entry);
 
 	// struct must have a validitymask for its fields
 	const idx_t struct_validitymask_size = (num_children + 7) / 8;
@@ -477,7 +466,7 @@ void RowDataCollection::SerializeStructVector(Vector &v, idx_t vcount, const Sel
 		auto idx = sel.get_index(i);
 		auto source_idx = vdata.sel->get_index(idx) + offset;
 		if (validitymask_locations && !vdata.validity.RowIsValid(source_idx)) {
-			*(validitymask_locations[i] + byte_offset) &= bit;
+			*(validitymask_locations[i] + entry_idx) &= bit;
 		}
 	}
 
@@ -642,7 +631,8 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 	return append_count;
 }
 
-void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]) {
+vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[],
+                                                          idx_t entry_sizes[]) {
 	vector<unique_ptr<BufferHandle>> handles;
 	vector<BlockAppendEntry> append_entries;
 
@@ -650,7 +640,7 @@ void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx
 	idx_t remaining = added_count;
 	{
 		// first append to the last block (if any)
-		lock_guard<mutex> append_lock(rc_lock);
+		lock_guard<mutex> append_lock(rdc_lock);
 		count += added_count;
 		if (!blocks.empty()) {
 			auto &last_block = blocks.back();
@@ -701,13 +691,15 @@ void RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[], idx
 			}
 		}
 	}
+
+	return handles;
 }
 
 void RowDataCollection::Merge(RowDataCollection &other) {
 	RowDataCollection temp(buffer_manager, Storage::BLOCK_SIZE, 1);
 	{
 		//	One lock at a time to avoid deadlocks
-		lock_guard<mutex> read_lock(other.rc_lock);
+		lock_guard<mutex> read_lock(other.rdc_lock);
 		temp.count = other.count;
 		temp.block_capacity = other.block_capacity;
 		temp.entry_size = other.entry_size;
@@ -715,12 +707,15 @@ void RowDataCollection::Merge(RowDataCollection &other) {
 		other.count = 0;
 	}
 
-	lock_guard<mutex> write_lock(rc_lock);
+	lock_guard<mutex> write_lock(rdc_lock);
 	count += temp.count;
 	block_capacity = MaxValue(block_capacity, temp.block_capacity);
 	entry_size = MaxValue(entry_size, temp.entry_size);
 	for (auto &block : temp.blocks) {
 		blocks.emplace_back(move(block));
+	}
+	for (auto &handle : temp.pinned_blocks) {
+		pinned_blocks.emplace_back(move(handle));
 	}
 }
 
