@@ -152,7 +152,7 @@ DUCKDB_API size_t duckdb_config_count();
 //! Returns the config name and description for the config at the specified index
 //! The result MUST NOT be freed
 //! Returns failure if the index is out of range (i.e. >= duckdb_config_count)
-DUCKDB_API duckdb_state duckdb_get_config_flag(size_t index, char **out_name, char **out_description);
+DUCKDB_API duckdb_state duckdb_get_config_flag(size_t index, const char **out_name, const char **out_description);
 //! Sets the specified config option for the configuration
 DUCKDB_API duckdb_state duckdb_set_config(duckdb_config config, const char *name, const char *option);
 //! Destroys a config object created with duckdb_create_config
@@ -162,7 +162,8 @@ DUCKDB_API void duckdb_destroy_config(duckdb_config *config);
 //! failure. [OUT: database]
 DUCKDB_API duckdb_state duckdb_open(const char *path, duckdb_database *out_database);
 //! Opens a database file at the given path using the specified configuration
-DUCKDB_API duckdb_state duckdb_open_custom(const char *path, duckdb_database *out_database, duckdb_config *config);
+//! If error is set the error will be reported
+DUCKDB_API duckdb_state duckdb_open_ext(const char *path, duckdb_database *out_database, duckdb_config config, char **error);
 //! Closes the database.
 DUCKDB_API void duckdb_close(duckdb_database *database);
 

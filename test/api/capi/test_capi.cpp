@@ -757,3 +757,73 @@ TEST_CASE("Test arrow in C API", "[capi]") {
 		duckdb_destroy_prepare(&stmt);
 	}
 }
+
+TEST_CASE("Test C API config", "[capi]") {
+	duckdb_database db = nullptr;
+	duckdb_connection con = nullptr;
+	duckdb_config config = nullptr;
+	duckdb_result result;
+
+	// enumerate config options
+	auto config_count = duckdb_config_count();
+	for(size_t i = 0; i < config_count; i++) {
+		const char *name = nullptr;
+		const char *description = nullptr;
+		duckdb_get_config_flag(i, &name, &description);
+		REQUIRE(strlen(name) > 0);
+		REQUIRE(strlen(description) > 0);
+	}
+
+	// test config creation
+	REQUIRE(duckdb_create_config(&config) == DuckDBSuccess);
+	REQUIRE(duckdb_set_config(config, "access_mode", "invalid_access_mode") == DuckDBError);
+	REQUIRE(duckdb_set_config(config, "access_mode", "read_only") == DuckDBSuccess);
+	REQUIRE(duckdb_set_config(config, "aaaa_invalidoption", "read_only") == DuckDBError);
+
+	auto dbdir = TestCreatePath("capi_read_only_db");
+
+	// open the database & connection
+	// cannot open an in-memory database in read-only mode
+	char *error = nullptr;
+	REQUIRE(duckdb_open_ext(":memory:", &db, config, &error) == DuckDBError);
+	REQUIRE(strlen(error) > 0);
+	duckdb_free(error);
+	// cannot open a database that does not exist
+	REQUIRE(duckdb_open_ext(dbdir.c_str(), &db, config, &error) == DuckDBError);
+	REQUIRE(strlen(error) > 0);
+	duckdb_free(error);
+	// we can create the database and add some tables
+	{
+		DuckDB cppdb(dbdir);
+		Connection cppcon(cppdb);
+		cppcon.Query("CREATE TABLE integers(i INTEGER)");
+		cppcon.Query("INSERT INTO integers VALUES (42)");
+	}
+
+	// now we can connect
+	REQUIRE(duckdb_open_ext(dbdir.c_str(), &db, config, &error) == DuckDBSuccess);
+	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
+
+	// we can query
+	REQUIRE(duckdb_query(con, "SELECT 42::INT", &result) == DuckDBSuccess);
+	REQUIRE(duckdb_value_int32(&result, 0, 0) == 42);
+	duckdb_destroy_result(&result);
+	REQUIRE(duckdb_query(con, "SELECT i::INT FROM integers", &result) == DuckDBSuccess);
+	REQUIRE(duckdb_value_int32(&result, 0, 0) == 42);
+	duckdb_destroy_result(&result);
+
+	// but we cannot create new tables
+	REQUIRE(duckdb_query(con, "CREATE TABLE new_table(i INTEGER)", nullptr) == DuckDBError);
+
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
+	duckdb_destroy_config(&config);
+
+	// api abuse
+	REQUIRE(duckdb_create_config(nullptr) == DuckDBError);
+	REQUIRE(duckdb_get_config_flag(9999999, nullptr, nullptr) == DuckDBError);
+	REQUIRE(duckdb_set_config(nullptr, nullptr, nullptr) == DuckDBError);
+	REQUIRE(duckdb_create_config(nullptr) == DuckDBError);
+	duckdb_destroy_config(nullptr);
+	duckdb_destroy_config(nullptr);
+}

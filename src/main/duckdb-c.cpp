@@ -46,9 +46,9 @@ duckdb_state duckdb_create_config(duckdb_config *out_config) {
 	DBConfig *config;
 	try {
 		config = new DBConfig();
-	} catch (...) {
+	} catch (...) { // LCOV_EXCL_START
 		return DuckDBError;
-	}
+	} // LCOV_EXCL_STOP
 	*out_config = (duckdb_config)config;
 	return DuckDBSuccess;
 }
@@ -57,7 +57,7 @@ size_t duckdb_config_count() {
 	return DBConfig::GetOptionCount();
 }
 
-duckdb_state duckdb_get_config_flag(size_t index, char **out_name, char **out_description) {
+duckdb_state duckdb_get_config_flag(size_t index, const char **out_name, const char **out_description) {
 	auto option = DBConfig::GetOptionByIndex(index);
 	if (!option) {
 		return DuckDBError;
@@ -72,16 +72,20 @@ duckdb_state duckdb_get_config_flag(size_t index, char **out_name, char **out_de
 }
 
 duckdb_state duckdb_set_config(duckdb_config config, const char *name, const char *option) {
-	if (!config) {
+	if (!config || !name || !option) {
 		return DuckDBError;
 	}
-	auto option = DBConfig::GetOptionByName(name);
-	if (!option) {
+	auto config_option = DBConfig::GetOptionByName(name);
+	if (!config_option) {
 		return DuckDBError;
 	}
-	auto db_config = (DBConfig *) config;
-	config->
-
+	try {
+		auto db_config = (DBConfig *) config;
+		db_config->SetOption(*config_option, Value(option));
+	} catch(...) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
 }
 
 void duckdb_destroy_config(duckdb_config *config) {
@@ -91,20 +95,34 @@ void duckdb_destroy_config(duckdb_config *config) {
 	if (*config) {
 		auto db_config = (DBConfig *) *config;
 		delete db_config;
-		*db_config = nullptr;
+		*config = nullptr;
 	}
 }
 
-duckdb_state duckdb_open(const char *path, duckdb_database *out) {
+duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_config config, char **error) {
 	auto wrapper = new DatabaseData();
 	try {
-		wrapper->database = new DuckDB(path);
-	} catch (...) {
+		auto db_config = (DBConfig *) config;
+		wrapper->database = new DuckDB(path, db_config);
+	} catch (std::exception &ex) {
+		if (error) {
+			*error = strdup(ex.what());
+		}
 		delete wrapper;
 		return DuckDBError;
-	}
+	} catch(...) { // LCOV_EXCL_START
+		if (error) {
+			*error = strdup("Unknown error");
+		}
+		delete wrapper;
+		return DuckDBError;
+	} // LCOV_EXCL_STOP
 	*out = (duckdb_database)wrapper;
 	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_open(const char *path, duckdb_database *out) {
+	return duckdb_open_ext(path, out, nullptr, nullptr);
 }
 
 void duckdb_close(duckdb_database *database) {
