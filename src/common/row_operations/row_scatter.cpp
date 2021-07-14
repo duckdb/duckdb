@@ -126,7 +126,6 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 
 	// Compute the entry size of the variable size columns
 	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
-	vector<unique_ptr<BufferHandle>> handles;
 	if (!layout.AllConstant()) {
 		idx_t entry_sizes[STANDARD_VECTOR_SIZE];
 		std::fill_n(entry_sizes, count, sizeof(idx_t));
@@ -152,7 +151,7 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 		}
 
 		// Build out the buffer space
-		handles = string_heap.Build(count, data_locations, entry_sizes);
+		string_heap.Build(count, data_locations, entry_sizes);
 
 		// Serialize information that is needed for swizzling if the computation goes out-of-core
 		const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();

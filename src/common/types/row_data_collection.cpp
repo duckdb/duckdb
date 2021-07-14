@@ -770,7 +770,7 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 }
 
 vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, data_ptr_t key_locations[],
-                                                          idx_t entry_sizes[]) {
+                                                          idx_t entry_sizes[], const SelectionVector *sel) {
 	vector<unique_ptr<BufferHandle>> handles;
 	vector<BlockAppendEntry> append_entries;
 
@@ -780,6 +780,7 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 		// first append to the last block (if any)
 		lock_guard<mutex> append_lock(rdc_lock);
 		count += added_count;
+
 		if (!blocks.empty()) {
 			auto &last_block = blocks.back();
 			if (last_block.count < last_block.capacity) {
@@ -824,7 +825,8 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 			}
 		} else {
 			for (; append_idx < next; append_idx++) {
-				key_locations[append_idx] = append_entry.baseptr;
+				auto idx = sel->get_index(append_idx);
+				key_locations[idx] = append_entry.baseptr;
 				append_entry.baseptr += entry_size;
 			}
 		}

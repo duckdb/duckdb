@@ -45,7 +45,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		layout_types.emplace_back(LogicalType::BOOLEAN);
 	}
 	layout_types.emplace_back(LogicalType::HASH);
-	layout.Initialize(layout_types, false);
+	layout.Initialize(layout_types);
 
 	const auto &offsets = layout.GetOffsets();
 	tuple_size = offsets[condition_types.size() + build_types.size()];
@@ -185,7 +185,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	// build out the buffer space
 	Vector addresses(LogicalType::POINTER);
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
-	auto handles = block_collection->Build(added_count, key_locations, nullptr);
+	auto handles = block_collection->Build(added_count, key_locations, nullptr, current_sel);
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
