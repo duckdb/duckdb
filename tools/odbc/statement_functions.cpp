@@ -18,6 +18,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 		auto query = duckdb::OdbcUtils::ReadString(statement_text, text_length);
 		stmt->stmt = stmt->dbc->conn->Prepare(query);
 		if (!stmt->stmt->success) {
+			stmt->error_messages.emplace_back(stmt->stmt->error);
 			return SQL_ERROR;
 		}
 		stmt->params.resize(stmt->stmt->n_param);
@@ -42,6 +43,7 @@ SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
 		}
 		stmt->res = stmt->stmt->Execute(stmt->params);
 		if (!stmt->res->success) {
+			stmt->error_messages.emplace_back(stmt->res->error);
 			return SQL_ERROR;
 		}
 		stmt->open = true;
