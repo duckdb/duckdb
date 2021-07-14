@@ -3,4 +3,5 @@ boolsaschar-test
 connect-test
 numeric-test
 quotes-test
+result-conversions-test
 select-test
