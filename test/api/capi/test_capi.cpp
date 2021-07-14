@@ -788,6 +788,8 @@ TEST_CASE("Test C API config", "[capi]") {
 	REQUIRE(duckdb_open_ext(":memory:", &db, config, &error) == DuckDBError);
 	REQUIRE(strlen(error) > 0);
 	duckdb_free(error);
+	// now without the error
+	REQUIRE(duckdb_open_ext(":memory:", &db, config, nullptr) == DuckDBError);
 	// cannot open a database that does not exist
 	REQUIRE(duckdb_open_ext(dbdir.c_str(), &db, config, &error) == DuckDBError);
 	REQUIRE(strlen(error) > 0);
@@ -802,6 +804,13 @@ TEST_CASE("Test C API config", "[capi]") {
 
 	// now we can connect
 	REQUIRE(duckdb_open_ext(dbdir.c_str(), &db, config, &error) == DuckDBSuccess);
+
+	// we can destroy the config right after duckdb_open
+	duckdb_destroy_config(&config);
+	// we can spam this
+	duckdb_destroy_config(&config);
+	duckdb_destroy_config(&config);
+
 	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
 
 	// we can query
@@ -817,7 +826,6 @@ TEST_CASE("Test C API config", "[capi]") {
 
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
-	duckdb_destroy_config(&config);
 
 	// api abuse
 	REQUIRE(duckdb_create_config(nullptr) == DuckDBError);
