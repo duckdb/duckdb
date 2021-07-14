@@ -88,9 +88,18 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::LIST:
 		return PhysicalType::LIST;
 	case LogicalTypeId::HASH:
-		return PhysicalType::HASH;
+		static_assert(sizeof(hash_t) == sizeof(uint64_t), "Hash must be uint64_t");
+		return PhysicalType::UINT64;
 	case LogicalTypeId::POINTER:
-		return PhysicalType::POINTER;
+		// LCOV_EXCL_START
+		if (sizeof(uintptr_t) == sizeof(uint32_t)) {
+			return PhysicalType::UINT32;
+		} else if (sizeof(uintptr_t) == sizeof(uint64_t)) {
+			return PhysicalType::UINT64;
+		} else {
+			throw InternalException("Unsupported pointer size");
+		}
+		// LCOV_EXCL_STOP
 	case LogicalTypeId::VALIDITY:
 		return PhysicalType::BIT;
 	case LogicalTypeId::TABLE:
@@ -180,10 +189,6 @@ string TypeIdToString(PhysicalType type) {
 		return "UINT64";
 	case PhysicalType::INT128:
 		return "INT128";
-	case PhysicalType::HASH:
-		return "HASH";
-	case PhysicalType::POINTER:
-		return "POINTER";
 	case PhysicalType::FLOAT:
 		return "FLOAT";
 	case PhysicalType::DOUBLE:
@@ -232,10 +237,6 @@ idx_t GetTypeIdSize(PhysicalType type) {
 		return sizeof(float);
 	case PhysicalType::DOUBLE:
 		return sizeof(double);
-	case PhysicalType::HASH:
-		return sizeof(hash_t);
-	case PhysicalType::POINTER:
-		return sizeof(uintptr_t);
 	case PhysicalType::VARCHAR:
 		return sizeof(string_t);
 	case PhysicalType::INTERVAL:
@@ -252,12 +253,11 @@ idx_t GetTypeIdSize(PhysicalType type) {
 
 bool TypeIsConstantSize(PhysicalType type) {
 	return (type >= PhysicalType::BOOL && type <= PhysicalType::DOUBLE) ||
-	       (type >= PhysicalType::FIXED_SIZE_BINARY && type <= PhysicalType::INTERVAL) || type == PhysicalType::HASH ||
-	       type == PhysicalType::POINTER || type == PhysicalType::INTERVAL || type == PhysicalType::INT128;
+	       (type >= PhysicalType::FIXED_SIZE_BINARY && type <= PhysicalType::INTERVAL) ||
+	       type == PhysicalType::INTERVAL || type == PhysicalType::INT128;
 }
 bool TypeIsIntegral(PhysicalType type) {
-	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::HASH ||
-	       type == PhysicalType::POINTER || type == PhysicalType::INT128;
+	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 bool TypeIsNumeric(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::DOUBLE) || type == PhysicalType::INT128;
