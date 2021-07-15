@@ -1,8 +1,10 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
+
+using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
 template <class T>
 static void TemplatedHeapGather(Vector &v, const idx_t count, const SelectionVector &sel, data_ptr_t *key_locations) {

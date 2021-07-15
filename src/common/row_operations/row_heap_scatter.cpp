@@ -1,8 +1,10 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
+
+using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
 static void ComputeStringEntrySizes(VectorData &vdata, idx_t entry_sizes[], const idx_t ser_count,
                                     const SelectionVector &sel, const idx_t offset) {

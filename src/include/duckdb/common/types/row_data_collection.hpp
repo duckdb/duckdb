@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
