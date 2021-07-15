@@ -644,6 +644,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			output_chunk.Reset();
 			output_chunk.SetCardinality(MinValue(idx_t(STANDARD_VECTOR_SIZE), input.Count() - row_idx));
 		}
+		auto &result = output_chunk.data[0];
 
 		// special case, OVER (), aggregate over everything
 		UpdateWindowBoundaries(wexpr, input.Count(), row_idx, boundary_start_collection, boundary_end_collection,
@@ -665,39 +666,43 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {
-			output_chunk.SetValue(0, output_offset, res);
+			FlatVector::SetNull(result, output_offset, true);
 			continue;
 		}
 
 		switch (wexpr->type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
-			auto &result = output_chunk.data[0];
 			segment_tree->Compute(result, output_offset, bounds.window_start, bounds.window_end);
 			continue;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
-			res = Value::Numeric(wexpr->return_type, row_idx - bounds.partition_start + 1);
-			break;
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = row_idx - bounds.partition_start + 1;
+			continue;
 		}
 		case ExpressionType::WINDOW_RANK_DENSE: {
-			res = Value::Numeric(wexpr->return_type, dense_rank);
-			break;
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = dense_rank;
+			continue;
 		}
 		case ExpressionType::WINDOW_RANK: {
-			res = Value::Numeric(wexpr->return_type, rank);
-			break;
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = rank;
+			continue;
 		}
 		case ExpressionType::WINDOW_PERCENT_RANK: {
 			int64_t denom = (int64_t)bounds.partition_end - bounds.partition_start - 1;
 			double percent_rank = denom > 0 ? ((double)rank - 1) / denom : 0;
-			res = Value(percent_rank);
-			break;
+			auto rdata = FlatVector::GetData<double>(result);
+			rdata[output_offset] = percent_rank;
+			continue;
 		}
 		case ExpressionType::WINDOW_CUME_DIST: {
 			int64_t denom = (int64_t)bounds.partition_end - bounds.partition_start;
 			double cume_dist = denom > 0 ? ((double)(bounds.peer_end - bounds.partition_start)) / denom : 0;
-			res = Value(cume_dist);
-			break;
+			auto rdata = FlatVector::GetData<double>(result);
+			rdata[output_offset] = cume_dist;
+			continue;
 		}
 		case ExpressionType::WINDOW_NTILE: {
 			if (payload_collection.ColumnCount() != 1) {
@@ -729,8 +734,9 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 			// result has to be between [1, NTILE]
 			D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
-			res = Value::Numeric(wexpr->return_type, result_ntile);
-			break;
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = result_ntile;
+			continue;
 		}
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG: {
