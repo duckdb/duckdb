@@ -662,8 +662,6 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			rank_equal++;
 		}
 
-		Value res;
-
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {
 			FlatVector::SetNull(result, output_offset, true);
@@ -673,36 +671,36 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		switch (wexpr->type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
 			segment_tree->Compute(result, output_offset, bounds.window_start, bounds.window_end);
-			continue;
+			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
 			auto rdata = FlatVector::GetData<int64_t>(result);
 			rdata[output_offset] = row_idx - bounds.partition_start + 1;
-			continue;
+			break;
 		}
 		case ExpressionType::WINDOW_RANK_DENSE: {
 			auto rdata = FlatVector::GetData<int64_t>(result);
 			rdata[output_offset] = dense_rank;
-			continue;
+			break;
 		}
 		case ExpressionType::WINDOW_RANK: {
 			auto rdata = FlatVector::GetData<int64_t>(result);
 			rdata[output_offset] = rank;
-			continue;
+			break;
 		}
 		case ExpressionType::WINDOW_PERCENT_RANK: {
 			int64_t denom = (int64_t)bounds.partition_end - bounds.partition_start - 1;
 			double percent_rank = denom > 0 ? ((double)rank - 1) / denom : 0;
 			auto rdata = FlatVector::GetData<double>(result);
 			rdata[output_offset] = percent_rank;
-			continue;
+			break;
 		}
 		case ExpressionType::WINDOW_CUME_DIST: {
 			int64_t denom = (int64_t)bounds.partition_end - bounds.partition_start;
 			double cume_dist = denom > 0 ? ((double)(bounds.peer_end - bounds.partition_start)) / denom : 0;
 			auto rdata = FlatVector::GetData<double>(result);
 			rdata[output_offset] = cume_dist;
-			continue;
+			break;
 		}
 		case ExpressionType::WINDOW_NTILE: {
 			if (payload_collection.ColumnCount() != 1) {
@@ -736,18 +734,14 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
 			auto rdata = FlatVector::GetData<int64_t>(result);
 			rdata[output_offset] = result_ntile;
-			continue;
+			break;
 		}
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG: {
-			Value def_val = Value(wexpr->return_type);
 			int64_t offset = 1;
 			if (wexpr->offset_expr) {
 				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : row_idx)
 				             .GetValue<int64_t>();
-			}
-			if (wexpr->default_expr) {
-				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
 			}
 			int64_t val_idx = (int64_t)row_idx;
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
@@ -757,25 +751,25 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 
 			if (val_idx >= int64_t(bounds.partition_start) && val_idx < int64_t(bounds.partition_end)) {
-				res = payload_collection.GetValue(0, val_idx);
+				payload_collection.CopyCell(0, val_idx, result, output_offset);
+			} else if (wexpr->default_expr) {
+				const auto source_row = wexpr->default_expr->IsScalar() ? 0 : row_idx;
+				leadlag_default_collection.CopyCell(0, source_row, result, output_offset);
 			} else {
-				res = def_val;
+				FlatVector::SetNull(result, output_offset, true);
 			}
 			break;
 		}
-		case ExpressionType::WINDOW_FIRST_VALUE: {
-			res = payload_collection.GetValue(0, bounds.window_start);
-			break;
-		}
+		case ExpressionType::WINDOW_FIRST_VALUE:
 		case ExpressionType::WINDOW_LAST_VALUE: {
-			res = payload_collection.GetValue(0, bounds.window_end - 1);
+			const auto source_row =
+			    (wexpr->type == ExpressionType::WINDOW_FIRST_VALUE) ? bounds.window_start : bounds.window_end - 1;
+			payload_collection.CopyCell(0, source_row, result, output_offset);
 			break;
 		}
 		default:
 			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
 		}
-
-		output_chunk.SetValue(0, output_offset, res);
 	}
 
 	// Push the last chunk

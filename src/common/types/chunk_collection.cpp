@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/assert.hpp"
 
@@ -475,6 +476,13 @@ vector<Value> ChunkCollection::GetRow(idx_t index) {
 
 void ChunkCollection::SetValue(idx_t column, idx_t index, const Value &value) {
 	chunks[LocateChunk(index)]->SetValue(column, index % STANDARD_VECTOR_SIZE, value);
+}
+
+void ChunkCollection::CopyCell(idx_t column, idx_t index, Vector &target, idx_t target_offset) {
+	auto &chunk = GetChunkForRow(index);
+	auto &source = chunk.data[column];
+	const auto source_offset = index % STANDARD_VECTOR_SIZE;
+	VectorOperations::Copy(source, target, source_offset + 1, source_offset, target_offset);
 }
 
 void ChunkCollection::Print() {

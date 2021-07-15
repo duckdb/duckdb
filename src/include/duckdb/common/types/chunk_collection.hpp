@@ -63,6 +63,9 @@ public:
 
 	DUCKDB_API vector<Value> GetRow(idx_t index);
 
+	//! Copy a single cell to a target vector
+	DUCKDB_API void CopyCell(idx_t column, idx_t index, Vector &target, idx_t target_offset);
+
 	DUCKDB_API string ToString() const {
 		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
 		                          : "ChunkCollection [ " + std::to_string(count) + " ]: \n" + chunks[0]->ToString();
