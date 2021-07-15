@@ -21,6 +21,7 @@ ART::ART(const vector<column_t> &column_ids, const vector<unique_ptr<Expression>
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
 		case PhysicalType::INT64:
+		case PhysicalType::INT128:
 		case PhysicalType::UINT8:
 		case PhysicalType::UINT16:
 		case PhysicalType::UINT32:
@@ -131,6 +132,9 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 	case PhysicalType::INT64:
 		TemplatedGenerateKeys<int64_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
+	case PhysicalType::INT128:
+		TemplatedGenerateKeys<hugeint_t>(input.data[0], input.size(), keys, is_little_endian);
+		break;
 	case PhysicalType::UINT8:
 		TemplatedGenerateKeys<uint8_t>(input.data[0], input.size(), keys, is_little_endian);
 		break;
@@ -173,6 +177,9 @@ void ART::GenerateKeys(DataChunk &input, vector<unique_ptr<Key>> &keys) {
 			break;
 		case PhysicalType::INT64:
 			ConcatenateKeys<int64_t>(input.data[i], input.size(), keys, is_little_endian);
+			break;
+		case PhysicalType::INT128:
+			ConcatenateKeys<hugeint_t>(input.data[i], input.size(), keys, is_little_endian);
 			break;
 		case PhysicalType::UINT8:
 			ConcatenateKeys<uint8_t>(input.data[i], input.size(), keys, is_little_endian);

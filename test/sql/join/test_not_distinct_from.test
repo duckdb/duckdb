@@ -2,7 +2,7 @@
 # description: Test join on is not distinct from query
 # group: [join]
 
-foreach type tinyint smallint integer bigint float double utinyint usmallint uinteger ubigint decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
 create table tbl_1 (a ${type}, b ${type})

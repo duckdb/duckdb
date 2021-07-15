@@ -1373,7 +1373,43 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					if (sScript.tokens[i].empty()) {
 						break;
 					}
-					def.tokens.push_back(sScript.tokens[i]);
+					auto token_name = StringUtil::Lower(sScript.tokens[i]);
+					StringUtil::Trim(token_name);
+					bool collection = false;
+					bool is_all = token_name == "<alltypes>";
+					bool is_numeric = is_all || token_name == "<numeric>";
+					bool is_integral = is_numeric || token_name == "<integral>";
+					bool is_signed = is_integral || token_name == "<signed>";
+					bool is_unsigned = is_integral || token_name == "<unsigned>";
+					if (is_signed) {
+						def.tokens.push_back("tinyint");
+						def.tokens.push_back("smallint");
+						def.tokens.push_back("integer");
+						def.tokens.push_back("bigint");
+						def.tokens.push_back("hugeint");
+						collection = true;
+					}
+					if (is_unsigned) {
+						def.tokens.push_back("utinyint");
+						def.tokens.push_back("usmallint");
+						def.tokens.push_back("uinteger");
+						def.tokens.push_back("ubigint");
+						collection = true;
+					}
+					if (is_numeric) {
+						def.tokens.push_back("float");
+						def.tokens.push_back("double");
+						collection = true;
+					}
+					if (is_all) {
+						def.tokens.push_back("bool");
+						def.tokens.push_back("interval");
+						def.tokens.push_back("varchar");
+						collection = true;
+					}
+					if (!collection) {
+						def.tokens.push_back(sScript.tokens[i]);
+					}
 				}
 				def.loop_idx = 0;
 				def.loop_start = 0;

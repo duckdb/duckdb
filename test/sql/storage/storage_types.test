@@ -5,7 +5,7 @@
 # load the DB from disk
 load __TEST_DIR__/storage_types.db
 
-foreach type tinyint smallint integer bigint float double utinyint usmallint uinteger ubigint
+foreach type <numeric>
 
 statement ok
 CREATE TABLE a_${type} AS SELECT range::${type} i FROM range(100)
@@ -54,7 +54,7 @@ restart
 
 # restart and check all types again
 
-foreach type tinyint smallint integer bigint float double utinyint usmallint uinteger ubigint
+foreach type <numeric>
 
 query IIII
 SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type}

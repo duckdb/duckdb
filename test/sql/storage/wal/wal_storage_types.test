@@ -11,7 +11,7 @@ PRAGMA disable_checkpoint_on_shutdown
 statement ok
 PRAGMA wal_autocheckpoint='1TB';
 
-foreach type tinyint smallint integer bigint float double utinyint usmallint uinteger ubigint
+foreach type <integral>
 
 statement ok
 CREATE TABLE a_${type} AS SELECT range::${type} i FROM range(100)
@@ -60,7 +60,7 @@ restart
 
 # restart and check all types again
 
-foreach type tinyint smallint integer bigint float double utinyint usmallint uinteger ubigint
+foreach type <integral>
 
 query IIII
 SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_${type}
