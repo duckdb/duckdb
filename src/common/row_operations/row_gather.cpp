@@ -51,7 +51,7 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 	}
 
 	// Deserialise into the selected locations
-	RowDataCollection::DeserializeIntoVector(col, count, col_sel, col_no, data_locations, mask_locations);
+	RowOperations::HeapGather(col, count, col_sel, col_no, data_locations, mask_locations);
 }
 
 void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
@@ -107,7 +107,7 @@ void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector 
 		GatherNestedVector(rows, row_sel, col, col_sel, count, col_offset, col_no);
 		break;
 	default:
-		throw NotImplementedException("Unimplemented type for RowOperations::Gather");
+		throw InternalException("Unimplemented type for RowOperations::Gather");
 	}
 }
 
