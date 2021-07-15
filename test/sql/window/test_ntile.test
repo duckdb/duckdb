@@ -118,6 +118,24 @@ SELECT
   TeamName,
   Player,
   Score,
+  NTILE(1,2) OVER (PARTITION BY TeamName ORDER BY Score ASC) AS NTILE
+FROM ScoreBoard s
+ORDER BY TeamName, Score;
+
+statement error
+SELECT
+  TeamName,
+  Player,
+  Score,
+  NTILE(1,2,3) OVER (PARTITION BY TeamName ORDER BY Score ASC) AS NTILE
+FROM ScoreBoard s
+ORDER BY TeamName, Score;
+
+statement error
+SELECT
+  TeamName,
+  Player,
+  Score,
   NTILE(1,2,3,4) OVER (PARTITION BY TeamName ORDER BY Score ASC) AS NTILE
 FROM ScoreBoard s
 ORDER BY TeamName, Score;
