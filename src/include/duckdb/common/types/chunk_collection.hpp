@@ -54,6 +54,9 @@ public:
 	//! Merge is like Append but messes up the order and destroys the other collection
 	DUCKDB_API void Merge(ChunkCollection &other);
 
+	//! Fuse adds new columns to the right of the collection
+	DUCKDB_API void Fuse(ChunkCollection &other);
+
 	DUCKDB_API void Verify();
 
 	//! Gets the value of the column at the specified index

@@ -801,28 +801,10 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 	}
 
 	//	Compute the functions columnwise
-	ChunkCollection hack_collection;
 	for (idx_t expr_idx = 0; expr_idx < window_exprs.size(); ++expr_idx) {
 		ChunkCollection column_collection;
 		ComputeWindowExpression(window_exprs[expr_idx], big_data, column_collection, partition_bits, order_bits);
-		if (expr_idx == 0) {
-			hack_collection.Append(column_collection);
-		} else {
-			D_ASSERT(hack_collection.ChunkCount() == column_collection.ChunkCount());
-			for (idx_t chunk_idx = 0; chunk_idx < hack_collection.ChunkCount(); ++chunk_idx) {
-				auto &lhs = hack_collection.GetChunk(chunk_idx);
-				auto &rhs = column_collection.GetChunk(chunk_idx);
-				D_ASSERT(lhs.size() == rhs.size());
-				for (auto &v : rhs.data) {
-					lhs.data.emplace_back(Vector(v));
-				}
-			}
-		}
-	}
-
-	// Append the hack chunks to the results
-	for (const auto &chunk : hack_collection.Chunks()) {
-		window_results.Append(*chunk);
+		window_results.Fuse(column_collection);
 	}
 }
 

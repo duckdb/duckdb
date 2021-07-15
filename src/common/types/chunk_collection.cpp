@@ -120,6 +120,23 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 	}
 }
 
+void ChunkCollection::Fuse(ChunkCollection &other) {
+	if (count == 0) {
+		Append(other);
+	} else {
+		D_ASSERT(this->ChunkCount() == other.ChunkCount());
+		for (idx_t chunk_idx = 0; chunk_idx < ChunkCount(); ++chunk_idx) {
+			auto &lhs = this->GetChunk(chunk_idx);
+			auto &rhs = other.GetChunk(chunk_idx);
+			D_ASSERT(lhs.size() == rhs.size());
+			for (auto &v : rhs.data) {
+				lhs.data.emplace_back(Vector(v));
+			}
+		}
+		types.insert(types.end(), other.types.begin(), other.types.end());
+	}
+}
+
 // returns an int similar to a C comparator:
 // -1 if left < right
 // 0 if left == right
