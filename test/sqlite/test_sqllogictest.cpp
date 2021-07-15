@@ -1492,6 +1492,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			FAIL();
 		}
 	}
+	if (!loop_statements.empty() || !active_loops.empty()) {
+		fprintf(stderr, "%s:%d: Missing endloop!\n", zScriptFile, sScript.startLine);
+		FAIL();
+	}
 }
 
 // code below traverses the test directory and makes individual test cases out

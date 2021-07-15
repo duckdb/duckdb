@@ -1,0 +1,65 @@
+# name: test/sql/window/test_window_bool.test
+# description: Test window functions with booleans
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+# bool as group
+statement ok
+create table a as select range%2==0 j, range::integer AS i from range(1, 5, 1)
+
+query III
+select j, i, sum(i) over () from a order by 1,2
+----
+False	1	10
+False	3	10
+True	2	10
+True	4	10
+
+query III
+select j, i, sum(i) over (partition by j) from a order by 1,2
+----
+False	1	4
+False	3	4
+True	2	6
+True	4	6
+
+query III
+select j, i, sum(i) over (partition by j order by i) from a order by 1,2
+----
+False	1	1
+False	3	4
+True	2	2
+True	4	6
+
+statement ok
+drop table a
+
+# bool as input to aggregate
+statement ok
+create table a as select range%2 j, range%3==0 AS i from range(1, 5, 1)
+
+query IIII
+select j, i, bool_and(i) over (), bool_or(i) over () from a order by 1,2
+----
+0	False	False	True
+0	False	False	True
+1	False	False	True
+1	True	False	True
+
+query IIII
+select j, i, bool_and(i) over (partition by j), bool_or(i) over (partition by j) from a order by 1,2
+----
+0	False	False	False
+0	False	False	False
+1	False	False	True
+1	True	False	True
+
+query IIIII
+select j, i, bool_and(not i) over (partition by j order by i), bool_and(i) over (partition by j order by i), bool_or(i) over (partition by j order by i) from a order by 1,2
+----
+0	False	True	False	False
+0	False	True	False	False
+1	False	True	False	False
+1	True	False	False	True

@@ -24,11 +24,11 @@ public:
 
 	//! The set of expressions to scan
 	vector<vector<unique_ptr<Expression>>> expressions;
-	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
 
 public:
 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
 	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
 };
 
 } // namespace duckdb
