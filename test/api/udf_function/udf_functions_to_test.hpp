@@ -564,7 +564,7 @@ struct UDFSum {
 	}
 
 	template <class STATE_TYPE, class RESULT_TYPE>
-	static void Finalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
+	static void Finalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count, idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
@@ -578,7 +578,8 @@ struct UDFSum {
 			auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 			for (idx_t i = 0; i < count; i++) {
-				UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata, FlatVector::Validity(result), i);
+				UDFSum::Finalize<RESULT_TYPE, STATE_TYPE>(result, sdata[i], rdata, FlatVector::Validity(result),
+				                                          i + offset);
 			}
 		}
 	}
