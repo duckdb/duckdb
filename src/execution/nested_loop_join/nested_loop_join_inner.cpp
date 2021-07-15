@@ -128,7 +128,7 @@ static idx_t NestedLoopJoinTypeSwitch(Vector &left, Vector &right, idx_t left_si
 		return NLTYPE::template Operation<string_t, OP>(left, right, left_size, right_size, lpos, rpos, lvector,
 		                                                rvector, current_match_count);
 	default:
-		throw NotImplementedException("Unimplemented type for join!");
+		throw InternalException("Unimplemented type for join!");
 	}
 }
 

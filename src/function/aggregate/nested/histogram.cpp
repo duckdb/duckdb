@@ -102,13 +102,10 @@ static void HistogramCombineFunction(Vector &state, Vector &combined, idx_t coun
 }
 
 template <class T>
-static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count) {
+static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &result, idx_t count, idx_t offset) {
 	VectorData sdata;
 	state_vector.Orrify(count, sdata);
 	auto states = (HistogramAggState<T> **)sdata.data;
-	result.Initialize();
-
-	idx_t old_len = 0;
 
 	auto &mask = FlatVector::Validity(result);
 
@@ -116,14 +113,17 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 	auto &bucket_list = child_entries[0];
 	auto &count_list = child_entries[1];
 
+	auto old_len = ListVector::GetListSize(*bucket_list);
+
 	auto &bucket_validity = FlatVector::Validity(*bucket_list);
 	auto &count_validity = FlatVector::Validity(*count_list);
 	for (idx_t i = 0; i < count; i++) {
+		const auto rid = i + offset;
 		auto state = states[sdata.sel->get_index(i)];
 		if (!state->hist) {
-			mask.SetInvalid(i);
-			bucket_validity.SetInvalid(i);
-			count_validity.SetInvalid(i);
+			mask.SetInvalid(rid);
+			bucket_validity.SetInvalid(rid);
+			count_validity.SetInvalid(rid);
 			continue;
 		}
 		for (auto &entry : *state->hist) {
@@ -133,21 +133,18 @@ static void HistogramFinalize(Vector &state_vector, FunctionData *, Vector &resu
 			ListVector::PushBack(*count_list, count_value);
 		}
 		auto list_struct_data = FlatVector::GetData<list_entry_t>(*bucket_list);
-		list_struct_data[i].length = ListVector::GetListSize(*bucket_list) - old_len;
-		list_struct_data[i].offset = old_len;
+		list_struct_data[rid].length = ListVector::GetListSize(*bucket_list) - old_len;
+		list_struct_data[rid].offset = old_len;
 
 		list_struct_data = FlatVector::GetData<list_entry_t>(*count_list);
-		list_struct_data[i].length = ListVector::GetListSize(*count_list) - old_len;
-		list_struct_data[i].offset = old_len;
-		old_len = list_struct_data[i].length;
+		list_struct_data[rid].length = ListVector::GetListSize(*count_list) - old_len;
+		list_struct_data[rid].offset = old_len;
+		old_len = list_struct_data[rid].length;
 	}
 }
 
 unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, AggregateFunction &function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	if (arguments.size() != 1) {
-		throw Exception("We need exactly one argument for the histogram");
-	}
 	D_ASSERT(arguments.size() == 1);
 	child_list_t<LogicalType> struct_children;
 	struct_children.push_back({"bucket", LogicalType::LIST(arguments[0]->return_type)});
@@ -225,7 +222,7 @@ AggregateFunction GetHistogramFunction(PhysicalType type) {
 		                         AggregateFunction::StateDestroy<HistogramAggState<string>, HistogramFunction>);
 
 	default:
-		throw NotImplementedException("Unimplemented histogram aggregate");
+		throw InternalException("Unimplemented histogram aggregate");
 	}
 }
 

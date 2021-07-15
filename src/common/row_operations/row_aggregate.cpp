@@ -94,7 +94,7 @@ void RowOperations::FinalizeStates(RowLayout &layout, Vector &addresses, DataChu
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
+		aggr.function.finalize(addresses, aggr.bind_data, target, result.size(), 0);
 
 		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());
