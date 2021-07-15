@@ -66,6 +66,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		// we do this by creating weak pointers to all pipelines
 		// then clearing our references to the pipelines
 		// and waiting until all pipelines have been destroyed
+		lock_guard<mutex> elock(executor_lock);
 		vector<weak_ptr<Pipeline>> weak_references;
 		weak_references.reserve(pipelines.size());
 		for (auto &pipeline : pipelines) {
@@ -83,6 +84,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		throw Exception(exception);
 	}
 
+	lock_guard<mutex> elock(executor_lock);
 	pipelines.clear();
 	if (!exceptions.empty()) {
 		// an exception has occurred executing one of the pipelines
@@ -91,6 +93,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 }
 
 void Executor::Reset() {
+	lock_guard<mutex> elock(executor_lock);
 	delim_join_dependencies.clear();
 	recursive_cte = nullptr;
 	physical_plan = nullptr;
