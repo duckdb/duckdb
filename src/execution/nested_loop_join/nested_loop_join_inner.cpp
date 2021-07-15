@@ -3,9 +3,9 @@
 
 namespace duckdb {
 
-template<class OP>
+template <class OP>
 struct ComparisonOperationWrapper {
-	template<class T>
+	template <class T>
 	static inline bool Operation(T left, T right, bool left_is_null, bool right_is_null) {
 		if (left_is_null || right_is_null) {
 			return false;
@@ -139,26 +139,26 @@ idx_t NestedLoopJoinComparisonSwitch(Vector &left, Vector &right, idx_t left_siz
 	D_ASSERT(left.GetType() == right.GetType());
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::Equals>>(left, right, left_size, right_size, lpos, rpos, lvector,
-		                                                        rvector, current_match_count);
-	case ExpressionType::COMPARE_NOTEQUAL:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::NotEquals>>(left, right, left_size, right_size, lpos, rpos,
-		                                                           lvector, rvector, current_match_count);
-	case ExpressionType::COMPARE_LESSTHAN:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::LessThan>>(left, right, left_size, right_size, lpos, rpos,
-		                                                          lvector, rvector, current_match_count);
-	case ExpressionType::COMPARE_GREATERTHAN:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::GreaterThan>>(left, right, left_size, right_size, lpos, rpos,
-		                                                             lvector, rvector, current_match_count);
-	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::LessThanEquals>>(left, right, left_size, right_size, lpos, rpos,
-		                                                                lvector, rvector, current_match_count);
-	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::GreaterThanEquals>>(left, right, left_size, right_size, lpos,
-		                                                                   rpos, lvector, rvector, current_match_count);
-	case ExpressionType::COMPARE_DISTINCT_FROM:
-		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::DistinctFrom>(
+		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::Equals>>(
 		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+	case ExpressionType::COMPARE_NOTEQUAL:
+		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::NotEquals>>(
+		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+	case ExpressionType::COMPARE_LESSTHAN:
+		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::LessThan>>(
+		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+	case ExpressionType::COMPARE_GREATERTHAN:
+		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::GreaterThan>>(
+		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+	case ExpressionType::COMPARE_LESSTHANOREQUALTO:
+		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::LessThanEquals>>(
+		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+		return NestedLoopJoinTypeSwitch<NLTYPE, ComparisonOperationWrapper<duckdb::GreaterThanEquals>>(
+		    left, right, left_size, right_size, lpos, rpos, lvector, rvector, current_match_count);
+	case ExpressionType::COMPARE_DISTINCT_FROM:
+		return NestedLoopJoinTypeSwitch<NLTYPE, duckdb::DistinctFrom>(left, right, left_size, right_size, lpos, rpos,
+		                                                              lvector, rvector, current_match_count);
 	default:
 		throw NotImplementedException("Unimplemented comparison type for join!");
 	}

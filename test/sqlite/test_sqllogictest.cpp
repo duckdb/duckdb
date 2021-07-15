@@ -102,15 +102,15 @@ public:
 */
 typedef struct Script Script;
 struct Script {
-	char *zScript;        /* Complete text of the input script */
-	int iCur;             /* Index in zScript of start of current line */
-	char *zLine;          /* Pointer to start of current line */
-	int len;              /* Length of current line */
-	int iNext;            /* index of start of next line */
-	int nLine;            /* line number for the current line */
-	int iEnd;             /* Index in zScript of '\000' at end of script */
-	int startLine;        /* Line number of start of current record */
-	int copyFlag;         /* If true, copy lines to output as they are read */
+	char *zScript; /* Complete text of the input script */
+	int iCur;      /* Index in zScript of start of current line */
+	char *zLine;   /* Pointer to start of current line */
+	int len;       /* Length of current line */
+	int iNext;     /* index of start of next line */
+	int nLine;     /* line number for the current line */
+	int iEnd;      /* Index in zScript of '\000' at end of script */
+	int startLine; /* Line number of start of current record */
+	int copyFlag;  /* If true, copy lines to output as they are read */
 	vector<string> tokens;
 };
 
@@ -252,10 +252,9 @@ static void tokenizeLine(Script *p) {
 		p->tokens.push_back(string(p->zLine + j, n));
 		j += n + 1;
 	}
-	while(p->tokens.size() < 4) {
+	while (p->tokens.size() < 4) {
 		p->tokens.push_back(string());
 	}
-
 }
 
 static void print_expected_result(vector<string> &values, idx_t columns, bool row_wise) {
@@ -415,7 +414,7 @@ static string ReplaceLoopIterator(string text, string loop_iterator_name, string
 }
 
 static string LoopReplacement(string text, const vector<LoopDefinition> &loops) {
-	for(auto &active_loop : loops) {
+	for (auto &active_loop : loops) {
 		if (active_loop.tokens.empty()) {
 			// regular loop
 			text = ReplaceLoopIterator(text, active_loop.loop_iterator_name, to_string(active_loop.loop_idx));
@@ -1320,7 +1319,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else if (sScript.tokens[1] == "unskip") {
 				skip_execution = false;
 			} else {
-				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine, sScript.tokens[1].c_str());
+				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine,
+				        sScript.tokens[1].c_str());
 				FAIL();
 			}
 		} else if (sScript.tokens[0] == "loop" || sScript.tokens[0] == "foreach") {
@@ -1328,14 +1328,16 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				continue;
 			}
 			if (!loop_statements.empty()) {
-				fprintf(stderr, "%s:%d: Test error: attempting to start a loop within a loop that already has elements!\n",
-						zScriptFile, sScript.startLine);
+				fprintf(stderr,
+				        "%s:%d: Test error: attempting to start a loop within a loop that already has elements!\n",
+				        zScriptFile, sScript.startLine);
 				FAIL();
 			}
 			if (sScript.tokens[0] == "loop") {
 				if (sScript.tokens[1].empty() || sScript.tokens[2].empty() || sScript.tokens[3].empty()) {
-					fprintf(stderr, "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n",
-							zScriptFile, sScript.startLine);
+					fprintf(stderr,
+					        "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n",
+					        zScriptFile, sScript.startLine);
 					FAIL();
 				}
 				LoopDefinition def;
@@ -1346,13 +1348,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				active_loops.push_back(def);
 			} else {
 				if (sScript.tokens[1].empty() || sScript.tokens[2].empty()) {
-					fprintf(stderr, "%s:%d: Test error: expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer smallint float)!\n",
-							zScriptFile, sScript.startLine);
+					fprintf(stderr,
+					        "%s:%d: Test error: expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type "
+					        "integer smallint float)!\n",
+					        zScriptFile, sScript.startLine);
 					FAIL();
 				}
 				LoopDefinition def;
 				def.loop_iterator_name = sScript.tokens[1];
-				for(idx_t i = 2; i < sScript.tokens.size(); i++) {
+				for (idx_t i = 2; i < sScript.tokens.size(); i++) {
 					if (sScript.tokens[i].empty()) {
 						break;
 					}
@@ -1375,18 +1379,18 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				fprintf(stderr, "%s:%d: Test error: empty loop!\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
-			for(auto &loop : active_loops) {
+			for (auto &loop : active_loops) {
 				loop.loop_idx = loop.loop_start;
 			}
 			bool finished = false;
-			while(!finished) {
+			while (!finished) {
 				// execute the current iteration of the loop
 				for (auto &statement : loop_statements) {
 					statement->ExecuteLoop();
 				}
 				// move to the next iteration of the loops
 				idx_t active_loop_index = active_loops.size() - 1;
-				while(true) {
+				while (true) {
 					auto &current_loop = active_loops[active_loop_index];
 					// move to the next index of this loop
 					current_loop.loop_idx++;
@@ -1488,7 +1492,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 		} else {
 			/* An unrecognized record type is an error */
-			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.tokens[0].c_str());
+			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine,
+			        sScript.tokens[0].c_str());
 			FAIL();
 		}
 	}
