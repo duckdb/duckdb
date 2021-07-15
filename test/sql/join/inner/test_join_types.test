@@ -6,401 +6,70 @@ statement ok
 PRAGMA enable_verification
 
 # numeric types
-# tests for tinyint
+
+foreach type tinyint smallint integer bigint float double utinyint usmallint uinteger ubigint decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
 statement ok
 begin transaction
 
 statement ok
-create table a as select i::tinyint AS i from range(1, 101, 1) t1(i)
+create table a as select i::${type} AS i from range(1, 101, 1) t1(i)
 
 # range joins
 query IR
-select count(*), sum(i) from a, (SELECT 100::tinyint AS j) b where i < j
+select count(*), sum(i) from a, (SELECT 100::${type} AS j) b where i < j
 ----
 99	4950.000000
 
 query I
-select count(*) from a, (SELECT 100::tinyint AS j) b where i <= j
+select count(*) from a, (SELECT 100::${type} AS j) b where i <= j
 ----
 100
 
 query I
-select count(*) from a, (SELECT 1::tinyint AS j) b where i > j
+select count(*) from a, (SELECT 1::${type} AS j) b where i > j
 ----
 99
 
 query I
-select count(*) from a, (SELECT 1::tinyint AS j) b where i >= j
+select count(*) from a, (SELECT 1::${type} AS j) b where i >= j
 ----
 100
 
 # inequality join
 query I
-select count(*) from a, (SELECT 1::tinyint AS j) b where i <> j
+select count(*) from a, (SELECT 1::${type} AS j) b where i <> j
 ----
 99
 
+query I
+select count(*) from a, (SELECT 1::${type} AS j) b where i <> j AND i=j
+----
+0
+
 # equality join
 query I
-select count(*) from a, (SELECT 1::tinyint AS j) b where i = j
+select count(*) from a, (SELECT 1::${type} AS j) b where i = j
 ----
 1
 
 # no results on one side
 query I
-select count(*) from a, (SELECT 1::tinyint AS j) b where i > j AND i>1000
+select count(*) from a, (SELECT 1::${type} AS j) b where i > j AND i>120
 ----
 0
 
 query I
-select count(*) from a, (SELECT 1::tinyint AS j) b where i <> j AND i>1000
+select count(*) from a, (SELECT 1::${type} AS j) b where i <> j AND i>120
 ----
 0
 
 query I
-select count(*) from a, (SELECT 1::tinyint AS j) b where i = j AND i>1000
-----
-0
-
-statement ok
-rollback
-
-# tests for smallint
-statement ok
-begin transaction
-
-statement ok
-create table a as select i::smallint AS i from range(1, 101, 1) t1(i)
-
-# range joins
-query IR
-select count(*), sum(i) from a, (SELECT 100::smallint AS j) b where i < j
-----
-99	4950.000000
-
-query I
-select count(*) from a, (SELECT 100::smallint AS j) b where i <= j
-----
-100
-
-query I
-select count(*) from a, (SELECT 1::smallint AS j) b where i > j
-----
-99
-
-query I
-select count(*) from a, (SELECT 1::smallint AS j) b where i >= j
-----
-100
-
-# inequality join
-query I
-select count(*) from a, (SELECT 1::smallint AS j) b where i <> j
-----
-99
-
-# equality join
-query I
-select count(*) from a, (SELECT 1::smallint AS j) b where i = j
-----
-1
-
-# no results on one side
-query I
-select count(*) from a, (SELECT 1::smallint AS j) b where i > j AND i>1000
-----
-0
-
-query I
-select count(*) from a, (SELECT 1::smallint AS j) b where i <> j AND i>1000
-----
-0
-
-query I
-select count(*) from a, (SELECT 1::smallint AS j) b where i = j AND i>1000
+select count(*) from a, (SELECT 1::${type} AS j) b where i = j AND i>120
 ----
 0
 
 statement ok
 rollback
 
-# tests for integer
-statement ok
-begin transaction
-
-statement ok
-create table a as select i::integer AS i from range(1, 101, 1) t1(i)
-
-# range joins
-query IR
-select count(*), sum(i) from a, (SELECT 100::integer AS j) b where i < j
-----
-99	4950.000000
-
-query I
-select count(*) from a, (SELECT 100::integer AS j) b where i <= j
-----
-100
-
-query I
-select count(*) from a, (SELECT 1::integer AS j) b where i > j
-----
-99
-
-query I
-select count(*) from a, (SELECT 1::integer AS j) b where i >= j
-----
-100
-
-# inequality join
-query I
-select count(*) from a, (SELECT 1::integer AS j) b where i <> j
-----
-99
-
-# equality join
-query I
-select count(*) from a, (SELECT 1::integer AS j) b where i = j
-----
-1
-
-# no results on one side
-query I
-select count(*) from a, (SELECT 1::integer AS j) b where i > j AND i>1000
-----
-0
-
-query I
-select count(*) from a, (SELECT 1::integer AS j) b where i <> j AND i>1000
-----
-0
-
-query I
-select count(*) from a, (SELECT 1::integer AS j) b where i = j AND i>1000
-----
-0
-
-statement ok
-rollback
-
-# tests for bigint
-statement ok
-begin transaction
-
-statement ok
-create table a as select i::bigint AS i from range(1, 101, 1) t1(i)
-
-# range joins
-query IR
-select count(*), sum(i) from a, (SELECT 100::bigint AS j) b where i < j
-----
-99	4950.000000
-
-query I
-select count(*) from a, (SELECT 100::bigint AS j) b where i <= j
-----
-100
-
-query I
-select count(*) from a, (SELECT 1::bigint AS j) b where i > j
-----
-99
-
-query I
-select count(*) from a, (SELECT 1::bigint AS j) b where i >= j
-----
-100
-
-# inequality join
-query I
-select count(*) from a, (SELECT 1::bigint AS j) b where i <> j
-----
-99
-
-# equality join
-query I
-select count(*) from a, (SELECT 1::bigint AS j) b where i = j
-----
-1
-
-# no results on one side
-query I
-select count(*) from a, (SELECT 1::bigint AS j) b where i > j AND i>1000
-----
-0
-
-query I
-select count(*) from a, (SELECT 1::bigint AS j) b where i <> j AND i>1000
-----
-0
-
-query I
-select count(*) from a, (SELECT 1::bigint AS j) b where i = j AND i>1000
-----
-0
-
-statement ok
-rollback
-
-# tests for real
-statement ok
-begin transaction
-
-statement ok
-create table a as select i::real AS i from range(1, 101, 1) t1(i)
-
-# range joins
-query IR
-select count(*), sum(i) from a, (SELECT 100::real AS j) b where i < j
-----
-99	4950.000000
-
-query I
-select count(*) from a, (SELECT 100::real AS j) b where i <= j
-----
-100
-
-query I
-select count(*) from a, (SELECT 1::real AS j) b where i > j
-----
-99
-
-query I
-select count(*) from a, (SELECT 1::real AS j) b where i >= j
-----
-100
-
-# inequality join
-query I
-select count(*) from a, (SELECT 1::real AS j) b where i <> j
-----
-99
-
-# equality join
-query I
-select count(*) from a, (SELECT 1::real AS j) b where i = j
-----
-1
-
-# no results on one side
-query I
-select count(*) from a, (SELECT 1::real AS j) b where i > j AND i>1000
-----
-0
-
-query I
-select count(*) from a, (SELECT 1::real AS j) b where i <> j AND i>1000
-----
-0
-
-query I
-select count(*) from a, (SELECT 1::real AS j) b where i = j AND i>1000
-----
-0
-
-statement ok
-rollback
-
-# tests for double
-statement ok
-begin transaction
-
-statement ok
-create table a as select i::double AS i from range(1, 101, 1) t1(i)
-
-# range joins
-query IR
-select count(*), sum(i) from a, (SELECT 100::double AS j) b where i < j
-----
-99	4950.000000
-
-query I
-select count(*) from a, (SELECT 100::double AS j) b where i <= j
-----
-100
-
-query I
-select count(*) from a, (SELECT 1::double AS j) b where i > j
-----
-99
-
-query I
-select count(*) from a, (SELECT 1::double AS j) b where i >= j
-----
-100
-
-# inequality join
-query I
-select count(*) from a, (SELECT 1::double AS j) b where i <> j
-----
-99
-
-# equality join
-query I
-select count(*) from a, (SELECT 1::double AS j) b where i = j
-----
-1
-
-# no results on one side
-query I
-select count(*) from a, (SELECT 1::double AS j) b where i > j AND i>1000
-----
-0
-
-query I
-select count(*) from a, (SELECT 1::double AS j) b where i <> j AND i>1000
-----
-0
-
-query I
-select count(*) from a, (SELECT 1::double AS j) b where i = j AND i>1000
-----
-0
-
-statement ok
-rollback
-
-# strings
-statement ok
-begin transaction
-
-statement ok
-create table a (i VARCHAR)
-
-statement ok
-insert into a values ('a'), ('b'), ('c'), ('d'), ('e'), ('f')
-
-# range joins
-query I
-select count(*) from a, (SELECT 'f' AS j) b where i < j
-----
-5
-
-query I
-select count(*) from a, (SELECT 'f' AS j) b where i <= j
-----
-6
-
-query I
-select count(*) from a, (SELECT 'a' AS j) b where i > j
-----
-5
-
-query I
-select count(*) from a, (SELECT 'a' AS j) b where i >= j
-----
-6
-
-query I
-select count(*) from a, (SELECT 'a' AS j) b where i <> j
-----
-5
-
-query I
-select count(*) from a, (SELECT 'a' AS j) b where i = j
-----
-1
-
-statement ok
-rollback
-
+endloop

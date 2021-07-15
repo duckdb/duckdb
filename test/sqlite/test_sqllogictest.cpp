@@ -26,16 +26,11 @@
 #include "re2/re2.h"
 
 #include "catch.hpp"
-#include "sqllogictest.hpp"
 #include "termcolor.hpp"
 
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifndef _WIN32
-#include <unistd.h>
-#define stricmp strcasecmp
-#endif
 
 #include "duckdb.hpp"
 #include "duckdb/common/types.hpp"
@@ -59,7 +54,13 @@
 using namespace duckdb;
 using namespace std;
 
-#define DEFAULT_HASH_THRESHOLD 0
+struct LoopDefinition {
+	string loop_iterator_name;
+	int loop_idx;
+	int loop_start;
+	int loop_end;
+	vector<string> tokens;
+};
 
 struct SQLLogicTestRunner {
 public:
@@ -83,17 +84,17 @@ public:
 	bool output_hash_mode = false;
 	bool output_result_mode = false;
 	bool debug_mode = false;
-	int hashThreshold = DEFAULT_HASH_THRESHOLD; /* Threshold for hashing res */
-	bool in_loop = false;
-	string loop_iterator_name;
-	int loop_idx;
-	int loop_start;
-	int loop_end;
+	int hashThreshold = 0; /* Threshold for hashing res */
+	vector<LoopDefinition> active_loops;
 	bool original_sqlite_test = false;
 
 	//! The map converting the labels to the hash values
 	unordered_map<string, string> hash_label_map;
 	unordered_map<string, unique_ptr<QueryResult>> result_label_map;
+
+	bool InLoop() {
+		return !active_loops.empty();
+	}
 };
 
 /*
@@ -110,12 +111,8 @@ struct Script {
 	int iEnd;             /* Index in zScript of '\000' at end of script */
 	int startLine;        /* Line number of start of current record */
 	int copyFlag;         /* If true, copy lines to output as they are read */
-	char azToken[4][200]; /* tokenization of a line */
+	vector<string> tokens;
 };
-
-// stub because not used
-void sqllogictestRegisterEngine(const DbEngine *p) {
-}
 
 /*
 ** Advance the cursor to the start of the next non-comment line of the
@@ -245,20 +242,20 @@ static void findToken(const char *z, int *piStart, int *pLen) {
 static void tokenizeLine(Script *p) {
 	int i, j, k;
 	int len, n;
-	for (i = 0; i < (int)count(p->azToken); i++)
-		p->azToken[i][0] = 0;
+	p->tokens.clear();
+
 	p->startLine = p->nLine;
-	for (i = j = 0; j < p->len && i < (int)count(p->azToken); i++) {
+	for (i = j = 0; j < p->len; i++) {
 		findToken(&p->zLine[j], &k, &len);
 		j += k;
 		n = len;
-		if (n >= (int)sizeof(p->azToken[0])) {
-			n = sizeof(p->azToken[0]) - 1;
-		}
-		memcpy(p->azToken[i], &p->zLine[j], n);
-		p->azToken[i][n] = 0;
+		p->tokens.push_back(string(p->zLine + j, n));
 		j += n + 1;
 	}
+	while(p->tokens.size() < 4) {
+		p->tokens.push_back(string());
+	}
+
 }
 
 static void print_expected_result(vector<string> &values, idx_t columns, bool row_wise) {
@@ -413,8 +410,21 @@ static bool result_is_hash(string result) {
 	return pos == result.size();
 }
 
-static string replace_loop_iterator(string text, string loop_iterator_name, idx_t index) {
-	return StringUtil::Replace(text, "${" + loop_iterator_name + "}", to_string(index));
+static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
+	return StringUtil::Replace(text, "${" + loop_iterator_name + "}", replacement);
+}
+
+static string LoopReplacement(string text, const vector<LoopDefinition> &loops) {
+	for(auto &active_loop : loops) {
+		if (active_loop.tokens.empty()) {
+			// regular loop
+			text = ReplaceLoopIterator(text, active_loop.loop_iterator_name, to_string(active_loop.loop_idx));
+		} else {
+			// foreach loop
+			text = ReplaceLoopIterator(text, active_loop.loop_iterator_name, active_loop.tokens[active_loop.loop_idx]);
+		}
+	}
+	return text;
 }
 
 static bool result_is_file(string result) {
@@ -565,9 +575,7 @@ struct Command {
 		// store the original query
 		auto original_query = sql_query;
 		// perform the string replacement
-		if (runner.in_loop) {
-			sql_query = replace_loop_iterator(sql_query, runner.loop_iterator_name, runner.loop_idx);
-		}
+		sql_query = LoopReplacement(sql_query, runner.active_loops);
 		// execute the iterated statement
 		Execute();
 		// now restore the original query
@@ -806,8 +814,7 @@ void Query::Execute() {
 	char zHash[100]; /* Storage space for hash results */
 	vector<string> comparison_values;
 	if (values.size() == 1 && result_is_file(values[0])) {
-		comparison_values = LoadResultFromFile(
-		    replace_loop_iterator(values[0], runner.loop_iterator_name, runner.loop_idx), result->names);
+		comparison_values = LoadResultFromFile(LoopReplacement(values[0], runner.active_loops), result->names);
 	} else {
 		comparison_values = values;
 	}
@@ -1117,7 +1124,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		tokenizeLine(&sScript);
 
 		bSkip = false;
-		while (strcmp(sScript.azToken[0], "skipif") == 0 || strcmp(sScript.azToken[0], "onlyif") == 0) {
+		while (sScript.tokens[0] == "skipif" || sScript.tokens[0] == "onlyif") {
 			int bMatch;
 			/* The "skipif" and "onlyif" modifiers allow skipping or using
 			** statement or query record for a particular database engine.
@@ -1130,8 +1137,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			** then we skip this rest of this record for "skipif". For
 			** "onlyif" we skip the record if the record does not match.
 			*/
-			bMatch = stricmp(sScript.azToken[1], zDbEngine) == 0;
-			if (sScript.azToken[0][0] == 's') {
+			bMatch = sScript.tokens[1] == zDbEngine;
+			if (sScript.tokens[0][0] == 's') {
 				if (bMatch)
 					bSkip = true;
 			} else {
@@ -1147,7 +1154,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 		}
 
 		/* Figure out the record type and do appropriate processing */
-		if (strcmp(sScript.azToken[0], "statement") == 0) {
+		if (sScript.tokens[0] == "statement") {
 			auto command = make_unique<Statement>(*this);
 
 			/* Extract the SQL from second and subsequent lines of the
@@ -1168,9 +1175,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			command->sql_query = ReplaceKeywords(zScript);
 
 			// parse
-			if (strcmp(sScript.azToken[1], "ok") == 0) {
+			if (sScript.tokens[1] == "ok") {
 				command->expect_ok = true;
-			} else if (strcmp(sScript.azToken[1], "error") == 0) {
+			} else if (sScript.tokens[1] == "error") {
 				command->expect_ok = false;
 			} else {
 				fprintf(stderr, "%s:%d: statement argument should be 'ok' or 'error'\n", zScriptFile,
@@ -1178,16 +1185,16 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				FAIL();
 			}
 
-			command->connection_name = sScript.azToken[2];
+			command->connection_name = sScript.tokens[2];
 			if (skip_execution) {
 				continue;
 			}
-			if (in_loop) {
+			if (InLoop()) {
 				loop_statements.push_back(move(command));
 			} else {
 				command->Execute();
 			}
-		} else if (strcmp(sScript.azToken[0], "query") == 0) {
+		} else if (sScript.tokens[0] == "query") {
 			auto command = make_unique<Query>(*this);
 
 			int k = 0;
@@ -1200,7 +1207,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			 *characters
 			 ** from the set 'TIR':*/
 			command->expected_column_count = 0;
-			for (k = 0; (c = sScript.azToken[1][k]) != 0; k++) {
+			for (k = 0; (c = sScript.tokens[1][k]) != 0; k++) {
 				command->expected_column_count++;
 				if (c != 'T' && c != 'I' && c != 'R') {
 					fprintf(stderr,
@@ -1237,17 +1244,17 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 
 			// figure out the sort style/connection style
 			command->sort_style = SortStyle::NO_SORT;
-			if (sScript.azToken[2][0] == 0 || strcmp(sScript.azToken[2], "nosort") == 0) {
+			if (sScript.tokens[2].empty() || sScript.tokens[2] == "nosort") {
 				/* Do no sorting */
 				command->sort_style = SortStyle::NO_SORT;
-			} else if (strcmp(sScript.azToken[2], "rowsort") == 0) {
+			} else if (sScript.tokens[2] == "rowsort") {
 				/* Row-oriented sorting */
 				command->sort_style = SortStyle::ROW_SORT;
-			} else if (strcmp(sScript.azToken[2], "valuesort") == 0) {
+			} else if (sScript.tokens[2] == "valuesort") {
 				/* Sort all values independently */
 				command->sort_style = SortStyle::VALUE_SORT;
 			} else {
-				command->connection_name = sScript.azToken[2];
+				command->connection_name = sScript.tokens[2];
 			}
 
 			/* In verify mode, first skip over the ---- line if we are
@@ -1263,19 +1270,19 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					break;
 				}
 			}
-			command->query_has_label = sScript.azToken[3][0];
-			command->query_label = sScript.azToken[3];
+			command->query_has_label = sScript.tokens[3][0];
+			command->query_label = sScript.tokens[3];
 			if (skip_execution) {
 				continue;
 			}
-			if (in_loop) {
+			if (InLoop()) {
 				// in a loop: add to loop statements
 				loop_statements.push_back(move(command));
 			} else {
 				// execute the command and compare it against the results
 				command->Execute();
 			}
-		} else if (strcmp(sScript.azToken[0], "hash-threshold") == 0) {
+		} else if (sScript.tokens[0] == "hash-threshold") {
 			/* Set the maximum number of result values that will be accepted
 			** for a query.  If the number of result values exceeds this
 			*number,
@@ -1289,9 +1296,9 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			** any specifed in the script.
 			*/
 			if (!bHt) {
-				hashThreshold = atoi(sScript.azToken[1]);
+				hashThreshold = atoi(sScript.tokens[1].c_str());
 			}
-		} else if (strcmp(sScript.azToken[0], "halt") == 0) {
+		} else if (sScript.tokens[0] == "halt") {
 			/* Used for debugging.  Stop reading the test script and shut
 			 *down.
 			 ** A "halt" record can be inserted in the middle of a test
@@ -1301,44 +1308,66 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			 */
 			fprintf(stderr, "%s:%d: halt\n", zScriptFile, sScript.startLine);
 			break;
-		} else if (strcmp(sScript.azToken[0], "mode") == 0) {
-			if (strcmp(sScript.azToken[1], "output_hash") == 0) {
+		} else if (sScript.tokens[0] == "mode") {
+			if (sScript.tokens[1] == "output_hash") {
 				output_hash_mode = true;
-			} else if (strcmp(sScript.azToken[1], "output_result") == 0) {
+			} else if (sScript.tokens[1] == "output_result") {
 				output_result_mode = true;
-			} else if (strcmp(sScript.azToken[1], "debug") == 0) {
+			} else if (sScript.tokens[1] == "debug") {
 				debug_mode = true;
-			} else if (strcmp(sScript.azToken[1], "skip") == 0) {
+			} else if (sScript.tokens[1] == "skip") {
 				skip_execution = true;
-			} else if (strcmp(sScript.azToken[1], "unskip") == 0) {
+			} else if (sScript.tokens[1] == "unskip") {
 				skip_execution = false;
 			} else {
-				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[1]);
+				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine, sScript.tokens[1].c_str());
 				FAIL();
 			}
-		} else if (strcmp(sScript.azToken[0], "loop") == 0) {
+		} else if (sScript.tokens[0] == "loop" || sScript.tokens[0] == "foreach") {
 			if (skip_execution) {
 				continue;
 			}
-			if (in_loop) {
-				fprintf(stderr, "%s:%d: Test error: nested loops not supported!\n", zScriptFile, sScript.startLine);
+			if (!loop_statements.empty()) {
+				fprintf(stderr, "%s:%d: Test error: attempting to start a loop within a loop that already has elements!\n",
+						zScriptFile, sScript.startLine);
 				FAIL();
 			}
-			in_loop = true;
-			if (strlen(sScript.azToken[1]) == 0 || strlen(sScript.azToken[2]) == 0 || strlen(sScript.azToken[3]) == 0) {
-				fprintf(stderr, "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n",
-				        zScriptFile, sScript.startLine);
-				FAIL();
+			if (sScript.tokens[0] == "loop") {
+				if (sScript.tokens[1].empty() || sScript.tokens[2].empty() || sScript.tokens[3].empty()) {
+					fprintf(stderr, "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n",
+							zScriptFile, sScript.startLine);
+					FAIL();
+				}
+				LoopDefinition def;
+				def.loop_iterator_name = sScript.tokens[1];
+				def.loop_start = std::stoi(sScript.tokens[2].c_str());
+				def.loop_end = std::stoi(sScript.tokens[3].c_str());
+				def.loop_idx = def.loop_start;
+				active_loops.push_back(def);
+			} else {
+				if (sScript.tokens[1].empty() || sScript.tokens[2].empty()) {
+					fprintf(stderr, "%s:%d: Test error: expected foreach [iterator_name] [m1] [m2] [etc...] (e.g. foreach type integer smallint float)!\n",
+							zScriptFile, sScript.startLine);
+					FAIL();
+				}
+				LoopDefinition def;
+				def.loop_iterator_name = sScript.tokens[1];
+				for(idx_t i = 2; i < sScript.tokens.size(); i++) {
+					if (sScript.tokens[i].empty()) {
+						break;
+					}
+					def.tokens.push_back(sScript.tokens[i]);
+				}
+				def.loop_idx = 0;
+				def.loop_start = 0;
+				def.loop_end = def.tokens.size();
+				active_loops.push_back(def);
 			}
-			// parse the loop parameters
-			loop_iterator_name = sScript.azToken[1];
-			loop_start = std::stoi(sScript.azToken[2]);
-			loop_end = std::stoi(sScript.azToken[3]);
-		} else if (strcmp(sScript.azToken[0], "endloop") == 0) {
+		} else if (sScript.tokens[0] == "endloop") {
 			if (skip_execution) {
 				continue;
 			}
-			if (!in_loop) {
+			if (!InLoop()) {
 				fprintf(stderr, "%s:%d: Test error: end loop without start loop!\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
@@ -1346,16 +1375,42 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				fprintf(stderr, "%s:%d: Test error: empty loop!\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
-			for (loop_idx = loop_start; loop_idx < loop_end; loop_idx++) {
+			for(auto &loop : active_loops) {
+				loop.loop_idx = loop.loop_start;
+			}
+			bool finished = false;
+			while(!finished) {
+				// execute the current iteration of the loop
 				for (auto &statement : loop_statements) {
 					statement->ExecuteLoop();
 				}
+				// move to the next iteration of the loops
+				idx_t active_loop_index = active_loops.size() - 1;
+				while(true) {
+					auto &current_loop = active_loops[active_loop_index];
+					// move to the next index of this loop
+					current_loop.loop_idx++;
+					if (current_loop.loop_idx >= current_loop.loop_end) {
+						// we have exhausted this loop: move to the next loop
+						if (active_loop_index == 0) {
+							// no next loop: we are done
+							finished = true;
+							break;
+						}
+						// nested loops: reset this loop and propagate to next loop
+						current_loop.loop_idx = current_loop.loop_start;
+						active_loop_index--;
+					} else {
+						// not done with this loop yet
+						break;
+					}
+				}
 			}
 			loop_statements.clear();
-			in_loop = false;
-		} else if (strcmp(sScript.azToken[0], "require") == 0) {
+			active_loops.clear();
+		} else if (sScript.tokens[0] == "require") {
 			// require command
-			string param = StringUtil::Lower(sScript.azToken[1]);
+			string param = StringUtil::Lower(sScript.tokens[1]);
 			// os specific stuff
 			if (param == "notmingw") {
 #ifdef __MINGW32__
@@ -1379,7 +1434,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 			} else if (param == "vector_size") {
 				// require a specific vector size
-				int required_vector_size = std::stoi(sScript.azToken[2]);
+				int required_vector_size = std::stoi(sScript.tokens[2].c_str());
 				if (STANDARD_VECTOR_SIZE < required_vector_size) {
 					// vector size is too low for this test: skip it
 					return;
@@ -1391,20 +1446,20 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					extensions.insert(param);
 				} else if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
 					fprintf(stderr, "%s:%d: unknown extension type: '%s'\n", zScriptFile, sScript.startLine,
-					        sScript.azToken[1]);
+					        sScript.tokens[1].c_str());
 					FAIL();
 				} else if (result == ExtensionLoadResult::NOT_LOADED) {
 					// extension known but not build: skip this test
 					return;
 				}
 			}
-		} else if (strcmp(sScript.azToken[0], "load") == 0) {
-			if (in_loop) {
+		} else if (sScript.tokens[0] == "load") {
+			if (InLoop()) {
 				fprintf(stderr, "%s:%d: load cannot be called in a loop\n", zScriptFile, sScript.startLine);
 				FAIL();
 			}
-			bool readonly = string(sScript.azToken[2]) == "readonly";
-			dbpath = ReplaceKeywords(sScript.azToken[1]);
+			bool readonly = sScript.tokens[2] == "readonly";
+			dbpath = ReplaceKeywords(sScript.tokens[1]);
 			if (!readonly) {
 				// delete the target database file, if it exists
 				DeleteDatabase(dbpath);
@@ -1417,7 +1472,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			// now create the database file
 			LoadDatabase(dbpath);
-		} else if (strcmp(sScript.azToken[0], "restart") == 0) {
+		} else if (sScript.tokens[0] == "restart") {
 			if (dbpath.empty()) {
 				fprintf(stderr, "%s:%d: cannot restart an in-memory database, did you forget to call \"load\"?\n",
 				        zScriptFile, sScript.startLine);
@@ -1426,14 +1481,14 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// restart the current database
 			// first clear all connections
 			auto command = make_unique<RestartCommand>(*this);
-			if (in_loop) {
+			if (InLoop()) {
 				loop_statements.push_back(move(command));
 			} else {
 				command->Execute();
 			}
 		} else {
 			/* An unrecognized record type is an error */
-			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.azToken[0]);
+			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine, sScript.tokens[0].c_str());
 			FAIL();
 		}
 	}
