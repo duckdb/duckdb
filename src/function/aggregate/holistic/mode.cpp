@@ -166,9 +166,9 @@ struct ModeFunction {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result) {
-		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-		auto &rmask = ConstantVector::Validity(result);
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid) {
+		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+		auto &rmask = FlatVector::Validity(result);
 
 		const auto bias = MinValue(frame.first, prev.first);
 		if (!state->frequency_map) {
@@ -220,9 +220,9 @@ struct ModeFunction {
 		}
 
 		if (state->valid) {
-			rdata[0] = RESULT_TYPE(*state->mode);
+			rdata[rid] = RESULT_TYPE(*state->mode);
 		} else {
-			rmask.Set(0, false);
+			rmask.Set(rid, false);
 		}
 	}
 

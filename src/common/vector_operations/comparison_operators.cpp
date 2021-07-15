@@ -188,7 +188,7 @@ public:
 			NestedComparisonExecutor<OP>(left, right, result, count);
 			break;
 		default:
-			throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
+			throw InternalException("Invalid type for comparison");
 		}
 	}
 };
