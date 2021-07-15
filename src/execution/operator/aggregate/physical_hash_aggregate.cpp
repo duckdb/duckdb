@@ -78,9 +78,12 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		if (aggr.filter) {
 			auto &bound_ref_expr = (BoundReferenceExpression &)*aggr.filter;
 			auto it = filter_indexes.find(aggr.filter.get());
-			D_ASSERT(it != filter_indexes.end());
-			filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
-			bound_ref_expr.index = aggregate_input_idx++;
+			if (it == filter_indexes.end()) {
+				filter_indexes[aggr.filter.get()] = bound_ref_expr.index;
+				bound_ref_expr.index = aggregate_input_idx++;
+			} else {
+				++aggregate_input_idx;
+			}
 		}
 	}
 }
