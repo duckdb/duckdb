@@ -57,20 +57,6 @@ public:
 	vector<unique_ptr<BufferHandle>> pinned_blocks;
 
 public:
-	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-	                             data_ptr_t key_locations[], bool desc, bool has_null, bool nulls_first,
-	                             idx_t prefix_len, idx_t width, idx_t offset = 0);
-
-	static void ComputeEntrySizes(Vector &v, VectorData &vdata, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
-	                              const SelectionVector &sel, idx_t offset = 0);
-	static void ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
-	                              const SelectionVector &sel, idx_t offset = 0);
-
-	static void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
-	                                idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
-	                                idx_t offset = 0);
-	static void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-	                            data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset = 0);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining, idx_t entry_sizes[]);
 	vector<unique_ptr<BufferHandle>> Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[],
@@ -78,48 +64,11 @@ public:
 
 	void Merge(RowDataCollection &other);
 
-	static void DeserializeIntoVector(Vector &v, const idx_t &vcount, const SelectionVector &sel, const idx_t &col_idx,
-	                                  data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
-
 private:
-	template <class T>
-	void TemplatedSerializeVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t count,
-	                                      data_ptr_t key_locations[], bool desc, bool has_null, bool invert,
-	                                      const idx_t offset);
-	void SerializeStringVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t add_count,
-	                                   data_ptr_t key_locations[], const bool desc, const bool has_null,
-	                                   const bool nulls_first, const idx_t prefix_len, const idx_t offset);
-	void SerializeListVectorSortable(Vector &v, VectorData &vdata, const SelectionVector &sel, idx_t add_count,
-	                                 data_ptr_t key_locations[], const bool desc, const bool has_null,
-	                                 const bool nulls_first, const idx_t prefix_len, const idx_t width,
-	                                 const idx_t offset);
-	void SerializeStructVectorSortable(Vector &v, VectorData &vdata, idx_t vcount, const SelectionVector &sel,
-	                                   idx_t add_count, data_ptr_t key_locations[], const bool desc,
-	                                   const bool has_null, const bool nulls_first, const idx_t prefix_len, idx_t width,
-	                                   const idx_t offset);
-
-	static void ComputeStringEntrySizes(VectorData &col, idx_t entry_sizes[], const idx_t ser_count,
-	                                    const SelectionVector &sel, const idx_t offset);
-	static void ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
-	                                    const SelectionVector &sel, idx_t offset);
-	static void ComputeListEntrySizes(Vector &v, VectorData &vdata, idx_t entry_sizes[], idx_t ser_count,
-	                                  const SelectionVector &sel, idx_t offset);
-
-	static void SerializeStringVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-	                                  idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
-	                                  idx_t offset);
-	static void SerializeStructVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-	                                  idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
-	                                  idx_t offset);
-	static void SerializeListVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-	                                data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset);
-
 	mutex rdc_lock;
 
-	//! Whether the system is little endian
-	const bool is_little_endian;
 	//! Whether the blocks should stay pinned (necessary for e.g. a heap)
-	bool keep_pinned;
+	const bool keep_pinned;
 };
 
 } // namespace duckdb

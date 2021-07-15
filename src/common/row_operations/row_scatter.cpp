@@ -103,7 +103,7 @@ static void ScatterNestedVector(Vector &vec, VectorData &col, Vector &rows, data
 	}
 
 	// Serialise the data
-	RowDataCollection::SerializeVector(vec, vcount, sel, count, col_no, data_locations, ptrs);
+	RowOperations::HeapScatter(vec, vcount, sel, count, col_no, data_locations, ptrs);
 }
 
 void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
@@ -143,7 +143,7 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 			case PhysicalType::LIST:
 			case PhysicalType::MAP:
 			case PhysicalType::STRUCT:
-				RowDataCollection::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
+				RowOperations::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
 				break;
 			default:
 				throw Exception("Unsupported type for RowOperations::Scatter");

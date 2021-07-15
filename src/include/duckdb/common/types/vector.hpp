@@ -10,12 +10,12 @@
 
 #include "duckdb/common/bitset.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types/selection_vector.hpp"
-#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/enums/vector_type.hpp"
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/common/types/validity_mask.hpp"
+#include "duckdb/common/types/value.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/common/vector_size.hpp"
-#include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
 
@@ -293,6 +293,13 @@ struct FlatVector {
 };
 
 struct ListVector {
+	static inline list_entry_t *GetData(Vector &v) {
+		if (v.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &child = DictionaryVector::Child(v);
+			return GetData(child);
+		}
+		return FlatVector::GetData<list_entry_t>(v);
+	}
 	//! Gets a reference to the underlying child-vector of a list
 	DUCKDB_API static const Vector &GetEntry(const Vector &vector);
 	//! Gets a reference to the underlying child-vector of a list

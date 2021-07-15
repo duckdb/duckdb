@@ -273,9 +273,9 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 		bool nulls_first = sorting_state.order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
 		bool desc = sorting_state.order_types[sort_col] == OrderType::DESCENDING;
 		// TODO: use actual string statistics
-		lstate.radix_sorting_data->SerializeVectorSortable(
-		    sort.data[sort_col], sort.size(), lstate.sel_ptr, sort.size(), data_pointers, desc, has_null, nulls_first,
-		    string_t::INLINE_LENGTH, sorting_state.column_sizes[sort_col]);
+		RowOperations::RadixScatter(sort.data[sort_col], sort.size(), lstate.sel_ptr, sort.size(), data_pointers, desc,
+		                            has_null, nulls_first, string_t::INLINE_LENGTH,
+		                            sorting_state.column_sizes[sort_col]);
 	}
 
 	// Also fully serialize blob sorting columns (to be able to break ties
