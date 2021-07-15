@@ -1215,17 +1215,35 @@ static int unixCurrentTimeInt64(sqlite3_vfs *NotUsed, sqlite3_int64 *piNow) {
 	return SQLITE_OK;
 }
 
+static sqlite3_vfs static_sqlite3_virtual_file_systems[] = {{
+    3,                    // int iVersion;            /* Structure version number (currently 3) */
+    0,                    // int szOsFile;            /* Size of subclassed sqlite3_file */
+    0,                    // int mxPathname;          /* Maximum file pathname length */
+    nullptr,              // sqlite3_vfs *pNext;      /* Next registered VFS */
+    "dummy",              // const char *zName;       /* Name of this virtual file system */
+    nullptr,              // void *pAppData;          /* Pointer to application-specific data */
+    nullptr,              // int (*xOpen)(sqlite3_vfs*, const char *zName, sqlite3_file*, int flags, int *pOutFlags);
+    nullptr,              // int (*xDelete)(sqlite3_vfs*, const char *zName, int syncDir);
+    nullptr,              // int (*xAccess)(sqlite3_vfs*, const char *zName, int flags, int *pResOut);
+    nullptr,              // int (*xFullPathname)(sqlite3_vfs*, const char *zName, int nOut, char *zOut);
+    nullptr,              // void *(*xDlOpen)(sqlite3_vfs*, const char *zFilename);
+    nullptr,              // void (*xDlError)(sqlite3_vfs*, int nByte, char *zErrMsg);
+    nullptr,              // void (*(*xDlSym)(sqlite3_vfs*,void*, const char *zSymbol))(void);
+    nullptr,              // void (*xDlClose)(sqlite3_vfs*, void*);
+    nullptr,              // int (*xRandomness)(sqlite3_vfs*, int nByte, char *zOut);
+    nullptr,              // int (*xSleep)(sqlite3_vfs*, int microseconds);
+    nullptr,              // int (*xCurrentTime)(sqlite3_vfs*, double*);
+    nullptr,              // int (*xGetLastError)(sqlite3_vfs*, int, char *);
+    unixCurrentTimeInt64, // int (*xCurrentTimeInt64)(sqlite3_vfs*, sqlite3_int64*);
+    nullptr,              // int (*xSetSystemCall)(sqlite3_vfs*, const char *zName, sqlite3_syscall_ptr);
+    nullptr,              // sqlite3_syscall_ptr (*xGetSystemCall)(sqlite3_vfs*, const char *zName);
+    nullptr               // const char *(*xNextSystemCall)(sqlite3_vfs*, const char *zName);
+}};
+
 // virtual file system, providing some dummies to avoid crashes
 sqlite3_vfs *sqlite3_vfs_find(const char *zVfsName) {
 	// return a dummy because the shell does not check the return code.
-	// fprintf(stderr, "sqlite3_vfs_find: unsupported.\n");
-	sqlite3_vfs *res = (sqlite3_vfs *)sqlite3_malloc(sizeof(sqlite3_vfs));
-	res->xCurrentTimeInt64 = unixCurrentTimeInt64;
-	res->iVersion = 2;
-	res->zName = "dummy";
-	res->pNext = nullptr;
-	assert(res);
-	return res;
+	return static_sqlite3_virtual_file_systems;
 }
 
 int sqlite3_vfs_register(sqlite3_vfs *, int makeDflt) {
