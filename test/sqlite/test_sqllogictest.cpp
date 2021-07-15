@@ -112,6 +112,19 @@ struct Script {
 	int startLine; /* Line number of start of current record */
 	int copyFlag;  /* If true, copy lines to output as they are read */
 	vector<string> tokens;
+
+	void Clear() {
+		zScript = nullptr;
+		iCur = 0;
+		zLine = nullptr;
+		len = 0;
+		iNext = 0;
+		nLine = 0;
+		iEnd = 0;
+		startLine = 0;
+		copyFlag = 0;
+		tokens.clear();
+	}
 };
 
 /*
@@ -1108,7 +1121,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	/* Initialize the sScript structure so that the cursor will be pointing
 	** to the start of the first line in the file after nextLine() is called
 	** once. */
-	memset(&sScript, 0, sizeof(sScript));
+	sScript.Clear();
 	sScript.zScript = zScript;
 	sScript.zLine = zScript;
 	sScript.iEnd = nScript;
