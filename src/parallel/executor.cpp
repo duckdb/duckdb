@@ -66,13 +66,15 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		// we do this by creating weak pointers to all pipelines
 		// then clearing our references to the pipelines
 		// and waiting until all pipelines have been destroyed
-		lock_guard<mutex> elock(executor_lock);
 		vector<weak_ptr<Pipeline>> weak_references;
-		weak_references.reserve(pipelines.size());
-		for (auto &pipeline : pipelines) {
-			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+		{
+			lock_guard<mutex> elock(executor_lock);
+			weak_references.reserve(pipelines.size());
+			for (auto &pipeline : pipelines) {
+				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+			}
+			pipelines.clear();
 		}
-		pipelines.clear();
 		for (auto &weak_ref : weak_references) {
 			while (true) {
 				auto weak = weak_ref.lock();
