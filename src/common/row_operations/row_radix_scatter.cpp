@@ -1,6 +1,7 @@
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/radix.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 

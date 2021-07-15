@@ -1,3 +1,4 @@
+#include "duckdb/common/helper.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector.hpp"
 

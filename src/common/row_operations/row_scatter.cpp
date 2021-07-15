@@ -11,8 +11,6 @@
 #include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
-#include "duckdb/common/types/string_heap.hpp"
-#include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
