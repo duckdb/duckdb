@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -457,6 +458,98 @@ static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
+template <typename SRC, typename DST>
+static DST GetTypedCell(Vector &source, idx_t index) {
+	switch (source.GetVectorType()) {
+	case VectorType::CONSTANT_VECTOR: {
+		const auto data = ConstantVector::GetData<DST>(source);
+		return data[0];
+	}
+	case VectorType::FLAT_VECTOR:
+		break;
+		// dictionary: apply dictionary and forward to child
+	case VectorType::DICTIONARY_VECTOR: {
+		auto &sel_vector = DictionaryVector::SelVector(source);
+		auto &child = DictionaryVector::Child(source);
+		return GetTypedCell<SRC, DST>(child, sel_vector.get_index(index));
+	}
+	case VectorType::SEQUENCE_VECTOR: {
+		int64_t start, increment;
+		SequenceVector::GetSequence(source, start, increment);
+		return Cast::Operation<int64_t, DST>(start + increment * index);
+	}
+	default:
+		throw InternalException("Unimplemented vector type for GetTypedCell");
+	}
+
+	const auto data = FlatVector::GetData<SRC>(source);
+	return Cast::Operation<SRC, DST>(data[index]);
+}
+
+template <typename SRC, typename DST>
+static inline DST GetDecimalCell(Vector &source, idx_t source_offset, uint8_t width, uint8_t scale) {
+	return CastFromDecimal::Operation<SRC, DST>(GetTypedCell<SRC, SRC>(source, source_offset), width, scale);
+}
+
+template <typename T>
+static T GetCell(ChunkCollection &collection, idx_t column, idx_t index) {
+	D_ASSERT(collection.ColumnCount() > column);
+	auto &chunk = collection.GetChunkForRow(index);
+	auto &source = chunk.data[column];
+	const auto source_offset = index % STANDARD_VECTOR_SIZE;
+	const auto &type = source.GetType();
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return GetTypedCell<bool, T>(source, source_offset);
+	case LogicalTypeId::TINYINT:
+		return GetTypedCell<int8_t, T>(source, source_offset);
+	case LogicalTypeId::SMALLINT:
+		return GetTypedCell<int16_t, T>(source, source_offset);
+	case LogicalTypeId::INTEGER:
+		return GetTypedCell<int32_t, T>(source, source_offset);
+	case LogicalTypeId::BIGINT:
+		return GetTypedCell<int64_t, T>(source, source_offset);
+	case LogicalTypeId::HUGEINT:
+		return GetTypedCell<hugeint_t, T>(source, source_offset);
+	case LogicalTypeId::DATE:
+		return GetTypedCell<int32_t, T>(source, source_offset);
+	case LogicalTypeId::TIME:
+		return GetTypedCell<int64_t, T>(source, source_offset);
+	case LogicalTypeId::TIMESTAMP:
+		return GetTypedCell<int64_t, T>(source, source_offset);
+	case LogicalTypeId::UTINYINT:
+		return GetTypedCell<uint8_t, T>(source, source_offset);
+	case LogicalTypeId::USMALLINT:
+		return GetTypedCell<uint16_t, T>(source, source_offset);
+	case LogicalTypeId::UINTEGER:
+		return GetTypedCell<uint32_t, T>(source, source_offset);
+	case LogicalTypeId::UBIGINT:
+		return GetTypedCell<uint64_t, T>(source, source_offset);
+	case LogicalTypeId::FLOAT:
+		return GetTypedCell<float, T>(source, source_offset);
+	case LogicalTypeId::DOUBLE:
+		return GetTypedCell<double, T>(source, source_offset);
+	case LogicalTypeId::DECIMAL: {
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+			return GetDecimalCell<int16_t, T>(source, source_offset, width, scale);
+		case PhysicalType::INT32:
+			return GetDecimalCell<int32_t, T>(source, source_offset, width, scale);
+		case PhysicalType::INT64:
+			return GetDecimalCell<int64_t, T>(source, source_offset, width, scale);
+		case PhysicalType::INT128:
+			return GetDecimalCell<hugeint_t, T>(source, source_offset, width, scale);
+		default:
+			throw InternalException("Widths bigger than 38 are not supported");
+		}
+	}
+	default:
+		throw NotImplementedException("Unimplemented type \"%s\" for GetCell()", type.ToString());
+	}
+}
+
 static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t input_size, const idx_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
                                    const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask,
@@ -511,17 +604,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		bounds.window_start = bounds.peer_start;
 		break;
 	case WindowBoundary::EXPR_PRECEDING: {
-		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
-		bounds.window_start =
-		    (int64_t)row_idx -
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
+		bounds.window_start = (int64_t)row_idx - GetCell<int64_t>(boundary_start_collection, 0,
+		                                                          wexpr->start_expr->IsScalar() ? 0 : row_idx);
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING: {
-		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
 		bounds.window_start =
-		    row_idx +
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
+		    row_idx + GetCell<int64_t>(boundary_start_collection, 0, wexpr->start_expr->IsScalar() ? 0 : row_idx);
 		break;
 	}
 	default:
@@ -539,16 +628,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		bounds.window_end = bounds.partition_end;
 		break;
 	case WindowBoundary::EXPR_PRECEDING:
-		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
-		bounds.window_end =
-		    (int64_t)row_idx -
-		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
+		bounds.window_end = (int64_t)row_idx -
+		                    GetCell<int64_t>(boundary_end_collection, 0, wexpr->end_expr->IsScalar() ? 0 : row_idx) + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING:
 		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
 		bounds.window_end =
-		    row_idx +
-		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
+		    row_idx + GetCell<int64_t>(boundary_end_collection, 0, wexpr->end_expr->IsScalar() ? 0 : row_idx) + 1;
 		break;
 	default:
 		throw InternalException("Unsupported window end boundary");
@@ -698,7 +784,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			if (payload_collection.ColumnCount() != 1) {
 				throw BinderException("NTILE needs a parameter");
 			}
-			auto n_param = payload_collection.GetValue(0, row_idx).GetValue<int64_t>();
+			auto n_param = GetCell<int64_t>(payload_collection, 0, row_idx);
 			// With thanks from SQLite's ntileValueFunc()
 			int64_t n_total = bounds.partition_end - bounds.partition_start;
 			if (n_param > n_total) {
@@ -732,8 +818,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		case ExpressionType::WINDOW_LAG: {
 			int64_t offset = 1;
 			if (wexpr->offset_expr) {
-				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : row_idx)
-				             .GetValue<int64_t>();
+				offset = GetCell<int64_t>(leadlag_offset_collection, 0, wexpr->offset_expr->IsScalar() ? 0 : row_idx);
 			}
 			int64_t val_idx = (int64_t)row_idx;
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
