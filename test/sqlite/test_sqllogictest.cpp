@@ -1544,6 +1544,10 @@ static string ParseGroupFromPath(string file) {
 		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
 		extension = "[.]";
 	}
+	if (file.find(".test_coverage") != std::string::npos) {
+		// "slow" in the name indicates a slow test (i.e. only run as part of allunit)
+		return "[coverage][.]";
+	}
 	// move backwards to the last slash
 	int group_begin = -1, group_end = -1;
 	for (idx_t i = file.size(); i > 0; i--) {
@@ -1630,7 +1634,7 @@ struct AutoRegTests {
 			}
 		});
 		listFiles(fs, "test", [excludes](const string &path) {
-			if (endsWith(path, ".test") || endsWith(path, ".test_slow")) {
+			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 				for (auto excl : excludes) {
 					if (path.find(excl) != string::npos) {
 						return;
