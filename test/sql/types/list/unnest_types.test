@@ -1,0 +1,118 @@
+# name: test/sql/types/list/unnest_types.test
+# description: Test unnest with different types
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+# integers
+foreach type tinyint smallint integer bigint utinyint usmallint uinteger ubigint
+
+statement ok
+create table a as select list(i::${type}) AS l from range(1, 6, 1) t1(i)
+
+query I
+select l from a order by 1;
+----
+[1, 2, 3, 4, 5]
+
+query I
+select unnest(l) from a order by 1
+----
+1
+2
+3
+4
+5
+
+statement ok
+drop table a
+
+endloop
+
+# decimals
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+create table a as select list(i::${type}) AS l from range(1, 6, 1) t1(i)
+
+query I
+select l from a order by 1;
+----
+[1.0, 2.0, 3.0, 4.0, 5.0]
+
+query I
+select unnest(l) from a order by 1
+----
+1
+2
+3
+4
+5
+
+statement ok
+drop table a
+
+endloop
+
+foreach type float double
+
+statement ok
+create table a as select list(('1e'||i::varchar)::${type}) AS l from range(1, 6, 1) t1(i)
+
+query I
+select unnest(l) from a order by 1
+----
+10.000000
+100.000000
+1000.000000
+10000.000000
+100000.000000
+
+statement ok
+drop table a
+
+endloop
+
+
+# intervals
+statement ok
+create table a as select list(interval (i) years) AS l from range(1, 6, 1) t1(i)
+
+query I
+select l from a order by 1;
+----
+[1 year, 2 years, 3 years, 4 years, 5 years]
+
+query I
+select unnest(l) from a order by 1
+----
+1 year
+2 years
+3 years
+4 years
+5 years
+
+statement ok
+drop table a
+
+# bools
+statement ok
+create table a as select list(i%2=0) AS l from range(1, 6, 1) t1(i);
+
+query I
+select l from a order by 1;
+----
+[False, True, False, True, False]
+
+query I
+select unnest(l) from a order by 1;
+----
+false
+false
+false
+true
+true
+
+statement ok
+drop table a
