@@ -44,6 +44,8 @@ public:
 
 	void Clear();
 
+	void Resize(uint64_t bufsiz);
+
 	uint64_t AllocSize() {
 		return internal_size;
 	}
@@ -57,6 +59,12 @@ private:
 	//! The buffer that was actually malloc'd, i.e. the pointer that must be freed when the FileBuffer is destroyed
 	data_ptr_t malloced_buffer;
 	uint64_t malloced_size;
+
+private:
+	//! Sets malloced_size given the requested buffer size
+	void SetMallocedSize(uint64_t &bufsiz);
+	//! Constructs the Filebuffer object
+	void Construct(uint64_t bufsiz);
 };
 
 } // namespace duckdb

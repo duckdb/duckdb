@@ -74,10 +74,9 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	// first copy the nullmask
 	auto &tmask = FlatVector::Validity(target);
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		if (ConstantVector::IsNull(source)) {
-			for (idx_t i = 0; i < copy_count; i++) {
-				tmask.SetInvalid(target_offset + i);
-			}
+		const bool valid = !ConstantVector::IsNull(source);
+		for (idx_t i = 0; i < copy_count; i++) {
+			tmask.Set(target_offset + i, valid);
 		}
 	} else {
 		auto &smask = FlatVector::Validity(source);
@@ -103,7 +102,6 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	case PhysicalType::INT32:
 		TemplatedCopy<int32_t>(source, *sel, target, source_offset, target_offset, copy_count);
 		break;
-	case PhysicalType::HASH:
 	case PhysicalType::INT64:
 		TemplatedCopy<int64_t>(source, *sel, target, source_offset, target_offset, copy_count);
 		break;
@@ -121,9 +119,6 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		break;
 	case PhysicalType::INT128:
 		TemplatedCopy<hugeint_t>(source, *sel, target, source_offset, target_offset, copy_count);
-		break;
-	case PhysicalType::POINTER:
-		TemplatedCopy<uintptr_t>(source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedCopy<float>(source, *sel, target, source_offset, target_offset, copy_count);

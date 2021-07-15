@@ -194,10 +194,6 @@ static void TemplatedMatchOp(Vector &vec, VectorData &col, const idx_t vcount, c
 		TemplatedMatchType<interval_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
 		                                                 no_match_count);
 		break;
-	case PhysicalType::HASH:
-		TemplatedMatchType<hash_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
-		                                             no_match_count);
-		break;
 	case PhysicalType::VARCHAR:
 		TemplatedMatchType<string_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
 		                                               no_match_count);

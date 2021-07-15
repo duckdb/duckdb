@@ -95,14 +95,8 @@ void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector 
 	case PhysicalType::DOUBLE:
 		TemplatedGatherLoop<double>(rows, row_sel, col, col_sel, count, col_offset, col_no);
 		break;
-	case PhysicalType::POINTER:
-		TemplatedGatherLoop<uintptr_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
-		break;
 	case PhysicalType::INTERVAL:
 		TemplatedGatherLoop<interval_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
-		break;
-	case PhysicalType::HASH:
-		TemplatedGatherLoop<hash_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedGatherLoop<string_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
