@@ -1,4 +1,4 @@
-# name: test/sql/order/test_order_parallel.test_slow
+# name: test/sql/order/test_order_parallel.test_coverage
 # description: Test ORDER BY keyword with multiple threads (internal and external sorting)
 # group: [order]
 
