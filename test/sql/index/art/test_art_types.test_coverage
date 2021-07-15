@@ -1,4 +1,4 @@
-# name: test/sql/index/art/test_art_types.test
+# name: test/sql/index/art/test_art_types.test_coverage
 # description: Test ART with different types
 # group: [art]
 
