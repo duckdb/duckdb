@@ -1,0 +1,35 @@
+# name: test/sql/storage/catalog/test_not_distinct_from_default.test
+# description: Test using NOT DISTINCT FROM in a default expression
+# group: [catalog]
+
+# Use in DEFAULT expression of a table
+load __TEST_DIR__/not_distinct_test.db
+
+statement ok
+CREATE SEQUENCE seq;
+
+statement ok
+CREATE TABLE test_default (a BOOL DEFAULT nextval('seq') is not distinct from nextval('seq'), b INTEGER);
+
+statement ok
+INSERT INTO test_default (b) VALUES (2), (4), (6);
+
+
+query II
+select * from test_default;
+----
+False	2
+False	4
+False	6
+
+# Use in DEFAULT expression of a table and store that table on disk (storage test)
+
+restart
+
+
+query II
+select * from test_default;
+----
+False	2
+False	4
+False	6

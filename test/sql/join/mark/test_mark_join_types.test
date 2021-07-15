@@ -5,79 +5,80 @@
 statement ok
 PRAGMA enable_verification
 
+foreach type tinyint smallint integer bigint float double utinyint usmallint uinteger ubigint decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
 # numeric types
-# tests for tinyint
 statement ok
 begin transaction
 
 statement ok
-create table a as select i::tinyint AS i from range(1, 101, 1) t1(i) order by random()
+create table a as select i::${type} AS i from range(1, 101, 1) t1(i) order by random()
 
 # range joins
 query I
-select count(*) from a WHERE i > ANY((SELECT 1::tinyint))
+select count(*) from a WHERE i > ANY((SELECT 1::${type}))
 ----
 99
 
 query I
-select count(*) from a WHERE i >= ANY((SELECT 1::tinyint))
+select count(*) from a WHERE i >= ANY((SELECT 1::${type}))
 ----
 100
 
 query I
-select count(*) from a WHERE i < ANY((SELECT 100::tinyint))
+select count(*) from a WHERE i < ANY((SELECT 100::${type}))
 ----
 99
 
 query I
-select count(*) from a WHERE i <= ANY((SELECT 100::tinyint))
+select count(*) from a WHERE i <= ANY((SELECT 100::${type}))
 ----
 100
 
 query I
-select count(*) from a WHERE i = ANY((SELECT 1::tinyint))
+select count(*) from a WHERE i = ANY((SELECT 1::${type}))
 ----
 1
 
 query I
-select count(*) from a WHERE i <> ANY((SELECT 1::tinyint))
+select count(*) from a WHERE i <> ANY((SELECT 1::${type}))
 ----
 99
 
 # now with a filter
 query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::tinyint))
+select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::${type}))
 ----
 49
 
 query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::tinyint))
+select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::${type}))
 ----
 50
 
 query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::tinyint))
+select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::${type}))
 ----
 49
 
 query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::tinyint))
+select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::${type}))
 ----
 50
 
 query I
-select * from (select * from a where i % 2 = 0) a WHERE i = ANY((SELECT 2::tinyint))
+select * from (select * from a where i % 2 = 0) a WHERE i = ANY((SELECT 2::${type}))
 ----
 2
 
 query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::tinyint))
+select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::${type}))
 ----
 49
 
 # now select the actual values, instead of only the count
 query I
-select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::tinyint)) ORDER BY 1
+select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::${type})) ORDER BY 1
 ----
 2
 4
@@ -86,7 +87,7 @@ select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::tin
 10
 
 query I
-select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::tinyint)) ORDER BY 1
+select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::${type})) ORDER BY 1
 ----
 90
 92
@@ -96,7 +97,7 @@ select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::tin
 100
 
 query I
-select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::tinyint)) ORDER BY 1
+select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::${type})) ORDER BY 1
 ----
 91
 92
@@ -111,572 +112,4 @@ select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::tinyin
 statement ok
 rollback
 
-# tests for smallint
-statement ok
-begin transaction
-
-statement ok
-create table a as select i::smallint AS i from range(1, 101, 1) t1(i) order by random()
-
-# range joins
-query I
-select count(*) from a WHERE i > ANY((SELECT 1::smallint))
-----
-99
-
-query I
-select count(*) from a WHERE i >= ANY((SELECT 1::smallint))
-----
-100
-
-query I
-select count(*) from a WHERE i < ANY((SELECT 100::smallint))
-----
-99
-
-query I
-select count(*) from a WHERE i <= ANY((SELECT 100::smallint))
-----
-100
-
-query I
-select count(*) from a WHERE i = ANY((SELECT 1::smallint))
-----
-1
-
-query I
-select count(*) from a WHERE i <> ANY((SELECT 1::smallint))
-----
-99
-
-# now with a filter
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::smallint))
-----
-49
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::smallint))
-----
-50
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::smallint))
-----
-49
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::smallint))
-----
-50
-
-query I
-select * from (select * from a where i % 2 = 0) a WHERE i = ANY((SELECT 2::smallint))
-----
-2
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::smallint))
-----
-49
-
-# now select the actual values, instead of only the count
-query I
-select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::smallint)) ORDER BY 1
-----
-2
-4
-6
-8
-10
-
-query I
-select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::smallint)) ORDER BY 1
-----
-90
-92
-94
-96
-98
-100
-
-query I
-select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::smallint)) ORDER BY 1
-----
-91
-92
-93
-94
-95
-97
-98
-99
-100
-
-statement ok
-rollback
-
-# tests for integer
-statement ok
-begin transaction
-
-statement ok
-create table a as select i::integer AS i from range(1, 101, 1) t1(i) order by random()
-
-# range joins
-query I
-select count(*) from a WHERE i > ANY((SELECT 1::integer))
-----
-99
-
-query I
-select count(*) from a WHERE i >= ANY((SELECT 1::integer))
-----
-100
-
-query I
-select count(*) from a WHERE i < ANY((SELECT 100::integer))
-----
-99
-
-query I
-select count(*) from a WHERE i <= ANY((SELECT 100::integer))
-----
-100
-
-query I
-select count(*) from a WHERE i = ANY((SELECT 1::integer))
-----
-1
-
-query I
-select count(*) from a WHERE i <> ANY((SELECT 1::integer))
-----
-99
-
-# now with a filter
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::integer))
-----
-49
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::integer))
-----
-50
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::integer))
-----
-49
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::integer))
-----
-50
-
-query I
-select * from (select * from a where i % 2 = 0) a WHERE i = ANY((SELECT 2::integer))
-----
-2
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::integer))
-----
-49
-
-# now select the actual values, instead of only the count
-query I
-select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::integer)) ORDER BY 1
-----
-2
-4
-6
-8
-10
-
-query I
-select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::integer)) ORDER BY 1
-----
-90
-92
-94
-96
-98
-100
-
-query I
-select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::integer)) ORDER BY 1
-----
-91
-92
-93
-94
-95
-97
-98
-99
-100
-
-statement ok
-rollback
-
-# tests for bigint
-statement ok
-begin transaction
-
-statement ok
-create table a as select i::bigint AS i from range(1, 101, 1) t1(i) order by random()
-
-# range joins
-query I
-select count(*) from a WHERE i > ANY((SELECT 1::bigint))
-----
-99
-
-query I
-select count(*) from a WHERE i >= ANY((SELECT 1::bigint))
-----
-100
-
-query I
-select count(*) from a WHERE i < ANY((SELECT 100::bigint))
-----
-99
-
-query I
-select count(*) from a WHERE i <= ANY((SELECT 100::bigint))
-----
-100
-
-query I
-select count(*) from a WHERE i = ANY((SELECT 1::bigint))
-----
-1
-
-query I
-select count(*) from a WHERE i <> ANY((SELECT 1::bigint))
-----
-99
-
-# now with a filter
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::bigint))
-----
-49
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::bigint))
-----
-50
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::bigint))
-----
-49
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::bigint))
-----
-50
-
-query I
-select * from (select * from a where i % 2 = 0) a WHERE i = ANY((SELECT 2::bigint))
-----
-2
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::bigint))
-----
-49
-
-# now select the actual values, instead of only the count
-query I
-select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::bigint)) ORDER BY 1
-----
-2
-4
-6
-8
-10
-
-query I
-select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::bigint)) ORDER BY 1
-----
-90
-92
-94
-96
-98
-100
-
-query I
-select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::bigint)) ORDER BY 1
-----
-91
-92
-93
-94
-95
-97
-98
-99
-100
-
-statement ok
-rollback
-
-# tests for real
-statement ok
-begin transaction
-
-statement ok
-create table a as select i::real AS i from range(1, 101, 1) t1(i) order by random()
-
-# range joins
-query I
-select count(*) from a WHERE i > ANY((SELECT 1::real))
-----
-99
-
-query I
-select count(*) from a WHERE i >= ANY((SELECT 1::real))
-----
-100
-
-query I
-select count(*) from a WHERE i < ANY((SELECT 100::real))
-----
-99
-
-query I
-select count(*) from a WHERE i <= ANY((SELECT 100::real))
-----
-100
-
-query I
-select count(*) from a WHERE i = ANY((SELECT 1::real))
-----
-1
-
-query I
-select count(*) from a WHERE i <> ANY((SELECT 1::real))
-----
-99
-
-# now with a filter
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::real))
-----
-49
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::real))
-----
-50
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::real))
-----
-49
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::real))
-----
-50
-
-query R
-select * from (select * from a where i % 2 = 0) a WHERE i = ANY((SELECT 2::real))
-----
-2.000000
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::real))
-----
-49
-
-# now select the actual values, instead of only the count
-query R
-select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::real)) ORDER BY 1
-----
-2.000000
-4.000000
-6.000000
-8.000000
-10.000000
-
-query R
-select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::real)) ORDER BY 1
-----
-90.000000
-92.000000
-94.000000
-96.000000
-98.000000
-100.000000
-
-query R
-select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::real)) ORDER BY 1
-----
-91.000000
-92.000000
-93.000000
-94.000000
-95.000000
-97.000000
-98.000000
-99.000000
-100.000000
-
-statement ok
-rollback
-
-# tests for double
-statement ok
-begin transaction
-
-statement ok
-create table a as select i::double AS i from range(1, 101, 1) t1(i) order by random()
-
-# range joins
-query I
-select count(*) from a WHERE i > ANY((SELECT 1::double))
-----
-99
-
-query I
-select count(*) from a WHERE i >= ANY((SELECT 1::double))
-----
-100
-
-query I
-select count(*) from a WHERE i < ANY((SELECT 100::double))
-----
-99
-
-query I
-select count(*) from a WHERE i <= ANY((SELECT 100::double))
-----
-100
-
-query I
-select count(*) from a WHERE i = ANY((SELECT 1::double))
-----
-1
-
-query I
-select count(*) from a WHERE i <> ANY((SELECT 1::double))
-----
-99
-
-# now with a filter
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i > ANY((SELECT 2::double))
-----
-49
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 2::double))
-----
-50
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i < ANY((SELECT 100::double))
-----
-49
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 100::double))
-----
-50
-
-query R
-select * from (select * from a where i % 2 = 0) a WHERE i = ANY((SELECT 2::double))
-----
-2.000000
-
-query I
-select count(*) from (select * from a where i % 2 = 0) a WHERE i <> ANY((SELECT 2::double))
-----
-49
-
-# now select the actual values, instead of only the count
-query R
-select * from (select * from a where i % 2 = 0) a WHERE i <= ANY((SELECT 10::double)) ORDER BY 1
-----
-2.000000
-4.000000
-6.000000
-8.000000
-10.000000
-
-query R
-select * from (select * from a where i % 2 = 0) a WHERE i >= ANY((SELECT 90::double)) ORDER BY 1
-----
-90.000000
-92.000000
-94.000000
-96.000000
-98.000000
-100.000000
-
-query R
-select * from (select * from a where i > 90) a WHERE i <> ANY((SELECT 96::double)) ORDER BY 1
-----
-91.000000
-92.000000
-93.000000
-94.000000
-95.000000
-97.000000
-98.000000
-99.000000
-100.000000
-
-statement ok
-rollback
-
-# strings
-statement ok
-begin transaction
-
-statement ok
-create table a (i VARCHAR)
-
-statement ok
-insert into a values ('a'), ('b'), ('c'), ('d'), ('e'), ('f')
-
-# range joins
-query I
-select count(*) from a WHERE i < ANY((SELECT 'f'))
-----
-5
-
-query I
-select count(*) from a WHERE i <= ANY((SELECT 'f' AS j))
-----
-6
-
-query I
-select count(*) from a WHERE i > ANY((SELECT 'a'))
-----
-5
-
-query I
-select count(*) from a WHERE i >= ANY((SELECT 'a'))
-----
-6
-
-query I
-select count(*) from a WHERE i <> ANY((SELECT 'a'))
-----
-5
-
-query I
-select count(*) from a WHERE i = ANY((SELECT 'a'))
-----
-1
-
-statement ok
-rollback
-
+endloop

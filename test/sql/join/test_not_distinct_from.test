@@ -2,22 +2,22 @@
 # description: Test join on is not distinct from query
 # group: [join]
 
+foreach type tinyint smallint integer bigint float double utinyint usmallint uinteger ubigint decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
-create table tbl_1 (a integer, b integer)
+create table tbl_1 (a ${type}, b ${type})
 
 statement ok
 insert into tbl_1 values (1,NULL),(2,3),(NULL,NULL)
 
 statement ok
-create table tbl_2 (b integer)
+create table tbl_2 (b ${type})
 
 statement ok
 insert into tbl_2 values (1),(2),(NULL)
 
-
 query I
- SELECT a from tbl_1 WHERE a IS DISTINCT FROM b
+SELECT a from tbl_1 WHERE a IS DISTINCT FROM b
 ----
 1
 2
@@ -27,18 +27,21 @@ SELECT a from tbl_1 WHERE a IS NOT DISTINCT FROM b
 ----
 NULL
 
-
 query II
 explain select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b)
 ----
 physical_plan	<REGEX>:.*HASH_JOIN.*
 
 query II
-select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b)
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b) ORDER BY 1
 ----
+NULL	NULL
 1	1
 2	2
-NULL	NULL
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS NOT DISTINCT FROM tbl_2.b AND a <> tbl_2.b) ORDER BY 1
+----
 
 query II
 explain select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b)
@@ -55,6 +58,30 @@ NULL	2
 2	NULL
 2	1
 
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b AND a <> tbl_2.b) order by a,tbl_2.b
+----
+1	2
+2	1
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a <> tbl_2.b AND a IS DISTINCT FROM tbl_2.b) order by a,tbl_2.b
+----
+1	2
+2	1
+
+query II
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (tbl_2.b > a AND a IS DISTINCT FROM tbl_2.b) order by a,tbl_2.b
+----
+1	2
+
+statement ok
+DROP TABLE tbl_1;
+
+statement ok
+DROP TABLE tbl_2;
+
+endloop
 
 #Vector with vector
 query III
@@ -212,6 +239,18 @@ False
 
 # Use on a bigger table (~10K elements)
 statement ok
+create table tbl_1 (a integer, b integer)
+
+statement ok
+insert into tbl_1 values (1,NULL),(2,3),(NULL,NULL)
+
+statement ok
+create table tbl_2 (b integer)
+
+statement ok
+insert into tbl_2 values (1),(2),(NULL)
+
+statement ok
 CREATE table big as select range a from range(10000);
 
 statement ok
@@ -242,36 +281,4 @@ SELECT a, (select count(*) from tbl_1 where tbl_1.a is distinct from t.b) from t
 1	2
 2	3
 NULL	2
-
-# Use in DEFAULT expression of a table
-load __TEST_DIR__/not_distinct_test.db
-
-statement ok
-CREATE SEQUENCE seq;
-
-statement ok
-CREATE TABLE test_default (a BOOL DEFAULT nextval('seq') is not distinct from nextval('seq'), b INTEGER);
-
-statement ok
-INSERT INTO test_default (b) VALUES (2), (4), (6);
-
-
-query II
-select * from test_default;
-----
-False	2
-False	4
-False	6
-
-# Use in DEFAULT expression of a table and store that table on disk (storage test)
-
-restart
-
-
-query II
-select * from test_default;
-----
-False	2
-False	4
-False	6
 
