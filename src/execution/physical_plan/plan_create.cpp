@@ -1,11 +1,13 @@
-#include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/operator/logical_create.hpp"
-
+#include "duckdb/execution/operator/schema/physical_create_function.hpp"
 #include "duckdb/execution/operator/schema/physical_create_schema.hpp"
 #include "duckdb/execution/operator/schema/physical_create_sequence.hpp"
 #include "duckdb/execution/operator/schema/physical_create_view.hpp"
-#include "duckdb/execution/operator/schema/physical_create_function.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/parser/parsed_data/create_enum_info.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_create.hpp"
+
+#include "duckdb/execution/operator/schema/physical_create_enum.hpp"
 
 namespace duckdb {
 
@@ -23,6 +25,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreate &op
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
 		return make_unique<PhysicalCreateFunction>(unique_ptr_cast<CreateInfo, CreateMacroInfo>(move(op.info)),
 		                                           op.estimated_cardinality);
+	case LogicalOperatorType::LOGICAL_CREATE_ENUM:
+		return make_unique<PhysicalCreateEnum>(unique_ptr_cast<CreateInfo, CreateEnumInfo>(move(op.info)),
+		                                       op.estimated_cardinality);
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple create");
 	}

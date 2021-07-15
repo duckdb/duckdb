@@ -185,6 +185,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = move(create_table);
 		break;
 	}
+	case CatalogType::ENUM_ENTRY: {
+		auto schema = BindSchema(*stmt.info);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_ENUM, move(stmt.info), schema);
+		break;
+	}
 	default:
 		throw Exception("Unrecognized type!");
 	}

@@ -91,6 +91,8 @@ unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNo
 		return TransformCheckpoint(stmt);
 	case duckdb_libpgquery::T_PGLoadStmt:
 		return TransformLoad(stmt);
+	case duckdb_libpgquery::T_PGCreateEnumStmt:
+		return TransformCreateEnum(stmt);
 	default:
 		throw NotImplementedException(NodetypeToString(stmt->type));
 	}

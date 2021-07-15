@@ -24,6 +24,7 @@ enum class CatalogType : uint8_t {
 	PREPARED_STATEMENT = 5,
 	SEQUENCE_ENTRY = 6,
 	COLLATION_ENTRY = 7,
+	ENUM_ENTRY = 8,
 
 	// functions
 	TABLE_FUNCTION_ENTRY = 25,

@@ -75,6 +75,7 @@ enum class LogicalOperatorType : uint8_t {
 	LOGICAL_DROP = 132,
 	LOGICAL_PRAGMA = 133,
 	LOGICAL_TRANSACTION = 134,
+	LOGICAL_CREATE_ENUM = 135,
 
 	// -----------------------------
 	// Explain

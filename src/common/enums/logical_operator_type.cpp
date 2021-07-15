@@ -89,6 +89,8 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "ALTER";
 	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
 		return "CREATE_SEQUENCE";
+	case LogicalOperatorType::LOGICAL_CREATE_ENUM:
+		return "CREATE_ENUM";
 	case LogicalOperatorType::LOGICAL_CREATE_VIEW:
 		return "CREATE_VIEW";
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
