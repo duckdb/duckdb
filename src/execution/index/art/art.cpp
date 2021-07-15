@@ -1,10 +1,12 @@
 #include "duckdb/execution/index/art/art.hpp"
-#include "duckdb/execution/expression_executor.hpp"
+
+#include "duckdb/common/radix.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/bit_operations.hpp"
+#include "duckdb/execution/expression_executor.hpp"
+
 #include <algorithm>
-#include <ctgmath>
 #include <cstring>
+#include <ctgmath>
 
 namespace duckdb {
 

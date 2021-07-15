@@ -13,7 +13,7 @@ add_library_unity(
   allocator.cpp
   arrow_wrapper.cpp
   assert.cpp
-  bit_operations.cpp
+  radix.cpp
   constants.cpp
   checksum.cpp
   exception.cpp
