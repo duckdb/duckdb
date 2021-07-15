@@ -67,6 +67,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	BindChild(window.end_expr, depth, error);
 	BindChild(window.offset_expr, depth, error);
 	BindChild(window.default_expr, depth, error);
+
 	this->inside_window = false;
 	if (!error.empty()) {
 		// failed to bind children of window function
@@ -125,6 +126,12 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto expression = GetExpression(order.expression);
 		result->orders.emplace_back(type, null_order, move(expression));
 	}
+
+	if (window.default_expr) {
+		auto &default_expr = (BoundExpression &)*window.default_expr;
+		default_expr.expr = BoundCastExpression::AddCastToType(move(default_expr.expr), result->return_type);
+	}
+
 	result->start_expr = GetExpression(window.start_expr);
 	result->end_expr = GetExpression(window.end_expr);
 	result->offset_expr = GetExpression(window.offset_expr);
