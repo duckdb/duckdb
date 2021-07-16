@@ -8,9 +8,9 @@ PRAGMA enable_verification
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
-#Do we accept empty enums?
-#statement ok
-#CREATE TYPE bla AS ENUM ();
+# Postgres accept empty ENUMs
+statement ok
+CREATE TYPE bla AS ENUM ();
 
 #Enums with the same name shouldn't work
 statement error
@@ -24,10 +24,47 @@ CREATE TYPE bla AS ENUM (1,2,3);
 statement error
 CREATE TYPE bla AS ENUM ('sad',NULL);
 
-# Should we accept repeated elements?
-#statement error
-#CREATE TYPE bla AS ENUM ('sad','sad');
+# We don't accept repeated elements?
+statement error
+CREATE TYPE bla AS ENUM ('sad','sad');
 
 # This should be case sensitive
 statement ok
-CREATE TYPE mood_2 AS ENUM ('sad','Sad','SAS');
+CREATE TYPE mood_2 AS ENUM ('sad','Sad','SAD');
+
+mode skip
+#We should be able to update enums eventually
+statement ok
+ALTER TYPE mood ADD VALUE 'depressive';
+
+statement ok
+ALTER TYPE mood REMOVE VALUE 'depressive';
+
+mode unskip
+
+# Delete ENUMs
+statement ok
+DROP TYPE mood;
+
+statement ok
+DROP TYPE mood_2;
+
+#This won't work because mood was already deleted
+statement error
+DROP TYPE mood;
+
+# We can create mood again
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+#This will drop mood
+statement ok
+DROP TYPE IF EXISTS mood;
+
+#Nothing to drop but won't break
+statement ok
+DROP TYPE IF EXISTS mood;
+
+# We can create mood again
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');

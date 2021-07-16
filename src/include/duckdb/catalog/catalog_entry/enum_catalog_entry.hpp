@@ -24,23 +24,6 @@ public:
 	//! For now I'm duplicating the data for fast access
 	unordered_map<string, idx_t> values;
 	vector<string> string_values;
-	//	//! Lock for getting a value on the sequence
-	//	mutex lock;
-	//	//! The amount of times the sequence has been used
-	//	uint64_t usage_count;
-	//	//! The sequence counter
-	//	int64_t counter;
-	//	//! The increment value
-	//	int64_t increment;
-	//	//! The minimum value of the sequence
-	//	int64_t start_value;
-	//	//! The minimum value of the sequence
-	//	int64_t min_value;
-	//	//! The maximum value of the sequence
-	//	int64_t max_value;
-	//	//! Whether or not the sequence cycles
-	//	bool cycle;
-
 public:
 	//! Serialize the meta information of the SequenceCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);

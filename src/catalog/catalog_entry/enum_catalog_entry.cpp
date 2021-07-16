@@ -14,6 +14,9 @@ EnumCatalogEntry::EnumCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
     : StandardEntry(CatalogType::ENUM_ENTRY, schema, catalog, info->name) {
 	idx_t counter = 0;
 	for (auto &value : info->values) {
+		if (values.find(value) != values.end()){
+			throw std::runtime_error("Duplicate value violates ENUM's unique constraint");
+		}
 		values[value] = counter++;
 		string_values.push_back(value);
 	}

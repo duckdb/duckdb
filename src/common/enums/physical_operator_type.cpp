@@ -122,6 +122,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "LOAD";
 	case PhysicalOperatorType::INOUT_FUNCTION:
 		return "INOUT_FUNCTION";
+	case PhysicalOperatorType::CREATE_ENUM:
+		return "CREATE_ENUM";
 	}
 	return "UNDEFINED";
 }
