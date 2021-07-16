@@ -458,96 +458,14 @@ static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
-template <typename SRC, typename DST>
-static DST GetTypedCell(Vector &source, idx_t index) {
-	switch (source.GetVectorType()) {
-	case VectorType::CONSTANT_VECTOR: {
-		const auto data = ConstantVector::GetData<DST>(source);
-		return data[0];
-	}
-	case VectorType::FLAT_VECTOR:
-		break;
-		// dictionary: apply dictionary and forward to child
-	case VectorType::DICTIONARY_VECTOR: {
-		auto &sel_vector = DictionaryVector::SelVector(source);
-		auto &child = DictionaryVector::Child(source);
-		return GetTypedCell<SRC, DST>(child, sel_vector.get_index(index));
-	}
-	case VectorType::SEQUENCE_VECTOR: {
-		int64_t start, increment;
-		SequenceVector::GetSequence(source, start, increment);
-		return Cast::Operation<int64_t, DST>(start + increment * index);
-	}
-	default:
-		throw InternalException("Unimplemented vector type for GetTypedCell");
-	}
-
-	const auto data = FlatVector::GetData<SRC>(source);
-	return Cast::Operation<SRC, DST>(data[index]);
-}
-
-template <typename SRC, typename DST>
-static inline DST GetDecimalCell(Vector &source, idx_t source_offset, uint8_t width, uint8_t scale) {
-	return CastFromDecimal::Operation<SRC, DST>(GetTypedCell<SRC, SRC>(source, source_offset), width, scale);
-}
-
 template <typename T>
 static T GetCell(ChunkCollection &collection, idx_t column, idx_t index) {
 	D_ASSERT(collection.ColumnCount() > column);
 	auto &chunk = collection.GetChunkForRow(index);
 	auto &source = chunk.data[column];
 	const auto source_offset = index % STANDARD_VECTOR_SIZE;
-	const auto &type = source.GetType();
-	switch (type.id()) {
-	case LogicalTypeId::BOOLEAN:
-		return GetTypedCell<bool, T>(source, source_offset);
-	case LogicalTypeId::TINYINT:
-		return GetTypedCell<int8_t, T>(source, source_offset);
-	case LogicalTypeId::SMALLINT:
-		return GetTypedCell<int16_t, T>(source, source_offset);
-	case LogicalTypeId::INTEGER:
-		return GetTypedCell<int32_t, T>(source, source_offset);
-	case LogicalTypeId::BIGINT:
-		return GetTypedCell<int64_t, T>(source, source_offset);
-	case LogicalTypeId::HUGEINT:
-		return GetTypedCell<hugeint_t, T>(source, source_offset);
-	case LogicalTypeId::DATE:
-		return GetTypedCell<int32_t, T>(source, source_offset);
-	case LogicalTypeId::TIME:
-		return GetTypedCell<int64_t, T>(source, source_offset);
-	case LogicalTypeId::TIMESTAMP:
-		return GetTypedCell<int64_t, T>(source, source_offset);
-	case LogicalTypeId::UTINYINT:
-		return GetTypedCell<uint8_t, T>(source, source_offset);
-	case LogicalTypeId::USMALLINT:
-		return GetTypedCell<uint16_t, T>(source, source_offset);
-	case LogicalTypeId::UINTEGER:
-		return GetTypedCell<uint32_t, T>(source, source_offset);
-	case LogicalTypeId::UBIGINT:
-		return GetTypedCell<uint64_t, T>(source, source_offset);
-	case LogicalTypeId::FLOAT:
-		return GetTypedCell<float, T>(source, source_offset);
-	case LogicalTypeId::DOUBLE:
-		return GetTypedCell<double, T>(source, source_offset);
-	case LogicalTypeId::DECIMAL: {
-		auto width = DecimalType::GetWidth(type);
-		auto scale = DecimalType::GetScale(type);
-		switch (type.InternalType()) {
-		case PhysicalType::INT16:
-			return GetDecimalCell<int16_t, T>(source, source_offset, width, scale);
-		case PhysicalType::INT32:
-			return GetDecimalCell<int32_t, T>(source, source_offset, width, scale);
-		case PhysicalType::INT64:
-			return GetDecimalCell<int64_t, T>(source, source_offset, width, scale);
-		case PhysicalType::INT128:
-			return GetDecimalCell<hugeint_t, T>(source, source_offset, width, scale);
-		default:
-			throw InternalException("Widths bigger than 38 are not supported");
-		}
-	}
-	default:
-		throw NotImplementedException("Unimplemented type \"%s\" for GetCell()", type.ToString());
-	}
+	const auto data = FlatVector::GetData<T>(source);
+	return data[source_offset];
 }
 
 static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t input_size, const idx_t row_idx,
@@ -838,12 +756,11 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			break;
 		}
 		case ExpressionType::WINDOW_FIRST_VALUE:
-		case ExpressionType::WINDOW_LAST_VALUE: {
-			const auto source_row =
-			    (wexpr->type == ExpressionType::WINDOW_FIRST_VALUE) ? bounds.window_start : bounds.window_end - 1;
-			payload_collection.CopyCell(0, source_row, result, output_offset);
+			payload_collection.CopyCell(0, bounds.window_start, result, output_offset);
 			break;
-		}
+		case ExpressionType::WINDOW_LAST_VALUE:
+			payload_collection.CopyCell(0, bounds.window_end - 1, result, output_offset);
+			break;
 		default:
 			throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
 		}
