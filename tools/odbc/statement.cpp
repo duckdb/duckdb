@@ -148,16 +148,28 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 }
 
 SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
-	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		if (option != SQL_CLOSE) {
-			return SQL_ERROR;
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		if (option == SQL_DROP) {
+			// mapping FreeStmt with DROP option to SQLFreeHandle
+			return SQLFreeHandle(SQL_HANDLE_STMT, statement_handle);
 		}
-		stmt->res.reset();
-		stmt->chunk.reset();
-		// stmt->stmt.reset(); // the statment can be reuse in prepared statement
-		stmt->bound_cols.clear();
-		stmt->params.clear();
-		stmt->error_messages.clear();
-		return SQL_SUCCESS;
+		if (option == SQL_UNBIND) {
+			stmt->bound_cols.clear();
+			return SQL_SUCCESS;
+		}
+		if (option == SQL_RESET_PARAMS) {
+			stmt->params.clear();
+			return SQL_SUCCESS;
+		}
+		if (option == SQL_CLOSE) {
+			stmt->res.reset();
+			stmt->chunk.reset();
+			// stmt->stmt.reset(); // the statment can be reuse in prepared statement
+			stmt->bound_cols.clear();
+			stmt->params.clear();
+			stmt->error_messages.clear();
+			return SQL_SUCCESS;
+		}
+		return SQL_ERROR;
 	});
 }
