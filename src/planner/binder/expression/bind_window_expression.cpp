@@ -25,6 +25,7 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, Logic
 		return LogicalType::BIGINT;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_NTH_VALUE:
 		D_ASSERT(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
 		return child_type;
 	case ExpressionType::WINDOW_LEAD:
@@ -103,6 +104,11 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 				bound.expr = BoundCastExpression::AddCastToType(move(bound.expr), LogicalType::BIGINT);
 			}
 			break;
+		case ExpressionType::WINDOW_NTH_VALUE:
+			// nth_value(<expr>, index)
+			if (argno == 1) {
+				bound.expr = BoundCastExpression::AddCastToType(move(bound.expr), LogicalType::BIGINT);
+			}
 		default:
 			break;
 		}

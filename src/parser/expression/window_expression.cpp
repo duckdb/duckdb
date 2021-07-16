@@ -14,6 +14,7 @@ WindowExpression::WindowExpression(ExpressionType type, string schema, const str
 	case ExpressionType::WINDOW_ROW_NUMBER:
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_NTH_VALUE:
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
 	case ExpressionType::WINDOW_PERCENT_RANK:

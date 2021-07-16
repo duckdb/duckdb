@@ -24,6 +24,8 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 		return ExpressionType::WINDOW_FIRST_VALUE;
 	} else if (fun_name == "last_value" || fun_name == "last") {
 		return ExpressionType::WINDOW_LAST_VALUE;
+	} else if (fun_name == "nth_value" || fun_name == "last") {
+		return ExpressionType::WINDOW_NTH_VALUE;
 	} else if (fun_name == "cume_dist") {
 		return ExpressionType::WINDOW_CUME_DIST;
 	} else if (fun_name == "lead") {
@@ -145,8 +147,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 					expr->children.push_back(move(function_list[0]));
 				}
 				if (function_list.size() > 1) {
-					D_ASSERT(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
-					expr->offset_expr = move(function_list[1]);
+					if (win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG) {
+						expr->offset_expr = move(function_list[1]);
+
+					} else {
+						D_ASSERT(win_fun_type == ExpressionType::WINDOW_NTH_VALUE);
+						expr->children.push_back(move(function_list[1]));
+					}
 				}
 				if (function_list.size() > 2) {
 					D_ASSERT(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);

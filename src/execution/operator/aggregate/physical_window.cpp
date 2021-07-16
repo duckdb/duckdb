@@ -761,6 +761,21 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		case ExpressionType::WINDOW_LAST_VALUE:
 			payload_collection.CopyCell(0, bounds.window_end - 1, result, output_offset);
 			break;
+		case ExpressionType::WINDOW_NTH_VALUE: {
+			if (payload_collection.ColumnCount() != 2) {
+				throw BinderException("NTH_VALUE needs a parameter");
+			}
+			// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
+			// returns NULL if there is no such row.
+			auto n_param = GetCell<int64_t>(payload_collection, 1, row_idx);
+			int64_t n_total = bounds.window_end - bounds.window_start;
+			if (0 < n_param && n_param <= n_total) {
+				payload_collection.CopyCell(0, bounds.window_start + n_param - 1, result, output_offset);
+			} else {
+				FlatVector::SetNull(result, output_offset, true);
+			}
+			break;
+		}
 		default:
 			throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
 		}

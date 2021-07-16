@@ -73,6 +73,48 @@ SELECT empno, first_value(empno) OVER (PARTITION BY depname ORDER BY empno) fv F
 3	1
 4	1
 
+# last_value
+query III
+SELECT depname, empno,
+	last_value(empno) OVER (
+		PARTITION BY depname ORDER BY empno ASC
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empsalary
+ORDER BY 1, 2
+----
+develop	7	11
+develop	8	11
+develop	9	11
+develop	10	11
+develop	11	11
+personnel	2	5
+personnel	5	5
+sales	1	4
+sales	3	4
+sales	4	4
+
+# nth_value
+query III
+SELECT depname, empno,
+	nth_value(empno, 2) OVER (
+		PARTITION BY depname ORDER BY empno ASC
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empsalary
+ORDER BY 1, 2
+----
+develop	7	8
+develop	8	9
+develop	9	10
+develop	10	11
+develop	11	NULL
+personnel	2	5
+personnel	5	NULL
+sales	1	3
+sales	3	4
+sales	4	NULL
+
 # rank_dense
 query TII
 SELECT depname, salary, dense_rank() OVER (PARTITION BY depname ORDER BY salary) FROM empsalary order by depname, salary
