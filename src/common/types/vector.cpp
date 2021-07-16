@@ -1105,6 +1105,18 @@ void Vector::Verify(idx_t count) {
 	}
 }
 
+void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
+	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+	vector.validity.Set(idx, !is_null);
+	if (is_null && vector.GetType().InternalType() == PhysicalType::STRUCT) {
+		// set all child entries to null as well
+		auto &entries = StructVector::GetEntries(vector);
+		for (auto &entry : entries) {
+			FlatVector::SetNull(*entry, idx, is_null);
+		}
+	}
+}
+
 void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	vector.validity.Set(0, !is_null);
