@@ -658,6 +658,7 @@ jobs:
           build/coverage/test/unittest
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"
+          build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[detailed_profiler]"
           build/coverage/test/unittest "[tpch]"
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
@@ -994,7 +995,7 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" "pyarrow>=4.0.0"' 
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" "pyarrow>=4.0.0"'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'

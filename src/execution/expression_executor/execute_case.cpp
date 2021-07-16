@@ -165,6 +165,9 @@ void Case(Vector &res_true, Vector &res_false, Vector &result, SelectionVector &
 	case PhysicalType::DOUBLE:
 		TemplatedCaseLoop<double>(res_true, res_false, result, tside, tcount, fside, fcount);
 		break;
+	case PhysicalType::INTERVAL:
+		TemplatedCaseLoop<interval_t>(res_true, res_false, result, tside, tcount, fside, fcount);
+		break;
 	case PhysicalType::VARCHAR:
 		TemplatedCaseLoop<string_t>(res_true, res_false, result, tside, tcount, fside, fcount);
 		StringVector::AddHeapReference(result, res_true);

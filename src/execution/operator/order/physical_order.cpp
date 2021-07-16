@@ -267,15 +267,15 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 
 	// Build and serialize sorting data to radix sortable rows
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(lstate.addresses);
-	lstate.radix_sorting_data->Build(sort.size(), data_pointers, nullptr);
+	auto handles = lstate.radix_sorting_data->Build(sort.size(), data_pointers, nullptr);
 	for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
 		bool has_null = sorting_state.has_null[sort_col];
 		bool nulls_first = sorting_state.order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
 		bool desc = sorting_state.order_types[sort_col] == OrderType::DESCENDING;
 		// TODO: use actual string statistics
-		lstate.radix_sorting_data->SerializeVectorSortable(
-		    sort.data[sort_col], sort.size(), lstate.sel_ptr, sort.size(), data_pointers, desc, has_null, nulls_first,
-		    string_t::INLINE_LENGTH, sorting_state.column_sizes[sort_col]);
+		RowOperations::RadixScatter(sort.data[sort_col], sort.size(), lstate.sel_ptr, sort.size(), data_pointers, desc,
+		                            has_null, nulls_first, string_t::INLINE_LENGTH,
+		                            sorting_state.column_sizes[sort_col]);
 	}
 
 	// Also fully serialize blob sorting columns (to be able to break ties
@@ -287,14 +287,14 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 				blob_chunk.data.emplace_back(sort.data[sort_col]);
 			}
 		}
-		lstate.blob_sorting_data->Build(blob_chunk.size(), data_pointers, nullptr);
+		handles = lstate.blob_sorting_data->Build(blob_chunk.size(), data_pointers, nullptr);
 		auto blob_data = blob_chunk.Orrify();
 		RowOperations::Scatter(blob_chunk, blob_data.get(), sorting_state.blob_layout, lstate.addresses,
 		                       *lstate.blob_sorting_heap, lstate.sel_ptr, blob_chunk.size());
 	}
 
 	// Finally, serialize payload data
-	lstate.payload_data->Build(input.size(), data_pointers, nullptr);
+	handles = lstate.payload_data->Build(input.size(), data_pointers, nullptr);
 	auto input_data = input.Orrify();
 	RowOperations::Scatter(input, input_data.get(), payload_layout, lstate.addresses, *lstate.payload_heap,
 	                       lstate.sel_ptr, input.size());

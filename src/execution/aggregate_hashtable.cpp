@@ -1,17 +1,16 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include <cmath>
@@ -90,7 +89,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		payload_idx += aggr.child_count;
 	}
 	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
-	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {

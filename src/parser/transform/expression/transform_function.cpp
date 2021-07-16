@@ -144,15 +144,21 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 				if (!function_list.empty()) {
 					expr->children.push_back(move(function_list[0]));
 				}
-				if (function_list.size() > 1) {
-					D_ASSERT(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
-					expr->offset_expr = move(function_list[1]);
+				if (win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG) {
+					if (function_list.size() > 1) {
+						expr->offset_expr = move(function_list[1]);
+					}
+					if (function_list.size() > 2) {
+						expr->default_expr = move(function_list[2]);
+					}
+					if (function_list.size() > 3) {
+						throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
+					}
+				} else {
+					if (function_list.size() > 1) {
+						throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
+					}
 				}
-				if (function_list.size() > 2) {
-					D_ASSERT(win_fun_type == ExpressionType::WINDOW_LEAD || win_fun_type == ExpressionType::WINDOW_LAG);
-					expr->default_expr = move(function_list[2]);
-				}
-				D_ASSERT(function_list.size() <= 3);
 			}
 		}
 		auto window_spec = reinterpret_cast<duckdb_libpgquery::PGWindowDef *>(root->over);
