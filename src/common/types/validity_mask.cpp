@@ -78,6 +78,12 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 	}
 	Initialize(STANDARD_VECTOR_SIZE);
 
+// FIXME THIS NEEDS FIXING!
+#if 1
+	for (idx_t i = offset; i < STANDARD_VECTOR_SIZE; i++) {
+		Set(i - offset, other.RowIsValid(i));
+	}
+#else
 	// first shift the "whole" units
 	idx_t entire_units = offset / BITS_PER_VALUE;
 	idx_t sub_units = offset - entire_units * BITS_PER_VALUE;
@@ -104,6 +110,12 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 		}
 		validity_mask[validity_idx] >>= sub_units;
 	}
+#ifdef DEBUG
+	for (idx_t i = offset; i < STANDARD_VECTOR_SIZE; i++) {
+		D_ASSERT(RowIsValid(i - offset) == other.RowIsValid(i));
+	}
+#endif
+#endif
 }
 
 } // namespace duckdb
