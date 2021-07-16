@@ -1,0 +1,132 @@
+# name: test/sql/types/nested/struct/struct_aggregates_types.test
+# description: Test structs with aggregations
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+foreach type <integral>
+
+statement ok
+CREATE TABLE structs AS SELECT {'i': i::${type}} AS s FROM range(11) tbl(i)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs
+----
+{'i': 0}	{'i': 10}
+
+statement ok
+DROP TABLE structs
+
+endloop
+
+foreach type float double
+
+statement ok
+CREATE TABLE structs AS SELECT {'i': i::${type}} AS s FROM range(11) tbl(i)
+
+query II
+SELECT MIN(s)['i'], MAX(s)['i'] FROM structs
+----
+0	10
+
+statement ok
+DROP TABLE structs
+
+endloop
+
+# booleans
+statement ok
+CREATE TABLE structs AS SELECT {'i': i%2} AS s FROM range(11) tbl(i)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs
+----
+{'i': 0}	{'i': 1}
+
+statement ok
+DROP TABLE structs
+
+# intervals
+statement ok
+CREATE TABLE structs AS SELECT {'i': interval (i+1) year} AS s FROM range(11) tbl(i)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs
+----
+{'i': 1 year}	{'i': 11 years}
+
+statement ok
+DROP TABLE structs
+
+# varchars
+statement ok
+CREATE TABLE structs AS SELECT {'i': i::varchar || 'thisisalongsuffix'} AS s FROM range(11) tbl(i)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs
+----
+{'i': 0thisisalongsuffix}	{'i': 9thisisalongsuffix}
+
+statement ok
+DROP TABLE structs
+
+# ties only
+statement ok
+CREATE TABLE structs AS SELECT {'i': 1} AS s FROM range(11) tbl(i)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs
+----
+{'i': 1}	{'i': 1}
+
+statement ok
+DROP TABLE structs
+
+# nulls only
+statement ok
+CREATE TABLE structs AS SELECT {'i': NULL} AS s FROM range(11) tbl(i)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs
+----
+{'i': NULL}	{'i': NULL}
+
+statement ok
+DROP TABLE structs
+
+# null structs
+statement ok
+CREATE TABLE structs AS SELECT NULL::ROW(i INTEGER) AS s FROM range(11) tbl(i)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs
+----
+NULL	NULL
+
+statement ok
+DROP TABLE structs
+
+# null structs within a struct
+statement ok
+CREATE TABLE structs AS SELECT {'i': NULL::ROW(i INTEGER)} AS s FROM range(11) tbl(i)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs
+----
+{'i': NULL}	{'i': NULL}
+
+statement ok
+DROP TABLE structs
+
+# null structs within a list
+statement ok
+CREATE TABLE structs AS SELECT [NULL::ROW(i INTEGER)] AS s FROM range(11) tbl(i)
+
+query II
+SELECT MIN(s), MAX(s) FROM structs
+----
+[NULL]	[NULL]
+
+statement ok
+DROP TABLE structs

@@ -312,7 +312,7 @@ static bool TemplatedOptimumStruct(Vector &left, idx_t lidx, idx_t lcount, Vecto
 		}
 
 		if (col_no == lchildren.size() - 1) {
-			return false;
+			break;
 		}
 
 		// Strict comparisons use IS NOT DISTINCT for possible
