@@ -59,6 +59,9 @@ SQLRETURN SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr);
 
 SQLRETURN SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *column_count_ptr);
 
+SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
+                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr);
+
 // diagnostics
 SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
                           SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
@@ -176,7 +179,7 @@ SQLRETURN WithStatement(SQLHANDLE &statement_handle, T &&lambda) {
 
 template <class T>
 SQLRETURN WithStatementPrepared(SQLHANDLE &statement_handle, T &&lambda) {
-	return WithStatement(statement_handle, [&](OdbcHandleStmt *stmt) {
+	return WithStatement(statement_handle, [&](OdbcHandleStmt *stmt) -> SQLRETURN {
 		if (!stmt->stmt) {
 			return SQL_ERROR;
 		}
@@ -189,7 +192,7 @@ SQLRETURN WithStatementPrepared(SQLHANDLE &statement_handle, T &&lambda) {
 
 template <class T>
 SQLRETURN WithStatementResult(SQLHANDLE &statement_handle, T &&lambda) {
-	return WithStatementPrepared(statement_handle, [&](OdbcHandleStmt *stmt) {
+	return WithStatementPrepared(statement_handle, [&](OdbcHandleStmt *stmt) -> SQLRETURN {
 		if (!stmt->res) {
 			return SQL_ERROR;
 		}
