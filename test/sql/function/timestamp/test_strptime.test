@@ -113,10 +113,17 @@ SELECT strptime('1-4', '%W-%w'), strftime('1900-01-04'::DATE, '%W-%w')
 ----
 1900-01-04 00:00:00	01-4
 
+# day of year
 query II
 SELECT strptime('30', '%j'), strftime('1900-01-30'::DATE, '%-j')
 ----
 1900-01-30 00:00:00	30
+
+# day of year AND month
+query I
+SELECT strptime('1992-01-30 30', '%Y-%m-%d %j')
+----
+1992-01-30 00:00:00
 
 # Year-Sunday Week-Weekday
 query II
@@ -326,6 +333,9 @@ SELECT strptime('mp', '%p')
 statement error
 SELECT strptime('pp', '%p')
 
+statement error
+SELECT strptime('zm', '%p')
+
 # incorrect abbreviated weekday name
 statement error
 SELECT strptime('moa', '%a')
@@ -389,3 +399,14 @@ SELECT strptime('Mon 30, December 30, 20:3:5 PM', '%a %d, %B %y, %H:%M:%S %p')
 # unrecognized specifier
 statement error
 SELECT strptime('21/10/2018', '%-q/%m/%Y')
+
+# microseconds out of range
+statement error
+SELECT strptime('9999999', '%f')
+
+# millisecond out of range
+statement error
+SELECT strptime('9999', '%g')
+
+statement error
+SELECT strptime('2000/10/10', random()::varchar)
