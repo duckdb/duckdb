@@ -15,11 +15,11 @@ bool OdbcInterval::GetInterval(Value &value, interval_t &interval, duckdb::OdbcH
 		try {
 			string val_str = value.GetValue<string>();
 			interval = duckdb::Cast::Operation<string_t, interval_t>(string_t(val_str));
+			return true;
 		} catch (duckdb::Exception &ex) {
 			stmt->error_messages.emplace_back(ex.what());
 			return false;
 		}
-		return true;
 	default:
 		return false;
 	}

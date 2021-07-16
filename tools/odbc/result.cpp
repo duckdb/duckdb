@@ -41,10 +41,37 @@ static void LogInvalidCast(const LogicalType &from_type, const LogicalType &to_t
 	stmt->error_messages.emplace_back(msg);
 }
 
+template <class T>
+SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value &val, const LogicalType &type,
+                           SQLLEN buffer_length, SQLPOINTER target_value_ptr) {
+	D_ASSERT(((size_t)buffer_length) >= sizeof(T));
+	try {
+		auto casted_value = val.CastAs(type).GetValue<T>();
+		Store<T>(casted_value, (duckdb::data_ptr_t)target_value_ptr);
+		return SQL_SUCCESS;
+	} catch (std::exception &ex) {
+		stmt->error_messages.emplace_back(ex.what());
+		return SQL_ERROR;
+	}
+}
+
+template <class CAST_OP, typename TARGET_TYPE, class CAST_FUNC = std::function<timestamp_t(int64_t)>>
+bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value &val, TARGET_TYPE &target,
+                        CAST_FUNC cast_timestamp_fun) {
+	try {
+		timestamp_t timestamp = cast_timestamp_fun(val.GetValue<int64_t>());
+		target = CAST_OP::template Operation<timestamp_t, TARGET_TYPE>(timestamp);
+		return true;
+	} catch (duckdb::Exception &ex) {
+		stmt->error_messages.emplace_back(ex.what());
+		return false;
+	}
+}
+
 SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                      SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
-	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
+	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
 		if (!target_value_ptr) {
 			return SQL_ERROR;
 		}
@@ -62,118 +89,31 @@ SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, S
 		}
 
 		switch (target_type) {
-		case SQL_C_SSHORT: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLSMALLINT));
-			try {
-				// should we use some cast operation? (TIME -> SMALLINT will 'work')
-				Store<SQLSMALLINT>(val.GetValue<SQLSMALLINT>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
-		}
-		case SQL_C_USHORT: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLUSMALLINT));
-			try {
-				Store<SQLUSMALLINT>(val.GetValue<SQLUSMALLINT>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
-		}
-		case SQL_C_SLONG: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLINTEGER));
-			try {
-				Store<SQLINTEGER>(val.GetValue<SQLINTEGER>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
-		}
-		case SQL_C_ULONG: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLUINTEGER));
-			try {
-				Store<SQLUINTEGER>(val.GetValue<SQLUINTEGER>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
-		}
-		case SQL_C_FLOAT: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLREAL));
-			try {
-				Store<SQLREAL>(val.GetValue<SQLREAL>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
-		}
-		case SQL_C_DOUBLE: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLFLOAT));
-			try {
-				Store<SQLFLOAT>(val.GetValue<SQLFLOAT>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
-		}
+		case SQL_C_SSHORT:
+			return GetInternalValue<SQLSMALLINT>(stmt, val, LogicalType::SMALLINT, buffer_length, target_value_ptr);
+		case SQL_C_USHORT:
+			return GetInternalValue<SQLUSMALLINT>(stmt, val, LogicalType::USMALLINT, buffer_length, target_value_ptr);
+		case SQL_C_SLONG:
+			return GetInternalValue<SQLINTEGER>(stmt, val, LogicalType::INTEGER, buffer_length, target_value_ptr);
+		case SQL_C_ULONG:
+			return GetInternalValue<SQLUINTEGER>(stmt, val, LogicalType::UINTEGER, buffer_length, target_value_ptr);
+		case SQL_C_FLOAT:
+			return GetInternalValue<SQLREAL>(stmt, val, LogicalType::FLOAT, buffer_length, target_value_ptr);
+		case SQL_C_DOUBLE:
+			return GetInternalValue<SQLFLOAT>(stmt, val, LogicalType::DOUBLE, buffer_length, target_value_ptr);
 		case SQL_C_BIT: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLCHAR));
-			try {
-				Store<SQLCHAR>(val.GetValue<SQLCHAR>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
+			LogicalType char_type = LogicalType(LogicalTypeId::CHAR);
+			return GetInternalValue<SQLCHAR>(stmt, val, char_type, buffer_length, target_value_ptr);
 		}
-		case SQL_C_STINYINT: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLSCHAR));
-			try {
-				Store<SQLSCHAR>(val.GetValue<SQLSCHAR>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
-		}
-		case SQL_C_UTINYINT: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLCHAR));
-			try {
-				Store<SQLCHAR>(val.GetValue<SQLCHAR>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
-		}
-		case SQL_C_SBIGINT: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLBIGINT));
-			try {
-				Store<SQLBIGINT>(val.GetValue<SQLBIGINT>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
-		}
-		// case SQL_C_BOOKMARK: // same ODBC type (\\TODO we don't support bookmark types)
-		case SQL_C_UBIGINT: {
-			D_ASSERT(((size_t)buffer_length) >= sizeof(SQLUBIGINT));
-			try {
-				Store<SQLUBIGINT>(val.GetValue<SQLUBIGINT>(), (duckdb::data_ptr_t)target_value_ptr);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
-		}
+		case SQL_C_STINYINT:
+			return GetInternalValue<SQLSCHAR>(stmt, val, LogicalType::TINYINT, buffer_length, target_value_ptr);
+		case SQL_C_UTINYINT:
+			return GetInternalValue<SQLSCHAR>(stmt, val, LogicalType::UTINYINT, buffer_length, target_value_ptr);
+		case SQL_C_SBIGINT:
+			return GetInternalValue<SQLBIGINT>(stmt, val, LogicalType::BIGINT, buffer_length, target_value_ptr);
+		case SQL_C_UBIGINT:
+			// case SQL_C_BOOKMARK: // same ODBC type (\\TODO we don't support bookmark types)
+			return GetInternalValue<SQLUBIGINT>(stmt, val, LogicalType::UBIGINT, buffer_length, target_value_ptr);
 		case SQL_C_WCHAR: {
 			std::string str = val.GetValue<std::string>();
 			std::wstring w_str = std::wstring(str.begin(), str.end());
@@ -258,14 +198,30 @@ SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, S
 			case LogicalTypeId::DATE:
 				date = val.GetValue<date_t>();
 				break;
-			case LogicalTypeId::TIMESTAMP:
-			case LogicalTypeId::TIMESTAMP_SEC:
-			case LogicalTypeId::TIMESTAMP_MS:
+			case LogicalTypeId::TIMESTAMP_SEC: {
+				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(stmt, val, date,
+				                                                             duckdb::Timestamp::FromEpochSeconds)) {
+					return SQL_ERROR;
+				}
+				break;
+			}
+			case LogicalTypeId::TIMESTAMP_MS: {
+				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(stmt, val, date,
+				                                                             duckdb::Timestamp::FromEpochMs)) {
+					return SQL_ERROR;
+				}
+				break;
+			}
+			case LogicalTypeId::TIMESTAMP: {
+				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(
+				        stmt, val, date, duckdb::Timestamp::FromEpochMicroSeconds)) {
+					return SQL_ERROR;
+				}
+				break;
+			}
 			case LogicalTypeId::TIMESTAMP_NS: {
-				try {
-					date = duckdb::CastTimestampToDate::Operation<timestamp_t, date_t>(val.GetValue<timestamp_t>());
-				} catch (duckdb::Exception &ex) {
-					stmt->error_messages.emplace_back(ex.what());
+				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(stmt, val, date,
+				                                                             duckdb::Timestamp::FromEpochNanoSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
@@ -276,16 +232,6 @@ SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, S
 					date = duckdb::CastToDate::Operation<string_t, date_t>(string_t(val_str));
 				} catch (duckdb::Exception &ex) {
 					stmt->error_messages.emplace_back(ex.what());
-					return SQL_ERROR;
-				}
-				break;
-			}
-			case LogicalTypeId::HUGEINT: {
-				hugeint_t val_hint = val.GetValue<hugeint_t>();
-				if (!duckdb::TryCast::Operation<hugeint_t, date_t>(val_hint, date)) {
-					string msg = "Conversion Error: could not convert from hugeint to date: " +
-					             duckdb::Hugeint::ToString(val_hint);
-					stmt->error_messages.emplace_back(msg);
 					return SQL_ERROR;
 				}
 				break;
@@ -312,14 +258,30 @@ SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, S
 			case LogicalTypeId::TIME:
 				time = val.GetValue<dtime_t>();
 				break;
-			case LogicalTypeId::TIMESTAMP:
-			case LogicalTypeId::TIMESTAMP_SEC:
-			case LogicalTypeId::TIMESTAMP_MS:
+			case LogicalTypeId::TIMESTAMP_SEC: {
+				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(stmt, val, time,
+				                                                              duckdb::Timestamp::FromEpochSeconds)) {
+					return SQL_ERROR;
+				}
+				break;
+			}
+			case LogicalTypeId::TIMESTAMP_MS: {
+				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(stmt, val, time,
+				                                                              duckdb::Timestamp::FromEpochMs)) {
+					return SQL_ERROR;
+				}
+				break;
+			}
+			case LogicalTypeId::TIMESTAMP: {
+				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(
+				        stmt, val, time, duckdb::Timestamp::FromEpochMicroSeconds)) {
+					return SQL_ERROR;
+				}
+				break;
+			}
 			case LogicalTypeId::TIMESTAMP_NS: {
-				try {
-					time = duckdb::CastTimestampToTime::Operation<timestamp_t, dtime_t>(val.GetValue<timestamp_t>());
-				} catch (duckdb::Exception &ex) {
-					stmt->error_messages.emplace_back(ex.what());
+				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(
+				        stmt, val, time, duckdb::Timestamp::FromEpochNanoSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
@@ -330,16 +292,6 @@ SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, S
 					time = duckdb::CastToTime::Operation<string_t, dtime_t>(string_t(val_str));
 				} catch (duckdb::Exception &ex) {
 					stmt->error_messages.emplace_back(ex.what());
-					return SQL_ERROR;
-				}
-				break;
-			}
-			case LogicalTypeId::HUGEINT: {
-				hugeint_t val_hint = val.GetValue<hugeint_t>();
-				if (!duckdb::TryCast::Operation<hugeint_t, dtime_t>(val_hint, time)) {
-					string msg = "Conversion Error: could not convert from hugeint to date: " +
-					             duckdb::Hugeint::ToString(val_hint);
-					stmt->error_messages.emplace_back(msg);
 					return SQL_ERROR;
 				}
 				break;
@@ -366,11 +318,17 @@ SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, S
 		case SQL_C_TYPE_TIMESTAMP: {
 			timestamp_t timestamp;
 			switch (val.type().id()) {
-			case LogicalTypeId::TIMESTAMP:
 			case LogicalTypeId::TIMESTAMP_SEC:
+				timestamp = duckdb::Timestamp::FromEpochSeconds(val.GetValue<int64_t>());
+				break;
 			case LogicalTypeId::TIMESTAMP_MS:
+				timestamp = duckdb::Timestamp::FromEpochMs(val.GetValue<int64_t>());
+				break;
+			case LogicalTypeId::TIMESTAMP:
+				timestamp = duckdb::Timestamp::FromEpochMicroSeconds(val.GetValue<int64_t>());
+				break;
 			case LogicalTypeId::TIMESTAMP_NS:
-				timestamp = val.GetValue<timestamp_t>();
+				timestamp = duckdb::Timestamp::FromEpochNanoSeconds(val.GetValue<int64_t>());
 				break;
 			case LogicalTypeId::DATE: {
 				try {
@@ -618,6 +576,7 @@ SQLRETURN SQLFetch(SQLHSTMT statement_handle) {
 		for (duckdb::idx_t col_idx = 0; col_idx < stmt->stmt->ColumnCount(); col_idx++) {
 			auto bound_buf = stmt->bound_cols[col_idx];
 			if (bound_buf.IsBound()) {
+				// TODO move SQLGetData to a separated function in the statement_functions.hpp
 				if (!SQL_SUCCEEDED(SQLGetData(statement_handle, col_idx + 1, bound_buf.type, bound_buf.ptr,
 				                              bound_buf.len, bound_buf.strlen_or_ind))) {
 					return SQL_ERROR;
