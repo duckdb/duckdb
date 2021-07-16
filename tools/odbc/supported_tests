@@ -1,4 +1,5 @@
 alter-test
+bindcol-test
 boolsaschar-test
 connect-test
 numeric-test
