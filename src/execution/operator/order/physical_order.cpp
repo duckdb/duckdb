@@ -1313,9 +1313,7 @@ static void ReOrder(ClientContext &context, SortedBlock &sb, OrderLocalState &ls
 //! Appends and sorts the data accumulated in a local sink state
 void PhysicalOrder::SortLocalState(ClientContext &context, OrderLocalState &lstate, OrderGlobalState &gstate) const {
 	D_ASSERT(lstate.radix_sorting_data->count == lstate.payload_data->count);
-	if (lstate.radix_sorting_data->count == 0) {
-		return;
-	}
+	D_ASSERT(lstate.radix_sorting_data->count > 0);
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	const auto &sorting_state = gstate.sorting_state;
 	// Move all data to a single SortedBlock

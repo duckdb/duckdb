@@ -5,8 +5,14 @@ namespace duckdb {
 
 unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrder &order,
                                                                      unique_ptr<LogicalOperator> *node_ptr) {
-	// propagate statistics in the child node
-	return PropagateStatistics(order.children[0]);
+	// first propagate to the child
+	node_stats = PropagateStatistics(order.children[0]);
+
+	// then propagate to each of the order expressions
+	for (idx_t i = 0; i < order.orders.size(); i++) {
+		PropagateExpression(order.orders[i].expression);
+	}
+	return move(node_stats);
 }
 
 } // namespace duckdb
