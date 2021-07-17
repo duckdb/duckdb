@@ -162,131 +162,132 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 					}
 					if (function_list.size() > 2) {
 						throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
-					} else {
-						if (function_list.size() > 1) {
-							throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
-						}
+					}
+				} else {
+					if (function_list.size() > 1) {
+						throw ParserException("Incorrect number of parameters for function %s", lowercase_name);
 					}
 				}
 			}
-			auto window_spec = reinterpret_cast<duckdb_libpgquery::PGWindowDef *>(root->over);
-			if (window_spec->name) {
-				auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
-				if (it == window_clauses.end()) {
-					throw ParserException("window \"%s\" does not exist", window_spec->name);
-				}
-				window_spec = it->second;
-				D_ASSERT(window_spec);
-			}
-			auto window_ref = window_spec;
-			if (window_ref->refname) {
-				auto it = window_clauses.find(StringUtil::Lower(string(window_spec->refname)));
-				if (it == window_clauses.end()) {
-					throw ParserException("window \"%s\" does not exist", window_spec->refname);
-				}
-				window_ref = it->second;
-				D_ASSERT(window_ref);
-			}
-			TransformWindowDef(window_ref, expr.get(), depth);
-			TransformWindowFrame(window_spec, expr.get(), depth);
-
-			return move(expr);
 		}
-
-		//  TransformExpressionList??
-		vector<unique_ptr<ParsedExpression>> children;
-		if (root->args != nullptr) {
-			for (auto node = root->args->head; node != nullptr; node = node->next) {
-				auto child_expr = TransformExpression((duckdb_libpgquery::PGNode *)node->data.ptr_value, depth + 1);
-				children.push_back(move(child_expr));
+		auto window_spec = reinterpret_cast<duckdb_libpgquery::PGWindowDef *>(root->over);
+		if (window_spec->name) {
+			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->name)));
+			if (it == window_clauses.end()) {
+				throw ParserException("window \"%s\" does not exist", window_spec->name);
 			}
+			window_spec = it->second;
+			D_ASSERT(window_spec);
 		}
-		unique_ptr<ParsedExpression> filter_expr;
-		if (root->agg_filter) {
-			filter_expr = TransformExpression(root->agg_filter, depth + 1);
-		}
-
-		// star gets eaten in the parser
-		if (lowercase_name == "count" && children.empty()) {
-			lowercase_name = "count_star";
-		}
-
-		if (lowercase_name == "if") {
-			if (children.size() != 3) {
-				throw ParserException("Wrong number of arguments to IF.");
+		auto window_ref = window_spec;
+		if (window_ref->refname) {
+			auto it = window_clauses.find(StringUtil::Lower(string(window_spec->refname)));
+			if (it == window_clauses.end()) {
+				throw ParserException("window \"%s\" does not exist", window_spec->refname);
 			}
-			auto expr = make_unique<CaseExpression>();
-			CaseCheck check;
-			check.when_expr = move(children[0]);
-			check.then_expr = move(children[1]);
-			expr->case_checks.push_back(move(check));
-			expr->else_expr = move(children[2]);
-			return move(expr);
-		} else if (lowercase_name == "construct_array") {
-			auto construct_array = make_unique<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
-			construct_array->children = move(children);
-			return move(construct_array);
-		} else if (lowercase_name == "ifnull") {
-			if (children.size() != 2) {
-				throw ParserException("Wrong number of arguments to IFNULL.");
-			}
-
-			//  Two-argument COALESCE
-			auto coalesce_op = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
-			coalesce_op->children.push_back(move(children[0]));
-			coalesce_op->children.push_back(move(children[1]));
-			return move(coalesce_op);
+			window_ref = it->second;
+			D_ASSERT(window_ref);
 		}
+		TransformWindowDef(window_ref, expr.get(), depth);
+		TransformWindowFrame(window_spec, expr.get(), depth);
 
-		auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), move(children),
-		                                                move(filter_expr), root->agg_distinct);
-		function->query_location = root->location;
-		return move(function);
+		return move(expr);
 	}
 
-	static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
-		switch (op) {
-		case duckdb_libpgquery::PG_SVFOP_CURRENT_DATE:
-			return "current_date";
-		case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME:
-			return "current_time";
-		case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME_N:
-			return "current_time_n";
-		case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP:
-			return "current_timestamp";
-		case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP_N:
-			return "current_timestamp_n";
-		case duckdb_libpgquery::PG_SVFOP_LOCALTIME:
-			return "current_localtime";
-		case duckdb_libpgquery::PG_SVFOP_LOCALTIME_N:
-			return "current_localtime_n";
-		case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP:
-			return "current_localtimestamp";
-		case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP_N:
-			return "current_localtimestamp_n";
-		case duckdb_libpgquery::PG_SVFOP_CURRENT_ROLE:
-			return "current_role";
-		case duckdb_libpgquery::PG_SVFOP_CURRENT_USER:
-			return "current_user";
-		case duckdb_libpgquery::PG_SVFOP_USER:
-			return "user";
-		case duckdb_libpgquery::PG_SVFOP_SESSION_USER:
-			return "session_user";
-		case duckdb_libpgquery::PG_SVFOP_CURRENT_CATALOG:
-			return "current_catalog";
-		case duckdb_libpgquery::PG_SVFOP_CURRENT_SCHEMA:
-			return "current_schema";
-		default:
-			throw InternalException("Could not find named SQL value function specification " + to_string((int)op));
+	//  TransformExpressionList??
+	vector<unique_ptr<ParsedExpression>> children;
+	if (root->args != nullptr) {
+		for (auto node = root->args->head; node != nullptr; node = node->next) {
+			auto child_expr = TransformExpression((duckdb_libpgquery::PGNode *)node->data.ptr_value, depth + 1);
+			children.push_back(move(child_expr));
 		}
 	}
-
-	unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction * node,
-	                                                                    idx_t depth) {
-		D_ASSERT(node);
-		vector<unique_ptr<ParsedExpression>> children;
-		auto fname = SQLValueOpToString(node->op);
-		return make_unique<FunctionExpression>(DEFAULT_SCHEMA, fname, move(children));
+	unique_ptr<ParsedExpression> filter_expr;
+	if (root->agg_filter) {
+		filter_expr = TransformExpression(root->agg_filter, depth + 1);
 	}
+
+	// star gets eaten in the parser
+	if (lowercase_name == "count" && children.empty()) {
+		lowercase_name = "count_star";
+	}
+
+	if (lowercase_name == "if") {
+		if (children.size() != 3) {
+			throw ParserException("Wrong number of arguments to IF.");
+		}
+		auto expr = make_unique<CaseExpression>();
+		CaseCheck check;
+		check.when_expr = move(children[0]);
+		check.then_expr = move(children[1]);
+		expr->case_checks.push_back(move(check));
+		expr->else_expr = move(children[2]);
+		return move(expr);
+	} else if (lowercase_name == "construct_array") {
+		auto construct_array = make_unique<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
+		construct_array->children = move(children);
+		return move(construct_array);
+	} else if (lowercase_name == "ifnull") {
+		if (children.size() != 2) {
+			throw ParserException("Wrong number of arguments to IFNULL.");
+		}
+
+		//  Two-argument COALESCE
+		auto coalesce_op = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
+		coalesce_op->children.push_back(move(children[0]));
+		coalesce_op->children.push_back(move(children[1]));
+		return move(coalesce_op);
+	}
+
+	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), move(children), move(filter_expr),
+	                                                root->agg_distinct);
+	function->query_location = root->location;
+	return move(function);
+}
+
+static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
+	switch (op) {
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_DATE:
+		return "current_date";
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME:
+		return "current_time";
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIME_N:
+		return "current_time_n";
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP:
+		return "current_timestamp";
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_TIMESTAMP_N:
+		return "current_timestamp_n";
+	case duckdb_libpgquery::PG_SVFOP_LOCALTIME:
+		return "current_localtime";
+	case duckdb_libpgquery::PG_SVFOP_LOCALTIME_N:
+		return "current_localtime_n";
+	case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP:
+		return "current_localtimestamp";
+	case duckdb_libpgquery::PG_SVFOP_LOCALTIMESTAMP_N:
+		return "current_localtimestamp_n";
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_ROLE:
+		return "current_role";
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_USER:
+		return "current_user";
+	case duckdb_libpgquery::PG_SVFOP_USER:
+		return "user";
+	case duckdb_libpgquery::PG_SVFOP_SESSION_USER:
+		return "session_user";
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_CATALOG:
+		return "current_catalog";
+	case duckdb_libpgquery::PG_SVFOP_CURRENT_SCHEMA:
+		return "current_schema";
+	default:
+		throw InternalException("Could not find named SQL value function specification " + to_string((int)op));
+	}
+}
+
+unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node,
+                                                                    idx_t depth) {
+	D_ASSERT(node);
+	vector<unique_ptr<ParsedExpression>> children;
+	auto fname = SQLValueOpToString(node->op);
+	return make_unique<FunctionExpression>(DEFAULT_SCHEMA, fname, move(children));
+}
 
 } // namespace duckdb
