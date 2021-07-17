@@ -431,19 +431,49 @@ struct ArrowResultWrapper {
 };
 } // namespace duckdb
 
+duckdb_state duckdb_translate_arrow(unique_ptr<MaterializedQueryResult> result, duckdb_arrow *out) {
+	if (!out) {
+		// no result to write to, only return the status
+		return result->success ? DuckDBSuccess : DuckDBError;
+	}
+	out->arrow = nullptr;
+	out->error_message = nullptr;
+	if (!result->success) {
+		// write the error message
+		out->error_message = strdup(result->error.c_str());
+		return DuckDBError;
+	}
+	// write the meta data
+	out->column_count = result->types.size();
+	out->row_count = result->collection.Count();
+	out->rows_changed = 0;
+	if (out->row_count > 0 && StatementTypeReturnChanges(result->statement_type)) {
+		// update total changes
+		auto row_changes = result->GetValue(0, 0);
+		if (!row_changes.is_null && row_changes.TryCastAs(LogicalType::BIGINT)) {
+			out->rows_changed = row_changes.GetValue<int64_t>();
+		}
+	}
+	// move into result
+	auto wrapper = new ArrowResultWrapper();
+	wrapper->result = std::move(result);
+	out->arrow = (void *)wrapper;
+	return wrapper->result->success ? DuckDBSuccess : DuckDBError;
+}
+
 duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result) {
 	Connection *conn = (Connection *)connection;
-	auto wrapper = new ArrowResultWrapper();
-	wrapper->result = conn->Query(query);
-	*out_result = (duckdb_arrow)wrapper;
-	return wrapper->result->success ? DuckDBSuccess : DuckDBError;
+	auto result = conn->Query(query);
+	return duckdb_translate_arrow(std::move(result), out_result);
 }
 
 duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema) {
 	if (!out_schema) {
 		return DuckDBSuccess;
 	}
-	auto wrapper = (ArrowResultWrapper *)result;
+	D_ASSERT(result.arrow);
+	auto wrapper = (ArrowResultWrapper *)result.arrow;
+	D_ASSERT(wrapper->result->success);
 	wrapper->result->ToArrowSchema((ArrowSchema *)*out_schema);
 	return DuckDBSuccess;
 }
@@ -452,9 +482,15 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	if (!out_array) {
 		return DuckDBSuccess;
 	}
-	auto wrapper = (ArrowResultWrapper *)result;
+	D_ASSERT(result.arrow);
+	auto wrapper = (ArrowResultWrapper *)result.arrow;
+	D_ASSERT(wrapper->result->success);
 	auto success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->error);
 	if (!success) {
+		if (result.error_message) {
+			free(result.error_message);
+		}
+		result.error_message = strdup(wrapper->result->error.c_str());
 		return DuckDBError;
 	}
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
@@ -464,17 +500,15 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	return DuckDBSuccess;
 }
 
-const char *duckdb_query_arrow_error(duckdb_arrow result) {
-	auto wrapper = (ArrowResultWrapper *)result;
-	return wrapper->result->error.c_str();
-}
-
 void duckdb_destroy_arrow(duckdb_arrow *result) {
-	if (*result) {
-		auto wrapper = (ArrowResultWrapper *)*result;
-		delete wrapper;
-		*result = nullptr;
+	if (result->error_message) {
+		free(result->error_message);
 	}
+	if (result->arrow) {
+		auto wrapper = (ArrowResultWrapper *)(result->arrow);
+		delete wrapper;
+	}
+	memset(result, 0, sizeof(duckdb_arrow));
 }
 
 static void duckdb_destroy_column(duckdb_column column, idx_t count) {
@@ -650,13 +684,10 @@ duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_st
 	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
 		return DuckDBError;
 	}
-	auto arrow_wrapper = new ArrowResultWrapper();
 	auto result = wrapper->statement->Execute(wrapper->values, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
-	arrow_wrapper->result =
-	    unique_ptr<MaterializedQueryResult>(static_cast<MaterializedQueryResult *>(result.release()));
-	*out_result = (duckdb_arrow)arrow_wrapper;
-	return arrow_wrapper->result->success ? DuckDBSuccess : DuckDBError;
+	auto mat_result = unique_ptr<MaterializedQueryResult>(static_cast<MaterializedQueryResult *>(result.release()));
+	return duckdb_translate_arrow(std::move(mat_result), out_result);
 }
 
 void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {
