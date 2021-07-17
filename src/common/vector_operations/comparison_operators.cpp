@@ -170,9 +170,6 @@ public:
 		case PhysicalType::INT128:
 			TemplatedExecute<hugeint_t, OP>(left, right, result, count);
 			break;
-		case PhysicalType::POINTER:
-			TemplatedExecute<uintptr_t, OP>(left, right, result, count);
-			break;
 		case PhysicalType::FLOAT:
 			TemplatedExecute<float, OP>(left, right, result, count);
 			break;
@@ -191,7 +188,7 @@ public:
 			NestedComparisonExecutor<OP>(left, right, result, count);
 			break;
 		default:
-			throw InvalidTypeException(left.GetType(), "Invalid type for comparison");
+			throw InternalException("Invalid type for comparison");
 		}
 	}
 };

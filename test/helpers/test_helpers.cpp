@@ -293,7 +293,7 @@ bool compare_result(string csv, ChunkCollection &collection, vector<LogicalType>
 		try {
 			parsed_result.Reset();
 			reader.ParseCSV(parsed_result);
-		} catch (Exception &ex) {
+		} catch (std::exception &ex) {
 			error_message = "Could not parse CSV: " + string(ex.what());
 			return false;
 		}

@@ -13,7 +13,7 @@ add_library_unity(
   allocator.cpp
   arrow_wrapper.cpp
   assert.cpp
-  bit_operations.cpp
+  radix.cpp
   constants.cpp
   checksum.cpp
   exception.cpp
@@ -21,6 +21,7 @@ add_library_unity(
   file_buffer.cpp
   file_system.cpp
   gzip_file_system.cpp
+  pipe_file_system.cpp
   limits.cpp
   printer.cpp
   progress_bar.cpp
@@ -29,7 +30,6 @@ add_library_unity(
   symbols.cpp
   tree_renderer.cpp
   types.cpp
-  fstream_util.cpp
   cycle_counter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common>

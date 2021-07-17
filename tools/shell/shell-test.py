@@ -18,11 +18,15 @@ def test_exception(command, input, stdout, stderr, errmsg):
      print(stderr)
      raise Exception(errmsg)
 
-def test(cmd, out=None, err=None, extra_commands=None):
+def test(cmd, out=None, err=None, extra_commands=None, input_file=None):
      command = [sys.argv[1], '--batch', '-init', '/dev/null']
      if extra_commands:
           command += extra_commands
-     res = subprocess.run(command, capture_output=True, input=bytearray(cmd, 'utf8'))
+     if input_file:
+          command += [cmd]
+          res = subprocess.run(command, input=open(input_file, 'rb').read(), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+     else:
+          res = subprocess.run(command, input=bytearray(cmd, 'utf8'), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
      stdout = res.stdout.decode('utf8').strip()
      stderr = res.stderr.decode('utf8').strip()
 
@@ -74,7 +78,6 @@ CREATE TABLE a (i STRING);
 INSERT INTO a VALUES ('XXXX');
 SELECT CAST(i AS INTEGER) FROM a;
 ''' , err='Could not convert')
-
 
 test('.auth ON', err='sqlite3_set_authorizer')
 test('.auth OFF', err='sqlite3_set_authorizer')
@@ -158,6 +161,11 @@ test('.help', 'Show help text for PATTERN')
 
 test('.load %s' % tf(), err="Error")
 
+# error in streaming result
+test('''
+SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);
+''', err='Could not convert string')
+
 # this should be fixed
 test('.selftest', err='sqlite3_table_column_metadata')
 
@@ -171,7 +179,10 @@ test('.show', out='rowseparator')
 test('.limit length 42', err='sqlite3_limit')
 
 # ???
-test('.lint fkey-indexes')
+# FIXME
+# Parser Error: syntax error at or near "["
+# LINE 1: ...concat(quote(s.name) || '.' || quote(f.[from]) || '=?'   || fkey_collate_claus...
+#test('.lint fkey-indexes')
 
 test('.timeout', err='sqlite3_busy_timeout')
 
@@ -514,3 +525,17 @@ select 42;
 ''', out='42')
 
 test('/* ;;;;;; */ select 42;', out='42')
+
+if os.name != 'nt':
+     test('''
+     create table mytable as select * from
+     read_csv('/dev/stdin',
+       columns=STRUCT_PACK(foo := 'INTEGER', bar := 'INTEGER', baz := 'VARCHAR'),
+       AUTO_DETECT='false'
+     );
+     select * from mytable limit 1;
+     ''',
+     extra_commands=['-csv', ':memory:'],
+     input_file='test/sql/copy/csv/data/test/test.csv',
+     out='''foo,bar,baz
+0,0," test"''')

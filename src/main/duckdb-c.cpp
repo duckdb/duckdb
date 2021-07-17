@@ -1,8 +1,10 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/arrow.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/main/config.hpp"
 
 #include "duckdb.h"
 #include "duckdb.hpp"
@@ -35,16 +37,92 @@ struct DatabaseData {
 	DuckDB *database;
 };
 } // namespace duckdb
-duckdb_state duckdb_open(const char *path, duckdb_database *out) {
-	auto wrapper = new DatabaseData();
-	try {
-		wrapper->database = new DuckDB(path);
-	} catch (...) {
-		delete wrapper;
+
+// config
+duckdb_state duckdb_create_config(duckdb_config *out_config) {
+	if (!out_config) {
 		return DuckDBError;
 	}
+	DBConfig *config;
+	try {
+		config = new DBConfig();
+	} catch (...) { // LCOV_EXCL_START
+		return DuckDBError;
+	} // LCOV_EXCL_STOP
+	*out_config = (duckdb_config)config;
+	return DuckDBSuccess;
+}
+
+size_t duckdb_config_count() {
+	return DBConfig::GetOptionCount();
+}
+
+duckdb_state duckdb_get_config_flag(size_t index, const char **out_name, const char **out_description) {
+	auto option = DBConfig::GetOptionByIndex(index);
+	if (!option) {
+		return DuckDBError;
+	}
+	if (out_name) {
+		*out_name = option->name;
+	}
+	if (out_description) {
+		*out_description = option->description;
+	}
+	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_set_config(duckdb_config config, const char *name, const char *option) {
+	if (!config || !name || !option) {
+		return DuckDBError;
+	}
+	auto config_option = DBConfig::GetOptionByName(name);
+	if (!config_option) {
+		return DuckDBError;
+	}
+	try {
+		auto db_config = (DBConfig *)config;
+		db_config->SetOption(*config_option, Value(option));
+	} catch (...) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
+}
+
+void duckdb_destroy_config(duckdb_config *config) {
+	if (!config) {
+		return;
+	}
+	if (*config) {
+		auto db_config = (DBConfig *)*config;
+		delete db_config;
+		*config = nullptr;
+	}
+}
+
+duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_config config, char **error) {
+	auto wrapper = new DatabaseData();
+	try {
+		auto db_config = (DBConfig *)config;
+		wrapper->database = new DuckDB(path, db_config);
+	} catch (std::exception &ex) {
+		if (error) {
+			*error = strdup(ex.what());
+		}
+		delete wrapper;
+		return DuckDBError;
+	} catch (...) { // LCOV_EXCL_START
+		if (error) {
+			*error = strdup("Unknown error");
+		}
+		delete wrapper;
+		return DuckDBError;
+	} // LCOV_EXCL_STOP
 	*out = (duckdb_database)wrapper;
 	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_open(const char *path, duckdb_database *out) {
+	return duckdb_open_ext(path, out, nullptr, nullptr);
 }
 
 void duckdb_close(duckdb_database *database) {
@@ -108,10 +186,20 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 	// first write the meta data
 	out->column_count = result->types.size();
 	out->row_count = result->collection.Count();
-	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
-	if (!out->columns) {
-		return DuckDBError;
+	out->rows_changed = 0;
+	if (out->row_count > 0 && StatementTypeReturnChanges(result->statement_type)) {
+		// update total changes
+		auto row_changes = result->GetValue(0, 0);
+		if (!row_changes.is_null && row_changes.TryCastAs(LogicalType::BIGINT)) {
+			out->rows_changed = row_changes.GetValue<int64_t>();
+		}
 	}
+	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
+	if (!out->columns) { // LCOV_EXCL_START
+		// malloc failure
+		return DuckDBError;
+	} // LCOV_EXCL_STOP
+
 	// zero initialize the columns (so we can cleanly delete it in case a malloc fails)
 	memset(out->columns, 0, sizeof(duckdb_column) * out->column_count);
 	for (idx_t i = 0; i < out->column_count; i++) {
@@ -119,10 +207,10 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 		out->columns[i].name = strdup(result->names[i].c_str());
 		out->columns[i].nullmask = (bool *)malloc(sizeof(bool) * out->row_count);
 		out->columns[i].data = malloc(GetCTypeSize(out->columns[i].type) * out->row_count);
-		if (!out->columns[i].nullmask || !out->columns[i].name || !out->columns[i].data) {
+		if (!out->columns[i].nullmask || !out->columns[i].name || !out->columns[i].data) { // LCOV_EXCL_START
 			// malloc failure
 			return DuckDBError;
-		}
+		} // LCOV_EXCL_STOP
 		// memset data to 0 for VARCHAR columns for safe deletion later
 		if (result->types[i].InternalType() == PhysicalType::VARCHAR) {
 			memset(out->columns[i].data, 0, GetCTypeSize(out->columns[i].type) * out->row_count);
@@ -153,6 +241,18 @@ static duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duc
 			break;
 		case LogicalTypeId::BIGINT:
 			WriteData<int64_t>(out, result->collection, col);
+			break;
+		case LogicalTypeId::UTINYINT:
+			WriteData<uint8_t>(out, result->collection, col);
+			break;
+		case LogicalTypeId::USMALLINT:
+			WriteData<uint16_t>(out, result->collection, col);
+			break;
+		case LogicalTypeId::UINTEGER:
+			WriteData<uint32_t>(out, result->collection, col);
+			break;
+		case LogicalTypeId::UBIGINT:
+			WriteData<uint64_t>(out, result->collection, col);
 			break;
 		case LogicalTypeId::FLOAT:
 			WriteData<float>(out, result->collection, col);
@@ -320,6 +420,63 @@ duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckd
 	return duckdb_translate_result(result.get(), out);
 }
 
+namespace duckdb {
+struct ArrowResultWrapper {
+	ArrowResultWrapper() : result(nullptr), current_chunk(nullptr) {
+	}
+	~ArrowResultWrapper() {
+	}
+	unique_ptr<MaterializedQueryResult> result;
+	unique_ptr<DataChunk> current_chunk;
+};
+} // namespace duckdb
+
+duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result) {
+	Connection *conn = (Connection *)connection;
+	auto wrapper = new ArrowResultWrapper();
+	wrapper->result = conn->Query(query);
+	*out_result = (duckdb_arrow)wrapper;
+	return wrapper->result->success ? DuckDBSuccess : DuckDBError;
+}
+
+duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema) {
+	if (!out_schema) {
+		return DuckDBSuccess;
+	}
+	auto wrapper = (ArrowResultWrapper *)result;
+	wrapper->result->ToArrowSchema((ArrowSchema *)*out_schema);
+	return DuckDBSuccess;
+}
+
+duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *out_array) {
+	if (!out_array) {
+		return DuckDBSuccess;
+	}
+	auto wrapper = (ArrowResultWrapper *)result;
+	auto success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->error);
+	if (!success) {
+		return DuckDBError;
+	}
+	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
+		return DuckDBSuccess;
+	}
+	wrapper->current_chunk->ToArrowArray((ArrowArray *)*out_array);
+	return DuckDBSuccess;
+}
+
+const char *duckdb_query_arrow_error(duckdb_arrow result) {
+	auto wrapper = (ArrowResultWrapper *)result;
+	return wrapper->result->error.c_str();
+}
+
+void duckdb_destroy_arrow(duckdb_arrow *result) {
+	if (*result) {
+		auto wrapper = (ArrowResultWrapper *)*result;
+		delete wrapper;
+		*result = nullptr;
+	}
+}
+
 static void duckdb_destroy_column(duckdb_column column, idx_t count) {
 	if (column.data) {
 		if (column.type == DUCKDB_TYPE_VARCHAR) {
@@ -381,6 +538,14 @@ duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
 	wrapper->statement = conn->Prepare(query);
 	*out_prepared_statement = (duckdb_prepared_statement)wrapper;
 	return wrapper->statement->success ? DuckDBSuccess : DuckDBError;
+}
+
+const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || wrapper->statement->success) {
+		return nullptr;
+	}
+	return wrapper->statement->error.c_str();
 }
 
 duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t *nparams_out) {
@@ -480,6 +645,20 @@ duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statemen
 	return duckdb_translate_result(mat_res, out_result);
 }
 
+duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement, duckdb_arrow *out_result) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
+		return DuckDBError;
+	}
+	auto arrow_wrapper = new ArrowResultWrapper();
+	auto result = wrapper->statement->Execute(wrapper->values, false);
+	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
+	arrow_wrapper->result =
+	    unique_ptr<MaterializedQueryResult>(static_cast<MaterializedQueryResult *>(result.release()));
+	*out_result = (duckdb_arrow)arrow_wrapper;
+	return arrow_wrapper->result->success ? DuckDBSuccess : DuckDBError;
+}
+
 void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement) {
 	if (!prepared_statement) {
 		return;
@@ -503,6 +682,14 @@ duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
 		return DUCKDB_TYPE_INTEGER;
 	case LogicalTypeId::BIGINT:
 		return DUCKDB_TYPE_BIGINT;
+	case LogicalTypeId::UTINYINT:
+		return DUCKDB_TYPE_UTINYINT;
+	case LogicalTypeId::USMALLINT:
+		return DUCKDB_TYPE_USMALLINT;
+	case LogicalTypeId::UINTEGER:
+		return DUCKDB_TYPE_UINTEGER;
+	case LogicalTypeId::UBIGINT:
+		return DUCKDB_TYPE_UBIGINT;
 	case LogicalTypeId::HUGEINT:
 		return DUCKDB_TYPE_HUGEINT;
 	case LogicalTypeId::FLOAT:
@@ -517,7 +704,6 @@ duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
 		return DUCKDB_TYPE_TIMESTAMP_MS;
 	case LogicalTypeId::TIMESTAMP_NS:
 		return DUCKDB_TYPE_TIMESTAMP_NS;
-
 	case LogicalTypeId::DATE:
 		return DUCKDB_TYPE_DATE;
 	case LogicalTypeId::TIME:
@@ -529,6 +715,7 @@ duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
 	case LogicalTypeId::INTERVAL:
 		return DUCKDB_TYPE_INTERVAL;
 	default:
+		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
 	}
 }
@@ -545,6 +732,14 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(int32_t);
 	case DUCKDB_TYPE_BIGINT:
 		return sizeof(int64_t);
+	case DUCKDB_TYPE_UTINYINT:
+		return sizeof(uint8_t);
+	case DUCKDB_TYPE_USMALLINT:
+		return sizeof(uint16_t);
+	case DUCKDB_TYPE_UINTEGER:
+		return sizeof(uint32_t);
+	case DUCKDB_TYPE_UBIGINT:
+		return sizeof(uint64_t);
 	case DUCKDB_TYPE_HUGEINT:
 		return sizeof(duckdb_hugeint);
 	case DUCKDB_TYPE_FLOAT:
@@ -600,6 +795,14 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 		return Value::INTEGER(UnsafeFetch<int32_t>(result, col, row));
 	case DUCKDB_TYPE_BIGINT:
 		return Value::BIGINT(UnsafeFetch<int64_t>(result, col, row));
+	case DUCKDB_TYPE_UTINYINT:
+		return Value::TINYINT(UnsafeFetch<uint8_t>(result, col, row));
+	case DUCKDB_TYPE_USMALLINT:
+		return Value::SMALLINT(UnsafeFetch<uint16_t>(result, col, row));
+	case DUCKDB_TYPE_UINTEGER:
+		return Value::INTEGER(UnsafeFetch<uint32_t>(result, col, row));
+	case DUCKDB_TYPE_UBIGINT:
+		return Value::BIGINT(UnsafeFetch<uint64_t>(result, col, row));
 	case DUCKDB_TYPE_FLOAT:
 		return Value(UnsafeFetch<float>(result, col, row));
 	case DUCKDB_TYPE_DOUBLE:
@@ -811,104 +1014,105 @@ duckdb_state duckdb_appender_destroy(duckdb_appender *appender) {
 	return DuckDBSuccess;
 }
 
-#define APPENDER_CALL(FUN)                                                                                             \
-	if (!appender) {                                                                                                   \
-		return DuckDBError;                                                                                            \
-	}                                                                                                                  \
-	auto *appender_instance = (Appender *)appender;                                                                    \
-	try {                                                                                                              \
-		appender_instance->FUN();                                                                                      \
-	} catch (...) {                                                                                                    \
-		return DuckDBError;                                                                                            \
-	}                                                                                                                  \
+template <class FUN>
+duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&function) {
+	if (!appender) {
+		return DuckDBError;
+	}
+	auto *appender_instance = (Appender *)appender;
+	try {
+		function(*appender_instance);
+	} catch (...) {
+		return DuckDBError;
+	}
 	return DuckDBSuccess;
-
-#define APPENDER_CALL_PARAM(FUN, PARAM)                                                                                \
-	if (!appender) {                                                                                                   \
-		return DuckDBError;                                                                                            \
-	}                                                                                                                  \
-	auto *appender_instance = (Appender *)appender;                                                                    \
-	try {                                                                                                              \
-		appender_instance->FUN(PARAM);                                                                                 \
-	} catch (...) {                                                                                                    \
-		return DuckDBError;                                                                                            \
-	}                                                                                                                  \
-	return DuckDBSuccess;
+}
 
 duckdb_state duckdb_appender_begin_row(duckdb_appender appender) {
-	APPENDER_CALL(BeginRow);
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.BeginRow(); });
 }
 
 duckdb_state duckdb_appender_end_row(duckdb_appender appender) {
-	APPENDER_CALL(EndRow);
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.EndRow(); });
+}
+
+template <class T>
+duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
+	if (!appender) {
+		return DuckDBError;
+	}
+	auto *appender_instance = (Appender *)appender;
+	try {
+		appender_instance->Append<T>(value);
+	} catch (...) {
+		return DuckDBError;
+	}
+	return DuckDBSuccess;
 }
 
 duckdb_state duckdb_append_bool(duckdb_appender appender, bool value) {
-	APPENDER_CALL_PARAM(Append<bool>, value);
+	return duckdb_append_internal<bool>(appender, value);
 }
 
 duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t value) {
-	APPENDER_CALL_PARAM(Append<int8_t>, value);
+	return duckdb_append_internal<int8_t>(appender, value);
 }
 
 duckdb_state duckdb_append_int16(duckdb_appender appender, int16_t value) {
-	APPENDER_CALL_PARAM(Append<int16_t>, value);
+	return duckdb_append_internal<int16_t>(appender, value);
 }
 
 duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value) {
-	APPENDER_CALL_PARAM(Append<int32_t>, value);
+	return duckdb_append_internal<int32_t>(appender, value);
 }
 
 duckdb_state duckdb_append_int64(duckdb_appender appender, int64_t value) {
-	APPENDER_CALL_PARAM(Append<int64_t>, value);
+	return duckdb_append_internal<int64_t>(appender, value);
 }
 
 duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value) {
-	APPENDER_CALL_PARAM(Append<uint8_t>, value);
+	return duckdb_append_internal<uint8_t>(appender, value);
 }
 
 duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t value) {
-	APPENDER_CALL_PARAM(Append<uint16_t>, value);
+	return duckdb_append_internal<uint16_t>(appender, value);
 }
 
 duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value) {
-	APPENDER_CALL_PARAM(Append<uint32_t>, value);
+	return duckdb_append_internal<uint32_t>(appender, value);
 }
 
 duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value) {
-	APPENDER_CALL_PARAM(Append<uint64_t>, value);
+	return duckdb_append_internal<uint64_t>(appender, value);
 }
 
 duckdb_state duckdb_append_float(duckdb_appender appender, float value) {
-	APPENDER_CALL_PARAM(Append<float>, value);
+	return duckdb_append_internal<float>(appender, value);
 }
 
 duckdb_state duckdb_append_double(duckdb_appender appender, double value) {
-	APPENDER_CALL_PARAM(Append<double>, value);
+	return duckdb_append_internal<double>(appender, value);
 }
 
 duckdb_state duckdb_append_null(duckdb_appender appender) {
-	APPENDER_CALL_PARAM(Append<std::nullptr_t>, nullptr);
+	return duckdb_append_internal<std::nullptr_t>(appender, nullptr);
 }
 
 duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val) {
-	auto string_val = Value(val);
-	APPENDER_CALL_PARAM(Append<Value>, string_val);
+	return duckdb_append_internal<Value>(appender, Value(val));
 }
 
 duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length) {
-	auto string_val = Value(string(val, length)); // TODO this copies orr
-	APPENDER_CALL_PARAM(Append<Value>, string_val);
+	return duckdb_append_internal<Value>(appender, Value(string(val, length)));
 }
 duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length) {
-	auto blob_val = Value::BLOB((const_data_ptr_t)data, length);
-	APPENDER_CALL_PARAM(Append<Value>, blob_val);
+	return duckdb_append_internal<Value>(appender, Value::BLOB((const_data_ptr_t)data, length));
 }
 
 duckdb_state duckdb_appender_flush(duckdb_appender appender) {
-	APPENDER_CALL(Flush);
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.Flush(); });
 }
 
 duckdb_state duckdb_appender_close(duckdb_appender appender) {
-	APPENDER_CALL(Close);
+	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.Close(); });
 }

@@ -117,6 +117,16 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 	case LogicalTypeId::SQLNULL:
 		result.Reference(Value());
 		break;
+	case LogicalTypeId::LIST: {
+		// nested list: we have to reference the child
+		auto &child_list = ListVector::GetEntry(list);
+		auto &child_child_list = ListVector::GetEntry(child_list);
+
+		ListVector::GetEntry(result).Reference(child_child_list);
+		ListVector::SetListSize(result, ListVector::GetListSize(child_list));
+		ListExtractTemplate<list_entry_t>(count, list, offsets, result);
+		break;
+	}
 	default:
 		throw NotImplementedException("Unimplemented type for LIST_EXTRACT");
 	}

@@ -390,7 +390,7 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 	Vector result(LogicalType::INTEGER);
 	try {
 		executor.ExecuteExpression(chunk, result);
-	} catch (Exception &ex) {
+	} catch (std::exception &ex) {
 		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, ex.what());
 	} catch (...) {
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);
@@ -480,6 +480,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
 
+	idx_t append_count = chunk.size();
 	idx_t remaining = chunk.size();
 	while (true) {
 		auto current_row_group = state.row_group_append_state.row_group;
@@ -519,7 +520,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 			break;
 		}
 	}
-	state.current_row += chunk.size();
+	state.current_row += append_count;
 }
 
 void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::function<void(DataChunk &chunk)> &function) {
@@ -869,8 +870,9 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
                        const vector<column_t> &column_ids, DataChunk &updates) {
 	D_ASSERT(row_ids.GetType().InternalType() == ROW_TYPE);
 
+	auto count = updates.size();
 	updates.Verify();
-	if (updates.size() == 0) {
+	if (count == 0) {
 		return;
 	}
 
@@ -885,22 +887,45 @@ void DataTable::Update(TableCatalogEntry &table, ClientContext &context, Vector 
 	auto &transaction = Transaction::GetTransaction(context);
 
 	updates.Normalify();
-	row_ids.Normalify(updates.size());
+	row_ids.Normalify(count);
+	auto ids = FlatVector::GetData<row_t>(row_ids);
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {
 		// update is in transaction-local storage: push update into local storage
 		transaction.storage.Update(this, row_ids, column_ids, updates);
 		return;
 	}
-	// find the row_group this id belongs to
-	auto row_group = (RowGroup *)row_groups->GetSegment(first_id);
-	row_group->Update(transaction, updates, row_ids, column_ids);
 
-	lock_guard<mutex> stats_guard(stats_lock);
-	for (idx_t i = 0; i < column_ids.size(); i++) {
-		auto column_id = column_ids[i];
-		column_stats[column_id]->Merge(*row_group->GetStatistics(column_id));
-	}
+	// update is in the row groups
+	// we need to figure out for each id to which row group it belongs
+	// usually all (or many) ids belong to the same row group
+	// we iterate over the ids and check for every id if it belongs to the same row group as their predecessor
+	idx_t pos = 0;
+	do {
+		idx_t start = pos;
+		auto row_group = (RowGroup *)row_groups->GetSegment(ids[pos]);
+		row_t base_id =
+		    row_group->start + ((ids[pos] - row_group->start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
+		for (pos++; pos < count; pos++) {
+			D_ASSERT(ids[pos] >= 0);
+			// check if this id still belongs to this vector
+			if (ids[pos] < base_id) {
+				// id is before vector start -> it does not
+				break;
+			}
+			if (ids[pos] >= base_id + STANDARD_VECTOR_SIZE) {
+				// id is after vector end -> it does not
+				break;
+			}
+		}
+		row_group->Update(transaction, updates, ids, start, pos - start, column_ids);
+
+		lock_guard<mutex> stats_guard(stats_lock);
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			auto column_id = column_ids[i];
+			column_stats[column_id]->Merge(*row_group->GetStatistics(column_id));
+		}
+	} while (pos < count);
 }
 
 void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, Vector &row_ids,

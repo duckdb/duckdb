@@ -321,6 +321,12 @@ bool Date::IsValid(int32_t year, int32_t month, int32_t day) {
 	return Date::IsLeapYear(year) ? day <= Date::LEAP_DAYS[month] : day <= Date::NORMAL_DAYS[month];
 }
 
+int32_t Date::MonthDays(int32_t year, int32_t month) {
+	D_ASSERT(month >= 1 && month <= 12);
+	D_ASSERT(year >= Date::MIN_YEAR && Date::MAX_YEAR);
+	return Date::IsLeapYear(year) ? Date::LEAP_DAYS[month] : Date::NORMAL_DAYS[month];
+}
+
 date_t Date::EpochDaysToDate(int32_t epoch) {
 	return (date_t)epoch;
 }

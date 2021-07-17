@@ -118,6 +118,9 @@ public:
 
 	//! Create a blob Value from a data pointer and a length: no bytes are interpreted
 	static Value BLOB(const_data_ptr_t data, idx_t len);
+	static Value BLOB_RAW(const string &data) {
+		return Value::BLOB((const_data_ptr_t)data.c_str(), data.size());
+	}
 	//! Creates a blob by casting a specified string to a blob (i.e. interpreting \x characters)
 	static Value BLOB(const string &data);
 
@@ -184,6 +187,10 @@ public:
 
 	static bool FloatIsValid(float value);
 	static bool DoubleIsValid(double value);
+	static bool StringIsValid(const char *str, idx_t length);
+	static bool StringIsValid(const string &str) {
+		return StringIsValid(str.c_str(), str.size());
+	}
 
 	template <class T>
 	static bool IsValid(T value) {

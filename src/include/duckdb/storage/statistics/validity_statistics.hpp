@@ -17,13 +17,18 @@ class Vector;
 
 class ValidityStatistics : public BaseStatistics {
 public:
-	explicit ValidityStatistics(bool has_null = false);
+	ValidityStatistics(bool has_null = false, bool has_no_null = true);
 
 	//! Whether or not the segment can contain NULL values
 	bool has_null;
+	//! Whether or not the segment can contain values that are not null
+	bool has_no_null;
 
 public:
 	void Merge(const BaseStatistics &other) override;
+
+	bool IsConstant() override;
+
 	unique_ptr<BaseStatistics> Copy() override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source);

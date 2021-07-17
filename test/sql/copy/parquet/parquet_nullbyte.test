@@ -1,0 +1,20 @@
+# name: test/sql/copy/parquet/parquet_nullbyte.test
+# description: Test reading parquet files with null bytes in strings
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query II
+select * from parquet_scan('data/parquet-testing/nullbyte.parquet')
+----
+42	hello
+
+query II
+select * from parquet_scan('data/parquet-testing/nullbyte_multiple.parquet')
+----
+1	hello
+2	this is a long
+3	this string has no null bytes

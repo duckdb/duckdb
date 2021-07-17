@@ -33,6 +33,9 @@ public:
 
 public:
 	void Merge(const BaseStatistics &other) override;
+
+	bool IsConstant() override;
+
 	FilterPropagateResult CheckZonemap(ExpressionType comparison_type, const Value &constant);
 
 	unique_ptr<BaseStatistics> Copy() override;
@@ -85,5 +88,7 @@ template <>
 void NumericStatistics::Update<double>(SegmentStatistics &stats, double new_value);
 template <>
 void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t new_value);
+template <>
+void NumericStatistics::Update<list_entry_t>(SegmentStatistics &stats, list_entry_t new_value);
 
 } // namespace duckdb

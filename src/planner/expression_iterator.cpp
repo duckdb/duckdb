@@ -121,9 +121,7 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		// these node types have no children
 		break;
 	default:
-		// called on non BoundExpression type!
-		D_ASSERT(0);
-		break;
+		throw InternalException("ExpressionIterator used on unbound expression");
 	}
 }
 
@@ -187,6 +185,9 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 		EnumerateExpression(bound_select.having, callback);
 		for (idx_t i = 0; i < bound_select.aggregates.size(); i++) {
 			EnumerateExpression(bound_select.aggregates[i], callback);
+		}
+		for (idx_t i = 0; i < bound_select.unnests.size(); i++) {
+			EnumerateExpression(bound_select.unnests[i], callback);
 		}
 		for (idx_t i = 0; i < bound_select.windows.size(); i++) {
 			EnumerateExpression(bound_select.windows[i], callback);

@@ -128,7 +128,7 @@ AggregateFunction GetArgMinMaxFunctionArg2(LogicalTypeId arg_2, const LogicalTyp
 		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, string_t>, T, string_t, T, OP>(
 		    arg, LogicalType::BLOB, arg);
 	default:
-		throw NotImplementedException("Unimplemented arg_min/arg_max aggregate");
+		throw InternalException("Unimplemented arg_min/arg_max aggregate");
 	}
 }
 
@@ -199,11 +199,11 @@ void GetArgMinMaxFunction(LogicalTypeId arg_1, AggregateFunctionSet &fun) {
 		fun.AddFunction(GetArgMinMaxFunctionArg2<OP, string_t>(LogicalTypeId::BLOB, LogicalType::BLOB));
 		break;
 	default:
-		throw NotImplementedException("Unimplemented arg_min/arg_max aggregate");
+		throw InternalException("Unimplemented arg_min/arg_max aggregate");
 	}
 }
 void ArgMinFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("arg_min");
+	AggregateFunctionSet fun("argmin");
 	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::INTEGER, fun);
 	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::BIGINT, fun);
 	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::DOUBLE, fun);
@@ -212,10 +212,18 @@ void ArgMinFun::RegisterFunction(BuiltinFunctions &set) {
 	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::TIMESTAMP, fun);
 	GetArgMinMaxFunction<ArgMinOperation>(LogicalTypeId::BLOB, fun);
 	set.AddFunction(fun);
+
+	//! Add min_by alias
+	fun.name = "min_by";
+	set.AddFunction(fun);
+
+	//! Add arg_min alias
+	fun.name = "arg_min";
+	set.AddFunction(fun);
 }
 
 void ArgMaxFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("arg_max");
+	AggregateFunctionSet fun("argmax");
 	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::INTEGER, fun);
 	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::BIGINT, fun);
 	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::DOUBLE, fun);
@@ -224,28 +232,13 @@ void ArgMaxFun::RegisterFunction(BuiltinFunctions &set) {
 	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::TIMESTAMP, fun);
 	GetArgMinMaxFunction<ArgMaxOperation>(LogicalTypeId::BLOB, fun);
 	set.AddFunction(fun);
-}
 
-void MinByFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("min_by");
-	fun.AddFunction(
-	    AggregateFunction::BinaryAggregate<ArgMinMaxState<double, double>, double, double, double, ArgMinOperation>(
-	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
-
-	fun.AddFunction(AggregateFunction::BinaryAggregate<ArgMinMaxState<string_t, double>, string_t, double, string_t,
-	                                                   ArgMinOperation>(LogicalType::VARCHAR, LogicalType::DOUBLE,
-	                                                                    LogicalType::VARCHAR));
+	//! Add max_by alias
+	fun.name = "max_by";
 	set.AddFunction(fun);
-}
 
-void MaxByFun::RegisterFunction(BuiltinFunctions &set) {
-	AggregateFunctionSet fun("max_by");
-	fun.AddFunction(
-	    AggregateFunction::BinaryAggregate<ArgMinMaxState<double, double>, double, double, double, ArgMaxOperation>(
-	        LogicalType::DOUBLE, LogicalType::DOUBLE, LogicalType::DOUBLE));
-	fun.AddFunction(AggregateFunction::BinaryAggregate<ArgMinMaxState<string_t, double>, string_t, double, string_t,
-	                                                   ArgMaxOperation>(LogicalType::VARCHAR, LogicalType::DOUBLE,
-	                                                                    LogicalType::VARCHAR));
+	//! Add arg_max alias
+	fun.name = "arg_max";
 	set.AddFunction(fun);
 }
 

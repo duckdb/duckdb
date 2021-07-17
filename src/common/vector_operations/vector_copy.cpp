@@ -26,7 +26,6 @@ static void TemplatedCopy(const Vector &source, const SelectionVector &sel, Vect
 void VectorOperations::Copy(const Vector &source, Vector &target, const SelectionVector &sel_p, idx_t source_count,
                             idx_t source_offset, idx_t target_offset) {
 	D_ASSERT(source_offset <= source_count);
-	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(source.GetType() == target.GetType());
 	idx_t copy_count = source_count - source_offset;
 
@@ -64,13 +63,20 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		return;
 	}
 
+	// Allow copying of a single value to constant vectors
+	const auto target_vector_type = target.GetVectorType();
+	if (copy_count == 1 && target_vector_type == VectorType::CONSTANT_VECTOR) {
+		target_offset = 0;
+		target.SetVectorType(VectorType::FLAT_VECTOR);
+	}
+	D_ASSERT(target.GetVectorType() == VectorType::FLAT_VECTOR);
+
 	// first copy the nullmask
 	auto &tmask = FlatVector::Validity(target);
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		if (ConstantVector::IsNull(source)) {
-			for (idx_t i = 0; i < copy_count; i++) {
-				tmask.SetInvalid(target_offset + i);
-			}
+		const bool valid = !ConstantVector::IsNull(source);
+		for (idx_t i = 0; i < copy_count; i++) {
+			tmask.Set(target_offset + i, valid);
 		}
 	} else {
 		auto &smask = FlatVector::Validity(source);
@@ -96,7 +102,6 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	case PhysicalType::INT32:
 		TemplatedCopy<int32_t>(source, *sel, target, source_offset, target_offset, copy_count);
 		break;
-	case PhysicalType::HASH:
 	case PhysicalType::INT64:
 		TemplatedCopy<int64_t>(source, *sel, target, source_offset, target_offset, copy_count);
 		break;
@@ -114,9 +119,6 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		break;
 	case PhysicalType::INT128:
 		TemplatedCopy<hugeint_t>(source, *sel, target, source_offset, target_offset, copy_count);
-		break;
-	case PhysicalType::POINTER:
-		TemplatedCopy<uintptr_t>(source, *sel, target, source_offset, target_offset, copy_count);
 		break;
 	case PhysicalType::FLOAT:
 		TemplatedCopy<float>(source, *sel, target, source_offset, target_offset, copy_count);
@@ -151,15 +153,31 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 	}
 	case PhysicalType::LIST: {
 		D_ASSERT(target.GetType().InternalType() == PhysicalType::LIST);
-		if (ListVector::HasEntry(source)) {
-			//! if the source has list offsets, we need to append them to the target
-			if (!ListVector::HasEntry(target)) {
-				auto target_child = make_unique<Vector>(ListType::GetChildType(target.GetType()));
-				ListVector::SetEntry(target, move(target_child));
-			}
 
+		auto &source_child = ListVector::GetEntry(source);
+		auto sdata = FlatVector::GetData<list_entry_t>(source);
+		auto tdata = FlatVector::GetData<list_entry_t>(target);
+
+		if (target_vector_type == VectorType::CONSTANT_VECTOR) {
+			// If we are only writing one value, then the copied values (if any) are contiguous
+			// and we can just Append from the offset position
+			if (!tmask.RowIsValid(target_offset)) {
+				break;
+			}
+			auto source_idx = sel->get_index(source_offset);
+			auto &source_entry = sdata[source_idx];
+			const idx_t source_child_size = source_entry.length + source_entry.offset;
+
+			//! overwrite constant target vectors.
+			ListVector::SetListSize(target, 0);
+			ListVector::Append(target, source_child, source_child_size, source_entry.offset);
+
+			auto &target_entry = tdata[target_offset];
+			target_entry.length = source_entry.length;
+			target_entry.offset = 0;
+		} else {
+			//! if the source has list offsets, we need to append them to the target
 			//! build a selection vector for the copied child elements
-			auto sdata = FlatVector::GetData<list_entry_t>(source);
 			vector<sel_t> child_rows;
 			for (idx_t i = 0; i < copy_count; ++i) {
 				if (tmask.RowIsValid(target_offset + i)) {
@@ -173,15 +191,12 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 			idx_t source_child_size = child_rows.size();
 			SelectionVector child_sel(child_rows.data());
 
-			auto &source_child = ListVector::GetEntry(source);
-
 			idx_t old_target_child_len = ListVector::GetListSize(target);
 
 			//! append to list itself
 			ListVector::Append(target, source_child, child_sel, source_child_size);
 
 			//! now write the list offsets
-			auto tdata = FlatVector::GetData<list_entry_t>(target);
 			for (idx_t i = 0; i < copy_count; i++) {
 				auto source_idx = sel->get_index(source_offset + i);
 				auto &source_entry = sdata[source_idx];
@@ -200,6 +215,10 @@ void VectorOperations::Copy(const Vector &source, Vector &target, const Selectio
 		throw NotImplementedException("Unimplemented type '%s' for copy!",
 		                              TypeIdToString(source.GetType().InternalType()));
 	}
+
+	if (target_vector_type != VectorType::FLAT_VECTOR) {
+		target.SetVectorType(target_vector_type);
+	}
 }
 
 void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_count, idx_t source_offset,
@@ -212,23 +231,17 @@ void VectorOperations::Copy(const Vector &source, Vector &target, idx_t source_c
 		VectorOperations::Copy(child, target, dict_sel, source_count, source_offset, target_offset);
 		break;
 	}
-	case VectorType::CONSTANT_VECTOR:
-		VectorOperations::Copy(source, target, ConstantVector::ZERO_SELECTION_VECTOR, source_count, source_offset,
+	case VectorType::CONSTANT_VECTOR: {
+		SelectionVector owned_sel;
+		auto sel = ConstantVector::ZeroSelectionVector(source_count, owned_sel);
+		VectorOperations::Copy(source, target, *sel, source_count, source_offset, target_offset);
+		break;
+	}
+	case VectorType::FLAT_VECTOR: {
+		VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count, source_offset,
 		                       target_offset);
 		break;
-	case VectorType::FLAT_VECTOR:
-		if (target_offset + source_count - source_offset > STANDARD_VECTOR_SIZE) {
-			idx_t sel_vec_size = target_offset + source_count - source_offset;
-			SelectionVector selection_vector(sel_vec_size);
-			for (size_t i = 0; i < sel_vec_size; i++) {
-				selection_vector.set_index(i, i);
-			}
-			VectorOperations::Copy(source, target, selection_vector, source_count, source_offset, target_offset);
-		} else {
-			VectorOperations::Copy(source, target, FlatVector::INCREMENTAL_SELECTION_VECTOR, source_count,
-			                       source_offset, target_offset);
-		}
-		break;
+	}
 	case VectorType::SEQUENCE_VECTOR: {
 		int64_t start, increment;
 		SequenceVector::GetSequence(source, start, increment);

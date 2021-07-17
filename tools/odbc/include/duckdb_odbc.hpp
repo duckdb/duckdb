@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DUCKDB_ODBC_HPP
+#define DUCKDB_ODBC_HPP
 
 // needs to be first because BOOL
 #include "duckdb.hpp"
@@ -9,64 +10,73 @@
 
 extern "C" {
 // handles
-SQLRETURN SQLAllocHandle(SQLSMALLINT HandleType, SQLHANDLE InputHandle, SQLHANDLE *OutputHandlePtr);
-SQLRETURN SQLFreeHandle(SQLSMALLINT HandleType, SQLHANDLE Handle);
+SQLRETURN SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle, SQLHANDLE *output_handle_ptr);
+SQLRETURN SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle);
 
 // attributes
-SQLRETURN SQLGetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
-                            SQLINTEGER BufferLength, SQLINTEGER *StringLengthPtr);
-SQLRETURN SQLSetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr, SQLINTEGER StringLength);
-SQLRETURN SQLSetConnectAttr(SQLHDBC ConnectionHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
-                            SQLINTEGER StringLength);
-SQLRETURN SQLSetStmtAttr(SQLHSTMT StatementHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr, SQLINTEGER StringLength);
+SQLRETURN SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                            SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr);
+SQLRETURN SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                        SQLINTEGER string_length);
+SQLRETURN SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                            SQLINTEGER string_length);
+SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                         SQLINTEGER string_length);
 
 // connections
-SQLRETURN SQLDriverConnect(SQLHDBC ConnectionHandle, SQLHWND WindowHandle, SQLCHAR *InConnectionString,
-                           SQLSMALLINT StringLength1, SQLCHAR *OutConnectionString, SQLSMALLINT BufferLength,
-                           SQLSMALLINT *StringLength2Ptr, SQLUSMALLINT DriverCompletion);
-SQLRETURN SQLConnect(SQLHDBC ConnectionHandle, SQLCHAR *ServerName, SQLSMALLINT NameLength1, SQLCHAR *UserName,
-                     SQLSMALLINT NameLength2, SQLCHAR *Authentication, SQLSMALLINT NameLength3);
+SQLRETURN SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_handle, SQLCHAR *in_connection_string,
+                           SQLSMALLINT string_length1, SQLCHAR *out_connection_string, SQLSMALLINT buffer_length,
+                           SQLSMALLINT *string_length2_ptr, SQLUSMALLINT driver_completion);
+SQLRETURN SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQLSMALLINT name_length1, SQLCHAR *user_name,
+                     SQLSMALLINT name_length2, SQLCHAR *authentication, SQLSMALLINT name_length3);
 
-SQLRETURN SQLGetInfo(SQLHDBC ConnectionHandle, SQLUSMALLINT InfoType, SQLPOINTER InfoValuePtr, SQLSMALLINT BufferLength,
-                     SQLSMALLINT *StringLengthPtr);
-SQLRETURN SQLEndTran(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMALLINT CompletionType);
-SQLRETURN SQLDisconnect(SQLHDBC ConnectionHandle);
+SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr,
+                     SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr);
+SQLRETURN SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type);
+SQLRETURN SQLDisconnect(SQLHDBC connection_handle);
 
 // statements
-SQLRETURN SQLTables(SQLHSTMT StatementHandle, SQLCHAR *CatalogName, SQLSMALLINT NameLength1, SQLCHAR *SchemaName,
-                    SQLSMALLINT NameLength2, SQLCHAR *TableName, SQLSMALLINT NameLength3, SQLCHAR *TableType,
-                    SQLSMALLINT NameLength4);
-SQLRETURN SQLColumns(SQLHSTMT StatementHandle, SQLCHAR *CatalogName, SQLSMALLINT NameLength1, SQLCHAR *SchemaName,
-                     SQLSMALLINT NameLength2, SQLCHAR *TableName, SQLSMALLINT NameLength3, SQLCHAR *ColumnName,
-                     SQLSMALLINT NameLength4);
+SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1, SQLCHAR *schema_name,
+                    SQLSMALLINT name_length2, SQLCHAR *table_name, SQLSMALLINT name_length3, SQLCHAR *table_type,
+                    SQLSMALLINT name_length4);
+SQLRETURN SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1, SQLCHAR *schema_name,
+                     SQLSMALLINT name_length2, SQLCHAR *table_name, SQLSMALLINT name_length3, SQLCHAR *column_name,
+                     SQLSMALLINT name_length4);
 
-SQLRETURN SQLPrepare(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength);
-SQLRETURN SQLExecDirect(SQLHSTMT StatementHandle, SQLCHAR *StatementText, SQLINTEGER TextLength);
-SQLRETURN SQLFreeStmt(SQLHSTMT StatementHandle, SQLUSMALLINT Option);
-SQLRETURN SQLDescribeParam(SQLHSTMT StatementHandle, SQLUSMALLINT ParameterNumber, SQLSMALLINT *DataTypePtr,
-                           SQLULEN *ParameterSizePtr, SQLSMALLINT *DecimalDigitsPtr, SQLSMALLINT *NullablePtr);
-SQLRETURN SQLDescribeCol(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNumber, SQLCHAR *ColumnName,
-                         SQLSMALLINT BufferLength, SQLSMALLINT *NameLengthPtr, SQLSMALLINT *DataTypePtr,
-                         SQLULEN *ColumnSizePtr, SQLSMALLINT *DecimalDigitsPtr, SQLSMALLINT *NullablePtr);
-SQLRETURN SQLColAttribute(SQLHSTMT StatementHandle, SQLUSMALLINT ColumnNumber, SQLUSMALLINT FieldIdentifier,
-                          SQLPOINTER CharacterAttributePtr, SQLSMALLINT BufferLength, SQLSMALLINT *StringLengthPtr,
-                          SQLLEN *NumericAttributePtr);
-SQLRETURN SQLFetchScroll(SQLHSTMT StatementHandle, SQLSMALLINT FetchOrientation, SQLLEN FetchOffset);
-SQLRETURN SQLRowCount(SQLHSTMT StatementHandle, SQLLEN *RowCountPtr);
+SQLRETURN SQLPrepare(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length);
+SQLRETURN SQLExecDirect(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length);
+SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option);
+SQLRETURN SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT *data_type_ptr,
+                           SQLULEN *parameter_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr);
+SQLRETURN SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLCHAR *column_name,
+                         SQLSMALLINT buffer_length, SQLSMALLINT *name_length_ptr, SQLSMALLINT *data_type_ptr,
+                         SQLULEN *column_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr);
+SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLUSMALLINT field_identifier,
+                          SQLPOINTER character_attribute_ptr, SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr,
+                          SQLLEN *numeric_attribute_ptr);
+SQLRETURN SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset);
+SQLRETURN SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr);
+
+SQLRETURN SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *column_count_ptr);
 
 // diagnostics
-SQLRETURN SQLGetDiagField(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMALLINT RecNumber, SQLSMALLINT DiagIdentifier,
-                          SQLPOINTER DiagInfoPtr, SQLSMALLINT BufferLength, SQLSMALLINT *StringLengthPtr);
-SQLRETURN SQLGetDiagRec(SQLSMALLINT HandleType, SQLHANDLE Handle, SQLSMALLINT RecNumber, SQLCHAR *SQLState,
-                        SQLINTEGER *NativeErrorPtr, SQLCHAR *MessageText, SQLSMALLINT BufferLength,
-                        SQLSMALLINT *TextLengthPtr);
+SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
+                          SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
+                          SQLSMALLINT *string_length_ptr);
+SQLRETURN SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLCHAR *sql_state,
+                        SQLINTEGER *native_error_ptr, SQLCHAR *message_text, SQLSMALLINT buffer_length,
+                        SQLSMALLINT *text_length_ptr);
+
+// api info
+SQLRETURN SQLGetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function_id, SQLUSMALLINT *supported_ptr);
+SQLRETURN SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type);
 
 } // extern "C"
 
 namespace duckdb {
 enum OdbcHandleType { ENV, DBC, STMT };
 struct OdbcHandle {
-	OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
+	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
 	OdbcHandleType type;
 };
 
@@ -76,7 +86,7 @@ struct OdbcHandleEnv : public OdbcHandle {
 };
 
 struct OdbcHandleDbc : public OdbcHandle {
-	OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
+	explicit OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
 		D_ASSERT(env_p);
 		D_ASSERT(env_p->db);
 	};
@@ -99,7 +109,8 @@ struct OdbcBoundCol {
 };
 
 struct OdbcHandleStmt : public OdbcHandle {
-	OdbcHandleStmt(OdbcHandleDbc *dbc_p) : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
+	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p)
+	    : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
 		D_ASSERT(dbc_p);
 		D_ASSERT(dbc_p->conn);
 	};
@@ -129,11 +140,11 @@ struct OdbcUtils {
 };
 
 template <class T>
-SQLRETURN WithConnection(SQLHANDLE &ConnectionHandle, T &&lambda) {
-	if (!ConnectionHandle) {
+SQLRETURN WithConnection(SQLHANDLE &connection_handle, T &&lambda) {
+	if (!connection_handle) {
 		return SQL_ERROR;
 	}
-	auto *hdl = (OdbcHandleDbc *)ConnectionHandle;
+	auto *hdl = (OdbcHandleDbc *)connection_handle;
 	if (hdl->type != OdbcHandleType::DBC) {
 		return SQL_ERROR;
 	}
@@ -145,11 +156,11 @@ SQLRETURN WithConnection(SQLHANDLE &ConnectionHandle, T &&lambda) {
 }
 
 template <class T>
-SQLRETURN WithStatement(SQLHANDLE &StatementHandle, T &&lambda) {
-	if (!StatementHandle) {
+SQLRETURN WithStatement(SQLHANDLE &statement_handle, T &&lambda) {
+	if (!statement_handle) {
 		return SQL_ERROR;
 	}
-	auto *hdl = (OdbcHandleStmt *)StatementHandle;
+	auto *hdl = (OdbcHandleStmt *)statement_handle;
 	if (hdl->type != OdbcHandleType::STMT) {
 		return SQL_ERROR;
 	}
@@ -161,8 +172,8 @@ SQLRETURN WithStatement(SQLHANDLE &StatementHandle, T &&lambda) {
 }
 
 template <class T>
-SQLRETURN WithStatementPrepared(SQLHANDLE &StatementHandle, T &&lambda) {
-	return WithStatement(StatementHandle, [&](OdbcHandleStmt *stmt) {
+SQLRETURN WithStatementPrepared(SQLHANDLE &statement_handle, T &&lambda) {
+	return WithStatement(statement_handle, [&](OdbcHandleStmt *stmt) {
 		if (!stmt->stmt) {
 			return SQL_ERROR;
 		}
@@ -174,8 +185,8 @@ SQLRETURN WithStatementPrepared(SQLHANDLE &StatementHandle, T &&lambda) {
 }
 
 template <class T>
-SQLRETURN WithStatementResult(SQLHANDLE &StatementHandle, T &&lambda) {
-	return WithStatementPrepared(StatementHandle, [&](OdbcHandleStmt *stmt) {
+SQLRETURN WithStatementResult(SQLHANDLE &statement_handle, T &&lambda) {
+	return WithStatementPrepared(statement_handle, [&](OdbcHandleStmt *stmt) {
 		if (!stmt->res) {
 			return SQL_ERROR;
 		}
@@ -187,3 +198,5 @@ SQLRETURN WithStatementResult(SQLHANDLE &StatementHandle, T &&lambda) {
 }
 
 } // namespace duckdb
+
+#endif // DUCKDB_ODBC_HPP

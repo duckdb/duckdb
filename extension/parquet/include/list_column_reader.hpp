@@ -40,11 +40,10 @@ private:
 	uint8_t *child_defines_ptr;
 	uint8_t *child_repeats_ptr;
 
-	Vector child_result;
-	parquet_filter_t child_filter;
-	DataChunk append_chunk;
+	Vector overflow_read_vector;
 
-	Vector overflow_child_vector;
+	parquet_filter_t child_filter;
+
 	idx_t overflow_child_count;
 };
 

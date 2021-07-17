@@ -179,19 +179,17 @@ interval_parse_identifier:
 	found_any = true;
 	goto standard_interval;
 interval_parse_ago:
-	// parse the "ago" string at the end of the
+	D_ASSERT(str[pos] == 'a' || str[pos] == 'A');
+	// parse the "ago" string at the end of the interval
 	if (len - pos < 3) {
 		return false;
 	}
-	if (!(str[pos] == 'a' || str[pos == 'A'])) {
+	pos++;
+	if (!(str[pos] == 'g' || str[pos] == 'G')) {
 		return false;
 	}
 	pos++;
-	if (!(str[pos] == 'g' || str[pos == 'G'])) {
-		return false;
-	}
-	pos++;
-	if (!(str[pos] == 'o' || str[pos == 'O'])) {
+	if (!(str[pos] == 'o' || str[pos] == 'O')) {
 		return false;
 	}
 	pos++;
@@ -227,16 +225,13 @@ string Interval::ToString(interval_t interval) {
 
 int64_t Interval::GetMilli(interval_t val) {
 	int64_t milli_month, milli_day, milli;
-	int64_t ns_in_us = 1000;
-	if (!TryMultiplyOperator::Operation((int64_t)val.months, Interval::MICROS_PER_MONTH, milli_month)) {
+	if (!TryMultiplyOperator::Operation((int64_t)val.months, Interval::MICROS_PER_MONTH / 1000, milli_month)) {
 		throw ConversionException("Could not convert Interval to Milliseconds");
 	}
-	if (!TryMultiplyOperator::Operation((int64_t)val.days, Interval::MICROS_PER_DAY, milli_day)) {
+	if (!TryMultiplyOperator::Operation((int64_t)val.days, Interval::MICROS_PER_DAY / 1000, milli_day)) {
 		throw ConversionException("Could not convert Interval to Milliseconds");
 	}
-	if (!TryMultiplyOperator::Operation(val.micros, ns_in_us, milli)) {
-		throw ConversionException("Could not convert Interval to Milliseconds");
-	}
+	milli = val.micros / 1000;
 	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(milli, milli_month, milli)) {
 		throw ConversionException("Could not convert Interval to Milliseconds");
 	}
@@ -246,6 +241,28 @@ int64_t Interval::GetMilli(interval_t val) {
 	return milli;
 }
 
+int64_t Interval::GetNanoseconds(interval_t val) {
+	int64_t micro_month, micro_day, micro_total, nano;
+	int64_t ns_in_us = 1000;
+	micro_total = val.micros;
+	if (!TryMultiplyOperator::Operation((int64_t)val.months, Interval::MICROS_PER_MONTH, micro_month)) {
+		throw ConversionException("Could not convert Month to Nanoseconds");
+	}
+	if (!TryMultiplyOperator::Operation((int64_t)val.days, Interval::MICROS_PER_DAY, micro_day)) {
+		throw ConversionException("Could not convert Day to Nanoseconds");
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(micro_total, micro_month, micro_total)) {
+		throw ConversionException("Could not convert Interval to Nanoseconds");
+	}
+	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(micro_total, micro_day, micro_total)) {
+		throw ConversionException("Could not convert Interval to Nanoseconds");
+	}
+	if (!TryMultiplyOperator::Operation(micro_total, ns_in_us, nano)) {
+		throw ConversionException("Could not convert Interval to Nanoseconds");
+	}
+
+	return nano;
+}
 interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 	date_t date1, date2;
 	dtime_t time1, time2;
@@ -275,6 +292,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	auto micros_diff = micros1 - micros2;
 
 	// flip sign if necessary
+	bool sign_flipped = false;
 	if (timestamp_1 < timestamp_2) {
 		year_diff = -year_diff;
 		month_diff = -month_diff;
@@ -283,6 +301,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 		min_diff = -min_diff;
 		sec_diff = -sec_diff;
 		micros_diff = -micros_diff;
+		sign_flipped = true;
 	}
 	// now propagate any negative field into the next higher field
 	while (micros_diff < 0) {
@@ -316,7 +335,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	}
 
 	// recover sign if necessary
-	if (timestamp_1 < timestamp_2 && (month_diff != 0 || day_diff != 0)) {
+	if (sign_flipped) {
 		year_diff = -year_diff;
 		month_diff = -month_diff;
 		day_diff = -day_diff;

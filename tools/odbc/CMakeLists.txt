@@ -8,6 +8,16 @@ endif()
 add_definitions(-DNO_FRAMEWORKS)
 include_directories(${ODBC_INCLUDE_DIRS} include)
 
-add_library(duckdb_odbc SHARED driver.cpp connection.cpp statement.cpp
-                               prepared.cpp result.cpp)
+add_library(
+  duckdb_odbc SHARED
+  driver.cpp
+  connection.cpp
+  statement.cpp
+  prepared.cpp
+  result.cpp
+  api_info.cpp
+  statement_functions.cpp)
+
+set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
+
 target_link_libraries(duckdb_odbc duckdb_static)

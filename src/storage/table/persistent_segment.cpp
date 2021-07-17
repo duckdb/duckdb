@@ -7,6 +7,7 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
+#include "duckdb/storage/constant_segment.hpp"
 #include "duckdb/storage/numeric_segment.hpp"
 #include "duckdb/storage/string_segment.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
@@ -18,7 +19,9 @@ PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t 
     : ColumnSegment(db, type_p, ColumnSegmentType::PERSISTENT, start, count, move(statistics)), block_id(id),
       offset(offset) {
 	D_ASSERT(offset == 0);
-	if (type.InternalType() == PhysicalType::VARCHAR) {
+	if (block_id == INVALID_BLOCK) {
+		data = make_unique<ConstantSegment>(db, stats, start);
+	} else if (type.InternalType() == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(db, start, id);
 	} else if (type.InternalType() == PhysicalType::BIT) {
 		data = make_unique<ValiditySegment>(db, start, id);

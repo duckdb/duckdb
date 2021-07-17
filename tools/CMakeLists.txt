@@ -23,7 +23,3 @@ endif()
 if(BUILD_R)
   add_subdirectory(rpkg)
 endif()
-
-if(BUILD_ARROW_ABI_TEST)
-  add_subdirectory(arrow_abi_test)
-endif()

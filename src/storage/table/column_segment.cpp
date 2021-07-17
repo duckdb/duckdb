@@ -25,10 +25,17 @@ void ColumnSegment::InitializeScan(ColumnScanState &state) {
 	data->InitializeScan(state);
 }
 
-void ColumnSegment::Scan(ColumnScanState &state, idx_t start_row, idx_t scan_count, Vector &result,
-                         idx_t result_offset) {
+void ColumnSegment::Scan(ColumnScanState &state, idx_t start_row, idx_t scan_count, Vector &result, idx_t result_offset,
+                         bool entire_vector) {
 	D_ASSERT(start_row + scan_count <= this->count);
-	data->Scan(state, start_row, scan_count, result, result_offset);
+	if (entire_vector) {
+		D_ASSERT(result_offset == 0);
+		data->Scan(state, start_row, scan_count, result);
+	} else {
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+		data->ScanPartial(state, start_row, scan_count, result, result_offset);
+		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
+	}
 }
 
 void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {

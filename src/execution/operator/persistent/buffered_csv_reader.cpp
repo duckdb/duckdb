@@ -12,6 +12,8 @@
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "utf8proc.hpp"
+#include "duckdb/parser/keyword_helper.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -121,11 +123,16 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
+BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, BufferedCSVReaderOptions options_p,
+                                     const vector<LogicalType> &requested_types)
+    : fs(fs_p), options(move(options_p)), buffer_size(0), position(0), start(0) {
+	file_handle = OpenCSV(options);
+	Initialize(requested_types);
+}
+
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : fs(FileSystem::GetFileSystem(context)), options(move(options_p)), buffer_size(0), position(0), start(0) {
-	file_handle = OpenCSV(context, options);
-	Initialize(requested_types);
+    : BufferedCSVReader(FileSystem::GetFileSystem(context), move(options_p), requested_types) {
 }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
@@ -137,7 +144,8 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 		}
 	} else {
 		sql_types = requested_types;
-		JumpToBeginning(options.skip_rows, options.header);
+		ResetBuffer();
+		SkipRowsAndReadHeader(options.skip_rows, options.header);
 	}
 	InitParseChunk(sql_types.size());
 }
@@ -148,7 +156,7 @@ void BufferedCSVReader::PrepareComplexParser() {
 	quote_search = TextSearchShiftArray(options.quote);
 }
 
-unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options) {
+unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(const BufferedCSVReaderOptions &options) {
 	this->compression = FileCompressionType::UNCOMPRESSED;
 	if (options.compression == "infer" || options.compression == "auto") {
 		this->compression = FileCompressionType::AUTO_DETECT;
@@ -170,6 +178,86 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 	string leading_zeros = string("0", max_digits - digits);
 	string value = to_string(col_number);
 	return string(prefix + leading_zeros + value);
+}
+
+// Helper function for UTF-8 aware space trimming
+static string TrimWhitespace(const string &col_name) {
+	utf8proc_int32_t codepoint;
+	auto str = reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str());
+	idx_t size = col_name.size();
+	// Find the first character that is not left trimmed
+	idx_t begin = 0;
+	while (begin < size) {
+		auto bytes = utf8proc_iterate(str + begin, size - begin, &codepoint);
+		D_ASSERT(bytes > 0);
+		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
+			break;
+		}
+		begin += bytes;
+	}
+
+	// Find the last character that is not right trimmed
+	idx_t end;
+	end = begin;
+	for (auto next = begin; next < col_name.size();) {
+		auto bytes = utf8proc_iterate(str + next, size - next, &codepoint);
+		D_ASSERT(bytes > 0);
+		next += bytes;
+		if (utf8proc_category(codepoint) != UTF8PROC_CATEGORY_ZS) {
+			end = next;
+		}
+	}
+
+	// return the trimmed string
+	return col_name.substr(begin, end - begin);
+}
+
+static string NormalizeColumnName(const string &col_name) {
+	// normalize UTF8 characters to NFKD
+	auto nfkd = utf8proc_NFKD((const utf8proc_uint8_t *)col_name.c_str(), col_name.size());
+	const string col_name_nfkd = string((const char *)nfkd, strlen((const char *)nfkd));
+	free(nfkd);
+
+	// only keep ASCII characters 0-9 a-z A-Z and replace spaces with regular whitespace
+	string col_name_ascii = "";
+	for (idx_t i = 0; i < col_name_nfkd.size(); i++) {
+		if (col_name_nfkd[i] == '_' || (col_name_nfkd[i] >= '0' && col_name_nfkd[i] <= '9') ||
+		    (col_name_nfkd[i] >= 'A' && col_name_nfkd[i] <= 'Z') ||
+		    (col_name_nfkd[i] >= 'a' && col_name_nfkd[i] <= 'z')) {
+			col_name_ascii += col_name_nfkd[i];
+		} else if (StringUtil::CharacterIsSpace(col_name_nfkd[i])) {
+			col_name_ascii += " ";
+		}
+	}
+
+	// trim whitespace and replace remaining whitespace by _
+	string col_name_trimmed = TrimWhitespace(col_name_ascii);
+	string col_name_cleaned = "";
+	bool in_whitespace = false;
+	for (idx_t i = 0; i < col_name_trimmed.size(); i++) {
+		if (col_name_trimmed[i] == ' ') {
+			if (!in_whitespace) {
+				col_name_cleaned += "_";
+				in_whitespace = true;
+			}
+		} else {
+			col_name_cleaned += col_name_trimmed[i];
+			in_whitespace = false;
+		}
+	}
+
+	// don't leave string empty; if not empty, make lowercase
+	if (col_name_cleaned.empty()) {
+		col_name_cleaned = "_";
+	} else {
+		col_name_cleaned = StringUtil::Lower(col_name_cleaned);
+	}
+
+	// prepend _ if name starts with a digit or is a reserved keyword
+	if (KeywordHelper::IsKeyword(col_name_cleaned) || (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
+		col_name_cleaned = "_" + col_name_cleaned;
+	}
+	return col_name_cleaned;
 }
 
 void BufferedCSVReader::ResetBuffer() {
@@ -202,28 +290,23 @@ void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
 	if (options.force_not_null.size() != num_cols) {
 		options.force_not_null.resize(num_cols, false);
 	}
+	if (num_cols == parse_chunk.ColumnCount()) {
+		parse_chunk.Reset();
+	} else {
+		parse_chunk.Destroy();
 
-	parse_chunk.Destroy();
-
-	// initialize the parse_chunk with a set of VARCHAR types
-	vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
-	parse_chunk.Initialize(varchar_types);
+		// initialize the parse_chunk with a set of VARCHAR types
+		vector<LogicalType> varchar_types(num_cols, LogicalType::VARCHAR);
+		parse_chunk.Initialize(varchar_types);
+	}
 }
 
 void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = false) {
 	ResetBuffer();
 	ResetStream();
-	SkipBOM();
 	SkipRowsAndReadHeader(skip_rows, skip_header);
 	sample_chunk_idx = 0;
-}
-
-void BufferedCSVReader::SkipBOM() {
-	char bom_buffer[3];
-	file_handle->Read(bom_buffer, 3);
-	if (bom_buffer[0] != '\xEF' || bom_buffer[1] != '\xBB' || bom_buffer[2] != '\xBF') {
-		ResetStream();
-	}
+	bom_checked = false;
 }
 
 void BufferedCSVReader::SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header) {
@@ -674,26 +757,35 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// update parser info, and read, generate & set col_names based on previous findings
 	if (((!first_row_consistent || first_row_nulls) && !options.has_header) || (options.has_header && options.header)) {
 		options.header = true;
-		vector<string> t_col_names;
+		unordered_map<string, idx_t> name_collision_count;
+		// get header names from CSV
 		for (idx_t col = 0; col < options.num_cols; col++) {
 			const auto &val = best_header_row.GetValue(col, 0);
 			string col_name = val.ToString();
+
+			// generate name if field is empty
 			if (col_name.empty() || val.is_null) {
 				col_name = GenerateColumnName(options.num_cols, col);
 			}
-			// We'll keep column names as they appear in the file, no canonicalization
-			// col_name = StringUtil::Lower(col_name);
-			t_col_names.push_back(col_name);
-		}
-		for (idx_t col = 0; col < t_col_names.size(); col++) {
-			string col_name = t_col_names[col];
-			idx_t exists_n_times = std::count(t_col_names.begin(), t_col_names.end(), col_name);
-			idx_t exists_n_times_before = std::count(t_col_names.begin(), t_col_names.begin() + col, col_name);
-			if (exists_n_times > 1) {
-				col_name = GenerateColumnName(exists_n_times, exists_n_times_before, col_name + "_");
+
+			// normalize names or at least trim whitespace
+			if (options.normalize_names) {
+				col_name = NormalizeColumnName(col_name);
+			} else {
+				col_name = TrimWhitespace(col_name);
 			}
+
+			// avoid duplicate header names
+			const string col_name_raw = col_name;
+			while (name_collision_count.find(col_name) != name_collision_count.end()) {
+				name_collision_count[col_name] += 1;
+				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
+			}
+
 			col_names.push_back(col_name);
+			name_collision_count[col_name] = 0;
 		}
+
 	} else {
 		options.header = false;
 		idx_t total_columns = parse_chunk.ColumnCount();
@@ -778,8 +870,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 					// create a new chunk and fill it with the remainder
 					auto chunk = make_unique<DataChunk>();
 					auto parse_chunk_types = parse_chunk.GetTypes();
-					chunk->Initialize(parse_chunk_types);
-					chunk->Reference(parse_chunk);
+					chunk->Move(parse_chunk);
 					cached_chunks.push(move(chunk));
 				} else {
 					while (!cached_chunks.empty()) {
@@ -1229,6 +1320,12 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	}
 	start = 0;
 	position = remaining;
+	if (!bom_checked) {
+		bom_checked = true;
+		if (read_count >= 3 && buffer[0] == '\xEF' && buffer[1] == '\xBB' && buffer[2] == '\xBF') {
+			position += 3;
+		}
+	}
 
 	return read_count > 0;
 }
@@ -1239,7 +1336,7 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		cached_buffers.clear();
 	} else {
 		auto &chunk = cached_chunks.front();
-		parse_chunk.Reference(*chunk);
+		parse_chunk.Move(*chunk);
 		cached_chunks.pop();
 		Flush(insert_chunk);
 		return;

@@ -1198,13 +1198,15 @@ Typename:	SimpleTypename opt_array_bounds
 					$$->arrayBounds = list_make1(makeInteger(-1));
 					$$->setof = true;
 				}
-			| RowOrStruct '(' colid_type_list ')' {
+			| RowOrStruct '(' colid_type_list ')' opt_array_bounds {
                $$ = SystemTypeName("struct");
+               $$->arrayBounds = $5;
                $$->typmods = $3;
                $$->location = @1;
                }
-            | MAP '(' type_list ')' {
+            | MAP '(' type_list ')' opt_array_bounds {
                $$ = SystemTypeName("map");
+               $$->arrayBounds = $5;
                $$->typmods = $3;
                $$->location = @1;
 			}

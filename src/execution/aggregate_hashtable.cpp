@@ -1,17 +1,16 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include <cmath>
@@ -38,7 +37,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      HtEntryType entry_type)
     : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), entry_type(entry_type), capacity(0), entries(0),
-      payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
+      payload_page_offset(0), addresses(LogicalType::POINTER), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
       hash_salts(LogicalTypeId::SMALLINT), group_compare_vector(STANDARD_VECTOR_SIZE),
       no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
 
@@ -51,9 +50,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 
 	tuple_size = layout.GetRowWidth();
 
-	D_ASSERT(tuple_size <= Storage::BLOCK_ALLOC_SIZE);
-	tuples_per_block = Storage::BLOCK_ALLOC_SIZE / tuple_size;
-	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(tuple_size <= Storage::BLOCK_SIZE);
+	tuples_per_block = Storage::BLOCK_SIZE / tuple_size;
+	hashes_hdl = buffer_manager.Allocate(Storage::BLOCK_SIZE);
 	hashes_hdl_ptr = hashes_hdl->Ptr();
 
 	switch (entry_type) {
@@ -68,7 +67,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		break;
 	}
 	default:
-		throw NotImplementedException("Unknown HT entry width");
+		throw InternalException("Unknown HT entry width");
 	}
 
 	// create additional hash tables for distinct aggrs
@@ -89,9 +88,8 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		}
 		payload_idx += aggr.child_count;
 	}
-	addresses.Initialize(LogicalType::POINTER);
 	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
-	string_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8);
+	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
@@ -121,7 +119,7 @@ void GroupedAggregateHashTable::PayloadApply(FUNC fun) {
 }
 
 void GroupedAggregateHashTable::NewBlock() {
-	auto pin = buffer_manager.Allocate(Storage::BLOCK_ALLOC_SIZE);
+	auto pin = buffer_manager.Allocate(Storage::BLOCK_SIZE);
 	payload_hds.push_back(move(pin));
 	payload_hds_ptrs.push_back(payload_hds.back()->Ptr());
 	payload_page_offset = 0;
@@ -189,7 +187,7 @@ idx_t GroupedAggregateHashTable::MaxCapacity() {
 		break;
 	}
 
-	return max_pages * MinValue(max_tuples, (idx_t)Storage::BLOCK_ALLOC_SIZE / tuple_size);
+	return max_pages * MinValue(max_tuples, (idx_t)Storage::BLOCK_SIZE / tuple_size);
 }
 
 void GroupedAggregateHashTable::Verify() {
@@ -214,16 +212,14 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	if (size <= capacity) {
 		throw InternalException("Cannot downsize a hash table!");
 	}
-	if (size < STANDARD_VECTOR_SIZE) {
-		size = STANDARD_VECTOR_SIZE;
-	}
+	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 
 	// size needs to be a power of 2
 	D_ASSERT((size & (size - 1)) == 0);
 	bitmask = size - 1;
 
 	auto byte_size = size * sizeof(ENTRY);
-	if (byte_size > (idx_t)Storage::BLOCK_ALLOC_SIZE) {
+	if (byte_size > (idx_t)Storage::BLOCK_SIZE) {
 		hashes_hdl = buffer_manager.Allocate(byte_size);
 		hashes_hdl_ptr = hashes_hdl->Ptr();
 	}
@@ -315,9 +311,8 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 			// a selection vector
 			if (new_group_count > 0) {
 				if (aggr.filter) {
-					Vector distinct_addresses;
+					Vector distinct_addresses(addresses, new_groups, new_group_count);
 					DataChunk distinct_payload;
-					distinct_addresses.Slice(addresses, new_groups, new_group_count);
 					auto pay_types = payload.GetTypes();
 					distinct_payload.Initialize(pay_types);
 					distinct_payload.Slice(payload, new_groups, new_group_count);
@@ -325,8 +320,7 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, Vector &group_hashe
 					distinct_addresses.Normalify(new_group_count);
 					RowOperations::UpdateFilteredStates(aggr, distinct_addresses, distinct_payload, payload_idx);
 				} else {
-					Vector distinct_addresses;
-					distinct_addresses.Slice(addresses, new_groups, new_group_count);
+					Vector distinct_addresses(addresses, new_groups, new_group_count);
 					for (idx_t i = 0; i < aggr.child_count; i++) {
 						payload.data[payload_idx + i].Slice(new_groups, new_group_count);
 						payload.data[payload_idx + i].Verify(new_group_count);
@@ -518,7 +512,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &g
 	case HtEntryType::HT_WIDTH_32:
 		return FindOrCreateGroupsInternal<aggr_ht_entry_32>(groups, group_hashes, addresses_out, new_groups_out);
 	default:
-		throw NotImplementedException("Unknown HT entry width");
+		throw InternalException("Unknown HT entry width");
 	}
 }
 
@@ -654,7 +648,7 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 
 	auto chunk_idx = scan_position / tuples_per_block;
 	auto chunk_offset = (scan_position % tuples_per_block) * tuple_size;
-	D_ASSERT(chunk_offset + tuple_size <= Storage::BLOCK_ALLOC_SIZE);
+	D_ASSERT(chunk_offset + tuple_size <= Storage::BLOCK_SIZE);
 
 	auto read_ptr = payload_hds_ptrs[chunk_idx++];
 	for (idx_t i = 0; i < this_n; i++) {

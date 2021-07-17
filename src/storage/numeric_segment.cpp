@@ -27,7 +27,7 @@ NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t ro
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified: allocate a buffer for the uncompressed segment
-		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_SIZE, false);
 	} else {
 		this->block = buffer_manager.RegisterBlock(block_id);
 	}
@@ -45,7 +45,13 @@ void NumericSegment::InitializeScan(ColumnScanState &state) {
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void NumericSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void NumericSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+	// FIXME: we should be able to do a zero-copy here
+	ScanPartial(state, start, scan_count, result, 0);
+}
+
+void NumericSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result,
+                                 idx_t result_offset) {
 	D_ASSERT(start <= tuple_count);
 	D_ASSERT(start + scan_count <= tuple_count);
 
@@ -116,6 +122,16 @@ static void AppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target
 		}
 	}
 }
+static void ListAppendLoop(SegmentStatistics &stats, data_ptr_t target, idx_t target_offset, VectorData &adata,
+                           idx_t offset, idx_t count) {
+	auto sdata = (list_entry_t *)adata.data;
+	auto tdata = (list_entry_t *)target;
+	for (idx_t i = 0; i < count; i++) {
+		auto source_idx = adata.sel->get_index(offset + i);
+		auto target_idx = target_offset + i;
+		tdata[target_idx] = sdata[source_idx];
+	}
+}
 
 static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 	switch (type) {
@@ -144,6 +160,8 @@ static NumericSegment::append_function_t GetAppendFunction(PhysicalType type) {
 		return AppendLoop<double>;
 	case PhysicalType::INTERVAL:
 		return AppendLoop<interval_t>;
+	case PhysicalType::LIST:
+		return ListAppendLoop;
 	default:
 		throw NotImplementedException("Unimplemented type for uncompressed segment");
 	}

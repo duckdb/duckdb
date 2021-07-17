@@ -36,7 +36,6 @@ public:
 	idx_t Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
 	           Vector &result) override {
 		auto &type = Type();
-		result.Initialize(type);
 
 		auto &struct_entries = StructVector::GetEntries(result);
 		D_ASSERT(StructType::GetChildTypes(type).size() == struct_entries.size());

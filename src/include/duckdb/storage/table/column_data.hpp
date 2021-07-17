@@ -25,7 +25,6 @@ class DatabaseInstance;
 class RowGroup;
 class TableDataWriter;
 class PersistentSegment;
-class PersistentColumnData;
 class Transaction;
 
 struct DataTableInfo;
@@ -51,18 +50,28 @@ public:
 
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
+	virtual idx_t GetMaxEntry();
 
 	//! The root type of the column
 	const LogicalType &RootType() const;
 
 	//! Initialize a scan of the column
-	virtual void InitializeScan(ColumnScanState &state) = 0;
+	virtual void InitializeScan(ColumnScanState &state);
 	//! Initialize a scan starting at the specified offset
-	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) = 0;
+	virtual void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx);
 	//! Scan the next vector from the column
-	virtual void Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
-	virtual void ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates);
+	virtual idx_t Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
+	virtual idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates);
 	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
+	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count);
+	//! Select
+	virtual void Select(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                    SelectionVector &sel, idx_t &count, const TableFilter &filter);
+	virtual void FilterScan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                        SelectionVector &sel, idx_t count);
+
+	//! Skip the scan forward by "count" rows
+	virtual void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE);
 
 	//! Initialize an appending phase for this column
 	virtual void InitializeAppend(ColumnAppendState &state);
@@ -73,13 +82,13 @@ public:
 	virtual void RevertAppend(row_t start_row);
 
 	//! Fetch the vector from the column data that belongs to this specific row
-	virtual void Fetch(ColumnScanState &state, row_t row_id, Vector &result);
+	virtual idx_t Fetch(ColumnScanState &state, row_t row_id, Vector &result);
 	//! Fetch a specific row id and append it to the vector
 	virtual void FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
 	                      idx_t result_idx);
 
 	virtual void Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-	                    idx_t update_count);
+	                    idx_t offset, idx_t update_count);
 	virtual void UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector,
 	                          row_t *row_ids, idx_t update_count, idx_t depth);
 	virtual unique_ptr<BaseStatistics> GetUpdateStatistics();
@@ -91,8 +100,6 @@ public:
 
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
 	                            idx_t base_row_index, idx_t count, Vector &scan_vector);
-
-	virtual void Initialize(PersistentColumnData &column_data);
 
 	virtual void DeserializeColumn(Deserializer &source);
 	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,
@@ -111,11 +118,11 @@ protected:
 	void AppendTransientSegment(idx_t start_row);
 
 	//! Scans a base vector from the column
-	void ScanVector(ColumnScanState &state, Vector &result);
+	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining);
 	//! Scans a vector from the column merged with any potential updates
 	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
 	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
-	void ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
+	idx_t ScanVector(Transaction *transaction, idx_t vector_index, ColumnScanState &state, Vector &result);
 
 protected:
 	//! The segments holding the data of this column segment

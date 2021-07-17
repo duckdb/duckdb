@@ -46,6 +46,22 @@ struct GreaterThanEquals {
 	}
 };
 
+struct LessThan {
+	template <class T>
+	static inline bool Operation(T left, T right) {
+		return left < right;
+	}
+};
+struct LessThanEquals {
+	template <class T>
+	static inline bool Operation(T left, T right) {
+		return left <= right;
+	}
+};
+
+// Distinct semantics are from Postgres record sorting. NULL = NULL and not-NULL < NULL
+// Deferring to the non-distinct operations removes the need for further specialisation.
+// TODO: To reverse the semantics, swap left_null and right_null for comparisons
 struct DistinctFrom {
 	template <class T>
 	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
@@ -60,18 +76,36 @@ struct NotDistinctFrom {
 	}
 };
 
-struct LessThan {
+struct DistinctGreaterThan {
 	template <class T>
-	static inline bool Operation(T left, T right) {
-		return left < right;
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return GreaterThan::Operation(left_null, right_null) ||
+		       (!left_null && !right_null && GreaterThan::Operation(left, right));
 	}
 };
-struct LessThanEquals {
+
+struct DistinctGreaterThanEquals {
 	template <class T>
-	static inline bool Operation(T left, T right) {
-		return left <= right;
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return left_null || (!left_null && !right_null && GreaterThanEquals::Operation(left, right));
 	}
 };
+
+struct DistinctLessThan {
+	template <class T>
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return LessThan::Operation(left_null, right_null) ||
+		       (!left_null && !right_null && LessThan::Operation(left, right));
+	}
+};
+
+struct DistinctLessThanEquals {
+	template <class T>
+	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
+		return right_null || (!left_null && !right_null && LessThanEquals::Operation(left, right));
+	}
+};
+
 //===--------------------------------------------------------------------===//
 // Specialized Boolean Comparison Operators
 //===--------------------------------------------------------------------===//

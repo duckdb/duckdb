@@ -15,20 +15,30 @@
 
 namespace duckdb {
 //===--------------------------------------------------------------------===//
-// Arrow List Types
+// Arrow Variable Size Types
 //===--------------------------------------------------------------------===//
-enum class ArrowListType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
-struct ArrowConvertData {};
+enum class ArrowVariableSizeType : uint8_t { FIXED_SIZE = 0, NORMAL = 1, SUPER_SIZE = 2 };
 
-struct DictionaryArrowConvertData : public ArrowConvertData {
-	DictionaryArrowConvertData(LogicalType type) : dictionary_type(type) {};
-	LogicalType dictionary_type;
+//===--------------------------------------------------------------------===//
+// Arrow Time/Date Types
+//===--------------------------------------------------------------------===//
+enum class ArrowDateTimeType : uint8_t {
+	MILLISECONDS = 0,
+	MICROSECONDS = 1,
+	NANOSECONDS = 2,
+	SECONDS = 3,
+	DAYS = 4,
+	MONTHS = 5
 };
-
-struct ListArrowConvertData : public ArrowConvertData {
-	ListArrowConvertData() {
-	}
-	vector<std::pair<ArrowListType, idx_t>> list_type;
+struct ArrowConvertData {
+	ArrowConvertData(LogicalType type) : dictionary_type(type) {};
+	ArrowConvertData() {};
+	//! Hold type of dictionary
+	LogicalType dictionary_type;
+	//! If its a variable size type (e.g., strings, blobs, lists) holds which type it is
+	vector<std::pair<ArrowVariableSizeType, idx_t>> variable_sz_type;
+	//! If this is a date/time holds its precision
+	vector<ArrowDateTimeType> date_time_precision;
 };
 
 struct ArrowScanFunctionData : public TableFunctionData {
@@ -73,7 +83,7 @@ private:
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanState &scan_state,
 	                          std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
-	                          DataChunk &output);
+	                          DataChunk &output, idx_t start);
 
 	//! -----Single Thread Functions:-----
 	//! Initialize Single Thread Scan

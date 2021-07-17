@@ -1,0 +1,127 @@
+# name: test/sql/types/nested/list/any_list.test
+# description: Test ANY with lists
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar lists
+query I
+SELECT 1=ALL([1, 2, 3]);
+----
+false
+
+query I
+SELECT 1=ALL([1, 2, 3, NULL]);
+----
+false
+
+query I
+SELECT 1=ANY([1, 2, 3]);
+----
+true
+
+query I
+SELECT 4=ANY([1, 2, 3]);
+----
+false
+
+query I
+SELECT 4=ANY([1, 2, 3, NULL]);
+----
+NULL
+
+query I
+SELECT 4>ALL([1, 2, 3]);
+----
+true
+
+query I
+SELECT 4>ALL([1, 2, 3, NULL]);
+----
+NULL
+
+# non-scalar list
+statement ok
+CREATE VIEW v1 AS SELECT LIST(i) l FROM RANGE(5) tbl(i)
+
+query I
+SELECT 1=ANY(l) FROM v1;
+----
+true
+
+query I
+SELECT 6=ANY(l) FROM v1;
+----
+false
+
+query I
+SELECT NULL=ANY(l) FROM v1;
+----
+NULL
+
+# non-scalar list with nulls
+statement ok
+CREATE VIEW v2 AS SELECT LIST(case when i % 2 = 0 then null else i end) l FROM RANGE(5) tbl(i)
+
+query I
+SELECT 1=ANY(l) FROM v2;
+----
+true
+
+query I
+SELECT 6=ANY(l) FROM v2;
+----
+NULL
+
+query I
+SELECT NULL=ANY(l) FROM v2;
+----
+NULL
+
+# multiple lists
+# 0	[0, 5, 10, 15]
+# 1	[1, NULL, 11, 16]
+# 2	[2, 7, 12, 17]
+# 3	[3, NULL, 13, 18]
+# 4	[4, 9, 14, 19]
+
+statement ok
+CREATE VIEW v3 AS SELECT i % 5 g, LIST(CASE WHEN i=6 or i=8 then null else i end) l FROM RANGE(20) tbl(i) group by g
+
+query II
+SELECT g, 5=ANY(l) FROM v3 ORDER BY g;
+----
+0	true
+1	NULL
+2	false
+3	NULL
+4	false
+
+query II
+SELECT g, 3>ANY(l) FROM v3 ORDER BY g;
+----
+0	true
+1	true
+2	true
+3	NULL
+4	false
+
+query II
+SELECT g, 100>ALL(l) FROM v3 ORDER BY g;
+----
+0	true
+1	NULL
+2	true
+3	NULL
+4	true
+
+# INSIDE a subquery
+query II
+SELECT g, (SELECT 5=ANY(l)) FROM v3 ORDER BY g;
+----
+0	true
+1	NULL
+2	false
+3	NULL
+4	false

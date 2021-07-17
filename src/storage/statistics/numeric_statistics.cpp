@@ -74,6 +74,10 @@ template <>
 void NumericStatistics::Update<interval_t>(SegmentStatistics &stats, interval_t new_value) {
 }
 
+template <>
+void NumericStatistics::Update<list_entry_t>(SegmentStatistics &stats, list_entry_t new_value) {
+}
+
 NumericStatistics::NumericStatistics(LogicalType type_p) : BaseStatistics(move(type_p)) {
 	min = Value::MaximumValue(type);
 	max = Value::MinimumValue(type);
@@ -160,6 +164,10 @@ unique_ptr<BaseStatistics> NumericStatistics::Copy() {
 		stats->validity_stats = validity_stats->Copy();
 	}
 	return move(stats);
+}
+
+bool NumericStatistics::IsConstant() {
+	return max <= min;
 }
 
 void NumericStatistics::Serialize(Serializer &serializer) {

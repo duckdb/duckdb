@@ -186,7 +186,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 			break;
 		}
 		default:
-			throw CatalogException("Unsupported constraint for entry!");
+			throw InternalException("Unsupported constraint for entry!");
 		}
 		create_info->constraints.push_back(move(copy));
 	}
@@ -354,7 +354,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 			break;
 		case ConstraintType::UNIQUE: {
 			auto &bound_unique = (BoundUniqueConstraint &)*bound_constraints[i];
-			if (bound_unique.keys.find(change_idx) != bound_unique.keys.end()) {
+			if (bound_unique.key_set.find(change_idx) != bound_unique.key_set.end()) {
 				throw BinderException(
 				    "Cannot change the type of a column that has a UNIQUE or PRIMARY KEY constraint specified");
 			}
@@ -397,18 +397,6 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 		types.push_back(it.type);
 	}
 	return types;
-}
-
-vector<LogicalType> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
-	vector<LogicalType> result;
-	for (auto &index : column_ids) {
-		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(LOGICAL_ROW_TYPE);
-		} else {
-			result.push_back(columns[index].type);
-		}
-	}
-	return result;
 }
 
 void TableCatalogEntry::Serialize(Serializer &serializer) {

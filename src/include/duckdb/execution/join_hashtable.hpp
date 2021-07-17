@@ -10,6 +10,7 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
@@ -19,7 +20,6 @@
 namespace duckdb {
 class BufferManager;
 class BufferHandle;
-class RowDataCollection;
 
 struct JoinHTScanState {
 	JoinHTScanState() : position(0), block_position(0) {
@@ -100,28 +100,6 @@ public:
 	};
 
 private:
-	mutex ht_lock;
-
-	//! Nodes store the actual data of the tuples inside the HT as a linked list
-	struct HTDataBlock {
-		idx_t count;
-		idx_t capacity;
-		shared_ptr<BlockHandle> block;
-	};
-
-	struct BlockAppendEntry {
-		BlockAppendEntry(data_ptr_t baseptr_, idx_t count_) : baseptr(baseptr_), count(count_) {
-		}
-
-		data_ptr_t baseptr;
-		idx_t count;
-	};
-
-	idx_t AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
-	                    idx_t remaining);
-
-	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
-
 public:
 	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<LogicalType> build_types,
 	              JoinType type);
@@ -137,12 +115,10 @@ public:
 	//! Scan the HT to construct the final full outer join result after
 	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
 
-	idx_t size() {
-		return count;
+	idx_t Count() {
+		return block_collection->count;
 	}
 
-	//! The stringheap of the JoinHashTable
-	unique_ptr<RowDataCollection> string_heap;
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The types of the keys used in equality comparison
@@ -155,8 +131,6 @@ public:
 	vector<ExpressionType> predicates;
 	//! Data column layout
 	RowLayout layout;
-	//! Size of the validity vector for each tuple.
-	idx_t validity_size;
 	//! The size of an entry as stored in the HashTable
 	idx_t entry_size;
 	//! The total tuple size
@@ -173,8 +147,6 @@ public:
 	bool has_null;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
-	//! The amount of entries stored per block
-	idx_t block_capacity;
 
 	struct {
 		mutex mj_lock;
@@ -188,12 +160,14 @@ public:
 		//! Group chunk used for aggregating into correlated_counts
 		DataChunk group_chunk;
 		//! Payload chunk used for aggregating into correlated_counts
-		DataChunk payload_chunk;
+		DataChunk correlated_payload;
 		//! Result chunk used for aggregating into correlated_counts
 		DataChunk result_chunk;
 	} correlated_mark_join_info;
 
 private:
+	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+
 	//! Apply a bitmask to the hashes
 	void ApplyBitmask(Vector &hashes, idx_t count);
 	void ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers);
@@ -204,10 +178,10 @@ private:
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
-	//! The amount of entries stored in the HT currently
-	idx_t count;
-	//! The blocks holding the main data of the hash table
-	vector<HTDataBlock> blocks;
+	//! The RowDataCollection holding the main data of the hash table
+	unique_ptr<RowDataCollection> block_collection;
+	//! The stringheap of the JoinHashTable
+	unique_ptr<RowDataCollection> string_heap;
 	//! Pinned handles, these are pinned during finalization only
 	vector<unique_ptr<BufferHandle>> pinned_handles;
 	//! The hash map of the HT, created after finalization

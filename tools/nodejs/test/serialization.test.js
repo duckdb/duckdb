@@ -69,24 +69,30 @@ describe('serialize(fn)', function() {
 
     it('should call the callback', function(done) {
         db.serialize(function() {
-            db.run("CREATE TABLE foo (txt text, num int, flt double, blb blob)");
+            db.run("CREATE TABLE foo (txt text, num int, flt double, blb blob, d date, ts timestamp)");
 
-            var stmt = db.prepare("INSERT INTO foo VALUES(?, ?, ?, ?)");
+            var stmt = db.prepare("INSERT INTO foo VALUES(?, ?, ?, ?, ?, ?)");
             for (var i = 0; i < count; i++) {
-                stmt.run('String ' + i, i, i * Math.PI, null, function(err) {
+                var d = new Date(Date.UTC(2018, 0, i));
+                var ts = new Date(Date.UTC(2021, 6, 10, 0, 0, i));
+                stmt.run('String ' + i, i, i * Math.PI, null, d, ts, function(err) {
                     if (err) throw err;
                     inserted++;
                 });
             }
             stmt.finalize();
 
-            db.all("SELECT txt, num, flt, blb FROM foo ORDER BY num", function(err, rows) {
+            db.all("SELECT txt, num, flt, blb, d, ts FROM foo ORDER BY num", function(err, rows) {
                 if (err) throw err;
                 for (var i = 0; i < rows.length; i++) {
+                    var d = new Date(Date.UTC(2018, 0, i));
+                    var ts = new Date(Date.UTC(2021, 6, 10, 0, 0, i));
                     assert.equal(rows[i].txt, 'String ' + i);
                     assert.equal(rows[i].num, i);
                     assert.equal(rows[i].flt, i * Math.PI);
                     assert.equal(rows[i].blb, null);
+                    assert.equal(rows[i].d.toString(), d.toString());
+                    assert.equal(rows[i].ts.toString(), ts.toString());
                     retrieved++;
                 }
                 done();

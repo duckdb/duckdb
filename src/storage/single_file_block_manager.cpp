@@ -1,11 +1,11 @@
 #include "duckdb/storage/single_file_block_manager.hpp"
-#include "duckdb/storage/meta_block_writer.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-#include "duckdb/common/exception.hpp"
 
+#include "duckdb/common/allocator.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
-#include "duckdb/common/allocator.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/storage/meta_block_writer.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -211,6 +211,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 }
 
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
+	D_ASSERT(block_id >= 0);
 	modified_blocks.insert(block_id);
 }
 

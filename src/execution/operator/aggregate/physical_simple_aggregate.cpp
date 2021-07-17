@@ -80,12 +80,11 @@ public:
 			}
 		}
 		if (!payload_types.empty()) { // for select count(*) from t; there is no payload at all
-			payload_chunk_base.Initialize(payload_types);
-			payload_chunk.InitializeEmpty(payload_types);
+			payload_chunk.Initialize(payload_types);
 		}
 	}
 	void Reset() {
-		payload_chunk.Reference(payload_chunk_base);
+		payload_chunk.Reset();
 	}
 
 	//! The local aggregate state
@@ -94,8 +93,6 @@ public:
 	ExpressionExecutor child_executor;
 	//! The payload chunk
 	DataChunk payload_chunk;
-	//! The payload chunk
-	DataChunk payload_chunk_base;
 };
 
 unique_ptr<GlobalOperatorState> PhysicalSimpleAggregate::GetGlobalState(ClientContext &context) {
@@ -182,16 +179,13 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorS
 void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                                PhysicalOperatorState *state) const {
 	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
-	if (state->finished) {
-		return;
-	}
 	// initialize the result chunk with the aggregate values
 	chunk.SetCardinality(1);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
 		auto &aggregate = (BoundAggregateExpression &)*aggregates[aggr_idx];
 
 		Vector state_vector(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
-		aggregate.function.finalize(state_vector, aggregate.bind_info.get(), chunk.data[aggr_idx], 1);
+		aggregate.function.finalize(state_vector, aggregate.bind_info.get(), chunk.data[aggr_idx], 1, 0);
 	}
 	state->finished = true;
 }

@@ -16,6 +16,8 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/replacement_scan.hpp"
+#include "duckdb/common/set.hpp"
+#include "duckdb/common/enums/optimizer_type.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -89,12 +91,20 @@ public:
 	CheckpointAbort checkpoint_abort = CheckpointAbort::NO_ABORT;
 	//! Replacement table scans are automatically attempted when a table name cannot be found in the schema
 	vector<ReplacementScan> replacement_scans;
+	//! Initialize the database with the standard set of DuckDB functions
+	//! You should probably not touch this unless you know what you are doing
+	bool initialize_default_database = true;
+	//! The set of disabled optimizers (default empty)
+	set<OptimizerType> disabled_optimizers;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
 	DUCKDB_API static DBConfig &GetConfig(DatabaseInstance &db);
 	DUCKDB_API static vector<ConfigurationOption> GetOptions();
+	DUCKDB_API static idx_t GetOptionCount();
 
+	//! Fetch an option by index. Returns a pointer to the option, or nullptr if out of range
+	DUCKDB_API static ConfigurationOption *GetOptionByIndex(idx_t index);
 	//! Fetch an option by name. Returns a pointer to the option, or nullptr if none exists.
 	DUCKDB_API static ConfigurationOption *GetOptionByName(const string &name);
 

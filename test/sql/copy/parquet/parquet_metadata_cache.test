@@ -9,12 +9,12 @@ pragma enable_object_cache
 
 # test the cached file
 query II
-select * from parquet_scan('test/sql/copy/parquet/data/cache/cache1.parquet')
+select * from parquet_scan('data/parquet-testing/cache/cache1.parquet')
 ----
 1	hello
 
 query II
-select * from parquet_scan('test/sql/copy/parquet/data/cache/cache1.parquet')
+select * from parquet_scan('data/parquet-testing/cache/cache1.parquet')
 ----
 1	hello
 
@@ -24,7 +24,7 @@ require vector_size 64
 # copy cache1.parquet to cached.parquet
 statement ok
 COPY (
-	SELECT * FROM parquet_scan('test/sql/copy/parquet/data/cache/cache1.parquet')
+	SELECT * FROM parquet_scan('data/parquet-testing/cache/cache1.parquet')
 	)
 TO '__TEST_DIR__/cached.parquet' (FORMAT 'parquet')
 
@@ -36,7 +36,7 @@ select * from parquet_scan('__TEST_DIR__/cached.parquet')
 # copy cache2.parquet to cached.parquet
 statement ok
 COPY (
-	SELECT * FROM parquet_scan('test/sql/copy/parquet/data/cache/cache2.parquet')
+	SELECT * FROM parquet_scan('data/parquet-testing/cache/cache2.parquet')
 	)
 TO '__TEST_DIR__/cached.parquet' (FORMAT 'parquet')
 
@@ -50,17 +50,17 @@ select * from parquet_scan('__TEST_DIR__/cached.parquet')
 
 # test two files with the same name on different directories
 query II
-select * from parquet_scan('test/sql/copy/parquet/data/glob/t1.parquet')
+select * from parquet_scan('data/parquet-testing/glob/t1.parquet')
 ----
 1	hello
 
 query II
-select * from parquet_scan('test/sql/copy/parquet/data/glob2/t1.parquet')
+select * from parquet_scan('data/parquet-testing/glob2/t1.parquet')
 ----
 1	hello
 
 # test using *
 query I
-select count(*) from parquet_scan('test/sql/copy/parquet/data/glob/*.parquet')
+select count(*) from parquet_scan('data/parquet-testing/glob/*.parquet')
 ----
 2

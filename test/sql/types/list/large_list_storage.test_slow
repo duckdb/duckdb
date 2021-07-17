@@ -1,0 +1,62 @@
+# name: test/sql/types/list/large_list_storage.test_slow
+# description: Test storing large lists
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE a(b INTEGER[]);
+
+statement ok
+INSERT INTO a SELECT LIST(i) FROM range(10000) tbl(i)
+
+query IIII
+SELECT COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT UNNEST(b) FROM a) tbl(i)
+----
+10000	0	9999	10000
+
+statement ok
+INSERT INTO a SELECT LIST(i) FROM range(20000) tbl(i)
+
+query I
+SELECT COUNT(*) FROM a
+----
+2
+
+query IIII
+SELECT COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT UNNEST(b) FROM a) tbl(i)
+----
+30000	0	19999	30000
+
+statement ok
+INSERT INTO a VALUES (NULL), ([1, 2, 3]), ([4, 5, 6, 99999999])
+
+query I
+SELECT COUNT(*) FROM a
+----
+5
+
+query IIII
+SELECT COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT UNNEST(b) FROM a) tbl(i)
+----
+30008	0	99999999	30007
+
+# bigly list that spans multiple pages
+statement ok
+INSERT INTO a SELECT LIST(i) FROM range(200000) tbl(i)
+
+query IIII
+SELECT COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT UNNEST(b) FROM a) tbl(i)
+----
+230008	0	99999999	230007
+
+# several bigly lists with null values
+statement ok
+CREATE TABLE b AS SELECT case when i < 100000 then 'a' else 'b' end g, LIST(case when i %2 = 0 then null else i end) l FROM range(200000) tbl(i) GROUP BY g
+
+query IIIII
+SELECT g, COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT g, UNNEST(l) FROM b) tbl(g, i) GROUP BY g ORDER BY g
+----
+a	100000	1	99999	50000
+b	100000	100001	199999	50000

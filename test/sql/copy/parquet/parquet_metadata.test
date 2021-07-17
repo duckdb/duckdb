@@ -1,0 +1,30 @@
+# name: test/sql/copy/parquet/parquet_metadata.test
+# description: Test parquet metadata function
+# group: [parquet]
+
+require parquet
+
+statement ok
+SELECT * FROM parquet_metadata('data/parquet-testing/lineitem-top10000.gzip.parquet');
+
+statement ok
+SELECT * FROM parquet_schema('data/parquet-testing/lineitem-top10000.gzip.parquet');
+
+statement ok
+select * from parquet_schema('data/parquet-testing/decimal/decimal_dc.parquet');
+
+statement ok
+select * from parquet_schema('data/parquet-testing/decimal/int64_decimal.parquet');
+
+# with globs
+statement ok
+select * from parquet_metadata('data/parquet-testing/glob/*.parquet');
+
+statement ok
+select * from parquet_schema('data/parquet-testing/glob/*.parquet');
+
+#statement ok
+#SELECT * FROM parquet_metadata('data/parquet-testing/*.parquet');
+
+#statement ok
+#SELECT * FROM parquet_schema('data/parquet-testing/*.parquet');

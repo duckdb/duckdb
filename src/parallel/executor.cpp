@@ -39,6 +39,9 @@ void Executor::Initialize(PhysicalOperator *plan) {
 
 		// schedule pipelines that do not have dependents
 		for (auto &pipeline : pipelines) {
+#ifdef DEBUG
+			D_ASSERT(!pipeline->ToString().empty());
+#endif
 			if (!pipeline->HasDependencies()) {
 				pipeline->Schedule();
 			}
@@ -64,11 +67,14 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		// then clearing our references to the pipelines
 		// and waiting until all pipelines have been destroyed
 		vector<weak_ptr<Pipeline>> weak_references;
-		weak_references.reserve(pipelines.size());
-		for (auto &pipeline : pipelines) {
-			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+		{
+			lock_guard<mutex> elock(executor_lock);
+			weak_references.reserve(pipelines.size());
+			for (auto &pipeline : pipelines) {
+				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+			}
+			pipelines.clear();
 		}
-		pipelines.clear();
 		for (auto &weak_ref : weak_references) {
 			while (true) {
 				auto weak = weak_ref.lock();
@@ -80,6 +86,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		throw Exception(exception);
 	}
 
+	lock_guard<mutex> elock(executor_lock);
 	pipelines.clear();
 	if (!exceptions.empty()) {
 		// an exception has occurred executing one of the pipelines
@@ -88,6 +95,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 }
 
 void Executor::Reset() {
+	lock_guard<mutex> elock(executor_lock);
 	delim_join_dependencies.clear();
 	recursive_cte = nullptr;
 	physical_plan = nullptr;
@@ -293,7 +301,7 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 
 	auto chunk = make_unique<DataChunk>();
 	// run the plan to get the next chunks
-	physical_plan->InitializeChunkEmpty(*chunk);
+	physical_plan->InitializeChunk(*chunk);
 	physical_plan->GetChunk(econtext, *chunk, physical_state.get());
 	physical_plan->FinalizeOperatorState(*physical_state, econtext);
 	context.profiler->Flush(thread.profiler);

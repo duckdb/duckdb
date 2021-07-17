@@ -55,6 +55,7 @@ void StorageManager::Initialize() {
 	Connection con(db);
 	con.BeginTransaction();
 
+	auto &config = DBConfig::GetConfig(db);
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
 	// create the default schema
@@ -63,9 +64,11 @@ void StorageManager::Initialize() {
 	info.internal = true;
 	catalog.CreateSchema(*con.context, &info);
 
-	// initialize default functions
-	BuiltinFunctions builtin(*con.context, catalog);
-	builtin.Initialize();
+	if (config.initialize_default_database) {
+		// initialize default functions
+		BuiltinFunctions builtin(*con.context, catalog);
+		builtin.Initialize();
+	}
 
 	// commit transactions
 	con.Commit();
@@ -74,7 +77,6 @@ void StorageManager::Initialize() {
 		// create or load the database from disk, if not in-memory mode
 		LoadDatabase();
 	} else {
-		auto &config = DBConfig::GetConfig(*con.context);
 		block_manager = make_unique<InMemoryBlockManager>();
 		buffer_manager = make_unique<BufferManager>(db, config.temporary_directory, config.maximum_memory);
 	}

@@ -48,14 +48,14 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 			render_widths.push_back(char_render_width);
 			cpos = Utf8Proc::NextGraphemeCluster(buf, len, cpos);
 		}
-	} else {
+	} else { // LCOV_EXCL_START
 		// invalid utf-8, we can't do much at this point
 		// we just assume every character is a character, and every character has a render width of 1
 		for (idx_t cpos = 0; cpos < len; cpos++) {
 			positions.push_back(cpos);
 			render_widths.push_back(1);
 		}
-	}
+	} // LCOV_EXCL_STOP
 	// now we want to find the (unicode aware) start and end position
 	idx_t epos = 0;
 	// start by finding the error location inside the array
@@ -110,7 +110,7 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 }
 
 string QueryErrorContext::FormatErrorRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
-	string error_message = ExceptionFormatValue::Format(msg, values);
+	string error_message = values.empty() ? msg : ExceptionFormatValue::Format(msg, values);
 	if (!statement || query_location >= statement->query.size()) {
 		// no statement provided or query location out of range
 		return error_message;

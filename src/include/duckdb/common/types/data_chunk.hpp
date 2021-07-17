@@ -15,6 +15,7 @@
 struct ArrowArray;
 
 namespace duckdb {
+class VectorCache;
 
 //!  A Data Chunk represents a set of vectors.
 /*!
@@ -38,6 +39,7 @@ class DataChunk {
 public:
 	//! Creates an empty DataChunk
 	DataChunk();
+	~DataChunk();
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
@@ -49,9 +51,9 @@ public:
 	DUCKDB_API idx_t ColumnCount() const {
 		return data.size();
 	}
-	void SetCardinality(idx_t count) {
+	void SetCardinality(idx_t count_p) {
 		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
-		this->count = count;
+		this->count = count_p;
 	}
 	void SetCardinality(const DataChunk &other) {
 		this->count = other.size();
@@ -62,6 +64,8 @@ public:
 
 	//! Set the DataChunk to reference another data chunk
 	DUCKDB_API void Reference(DataChunk &chunk);
+	//! Set the DataChunk to own the data of data chunk, destroying the other chunk in the process
+	DUCKDB_API void Move(DataChunk &chunk);
 
 	//! Initializes the DataChunk with the specified types to an empty DataChunk
 	//! This will create one vector of the specified type for each LogicalType in the
@@ -120,6 +124,9 @@ public:
 	DUCKDB_API void ToArrowArray(ArrowArray *out_array);
 
 private:
+	//! The amount of tuples stored in the data chunk
 	idx_t count;
+	//! Vector caches, used to store data when ::Initialize is called
+	vector<VectorCache> vector_caches;
 };
 } // namespace duckdb

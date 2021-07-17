@@ -28,7 +28,7 @@ typedef void (*aggregate_update_t)(Vector inputs[], FunctionData *bind_data, idx
 //! The type used for combining hashed aggregate states (optional)
 typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, idx_t count);
 //! The type used for finalizing hashed aggregate function payloads
-typedef void (*aggregate_finalize_t)(Vector &state, FunctionData *bind_data, Vector &result, idx_t count);
+typedef void (*aggregate_finalize_t)(Vector &state, FunctionData *bind_data, Vector &result, idx_t count, idx_t offset);
 //! The type used for propagating statistics in aggregate functions (optional)
 typedef unique_ptr<BaseStatistics> (*aggregate_statistics_t)(ClientContext &context, BoundAggregateExpression &expr,
                                                              FunctionData *bind_data,
@@ -47,7 +47,7 @@ typedef void (*aggregate_simple_update_t)(Vector inputs[], FunctionData *bind_da
 //! The type used for updating complex windowed aggregate functions (optional)
 typedef std::pair<idx_t, idx_t> FrameBounds;
 typedef void (*aggregate_window_t)(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
-                                   const FrameBounds &frame, const FrameBounds &prev, Vector &result);
+                                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t offset);
 
 class AggregateFunction : public BaseScalarFunction {
 public:
@@ -183,10 +183,10 @@ public:
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void UnaryWindow(Vector inputs[], FunctionData *bind_data, idx_t input_count, data_ptr_t state,
-	                        const FrameBounds &frame, const FrameBounds &prev, Vector &result) {
+	                        const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid) {
 		D_ASSERT(input_count == 1);
 		AggregateExecutor::UnaryWindow<STATE, INPUT_TYPE, RESULT_TYPE, OP>(inputs[0], bind_data, state, frame, prev,
-		                                                                   result);
+		                                                                   result, rid);
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class OP>
@@ -209,8 +209,8 @@ public:
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
-	static void StateFinalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
-		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, bind_data, result, count);
+	static void StateFinalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count, idx_t offset) {
+		AggregateExecutor::Finalize<STATE, RESULT_TYPE, OP>(states, bind_data, result, count, offset);
 	}
 
 	template <class STATE, class OP>

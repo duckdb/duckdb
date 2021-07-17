@@ -93,7 +93,7 @@ void Pipeline::Execute(TaskContext &task) {
 		auto lstate = sink->GetLocalSinkState(context);
 		// incrementally process the pipeline
 		DataChunk intermediate;
-		child->InitializeChunkEmpty(intermediate);
+		child->InitializeChunk(intermediate);
 		while (true) {
 			child->GetChunk(context, intermediate, state.get());
 			thread.profiler.StartOperator(sink);
@@ -107,9 +107,9 @@ void Pipeline::Execute(TaskContext &task) {
 		child->FinalizeOperatorState(*state, context);
 	} catch (std::exception &ex) {
 		executor.PushError(ex.what());
-	} catch (...) {
+	} catch (...) { // LCOV_EXCL_START
 		executor.PushError("Unknown exception in pipeline!");
-	}
+	} // LCOV_EXCL_STOP
 	executor.Flush(thread);
 }
 
@@ -123,9 +123,9 @@ void Pipeline::FinishTask() {
 			finish_pipeline = sink->Finalize(*this, executor.context, move(sink_state));
 		} catch (std::exception &ex) {
 			executor.PushError(ex.what());
-		} catch (...) {
+		} catch (...) { // LCOV_EXCL_START
 			executor.PushError("Unknown exception in Finalize!");
-		}
+		} // LCOV_EXCL_STOP
 		if (finish_pipeline) {
 			Finish();
 		}
@@ -339,7 +339,7 @@ string Pipeline::ToString() const {
 	auto node = this->child;
 	while (node) {
 		str = PhysicalOperatorToString(node->type) + " -> " + str;
-		node = node->children[0].get();
+		node = node->children.empty() ? nullptr : node->children[0].get();
 	}
 	return str;
 }

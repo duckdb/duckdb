@@ -15,8 +15,6 @@ void BuiltinFunctions::RegisterDistributiveAggregates() {
 	Register<FirstFun>();
 	Register<MaxFun>();
 	Register<MinFun>();
-	Register<MaxByFun>();
-	Register<MinByFun>();
 	Register<SumFun>();
 	Register<StringAggFun>();
 	Register<ApproxCountDistinctFun>();

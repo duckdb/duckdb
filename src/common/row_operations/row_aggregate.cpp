@@ -62,8 +62,7 @@ void RowOperations::UpdateFilteredStates(AggregateObject &aggr, Vector &addresse
 	filtered_payload.Initialize(pay_types);
 	filtered_payload.Slice(payload, true_sel, count);
 
-	Vector filtered_addresses;
-	filtered_addresses.Slice(addresses, true_sel, count);
+	Vector filtered_addresses(addresses, true_sel, count);
 	filtered_addresses.Normalify(count);
 
 	UpdateStates(aggr, filtered_addresses, filtered_payload, arg_idx, filtered_payload.size());
@@ -95,7 +94,7 @@ void RowOperations::FinalizeStates(RowLayout &layout, Vector &addresses, DataChu
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &target = result.data[aggr_idx + i];
 		auto &aggr = aggregates[i];
-		aggr.function.finalize(addresses, aggr.bind_data, target, result.size());
+		aggr.function.finalize(addresses, aggr.bind_data, target, result.size(), 0);
 
 		// Move to the next aggregate state
 		VectorOperations::AddInPlace(addresses, aggr.payload_size, result.size());

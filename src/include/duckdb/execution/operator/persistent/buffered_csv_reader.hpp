@@ -75,6 +75,8 @@ struct BufferedCSVReaderOptions {
 	bool has_header = false;
 	//! Whether or not the file has a header line
 	bool header = false;
+	//! Whether or not header names shall be normalized
+	bool normalize_names = false;
 	//! How many leading rows to skip
 	idx_t skip_rows = 0;
 	//! Expected number of columns
@@ -134,6 +136,9 @@ public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
+	BufferedCSVReader(FileSystem &fs, BufferedCSVReaderOptions options,
+	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
+
 	FileSystem &fs;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
@@ -156,6 +161,7 @@ public:
 	idx_t sample_chunk_idx = 0;
 	bool jumping_samples = false;
 	bool end_of_file_reached = false;
+	bool bom_checked = false;
 
 	idx_t bytes_in_chunk = 0;
 	double bytes_per_line_avg = 0;
@@ -191,8 +197,6 @@ private:
 	bool TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type);
 	//! Skips skip_rows, reads header row from input stream
 	void SkipRowsAndReadHeader(idx_t skip_rows, bool skip_header);
-	//! Skip Byte Order Mark
-	void SkipBOM();
 	//! Jumps back to the beginning of input stream and resets necessary internal states
 	void JumpToBeginning(idx_t skip_rows, bool skip_header);
 	//! Jumps back to the beginning of input stream and resets necessary internal states
@@ -218,7 +222,7 @@ private:
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
 
-	unique_ptr<FileHandle> OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options);
+	unique_ptr<FileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
 };
 
 } // namespace duckdb

@@ -4,16 +4,13 @@
 //              operators
 //===--------------------------------------------------------------------===//
 
-#include "duckdb/common/row_operations/row_operations.hpp"
-
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
-#include "duckdb/common/types/string_heap.hpp"
-#include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
@@ -64,17 +61,8 @@ static void ComputeStringEntrySizes(const VectorData &col, idx_t entry_sizes[], 
 	}
 }
 
-static void ScatterStringVector(VectorData &col, Vector &rows, RowDataCollection &string_heap,
-                                const SelectionVector &sel, const idx_t count, const idx_t col_offset,
-                                const idx_t col_no) {
-
-	idx_t entry_sizes[STANDARD_VECTOR_SIZE];
-	std::fill_n(entry_sizes, count, 0);
-	ComputeStringEntrySizes(col, entry_sizes, sel, count);
-
-	data_ptr_t str_locations[STANDARD_VECTOR_SIZE];
-	string_heap.Build(count, str_locations, entry_sizes);
-
+static void ScatterStringVector(VectorData &col, Vector &rows, data_ptr_t str_locations[], const SelectionVector &sel,
+                                const idx_t count, const idx_t col_offset, const idx_t col_no) {
 	auto string_data = (string_t *)col.data;
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 
@@ -92,34 +80,16 @@ static void ScatterStringVector(VectorData &col, Vector &rows, RowDataCollection
 			const auto &str = string_data[col_idx];
 			string_t inserted((const char *)str_locations[i], str.GetSize());
 			memcpy(inserted.GetDataWriteable(), str.GetDataUnsafe(), str.GetSize());
+			str_locations[i] += str.GetSize();
 			inserted.Finalize();
 			Store<string_t>(inserted, row + col_offset);
 		}
 	}
 }
 
-static void ScatterNestedVector(Vector &vec, VectorData &col, Vector &rows, RowDataCollection &data_collection,
+static void ScatterNestedVector(Vector &vec, VectorData &col, Vector &rows, data_ptr_t data_locations[],
                                 const SelectionVector &sel, const idx_t count, const idx_t col_offset,
                                 const idx_t col_no, const idx_t vcount) {
-
-	idx_t entry_sizes[STANDARD_VECTOR_SIZE];
-	std::fill_n(entry_sizes, vcount, 0);
-
-	// FIXME: The top level here does another Orrify even though we have that information...
-	// FIXME: SerializeVector takes a selection, but ComputeEntrySizes does not...
-	RowDataCollection::ComputeEntrySizes(vec, entry_sizes, vcount);
-
-	// Only serialise the selected rows
-	for (idx_t i = 0; i < count; ++i) {
-		auto idx = sel.get_index(i);
-		auto col_idx = col.sel->get_index(idx);
-		entry_sizes[i] = entry_sizes[col_idx];
-	}
-
-	// Build out the buffer space
-	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
-	data_collection.Build(count, data_locations, entry_sizes);
-
 	// Store pointers to the data in the row
 	// Do this first because SerializeVector destroys the locations
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
@@ -131,7 +101,7 @@ static void ScatterNestedVector(Vector &vec, VectorData &col, Vector &rows, RowD
 	}
 
 	// Serialise the data
-	RowDataCollection::SerializeVector(vec, vcount, sel, count, col_no, data_locations, ptrs);
+	RowOperations::HeapScatter(vec, vcount, sel, count, col_no, data_locations, ptrs);
 }
 
 void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
@@ -151,6 +121,49 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 	const auto vcount = columns.size();
 	auto &offsets = layout.GetOffsets();
 	auto &types = layout.GetTypes();
+
+	// Compute the entry size of the variable size columns
+	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
+	if (!layout.AllConstant()) {
+		idx_t entry_sizes[STANDARD_VECTOR_SIZE];
+		std::fill_n(entry_sizes, count, sizeof(idx_t));
+		for (idx_t col_no = 0; col_no < types.size(); col_no++) {
+			if (TypeIsConstantSize(types[col_no].InternalType())) {
+				continue;
+			}
+
+			auto &vec = columns.data[col_no];
+			auto &col = col_data[col_no];
+			switch (types[col_no].InternalType()) {
+			case PhysicalType::VARCHAR:
+				ComputeStringEntrySizes(col, entry_sizes, sel, count);
+				break;
+			case PhysicalType::LIST:
+			case PhysicalType::MAP:
+			case PhysicalType::STRUCT:
+				RowOperations::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
+				break;
+			default:
+				throw Exception("Unsupported type for RowOperations::Scatter");
+			}
+		}
+
+		// Build out the buffer space
+		string_heap.Build(count, data_locations, entry_sizes);
+
+		// Serialize information that is needed for swizzling if the computation goes out-of-core
+		const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
+		for (idx_t i = 0; i < count; i++) {
+			auto row_idx = sel.get_index(i);
+			auto row = ptrs[row_idx];
+			// Pointer to this row in the heap block
+			Store<data_ptr_t>(data_locations[i], row + heap_pointer_offset);
+			// Row size is stored in the heap in front of each row
+			Store<idx_t>(entry_sizes[i], data_locations[i]);
+			data_locations[i] += sizeof(idx_t);
+		}
+	}
+
 	for (idx_t col_no = 0; col_no < types.size(); col_no++) {
 		auto &vec = columns.data[col_no];
 		auto &col = col_data[col_no];
@@ -194,19 +207,16 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 		case PhysicalType::INTERVAL:
 			TemplatedScatter<interval_t>(col, rows, sel, count, col_offset, col_no);
 			break;
-		case PhysicalType::HASH:
-			TemplatedScatter<hash_t>(col, rows, sel, count, col_offset, col_no);
-			break;
 		case PhysicalType::VARCHAR:
-			ScatterStringVector(col, rows, string_heap, sel, count, col_offset, col_no);
+			ScatterStringVector(col, rows, data_locations, sel, count, col_offset, col_no);
 			break;
 		case PhysicalType::LIST:
 		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
-			ScatterNestedVector(vec, col, rows, string_heap, sel, count, col_offset, col_no, vcount);
+			ScatterNestedVector(vec, col, rows, data_locations, sel, count, col_offset, col_no, vcount);
 			break;
 		default:
-			throw Exception("Unsupported type for RowOperations::Scatter");
+			throw InternalException("Unsupported type for RowOperations::Scatter");
 		}
 	}
 }

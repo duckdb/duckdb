@@ -1,0 +1,15 @@
+# name: test/sql/types/nested/list/list_minmax.test_slow
+# description: Test lists with aggregations
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE VIEW million_lists AS
+SELECT [(i+1) % 998513, i+1] as l FROM range(999983) tbl(i);
+
+query II
+SELECT min(l), max(l) FROM million_lists;
+----
+[0, 998513]	[998512, 998512]

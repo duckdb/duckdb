@@ -38,8 +38,6 @@ public:
 	DataChunk child_chunk;
 	//! State of the child of this operator
 	unique_ptr<PhysicalOperatorState> child_state;
-	//! The initial chunk
-	DataChunk initial_chunk;
 };
 
 //! PhysicalOperator is the base class of the physical operators present in the
@@ -86,10 +84,6 @@ public:
 	virtual void InitializeChunk(DataChunk &chunk) {
 		auto &types = GetTypes();
 		chunk.Initialize(types);
-	}
-	virtual void InitializeChunkEmpty(DataChunk &chunk) {
-		auto &types = GetTypes();
-		chunk.InitializeEmpty(types);
 	}
 	//! Retrieves a chunk from this operator and stores it in the chunk
 	//! variable.

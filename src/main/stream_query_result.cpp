@@ -29,7 +29,8 @@ string StreamQueryResult::ToString() {
 
 unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 	if (!success || !is_open) {
-		throw InvalidInputException("Attempting to fetch from an unsuccessful or closed streaming query result");
+		throw InvalidInputException(
+		    "Attempting to fetch from an unsuccessful or closed streaming query result\nError: %s", error);
 	}
 	auto chunk = context->Fetch();
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
@@ -47,9 +48,12 @@ unique_ptr<MaterializedQueryResult> StreamQueryResult::Materialize() {
 	while (true) {
 		auto chunk = Fetch();
 		if (!chunk || chunk->size() == 0) {
-			return result;
+			break;
 		}
 		result->collection.Append(*chunk);
+	}
+	if (!success) {
+		return make_unique<MaterializedQueryResult>(error);
 	}
 	return result;
 }

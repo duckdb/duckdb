@@ -28,12 +28,15 @@ namespace duckdb {
 class Appender;
 class Catalog;
 class DatabaseInstance;
+class LogicalOperator;
 class PreparedStatementData;
 class Relation;
 class BufferedFileWriter;
 class QueryProfiler;
 class QueryProfilerHistory;
 class ClientContextLock;
+struct CreateScalarFunctionInfo;
+class ScalarFunctionCatalogEntry;
 
 //! The ClientContext holds information relevant to the current client session
 //! during execution
@@ -79,6 +82,8 @@ public:
 	bool force_parallelism = false;
 	//! Force index join independent of table cardinality, used for testing
 	bool force_index_join = false;
+	//! Force out-of-core computation for operators that support it, used for testing
+	bool force_external = false;
 	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
 	//! elements)
 	idx_t perfect_ht_threshold = 12;
@@ -146,6 +151,8 @@ public:
 
 	//! Parse statements from a query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
+	//! Extract the logical plan of a query
+	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
 	void HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements);
 
 	//! Runs a function with a valid transaction context, potentially starting a transaction if the context is in auto
@@ -194,6 +201,8 @@ private:
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 
 	unique_ptr<ClientContextLock> LockContext();
+
+	bool UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function, CreateScalarFunctionInfo *new_info);
 
 private:
 	//! The currently opened StreamQueryResult (if any)

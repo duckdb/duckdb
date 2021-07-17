@@ -12,6 +12,7 @@
 #include "duckdb/execution/operator/persistent/buffered_csv_reader.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
@@ -101,6 +102,10 @@ vector<unique_ptr<SQLStatement>> Connection::ExtractStatements(const string &que
 	return context->ParseStatements(query);
 }
 
+unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
+	return context->ExtractPlan(query);
+}
+
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
 	context->Append(description, chunk);
 }
@@ -156,6 +161,7 @@ shared_ptr<Relation> Connection::Values(const string &values, const vector<strin
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
 	BufferedCSVReaderOptions options;
 	options.file_path = csv_file;
+	options.auto_detect = true;
 	BufferedCSVReader reader(*context, options);
 	vector<ColumnDefinition> column_list;
 	for (idx_t i = 0; i < reader.sql_types.size(); i++) {

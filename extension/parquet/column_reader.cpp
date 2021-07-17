@@ -18,6 +18,7 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #endif
 
@@ -39,10 +40,9 @@ const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                            idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-      type(move(type_p)), page_rows_available(0) {
+      type(move(type_p)), page_rows_available(0), dummy_result(type, nullptr) {
 
 	// dummies for Skip()
-	dummy_result.Initialize(Type());
 	none_filter.none();
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	dummy_repeat.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -345,16 +345,24 @@ void ColumnReader::Skip(idx_t num_values) {
 	}
 }
 
-void StringColumnReader::VerifyString(const char *str_data, idx_t str_len) {
+uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) {
 	if (Type() != LogicalTypeId::VARCHAR) {
-		return;
+		return str_len;
 	}
 	// verify if a string is actually UTF8, and if there are no null bytes in the middle of the string
 	// technically Parquet should guarantee this, but reality is often disappointing
-	auto utf_type = Utf8Proc::Analyze(str_data, str_len);
+	UnicodeInvalidReason reason;
+	size_t pos;
+	auto utf_type = Utf8Proc::Analyze(str_data, str_len, &reason, &pos);
 	if (utf_type == UnicodeType::INVALID) {
-		throw InternalException("Invalid string encoding found in Parquet file: value is not valid UTF8!");
+		if (reason == UnicodeInvalidReason::NULL_BYTE) {
+			// for null bytes we just truncate the string
+			return pos;
+		}
+		throw InvalidInputException("Invalid string encoding found in Parquet file: value \"" +
+		                            Blob::ToString(string_t(str_data, str_len)) + "\" is not valid UTF8!");
 	}
+	return str_len;
 }
 
 void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entries) {
@@ -364,8 +372,8 @@ void StringColumnReader::Dictionary(shared_ptr<ByteBuffer> data, idx_t num_entri
 		uint32_t str_len = dict->read<uint32_t>();
 		dict->available(str_len);
 
-		VerifyString(dict->ptr, str_len);
-		dict_strings[dict_idx] = string_t(dict->ptr, str_len);
+		auto actual_str_len = VerifyString(dict->ptr, str_len);
+		dict_strings[dict_idx] = string_t(dict->ptr, actual_str_len);
 		dict->inc(str_len);
 	}
 }
@@ -396,8 +404,8 @@ string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnR
 	auto &scr = ((StringColumnReader &)reader);
 	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
 	plain_data.available(str_len);
-	((StringColumnReader &)reader).VerifyString(plain_data.ptr, str_len);
-	auto ret_str = string_t(plain_data.ptr, str_len);
+	auto actual_str_len = ((StringColumnReader &)reader).VerifyString(plain_data.ptr, str_len);
+	auto ret_str = string_t(plain_data.ptr, actual_str_len);
 	plain_data.inc(str_len);
 	return ret_str;
 }
@@ -411,41 +419,39 @@ void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReade
 
 idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t *define_out, uint8_t *repeat_out,
                              Vector &result_out) {
-	if (!ListVector::HasEntry(result_out)) {
-		auto list_child = make_unique<Vector>(ListType::GetChildType(result_out.GetType()));
-		ListVector::SetEntry(result_out, move(list_child));
-	}
-
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
 
-	while (result_offset < num_values) {
-		auto child_req_num_values = MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
-
-		if (child_req_num_values == 0) {
-			break;
-		}
-
-		child_defines.zero();
-		child_repeats.zero();
+	D_ASSERT(ListVector::GetListSize(result_out) == 0);
+	// if an individual list is longer than STANDARD_VECTOR_SIZE we actually have to loop the child read to fill it
+	bool keep_calm_and_carry_on = true;
+	while (keep_calm_and_carry_on) {
+		Vector current_read_vector(ListType::GetChildType(Type()));
 
 		idx_t child_actual_num_values = 0;
 
 		if (overflow_child_count == 0) {
+			child_defines.zero();
+			child_repeats.zero();
+			auto child_req_num_values =
+			    MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
+
 			child_actual_num_values = child_column_reader->Read(child_req_num_values, child_filter, child_defines_ptr,
-			                                                    child_repeats_ptr, child_result);
+			                                                    child_repeats_ptr, current_read_vector);
 		} else {
 			child_actual_num_values = overflow_child_count;
 			overflow_child_count = 0;
-			child_result.Reference(overflow_child_vector);
+			current_read_vector.Reference(overflow_read_vector);
 		}
 
-		append_chunk.data[0].Reference(child_result);
-		append_chunk.SetCardinality(child_actual_num_values);
-		append_chunk.Verify();
+		if (child_actual_num_values == 0) {
+			break;
+		}
 
+		current_read_vector.Verify(child_actual_num_values);
 		idx_t current_chunk_offset = ListVector::GetListSize(result_out);
-		ListVector::Append(result_out, append_chunk.data[0], append_chunk.size());
+		ListVector::Append(result_out, current_read_vector, child_actual_num_values);
+
 		// hard-won piece of code this, modify at your own risk
 		// the intuition is that we have to only collapse values into lists that are repeated *on this level*
 		// the rest is pretty much handed up as-is as a single-valued list or NULL
@@ -456,7 +462,9 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 				result_ptr[result_offset - 1].length++;
 				continue;
 			}
+
 			if (result_offset >= num_values) { // we ran out of output space
+				keep_calm_and_carry_on = false;
 				break;
 			}
 			if (child_defines_ptr[child_idx] >= max_define) {
@@ -479,9 +487,9 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 		// we have read more values from the child reader than we can fit into the result for this read
 		// we have to pass everything from child_idx to child_actual_num_values into the next call
 		if (child_idx < child_actual_num_values && result_offset == num_values) {
-			overflow_child_vector.Slice(child_result, child_idx);
+			overflow_read_vector.Slice(current_read_vector, child_idx);
 			overflow_child_count = child_actual_num_values - child_idx;
-			overflow_child_vector.Verify(overflow_child_count);
+			overflow_read_vector.Verify(overflow_child_count);
 
 			// move values in the child repeats and defines *backward* by child_idx
 			for (idx_t repdef_idx = 0; repdef_idx < overflow_child_count; repdef_idx++) {
@@ -498,19 +506,13 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
                                    idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
                                    unique_ptr<ColumnReader> child_column_reader_p)
     : ColumnReader(reader, move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_column_reader(move(child_column_reader_p)), overflow_child_count(0) {
+      child_column_reader(move(child_column_reader_p)), overflow_read_vector(ListType::GetChildType(Type())),
+      overflow_child_count(0) {
 
 	child_defines.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_defines_ptr = (uint8_t *)child_defines.ptr;
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
-
-	auto child_type = ListType::GetChildType(Type());
-	child_result.Initialize(child_type);
-
-	vector<LogicalType> append_chunk_types;
-	append_chunk_types.push_back(child_type);
-	append_chunk.Initialize(append_chunk_types);
 
 	child_filter.set();
 }

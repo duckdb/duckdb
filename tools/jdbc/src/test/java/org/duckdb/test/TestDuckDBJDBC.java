@@ -994,7 +994,7 @@ public class TestDuckDBJDBC {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 		ResultSet rs = stmt
-				.executeQuery("SELECT COUNT(*) FROM parquet_scan('test/sql/copy/parquet/data/userdata1.parquet')");
+				.executeQuery("SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet')");
 		assertTrue(rs.next());
 		assertEquals(rs.getInt(1), 1000);
 		rs.close();

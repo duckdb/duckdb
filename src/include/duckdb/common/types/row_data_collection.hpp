@@ -9,29 +9,25 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/string_heap.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
 struct RowDataBlock {
-	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size, idx_t added_capacity = 0)
+	RowDataBlock(BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
 	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
-		capacity += added_capacity;
 		block = buffer_manager.RegisterMemory(capacity * entry_size, false);
 	}
+	//! The buffer block handle
 	shared_ptr<BlockHandle> block;
-	const idx_t capacity;
+	//! Capacity (number of entries) and entry size that fit in this block
+	idx_t capacity;
 	const idx_t entry_size;
+	//! Number of entries currently in this block
 	idx_t count;
+	//! Write offset (if variable size entries)
 	idx_t byte_offset;
-
-	RowDataBlock(const RowDataBlock &other)
-	    : block(other.block), capacity(other.capacity), entry_size(other.entry_size), count(other.count),
-	      byte_offset(other.byte_offset) {
-	}
 };
 
 struct BlockAppendEntry {
@@ -43,9 +39,7 @@ struct BlockAppendEntry {
 
 class RowDataCollection {
 public:
-	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size);
-
-	mutex rc_lock;
+	RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size, bool keep_pinned = false);
 
 	//! BufferManager
 	BufferManager &buffer_manager;
@@ -57,51 +51,22 @@ public:
 	idx_t entry_size;
 	//! The blocks holding the main data
 	vector<RowDataBlock> blocks;
+	//! The blocks that this collection currently has pinned
+	vector<unique_ptr<BufferHandle>> pinned_blocks;
 
 public:
-	void SerializeVectorSortable(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-	                             data_ptr_t key_locations[], bool desc, bool has_null, bool invert, idx_t prefix_len);
-
-	static void ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset = 0);
-	static void ComputeEntrySizes(DataChunk &input, idx_t entry_sizes[], idx_t entry_size);
-
-	static void SerializeVectorData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
-	                                idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
-	                                idx_t offset = 0);
-	static void SerializeVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-	                            data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset = 0);
 	idx_t AppendToBlock(RowDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
 	                    idx_t remaining, idx_t entry_sizes[]);
-	void Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[]);
+	vector<unique_ptr<BufferHandle>> Build(idx_t added_count, data_ptr_t key_locations[], idx_t entry_sizes[],
+	                                       const SelectionVector *sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR);
 
 	void Merge(RowDataCollection &other);
 
-	static void DeserializeIntoVector(Vector &v, const idx_t &vcount, const SelectionVector &sel, const idx_t &col_idx,
-	                                  data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
-
 private:
-	template <class T>
-	void TemplatedSerializeVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t count,
-	                                      data_ptr_t key_locations[], bool desc, bool has_null, bool invert);
-	void SerializeStringVectorSortable(VectorData &vdata, const SelectionVector &sel, idx_t add_count,
-	                                   data_ptr_t key_locations[], const bool desc, const bool has_null,
-	                                   const bool nulls_first, const idx_t prefix_len);
+	mutex rdc_lock;
 
-	static void ComputeStringEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset);
-	static void ComputeStructEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset);
-	static void ComputeListEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t offset);
-
-	static void SerializeStringVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-	                                  idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
-	                                  idx_t offset);
-	static void SerializeStructVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
-	                                  idx_t col_idx, data_ptr_t key_locations[], data_ptr_t validitymask_locations[],
-	                                  idx_t offset);
-	static void SerializeListVector(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
-	                                data_ptr_t key_locations[], data_ptr_t validitymask_locations[], idx_t offset);
-
-	//! Whether the system is little endian
-	const bool is_little_endian;
+	//! Whether the blocks should stay pinned (necessary for e.g. a heap)
+	const bool keep_pinned;
 };
 
 } // namespace duckdb

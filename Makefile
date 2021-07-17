@@ -73,7 +73,7 @@ ifeq (${BUILD_ODBC}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_ODBC_DRIVER=1
 endif
 ifeq (${BUILD_PYTHON}, 1)
-	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1
 endif
 ifeq (${BUILD_R}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
@@ -125,7 +125,6 @@ unittest: debug
 unittestci:
 	build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
-	build/debug/tools/arrow_abi_test/arrow_abi_test
 
 allunit: release_expanded # uses release build because otherwise allunit takes forever
 	build/release_expanded/test/unittest "*"
@@ -165,7 +164,7 @@ amaldebug:
 tidy-check:
 	mkdir -p build/tidy && \
 	cd build/tidy && \
-	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_ODBC_DRIVER=TRUE -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
 	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER}
 
 tidy-fix:
