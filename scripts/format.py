@@ -12,7 +12,7 @@ from python_helpers import open_utf8
 
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
 cmake_format_command = 'cmake-format'
-extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test', '.test_slow']
+extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test', '.test_slow', '.test_coverage']
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
                  'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c',
@@ -178,7 +178,7 @@ def get_formatted_text(f, full_path, directory, ext):
             if not is_old_header:
                 text += line
 
-    if ext == '.test' or ext == '.test_slow':
+    if ext == '.test' or ext == '.test_slow' or ext == '.test_coverage':
         f = open_utf8(full_path, 'r')
         lines = f.readlines()
         f.close()

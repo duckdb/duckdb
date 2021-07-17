@@ -147,8 +147,10 @@ void ConstantSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &re
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
+// LCOV_EXCL_START
 idx_t ConstantSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
 	throw InternalException("Cannot append to a constant segment");
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
