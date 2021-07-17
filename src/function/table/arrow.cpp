@@ -16,6 +16,7 @@
 #include "utf8proc_wrapper.hpp"
 
 #include "duckdb/common/operator/multiply.hpp"
+#include <mutex>
 namespace duckdb {
 
 LogicalType GetArrowLogicalType(ArrowSchema &schema,
@@ -1034,9 +1035,12 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
                                                     ParallelState *parallel_state_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	auto &state = (ArrowScanState &)*operator_state;
-
+	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
+	lock_guard<mutex> parallel_lock(parallel_state.lock);
 	state.chunk_offset = 0;
+
 	state.chunk = bind_data.stream->GetNextChunk();
+
 	//! have we run out of chunks? we are done
 	if (!state.chunk->arrow_array.release) {
 		return false;

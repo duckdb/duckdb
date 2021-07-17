@@ -162,14 +162,22 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::objec
 	return this;
 }
 
+// duckdb_register_arrow <- function(conn, name, arrow_scannable) {
+//   stopifnot(dbIsValid(conn))
+
+//     # create some R functions to pass to c-land
+//     export_fun <- function(arrow_scannable, stream_ptr) {
+//         record_batch_reader <- arrow::Scanner$create(arrow_scannable)$ToRecordBatchReader()
+//         record_batch_reader$export_to_c(stream_ptr)
+//     }
+//   .Call(duckdb_register_arrow_R, conn@conn_ref, as.character(name), export_fun, arrow_scannable)
+//   invisible(TRUE)
+// }
+
 DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::object &table,
                                                       const idx_t rows_per_tuple) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
-	}
-	auto py_object_type = string(py::str(table.get_type().attr("__name__")));
-	if (table.is_none() || (py_object_type != "Table" && py_object_type != "FileSystemDataset")) {
-		throw std::runtime_error("Only arrow tables/datasets are supported");
 	}
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 
@@ -270,13 +278,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 		throw std::runtime_error("connection closed");
 	}
 	py::gil_scoped_acquire acquire;
-
-	// the following is a careful dance around having to depend on pyarrow
-	auto py_object_type = string(py::str(table.get_type().attr("__name__")));
-	if (table.is_none() || (py_object_type != "Table" && py_object_type != "FileSystemDataset")) {
-		throw std::runtime_error("Only arrow tables/datasets are supported");
-	}
-
 	string name = "arrow_table_" + GenerateRandomName();
 
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
