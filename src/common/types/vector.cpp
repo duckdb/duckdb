@@ -116,18 +116,19 @@ void Vector::Slice(Vector &other, idx_t offset) {
 
 	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		Initialize();
-		auto &entries = StructVector::GetEntries(*this);
+		Vector new_vector(GetType());
+		auto &entries = StructVector::GetEntries(new_vector);
 		auto &other_entries = StructVector::GetEntries(other);
 		D_ASSERT(entries.size() == other_entries.size());
 		for (idx_t i = 0; i < entries.size(); i++) {
 			entries[i]->Slice(*other_entries[i], offset);
 		}
 		if (offset > 0) {
-			validity.Slice(other.validity, offset);
+			new_vector.validity.Slice(other.validity, offset);
 		} else {
-			validity = other.validity;
+			new_vector.validity = other.validity;
 		}
+		Reference(new_vector);
 	} else {
 		Reference(other);
 		if (offset > 0) {
