@@ -952,40 +952,6 @@ jobs:
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           cibuildwheel --output-dir wheelhouse duckdb_tarball
 
-  linux-python2:
-    name: Python 2 Linux
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CIBW_BUILD: 'cp27-*'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-      CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" '
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: pip install cibuildwheel twine
-
-    - name: Build
-      run: |
-        cd tools/pythonpkg
-        python setup.py sdist
-        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cibuildwheel --output-dir wheelhouse duckdb_tarball
-
-
   osx-python3:
     name: Python 3 OSX
     runs-on: macos-latest
@@ -1136,6 +1102,34 @@ jobs:
         R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
         if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
+  linux-tarball-v2:
+    name: Python 2 Tarball
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '2.7'
+
+    - name: Install
+      run: pip install numpy
+
+    - name: Build
+      run: |
+        python --version
+        git archive --format zip --output test-tarball.zip HEAD
+        mkdir duckdb-test-tarball
+        mv test-tarball.zip duckdb-test-tarball
+        cd duckdb-test-tarball
+        unzip test-tarball.zip
+        cd tools/pythonpkg
+        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+        python setup.py install --user
 
   linux-tarball:
     name: Python 3 Tarball
