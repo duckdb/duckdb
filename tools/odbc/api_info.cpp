@@ -28,7 +28,7 @@ const std::vector<SQLUSMALLINT> ApiInfo::ALL_SUPPORTED_FUNCTIONS = {
     SQL_API_SQLDESCRIBEPARAM,  SQL_API_SQLDESCRIBECOL,  SQL_API_SQLCOLATTRIBUTES,  SQL_API_SQLFETCHSCROLL,
     SQL_API_SQLROWCOUNT,       SQL_API_SQLGETDIAGFIELD, SQL_API_SQLGETDIAGREC,     SQL_API_SQLGETFUNCTIONS,
     SQL_API_SQLBINDPARAMETER,  SQL_API_SQLGETDATA,      SQL_API_SQLFETCH,          SQL_API_SQLEXECUTE,
-    SQL_API_SQLNUMRESULTCOLS,  SQL_API_SQLGETTYPEINFO};
+    SQL_API_SQLNUMRESULTCOLS,  SQL_API_SQLGETTYPEINFO,  SQL_API_SQLBINDCOL};
 
 const std::vector<SQLUSMALLINT> ApiInfo::ODBC3_SUPPORTED_FUNCTIONS = {
     SQL_API_SQLALLOCHANDLE,    SQL_API_SQLFREEHANDLE,   SQL_API_SQLGETCONNECTATTR, SQL_API_SQLSETENVATTR,
@@ -38,7 +38,7 @@ const std::vector<SQLUSMALLINT> ApiInfo::ODBC3_SUPPORTED_FUNCTIONS = {
     SQL_API_SQLDESCRIBEPARAM,  SQL_API_SQLDESCRIBECOL,  SQL_API_SQLCOLATTRIBUTES,  SQL_API_SQLFETCHSCROLL,
     SQL_API_SQLROWCOUNT,       SQL_API_SQLGETDIAGFIELD, SQL_API_SQLGETDIAGREC,     SQL_API_SQLGETFUNCTIONS,
     SQL_API_SQLBINDPARAMETER,  SQL_API_SQLGETDATA,      SQL_API_SQLFETCH,          SQL_API_SQLEXECUTE,
-    SQL_API_SQLNUMRESULTCOLS,  SQL_API_SQLGETTYPEINFO};
+    SQL_API_SQLNUMRESULTCOLS,  SQL_API_SQLGETTYPEINFO,  SQL_API_SQLBINDCOL};
 
 const std::vector<SQLSMALLINT> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {SQL_CHAR,
                                                                     SQL_TINYINT,
@@ -56,6 +56,8 @@ const std::vector<SQLSMALLINT> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {SQL_CHAR,
                                                                     SQL_FLOAT,
                                                                     SQL_DOUBLE,
                                                                     SQL_VARCHAR,
+                                                                    SQL_BINARY,
+                                                                    SQL_VARBINARY,
                                                                     SQL_INTERVAL_MONTH,
                                                                     SQL_INTERVAL_YEAR,
                                                                     SQL_INTERVAL_YEAR_TO_MONTH,
@@ -113,6 +115,7 @@ SQLRETURN ApiInfo::GetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function
 	case SQL_API_SQLDESCRIBECOL:
 	case SQL_API_SQLCOLATTRIBUTES:
 	case SQL_API_SQLNUMRESULTCOLS:
+	case SQL_API_SQLBINDCOL:
 	// results
 	case SQL_API_SQLGETDATA:
 	case SQL_API_SQLFETCH:
@@ -178,6 +181,8 @@ SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
 		return SQL_TIME;
 	case LogicalTypeId::VARCHAR:
 		return SQL_VARCHAR;
+	case LogicalTypeId::BLOB:
+		return SQL_VARBINARY;
 	case LogicalTypeId::INTERVAL:
 		return SQL_TIME;
 	default:
