@@ -129,15 +129,7 @@ typedef void *duckdb_database;
 typedef void *duckdb_connection;
 typedef void *duckdb_prepared_statement;
 typedef void *duckdb_appender;
-
-typedef struct {
-	idx_t column_count;
-	idx_t row_count;
-	idx_t rows_changed;
-	void *arrow;
-	char *error_message;
-} duckdb_arrow;
-
+typedef void *duckdb_arrow;
 typedef void *duckdb_config;
 // we don't need to spell out the schema/array in here
 // because it's a common interface, users can consume
@@ -155,6 +147,8 @@ DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_ar
 //! This function can be called multiple time to get next chunks, which will free the previous out_array.
 //! So consume the out_array before call this function again
 DUCKDB_API duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *out_array);
+//! get arrow error message
+DUCKDB_API const char *duckdb_query_arrow_error(duckdb_arrow result);
 //! Destroys the arrow result
 DUCKDB_API void duckdb_destroy_arrow(duckdb_arrow *result);
 
