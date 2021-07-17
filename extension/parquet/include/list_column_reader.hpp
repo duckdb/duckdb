@@ -30,7 +30,7 @@ public:
 	}
 
 	idx_t GroupRowsAvailable() override {
-		return child_column_reader->GroupRowsAvailable();
+		return child_column_reader->GroupRowsAvailable() + overflow_child_count;
 	}
 
 private:
