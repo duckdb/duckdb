@@ -1130,6 +1130,7 @@ jobs:
         cd tools/pythonpkg
         export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
         python setup.py install --user
+        (cd tests/ && python -m pytest)
 
   linux-tarball:
     name: Python 3 Tarball
@@ -1150,6 +1151,7 @@ jobs:
 
     - name: Build
       run: |
+        python --version
         git archive --format zip --output test-tarball.zip HEAD
         mkdir duckdb-test-tarball
         mv test-tarball.zip duckdb-test-tarball
@@ -1157,7 +1159,8 @@ jobs:
         unzip test-tarball.zip
         cd tools/pythonpkg
         export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-        python3 setup.py install --user
+        python setup.py install --user
+        (cd tests/ && python -m pytest)
 
   linux-nodejs:
     name: node.js Linux
