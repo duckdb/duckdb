@@ -40,7 +40,8 @@ private:
 	uint8_t *child_defines_ptr;
 	uint8_t *child_repeats_ptr;
 
-	Vector overflow_read_vector;
+	VectorCache read_cache;
+	Vector read_vector;
 
 	parquet_filter_t child_filter;
 

@@ -23,6 +23,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/vector_cache.hpp"
 #endif
 
 namespace duckdb {
