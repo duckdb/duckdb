@@ -95,6 +95,22 @@ sales	3	4
 sales	4	4
 
 # nth_value
+statement error
+SELECT depname, empno,
+	nth_value(empno) OVER (
+		PARTITION BY depname ORDER BY empno ASC
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empsalary
+
+statement error
+SELECT depname, empno,
+	nth_value(empno, 2, 3) OVER (
+		PARTITION BY depname ORDER BY empno ASC
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empsalary
+
 query III
 SELECT depname, empno,
 	nth_value(empno, 2) OVER (
