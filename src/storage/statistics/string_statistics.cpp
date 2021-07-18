@@ -167,8 +167,8 @@ string StringStatistics::ToString() {
 	                          validity_stats ? validity_stats->ToString() : "");
 }
 
-void StringStatistics::Verify(Vector &vector, idx_t count) {
-	BaseStatistics::Verify(vector, count);
+void StringStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
+	BaseStatistics::Verify(vector, sel, count);
 
 	string_t min_string((const char *)min, MAX_STRING_MINMAX_SIZE);
 	string_t max_string((const char *)max, MAX_STRING_MINMAX_SIZE);
@@ -177,7 +177,8 @@ void StringStatistics::Verify(Vector &vector, idx_t count) {
 	vector.Orrify(count, vdata);
 	auto data = (string_t *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		auto index = vdata.sel->get_index(i);
+		auto idx = sel.get_index(i);
+		auto index = vdata.sel->get_index(idx);
 		if (!vdata.validity.RowIsValid(index)) {
 			continue;
 		}

@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-ExpressionExecutor::ExpressionExecutor()  {
+ExpressionExecutor::ExpressionExecutor() {
 }
 
 ExpressionExecutor::ExpressionExecutor(const Expression *expression) : ExpressionExecutor() {

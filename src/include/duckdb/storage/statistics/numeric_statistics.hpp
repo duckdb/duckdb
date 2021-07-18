@@ -41,13 +41,13 @@ public:
 	unique_ptr<BaseStatistics> Copy() override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
-	void Verify(Vector &vector, idx_t count) override;
+	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) override;
 
 	string ToString() override;
 
 private:
 	template <class T>
-	void TemplatedVerify(Vector &vector, idx_t count);
+	void TemplatedVerify(Vector &vector, const SelectionVector &sel, idx_t count);
 
 public:
 	template <class T>

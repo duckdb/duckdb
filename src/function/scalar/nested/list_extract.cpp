@@ -201,7 +201,7 @@ void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	                    ListExtractFunction, false, ListExtractBind, nullptr, ListExtractStats);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR, ListExtractFunction, false,
-	                    nullptr, nullptr, ListExtractStats);
+	                    nullptr);
 
 	ScalarFunctionSet list_extract("list_extract");
 	list_extract.AddFunction(lfun);

@@ -188,13 +188,14 @@ string NumericStatistics::ToString() {
 }
 
 template <class T>
-void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
+void NumericStatistics::TemplatedVerify(Vector &vector, const SelectionVector &sel, idx_t count) {
 	VectorData vdata;
 	vector.Orrify(count, vdata);
 
 	auto data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		auto index = vdata.sel->get_index(i);
+		auto idx = sel.get_index(i);
+		auto index = vdata.sel->get_index(idx);
 		if (!vdata.validity.RowIsValid(index)) {
 			continue;
 		}
@@ -209,32 +210,32 @@ void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
 	}
 }
 
-void NumericStatistics::Verify(Vector &vector, idx_t count) {
-	BaseStatistics::Verify(vector, count);
+void NumericStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
+	BaseStatistics::Verify(vector, sel, count);
 
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 		break;
 	case PhysicalType::INT8:
-		TemplatedVerify<int8_t>(vector, count);
+		TemplatedVerify<int8_t>(vector, sel, count);
 		break;
 	case PhysicalType::INT16:
-		TemplatedVerify<int16_t>(vector, count);
+		TemplatedVerify<int16_t>(vector, sel, count);
 		break;
 	case PhysicalType::INT32:
-		TemplatedVerify<int32_t>(vector, count);
+		TemplatedVerify<int32_t>(vector, sel, count);
 		break;
 	case PhysicalType::INT64:
-		TemplatedVerify<int64_t>(vector, count);
+		TemplatedVerify<int64_t>(vector, sel, count);
 		break;
 	case PhysicalType::INT128:
-		TemplatedVerify<hugeint_t>(vector, count);
+		TemplatedVerify<hugeint_t>(vector, sel, count);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedVerify<float>(vector, count);
+		TemplatedVerify<float>(vector, sel, count);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedVerify<double>(vector, count);
+		TemplatedVerify<double>(vector, sel, count);
 		break;
 	default:
 		throw InternalException("Unsupported type %s for numeric statistics verify", type.ToString());
