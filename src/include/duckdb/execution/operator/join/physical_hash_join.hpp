@@ -18,42 +18,7 @@
 
 namespace duckdb {
 
-class PhysicalHashJoinState : public PhysicalOperatorState {
-public:
-	PhysicalHashJoinState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right,
-	                      vector<JoinCondition> &conditions)
-	    : PhysicalOperatorState(op, left) {
-	}
-
-	DataChunk cached_chunk;
-	DataChunk join_keys;
-	ExpressionExecutor probe_executor;
-	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
-	SelectionVector build_sel_vec;
-	SelectionVector probe_sel_vec;
-	SelectionVector seq_sel_vec;
-};
 //! PhysicalHashJoin represents a hash loop join between two tables
-
-class HashJoinGlobalState : public GlobalOperatorState {
-public:
-	HashJoinGlobalState() {
-	}
-
-	//! The HT used by the join
-	unique_ptr<JoinHashTable> hash_table;
-	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
-	JoinHTScanState ht_scan_state;
-	vector<Vector> build_columns; // for build_data storage
-	LogicalType key_type {LogicalType::INVALID};
-};
-
-class HashJoinLocalState : public LocalSinkState {
-public:
-	DataChunk build_chunk;
-	DataChunk join_keys;
-	ExpressionExecutor build_executor;
-};
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
@@ -72,9 +37,9 @@ public:
 	vector<LogicalType> build_types;
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
-	//! Checks and execute perfect hash join optimization
-	unique_ptr<PerfectHashJoinExecutor> pjoin_executor {nullptr};
 	bool use_perfect_hash {false};
+	// used in perfect hash join
+	PerfectHashJoinStats perfect_join_statistics;
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

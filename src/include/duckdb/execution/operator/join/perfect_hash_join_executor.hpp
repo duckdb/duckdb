@@ -9,7 +9,9 @@
 #pragma once
 
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
 
@@ -48,6 +50,8 @@ public:
 	void TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
 	                                       idx_t count);
 	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type, JoinHashTable *hash_table);
+
+public:
 	bool has_duplicates {false};
 
 private:

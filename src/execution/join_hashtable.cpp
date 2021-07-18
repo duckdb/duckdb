@@ -778,8 +778,8 @@ idx_t JoinHashTable::FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanStat
 
 	// iterate over blocks
 	idx_t key_count = 0;
-	while (state.block_position < blocks.size()) {
-		auto &block = blocks[state.block_position];
+	while (state.block_position < block_collection->blocks.size()) {
+		auto &block = block_collection->blocks[state.block_position];
 		auto handle = buffer_manager.Pin(block.block);
 		auto base_ptr = handle->node->buffer;
 		// go through all the tuples within this block

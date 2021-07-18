@@ -170,14 +170,8 @@ void RowOperations::FullScanColumn(const RowLayout &layout, Vector &rows, Vector
 	case PhysicalType::DOUBLE:
 		TemplatedFullScanLoop<double>(rows, col, count, col_offset, col_no);
 		break;
-	case PhysicalType::POINTER:
-		TemplatedFullScanLoop<uintptr_t>(rows, col, count, col_offset, col_no);
-		break;
 	case PhysicalType::INTERVAL:
 		TemplatedFullScanLoop<interval_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::HASH:
-		TemplatedFullScanLoop<hash_t>(rows, col, count, col_offset, col_no);
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedFullScanLoop<string_t>(rows, col, count, col_offset, col_no);

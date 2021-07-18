@@ -29,7 +29,7 @@ void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_pt
 
 void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType key_type,
                                                 JoinHashTable *hash_table) {
-	Vector tuples_addresses(LogicalType::POINTER, hash_table->size());      // allocate space for all the tuples
+	Vector tuples_addresses(LogicalType::POINTER, hash_table->Count());     // allocate space for all the tuples
 	auto key_locations = FlatVector::GetData<data_ptr_t>(tuples_addresses); // get a pointer to vector data
 	// TODO: In a parallel finalize: One should exclusivly lock and each thread should do one part of the code below.
 	// Go through all the blocks and fill the keys addresses
@@ -61,29 +61,34 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 
 void PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, SelectionVector &sel_vec,
                                                              SelectionVector &seq_sel_vec, idx_t count) {
-	switch (source.GetType().id()) {
-	case LogicalTypeId::TINYINT:
+	switch (source.GetType().InternalType()) {
+	case PhysicalType::INT8:
 		TemplatedFillSelectionVectorBuild<int8_t>(source, sel_vec, seq_sel_vec, count);
 		break;
-	case LogicalTypeId::SMALLINT:
+	case PhysicalType::INT16:
 		TemplatedFillSelectionVectorBuild<int16_t>(source, sel_vec, seq_sel_vec, count);
 		break;
-	case LogicalTypeId::INTEGER:
+	case PhysicalType::TIME32:
+	case PhysicalType::DATE32:
+	case PhysicalType::INT32:
 		TemplatedFillSelectionVectorBuild<int32_t>(source, sel_vec, seq_sel_vec, count);
 		break;
-	case LogicalTypeId::BIGINT:
+	case PhysicalType::TIMESTAMP:
+	case PhysicalType::TIME64:
+	case PhysicalType::DATE64:
+	case PhysicalType::INT64:
 		TemplatedFillSelectionVectorBuild<int64_t>(source, sel_vec, seq_sel_vec, count);
 		break;
-	case LogicalTypeId::UTINYINT:
+	case PhysicalType::UINT8:
 		TemplatedFillSelectionVectorBuild<uint8_t>(source, sel_vec, seq_sel_vec, count);
 		break;
-	case LogicalTypeId::USMALLINT:
+	case PhysicalType::UINT16:
 		TemplatedFillSelectionVectorBuild<uint16_t>(source, sel_vec, seq_sel_vec, count);
 		break;
-	case LogicalTypeId::UINTEGER:
+	case PhysicalType::UINT32:
 		TemplatedFillSelectionVectorBuild<uint32_t>(source, sel_vec, seq_sel_vec, count);
 		break;
-	case LogicalTypeId::UBIGINT:
+	case PhysicalType::UINT64:
 		TemplatedFillSelectionVectorBuild<uint64_t>(source, sel_vec, seq_sel_vec, count);
 		break;
 	default:
@@ -101,7 +106,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 	source.Orrify(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);
 	// generate the selection vector
-	for (idx_t i = 0, sel_idx = 0; i != count; ++i) {
+	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
 		auto data_idx = vector_data.sel->get_index(i);
 		auto input_value = data[data_idx];
 		// add index to selection vector if value in the range
@@ -160,29 +165,34 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
 
 void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, SelectionVector &build_sel_vec,
                                                              SelectionVector &probe_sel_vec, idx_t count) {
-	switch (source.GetType().id()) {
-	case LogicalTypeId::TINYINT:
+	switch (source.GetType().InternalType()) {
+	case PhysicalType::INT8:
 		TemplatedFillSelectionVectorProbe<int8_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
-	case LogicalTypeId::SMALLINT:
+	case PhysicalType::INT16:
 		TemplatedFillSelectionVectorProbe<int16_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
-	case LogicalTypeId::INTEGER:
+	case PhysicalType::TIME32:
+	case PhysicalType::DATE32:
+	case PhysicalType::INT32:
 		TemplatedFillSelectionVectorProbe<int32_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
-	case LogicalTypeId::BIGINT:
+	case PhysicalType::TIMESTAMP:
+	case PhysicalType::TIME64:
+	case PhysicalType::DATE64:
+	case PhysicalType::INT64:
 		TemplatedFillSelectionVectorProbe<int64_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
-	case LogicalTypeId::UTINYINT:
+	case PhysicalType::UINT8:
 		TemplatedFillSelectionVectorProbe<uint8_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
-	case LogicalTypeId::USMALLINT:
+	case PhysicalType::UINT16:
 		TemplatedFillSelectionVectorProbe<uint16_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
-	case LogicalTypeId::UINTEGER:
+	case PhysicalType::UINT32:
 		TemplatedFillSelectionVectorProbe<uint32_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
-	case LogicalTypeId::UBIGINT:
+	case PhysicalType::UINT64:
 		TemplatedFillSelectionVectorProbe<uint64_t>(source, build_sel_vec, probe_sel_vec, count);
 		break;
 	default:
@@ -201,7 +211,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
 	auto data = reinterpret_cast<T *>(vector_data.data);
 
 	// build selection vector for non-dense build
-	for (idx_t i = 0, sel_idx = 0; i != count; ++i) {
+	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
 		// retrieve value from vector
 		auto data_idx = vector_data.sel->get_index(i);
 		auto input_value = data[data_idx];

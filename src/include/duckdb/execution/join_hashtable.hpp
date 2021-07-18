@@ -118,11 +118,9 @@ public:
 	unique_ptr<ScanStructure> Probe(DataChunk &keys);
 	//! Scan the HT to construct the final full outer join result after
 	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
-	//! Fill the pointer with all the addresses from the hashtable
+	//! Fill the pointer with all the addresses from the hashtable for full scan
 	idx_t FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
-	idx_t size() {
-		return count;
-	}
+
 	idx_t Count() {
 		return block_collection->count;
 	}
@@ -150,9 +148,9 @@ public:
 	//! The join type of the HT
 	JoinType join_type;
 	//! Whether or not the HT has been finalized
-	bool finalized {false};
+	bool finalized;
 	//! Whether or not any of the key elements contain NULL
-	bool has_null {false};
+	bool has_null;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 
