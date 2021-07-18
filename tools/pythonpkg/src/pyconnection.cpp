@@ -162,18 +162,6 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::objec
 	return this;
 }
 
-// duckdb_register_arrow <- function(conn, name, arrow_scannable) {
-//   stopifnot(dbIsValid(conn))
-
-//     # create some R functions to pass to c-land
-//     export_fun <- function(arrow_scannable, stream_ptr) {
-//         record_batch_reader <- arrow::Scanner$create(arrow_scannable)$ToRecordBatchReader()
-//         record_batch_reader$export_to_c(stream_ptr)
-//     }
-//   .Call(duckdb_register_arrow_R, conn@conn_ref, as.character(name), export_fun, arrow_scannable)
-//   invisible(TRUE)
-// }
-
 DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::object &table,
                                                       const idx_t rows_per_tuple) {
 	if (!connection) {
