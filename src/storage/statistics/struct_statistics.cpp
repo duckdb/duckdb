@@ -1,5 +1,6 @@
 #include "duckdb/storage/statistics/struct_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
 
