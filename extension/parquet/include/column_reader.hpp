@@ -23,6 +23,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/types/vector_cache.hpp"
 #endif
 
 namespace duckdb {
@@ -47,7 +48,7 @@ public:
 	ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
 	             idx_t max_define_p, idx_t max_repeat_p);
 
-	virtual void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
+	virtual void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 		D_ASSERT(file_idx < columns.size());
 		chunk = &columns[file_idx];
 		protocol = &protocol_p;
