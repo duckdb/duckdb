@@ -25,12 +25,12 @@ public:
 		D_ASSERT(0);
 	}
 
-	void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
-		child_column_reader->IntializeRead(columns, protocol_p);
+	void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
+		child_column_reader->InitializeRead(columns, protocol_p);
 	}
 
 	idx_t GroupRowsAvailable() override {
-		return child_column_reader->GroupRowsAvailable();
+		return child_column_reader->GroupRowsAvailable() + overflow_child_count;
 	}
 
 private:
@@ -40,7 +40,8 @@ private:
 	uint8_t *child_defines_ptr;
 	uint8_t *child_repeats_ptr;
 
-	Vector overflow_read_vector;
+	VectorCache read_cache;
+	Vector read_vector;
 
 	parquet_filter_t child_filter;
 
