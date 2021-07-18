@@ -28,7 +28,7 @@ jobs:
     - name: Install
       run: |
         pip install setuptools-scm==5.0.2
-        pip install numpy pytest
+        pip install numpy pytest pandas
 
     - name: Build
       run: |
@@ -57,7 +57,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: pip install numpy pytest
+      run: pip install numpy pytest pandas
 
     - name: Build
       run: |
