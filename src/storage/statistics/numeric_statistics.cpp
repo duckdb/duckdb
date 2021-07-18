@@ -198,10 +198,10 @@ void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
 		if (!vdata.validity.RowIsValid(index)) {
 			continue;
 		}
-		if (!min.is_null && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) {
+		if (!min.is_null && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) { // LCOV_EXCL_START
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
-		}
+		} // LCOV_EXCL_STOP
 		if (!max.is_null && GreaterThan::Operation(data[index], max.GetValueUnsafe<T>())) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));

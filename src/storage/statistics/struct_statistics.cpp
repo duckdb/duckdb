@@ -26,10 +26,11 @@ void StructStatistics::Merge(const BaseStatistics &other_p) {
 	}
 }
 
+// LCOV_EXCL_START
 FilterPropagateResult StructStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
-	// for now...
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	throw InternalException("Struct zonemaps are not supported yet");
 }
+// LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> StructStatistics::Copy() {
 	auto copy = make_unique<StructStatistics>(type);

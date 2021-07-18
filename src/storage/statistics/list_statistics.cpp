@@ -20,10 +20,11 @@ void ListStatistics::Merge(const BaseStatistics &other_p) {
 	}
 }
 
+// LCOV_EXCL_START
 FilterPropagateResult ListStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
-	// for now...
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	throw InternalException("List zonemaps are not supported yet");
 }
+// LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> ListStatistics::Copy() {
 	auto copy = make_unique<ListStatistics>(type);

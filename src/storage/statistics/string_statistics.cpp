@@ -184,6 +184,7 @@ void StringStatistics::Verify(Vector &vector, idx_t count) {
 		auto value = data[index];
 		auto data = value.GetDataUnsafe();
 		auto len = value.GetSize();
+		// LCOV_EXCL_START
 		if (len > max_string_length) {
 			throw InternalException(
 			    "Statistics mismatch: string value exceeds maximum string length.\nStatistics: %s\nVector: %s",
@@ -207,6 +208,7 @@ void StringStatistics::Verify(Vector &vector, idx_t count) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		}
+		// LCOV_EXCL_STOP
 	}
 }
 

@@ -2,6 +2,7 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/string_statistics.hpp"
+#include "duckdb/storage/statistics/struct_statistics.hpp"
 
 namespace duckdb {
 
@@ -24,6 +25,21 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
 		string_t str(input.str_value.c_str(), input.str_value.size());
 		result->Update(str);
+		return move(result);
+	}
+	case PhysicalType::STRUCT: {
+		auto result = make_unique<StructStatistics>(input.type());
+		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
+		if (input.is_null) {
+			for(auto &child_stat : result->child_stats) {
+				child_stat.reset();
+			}
+		} else {
+			D_ASSERT(result->child_stats.size() == input.struct_value.size());
+			for(idx_t i = 0; i < result->child_stats.size(); i++) {
+				result->child_stats[i] = StatisticsFromValue(input.struct_value[i]);
+			}
+		}
 		return move(result);
 	}
 	default:
