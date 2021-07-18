@@ -1,6 +1,6 @@
 # name: test/sql/types/list/list_stats.test
 # description: Test stats propagation for lists
-# group: [struct]
+# group: [list]
 
 # struct stats
 query I

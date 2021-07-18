@@ -224,9 +224,9 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 
 void ReservoirQuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet reservoir_quantile("reservoir_quantile");
-	reservoir_quantile.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::DOUBLE, LogicalType::INTEGER},
-	                                                 LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
-	                                                 nullptr, nullptr, BindReservoirQuantileDecimal));
+	reservoir_quantile.AddFunction(
+	    AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::DOUBLE, LogicalType::INTEGER}, LogicalTypeId::DECIMAL,
+	                      nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, BindReservoirQuantileDecimal));
 	reservoir_quantile.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::DOUBLE},
 	                                                 LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr, nullptr,
 	                                                 nullptr, nullptr, BindReservoirQuantileDecimal));
