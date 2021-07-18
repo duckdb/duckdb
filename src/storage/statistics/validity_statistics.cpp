@@ -63,19 +63,19 @@ void ValidityStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_
 	}
 	VectorData vdata;
 	vector.Orrify(count, vdata);
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = sel.get_index(i);
 		auto index = vdata.sel->get_index(idx);
 		bool row_is_valid = vdata.validity.RowIsValid(index);
 		if (row_is_valid && !has_no_null) {
 			throw InternalException(
-				"Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",
-				vector.ToString(count));
+			    "Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",
+			    vector.ToString(count));
 		}
 		if (!row_is_valid && !has_null) {
 			throw InternalException(
-				"Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
-				vector.ToString(count));
+			    "Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
+			    vector.ToString(count));
 		}
 	}
 }

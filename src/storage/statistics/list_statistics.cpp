@@ -65,26 +65,26 @@ void ListStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t co
 		VectorData vdata;
 		vector.Orrify(count, vdata);
 
-		auto list_data = (list_entry_t*) vdata.data;
+		auto list_data = (list_entry_t *)vdata.data;
 		idx_t total_list_count = 0;
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto index = vdata.sel->get_index(idx);
 			auto list = list_data[index];
 			if (vdata.validity.RowIsValid(index)) {
-				for(idx_t list_idx = 0; list_idx < list.length; list_idx++) {
+				for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 					total_list_count++;
 				}
 			}
 		}
 		SelectionVector list_sel(total_list_count);
 		idx_t list_count = 0;
-		for(idx_t i = 0; i < count; i++) {
+		for (idx_t i = 0; i < count; i++) {
 			auto idx = sel.get_index(i);
 			auto index = vdata.sel->get_index(idx);
 			auto list = list_data[index];
 			if (vdata.validity.RowIsValid(index)) {
-				for(idx_t list_idx = 0; list_idx < list.length; list_idx++) {
+				for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 					list_sel.set_index(list_count++, list.offset + list_idx);
 				}
 			}
