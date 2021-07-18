@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -28,7 +29,6 @@ public:
 	ChunkCollection chunks;
 	ChunkCollection over_collection;
 	ChunkCollection hash_collection;
-	ChunkCollection window_results;
 	counts_t counts;
 };
 
@@ -366,7 +366,7 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static void SortCollectionForPartition(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+static void SortCollectionForPartition(BoundWindowExpression *wexpr, ChunkCollection &input,
                                        ChunkCollection &sort_collection) {
 	if (input.Count() == 0) {
 		return;
@@ -389,7 +389,6 @@ static void SortCollectionForPartition(BoundWindowExpression *wexpr, ChunkCollec
 	sort_collection.Sort(orders, null_order_types, sorted_vector.get());
 
 	input.Reorder(sorted_vector.get());
-	output.Reorder(sorted_vector.get());
 	sort_collection.Reorder(sorted_vector.get());
 }
 
@@ -459,6 +458,16 @@ static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
+template <typename T>
+static T GetCell(ChunkCollection &collection, idx_t column, idx_t index) {
+	D_ASSERT(collection.ColumnCount() > column);
+	auto &chunk = collection.GetChunkForRow(index);
+	auto &source = chunk.data[column];
+	const auto source_offset = index % STANDARD_VECTOR_SIZE;
+	const auto data = FlatVector::GetData<T>(source);
+	return data[source_offset];
+}
+
 static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t input_size, const idx_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
                                    const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask,
@@ -512,32 +521,21 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 	case WindowBoundary::CURRENT_ROW_RANGE:
 		bounds.window_start = bounds.peer_start;
 		break;
-	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		D_ASSERT(0); // disallowed
-		break;
 	case WindowBoundary::EXPR_PRECEDING: {
-		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
-		bounds.window_start =
-		    (int64_t)row_idx -
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
+		bounds.window_start = (int64_t)row_idx - GetCell<int64_t>(boundary_start_collection, 0,
+		                                                          wexpr->start_expr->IsScalar() ? 0 : row_idx);
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING: {
-		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
 		bounds.window_start =
-		    row_idx +
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
+		    row_idx + GetCell<int64_t>(boundary_start_collection, 0, wexpr->start_expr->IsScalar() ? 0 : row_idx);
 		break;
 	}
-
 	default:
-		throw NotImplementedException("Unsupported boundary");
+		throw InternalException("Unsupported window start boundary");
 	}
 
 	switch (wexpr->end) {
-	case WindowBoundary::UNBOUNDED_PRECEDING:
-		D_ASSERT(0); // disallowed
-		break;
 	case WindowBoundary::CURRENT_ROW_ROWS:
 		bounds.window_end = row_idx + 1;
 		break;
@@ -548,20 +546,16 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		bounds.window_end = bounds.partition_end;
 		break;
 	case WindowBoundary::EXPR_PRECEDING:
-		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
-		bounds.window_end =
-		    (int64_t)row_idx -
-		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
+		bounds.window_end = (int64_t)row_idx -
+		                    GetCell<int64_t>(boundary_end_collection, 0, wexpr->end_expr->IsScalar() ? 0 : row_idx) + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING:
 		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
 		bounds.window_end =
-		    row_idx +
-		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
-
+		    row_idx + GetCell<int64_t>(boundary_end_collection, 0, wexpr->end_expr->IsScalar() ? 0 : row_idx) + 1;
 		break;
 	default:
-		throw NotImplementedException("Unsupported boundary");
+		throw InternalException("Unsupported window end boundary");
 	}
 
 	// clamp windows to partitions if they should exceed
@@ -579,13 +573,12 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 	}
 
 	if (bounds.window_start < 0 || bounds.window_end < 0) {
-		throw Exception("Failed to compute window boundaries");
+		throw InternalException("Failed to compute window boundaries");
 	}
 }
 
 static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
-                                    const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask,
-                                    const idx_t output_col) {
+                                    const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask) {
 
 	// TODO we could evaluate those expressions in parallel
 
@@ -636,7 +629,19 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 	uint64_t dense_rank = 1, rank_equal = 0, rank = 1;
 
 	// this is the main loop, go through all sorted rows and compute window function result
+	const vector<LogicalType> output_types(1, wexpr->return_type);
+	DataChunk output_chunk;
+	output_chunk.Initialize(output_types);
 	for (idx_t row_idx = 0; row_idx < input.Count(); row_idx++) {
+		// Grow the chunk if necessary.
+		const auto output_offset = row_idx % STANDARD_VECTOR_SIZE;
+		if (output_offset == 0) {
+			output.Append(output_chunk);
+			output_chunk.Reset();
+			output_chunk.SetCardinality(MinValue(idx_t(STANDARD_VECTOR_SIZE), input.Count() - row_idx));
+		}
+		auto &result = output_chunk.data[0];
+
 		// special case, OVER (), aggregate over everything
 		UpdateWindowBoundaries(wexpr, input.Count(), row_idx, boundary_start_collection, boundary_end_collection,
 		                       partition_mask, order_mask, bounds);
@@ -653,48 +658,51 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			rank_equal++;
 		}
 
-		Value res;
-
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {
-			output.SetValue(output_col, row_idx, res);
+			FlatVector::SetNull(result, output_offset, true);
 			continue;
 		}
 
 		switch (wexpr->type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
-			res = segment_tree->Compute(bounds.window_start, bounds.window_end);
+			segment_tree->Compute(result, output_offset, bounds.window_start, bounds.window_end);
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
-			res = Value::Numeric(wexpr->return_type, row_idx - bounds.partition_start + 1);
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = row_idx - bounds.partition_start + 1;
 			break;
 		}
 		case ExpressionType::WINDOW_RANK_DENSE: {
-			res = Value::Numeric(wexpr->return_type, dense_rank);
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = dense_rank;
 			break;
 		}
 		case ExpressionType::WINDOW_RANK: {
-			res = Value::Numeric(wexpr->return_type, rank);
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = rank;
 			break;
 		}
 		case ExpressionType::WINDOW_PERCENT_RANK: {
 			int64_t denom = (int64_t)bounds.partition_end - bounds.partition_start - 1;
 			double percent_rank = denom > 0 ? ((double)rank - 1) / denom : 0;
-			res = Value(percent_rank);
+			auto rdata = FlatVector::GetData<double>(result);
+			rdata[output_offset] = percent_rank;
 			break;
 		}
 		case ExpressionType::WINDOW_CUME_DIST: {
 			int64_t denom = (int64_t)bounds.partition_end - bounds.partition_start;
 			double cume_dist = denom > 0 ? ((double)(bounds.peer_end - bounds.partition_start)) / denom : 0;
-			res = Value(cume_dist);
+			auto rdata = FlatVector::GetData<double>(result);
+			rdata[output_offset] = cume_dist;
 			break;
 		}
 		case ExpressionType::WINDOW_NTILE: {
 			if (payload_collection.ColumnCount() != 1) {
-				throw Exception("NTILE needs a parameter");
+				throw BinderException("NTILE needs a parameter");
 			}
-			auto n_param = payload_collection.GetValue(0, row_idx).GetValue<int64_t>();
+			auto n_param = GetCell<int64_t>(payload_collection, 0, row_idx);
 			// With thanks from SQLite's ntileValueFunc()
 			int64_t n_total = bounds.partition_end - bounds.partition_start;
 			if (n_param > n_total) {
@@ -720,19 +728,15 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 			// result has to be between [1, NTILE]
 			D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
-			res = Value::Numeric(wexpr->return_type, result_ntile);
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = result_ntile;
 			break;
 		}
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG: {
-			Value def_val = Value(wexpr->return_type);
 			int64_t offset = 1;
 			if (wexpr->offset_expr) {
-				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : row_idx)
-				             .GetValue<int64_t>();
-			}
-			if (wexpr->default_expr) {
-				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
+				offset = GetCell<int64_t>(leadlag_offset_collection, 0, wexpr->offset_expr->IsScalar() ? 0 : row_idx);
 			}
 			int64_t val_idx = (int64_t)row_idx;
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
@@ -742,26 +746,28 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 
 			if (val_idx >= int64_t(bounds.partition_start) && val_idx < int64_t(bounds.partition_end)) {
-				res = payload_collection.GetValue(0, val_idx);
+				payload_collection.CopyCell(0, val_idx, result, output_offset);
+			} else if (wexpr->default_expr) {
+				const auto source_row = wexpr->default_expr->IsScalar() ? 0 : row_idx;
+				leadlag_default_collection.CopyCell(0, source_row, result, output_offset);
 			} else {
-				res = def_val;
+				FlatVector::SetNull(result, output_offset, true);
 			}
 			break;
 		}
-		case ExpressionType::WINDOW_FIRST_VALUE: {
-			res = payload_collection.GetValue(0, bounds.window_start);
+		case ExpressionType::WINDOW_FIRST_VALUE:
+			payload_collection.CopyCell(0, bounds.window_start, result, output_offset);
 			break;
-		}
-		case ExpressionType::WINDOW_LAST_VALUE: {
-			res = payload_collection.GetValue(0, bounds.window_end - 1);
+		case ExpressionType::WINDOW_LAST_VALUE:
+			payload_collection.CopyCell(0, bounds.window_end - 1, result, output_offset);
 			break;
-		}
 		default:
-			throw NotImplementedException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
+			throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
 		}
-
-		output.SetValue(output_col, row_idx, res);
 	}
+
+	// Push the last chunk
+	output.Append(output_chunk);
 }
 
 using WindowExpressions = vector<BoundWindowExpression *>;
@@ -778,7 +784,7 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 	//	Sort the partition
 	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
 	if (sort_col_count > 0) {
-		SortCollectionForPartition(over_expr, big_data, window_results, over_collection);
+		SortCollectionForPartition(over_expr, big_data, over_collection);
 	}
 
 	//	Set bits for the start of each partition
@@ -796,9 +802,11 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 		MaskColumn(order_bits, over_collection, c);
 	}
 
-	//	Compute the functions
+	//	Compute the functions columnwise
 	for (idx_t expr_idx = 0; expr_idx < window_exprs.size(); ++expr_idx) {
-		ComputeWindowExpression(window_exprs[expr_idx], big_data, window_results, partition_bits, order_bits, expr_idx);
+		ChunkCollection column_collection;
+		ComputeWindowExpression(window_exprs[expr_idx], big_data, column_collection, partition_bits, order_bits);
+		window_results.Fuse(column_collection);
 	}
 }
 
@@ -811,8 +819,8 @@ static void AppendCollection(const ChunkCollection &source, ChunkCollection &tar
 	target.Append(chunk);
 }
 
-static void ExtractPartition(WindowGlobalState &gstate, ChunkCollection &chunks, ChunkCollection &window_results,
-                             ChunkCollection &over_collection, const hash_t hash_bin, const hash_t hash_mask) {
+static void ExtractPartition(WindowGlobalState &gstate, ChunkCollection &chunks, ChunkCollection &over_collection,
+                             const hash_t hash_bin, const hash_t hash_mask) {
 
 	//	Copy the partition data so we can work with it on this thread
 	ChunkCollection &hashes = gstate.hash_collection;
@@ -836,7 +844,6 @@ static void ExtractPartition(WindowGlobalState &gstate, ChunkCollection &chunks,
 		}
 
 		AppendCollection(gstate.chunks, chunks, sel, bin_size, chunk_idx);
-		AppendCollection(gstate.window_results, window_results, sel, bin_size, chunk_idx);
 		AppendCollection(gstate.over_collection, over_collection, sel, bin_size, chunk_idx);
 	}
 }
@@ -922,17 +929,17 @@ static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalSt
 
 	if (gstate.counts.empty() && hash_bin == 0) {
 		ChunkCollection &big_data = gstate.chunks;
-		ChunkCollection &window_results = gstate.window_results;
+		ChunkCollection output;
 		ChunkCollection &over_collection = gstate.over_collection;
-		ComputeWindowExpressions(window_exprs, big_data, window_results, over_collection);
+		ComputeWindowExpressions(window_exprs, big_data, output, over_collection);
 		state.chunks.Merge(big_data);
-		state.window_results.Merge(window_results);
+		state.window_results.Merge(output);
 	} else if (hash_bin < gstate.counts.size() && gstate.counts[hash_bin] > 0) {
 		ChunkCollection input;
 		ChunkCollection output;
 		ChunkCollection over;
 		const auto hash_mask = hash_t(gstate.counts.size() - 1);
-		ExtractPartition(gstate, input, output, over, hash_bin, hash_mask);
+		ExtractPartition(gstate, input, over, hash_bin, hash_mask);
 		ComputeWindowExpressions(window_exprs, input, output, over);
 		state.chunks.Merge(input);
 		state.window_results.Merge(output);
@@ -1078,34 +1085,6 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gst
 
 bool PhysicalWindow::FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
 	this->sink_state = move(gstate_p);
-	auto &gstate = (WindowGlobalState &)*this->sink_state;
-
-	ChunkCollection &big_data = gstate.chunks;
-	ChunkCollection &window_results = gstate.window_results;
-
-	if (big_data.Count() == 0) {
-		return true;
-	}
-
-	vector<LogicalType> window_types;
-	for (idx_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
-		window_types.push_back(select_list[expr_idx]->return_type);
-	}
-
-	for (idx_t i = 0; i < big_data.ChunkCount(); i++) {
-		DataChunk window_chunk;
-		window_chunk.Initialize(window_types);
-		window_chunk.SetCardinality(big_data.GetChunk(i).size());
-		for (idx_t col_idx = 0; col_idx < window_chunk.ColumnCount(); col_idx++) {
-			window_chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(window_chunk.data[col_idx], true);
-		}
-
-		window_chunk.Verify();
-		window_results.Append(window_chunk);
-	}
-
-	D_ASSERT(window_results.ColumnCount() == select_list.size());
 	return true;
 }
 

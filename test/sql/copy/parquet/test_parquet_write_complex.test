@@ -4,6 +4,9 @@
 
 require parquet
 
+# writer requires vector_size >= 64
+require vector_size 64
+
 # alltypes_dictionary: scan as parquet
 query I nosort alltypes_dictionary
 SELECT * FROM parquet_scan('data/parquet-testing/arrow/alltypes_dictionary.parquet');

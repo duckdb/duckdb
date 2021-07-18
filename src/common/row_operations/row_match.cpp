@@ -194,10 +194,6 @@ static void TemplatedMatchOp(Vector &vec, VectorData &col, const idx_t vcount, c
 		TemplatedMatchType<interval_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
 		                                                 no_match_count);
 		break;
-	case PhysicalType::HASH:
-		TemplatedMatchType<hash_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
-		                                             no_match_count);
-		break;
 	case PhysicalType::VARCHAR:
 		TemplatedMatchType<string_t, OP, NO_MATCH_SEL>(col, rows, sel, count, col_offset, col_no, no_match,
 		                                               no_match_count);
@@ -209,7 +205,7 @@ static void TemplatedMatchOp(Vector &vec, VectorData &col, const idx_t vcount, c
 		                                       no_match_count);
 		break;
 	default:
-		throw Exception("Unsupported column type for RowOperations::Match");
+		throw InternalException("Unsupported column type for RowOperations::Match");
 	}
 }
 
@@ -247,7 +243,7 @@ static void TemplatedMatch(DataChunk &columns, VectorData col_data[], const RowL
 			                                               no_match_count);
 			break;
 		default:
-			throw NotImplementedException("Unsupported comparison type for RowOperations::Match");
+			throw InternalException("Unsupported comparison type for RowOperations::Match");
 		}
 	}
 }

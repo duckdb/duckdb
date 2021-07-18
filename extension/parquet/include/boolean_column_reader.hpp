@@ -25,9 +25,9 @@ public:
 
 	uint8_t byte_pos;
 
-	void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
+	void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
 		byte_pos = 0;
-		TemplatedColumnReader<bool, BooleanParquetValueConversion>::IntializeRead(columns, protocol_p);
+		TemplatedColumnReader<bool, BooleanParquetValueConversion>::InitializeRead(columns, protocol_p);
 	}
 };
 

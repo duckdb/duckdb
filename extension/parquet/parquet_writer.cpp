@@ -135,6 +135,10 @@ static void TemplatedWritePlain(Vector &col, idx_t length, ValidityMask &mask, S
 ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalType> types_p, vector<string> names_p,
                              CompressionCodec::type codec)
     : file_name(move(file_name_p)), sql_types(move(types_p)), column_names(move(names_p)), codec(codec) {
+#if STANDARD_VECTOR_SIZE < 64
+	throw NotImplementedException("Parquet writer is not supported for vector sizes < 64");
+#endif
+
 	// initialize the file writer
 	writer = make_unique<BufferedFileWriter>(fs, file_name.c_str(),
 	                                         FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW);

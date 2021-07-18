@@ -11,8 +11,6 @@
 #include "duckdb/common/types/row_data_collection.hpp"
 #include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
-#include "duckdb/common/types/string_heap.hpp"
-#include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
@@ -103,7 +101,7 @@ static void ScatterNestedVector(Vector &vec, VectorData &col, Vector &rows, data
 	}
 
 	// Serialise the data
-	RowDataCollection::SerializeVector(vec, vcount, sel, count, col_no, data_locations, ptrs);
+	RowOperations::HeapScatter(vec, vcount, sel, count, col_no, data_locations, ptrs);
 }
 
 void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
@@ -125,36 +123,45 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 	auto &types = layout.GetTypes();
 
 	// Compute the entry size of the variable size columns
-	idx_t entry_sizes[STANDARD_VECTOR_SIZE];
-	std::fill_n(entry_sizes, count, 0);
-	bool constant_size = true;
-	for (idx_t col_no = 0; col_no < types.size(); col_no++) {
-		if (TypeIsConstantSize(types[col_no].InternalType())) {
-			continue;
-		} else {
-			constant_size = false;
-		}
-
-		auto &vec = columns.data[col_no];
-		auto &col = col_data[col_no];
-		switch (types[col_no].InternalType()) {
-		case PhysicalType::VARCHAR:
-			ComputeStringEntrySizes(col, entry_sizes, sel, count);
-			break;
-		case PhysicalType::LIST:
-		case PhysicalType::MAP:
-		case PhysicalType::STRUCT:
-			RowDataCollection::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
-			break;
-		default:
-			throw Exception("Unsupported type for RowOperations::Scatter");
-		}
-	}
-
-	// Build out the buffer space
 	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
-	if (!constant_size) {
+	if (!layout.AllConstant()) {
+		idx_t entry_sizes[STANDARD_VECTOR_SIZE];
+		std::fill_n(entry_sizes, count, sizeof(idx_t));
+		for (idx_t col_no = 0; col_no < types.size(); col_no++) {
+			if (TypeIsConstantSize(types[col_no].InternalType())) {
+				continue;
+			}
+
+			auto &vec = columns.data[col_no];
+			auto &col = col_data[col_no];
+			switch (types[col_no].InternalType()) {
+			case PhysicalType::VARCHAR:
+				ComputeStringEntrySizes(col, entry_sizes, sel, count);
+				break;
+			case PhysicalType::LIST:
+			case PhysicalType::MAP:
+			case PhysicalType::STRUCT:
+				RowOperations::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
+				break;
+			default:
+				throw Exception("Unsupported type for RowOperations::Scatter");
+			}
+		}
+
+		// Build out the buffer space
 		string_heap.Build(count, data_locations, entry_sizes);
+
+		// Serialize information that is needed for swizzling if the computation goes out-of-core
+		const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
+		for (idx_t i = 0; i < count; i++) {
+			auto row_idx = sel.get_index(i);
+			auto row = ptrs[row_idx];
+			// Pointer to this row in the heap block
+			Store<data_ptr_t>(data_locations[i], row + heap_pointer_offset);
+			// Row size is stored in the heap in front of each row
+			Store<idx_t>(entry_sizes[i], data_locations[i]);
+			data_locations[i] += sizeof(idx_t);
+		}
 	}
 
 	for (idx_t col_no = 0; col_no < types.size(); col_no++) {
@@ -200,9 +207,6 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 		case PhysicalType::INTERVAL:
 			TemplatedScatter<interval_t>(col, rows, sel, count, col_offset, col_no);
 			break;
-		case PhysicalType::HASH:
-			TemplatedScatter<hash_t>(col, rows, sel, count, col_offset, col_no);
-			break;
 		case PhysicalType::VARCHAR:
 			ScatterStringVector(col, rows, data_locations, sel, count, col_offset, col_no);
 			break;
@@ -212,7 +216,7 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 			ScatterNestedVector(vec, col, rows, data_locations, sel, count, col_offset, col_no, vcount);
 			break;
 		default:
-			throw Exception("Unsupported type for RowOperations::Scatter");
+			throw InternalException("Unsupported type for RowOperations::Scatter");
 		}
 	}
 }

@@ -178,7 +178,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 	    (sink.hash_table->join_type == JoinType::INNER || sink.hash_table->join_type == JoinType::RIGHT ||
 	     sink.hash_table->join_type == JoinType::SEMI);
 
-	if (sink.hash_table->size() == 0 && join_is_inner_right_semi) {
+	if (sink.hash_table->Count() == 0 && join_is_inner_right_semi) {
 		// empty hash table with INNER, RIGHT or SEMI join means empty result set
 		return;
 	}
@@ -249,7 +249,7 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
-		if (sink.hash_table->size() == 0) {
+		if (sink.hash_table->Count() == 0) {
 			ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state->child_chunk, chunk);
 			return;
 		}

@@ -43,7 +43,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("fetchdf", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
 	    .def("fetch_df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
 	    .def("fetch_df_chunk", &DuckDBPyConnection::FetchDFChunk,
-	         "Fetch a chunk of the result as Data.Frame following execute()")
+	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1)
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
@@ -323,7 +323,7 @@ DuckDBPyConnection *DuckDBPyConnection::Rollback() {
 py::object DuckDBPyConnection::GetAttr(const py::str &key) {
 	if (key.cast<string>() == "description") {
 		if (!result) {
-			throw std::runtime_error("no open result set");
+			return py::none();
 		}
 		return result->Description();
 	}
@@ -377,11 +377,11 @@ py::object DuckDBPyConnection::FetchDF() {
 	return result->FetchDF();
 }
 
-py::object DuckDBPyConnection::FetchDFChunk() const {
+py::object DuckDBPyConnection::FetchDFChunk(const idx_t vectors_per_chunk) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
-	return result->FetchDFChunk();
+	return result->FetchDFChunk(vectors_per_chunk);
 }
 
 py::object DuckDBPyConnection::FetchArrow() {

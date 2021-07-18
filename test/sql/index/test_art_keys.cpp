@@ -1,9 +1,10 @@
 #include "catch.hpp"
-#include "duckdb/execution/index/art/art_key.hpp"
-#include "duckdb/common/bit_operations.hpp"
+#include "duckdb/common/radix.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include <iostream>
+#include "duckdb/execution/index/art/art_key.hpp"
+
 #include <cstring>
+#include <iostream>
 
 using namespace duckdb;
 using namespace std;

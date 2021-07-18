@@ -127,10 +127,6 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		return OP::Operation(left.value_.ubigint, right.value_.ubigint);
 	case PhysicalType::INT128:
 		return OP::Operation(left.value_.hugeint, right.value_.hugeint);
-	case PhysicalType::POINTER:
-		return OP::Operation(left.value_.pointer, right.value_.pointer);
-	case PhysicalType::HASH:
-		return OP::Operation(left.value_.hash, right.value_.hash);
 	case PhysicalType::FLOAT:
 		return OP::Operation(left.value_.float_, right.value_.float_);
 	case PhysicalType::DOUBLE:

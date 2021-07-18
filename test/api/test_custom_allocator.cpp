@@ -25,11 +25,18 @@ void my_free_function(PrivateAllocatorData *private_data, data_ptr_t pointer, id
 	free(pointer);
 }
 
+data_ptr_t my_reallocate_function(PrivateAllocatorData *private_data, data_ptr_t pointer, idx_t size) {
+	auto my_allocate_data = (MyAllocateData *)private_data;
+	*my_allocate_data->memory_counter -= size;
+	return (data_ptr_t)realloc(pointer, size);
+}
+
 TEST_CASE("Test using a custom allocator", "[api]") {
 	atomic<idx_t> memory_counter;
 	memory_counter = 0;
 
-	Allocator my_allocator(my_allocate_function, my_free_function, make_unique<MyAllocateData>(&memory_counter));
+	Allocator my_allocator(my_allocate_function, my_free_function, my_reallocate_function,
+	                       make_unique<MyAllocateData>(&memory_counter));
 
 	REQUIRE(memory_counter.load() == 0);
 

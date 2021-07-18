@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/enums/expression_type.hpp"
-#include "duckdb/common/vector.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
@@ -46,7 +46,7 @@ struct RowOperations {
 	//! Scatter group data to the rows. Initialises the ValidityMask.
 	static void Scatter(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
 	                    RowDataCollection &string_heap, const SelectionVector &sel, idx_t count);
-	//! Gather a single column
+	//! Gather a single column.
 	static void Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
 	                   const idx_t count, const idx_t col_offset, const idx_t col_no);
 	//! Full Scan an entire columns
@@ -63,6 +63,48 @@ struct RowOperations {
 	static idx_t Match(DataChunk &columns, VectorData col_data[], const RowLayout &layout, Vector &rows,
 	                   const Predicates &predicates, SelectionVector &sel, idx_t count, SelectionVector *no_match,
 	                   idx_t &no_match_count);
+
+	//===--------------------------------------------------------------------===//
+	// Heap Operators
+	//===--------------------------------------------------------------------===//
+	//! Compute the entry sizes of a vector with variable size type (used before building heap buffer space).
+	static void ComputeEntrySizes(Vector &v, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
+	                              const SelectionVector &sel, idx_t offset = 0);
+	//! Compute the entry sizes of vector data with variable size type (used before building heap buffer space).
+	static void ComputeEntrySizes(Vector &v, VectorData &vdata, idx_t entry_sizes[], idx_t vcount, idx_t ser_count,
+	                              const SelectionVector &sel, idx_t offset = 0);
+	//! Scatter vector with variable size type to the heap.
+	static void HeapScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count, idx_t col_idx,
+	                        data_ptr_t *key_locations, data_ptr_t *validitymask_locations, idx_t offset = 0);
+	//! Scatter vector data with variable size type to the heap.
+	static void HeapScatterVData(VectorData &vdata, PhysicalType type, const SelectionVector &sel, idx_t ser_count,
+	                             idx_t col_idx, data_ptr_t *key_locations, data_ptr_t *validitymask_locations,
+	                             idx_t offset = 0);
+	//! Gather a single column with variable size type from the heap.
+	static void HeapGather(Vector &v, const idx_t &vcount, const SelectionVector &sel, const idx_t &col_idx,
+	                       data_ptr_t key_locations[], data_ptr_t validitymask_locations[]);
+
+	//===--------------------------------------------------------------------===//
+	// Sorting Operators
+	//===--------------------------------------------------------------------===//
+	//! Scatter vector data to the rows in radix-sortable format.
+	static void RadixScatter(Vector &v, idx_t vcount, const SelectionVector &sel, idx_t ser_count,
+	                         data_ptr_t key_locations[], bool desc, bool has_null, bool nulls_first, idx_t prefix_len,
+	                         idx_t width, idx_t offset = 0);
+
+	//===--------------------------------------------------------------------===//
+	// Out-of-Core Operators
+	//===--------------------------------------------------------------------===//
+	//! Swizzles blob pointers to offset within heap row
+	static void SwizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count);
+	//! Swizzles the base pointer of each row to offset within heap block
+	static void SwizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+	                               const idx_t count);
+	//! Swizzles the base offset of each row back to a pointer
+	static void UnswizzleHeapPointer(const RowLayout &layout, data_ptr_t row_ptr, const data_ptr_t heap_base_ptr,
+	                                 const idx_t count);
+	//! Unswizzles offsets back to pointers to blobs
+	static void UnswizzleColumns(const RowLayout &layout, const data_ptr_t base_row_ptr, const idx_t count);
 };
 
 } // namespace duckdb

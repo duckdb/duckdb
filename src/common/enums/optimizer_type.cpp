@@ -34,10 +34,10 @@ string OptimizerTypeToString(OptimizerType type) {
 		return "top_n";
 	case OptimizerType::REORDER_FILTER:
 		return "reorder_filter";
-	case OptimizerType::INVALID:
+	case OptimizerType::INVALID: // LCOV_EXCL_START
 		break;
 	}
-	return "INVALID";
+	return "INVALID"; // LCOV_EXCL_STOP
 }
 
 } // namespace duckdb

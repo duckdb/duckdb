@@ -10,8 +10,8 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/radix.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/common/bit_operations.hpp"
 
 namespace duckdb {
 

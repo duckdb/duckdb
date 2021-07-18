@@ -1,8 +1,8 @@
-#include "duckdb/common/bit_operations.hpp"
+#include "duckdb/common/radix.hpp"
 
 #include <cfloat>
-#include <limits.h>
 #include <cstring> // strlen() on Solaris
+#include <limits.h>
 
 namespace duckdb {
 

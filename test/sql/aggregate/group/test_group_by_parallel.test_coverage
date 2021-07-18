@@ -1,0 +1,69 @@
+# name: test/sql/aggregate/group/test_group_by_parallel.test_coverage
+# description: Test parallel group by
+# group: [group]
+
+statement ok
+PRAGMA threads=4
+
+# small number of groups (100)
+statement ok
+create temporary table d as select mod(range, 100) g, 42 p from range(10000000);
+
+query IIII
+select g, count(*), min(p), max(p) c from d group by g order by g limit 10;
+----
+0	100000	42	42
+1	100000	42	42
+2	100000	42	42
+3	100000	42	42
+4	100000	42	42
+5	100000	42	42
+6	100000	42	42
+7	100000	42	42
+8	100000	42	42
+9	100000	42	42
+
+statement ok
+drop table d;
+
+# medium number of groups (100000)
+statement ok
+create temporary table d as select mod(range, 100000) g, 42 p from range(10000000);
+
+query IIII
+select g, count(*), min(p), max(p) c from d group by g order by g limit 10;
+----
+0	100	42	42
+1	100	42	42
+2	100	42	42
+3	100	42	42
+4	100	42	42
+5	100	42	42
+6	100	42	42
+7	100	42	42
+8	100	42	42
+9	100	42	42
+
+statement ok
+drop table d;
+
+# large number of groups (1000000)
+statement ok
+create temporary table d as select mod(range, 1000000) g, 42 p from range(1000000);
+
+query IIII
+select g, count(*), min(p), max(p) c from d group by g order by g limit 10;
+----
+0	1	42	42
+1	1	42	42
+2	1	42	42
+3	1	42	42
+4	1	42	42
+5	1	42	42
+6	1	42	42
+7	1	42	42
+8	1	42	42
+9	1	42	42
+
+statement ok
+drop table d;

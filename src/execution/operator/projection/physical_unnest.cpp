@@ -117,14 +117,8 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 	case PhysicalType::DOUBLE:
 		TemplatedUnnest<double>(vdata, start, end, result);
 		break;
-	case PhysicalType::POINTER:
-		TemplatedUnnest<uintptr_t>(vdata, start, end, result);
-		break;
 	case PhysicalType::INTERVAL:
 		TemplatedUnnest<interval_t>(vdata, start, end, result);
-		break;
-	case PhysicalType::HASH:
-		TemplatedUnnest<hash_t>(vdata, start, end, result);
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedUnnest<string_t>(vdata, start, end, result);
@@ -148,7 +142,7 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for UNNEST");
+		throw InternalException("Unimplemented type for UNNEST");
 	}
 }
 

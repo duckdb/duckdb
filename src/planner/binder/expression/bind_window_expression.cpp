@@ -1,5 +1,6 @@
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
@@ -43,6 +44,19 @@ static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) 
 	return move(((BoundExpression &)*expr).expr);
 }
 
+static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> &expr, const LogicalType &type) {
+	if (!expr) {
+		return nullptr;
+	}
+	D_ASSERT(expr.get());
+	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+
+	auto &bound = (BoundExpression &)*expr;
+	bound.expr = BoundCastExpression::AddCastToType(move(bound.expr), type);
+
+	return move(bound.expr);
+}
+
 BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	if (inside_window) {
 		throw BinderException("window function calls cannot be nested");
@@ -67,6 +81,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	BindChild(window.end_expr, depth, error);
 	BindChild(window.offset_expr, depth, error);
 	BindChild(window.default_expr, depth, error);
+
 	this->inside_window = false;
 	if (!error.empty()) {
 		// failed to bind children of window function
@@ -79,6 +94,18 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		D_ASSERT(child.get());
 		D_ASSERT(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
 		auto &bound = (BoundExpression &)*child;
+		// Add casts for positional arguments
+		const auto argno = children.size();
+		switch (window.type) {
+		case ExpressionType::WINDOW_NTILE:
+			// ntile(bigint)
+			if (argno == 0) {
+				bound.expr = BoundCastExpression::AddCastToType(move(bound.expr), LogicalType::BIGINT);
+			}
+			break;
+		default:
+			break;
+		}
 		types.push_back(bound.expr->return_type);
 		children.push_back(move(bound.expr));
 	}
@@ -125,10 +152,11 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		auto expression = GetExpression(order.expression);
 		result->orders.emplace_back(type, null_order, move(expression));
 	}
-	result->start_expr = GetExpression(window.start_expr);
-	result->end_expr = GetExpression(window.end_expr);
-	result->offset_expr = GetExpression(window.offset_expr);
-	result->default_expr = GetExpression(window.default_expr);
+
+	result->start_expr = CastWindowExpression(window.start_expr, LogicalType::BIGINT);
+	result->end_expr = CastWindowExpression(window.end_expr, LogicalType::BIGINT);
+	result->offset_expr = CastWindowExpression(window.offset_expr, LogicalType::BIGINT);
+	result->default_expr = CastWindowExpression(window.default_expr, result->return_type);
 	result->start = window.start;
 	result->end = window.end;
 

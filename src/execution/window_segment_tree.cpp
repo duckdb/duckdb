@@ -11,18 +11,18 @@ namespace duckdb {
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
                                      const LogicalType &result_type_p, ChunkCollection *input)
     : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
-      statep(Value::POINTER((idx_t)state.data())), frame(0, 0), result(result_type_p), internal_nodes(0),
-      input_ref(input) {
+      statep(Value::POINTER((idx_t)state.data())), frame(0, 0), statev(Value::POINTER((idx_t)state.data())),
+      internal_nodes(0), input_ref(input) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
 	statep.Normalify(STANDARD_VECTOR_SIZE);
+	statev.SetVectorType(VectorType::FLAT_VECTOR); // Prevent conversion of results to constants
 
 	if (input_ref && input_ref->ColumnCount() > 0) {
 		inputs.Initialize(input_ref->Types());
 		// if we have a frame-by-frame method, share the single state
 		if (aggregate.window) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 			AggregateInit();
 		} else if (aggregate.combine) {
 			ConstructTree();
@@ -51,7 +51,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 	}
 
 	if (aggregate.window) {
-		(void)AggegateFinal();
+		aggregate.destructor(statev, 1);
 	}
 }
 
@@ -59,16 +59,12 @@ void WindowSegmentTree::AggregateInit() {
 	aggregate.initialize(state.data());
 }
 
-Value WindowSegmentTree::AggegateFinal() {
-	Vector statev(Value::POINTER((idx_t)state.data()));
-	Vector result(result_type);
-	aggregate.finalize(statev, bind_info, result, 1);
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+void WindowSegmentTree::AggegateFinal(Vector &result, idx_t rid) {
+	aggregate.finalize(statev, bind_info, result, 1, rid);
 
 	if (aggregate.destructor) {
 		aggregate.destructor(statev, 1);
 	}
-	return result.GetValue(0);
 }
 
 void WindowSegmentTree::ExtractFrame(idx_t begin, idx_t end) {
@@ -176,12 +172,15 @@ void WindowSegmentTree::ConstructTree() {
 	}
 }
 
-Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
+void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t end) {
 	D_ASSERT(input_ref);
 
 	// No arguments, so just count
 	if (inputs.ColumnCount() == 0) {
-		return Value::Numeric(result_type, end - begin);
+		D_ASSERT(GetTypeIdSize(result_type.InternalType()) == sizeof(idx_t));
+		auto data = FlatVector::GetData<idx_t>(result);
+		data[rid] = end - begin;
+		return;
 	}
 
 	// If we have a window function, use that
@@ -193,10 +192,8 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 		// Extract the range
 		ExtractFrame(MinValue(frame.first, prev.first), MaxValue(frame.second, prev.second));
 
-		ConstantVector::SetNull(result, false);
-
-		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result);
-		return result.GetValue(0);
+		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result, rid);
+		return;
 	}
 
 	AggregateInit();
@@ -204,7 +201,8 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 	// Aggregate everything at once if we can't combine states
 	if (!aggregate.combine) {
 		WindowSegmentValue(0, begin, end);
-		return AggegateFinal();
+		AggegateFinal(result, rid);
+		return;
 	}
 
 	for (idx_t l_idx = 0; l_idx < levels_flat_start.size() + 1; l_idx++) {
@@ -212,7 +210,7 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 		idx_t parent_end = end / TREE_FANOUT;
 		if (parent_begin == parent_end) {
 			WindowSegmentValue(l_idx, begin, end);
-			return AggegateFinal();
+			break;
 		}
 		idx_t group_begin = parent_begin * TREE_FANOUT;
 		if (begin != group_begin) {
@@ -227,7 +225,7 @@ Value WindowSegmentTree::Compute(idx_t begin, idx_t end) {
 		end = parent_end;
 	}
 
-	return AggegateFinal();
+	AggegateFinal(result, rid);
 }
 
 } // namespace duckdb

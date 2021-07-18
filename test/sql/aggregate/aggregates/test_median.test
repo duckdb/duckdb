@@ -42,7 +42,7 @@ SELECT median(r::double) FROM quantile
 query I
 SELECT median(r::tinyint) FROM quantile where r < 100
 ----
-49
+49.500000
 
 query I
 SELECT median(r::smallint) FROM quantile

@@ -52,10 +52,7 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
                            SQLSMALLINT value_type, SQLSMALLINT parameter_type, SQLULEN column_size,
                            SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr, SQLLEN buffer_length,
                            SQLLEN *str_len_or_ind_ptr) {
-	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		if (parameter_number > stmt->stmt->n_param) {
-			return SQL_ERROR;
-		}
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (input_output_type != SQL_PARAM_INPUT) {
 			return SQL_ERROR;
 		}
@@ -129,6 +126,11 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 			// TODO error message?
 			return SQL_ERROR;
 		}
+
+		if (parameter_number > stmt->params.size()) {
+			// need to resize because SQLFreeStmt might clear it before
+			stmt->params.resize(parameter_number);
+		}
 		stmt->params[parameter_number - 1] = res;
 		return SQL_SUCCESS;
 	});
@@ -160,11 +162,14 @@ SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_p
 
 SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
                      SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
-	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		size_t col_nr_internal = column_number - 1;
-		if (col_nr_internal >= stmt->bound_cols.size()) {
-			stmt->bound_cols.resize(col_nr_internal);
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
+		D_ASSERT(column_number > 0);
+
+		if (column_number > stmt->bound_cols.size()) {
+			stmt->bound_cols.resize(column_number);
 		}
+
+		size_t col_nr_internal = column_number - 1;
 
 		stmt->bound_cols[col_nr_internal].type = target_type;
 		stmt->bound_cols[col_nr_internal].ptr = target_value_ptr;
