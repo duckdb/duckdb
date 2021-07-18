@@ -11,8 +11,6 @@ coverage:
         paths:
           - "src"
        # advanced settings
-        branches:
-          - master
         if_not_found: failure
         if_ci_failed: error #success, failure, error, ignore
         informational: false
