@@ -468,6 +468,14 @@ static T GetCell(ChunkCollection &collection, idx_t column, idx_t index) {
 	return data[source_offset];
 }
 
+static bool CellIsNull(ChunkCollection &collection, idx_t column, idx_t index) {
+	D_ASSERT(collection.ColumnCount() > column);
+	auto &chunk = collection.GetChunkForRow(index);
+	auto &source = chunk.data[column];
+	const auto source_offset = index % STANDARD_VECTOR_SIZE;
+	return FlatVector::IsNull(source, source_offset);
+}
+
 static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t input_size, const idx_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
                                    const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask,
@@ -767,12 +775,16 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 			// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
 			// returns NULL if there is no such row.
-			auto n_param = GetCell<int64_t>(payload_collection, 1, row_idx);
-			int64_t n_total = bounds.window_end - bounds.window_start;
-			if (0 < n_param && n_param <= n_total) {
-				payload_collection.CopyCell(0, bounds.window_start + n_param - 1, result, output_offset);
-			} else {
+			if (CellIsNull(payload_collection, 1, row_idx)) {
 				FlatVector::SetNull(result, output_offset, true);
+			} else {
+				auto n_param = GetCell<int64_t>(payload_collection, 1, row_idx);
+				int64_t n_total = bounds.window_end - bounds.window_start;
+				if (0 < n_param && n_param <= n_total) {
+					payload_collection.CopyCell(0, bounds.window_start + n_param - 1, result, output_offset);
+				} else {
+					FlatVector::SetNull(result, output_offset, true);
+				}
 			}
 			break;
 		}
