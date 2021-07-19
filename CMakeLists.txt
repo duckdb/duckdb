@@ -59,10 +59,6 @@ foreach(p LIB BIN INCLUDE CMAKE)
   endif()
 endforeach()
 
-set(M32_FLAG "")
-if(FORCE_32_BIT)
-  set(M32_FLAG " -m32 ")
-endif()
 
 
 option(DISABLE_UNITY "Disable unity builds." FALSE)
@@ -75,6 +71,20 @@ if(${FORCE_COLORED_OUTPUT})
   elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     add_compile_options(-fcolor-diagnostics)
   endif()
+endif()
+
+option( "Enable address sanitizer." TRUE)
+
+set(M32_FLAG "")
+if(FORCE_32_BIT)
+  set(M32_FLAG " -m32 ")
+endif()
+
+option(WARN_UNUSED_RELEASE "Unused code objects lead to warnings in release build." FALSE)
+
+set(UNUSED_RELEASE_ARG "")
+if(WARN_UNUSED_RELEASE)
+  set(UNUSED_RELEASE_ARG " -Wunused")
 endif()
 
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
@@ -261,7 +271,7 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
   set(CMAKE_CXX_FLAGS_RELEASE
-      "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
+      "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${UNUSED_RELEASE_ARG} ${CXX_EXTRA}")
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
   set(CXX_EXTRA_DEBUG

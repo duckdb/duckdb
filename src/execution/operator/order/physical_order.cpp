@@ -1394,8 +1394,10 @@ public:
 		bool left_smaller[STANDARD_VECTOR_SIZE];
 		idx_t next_entry_sizes[STANDARD_VECTOR_SIZE];
 		// Merge loop
+#ifdef DEBUG
 		auto l_count = left.Remaining();
 		auto r_count = right.Remaining();
+#endif
 		while (true) {
 			auto l_remaining = left.Remaining();
 			auto r_remaining = right.Remaining();

@@ -706,13 +706,14 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			if (nested_offset != -1) {
 				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
 			}
+#ifdef DEBUG
 			auto tgt_ptr = (int16_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
-					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
-					D_ASSERT(result);
+					D_ASSERT(Hugeint::TryCast(src_ptr[row], tgt_ptr[row]));
 				}
 			}
+#endif
 			break;
 		}
 		case PhysicalType::INT32: {
@@ -720,13 +721,14 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			if (nested_offset != -1) {
 				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
 			}
+#ifdef DEBUG
 			auto tgt_ptr = (int32_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
-					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
-					D_ASSERT(result);
+					D_ASSERT(Hugeint::TryCast(src_ptr[row], tgt_ptr[row]));
 				}
 			}
+#endif
 			break;
 		}
 		case PhysicalType::INT64: {
@@ -734,13 +736,14 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			if (nested_offset != -1) {
 				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
 			}
+#ifdef DEBUG
 			auto tgt_ptr = (int64_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
-					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
-					D_ASSERT(result);
+					D_ASSERT(Hugeint::TryCast(src_ptr[row], tgt_ptr[row]));
 				}
 			}
+#endif
 			break;
 		}
 		case PhysicalType::INT128: {
