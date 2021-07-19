@@ -507,9 +507,7 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 
 					JumpToBeginning(original_options.skip_rows);
 					sniffed_column_counts.clear();
-					try {
-						ParseCSV(ParserMode::SNIFFING_DIALECT);
-					} catch (const InvalidInputException &e) {
+					if (!TryParseCSV(ParserMode::SNIFFING_DIALECT)) {
 						continue;
 					}
 
@@ -812,9 +810,7 @@ vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalT
 		while (JumpToNextSample()) {
 			InitParseChunk(sql_types.size());
 			// if jump ends up a bad line, we just skip this chunk
-			try {
-				ParseCSV(ParserMode::SNIFFING_DATATYPES);
-			} catch (const InvalidInputException &e) {
+			if (!TryParseCSV(ParserMode::SNIFFING_DATATYPES)) {
 				continue;
 			}
 			for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
@@ -941,7 +937,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	return RefineTypeDetection(type_candidates, requested_types, best_sql_types_candidates, best_format_candidates);
 }
 
-void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {
+bool BufferedCSVReader::TryParseComplexCSV(DataChunk &insert_chunk, string &error_message) {
 	// used for parsing algorithm
 	bool finished_chunk = false;
 	idx_t column = 0;
@@ -952,7 +948,7 @@ void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {
 	// read values into the buffer (if any)
 	if (position >= buffer_size) {
 		if (!ReadBuffer(start)) {
-			return;
+			return true;
 		}
 	}
 	// start parsing the first value
@@ -1035,7 +1031,7 @@ add_row : {
 	} else {
 		// \n newline, move to value start
 		if (finished_chunk) {
-			return;
+			return true;
 		}
 		goto value_start;
 	}
@@ -1059,8 +1055,9 @@ in_quotes:
 		}
 	} while (ReadBuffer(start));
 	// still in quoted state at the end of the file, error:
-	throw InvalidInputException("Error in file \"%s\" on line %s: unterminated quotes. (%s)", options.file_path,
+	error_message = StringUtil::Format("Error in file \"%s\" on line %s: unterminated quotes. (%s)", options.file_path,
 	                            GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
+	return false;
 unquote:
 	/* state: unquote */
 	// this state handles the state directly after we unquote
@@ -1086,10 +1083,11 @@ unquote:
 			delimiter_search.Match(delimiter_pos, buffer[position]);
 			count++;
 			if (count > delimiter_pos && count > quote_pos) {
-				throw InvalidInputException(
+				error_message = StringUtil::Format(
 				    "Error in file \"%s\" on line %s: quote should be followed by end of value, end "
 				    "of row or another quote. (%s)",
 				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
+				return false;
 			}
 			if (delimiter_pos == options.delimiter.size()) {
 				// quote followed by delimiter, add value
@@ -1103,9 +1101,10 @@ unquote:
 			}
 		}
 	} while (ReadBuffer(start));
-	throw InvalidInputException(
+	error_message = StringUtil::Format(
 	    "Error in file \"%s\" on line %s: quote should be followed by end of value, end of row or another quote. (%s)",
 	    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
+	return false;
 handle_escape:
 	escape_pos = 0;
 	quote_pos = 0;
@@ -1117,9 +1116,10 @@ handle_escape:
 			escape_search.Match(escape_pos, buffer[position]);
 			count++;
 			if (count > escape_pos && count > quote_pos) {
-				throw InvalidInputException(
+				error_message = StringUtil::Format(
 				    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)",
 				    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
+				return false;
 			}
 			if (quote_pos == options.quote.size() || escape_pos == options.escape.size()) {
 				// found quote or escape: move back to quoted state
@@ -1127,9 +1127,10 @@ handle_escape:
 			}
 		}
 	} while (ReadBuffer(start));
-	throw InvalidInputException(
+	error_message = StringUtil::Format(
 	    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 	    GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
+	return false;
 carriage_return:
 	/* state: carriage_return */
 	// this stage optionally skips a newline (\n) character, which allows \r\n to be interpreted as a single line
@@ -1142,12 +1143,12 @@ carriage_return:
 		}
 	}
 	if (finished_chunk) {
-		return;
+		return true;
 	}
 	goto value_start;
 final_state:
 	if (finished_chunk) {
-		return;
+		return true;
 	}
 	if (column > 0 || position > start) {
 		// remaining values to be added to the chunk
@@ -1161,9 +1162,10 @@ final_state:
 	}
 
 	end_of_file_reached = true;
+	return true;
 }
 
-void BufferedCSVReader::ParseSimpleCSV(DataChunk &insert_chunk) {
+bool BufferedCSVReader::TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message) {
 	// used for parsing algorithm
 	bool finished_chunk = false;
 	idx_t column = 0;
@@ -1173,7 +1175,7 @@ void BufferedCSVReader::ParseSimpleCSV(DataChunk &insert_chunk) {
 	// read values into the buffer (if any)
 	if (position >= buffer_size) {
 		if (!ReadBuffer(start)) {
-			return;
+			return true;
 		}
 	}
 	// start parsing the first value
@@ -1236,7 +1238,7 @@ add_row : {
 	} else {
 		// \n newline, move to value start
 		if (finished_chunk) {
-			return;
+			return true;
 		}
 		goto value_start;
 	}
@@ -1283,24 +1285,27 @@ unquote:
 		offset = 1;
 		goto add_row;
 	} else {
-		throw InvalidInputException("Error in file \"%s\" on line %s: quote should be followed by end of value, end of "
+		error_message = StringUtil::Format("Error in file \"%s\" on line %s: quote should be followed by end of value, end of "
 		                            "row or another quote. (%s)",
 		                            options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(),
 		                            options.toString());
+		return false;
 	}
 handle_escape:
 	/* state: handle_escape */
 	// escape should be followed by a quote or another escape character
 	position++;
 	if (position >= buffer_size && !ReadBuffer(start)) {
-		throw InvalidInputException(
+		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
+		return false;
 	}
 	if (buffer[position] != options.quote[0] && buffer[position] != options.escape[0]) {
-		throw InvalidInputException(
+		error_message = StringUtil::Format(
 		    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
 		    GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
+		return false;
 	}
 	// escape was followed by quote or escape, go back to quoted state
 	goto in_quotes;
@@ -1317,12 +1322,12 @@ carriage_return:
 		}
 	}
 	if (finished_chunk) {
-		return;
+		return true;
 	}
 	goto value_start;
 final_state:
 	if (finished_chunk) {
-		return;
+		return true;
 	}
 
 	if (column > 0 || position > start) {
@@ -1338,6 +1343,7 @@ final_state:
 	}
 
 	end_of_file_reached = true;
+	return true;
 }
 
 bool BufferedCSVReader::ReadBuffer(idx_t &start) {
@@ -1378,6 +1384,7 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 	return read_count > 0;
 }
 
+
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	// if no auto-detect or auto-detect with jumping samples, we have nothing cached and start from the beginning
 	if (cached_chunks.empty()) {
@@ -1390,16 +1397,33 @@ void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 		return;
 	}
 
-	ParseCSV(ParserMode::PARSING, insert_chunk);
+	string error_message;
+	if (!TryParseCSV(ParserMode::PARSING, insert_chunk, error_message)) {
+		throw InvalidInputException(error_message);
+	}
 }
 
-void BufferedCSVReader::ParseCSV(ParserMode parser_mode, DataChunk &insert_chunk) {
+bool BufferedCSVReader::TryParseCSV(ParserMode mode) {
+	DataChunk dummy_chunk;
+	string error_message;
+	return TryParseCSV(mode, dummy_chunk, error_message);
+}
+
+void BufferedCSVReader::ParseCSV(ParserMode mode) {
+	DataChunk dummy_chunk;
+	string error_message;
+	if (!TryParseCSV(mode, dummy_chunk, error_message)) {
+		throw InvalidInputException(error_message);
+	}
+}
+
+bool BufferedCSVReader::TryParseCSV(ParserMode parser_mode, DataChunk &insert_chunk, string &error_message) {
 	mode = parser_mode;
 
 	if (options.quote.size() <= 1 && options.escape.size() <= 1 && options.delimiter.size() == 1) {
-		ParseSimpleCSV(insert_chunk);
+		return TryParseSimpleCSV(insert_chunk, error_message);
 	} else {
-		ParseComplexCSV(insert_chunk);
+		return TryParseComplexCSV(insert_chunk, error_message);
 	}
 }
 

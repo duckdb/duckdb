@@ -111,8 +111,6 @@ struct BufferedCSVReaderOptions {
 
 enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2, PARSING_HEADER = 3 };
 
-static DataChunk DUMMY_CHUNK;
-
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BufferedCSVReader {
 	//! Initial buffer read size; can be extended for long lines
@@ -174,8 +172,12 @@ private:
 	void InitParseChunk(idx_t num_cols);
 	//! Initializes the TextSearchShiftArrays for complex parser
 	void PrepareComplexParser();
+	//! Try to parse a single datachunk from the file. Throws an exception if anything goes wrong.
+	void ParseCSV(ParserMode mode);
+	//! Try to parse a single datachunk from the file. Returns whether or not the parsing is successful
+	bool TryParseCSV(ParserMode mode);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
-	void ParseCSV(ParserMode mode, DataChunk &insert_chunk = DUMMY_CHUNK);
+	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
 	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
 	//! Change the date format for the type to the string
@@ -196,9 +198,9 @@ private:
 	void ResetStream();
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
-	void ParseSimpleCSV(DataChunk &insert_chunk);
+	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message);
 	//! Parses more complex CSV files with multi-byte delimiters, escapes or quotes
-	void ParseComplexCSV(DataChunk &insert_chunk);
+	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message);
 
 	//! Adds a value to the current row
 	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions);
