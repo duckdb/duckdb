@@ -207,11 +207,12 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	auto list_vector_type = LogicalType::LIST(LogicalType::VARCHAR);
 
 	idx_t total_len = 0;
+	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_idx = input_data.sel->get_index(i);
 		auto delim_idx = delim_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(input_idx)) {
-			FlatVector::SetNull(result, i, true);
+			result_mask.SetInvalid(i);
 			continue;
 		}
 		string_t input = inputs[input_idx];

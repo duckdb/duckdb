@@ -273,3 +273,5 @@ SELECT quantile_cont(t, 0.5) FROM bigints;
 ----
 9223372036854775800
 
+statement error
+SELECT quantile_cont(r, random()) FROM quantile

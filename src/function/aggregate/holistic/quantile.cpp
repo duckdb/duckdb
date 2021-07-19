@@ -750,7 +750,7 @@ static float CheckQuantile(const Value &quantile_val) {
 
 unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction &function,
                                       vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[1]->IsScalar()) {
+	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("QUANTILE can only take constant parameters");
 	}
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
