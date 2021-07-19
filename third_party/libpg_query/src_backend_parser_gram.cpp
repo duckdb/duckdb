@@ -24045,6 +24045,7 @@ static PGNode* makeParamRef(int number, int location)
 	return (PGNode *) p;
 }
 
+
 /* insertSelectOptions()
  * Insert ORDER BY, etc into an already-constructed SelectStmt.
  *
