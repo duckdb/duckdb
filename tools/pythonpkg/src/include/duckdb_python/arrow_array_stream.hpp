@@ -9,6 +9,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
@@ -17,7 +18,8 @@ namespace duckdb {
 class PythonTableArrowArrayStreamFactory {
 public:
 	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table) : arrow_table(arrow_table) {};
-	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory);
+	static unique_ptr<ArrowArrayStreamWrapper>
+	Produce(uintptr_t factory, std::vector<string> *project_columns = nullptr, std::vector<string> *filters = nullptr);
 	PyObject *arrow_table;
 };
 } // namespace duckdb

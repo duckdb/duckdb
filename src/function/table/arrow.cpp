@@ -163,20 +163,24 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
                                                            vector<LogicalType> &input_table_types,
                                                            vector<string> &input_table_names,
                                                            vector<LogicalType> &return_types, vector<string> &names) {
-
 	auto stream_factory_ptr = inputs[0].GetPointer();
-	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(uintptr_t stream_factory_ptr) =
-	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr))inputs[1].GetPointer();
+	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(
+	    uintptr_t stream_factory_ptr, std::vector<string> * project_columns, std::vector<string> * filters) =
+	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr, std::vector<string> * project_columns,
+	                                            std::vector<string> * filters)) inputs[1]
+	        .GetPointer();
 	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
 
-	auto res = make_unique<ArrowScanFunctionData>(rows_per_thread);
+	auto res = make_unique<ArrowScanFunctionData>(rows_per_thread, stream_factory_produce, stream_factory_ptr);
 	auto &data = *res;
-	data.stream = stream_factory_produce(stream_factory_ptr);
-	if (!data.stream) {
+	auto stream = stream_factory_produce(stream_factory_ptr, nullptr, nullptr);
+
+	data.number_of_rows = stream->number_of_rows;
+	if (!stream) {
 		throw InvalidInputException("arrow_scan: NULL pointer passed");
 	}
 
-	data.stream->GetSchema(data.schema_root);
+	stream->GetSchema(data.schema_root);
 
 	for (idx_t col_idx = 0; col_idx < (idx_t)data.schema_root.arrow_schema.n_children; col_idx++) {
 		auto &schema = *data.schema_root.arrow_schema.children[col_idx];
@@ -950,41 +954,67 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanS
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
                                        std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
                                        DataChunk &output, idx_t start) {
+	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
+		auto col_idx = scan_state.column_ids[idx];
+		std::pair<idx_t, idx_t> arrow_convert_idx {0, 0};
+		auto &array = *scan_state.chunk->arrow_array.children[idx];
+		if (!array.release) {
+			throw InvalidInputException("arrow_scan: released array passed");
+		}
+		if (array.length != scan_state.chunk->arrow_array.length) {
+			throw InvalidInputException("arrow_scan: array length mismatch");
+		}
+		if (array.dictionary) {
+			ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
+			                              col_idx, arrow_convert_idx);
+		} else {
+			SetValidityMask(output.data[idx], array, scan_state, output.size(), -1);
+			ColumnArrowToDuckDB(output.data[idx], array, scan_state, output.size(), arrow_convert_data, col_idx,
+			                    arrow_convert_idx);
+		}
+	}
+}
+
+unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(ArrowScanFunctionData &function, ArrowScanState &scan_state) {
+	//! Generate Projection Pushdown Vector
+	vector<string> projection_columns;
 	for (idx_t idx = 0; idx < scan_state.column_ids.size(); idx++) {
 		auto col_idx = scan_state.column_ids[idx];
-		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
-			output.data[idx].Sequence(start, start + output.size());
-		} else {
-			std::pair<idx_t, idx_t> arrow_convert_idx {0, 0};
-			auto &array = *scan_state.chunk->arrow_array.children[col_idx];
-			if (!array.release) {
-				throw InvalidInputException("arrow_scan: released array passed");
-			}
-			if (array.length != scan_state.chunk->arrow_array.length) {
-				throw InvalidInputException("arrow_scan: array length mismatch");
-			}
-			if (array.dictionary) {
-				ColumnArrowToDuckDBDictionary(output.data[idx], array, scan_state, output.size(), arrow_convert_data,
-				                              col_idx, arrow_convert_idx);
-			} else {
-				SetValidityMask(output.data[idx], array, scan_state, output.size(), -1);
-				ColumnArrowToDuckDB(output.data[idx], array, scan_state, output.size(), arrow_convert_data, col_idx,
-				                    arrow_convert_idx);
-			}
+		if (col_idx != COLUMN_IDENTIFIER_ROW_ID) {
+			auto &schema = *function.schema_root.arrow_schema.children[col_idx];
+			projection_columns.emplace_back(schema.name);
 		}
+	}
+	return function.scanner_producer(function.stream_factory_ptr, &projection_columns, nullptr);
+}
+void ProduceArrowScanSequential(ArrowScanFunctionData &function, ArrowScanState &scan_state) {
+	//! If our stream object is not set, we have not initialized an arrow scan yet.
+	if (!scan_state.stream) {
+		//! Generate Projection Pushdown Vector
+		scan_state.stream = ProduceArrowScan(function, scan_state);
+	}
+}
+
+void ProduceArrowScanParallel(ArrowScanFunctionData &function, ArrowScanState &scan_state,
+                              ParallelArrowScanState &scan_state_parallel) {
+	//! If our stream object is not set, we have not initialized an arrow scan yet.
+	if (!scan_state_parallel.stream) {
+		//! Generate Projection Pushdown Vector
+		scan_state_parallel.stream = ProduceArrowScan(function, scan_state);
 	}
 }
 
 void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const FunctionData *bind_data,
                                            FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	auto &state = (ArrowScanState &)*operator_state;
-
+	ProduceArrowScanSequential(data, state);
 	//! have we run out of data on the current chunk? move to next one
 	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
 		state.chunk_offset = 0;
 		state.arrow_dictionary_vectors.clear();
-		state.chunk = data.stream->GetNextChunk();
+		state.chunk = state.stream->GetNextChunk();
 	}
 
 	//! have we run out of chunks? we are done
@@ -1019,27 +1049,29 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	if (bind_data.stream->number_of_rows == -1) {
+	if (bind_data.number_of_rows == -1) {
 		return context.db->NumberOfThreads();
 	}
-	return (bind_data.stream->number_of_rows + bind_data.rows_per_thread - 1) / bind_data.rows_per_thread;
+	return (bind_data.number_of_rows + bind_data.rows_per_thread - 1) / bind_data.rows_per_thread;
 }
 
 unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientContext &context,
                                                                          const FunctionData *bind_data_p) {
+	auto &bind_data = (ArrowScanFunctionData &)*bind_data_p;
 	return make_unique<ParallelArrowScanState>();
 }
 
 bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                                     FunctionOperatorData *operator_state,
                                                     ParallelState *parallel_state_p) {
-	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	auto &state = (ArrowScanState &)*operator_state;
 	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
+	auto &bind_data = (ArrowScanFunctionData &)*bind_data_p;
+	auto &state = (ArrowScanState &)*operator_state;
+	ProduceArrowScanParallel(bind_data, state, parallel_state);
 	state.chunk_offset = 0;
 
-	state.chunk = bind_data.stream->GetNextChunk();
+	state.chunk = parallel_state.stream->GetNextChunk();
 
 	//! have we run out of chunks? we are done
 	if (!state.chunk->arrow_array.release) {
@@ -1062,15 +1094,15 @@ ArrowTableFunction::ArrowScanParallelInit(ClientContext &context, const Function
 
 unique_ptr<NodeStatistics> ArrowTableFunction::ArrowScanCardinality(ClientContext &context, const FunctionData *data) {
 	auto &bind_data = (ArrowScanFunctionData &)*data;
-	return make_unique<NodeStatistics>(bind_data.stream->number_of_rows, bind_data.stream->number_of_rows);
+	return make_unique<NodeStatistics>(bind_data.number_of_rows, bind_data.number_of_rows);
 }
 
 int ArrowTableFunction::ArrowProgress(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	if (bind_data.stream->number_of_rows == 0) {
+	if (bind_data.number_of_rows == 0) {
 		return 100;
 	}
-	auto percentage = bind_data.lines_read * 100 / bind_data.stream->number_of_rows;
+	auto percentage = bind_data.lines_read * 100 / bind_data.number_of_rows;
 	return percentage;
 }
 
