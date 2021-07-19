@@ -404,19 +404,16 @@ void BufferedCSVReader::SetDateFormat(const string &format_specifier, const Logi
 }
 
 bool BufferedCSVReader::TryCastValue(const Value &value, const LogicalType &sql_type) {
-	try {
-		if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
-			options.date_format[LogicalTypeId::DATE].ParseDate(string_t(value.str_value));
-		} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type.id() == LogicalTypeId::TIMESTAMP) {
-			options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(string_t(value.str_value));
-		} else {
-			value.CastAs(sql_type, true);
-		}
-		return true;
-	} catch (...) {
-		return false;
+	if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
+		date_t result;
+		return options.date_format[LogicalTypeId::DATE].TryParseDate(string_t(value.str_value), result);
+	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type.id() == LogicalTypeId::TIMESTAMP) {
+		timestamp_t result;
+		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(value.str_value), result);
+	} else {
+		Value new_value;
+		return value.TryCastAs(sql_type, new_value, true);
 	}
-	return false;
 }
 
 bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
@@ -425,14 +422,26 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const
 		Vector dummy_result(sql_type);
 		if (options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
+			bool success = true;
 			UnaryExecutor::Execute<string_t, date_t>(parse_chunk_col, dummy_result, size, [&](string_t input) {
-				return options.date_format[LogicalTypeId::DATE].ParseDate(input);
+				date_t result;
+				if (!options.date_format[LogicalTypeId::DATE].TryParseDate(input, result)) {
+					success = false;
+				}
+				return result;
 			});
+			return success;
 		} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
 			// use the date format to cast the chunk
+			bool success = true;
 			UnaryExecutor::Execute<string_t, timestamp_t>(parse_chunk_col, dummy_result, size, [&](string_t input) {
-				return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
+				timestamp_t result;
+				if (!options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result)) {
+					success = false;
+				}
+				return result;
 			});
+			return success;
 		} else {
 			// target type is not varchar: perform a cast
 			VectorOperations::Cast(parse_chunk_col, dummy_result, size, true);
@@ -726,11 +735,10 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 	for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
 		auto dummy_val = best_header_row.GetValue(col, 0);
 		// try cast as SQLNULL
-		try {
-			dummy_val.CastAs(LogicalType::SQLNULL, true);
-		} catch (const Exception &e) {
+		if (!dummy_val.TryCastAs(LogicalType::SQLNULL, true)) {
 			first_row_nulls = false;
 		}
+
 		// try cast to sql_type of column
 		const auto &sql_type = best_sql_types_candidates[col].back();
 		if (!TryCastValue(dummy_val, sql_type)) {
@@ -1544,7 +1552,7 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					// target type is not varchar: perform a cast
 					VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());
 				}
-			} catch (const Exception &e) {
+			} catch (const std::exception &e) {
 				string col_name = to_string(col_idx);
 				if (col_idx < col_names.size()) {
 					col_name = "\"" + col_names[col_idx] + "\"";

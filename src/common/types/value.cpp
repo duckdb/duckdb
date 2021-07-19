@@ -1062,19 +1062,27 @@ Value Value::CastAs(const LogicalType &target_type, bool strict) const {
 	return result.GetValue(0);
 }
 
-bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
+bool Value::TryCastAs(const LogicalType &target_type, Value &new_value, bool strict) const {
 	try {
-		Value new_value = CastAs(target_type, strict);
-		type_ = target_type;
-		is_null = new_value.is_null;
-		value_ = new_value.value_;
-		str_value = new_value.str_value;
-		struct_value = new_value.struct_value;
-		list_value = new_value.list_value;
+		new_value = CastAs(target_type, strict);
 		return true;
 	} catch (Exception &) {
 		return false;
 	}
+}
+
+bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
+	Value new_value;
+	if (!TryCastAs(target_type, new_value, strict)) {
+		return false;
+	}
+	type_ = target_type;
+	is_null = new_value.is_null;
+	value_ = new_value.value_;
+	str_value = new_value.str_value;
+	struct_value = new_value.struct_value;
+	list_value = new_value.list_value;
+	return true;
 }
 
 void Value::Serialize(Serializer &serializer) {

@@ -107,11 +107,18 @@ public:
 		int32_t data[7];
 		string error_message;
 		idx_t error_position = INVALID_INDEX;
+
+		date_t ToDate();
+		timestamp_t ToTimestamp();
 	};
 	//! The full format specifier, for error messages
 	string format_specifier;
 
 	bool Parse(string_t str, ParseResult &result);
+
+	bool TryParseDate(string_t str, date_t &result);
+	bool TryParseTimestamp(string_t str, timestamp_t &result);
+
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);
 

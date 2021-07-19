@@ -1104,6 +1104,34 @@ string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) 
 	return input + "\n" + string(position, ' ') + "^";
 }
 
+date_t StrpTimeFormat::ParseResult::ToDate() {
+	return Date::FromDate(data[0], data[1], data[2]);
+}
+
+timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
+	date_t date = Date::FromDate(data[0], data[1], data[2]);
+	dtime_t time = Time::FromTime(data[3], data[4], data[5], data[6]);
+	return Timestamp::FromDatetime(date, time);
+}
+
+bool StrpTimeFormat::TryParseDate(string_t input, date_t &result) {
+	ParseResult parse_result;
+	if (!Parse(input, parse_result)) {
+		return false;
+	}
+	result = parse_result.ToDate();
+	return true;
+}
+
+bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result) {
+	ParseResult parse_result;
+	if (!Parse(input, parse_result)) {
+		return false;
+	}
+	result = parse_result.ToTimestamp();
+	return true;
+}
+
 date_t StrpTimeFormat::ParseDate(string_t input) {
 	ParseResult result;
 	if (!Parse(input, result)) {
@@ -1111,7 +1139,7 @@ date_t StrpTimeFormat::ParseDate(string_t input) {
 		    "Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetString(),
 		    format_specifier, FormatStrpTimeError(input.GetString(), result.error_position), result.error_message);
 	}
-	return Date::FromDate(result.data[0], result.data[1], result.data[2]);
+	return result.ToDate();
 }
 
 timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
@@ -1121,9 +1149,7 @@ timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
 		    "Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetString(),
 		    format_specifier, FormatStrpTimeError(input.GetString(), result.error_position), result.error_message);
 	}
-	date_t date = Date::FromDate(result.data[0], result.data[1], result.data[2]);
-	dtime_t time = Time::FromTime(result.data[3], result.data[4], result.data[5], result.data[6]);
-	return Timestamp::FromDatetime(date, time);
+	return result.ToTimestamp();
 }
 
 static void StrpTimeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
