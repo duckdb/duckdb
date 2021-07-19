@@ -1256,7 +1256,7 @@ typedef union YYSTYPE
 	PGViewCheckOption viewcheckoption;
 }
 /* Line 193 of yacc.c.  */
-#line 1261 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1260 "third_party/libpg_query/grammar/grammar_out.cpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
@@ -1281,7 +1281,7 @@ typedef struct YYLTYPE
 
 
 /* Line 216 of yacc.c.  */
-#line 1286 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1285 "third_party/libpg_query/grammar/grammar_out.cpp"
 
 #ifdef short
 # undef short
@@ -23488,7 +23488,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 23493 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 23492 "third_party/libpg_query/grammar/grammar_out.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -24044,8 +24044,6 @@ static PGNode* makeParamRef(int number, int location)
 	p->location = location;
 	return (PGNode *) p;
 }
-
-
 
 /* insertSelectOptions()
  * Insert ORDER BY, etc into an already-constructed SelectStmt.
