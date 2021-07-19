@@ -445,7 +445,9 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
 
-void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options, vector<BufferedCSVReaderOptions> &info_candidates, idx_t &best_num_cols) {
+void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types,
+                                      BufferedCSVReaderOptions &original_options,
+                                      vector<BufferedCSVReaderOptions> &info_candidates, idx_t &best_num_cols) {
 	// set up the candidates we consider for delimiter and quote rules based on user input
 	vector<string> delim_candidates;
 	vector<QuoteRule> quoterule_candidates;
@@ -480,7 +482,6 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 	}
 
 	idx_t best_consistent_rows = 0;
-
 	for (auto quoterule : quoterule_candidates) {
 		const auto &quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
 		for (const auto &quote : quote_candidates) {
@@ -553,58 +554,19 @@ void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types
 			}
 		}
 	}
-
-	// if not dialect candidate was found, then file was most likely empty and we throw an exception
-	if (info_candidates.empty()) {
-		throw InvalidInputException(
-		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
-		    options.file_path);
-	}
 }
 
-vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
-	for (auto &type : requested_types) {
-		// auto detect for blobs not supported: there may be invalid UTF-8 in the file
-		if (type.id() == LogicalTypeId::BLOB) {
-			return requested_types;
-		}
-	}
-
-	// #######
-	// ### dialect detection
-	// #######
-	BufferedCSVReaderOptions original_options = options;
-	vector<BufferedCSVReaderOptions> info_candidates;
-	idx_t best_num_cols = 0;
-
-	DetectDialect(requested_types, original_options, info_candidates, best_num_cols);
-
-	// #######
-	// ### type detection (initial)
-	// #######
-	// type candidates, ordered by descending specificity (~ from high to low)
-	vector<LogicalType> type_candidates = {
-	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
-	    LogicalType::DATE,    LogicalType::TIME,
-	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
-	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
-	    LogicalType::SQLNULL};
-
-	// format template candidates, ordered by descending specificity (~ from high to low)
-	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
-	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
-	    {LogicalTypeId::TIMESTAMP,
-	     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",
-	      "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%y-%m-%d %H:%M:%S"}},
-	};
-
-	// check which info candidate leads to minimum amount of non-varchar columns...
+void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_candidates,
+                                             const map<LogicalTypeId, vector<const char *>> &format_template_candidates,
+                                             const vector<BufferedCSVReaderOptions> &info_candidates,
+                                             BufferedCSVReaderOptions &original_options, idx_t best_num_cols,
+                                             vector<vector<LogicalType>> &best_sql_types_candidates,
+                                             std::map<LogicalTypeId, vector<string>> &best_format_candidates,
+                                             DataChunk &best_header_row) {
 	BufferedCSVReaderOptions best_options;
 	idx_t min_varchar_cols = best_num_cols + 1;
-	vector<vector<LogicalType>> best_sql_types_candidates;
-	std::map<LogicalTypeId, vector<string>> best_format_candidates;
-	DataChunk best_header_row;
 
+	// check which info candidate leads to minimum amount of non-varchar columns...
 	for (const auto &t : format_template_candidates) {
 		best_format_candidates[t.first].clear();
 	}
@@ -655,14 +617,17 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 						if (!has_format_candidates[sql_type.id()]) {
 							has_format_candidates[sql_type.id()] = true;
 							// order by preference
-							for (const auto &t : format_template_candidates[sql_type.id()]) {
-								const auto format_string = GenerateDateFormat(separator, t);
-								// don't parse ISO 8601
-								if (format_string.find("%Y-%m-%d") == string::npos) {
-									type_format_candidates.emplace_back(format_string);
+							auto entry = format_template_candidates.find(sql_type.id());
+							if (entry != format_template_candidates.end()) {
+								const auto &format_template_list = entry->second;
+								for (const auto &t : format_template_list) {
+									const auto format_string = GenerateDateFormat(separator, t);
+									// don't parse ISO 8601
+									if (format_string.find("%Y-%m-%d") == string::npos) {
+										type_format_candidates.emplace_back(format_string);
+									}
 								}
 							}
-
 							//	initialise the first candidate
 							options.has_format[sql_type.id()] = true;
 							//	all formats are constructed to be valid
@@ -749,11 +714,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 			SetDateFormat(best.second.back(), best.first);
 		}
 	}
+}
 
-	// #######
-	// ### header detection
-	// #######
-
+void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql_types_candidates, const DataChunk &best_header_row) {
 	// information for header detection
 	bool first_row_consistent = true;
 	bool first_row_nulls = false;
@@ -815,11 +778,9 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 			col_names.push_back(column_name);
 		}
 	}
+}
 
-	// #######
-	// ### type detection (refining)
-	// #######
-
+vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalType> &type_candidates, const vector<LogicalType> &requested_types, vector<vector<LogicalType>> &best_sql_types_candidates, map<LogicalTypeId, vector<string>> &best_format_candidates) {
 	// sql_types and parse_chunk have to be in line with new info
 	sql_types.clear();
 	sql_types.assign(options.num_cols, LogicalType::VARCHAR);
@@ -912,6 +873,64 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	}
 
 	return detected_types;
+}
+
+vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
+	for (auto &type : requested_types) {
+		// auto detect for blobs not supported: there may be invalid UTF-8 in the file
+		if (type.id() == LogicalTypeId::BLOB) {
+			return requested_types;
+		}
+	}
+
+	// #######
+	// ### dialect detection
+	// #######
+	BufferedCSVReaderOptions original_options = options;
+	vector<BufferedCSVReaderOptions> info_candidates;
+	idx_t best_num_cols = 0;
+
+	DetectDialect(requested_types, original_options, info_candidates, best_num_cols);
+
+	// if no dialect candidate was found, then file was most likely empty and we throw an exception
+	if (info_candidates.empty()) {
+		throw InvalidInputException(
+		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
+		    options.file_path);
+	}
+
+	// #######
+	// ### type detection (initial)
+	// #######
+	// type candidates, ordered by descending specificity (~ from high to low)
+	vector<LogicalType> type_candidates = {
+	    LogicalType::VARCHAR, LogicalType::TIMESTAMP,
+	    LogicalType::DATE,    LogicalType::TIME,
+	    LogicalType::DOUBLE,  /* LogicalType::FLOAT,*/ LogicalType::BIGINT,
+	    LogicalType::INTEGER, /*LogicalType::SMALLINT, LogicalType::TINYINT,*/ LogicalType::BOOLEAN,
+	    LogicalType::SQLNULL};
+	// format template candidates, ordered by descending specificity (~ from high to low)
+	std::map<LogicalTypeId, vector<const char *>> format_template_candidates = {
+	    {LogicalTypeId::DATE, {"%m-%d-%Y", "%m-%d-%y", "%d-%m-%Y", "%d-%m-%y", "%Y-%m-%d", "%y-%m-%d"}},
+	    {LogicalTypeId::TIMESTAMP,
+	     {"%Y-%m-%d %H:%M:%S.%f", "%m-%d-%Y %I:%M:%S %p", "%m-%d-%y %I:%M:%S %p", "%d-%m-%Y %H:%M:%S",
+	      "%d-%m-%y %H:%M:%S", "%Y-%m-%d %H:%M:%S", "%y-%m-%d %H:%M:%S"}},
+	};
+	vector<vector<LogicalType>> best_sql_types_candidates;
+	map<LogicalTypeId, vector<string>> best_format_candidates;
+	DataChunk best_header_row;
+	DetectCandidateTypes(type_candidates, format_template_candidates, info_candidates, original_options, best_num_cols,
+	                     best_sql_types_candidates, best_format_candidates, best_header_row);
+
+	// #######
+	// ### header detection
+	// #######
+	DetectHeader(best_sql_types_candidates, best_header_row);
+
+	// #######
+	// ### type detection (refining)
+	// #######
+	return RefineTypeDetection(type_candidates, requested_types, best_sql_types_candidates, best_format_candidates);
 }
 
 void BufferedCSVReader::ParseComplexCSV(DataChunk &insert_chunk) {

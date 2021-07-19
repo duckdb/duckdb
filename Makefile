@@ -188,6 +188,9 @@ format-fix:
 format-head:
 	python3 scripts/format.py HEAD --fix --noconfirm
 
+format-changes:
+	python3 scripts/format.py HEAD --fix --noconfirm
+
 format-master:
 	python3 scripts/format.py master --fix --noconfirm
 

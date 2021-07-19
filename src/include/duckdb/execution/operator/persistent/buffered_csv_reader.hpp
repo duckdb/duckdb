@@ -13,8 +13,8 @@
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/map.hpp"
 
-#include <map>
 #include <sstream>
 #include <queue>
 
@@ -212,7 +212,20 @@ private:
 	unique_ptr<FileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
 
 	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
-	void DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options, vector<BufferedCSVReaderOptions> &info_candidates, idx_t &best_num_cols);
+	void DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options,
+	                   vector<BufferedCSVReaderOptions> &info_candidates, idx_t &best_num_cols);
+	//! Second phase of auto detection: detect candidate types for each column
+	void DetectCandidateTypes(const vector<LogicalType> &type_candidates,
+	                          const map<LogicalTypeId, vector<const char *>> &format_template_candidates,
+	                          const vector<BufferedCSVReaderOptions> &info_candidates,
+	                          BufferedCSVReaderOptions &original_options, idx_t best_num_cols,
+	                          vector<vector<LogicalType>> &best_sql_types_candidates,
+	                          std::map<LogicalTypeId, vector<string>> &best_format_candidates,
+	                          DataChunk &best_header_row);
+	//! Third phase of auto detection: detect header of CSV file
+	void DetectHeader(const vector<vector<LogicalType>> &best_sql_types_candidates, const DataChunk &best_header_row);
+	//! Fourth phase of auto detection: refine the types of each column and select which types to use for each column
+	vector<LogicalType> RefineTypeDetection(const vector<LogicalType> &type_candidates, const vector<LogicalType> &requested_types, vector<vector<LogicalType>> &best_sql_types_candidates, map<LogicalTypeId, vector<string>> &best_format_candidates);
 };
 
 } // namespace duckdb
