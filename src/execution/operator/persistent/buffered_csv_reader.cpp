@@ -443,46 +443,49 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const
 	return true;
 }
 
-void BufferedCSVReader::PrepareCandidateSets() {
+enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
+
+void BufferedCSVReader::DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options, vector<BufferedCSVReaderOptions> &info_candidates, idx_t &best_num_cols) {
+	// set up the candidates we consider for delimiter and quote rules based on user input
+	vector<string> delim_candidates;
+	vector<QuoteRule> quoterule_candidates;
+	vector<vector<string>> quote_candidates_map;
+	vector<vector<string>> escape_candidates_map = {{""}, {"\\"}, {""}};
+
 	if (options.has_delimiter) {
+		// user provided a delimiter: use that delimiter
 		delim_candidates = {options.delimiter};
+	} else {
+		// no delimiter provided: try standard/common delimiters
+		delim_candidates = {",", "|", ";", "\t"};
 	}
 	if (options.has_quote) {
+		// user provided quote: use that quote rule
 		quote_candidates_map = {{options.quote}, {options.quote}, {options.quote}};
+	} else {
+		// no quote rule provided: use standard/common quotes
+		quote_candidates_map = {{"\""}, {"\"", "'"}, {""}};
 	}
 	if (options.has_escape) {
+		// user provided escape: use that escape rule
 		if (options.escape.empty()) {
 			quoterule_candidates = {QuoteRule::QUOTES_RFC};
 		} else {
 			quoterule_candidates = {QuoteRule::QUOTES_OTHER};
 		}
 		escape_candidates_map[static_cast<uint8_t>(quoterule_candidates[0])] = {options.escape};
-	}
-}
-
-vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
-	for (auto &type : requested_types) {
-		// auto detect for blobs not supported: there may be invalid UTF-8 in the file
-		if (type.id() == LogicalTypeId::BLOB) {
-			return requested_types;
-		}
+	} else {
+		// no escape provided: try standard/common escapes
+		quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
 	}
 
-	// #######
-	// ### dialect detection
-	// #######
-
-	PrepareCandidateSets();
-	BufferedCSVReaderOptions original_options = options;
-	vector<BufferedCSVReaderOptions> info_candidates;
 	idx_t best_consistent_rows = 0;
-	idx_t best_num_cols = 0;
 
-	for (QuoteRule quoterule : quoterule_candidates) {
-		vector<string> quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
+	for (auto quoterule : quoterule_candidates) {
+		const auto &quote_candidates = quote_candidates_map[static_cast<uint8_t>(quoterule)];
 		for (const auto &quote : quote_candidates) {
 			for (const auto &delim : delim_candidates) {
-				vector<string> escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
+				const auto &escape_candidates = escape_candidates_map[static_cast<uint8_t>(quoterule)];
 				for (const auto &escape : escape_candidates) {
 					BufferedCSVReaderOptions sniff_info = original_options;
 					sniff_info.delimiter = delim;
@@ -557,6 +560,24 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 		    "Error in file \"%s\": CSV options could not be auto-detected. Consider setting parser options manually.",
 		    options.file_path);
 	}
+}
+
+vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &requested_types) {
+	for (auto &type : requested_types) {
+		// auto detect for blobs not supported: there may be invalid UTF-8 in the file
+		if (type.id() == LogicalTypeId::BLOB) {
+			return requested_types;
+		}
+	}
+
+	// #######
+	// ### dialect detection
+	// #######
+	BufferedCSVReaderOptions original_options = options;
+	vector<BufferedCSVReaderOptions> info_candidates;
+	idx_t best_num_cols = 0;
+
+	DetectDialect(requested_types, original_options, info_candidates, best_num_cols);
 
 	// #######
 	// ### type detection (initial)

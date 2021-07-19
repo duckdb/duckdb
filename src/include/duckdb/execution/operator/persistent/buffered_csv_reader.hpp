@@ -109,8 +109,6 @@ struct BufferedCSVReaderOptions {
 	}
 };
 
-enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
-
 enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2, PARSING_HEADER = 3 };
 
 static DataChunk DUMMY_CHUNK;
@@ -122,15 +120,6 @@ class BufferedCSVReader {
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have the wrong delimiters
 	static constexpr idx_t MAXIMUM_CSV_LINE_SIZE = 1048576;
 	ParserMode mode;
-
-	//! Candidates for delimiter auto detection
-	vector<string> delim_candidates = {",", "|", ";", "\t"};
-	//! Candidates for quote rule auto detection
-	vector<QuoteRule> quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
-	//! Candidates for quote sign auto detection (per quote rule)
-	vector<vector<string>> quote_candidates_map = {{"\""}, {"\"", "'"}, {""}};
-	//! Candidates for escape character auto detection (per quote rule)
-	vector<vector<string>> escape_candidates_map = {{""}, {"\\"}, {""}};
 
 public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
@@ -205,8 +194,6 @@ private:
 	void ResetBuffer();
 	//! Resets the steam
 	void ResetStream();
-	//! Prepare candidate sets for auto detection based on user input
-	void PrepareCandidateSets();
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
 	void ParseSimpleCSV(DataChunk &insert_chunk);
@@ -223,6 +210,9 @@ private:
 	bool ReadBuffer(idx_t &start);
 
 	unique_ptr<FileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
+
+	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
+	void DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options, vector<BufferedCSVReaderOptions> &info_candidates, idx_t &best_num_cols);
 };
 
 } // namespace duckdb
