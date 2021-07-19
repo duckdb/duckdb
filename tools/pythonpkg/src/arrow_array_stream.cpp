@@ -1,18 +1,19 @@
 #include "duckdb/common/assert.hpp"
 #include "include/duckdb_python/arrow_array_stream.hpp"
 #include "duckdb/common/common.hpp"
-
+#include "duckdb/planner/table_filter.hpp"
 namespace duckdb {
 using namespace py::literals; // to bring in the `_a` literal
+
+
 unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr,
                                                                                 std::vector<string> *project_columns,
-                                                                                std::vector<string> *filters) {
+                                                                                TableFilterCollection *filters) {
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
 	if (!factory->arrow_table) {
 		return nullptr;
 	}
-
 	py::handle table(factory->arrow_table);
 	py::object scanner;
 	py::object arrow_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_dataset");
@@ -45,6 +46,11 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	auto export_to_c = record_batches.attr("_export_to_c");
 	export_to_c((uint64_t)&res->arrow_array_stream);
 	return res;
+}
+
+py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterCollection &filters){
+	filters.table_filters->filters;
+
 }
 
 } // namespace duckdb

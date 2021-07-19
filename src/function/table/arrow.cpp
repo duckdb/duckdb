@@ -165,9 +165,9 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
                                                            vector<LogicalType> &return_types, vector<string> &names) {
 	auto stream_factory_ptr = inputs[0].GetPointer();
 	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(
-	    uintptr_t stream_factory_ptr, std::vector<string> * project_columns, std::vector<string> * filters) =
+	    uintptr_t stream_factory_ptr, std::vector<string> * project_columns, TableFilterCollection *filters) =
 	    (unique_ptr<ArrowArrayStreamWrapper>(*)(uintptr_t stream_factory_ptr, std::vector<string> * project_columns,
-	                                            std::vector<string> * filters)) inputs[1]
+	                                            TableFilterCollection *filters)) inputs[1]
 	        .GetPointer();
 	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
 
@@ -204,6 +204,19 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	return move(res);
 }
 
+unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(ArrowScanFunctionData &function, ArrowScanState &scan_state, TableFilterCollection *filters = nullptr) {
+	//! Generate Projection Pushdown Vector
+	vector<string> projection_columns;
+	for (idx_t idx = 0; idx < scan_state.column_ids.size(); idx++) {
+		auto col_idx = scan_state.column_ids[idx];
+		if (col_idx != COLUMN_IDENTIFIER_ROW_ID) {
+			auto &schema = *function.schema_root.arrow_schema.children[col_idx];
+			projection_columns.emplace_back(schema.name);
+		}
+	}
+	return function.scanner_producer(function.stream_factory_ptr, &projection_columns, filters);
+}
+
 unique_ptr<FunctionOperatorData> ArrowTableFunction::ArrowScanInit(ClientContext &context,
                                                                    const FunctionData *bind_data,
                                                                    const vector<column_t> &column_ids,
@@ -211,6 +224,8 @@ unique_ptr<FunctionOperatorData> ArrowTableFunction::ArrowScanInit(ClientContext
 	auto current_chunk = make_unique<ArrowArrayWrapper>();
 	auto result = make_unique<ArrowScanState>(move(current_chunk));
 	result->column_ids = column_ids;
+	auto &data = (ArrowScanFunctionData &)*bind_data;
+	ProduceArrowScan(data, *result,filters);
 	return move(result);
 }
 
@@ -975,25 +990,7 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
 	}
 }
 
-unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(ArrowScanFunctionData &function, ArrowScanState &scan_state) {
-	//! Generate Projection Pushdown Vector
-	vector<string> projection_columns;
-	for (idx_t idx = 0; idx < scan_state.column_ids.size(); idx++) {
-		auto col_idx = scan_state.column_ids[idx];
-		if (col_idx != COLUMN_IDENTIFIER_ROW_ID) {
-			auto &schema = *function.schema_root.arrow_schema.children[col_idx];
-			projection_columns.emplace_back(schema.name);
-		}
-	}
-	return function.scanner_producer(function.stream_factory_ptr, &projection_columns, nullptr);
-}
-void ProduceArrowScanSequential(ArrowScanFunctionData &function, ArrowScanState &scan_state) {
-	//! If our stream object is not set, we have not initialized an arrow scan yet.
-	if (!scan_state.stream) {
-		//! Generate Projection Pushdown Vector
-		scan_state.stream = ProduceArrowScan(function, scan_state);
-	}
-}
+
 
 void ProduceArrowScanParallel(ArrowScanFunctionData &function, ArrowScanState &scan_state,
                               ParallelArrowScanState &scan_state_parallel) {
@@ -1009,7 +1006,6 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	auto &state = (ArrowScanState &)*operator_state;
-	ProduceArrowScanSequential(data, state);
 	//! have we run out of data on the current chunk? move to next one
 	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
 		state.chunk_offset = 0;
@@ -1057,7 +1053,7 @@ idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const Func
 
 unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientContext &context,
                                                                          const FunctionData *bind_data_p) {
-	auto &bind_data = (ArrowScanFunctionData &)*bind_data_p;
+//	auto &bind_data = (ArrowScanFunctionData &)*bind_data_p;
 	return make_unique<ParallelArrowScanState>();
 }
 
@@ -1112,7 +1108,7 @@ void ArrowTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	                                ArrowScanFunction, ArrowScanBind, ArrowScanInit, nullptr, nullptr, nullptr,
 	                                ArrowScanCardinality, nullptr, nullptr, ArrowScanMaxThreads,
 	                                ArrowScanInitParallelState, ArrowScanFunctionParallel, ArrowScanParallelInit,
-	                                ArrowScanParallelStateNext, true, false, ArrowProgress));
+	                                ArrowScanParallelStateNext, true, true, ArrowProgress));
 	set.AddFunction(arrow);
 }
 

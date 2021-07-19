@@ -45,7 +45,7 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	ArrowScanFunctionData(idx_t rows_per_thread_p,
 	                      unique_ptr<ArrowArrayStreamWrapper> (*scanner_producer_p)(
 	                          uintptr_t stream_factory_ptr, std::vector<string> *project_columns,
-	                          std::vector<string> *filters),
+	                          TableFilterCollection *filters),
 	                      uintptr_t stream_factory_ptr_p)
 	    : lines_read(0), rows_per_thread(rows_per_thread_p), stream_factory_ptr(stream_factory_ptr_p),
 	      scanner_producer(scanner_producer_p), number_of_rows(0) {
@@ -60,7 +60,7 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	//! Pointer to the scanner factory produce
 	unique_ptr<ArrowArrayStreamWrapper> (*scanner_producer)(uintptr_t stream_factory_ptr,
 	                                                        std::vector<string> *project_columns,
-	                                                        std::vector<string> *filters);
+	                                                        TableFilterCollection *filters);
 	//! Number of rows (Used in cardinality and progress bar)
 	int64_t number_of_rows;
 };
