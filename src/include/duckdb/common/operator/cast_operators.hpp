@@ -21,7 +21,7 @@ class Vector;
 struct TryCast {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, bool strict = false) {
-		throw InternalException("Unsupported cast from %s to %s", GetTypeId<SRC>(), GetTypeId<DST>());
+		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
 	}
 };
 
@@ -46,173 +46,173 @@ struct Cast {
 
 #define TRY_CAST_TEMPLATE(SOURCE_TYPE, TARGET_TYPE) \
 template <> \
-bool TryCast::Operation(SOURCE_TYPE input, TARGET_TYPE &result, bool strict);
+bool TryCast::Operation(SOURCE_TYPE input, TARGET_TYPE &result, bool strict)
 
 //===--------------------------------------------------------------------===//
 // bool casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(bool, bool)
-TRY_CAST_TEMPLATE(bool, int8_t)
-TRY_CAST_TEMPLATE(bool, int16_t)
-TRY_CAST_TEMPLATE(bool, int32_t)
-TRY_CAST_TEMPLATE(bool, int64_t)
-TRY_CAST_TEMPLATE(bool, uint8_t)
-TRY_CAST_TEMPLATE(bool, uint16_t)
-TRY_CAST_TEMPLATE(bool, uint32_t)
-TRY_CAST_TEMPLATE(bool, uint64_t)
-TRY_CAST_TEMPLATE(bool, float)
-TRY_CAST_TEMPLATE(bool, double)
+TRY_CAST_TEMPLATE(bool, bool);
+TRY_CAST_TEMPLATE(bool, int8_t);
+TRY_CAST_TEMPLATE(bool, int16_t);
+TRY_CAST_TEMPLATE(bool, int32_t);
+TRY_CAST_TEMPLATE(bool, int64_t);
+TRY_CAST_TEMPLATE(bool, uint8_t);
+TRY_CAST_TEMPLATE(bool, uint16_t);
+TRY_CAST_TEMPLATE(bool, uint32_t);
+TRY_CAST_TEMPLATE(bool, uint64_t);
+TRY_CAST_TEMPLATE(bool, float);
+TRY_CAST_TEMPLATE(bool, double);
 
 //===--------------------------------------------------------------------===//
 // int8_t casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(int8_t, bool)
-TRY_CAST_TEMPLATE(int8_t, int8_t)
-TRY_CAST_TEMPLATE(int8_t, int16_t)
-TRY_CAST_TEMPLATE(int8_t, int32_t)
-TRY_CAST_TEMPLATE(int8_t, int64_t)
-TRY_CAST_TEMPLATE(int8_t, uint8_t)
-TRY_CAST_TEMPLATE(int8_t, uint16_t)
-TRY_CAST_TEMPLATE(int8_t, uint32_t)
-TRY_CAST_TEMPLATE(int8_t, uint64_t)
-TRY_CAST_TEMPLATE(int8_t, float)
-TRY_CAST_TEMPLATE(int8_t, double)
+TRY_CAST_TEMPLATE(int8_t, bool);
+TRY_CAST_TEMPLATE(int8_t, int8_t);
+TRY_CAST_TEMPLATE(int8_t, int16_t);
+TRY_CAST_TEMPLATE(int8_t, int32_t);
+TRY_CAST_TEMPLATE(int8_t, int64_t);
+TRY_CAST_TEMPLATE(int8_t, uint8_t);
+TRY_CAST_TEMPLATE(int8_t, uint16_t);
+TRY_CAST_TEMPLATE(int8_t, uint32_t);
+TRY_CAST_TEMPLATE(int8_t, uint64_t);
+TRY_CAST_TEMPLATE(int8_t, float);
+TRY_CAST_TEMPLATE(int8_t, double);
 
 //===--------------------------------------------------------------------===//
 // int16_t casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(int16_t, bool)
-TRY_CAST_TEMPLATE(int16_t, int8_t)
-TRY_CAST_TEMPLATE(int16_t, int16_t)
-TRY_CAST_TEMPLATE(int16_t, int32_t)
-TRY_CAST_TEMPLATE(int16_t, int64_t)
-TRY_CAST_TEMPLATE(int16_t, uint8_t)
-TRY_CAST_TEMPLATE(int16_t, uint16_t)
-TRY_CAST_TEMPLATE(int16_t, uint32_t)
-TRY_CAST_TEMPLATE(int16_t, uint64_t)
-TRY_CAST_TEMPLATE(int16_t, float)
-TRY_CAST_TEMPLATE(int16_t, double)
+TRY_CAST_TEMPLATE(int16_t, bool);
+TRY_CAST_TEMPLATE(int16_t, int8_t);
+TRY_CAST_TEMPLATE(int16_t, int16_t);
+TRY_CAST_TEMPLATE(int16_t, int32_t);
+TRY_CAST_TEMPLATE(int16_t, int64_t);
+TRY_CAST_TEMPLATE(int16_t, uint8_t);
+TRY_CAST_TEMPLATE(int16_t, uint16_t);
+TRY_CAST_TEMPLATE(int16_t, uint32_t);
+TRY_CAST_TEMPLATE(int16_t, uint64_t);
+TRY_CAST_TEMPLATE(int16_t, float);
+TRY_CAST_TEMPLATE(int16_t, double);
 
 //===--------------------------------------------------------------------===//
 // int32_t casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(int32_t, bool)
-TRY_CAST_TEMPLATE(int32_t, int8_t)
-TRY_CAST_TEMPLATE(int32_t, int16_t)
-TRY_CAST_TEMPLATE(int32_t, int32_t)
-TRY_CAST_TEMPLATE(int32_t, int64_t)
-TRY_CAST_TEMPLATE(int32_t, uint8_t)
-TRY_CAST_TEMPLATE(int32_t, uint16_t)
-TRY_CAST_TEMPLATE(int32_t, uint32_t)
-TRY_CAST_TEMPLATE(int32_t, uint64_t)
-TRY_CAST_TEMPLATE(int32_t, float)
-TRY_CAST_TEMPLATE(int32_t, double)
+TRY_CAST_TEMPLATE(int32_t, bool);
+TRY_CAST_TEMPLATE(int32_t, int8_t);
+TRY_CAST_TEMPLATE(int32_t, int16_t);
+TRY_CAST_TEMPLATE(int32_t, int32_t);
+TRY_CAST_TEMPLATE(int32_t, int64_t);
+TRY_CAST_TEMPLATE(int32_t, uint8_t);
+TRY_CAST_TEMPLATE(int32_t, uint16_t);
+TRY_CAST_TEMPLATE(int32_t, uint32_t);
+TRY_CAST_TEMPLATE(int32_t, uint64_t);
+TRY_CAST_TEMPLATE(int32_t, float);
+TRY_CAST_TEMPLATE(int32_t, double);
 
 //===--------------------------------------------------------------------===//
 // int64_t casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(int64_t, bool)
-TRY_CAST_TEMPLATE(int64_t, int8_t)
-TRY_CAST_TEMPLATE(int64_t, int16_t)
-TRY_CAST_TEMPLATE(int64_t, int32_t)
-TRY_CAST_TEMPLATE(int64_t, int64_t)
-TRY_CAST_TEMPLATE(int64_t, uint8_t)
-TRY_CAST_TEMPLATE(int64_t, uint16_t)
-TRY_CAST_TEMPLATE(int64_t, uint32_t)
-TRY_CAST_TEMPLATE(int64_t, uint64_t)
-TRY_CAST_TEMPLATE(int64_t, float)
-TRY_CAST_TEMPLATE(int64_t, double)
+TRY_CAST_TEMPLATE(int64_t, bool);
+TRY_CAST_TEMPLATE(int64_t, int8_t);
+TRY_CAST_TEMPLATE(int64_t, int16_t);
+TRY_CAST_TEMPLATE(int64_t, int32_t);
+TRY_CAST_TEMPLATE(int64_t, int64_t);
+TRY_CAST_TEMPLATE(int64_t, uint8_t);
+TRY_CAST_TEMPLATE(int64_t, uint16_t);
+TRY_CAST_TEMPLATE(int64_t, uint32_t);
+TRY_CAST_TEMPLATE(int64_t, uint64_t);
+TRY_CAST_TEMPLATE(int64_t, float);
+TRY_CAST_TEMPLATE(int64_t, double);
 
 //===--------------------------------------------------------------------===//
 // uint8_t casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(uint8_t, bool)
-TRY_CAST_TEMPLATE(uint8_t, int8_t)
-TRY_CAST_TEMPLATE(uint8_t, int16_t)
-TRY_CAST_TEMPLATE(uint8_t, int32_t)
-TRY_CAST_TEMPLATE(uint8_t, int64_t)
-TRY_CAST_TEMPLATE(uint8_t, uint8_t)
-TRY_CAST_TEMPLATE(uint8_t, uint16_t)
-TRY_CAST_TEMPLATE(uint8_t, uint32_t)
-TRY_CAST_TEMPLATE(uint8_t, uint64_t)
-TRY_CAST_TEMPLATE(uint8_t, float)
-TRY_CAST_TEMPLATE(uint8_t, double)
+TRY_CAST_TEMPLATE(uint8_t, bool);
+TRY_CAST_TEMPLATE(uint8_t, int8_t);
+TRY_CAST_TEMPLATE(uint8_t, int16_t);
+TRY_CAST_TEMPLATE(uint8_t, int32_t);
+TRY_CAST_TEMPLATE(uint8_t, int64_t);
+TRY_CAST_TEMPLATE(uint8_t, uint8_t);
+TRY_CAST_TEMPLATE(uint8_t, uint16_t);
+TRY_CAST_TEMPLATE(uint8_t, uint32_t);
+TRY_CAST_TEMPLATE(uint8_t, uint64_t);
+TRY_CAST_TEMPLATE(uint8_t, float);
+TRY_CAST_TEMPLATE(uint8_t, double);
 
 //===--------------------------------------------------------------------===//
 // uint16_t casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(uint16_t, bool)
-TRY_CAST_TEMPLATE(uint16_t, int8_t)
-TRY_CAST_TEMPLATE(uint16_t, int16_t)
-TRY_CAST_TEMPLATE(uint16_t, int32_t)
-TRY_CAST_TEMPLATE(uint16_t, int64_t)
-TRY_CAST_TEMPLATE(uint16_t, uint8_t)
-TRY_CAST_TEMPLATE(uint16_t, uint16_t)
-TRY_CAST_TEMPLATE(uint16_t, uint32_t)
-TRY_CAST_TEMPLATE(uint16_t, uint64_t)
-TRY_CAST_TEMPLATE(uint16_t, float)
-TRY_CAST_TEMPLATE(uint16_t, double)
+TRY_CAST_TEMPLATE(uint16_t, bool);
+TRY_CAST_TEMPLATE(uint16_t, int8_t);
+TRY_CAST_TEMPLATE(uint16_t, int16_t);
+TRY_CAST_TEMPLATE(uint16_t, int32_t);
+TRY_CAST_TEMPLATE(uint16_t, int64_t);
+TRY_CAST_TEMPLATE(uint16_t, uint8_t);
+TRY_CAST_TEMPLATE(uint16_t, uint16_t);
+TRY_CAST_TEMPLATE(uint16_t, uint32_t);
+TRY_CAST_TEMPLATE(uint16_t, uint64_t);
+TRY_CAST_TEMPLATE(uint16_t, float);
+TRY_CAST_TEMPLATE(uint16_t, double);
 
 //===--------------------------------------------------------------------===//
 // uint32_t casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(uint32_t, bool)
-TRY_CAST_TEMPLATE(uint32_t, int8_t)
-TRY_CAST_TEMPLATE(uint32_t, int16_t)
-TRY_CAST_TEMPLATE(uint32_t, int32_t)
-TRY_CAST_TEMPLATE(uint32_t, int64_t)
-TRY_CAST_TEMPLATE(uint32_t, uint8_t)
-TRY_CAST_TEMPLATE(uint32_t, uint16_t)
-TRY_CAST_TEMPLATE(uint32_t, uint32_t)
-TRY_CAST_TEMPLATE(uint32_t, uint64_t)
-TRY_CAST_TEMPLATE(uint32_t, float)
-TRY_CAST_TEMPLATE(uint32_t, double)
+TRY_CAST_TEMPLATE(uint32_t, bool);
+TRY_CAST_TEMPLATE(uint32_t, int8_t);
+TRY_CAST_TEMPLATE(uint32_t, int16_t);
+TRY_CAST_TEMPLATE(uint32_t, int32_t);
+TRY_CAST_TEMPLATE(uint32_t, int64_t);
+TRY_CAST_TEMPLATE(uint32_t, uint8_t);
+TRY_CAST_TEMPLATE(uint32_t, uint16_t);
+TRY_CAST_TEMPLATE(uint32_t, uint32_t);
+TRY_CAST_TEMPLATE(uint32_t, uint64_t);
+TRY_CAST_TEMPLATE(uint32_t, float);
+TRY_CAST_TEMPLATE(uint32_t, double);
 
 //===--------------------------------------------------------------------===//
 // uint64_t casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(uint64_t, bool)
-TRY_CAST_TEMPLATE(uint64_t, int8_t)
-TRY_CAST_TEMPLATE(uint64_t, int16_t)
-TRY_CAST_TEMPLATE(uint64_t, int32_t)
-TRY_CAST_TEMPLATE(uint64_t, int64_t)
-TRY_CAST_TEMPLATE(uint64_t, uint8_t)
-TRY_CAST_TEMPLATE(uint64_t, uint16_t)
-TRY_CAST_TEMPLATE(uint64_t, uint32_t)
-TRY_CAST_TEMPLATE(uint64_t, uint64_t)
-TRY_CAST_TEMPLATE(uint64_t, float)
-TRY_CAST_TEMPLATE(uint64_t, double)
+TRY_CAST_TEMPLATE(uint64_t, bool);
+TRY_CAST_TEMPLATE(uint64_t, int8_t);
+TRY_CAST_TEMPLATE(uint64_t, int16_t);
+TRY_CAST_TEMPLATE(uint64_t, int32_t);
+TRY_CAST_TEMPLATE(uint64_t, int64_t);
+TRY_CAST_TEMPLATE(uint64_t, uint8_t);
+TRY_CAST_TEMPLATE(uint64_t, uint16_t);
+TRY_CAST_TEMPLATE(uint64_t, uint32_t);
+TRY_CAST_TEMPLATE(uint64_t, uint64_t);
+TRY_CAST_TEMPLATE(uint64_t, float);
+TRY_CAST_TEMPLATE(uint64_t, double);
 
 //===--------------------------------------------------------------------===//
 // float casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(float, bool)
-TRY_CAST_TEMPLATE(float, int8_t)
-TRY_CAST_TEMPLATE(float, int16_t)
-TRY_CAST_TEMPLATE(float, int32_t)
-TRY_CAST_TEMPLATE(float, int64_t)
-TRY_CAST_TEMPLATE(float, uint8_t)
-TRY_CAST_TEMPLATE(float, uint16_t)
-TRY_CAST_TEMPLATE(float, uint32_t)
-TRY_CAST_TEMPLATE(float, uint64_t)
-TRY_CAST_TEMPLATE(float, float)
-TRY_CAST_TEMPLATE(float, double)
+TRY_CAST_TEMPLATE(float, bool);
+TRY_CAST_TEMPLATE(float, int8_t);
+TRY_CAST_TEMPLATE(float, int16_t);
+TRY_CAST_TEMPLATE(float, int32_t);
+TRY_CAST_TEMPLATE(float, int64_t);
+TRY_CAST_TEMPLATE(float, uint8_t);
+TRY_CAST_TEMPLATE(float, uint16_t);
+TRY_CAST_TEMPLATE(float, uint32_t);
+TRY_CAST_TEMPLATE(float, uint64_t);
+TRY_CAST_TEMPLATE(float, float);
+TRY_CAST_TEMPLATE(float, double);
 
 //===--------------------------------------------------------------------===//
 // double casts
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(double, bool)
-TRY_CAST_TEMPLATE(double, int8_t)
-TRY_CAST_TEMPLATE(double, int16_t)
-TRY_CAST_TEMPLATE(double, int32_t)
-TRY_CAST_TEMPLATE(double, int64_t)
-TRY_CAST_TEMPLATE(double, uint8_t)
-TRY_CAST_TEMPLATE(double, uint16_t)
-TRY_CAST_TEMPLATE(double, uint32_t)
-TRY_CAST_TEMPLATE(double, uint64_t)
+TRY_CAST_TEMPLATE(double, bool);
+TRY_CAST_TEMPLATE(double, int8_t);
+TRY_CAST_TEMPLATE(double, int16_t);
+TRY_CAST_TEMPLATE(double, int32_t);
+TRY_CAST_TEMPLATE(double, int64_t);
+TRY_CAST_TEMPLATE(double, uint8_t);
+TRY_CAST_TEMPLATE(double, uint16_t);
+TRY_CAST_TEMPLATE(double, uint32_t);
+TRY_CAST_TEMPLATE(double, uint64_t);
 template <>
 bool TryCast::Operation(double input, float &result, bool strict);
-TRY_CAST_TEMPLATE(double, double)
+TRY_CAST_TEMPLATE(double, double);
 
 //===--------------------------------------------------------------------===//
 // String -> Numeric Casts
@@ -365,257 +365,91 @@ bool TryCast::Operation(string_t input, interval_t &result, bool strict);
 //===--------------------------------------------------------------------===//
 // Decimal Casts
 //===--------------------------------------------------------------------===//
-struct CastToDecimal {
+struct TryCastToDecimal {
 	template <class SRC, class DST>
-	static inline DST Operation(SRC input, uint8_t width, uint8_t scale) {
-		throw NotImplementedException("Unimplemented type for CastToDecimal!");
+	static inline bool Operation(SRC input, DST &result, string &error_message, uint8_t width, uint8_t scale) {
+		throw NotImplementedException("Unimplemented type for TryCastToDecimal!");
 	}
 };
 
-struct CastFromDecimal {
+struct TryCastFromDecimal {
 	template <class SRC, class DST>
-	static inline DST Operation(SRC input, uint8_t width, uint8_t scale) {
-		throw NotImplementedException("Unimplemented type for CastFromDecimal!");
+	static inline bool Operation(SRC input, DST &result, string &error_message, uint8_t width, uint8_t scale) {
+		throw NotImplementedException("Unimplemented type for TryCastFromDecimal!");
 	}
 };
+
+#define TRY_CAST_TO_DECIMAL_TEMPLATE(SOURCE_TYPE) \
+template <> \
+bool TryCastToDecimal::Operation(SOURCE_TYPE input, int16_t &result, string &error_message, uint8_t width, uint8_t scale); \
+template <> \
+bool TryCastToDecimal::Operation(SOURCE_TYPE input, int32_t &result, string &error_message, uint8_t width, uint8_t scale); \
+template <> \
+bool TryCastToDecimal::Operation(SOURCE_TYPE input, int64_t &result, string &error_message, uint8_t width, uint8_t scale); \
+template <> \
+bool TryCastToDecimal::Operation(SOURCE_TYPE input, hugeint_t &result, string &error_message, uint8_t width, uint8_t scale)
+
+
+#define TRY_CAST_FROM_DECIMAL_TEMPLATE(TARGET_TYPE) \
+template <> \
+bool TryCastFromDecimal::Operation(int16_t input, TARGET_TYPE &result, string &error_message, uint8_t width, uint8_t scale); \
+template <> \
+bool TryCastFromDecimal::Operation(int32_t input, TARGET_TYPE &result, string &error_message, uint8_t width, uint8_t scale); \
+template <> \
+bool TryCastFromDecimal::Operation(int64_t input, TARGET_TYPE &result, string &error_message, uint8_t width, uint8_t scale); \
+template <> \
+bool TryCastFromDecimal::Operation(hugeint_t input, TARGET_TYPE &result, string &error_message, uint8_t width, uint8_t scale)
 
 // BOOLEAN
-template <>
-int16_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(bool input, uint8_t width, uint8_t scale);
-
-template <>
-bool CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-bool CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-bool CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-bool CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(bool);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(bool);
 
 // TINYINT
-template <>
-int16_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(int8_t input, uint8_t width, uint8_t scale);
-
-template <>
-int8_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-int8_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-int8_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-int8_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(int8_t);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(int8_t);
 
 // SMALLINT
-template <>
-int16_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-
-template <>
-int16_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-int16_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-int16_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-int16_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(int16_t);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(int16_t);
 
 // INTEGER
-template <>
-int16_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-
-template <>
-int32_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(int32_t);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(int32_t);
 
 // BIGINT
-template <>
-int16_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-
-template <>
-int64_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(int64_t);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(int64_t);
 
 // UTINYINT
-template <>
-int16_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(uint8_t input, uint8_t width, uint8_t scale);
-
-template <>
-uint8_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-uint8_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-uint8_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-uint8_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(uint8_t);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(uint8_t);
 
 // USMALLINT
-template <>
-int16_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(uint16_t input, uint8_t width, uint8_t scale);
-
-template <>
-uint16_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-uint16_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-uint16_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-uint16_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(uint16_t);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(uint16_t);
 
 // UINTEGER
-template <>
-int16_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(uint32_t input, uint8_t width, uint8_t scale);
-
-template <>
-uint32_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-uint32_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-uint32_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-uint32_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(uint32_t);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(uint32_t);
 
 // BIGINT
-template <>
-int16_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(uint64_t input, uint8_t width, uint8_t scale);
-
-template <>
-uint64_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-uint64_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-uint64_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-uint64_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(uint64_t);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(uint64_t);
 
 // HUGEINT
-template <>
-int16_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
-
-template <>
-hugeint_t CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(hugeint_t);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(hugeint_t);
 
 // FLOAT
-template <>
-int16_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(float input, uint8_t width, uint8_t scale);
-
-template <>
-float CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-float CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-float CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-float CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(float);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(float);
 
 // DOUBLE
-template <>
-int16_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(double input, uint8_t width, uint8_t scale);
-
-template <>
-double CastFromDecimal::Operation(int16_t input, uint8_t width, uint8_t scale);
-template <>
-double CastFromDecimal::Operation(int32_t input, uint8_t width, uint8_t scale);
-template <>
-double CastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t scale);
-template <>
-double CastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(double);
+TRY_CAST_FROM_DECIMAL_TEMPLATE(double);
 
 // VARCHAR
-template <>
-int16_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale);
-template <>
-int32_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale);
-template <>
-int64_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale);
-template <>
-hugeint_t CastToDecimal::Operation(string_t input, uint8_t width, uint8_t scale);
+TRY_CAST_TO_DECIMAL_TEMPLATE(string_t);
 
 struct StringCastFromDecimal {
 	template <class SRC>

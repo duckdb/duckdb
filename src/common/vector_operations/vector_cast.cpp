@@ -40,26 +40,58 @@ static void ToDecimalCast(Vector &source, Vector &result, idx_t count) {
 	auto &result_type = result.GetType();
 	auto width = DecimalType::GetWidth(result_type);
 	auto scale = DecimalType::GetScale(result_type);
+	bool success = true;
+	string error_message;
 	switch (result_type.InternalType()) {
 	case PhysicalType::INT16:
-		UnaryExecutor::Execute<T, int16_t>(
-		    source, result, count, [&](T input) { return CastToDecimal::Operation<T, int16_t>(input, width, scale); });
+		UnaryExecutor::Execute<T, int16_t>(source, result, count, [&](T input) {
+			int16_t result_value;
+			if (TryCastToDecimal::Operation<T, int16_t>(input, result_value, error_message, width, scale)) {
+				return result_value;
+			} else {
+				success = false;
+				return NullValue<int16_t>();
+			}
+		});
 		break;
 	case PhysicalType::INT32:
-		UnaryExecutor::Execute<T, int32_t>(
-		    source, result, count, [&](T input) { return CastToDecimal::Operation<T, int32_t>(input, width, scale); });
+		UnaryExecutor::Execute<T, int32_t>(source, result, count, [&](T input) {
+			int32_t result_value;
+			if (TryCastToDecimal::Operation<T, int32_t>(input, result_value, error_message, width, scale)) {
+				return result_value;
+			} else {
+				success = false;
+				return NullValue<int32_t>();
+			}
+		});
 		break;
 	case PhysicalType::INT64:
-		UnaryExecutor::Execute<T, int64_t>(
-		    source, result, count, [&](T input) { return CastToDecimal::Operation<T, int64_t>(input, width, scale); });
+		UnaryExecutor::Execute<T, int64_t>(source, result, count, [&](T input) {
+			int64_t result_value;
+			if (TryCastToDecimal::Operation<T, int64_t>(input, result_value, error_message, width, scale)) {
+				return result_value;
+			} else {
+				success = false;
+				return NullValue<int64_t>();
+			}
+		});
 		break;
 	case PhysicalType::INT128:
 		UnaryExecutor::Execute<T, hugeint_t>(source, result, count, [&](T input) {
-			return CastToDecimal::Operation<T, hugeint_t>(input, width, scale);
+			hugeint_t result_value;
+			if (TryCastToDecimal::Operation<T, hugeint_t>(input, result_value, error_message, width, scale)) {
+				return result_value;
+			} else {
+				success = false;
+				return NullValue<hugeint_t>();
+			}
 		});
 		break;
 	default:
 		throw NotImplementedException("Unimplemented internal type for decimal");
+	}
+	if (!success) {
+		throw ConversionException(error_message);
 	}
 }
 
@@ -68,29 +100,58 @@ static void FromDecimalCast(Vector &source, Vector &result, idx_t count) {
 	auto &source_type = source.GetType();
 	auto width = DecimalType::GetWidth(source_type);
 	auto scale = DecimalType::GetScale(source_type);
+	bool success = true;
+	string error_message;
 	switch (source_type.InternalType()) {
 	case PhysicalType::INT16:
 		UnaryExecutor::Execute<int16_t, T>(source, result, count, [&](int16_t input) {
-			return CastFromDecimal::Operation<int16_t, T>(input, width, scale);
+			T result_value;
+			if (TryCastFromDecimal::Operation<int16_t, T>(input, result_value, error_message, width, scale)) {
+				return result_value;
+			} else {
+				success = false;
+				return NullValue<T>();
+			}
 		});
 		break;
 	case PhysicalType::INT32:
 		UnaryExecutor::Execute<int32_t, T>(source, result, count, [&](int32_t input) {
-			return CastFromDecimal::Operation<int32_t, T>(input, width, scale);
+			T result_value;
+			if (TryCastFromDecimal::Operation<int32_t, T>(input, result_value, error_message, width, scale)) {
+				return result_value;
+			} else {
+				success = false;
+				return NullValue<T>();
+			}
 		});
 		break;
 	case PhysicalType::INT64:
 		UnaryExecutor::Execute<int64_t, T>(source, result, count, [&](int64_t input) {
-			return CastFromDecimal::Operation<int64_t, T>(input, width, scale);
+			T result_value;
+			if (TryCastFromDecimal::Operation<int64_t, T>(input, result_value, error_message, width, scale)) {
+				return result_value;
+			} else {
+				success = false;
+				return NullValue<T>();
+			}
 		});
 		break;
 	case PhysicalType::INT128:
 		UnaryExecutor::Execute<hugeint_t, T>(source, result, count, [&](hugeint_t input) {
-			return CastFromDecimal::Operation<hugeint_t, T>(input, width, scale);
+			T result_value;
+			if (TryCastFromDecimal::Operation<hugeint_t, T>(input, result_value, error_message, width, scale)) {
+				return result_value;
+			} else {
+				success = false;
+				return NullValue<T>();
+			}
 		});
 		break;
 	default:
 		throw NotImplementedException("Unimplemented internal type for decimal");
+	}
+	if (!success) {
+		throw ConversionException(error_message);
 	}
 }
 
