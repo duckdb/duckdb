@@ -2,6 +2,7 @@
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -63,28 +64,40 @@ string Blob::ToString(string_t blob) {
 	return string(buffer.get(), str_len);
 }
 
-idx_t Blob::GetBlobSize(string_t str) {
+bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string &error_message) {
 	auto data = (const_data_ptr_t)str.GetDataUnsafe();
 	auto len = str.GetSize();
-	idx_t str_len = 0;
+	str_len = 0;
 	for (idx_t i = 0; i < len; i++) {
 		if (data[i] == '\\') {
 			if (i + 3 >= len) {
-				throw ConversionException("Invalid hex escape code encountered in string -> blob conversion: "
-				                          "unterminated escape code at end of blob");
+				error_message = "Invalid hex escape code encountered in string -> blob conversion: "
+				                          "unterminated escape code at end of blob";
+				return false;
 			}
 			if (data[i + 1] != 'x' || Blob::HEX_MAP[data[i + 2]] < 0 || Blob::HEX_MAP[data[i + 3]] < 0) {
-				throw ConversionException("Invalid hex escape code encountered in string -> blob conversion: %s",
+				error_message = StringUtil::Format("Invalid hex escape code encountered in string -> blob conversion: %s",
 				                          string((char *)data + i, 4));
+				return false;
 			}
 			str_len++;
 			i += 3;
 		} else if (data[i] >= 32 && data[i] <= 127) {
 			str_len++;
 		} else {
-			throw ConversionException("Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
+			error_message = ("Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
 			                          "must be escaped with hex codes (e.g. \\xAA)");
+			return false;
 		}
+	}
+	return true;
+}
+
+idx_t Blob::GetBlobSize(string_t str) {
+	string error_message;
+	idx_t str_len;
+	if (!Blob::TryGetBlobSize(str, str_len, error_message)) {
+		throw ConversionException(error_message);
 	}
 	return str_len;
 }

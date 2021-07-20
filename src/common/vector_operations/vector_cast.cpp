@@ -419,13 +419,26 @@ struct UnaryTryCastWrapper {
 };
 
 template<class SRC, class DST, class OP>
-static bool VectorTryCastStrictLoop(Vector &source, Vector &result, idx_t count, bool strict, string &error_message) {
+static bool VectorTryCastLoop(Vector &source, Vector &result, idx_t count, bool strict, string &error_message) {
 	bool success = true;
 	UnaryExecutor::Execute<SRC, DST, UnaryTryCastWrapper>(source, result, count, [&](SRC input, DST &output) {
-		if (!TryCast::Operation<SRC, DST>(input, output, strict)) {
+		if (!OP::template Operation<SRC, DST>(input, output, strict)) {
 			if (error_message.empty()) {
 				error_message = CastException<SRC, DST>(input);
 			}
+			success = false;
+			return false;
+		}
+		return true;
+	});
+	return success;
+}
+
+template<class SRC, class DST, class OP>
+static bool VectorTryCastStringLoop(Vector &source, Vector &result, idx_t count, bool strict, string &error_message) {
+	bool success = true;
+	UnaryExecutor::Execute<SRC, DST, UnaryTryCastWrapper>(source, result, count, [&](SRC input, DST &output) {
+		if (!OP::template Operation<SRC, DST>(input, output, result, error_message, strict)) {
 			success = false;
 			return false;
 		}
@@ -439,31 +452,39 @@ static void StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 	string error_message;
 	switch (result.GetType().id()) {
 	case LogicalTypeId::DATE:
-		if (!VectorTryCastStrictLoop<string_t, date_t, duckdb::TryCast>(source, result, count, strict, error_message)) {
+		if (!VectorTryCastLoop<string_t, date_t, duckdb::TryCast>(source, result, count, strict, error_message)) {
 			throw InvalidInputException(error_message);
 		}
 		break;
 	case LogicalTypeId::TIME:
-		if (!VectorTryCastStrictLoop<string_t, dtime_t, duckdb::TryCast>(source, result, count, strict, error_message)) {
+		if (!VectorTryCastLoop<string_t, dtime_t, duckdb::TryCast>(source, result, count, strict, error_message)) {
 			throw InvalidInputException(error_message);
 		}
 		break;
 	case LogicalTypeId::TIMESTAMP:
-		if (!VectorTryCastStrictLoop<string_t, timestamp_t, duckdb::TryCast>(source, result, count, strict, error_message)) {
+		if (!VectorTryCastLoop<string_t, timestamp_t, duckdb::TryCast>(source, result, count, strict, error_message)) {
 			throw InvalidInputException(error_message);
 		}
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
-		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::CastToTimestampNS>(source, result, count);
+		if (!VectorTryCastLoop<string_t, timestamp_t, duckdb::TryCastToTimestampNS>(source, result, count, strict, error_message)) {
+			throw InvalidInputException(error_message);
+		}
 		break;
 	case LogicalTypeId::TIMESTAMP_SEC:
-		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::CastToTimestampSec>(source, result, count);
+		if (!VectorTryCastLoop<string_t, timestamp_t, duckdb::TryCastToTimestampSec>(source, result, count, strict, error_message)) {
+			throw InvalidInputException(error_message);
+		}
 		break;
 	case LogicalTypeId::TIMESTAMP_MS:
-		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::CastToTimestampMS>(source, result, count);
+		if (!VectorTryCastLoop<string_t, timestamp_t, duckdb::TryCastToTimestampMS>(source, result, count, strict, error_message)) {
+			throw InvalidInputException(error_message);
+		}
 		break;
 	case LogicalTypeId::BLOB:
-		VectorStringCast<string_t, duckdb::CastToBlob>(source, result, count);
+		if (!VectorTryCastStringLoop<string_t, string_t, duckdb::TryCastToBlob>(source, result, count, strict, error_message)) {
+			throw InvalidInputException(error_message);
+		}
 		break;
 	default:
 		VectorStringCastNumericSwitch<duckdb::Cast>(source, result, count);

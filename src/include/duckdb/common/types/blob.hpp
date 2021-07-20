@@ -35,6 +35,7 @@ public:
 	static string ToString(string_t blob);
 
 	//! Returns the blob size of a string -> blob conversion
+	static bool TryGetBlobSize(string_t str, idx_t &result_size, string &error_message);
 	static idx_t GetBlobSize(string_t str);
 	//! Convert a string to a blob. This function should ONLY be called after calling GetBlobSize, since it does NOT
 	//! perform data validation.

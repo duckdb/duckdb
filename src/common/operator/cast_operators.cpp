@@ -752,25 +752,31 @@ timestamp_t CastTimestampSecToUs::Operation(timestamp_t input) {
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
 template <>
-timestamp_t CastToTimestampNS::Operation(string_t input) {
-	timestamp_t cast_timestamp(
-	    Timestamp::GetEpochNanoSeconds(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize())));
-	return cast_timestamp;
+bool TryCastToTimestampNS::Operation(string_t input, timestamp_t &result, bool strict) {
+	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
+		return false;
+	}
+	result = Timestamp::GetEpochNanoSeconds(result);
+	return true;
 }
 
 template <>
-timestamp_t CastToTimestampMS::Operation(string_t input) {
-	timestamp_t cast_timestamp(Timestamp::GetEpochMs(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize())));
-	return cast_timestamp;
+bool TryCastToTimestampMS::Operation(string_t input, timestamp_t &result, bool strict) {
+	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
+		return false;
+	}
+	result = Timestamp::GetEpochMs(result);
+	return true;
 }
 
 template <>
-timestamp_t CastToTimestampSec::Operation(string_t input) {
-	timestamp_t cast_timestamp(
-	    Timestamp::GetEpochSeconds(Timestamp::FromCString(input.GetDataUnsafe(), input.GetSize())));
-	return cast_timestamp;
+bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool strict) {
+	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
+		return false;
+	}
+	result = Timestamp::GetEpochSeconds(result);
+	return true;
 }
-
 //===--------------------------------------------------------------------===//
 // Cast From Blob
 //===--------------------------------------------------------------------===//
@@ -788,13 +794,16 @@ string_t CastFromBlob::Operation(string_t input, Vector &vector) {
 // Cast To Blob
 //===--------------------------------------------------------------------===//
 template <>
-string_t CastToBlob::Operation(string_t input, Vector &vector) {
-	idx_t result_size = Blob::GetBlobSize(input);
+bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string &error_message, bool strict) {
+	idx_t result_size;
+	if (!Blob::TryGetBlobSize(input, result_size, error_message)) {
+		return false;
+	}
 
-	string_t result = StringVector::EmptyString(vector, result_size);
+	result = StringVector::EmptyString(result_vector, result_size);
 	Blob::ToBlob(input, (data_ptr_t)result.GetDataWriteable());
 	result.Finalize();
-	return result;
+	return true;
 }
 
 //===--------------------------------------------------------------------===//
