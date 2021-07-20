@@ -12,6 +12,7 @@
 #include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
 #include "duckdb/common/atomic.hpp"
+#include <map>
 
 namespace duckdb {
 //===--------------------------------------------------------------------===//
@@ -44,7 +45,8 @@ struct ArrowConvertData {
 struct ArrowScanFunctionData : public TableFunctionData {
 	ArrowScanFunctionData(idx_t rows_per_thread_p,
 	                      unique_ptr<ArrowArrayStreamWrapper> (*scanner_producer_p)(
-	                          uintptr_t stream_factory_ptr, std::vector<string> *project_columns,
+	                          uintptr_t stream_factory_ptr,
+	                          std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
 	                          TableFilterCollection *filters),
 	                      uintptr_t stream_factory_ptr_p)
 	    : lines_read(0), rows_per_thread(rows_per_thread_p), stream_factory_ptr(stream_factory_ptr_p),
@@ -58,9 +60,10 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	//! Pointer to the scanner factory
 	uintptr_t stream_factory_ptr;
 	//! Pointer to the scanner factory produce
-	unique_ptr<ArrowArrayStreamWrapper> (*scanner_producer)(uintptr_t stream_factory_ptr,
-	                                                        std::vector<string> *project_columns,
-	                                                        TableFilterCollection *filters);
+	unique_ptr<ArrowArrayStreamWrapper> (*scanner_producer)(
+	    uintptr_t stream_factory_ptr,
+	    std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
+	    TableFilterCollection *filters);
 	//! Number of rows (Used in cardinality and progress bar)
 	int64_t number_of_rows;
 };
@@ -75,6 +78,7 @@ struct ArrowScanState : public FunctionOperatorData {
 	vector<column_t> column_ids;
 	//! Store child vectors for Arrow Dictionary Vectors (col-idx,vector)
 	unordered_map<idx_t, unique_ptr<Vector>> arrow_dictionary_vectors;
+	TableFilterCollection *filters = nullptr;
 };
 
 struct ParallelArrowScanState : public ParallelState {

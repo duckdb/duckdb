@@ -21,9 +21,12 @@ class PythonTableArrowArrayStreamFactory {
 public:
 	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table) : arrow_table(arrow_table) {};
 	static unique_ptr<ArrowArrayStreamWrapper>
-	Produce(uintptr_t factory, std::vector<string> *project_columns = nullptr, TableFilterCollection *filters = nullptr);
+	Produce(uintptr_t factory, std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
+	        TableFilterCollection *filters = nullptr);
 	PyObject *arrow_table;
+
 private:
-	py::object TransformFilter(TableFilterCollection &filters);
+	//! We transform a TableFilterCollection to an Arrow Expression Object
+	static py::object TransformFilter(TableFilterCollection &filters, std::unordered_map<idx_t, string> &columns);
 };
 } // namespace duckdb
