@@ -254,28 +254,28 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				date = val.GetValue<date_t>();
 				break;
 			case LogicalTypeId::TIMESTAMP_SEC: {
-				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(stmt, val, date,
+				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date,
 				                                                             duckdb::Timestamp::FromEpochSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_MS: {
-				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(stmt, val, date,
+				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date,
 				                                                             duckdb::Timestamp::FromEpochMs)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP: {
-				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(
+				if (!CastTimestampValue<duckdb::Cast, date_t>(
 				        stmt, val, date, duckdb::Timestamp::FromEpochMicroSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_NS: {
-				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(stmt, val, date,
+				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date,
 				                                                             duckdb::Timestamp::FromEpochNanoSeconds)) {
 					return SQL_ERROR;
 				}

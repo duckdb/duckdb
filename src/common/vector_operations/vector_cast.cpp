@@ -2,6 +2,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
@@ -403,21 +404,13 @@ static void StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::DATE:
-		if (strict) {
-			UnaryExecutor::Execute<string_t, date_t, duckdb::StrictCastToDate>(source, result, count);
-		} else {
-			UnaryExecutor::Execute<string_t, date_t, duckdb::CastToDate>(source, result, count);
-		}
+		UnaryExecutor::Execute<string_t, date_t, duckdb::Cast>(source, result, count);
 		break;
 	case LogicalTypeId::TIME:
-		if (strict) {
-			UnaryExecutor::Execute<string_t, dtime_t, duckdb::StrictCastToTime>(source, result, count);
-		} else {
-			UnaryExecutor::Execute<string_t, dtime_t, duckdb::CastToTime>(source, result, count);
-		}
+		UnaryExecutor::Execute<string_t, dtime_t, duckdb::Cast>(source, result, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
-		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::CastToTimestamp>(source, result, count);
+		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::Cast>(source, result, count);
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
 		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::CastToTimestampNS>(source, result, count);
@@ -432,11 +425,7 @@ static void StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 		VectorStringCast<string_t, duckdb::CastToBlob>(source, result, count);
 		break;
 	default:
-		if (strict) {
-			VectorStringCastNumericSwitch<duckdb::StrictCast>(source, result, count);
-		} else {
-			VectorStringCastNumericSwitch<duckdb::Cast>(source, result, count);
-		}
+		VectorStringCastNumericSwitch<duckdb::Cast>(source, result, count);
 		break;
 	}
 }
@@ -446,11 +435,11 @@ static void DateCastSwitch(Vector &source, Vector &result, idx_t count) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
 		// date to varchar
-		VectorStringCast<date_t, duckdb::CastFromDate>(source, result, count);
+		VectorStringCast<date_t, duckdb::StringCast>(source, result, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
 		// date to timestamp
-		UnaryExecutor::Execute<date_t, timestamp_t, duckdb::CastDateToTimestamp>(source, result, count);
+		UnaryExecutor::Execute<date_t, timestamp_t, duckdb::Cast>(source, result, count);
 		break;
 	default:
 		VectorNullCast(source, result, count);
@@ -463,7 +452,7 @@ static void TimeCastSwitch(Vector &source, Vector &result, idx_t count) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
 		// time to varchar
-		VectorStringCast<dtime_t, duckdb::CastFromTime>(source, result, count);
+		VectorStringCast<dtime_t, duckdb::StringCast>(source, result, count);
 		break;
 	default:
 		VectorNullCast(source, result, count);
@@ -476,15 +465,15 @@ static void TimestampCastSwitch(Vector &source, Vector &result, idx_t count) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
 		// timestamp to varchar
-		VectorStringCast<timestamp_t, duckdb::CastFromTimestamp>(source, result, count);
+		VectorStringCast<timestamp_t, duckdb::StringCast>(source, result, count);
 		break;
 	case LogicalTypeId::DATE:
 		// timestamp to date
-		UnaryExecutor::Execute<timestamp_t, date_t, duckdb::CastTimestampToDate>(source, result, count);
+		UnaryExecutor::Execute<timestamp_t, date_t, duckdb::Cast>(source, result, count);
 		break;
 	case LogicalTypeId::TIME:
 		// timestamp to time
-		UnaryExecutor::Execute<timestamp_t, dtime_t, duckdb::CastTimestampToTime>(source, result, count);
+		UnaryExecutor::Execute<timestamp_t, dtime_t, duckdb::Cast>(source, result, count);
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
 		// timestamp (us) to timestamp (ns)

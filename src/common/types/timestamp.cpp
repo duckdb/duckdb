@@ -20,18 +20,17 @@ static_assert(sizeof(timestamp_t) == sizeof(int64_t), "timestamp_t was padded");
 // T may be a space
 // Z is optional
 // ISO 8601
-timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
+bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result) {
 	idx_t pos;
 	date_t date;
 	dtime_t time;
 	if (!Date::TryConvertDate(str, len, pos, date)) {
-		throw ConversionException("timestamp field value out of range: \"%s\", "
-		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
-		                          string(str, len));
+		return false;
 	}
 	if (pos == len) {
 		// no time: only a date
-		return Timestamp::FromDatetime(date, dtime_t(0));
+		result = Timestamp::FromDatetime(date, dtime_t(0));
+		return true;
 	}
 	// try to parse a time field
 	if (str[pos] == ' ' || str[pos] == 'T') {
@@ -39,12 +38,10 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	}
 	idx_t time_pos = 0;
 	if (!Time::TryConvertTime(str + pos, len - pos, time_pos, time)) {
-		throw ConversionException("timestamp field value out of range: \"%s\", "
-		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
-		                          string(str, len));
+		return false;
 	}
 	pos += time_pos;
-	auto timestamp = Timestamp::FromDatetime(date, time);
+	result = Timestamp::FromDatetime(date, time);
 	if (pos < len) {
 		// skip a "Z" at the end (as per the ISO8601 specs)
 		if (str[pos] == 'Z') {
@@ -52,7 +49,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 		}
 		int hour_offset, minute_offset;
 		if (Timestamp::TryParseUTCOffset(str, pos, len, hour_offset, minute_offset)) {
-			timestamp -= hour_offset * Interval::MICROS_PER_HOUR + minute_offset * Interval::MICROS_PER_MINUTE;
+			result -= hour_offset * Interval::MICROS_PER_HOUR + minute_offset * Interval::MICROS_PER_MINUTE;
 		}
 
 		// skip any spaces at the end
@@ -60,12 +57,21 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 			pos++;
 		}
 		if (pos < len) {
-			throw ConversionException("timestamp field value out of range: \"%s\", "
-			                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
-			                          string(str, len));
+			return false;
 		}
 	}
-	return timestamp;
+	return true;
+}
+
+
+timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
+	timestamp_t result;
+	if (!Timestamp::TryConvertTimestamp(str, len, result)) {
+		throw ConversionException("timestamp field value out of range: \"%s\", "
+		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
+		                          string(str, len));
+	}
+	return result;
 }
 
 bool Timestamp::TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset, int &minute_offset) {

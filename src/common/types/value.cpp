@@ -613,11 +613,11 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::HUGEINT:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
 	case LogicalTypeId::DATE:
-		return Cast::Operation<int32_t, T>(value_.integer);
+		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
-		return Cast::Operation<int64_t, T>(value_.bigint);
+		return Cast::Operation<dtime_t, T>(value_.time);
 	case LogicalTypeId::TIMESTAMP:
-		return Cast::Operation<int64_t, T>(value_.bigint);
+		return Cast::Operation<timestamp_t, T>(value_.timestamp);
 	case LogicalTypeId::UTINYINT:
 		return Cast::Operation<uint8_t, T>(value_.utinyint);
 	case LogicalTypeId::USMALLINT:
