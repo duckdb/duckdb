@@ -5,6 +5,7 @@
 #include "duckdb/common/operator/string_cast.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
 namespace duckdb {
 
@@ -400,17 +401,57 @@ static void VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t 
 	}
 }
 
-static void StringCastSwitch(Vector &source, Vector &result, idx_t count, bool strict = false) {
+struct UnaryTryCastWrapper {
+	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
+	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
+		RESULT_TYPE result;
+		if (fun(input, result)) {
+			return result;
+		} else {
+			mask.SetInvalid(idx);
+			return NullValue<RESULT_TYPE>();
+		}
+	}
+
+	static bool AddsNulls() {
+		return true;
+	}
+};
+
+template<class SRC, class DST, class OP>
+static bool VectorTryCastStrictLoop(Vector &source, Vector &result, idx_t count, bool strict, string &error_message) {
+	bool success = true;
+	UnaryExecutor::Execute<SRC, DST, UnaryTryCastWrapper>(source, result, count, [&](SRC input, DST &output) {
+		if (!TryCast::Operation<SRC, DST>(input, output, strict)) {
+			if (error_message.empty()) {
+				error_message = CastException<SRC, DST>(input);
+			}
+			success = false;
+			return false;
+		}
+		return true;
+	});
+	return success;
+}
+
+static void StringCastSwitch(Vector &source, Vector &result, idx_t count, bool strict) {
 	// now switch on the result type
+	string error_message;
 	switch (result.GetType().id()) {
 	case LogicalTypeId::DATE:
-		UnaryExecutor::Execute<string_t, date_t, duckdb::Cast>(source, result, count);
+		if (!VectorTryCastStrictLoop<string_t, date_t, duckdb::TryCast>(source, result, count, strict, error_message)) {
+			throw InvalidInputException(error_message);
+		}
 		break;
 	case LogicalTypeId::TIME:
-		UnaryExecutor::Execute<string_t, dtime_t, duckdb::Cast>(source, result, count);
+		if (!VectorTryCastStrictLoop<string_t, dtime_t, duckdb::TryCast>(source, result, count, strict, error_message)) {
+			throw InvalidInputException(error_message);
+		}
 		break;
 	case LogicalTypeId::TIMESTAMP:
-		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::Cast>(source, result, count);
+		if (!VectorTryCastStrictLoop<string_t, timestamp_t, duckdb::TryCast>(source, result, count, strict, error_message)) {
+			throw InvalidInputException(error_message);
+		}
 		break;
 	case LogicalTypeId::TIMESTAMP_NS:
 		UnaryExecutor::Execute<string_t, timestamp_t, duckdb::CastToTimestampNS>(source, result, count);

@@ -533,7 +533,7 @@ PhysicalType GetTypeId() {
 		return PhysicalType::FLOAT;
 	} else if (std::is_same<T, double>()) {
 		return PhysicalType::DOUBLE;
-	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>()) {
+	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>() || std::is_same<T, string_t>()) {
 		return PhysicalType::VARCHAR;
 	} else if (std::is_same<T, interval_t>()) {
 		return PhysicalType::INTERVAL;

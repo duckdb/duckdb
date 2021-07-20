@@ -446,7 +446,7 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const
 			// target type is not varchar: perform a cast
 			VectorOperations::Cast(parse_chunk_col, dummy_result, size, true);
 		}
-	} catch (const Exception &e) {
+	} catch (const std::exception &e) {
 		return false;
 	}
 	return true;

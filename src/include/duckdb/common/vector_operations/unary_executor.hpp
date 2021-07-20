@@ -159,9 +159,9 @@ public:
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP, bool>(input, result, count, false);
 	}
 
-	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
+	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER=UnaryLambdaWrapper, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
 	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, bool, FUNC>(input, result, count, fun);
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, bool, FUNC>(input, result, count, fun);
 	}
 };
 
