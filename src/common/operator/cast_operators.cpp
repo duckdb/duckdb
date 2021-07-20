@@ -23,15 +23,15 @@ namespace duckdb {
 
 template <class SRC, class DST>
 static bool TryCastWithOverflowCheck(SRC value, DST &result) {
-	if (std::numeric_limits<SRC>::is_signed != std::numeric_limits<DST>::is_signed) {
-		if (std::numeric_limits<SRC>::is_signed) {
+	if (NumericLimits<SRC>::IsSigned() != NumericLimits<DST>::IsSigned()) {
+		if (NumericLimits<SRC>::IsSigned()) {
 			// signed to unsigned conversion
-			if (std::numeric_limits<SRC>::digits > std::numeric_limits<DST>::digits) {
+			if (NumericLimits<SRC>::Digits() > NumericLimits<DST>::Digits()) {
 				if (value < 0 || value > (SRC)NumericLimits<DST>::Maximum()) {
 					return false;
 				}
 			} else {
-				if (value < 0 || (DST)value > NumericLimits<DST>::Maximum()) {
+				if (value < 0) {
 					return false;
 				}
 			}
@@ -39,26 +39,24 @@ static bool TryCastWithOverflowCheck(SRC value, DST &result) {
 			return true;
 		} else {
 			// unsigned to signed conversion
-			if (std::numeric_limits<SRC>::digits > std::numeric_limits<DST>::digits) {
+			if (NumericLimits<SRC>::Digits() >= NumericLimits<DST>::Digits()) {
 				if (value <= (SRC)NumericLimits<DST>::Maximum()) {
 					result = (DST)value;
 					return true;
 				}
+				return false;
 			} else {
-				if ((DST)value <= NumericLimits<DST>::Maximum()) {
-					result = (DST)value;
-					return true;
-				}
+				result = (DST)value;
+				return true;
 			}
-
-			return false;
 		}
 	} else {
-		if (std::numeric_limits<DST>::digits >= std::numeric_limits<SRC>::digits) {
+		// same sign conversion
+		if (NumericLimits<DST>::Digits() >= NumericLimits<SRC>::Digits()) {
 			result = (DST) value;
 			return true;
 		} else {
-			if (value < NumericLimits<DST>::Minimum() || value > NumericLimits<DST>::Maximum()) {
+			if (value < SRC(NumericLimits<DST>::Minimum()) || value > SRC(NumericLimits<DST>::Maximum())) {
 				return false;
 			}
 			result = (DST)value;
@@ -413,7 +411,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 	return pos > start_pos;
 }
 
-template <class T, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation, bool ZERO_INITIALIZE = true>
+template <class T, bool IS_SIGNED = true, bool ALLOW_EXPONENT = true, class OP = IntegerCastOperation, bool ZERO_INITIALIZE = true>
 static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	// skip any spaces at the start
 	while (len > 0 && StringUtil::CharacterIsSpace(*buf)) {
@@ -431,7 +429,7 @@ static bool TryIntegerCast(const char *buf, idx_t len, T &result, bool strict) {
 	if (!negative) {
 		return IntegerCastLoop<T, false, ALLOW_EXPONENT, OP>(buf, len, result, strict);
 	} else {
-		if (!std::numeric_limits<T>::is_signed) {
+		if (!IS_SIGNED) {
 			// Need to check if its not -0
 			idx_t pos = 1;
 			while (pos < len) {
@@ -507,19 +505,19 @@ bool TryCast::Operation(string_t input, int64_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(string_t input, uint8_t &result, bool strict) {
-	return TryIntegerCast<uint8_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TryIntegerCast<uint8_t, false>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, uint16_t &result, bool strict) {
-	return TryIntegerCast<uint16_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TryIntegerCast<uint16_t, false>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, uint32_t &result, bool strict) {
-	return TryIntegerCast<uint32_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TryIntegerCast<uint32_t, false>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 template <>
 bool TryCast::Operation(string_t input, uint64_t &result, bool strict) {
-	return TryIntegerCast<uint64_t>(input.GetDataUnsafe(), input.GetSize(), result, strict);
+	return TryIntegerCast<uint64_t, false>(input.GetDataUnsafe(), input.GetSize(), result, strict);
 }
 
 template <class T, bool NEGATIVE>
@@ -568,7 +566,7 @@ static bool DoubleCastLoop(const char *buf, idx_t len, T &result, bool strict) {
 				// parse an integer, this time not allowing another exponent
 				pos++;
 				int64_t exponent;
-				if (!TryIntegerCast<int64_t, false>(buf + pos, len - pos, exponent, strict)) {
+				if (!TryIntegerCast<int64_t, true, false>(buf + pos, len - pos, exponent, strict)) {
 					return false;
 				}
 				ComputeDoubleResult<T, NEGATIVE>(result, decimal, decimal_factor);
@@ -689,6 +687,15 @@ bool TryCast::Operation(timestamp_t input, dtime_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict) {
+	result = input;
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast from Interval
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(interval_t input, interval_t &result, bool strict) {
 	result = input;
 	return true;
 }
@@ -935,7 +942,7 @@ struct HugeIntegerCastOperation {
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 	HugeIntCastData data;
-	if (!TryIntegerCast<HugeIntCastData, true, HugeIntegerCastOperation>(input.GetDataUnsafe(), input.GetSize(), data,
+	if (!TryIntegerCast<HugeIntCastData, true, true, HugeIntegerCastOperation>(input.GetDataUnsafe(), input.GetSize(), data,
 	                                                                     strict)) {
 		return false;
 	}
@@ -1000,14 +1007,12 @@ bool TryCast::Operation(uint64_t input, hugeint_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(float input, hugeint_t &result, bool strict) {
-	result = Cast::Operation<float, hugeint_t>(input);
-	return true;
+	return Hugeint::TryConvert(input, result);
 }
 
 template <>
 bool TryCast::Operation(double input, hugeint_t &result, bool strict) {
-	result = Cast::Operation<double, hugeint_t>(input);
-	return true;
+	return Hugeint::TryConvert(input, result);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1271,7 +1276,7 @@ T DecimalStringCast(string_t input, uint8_t width, uint8_t scale) {
 	state.scale = scale;
 	state.digit_count = 0;
 	state.decimal_count = 0;
-	if (!TryIntegerCast<DecimalCastData<T>, true, DecimalCastOperation, false>(input.GetDataUnsafe(), input.GetSize(),
+	if (!TryIntegerCast<DecimalCastData<T>, true, true, DecimalCastOperation, false>(input.GetDataUnsafe(), input.GetSize(),
 	                                                                           state, false)) {
 		throw ConversionException("Could not convert string \"%s\" to DECIMAL(%d,%d)", input.GetString(), (int)width,
 		                          (int)scale);

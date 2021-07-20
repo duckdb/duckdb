@@ -330,6 +330,12 @@ template <>
 bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
+// Interval Casts
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCast::Operation(interval_t input, interval_t &result, bool strict);
+
+//===--------------------------------------------------------------------===//
 // String -> Date Casts
 //===--------------------------------------------------------------------===//
 template <>
