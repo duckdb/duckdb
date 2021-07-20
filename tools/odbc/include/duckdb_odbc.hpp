@@ -116,7 +116,13 @@ struct OdbcHandleStmt : public OdbcHandle {
 	    : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
 		D_ASSERT(dbc_p);
 		D_ASSERT(dbc_p->conn);
+		// default is column-wise orientation
+		row_wise = false;
 	};
+
+	// dictates binding and fetching orientation
+	bool row_wise;
+	SQLPOINTER row_length;
 
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
@@ -128,7 +134,7 @@ struct OdbcHandleStmt : public OdbcHandle {
 	row_t chunk_row;
 	SQLULEN *rows_fetched_ptr;
 
-	// append all statement messages error here
+	// appending all statement error messages into it
 	vector<std::string> error_messages;
 };
 
