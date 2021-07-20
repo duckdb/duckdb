@@ -1,6 +1,7 @@
 alter-test
 bindcol-test
 boolsaschar-test
+colattribute-test
 connect-test
 numeric-test
 quotes-test

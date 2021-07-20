@@ -1,5 +1,6 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
+#include "api_info.hpp"
 
 SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                          SQLINTEGER string_length) {
@@ -32,7 +33,16 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			stmt->rows_fetched_ptr = (SQLULEN *)value_ptr;
 			return SQL_SUCCESS;
 		}
+		case SQL_ATTR_ROW_BIND_TYPE: {
+			if (value_ptr && (uint64_t)value_ptr != SQL_BIND_BY_COLUMN) {
+				//! it's a row-wise binding orientation (SQLFetch should support it)
+				stmt->row_length = value_ptr;
+				stmt->row_wise = true;
+			}
+			return SQL_SUCCESS;
+		}
 		default:
+			stmt->error_messages.emplace_back("Unsupported attribute type.");
 			return SQL_ERROR;
 		}
 	});
@@ -144,7 +154,102 @@ SQLRETURN SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLI
 SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLUSMALLINT field_identifier,
                           SQLPOINTER character_attribute_ptr, SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr,
                           SQLLEN *numeric_attribute_ptr) {
-	throw std::runtime_error("SQLColAttribute"); // TODO
+
+	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
+		if (column_number < 1 || column_number > stmt->stmt->GetTypes().size()) {
+			stmt->error_messages.emplace_back("Column number out of range.");
+			return SQL_ERROR;
+		}
+
+		duckdb::idx_t col_idx = column_number - 1;
+
+		switch (field_identifier) {
+		case SQL_DESC_LABEL: {
+			if (buffer_length <= 0) {
+				stmt->error_messages.emplace_back("Inadequate buffer length.");
+				return SQL_ERROR;
+			}
+
+			auto col_name = stmt->stmt->GetNames()[col_idx];
+			auto out_len = snprintf((char *)character_attribute_ptr, buffer_length, "%s", col_name.c_str());
+			if (string_length_ptr) {
+				*string_length_ptr = out_len;
+			}
+
+			return SQL_SUCCESS;
+		}
+		case SQL_DESC_OCTET_LENGTH:
+			// 0 DuckDB doesn't provide octet length
+			*numeric_attribute_ptr = 0;
+			return SQL_SUCCESS;
+		case SQL_DESC_TYPE_NAME: {
+			if (buffer_length <= 0) {
+				stmt->error_messages.emplace_back("Inadequate buffer length.");
+				return SQL_ERROR;
+			}
+
+			auto internal_type = stmt->stmt->GetTypes()[col_idx].InternalType();
+			std::string type_name = duckdb::TypeIdToString(internal_type);
+			auto out_len = snprintf((char *)character_attribute_ptr, buffer_length, "%s", type_name.c_str());
+			if (string_length_ptr) {
+				*string_length_ptr = out_len;
+			}
+
+			return SQL_SUCCESS;
+		}
+		// https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size?view=sql-server-ver15
+		case SQL_DESC_DISPLAY_SIZE: {
+			auto logical_type = stmt->stmt->GetTypes()[col_idx];
+			auto sql_type = duckdb::ApiInfo::FindRelatedSQLType(logical_type.id());
+			switch (sql_type) {
+			case SQL_DECIMAL:
+			case SQL_NUMERIC:
+				*numeric_attribute_ptr =
+				    duckdb::DecimalType::GetWidth(logical_type) + duckdb::DecimalType::GetScale(logical_type);
+				return SQL_SUCCESS;
+			case SQL_BIT:
+				*numeric_attribute_ptr = 1;
+				return SQL_SUCCESS;
+			case SQL_TINYINT:
+				*numeric_attribute_ptr = 6;
+				return SQL_SUCCESS;
+			case SQL_INTEGER:
+				*numeric_attribute_ptr = 11;
+				return SQL_SUCCESS;
+			case SQL_BIGINT:
+				*numeric_attribute_ptr = 20;
+				return SQL_SUCCESS;
+			case SQL_REAL:
+				*numeric_attribute_ptr = 14;
+				return SQL_SUCCESS;
+			case SQL_FLOAT:
+			case SQL_DOUBLE:
+				*numeric_attribute_ptr = 24;
+				return SQL_SUCCESS;
+			case SQL_TYPE_DATE:
+				*numeric_attribute_ptr = 10;
+				return SQL_SUCCESS;
+			case SQL_TYPE_TIME:
+				*numeric_attribute_ptr = 9;
+				return SQL_SUCCESS;
+			case SQL_TYPE_TIMESTAMP:
+				*numeric_attribute_ptr = 20;
+				return SQL_SUCCESS;
+			case SQL_VARCHAR:
+			case SQL_VARBINARY:
+				// we don't know the number of characters
+				*numeric_attribute_ptr = 0;
+				return SQL_SUCCESS;
+			default:
+				stmt->error_messages.emplace_back("Unsupported type for display size.");
+				return SQL_ERROR;
+			}
+		}
+		default:
+			stmt->error_messages.emplace_back("Unsupported attribute type.");
+			return SQL_ERROR;
+		}
+	});
 }
 
 SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
