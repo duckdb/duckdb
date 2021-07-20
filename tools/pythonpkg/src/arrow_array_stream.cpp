@@ -118,7 +118,7 @@ py::object GetScalar(Value &constant) {
 	}
 }
 
-py::object TransformFilterRecursive(TableFilter *filter, string column_name) {
+py::object TransformFilterRecursive(TableFilter *filter, const string &column_name) {
 
 	py::object field = py::module_::import("pyarrow.dataset").attr("field");
 	switch (filter->filter_type) {
@@ -148,28 +148,22 @@ py::object TransformFilterRecursive(TableFilter *filter, string column_name) {
 		break;
 	}
 		//! I guess arrow cant handle IS_NULL or IS_NOT_NULL
-		//	case TableFilterType::IS_NULL:
-		//		break;
-		//	case TableFilterType::IS_NOT_NULL:
-		//		py::object expression;
-		//		return expression;
+	case TableFilterType::IS_NULL: {
+		auto constant_field = field(column_name);
+		return constant_field.attr("is_null")();
+	}
+	case TableFilterType::IS_NOT_NULL: {
+		auto constant_field = field(column_name);
+		return constant_field.attr("is_valid")();
+	}
 	case TableFilterType::CONJUNCTION_OR: {
 		idx_t i = 0;
 		auto or_filter = (ConjunctionOrFilter *)filter;
 		//! Get first non null filter type
 		auto child_filter = or_filter->child_filters[i++].get();
-		while ((child_filter->filter_type == TableFilterType::IS_NOT_NULL ||
-		        child_filter->filter_type == TableFilterType::IS_NULL) &&
-		       i < or_filter->child_filters.size()) {
-			child_filter = or_filter->child_filters[i++].get();
-		}
 		py::object expression = TransformFilterRecursive(child_filter, column_name);
 		while (i < or_filter->child_filters.size()) {
 			child_filter = or_filter->child_filters[i++].get();
-			if (child_filter->filter_type == TableFilterType::IS_NOT_NULL ||
-			    child_filter->filter_type == TableFilterType::IS_NULL) {
-				continue;
-			}
 			py::object child_expression = TransformFilterRecursive(child_filter, column_name);
 			expression = expression.attr("__or__")(child_expression);
 		}
@@ -179,20 +173,10 @@ py::object TransformFilterRecursive(TableFilter *filter, string column_name) {
 	case TableFilterType::CONJUNCTION_AND: {
 		idx_t i = 0;
 		auto and_filter = (ConjunctionAndFilter *)filter;
-		//! Get first non null filter type
 		auto child_filter = and_filter->child_filters[i++].get();
-		while ((child_filter->filter_type == TableFilterType::IS_NOT_NULL ||
-		        child_filter->filter_type == TableFilterType::IS_NULL) &&
-		       i < and_filter->child_filters.size()) {
-			child_filter = and_filter->child_filters[i++].get();
-		}
 		py::object expression = TransformFilterRecursive(child_filter, column_name);
 		while (i < and_filter->child_filters.size()) {
 			child_filter = and_filter->child_filters[i++].get();
-			if (child_filter->filter_type == TableFilterType::IS_NOT_NULL ||
-			    child_filter->filter_type == TableFilterType::IS_NULL) {
-				continue;
-			}
 			py::object child_expression = TransformFilterRecursive(child_filter, column_name);
 			expression = expression.attr("__and__")(child_expression);
 		}
@@ -208,18 +192,8 @@ py::object PythonTableArrowArrayStreamFactory::TransformFilter(TableFilterCollec
 	auto filters_map = &filter_collection.table_filters->filters;
 	auto it = filters_map->begin();
 	D_ASSERT(columns.find(it->first) != columns.end());
-	while ((it->second->filter_type == TableFilterType::IS_NOT_NULL ||
-	        it->second->filter_type == TableFilterType::IS_NULL) &&
-	       it != filters_map->end()) {
-		it++;
-	}
 	py::object expression = TransformFilterRecursive(it->second.get(), columns[it->first]);
 	while (it != filters_map->end()) {
-		if (it->second->filter_type == TableFilterType::IS_NOT_NULL ||
-		    it->second->filter_type == TableFilterType::IS_NULL) {
-			it++;
-			continue;
-		}
 		py::object child_expression = TransformFilterRecursive(it->second.get(), columns[it->first]);
 		expression = expression.attr("__and__")(child_expression);
 		it++;
