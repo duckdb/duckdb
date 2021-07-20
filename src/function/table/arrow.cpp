@@ -700,12 +700,14 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::DECIMAL: {
 		auto val_mask = FlatVector::Validity(vector);
 		//! We have to convert from INT128
+#ifdef DEBUG
+		auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+		if (nested_offset != -1) {
+			src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
+		}
+#endif
 		switch (vector.GetType().InternalType()) {
 		case PhysicalType::INT16: {
-			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
-			if (nested_offset != -1) {
-				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
-			}
 #ifdef DEBUG
 			auto tgt_ptr = (int16_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -717,10 +719,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			break;
 		}
 		case PhysicalType::INT32: {
-			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
-			if (nested_offset != -1) {
-				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
-			}
 #ifdef DEBUG
 			auto tgt_ptr = (int32_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -732,10 +730,6 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			break;
 		}
 		case PhysicalType::INT64: {
-			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
-			if (nested_offset != -1) {
-				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
-			}
 #ifdef DEBUG
 			auto tgt_ptr = (int64_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
@@ -743,8 +737,8 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 					D_ASSERT(Hugeint::TryCast(src_ptr[row], tgt_ptr[row]));
 				}
 			}
-#endif
 			break;
+#endif
 		}
 		case PhysicalType::INT128: {
 			FlatVector::SetData(vector, (data_ptr_t)array.buffers[1] + GetTypeIdSize(vector.GetType().InternalType()) *
