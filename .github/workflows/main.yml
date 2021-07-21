@@ -15,13 +15,14 @@ jobs:
   linux-debug:
     name: Linux Debug
     runs-on: ubuntu-20.04
-    timeout-minutes: 120
 
     env:
       CC: gcc-10
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
+      DISABLE_SANITIZER: 1
+
 
     steps:
     - uses: actions/checkout@v2
@@ -33,9 +34,6 @@ jobs:
 
     - name: Build
       run: BUILD_ARROW_ABI_TEST=1 make debug
-
-    - name: Nap Time
-      run: sleep 300
 
     - name: Test
       run: make unittestci
