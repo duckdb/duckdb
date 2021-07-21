@@ -15,6 +15,7 @@ jobs:
   linux-debug:
     name: Linux Debug
     runs-on: ubuntu-20.04
+    timeout-minutes: 120
 
     env:
       CC: gcc-10
@@ -33,13 +34,8 @@ jobs:
     - name: Build
       run: BUILD_ARROW_ABI_TEST=1 make debug
 
-    - name: Inconspicuous Commands
-      run: |
-        sudo fallocate -l 10G swapfile
-        sudo chmod 600 swapfile
-        sudo mkswap swapfile
-        sudo swapon swapfile
-        sudo free -h
+    - name: Nap Time
+      run: sleep 300
 
     - name: Test
       run: make unittestci
