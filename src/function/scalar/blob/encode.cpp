@@ -9,9 +9,9 @@ static void EncodeFunction(DataChunk &args, ExpressionState &state, Vector &resu
 	result.Reinterpret(args.data[0]);
 }
 
-static void DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	// decode is also a nop cast, but requires verification if the provided string is actually
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+struct BlobDecodeOperator {
+	template<class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		if (Utf8Proc::Analyze(input_data, input_length) == UnicodeType::INVALID) {
@@ -19,7 +19,12 @@ static void DecodeFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			    "Failure in decode: could not convert blob to UTF8 string, the blob contained invalid UTF8 characters");
 		}
 		return input;
-	});
+	}
+};
+
+static void DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	// decode is also a nop cast, but requires verification if the provided string is actually
+	UnaryExecutor::Execute<string_t, string_t, BlobDecodeOperator>(args.data[0], result, args.size());
 	StringVector::AddHeapReference(result, args.data[0]);
 }
 
