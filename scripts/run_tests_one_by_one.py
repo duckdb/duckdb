@@ -31,7 +31,7 @@ for line in stdout.splitlines():
 	if current_test is None:
 		current_test = line.strip()
 	else:
-		test_cases.append(current_test + ' - ' + line.strip())
+		test_cases.append(current_test)
 		current_test = None
 
 test_count = len(test_cases)

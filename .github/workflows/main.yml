@@ -628,6 +628,7 @@ jobs:
     needs: linux-debug
     env:
       GEN: ninja
+      DISABLE_SANITIZER: 1
     steps:
       - uses: actions/checkout@v2
         with:
