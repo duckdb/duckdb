@@ -423,7 +423,7 @@ struct TryCastDateTimeInput {
 	bool success = true;
 };
 
-struct TryCastDateTimeOperator {
+struct TryCastDateOperator {
 	template<class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (TryCastDateTimeInput *) dataptr;
@@ -435,15 +435,17 @@ struct TryCastDateTimeOperator {
 	}
 };
 
-template<>
-static timestamp_t Operation(string_t input, ValidityMask &mask, idx_t idx, void *dataptr) {
-	auto data = (TryCastDateTimeInput *) dataptr;
-	timestamp_t result;
-	if (!data->options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result)) {
-		data->success = false;
+struct TryCastTimestampOperator {
+	template<class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		auto data = (TryCastDateTimeInput *) dataptr;
+		timestamp_t result;
+		if (!data->options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result)) {
+			data->success = false;
+		}
+		return result;
 	}
-	return result;
-}
+};
 
 bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
 	try {
@@ -452,12 +454,12 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const
 		if (options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
 			// use the date format to cast the chunk
 			TryCastDateTimeInput cast_options(options);
-			UnaryExecutor::Execute<string_t, date_t, TryCastDateTimeInput>(parse_chunk_col, dummy_result, size, (void *) &cast_options);
+			UnaryExecutor::GenericExecute<string_t, date_t, TryCastDateOperator>(parse_chunk_col, dummy_result, size, (void *) &cast_options);
 			return cast_options.success;
 		} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
 			// use the date format to cast the chunk
 			TryCastDateTimeInput cast_options(options);
-			UnaryExecutor::Execute<string_t, timestamp_t, TryCastDateTimeInput>(parse_chunk_col, dummy_result, size, (void *) &cast_options);
+			UnaryExecutor::GenericExecute<string_t, timestamp_t, TryCastTimestampOperator>(parse_chunk_col, dummy_result, size, (void *) &cast_options);
 			return cast_options.success;
 		} else {
 			// target type is not varchar: perform a cast

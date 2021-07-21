@@ -14,8 +14,10 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/operator/convert_to_string.hpp"
+#include "duckdb/common/types/null_value.hpp"
 
 namespace duckdb {
+struct ValidityMask;
 class Vector;
 
 struct TryCast {
@@ -41,6 +43,18 @@ struct Cast {
 			throw InvalidInputException(CastException<SRC, DST>(input));
 		}
 		return result;
+	}
+};
+
+
+struct HandleCastError {
+	static void AssignError(string error_message, string *error_message_ptr) {
+		if (!error_message_ptr) {
+			throw ConversionException(error_message);
+		}
+		if (error_message_ptr->empty()) {
+			*error_message_ptr = error_message;
+		}
 	}
 };
 
@@ -367,38 +381,38 @@ bool TryCast::Operation(string_t input, interval_t &result, bool strict);
 //===--------------------------------------------------------------------===//
 struct TryCastToDecimal {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, string &error_message, uint8_t width, uint8_t scale) {
+	static inline bool Operation(SRC input, DST &result, string *error_message, uint8_t width, uint8_t scale) {
 		throw NotImplementedException("Unimplemented type for TryCastToDecimal!");
 	}
 };
 
 struct TryCastFromDecimal {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, string &error_message, uint8_t width, uint8_t scale) {
+	static inline bool Operation(SRC input, DST &result, string *error_message, uint8_t width, uint8_t scale) {
 		throw NotImplementedException("Unimplemented type for TryCastFromDecimal!");
 	}
 };
 
 #define TRY_CAST_TO_DECIMAL_TEMPLATE(SOURCE_TYPE) \
 template <> \
-bool TryCastToDecimal::Operation(SOURCE_TYPE input, int16_t &result, string &error_message, uint8_t width, uint8_t scale); \
+bool TryCastToDecimal::Operation(SOURCE_TYPE input, int16_t &result, string *error_message, uint8_t width, uint8_t scale); \
 template <> \
-bool TryCastToDecimal::Operation(SOURCE_TYPE input, int32_t &result, string &error_message, uint8_t width, uint8_t scale); \
+bool TryCastToDecimal::Operation(SOURCE_TYPE input, int32_t &result, string *error_message, uint8_t width, uint8_t scale); \
 template <> \
-bool TryCastToDecimal::Operation(SOURCE_TYPE input, int64_t &result, string &error_message, uint8_t width, uint8_t scale); \
+bool TryCastToDecimal::Operation(SOURCE_TYPE input, int64_t &result, string *error_message, uint8_t width, uint8_t scale); \
 template <> \
-bool TryCastToDecimal::Operation(SOURCE_TYPE input, hugeint_t &result, string &error_message, uint8_t width, uint8_t scale)
+bool TryCastToDecimal::Operation(SOURCE_TYPE input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale)
 
 
 #define TRY_CAST_FROM_DECIMAL_TEMPLATE(TARGET_TYPE) \
 template <> \
-bool TryCastFromDecimal::Operation(int16_t input, TARGET_TYPE &result, string &error_message, uint8_t width, uint8_t scale); \
+bool TryCastFromDecimal::Operation(int16_t input, TARGET_TYPE &result, string *error_message, uint8_t width, uint8_t scale); \
 template <> \
-bool TryCastFromDecimal::Operation(int32_t input, TARGET_TYPE &result, string &error_message, uint8_t width, uint8_t scale); \
+bool TryCastFromDecimal::Operation(int32_t input, TARGET_TYPE &result, string *error_message, uint8_t width, uint8_t scale); \
 template <> \
-bool TryCastFromDecimal::Operation(int64_t input, TARGET_TYPE &result, string &error_message, uint8_t width, uint8_t scale); \
+bool TryCastFromDecimal::Operation(int64_t input, TARGET_TYPE &result, string *error_message, uint8_t width, uint8_t scale); \
 template <> \
-bool TryCastFromDecimal::Operation(hugeint_t input, TARGET_TYPE &result, string &error_message, uint8_t width, uint8_t scale)
+bool TryCastFromDecimal::Operation(hugeint_t input, TARGET_TYPE &result, string *error_message, uint8_t width, uint8_t scale)
 
 // BOOLEAN
 TRY_CAST_TO_DECIMAL_TEMPLATE(bool);
@@ -599,12 +613,12 @@ duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector)
 
 struct TryCastToBlob {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string &error_message, bool strict = false) {
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message, bool strict = false) {
 		throw InternalException("Unsupported type for try cast to blob");
 	}
 };
 
 template <>
-bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string &error_message, bool strict);
+bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message, bool strict);
 
 } // namespace duckdb

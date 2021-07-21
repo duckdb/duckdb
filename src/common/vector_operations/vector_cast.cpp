@@ -19,33 +19,65 @@ struct VectorStringCastOperator {
 	}
 };
 
+struct VectorTryCastData {
+	VectorTryCastData(Vector &result_p, string *error_message_p, bool strict_p) :
+	  result(result_p), error_message(error_message_p), strict(strict_p) {}
+
+	Vector &result;
+	string *error_message;
+	bool strict;
+	bool all_converted = true;
+};
+
+template<class OP>
+struct VectorTryCastOperator {
+	template<class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		auto data = (VectorTryCastData *) dataptr;
+		RESULT_TYPE output;
+		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->strict)) {
+			return HandleVectorCastError::Operation<RESULT_TYPE>(CastException<INPUT_TYPE, RESULT_TYPE>(input), mask, idx, data->error_message, data->all_converted);
+		}
+		return output;
+	}
+};
+
+template<class SRC, class DST, class OP>
+static bool VectorTryCastLoop(Vector &source, Vector &result, idx_t count, bool strict, string *error_message) {
+	VectorTryCastData input(result, error_message, strict);
+	UnaryExecutor::GenericExecute<SRC, DST, VectorTryCastOperator>(source, result, count, &input, error_message);
+	return input.all_converted;
+}
+
+template<class OP>
+struct VectorTryCastStringOperator {
+	template<class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		auto data = (VectorTryCastData *) dataptr;
+		RESULT_TYPE output;
+		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->result, data->strict)) {
+			return HandleVectorCastError::Operation<RESULT_TYPE>(CastException<INPUT_TYPE, RESULT_TYPE>(input), mask, idx, data->error_message, data->all_converted);
+		}
+		return output;
+	}
+};
+
+template<class SRC, class DST, class OP>
+static bool VectorTryCastStringLoop(Vector &source, Vector &result, idx_t count, bool strict, string *error_message) {
+	VectorTryCastData input(result, error_message, strict);
+	UnaryExecutor::GenericExecute<SRC, DST, VectorTryCastOperator>(source, result, count, &input, error_message);
+	return input.all_converted;
+}
+
+
 template <class SRC, class OP>
 static void VectorStringCast(Vector &source, Vector &result, idx_t count) {
 	D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 	UnaryExecutor::GenericExecute<SRC, string_t, VectorStringCastOperator<OP>>(source, result, count, (void *) &result);
 }
 
-static NotImplementedException UnimplementedCast(const LogicalType &source_type, const LogicalType &target_type) {
-	return NotImplementedException("Unimplemented type for cast (%s -> %s)", source_type.ToString(),
-	                               target_type.ToString());
-}
-
-// NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
-static void VectorNullCast(Vector &source, Vector &result, idx_t count) {
-	if (VectorOperations::HasNotNull(source, count)) {
-		throw UnimplementedCast(source.GetType(), result.GetType());
-	}
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
-	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::Validity(result).SetAllInvalid(count);
-	}
-}
-
 template <class SRC>
-static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, string &error_message) {
+static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -101,7 +133,7 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 	return true;
 }
 
-static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, string &error_message) {
+static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
@@ -139,7 +171,7 @@ static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t 
 	return true;
 }
 
-static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool strict, string &error_message) {
+static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool strict, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::DATE:
@@ -411,7 +443,7 @@ static void StructCastSwitch(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, string &error_message, bool strict) {
+bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, string *error_message, bool strict) {
 	D_ASSERT(source.GetType() != result.GetType());
 	// first switch on source type
 	switch (source.GetType().id()) {
@@ -488,10 +520,7 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 
 
 void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool strict) {
-	string error_message;
-	if (!VectorOperations::TryCast(source, result, count, error_message, strict)) {
-		throw ConversionException(error_message);
-	}
+	VectorOperations::TryCast(source, result, count, nullptr, strict);
 }
 
 } // namespace duckdb

@@ -275,19 +275,26 @@ unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context,
 	return nullptr;
 }
 
+template<class T>
+struct CeilDecimalGenericOperator {
+	template<class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		auto power_of_ten = *((T *) dataptr);
+		if (input < 0) {
+			// below 0 we floor the number (e.g. -10.5 -> -10)
+			return input / power_of_ten;
+		} else {
+			// above 0 we ceil the number
+			return ((input - 1) / power_of_ten) + 1;
+		}
+	}
+};
+
 struct CeilDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
-			if (input < 0) {
-				// below 0 we floor the number (e.g. -10.5 -> -10)
-				return input / power_of_ten;
-			} else {
-				// above 0 we ceil the number
-				return ((input - 1) / power_of_ten) + 1;
-			}
-		});
+		UnaryExecutor::GenericExecute<T, T, CeilDecimalGenericOperator<T>>(input.data[0], result, input.size(), &power_of_ten);
 	}
 };
 

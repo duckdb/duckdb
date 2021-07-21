@@ -62,7 +62,10 @@ struct ICUCollatorInput {
 	unique_ptr<char[]> buffer;
 	int32_t buffer_size = 0;
 
+	static const char HEX_TABLE[];
 };
+
+static const char ICUCollatorInput::HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
 struct ICUCollatorOperator {
 	template<class INPUT_TYPE, class RESULT_TYPE>
@@ -76,8 +79,8 @@ struct ICUCollatorOperator {
 		for (idx_t i = 0; i < string_size - 1; i++) {
 			uint8_t byte = uint8_t(data->buffer[i]);
 			assert(byte != 0);
-			str_data[i * 2] = hexa_table[byte / 16];
-			str_data[i * 2 + 1] = hexa_table[byte % 16];
+			str_data[i * 2] = ICUCollatorInput::HEX_TABLE[byte / 16];
+			str_data[i * 2 + 1] = ICUCollatorInput::HEX_TABLE[byte % 16];
 		}
 		// printf("%s: %s\n", input.GetString().c_str(), str_result.GetString().c_str());
 		return str_result;
@@ -86,7 +89,6 @@ struct ICUCollatorOperator {
 
 
 static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector &result) {
-	const char hexa_table[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (IcuBindData &)*func_expr.bind_info;
 	auto &collator = *info.collator;
