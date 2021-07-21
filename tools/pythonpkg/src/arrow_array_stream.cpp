@@ -6,7 +6,6 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 
 namespace duckdb {
-using namespace py::literals; // to bring in the `_a` literal
 
 unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
     uintptr_t factory_ptr, std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
@@ -31,9 +30,9 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 		} else {
 			if (has_filter) {
 				auto filter = TransformFilter(*filters, project_columns.first);
-				scanner = arrow_scanner(dataset, "columns"_a = projection_list, "filter"_a = filter);
+				scanner = arrow_scanner(dataset, py::arg("columns") = projection_list, py::arg("filter") = filter);
 			} else {
-				scanner = arrow_scanner(dataset, "columns"_a = projection_list);
+				scanner = arrow_scanner(dataset, py::arg("columns") = projection_list);
 			}
 		}
 
@@ -44,9 +43,9 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 		} else {
 			if (has_filter) {
 				auto filter = TransformFilter(*filters, project_columns.first);
-				scanner = arrow_scanner(table, "columns"_a = projection_list, "filter"_a = filter);
+				scanner = arrow_scanner(table, py::arg("columns") = projection_list, py::arg("filter") = filter);
 			} else {
-				scanner = arrow_scanner(table, "columns"_a = projection_list);
+				scanner = arrow_scanner(table, py::arg("columns") = projection_list);
 			}
 		}
 	}
