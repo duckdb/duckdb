@@ -123,16 +123,7 @@ unittest: debug
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
-	build/debug/test/unittest --end-offset-percentage=10
-	build/debug/test/unittest --start-offset-percentage=10 --end-offset-percentage=20
-	build/debug/test/unittest --start-offset-percentage=20 --end-offset-percentage=30
-	build/debug/test/unittest --start-offset-percentage=30 --end-offset-percentage=40
-	build/debug/test/unittest --start-offset-percentage=40 --end-offset-percentage=50
-	build/debug/test/unittest --start-offset-percentage=50 --end-offset-percentage=60
-	build/debug/test/unittest --start-offset-percentage=60 --end-offset-percentage=70
-	build/debug/test/unittest --start-offset-percentage=70 --end-offset-percentage=80
-	build/debug/test/unittest --start-offset-percentage=80 --end-offset-percentage=90
-	build/debug/test/unittest --start-offset-percentage=90
+	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 allunit: release_expanded # uses release build because otherwise allunit takes forever
