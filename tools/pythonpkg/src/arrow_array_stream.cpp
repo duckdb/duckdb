@@ -108,9 +108,22 @@ py::object GetScalar(Value &constant) {
 	case LogicalTypeId::VARCHAR:
 		scalar_value = scalar(constant.ToString());
 		return scalar_value;
-		//	case LogicalTypeId::DECIMAL:
-		//		scalar =  constant.ToString();
-		//		break;
+	case LogicalTypeId::DECIMAL:
+		switch (constant.type().InternalType()) {
+		case PhysicalType::INT16:
+			scalar_value = scalar(constant.GetValue<int16_t>());
+			return scalar_value;
+		case PhysicalType::INT32:
+			scalar_value = scalar(constant.GetValue<int32_t>());
+			return scalar_value;
+		case PhysicalType::INT64:
+			scalar_value = scalar(constant.GetValue<int64_t>());
+			return scalar_value;
+		default:
+			scalar_value = scalar(constant.GetValue<hugeint_t>());
+			return scalar_value;
+		}
+		break;
 	default:
 		throw NotImplementedException("Unimplemented type \"%s\" for Arrow Filter Pushdown",
 		                              constant.type().ToString());

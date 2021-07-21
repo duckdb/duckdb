@@ -245,9 +245,8 @@ py::object DuckDBPyResult::FetchArrowTable() {
 	auto batch_import_func = pyarrow_lib_module.attr("RecordBatch").attr("_import_from_c");
 	auto from_batches_func = pyarrow_lib_module.attr("Table").attr("from_batches");
 	auto schema_import_func = pyarrow_lib_module.attr("Schema").attr("_import_from_c");
-	ArrowSchema schema;
-	result->ToArrowSchema(&schema);
-	auto schema_obj = schema_import_func((uint64_t)&schema);
+	py::object schema_obj;
+	bool fetch_schema = true;
 
 	py::list batches;
 	while (true) {
@@ -258,8 +257,13 @@ py::object DuckDBPyResult::FetchArrowTable() {
 		ArrowArray data;
 		data_chunk->ToArrowArray(&data);
 		ArrowSchema arrow_schema;
-		result->ToArrowSchema(&arrow_schema);
+		result->ToArrowSchema(&arrow_schema, &data);
 		batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+		if (fetch_schema) {
+			result->ToArrowSchema(&arrow_schema, &data);
+			schema_obj = schema_import_func((uint64_t)&arrow_schema);
+			fetch_schema = false;
+		}
 	}
 	return from_batches_func(batches, schema_obj);
 }

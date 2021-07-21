@@ -439,12 +439,13 @@ duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query,
 	return wrapper->result->success ? DuckDBSuccess : DuckDBError;
 }
 
-duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema) {
+duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_array *data_array,
+                                       duckdb_arrow_schema *out_schema) {
 	if (!out_schema) {
 		return DuckDBSuccess;
 	}
 	auto wrapper = (ArrowResultWrapper *)result;
-	wrapper->result->ToArrowSchema((ArrowSchema *)*out_schema);
+	wrapper->result->ToArrowSchema((ArrowSchema *)*out_schema, (ArrowArray *)*data_array);
 	return DuckDBSuccess;
 }
 

@@ -112,23 +112,28 @@ static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 	delete holder;
 }
 
-void InitializeChild(ArrowSchema &child, const string &name = "") {
+void InitializeChild(ArrowSchema &child, ArrowArray &data_child, const string &name = "") {
 	//! Child is cleaned up by parent
 	child.private_data = nullptr;
 	child.release = ReleaseDuckDBArrowSchema;
 
 	//! Store the child schema
-	child.flags = ARROW_FLAG_NULLABLE;
+	if (data_child.null_count == 0) {
+		child.flags = 0;
+	} else {
+		child.flags = ARROW_FLAG_NULLABLE;
+	}
 	child.name = name.c_str();
 	child.n_children = 0;
 	child.children = nullptr;
-	child.flags = 0;
 	child.metadata = nullptr;
 	child.dictionary = nullptr;
 }
-void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type);
+void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
+                    ArrowArray &data_child);
 
-void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type) {
+void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
+                       ArrowArray &data_child) {
 	child.format = "+m";
 	//! Map has one child which is a struct
 	child.n_children = 1;
@@ -136,17 +141,19 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	root_holder.nested_children.back().resize(1);
 	root_holder.nested_children_ptr.emplace_back();
 	root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
-	InitializeChild(root_holder.nested_children.back()[0]);
+	auto &map_data_child = *data_child.children[0];
+	InitializeChild(root_holder.nested_children.back()[0], map_data_child);
 	child.children = &root_holder.nested_children_ptr.back()[0];
 	child.children[0]->name = "entries";
 	child_list_t<LogicalType> struct_child_types;
 	struct_child_types.push_back(std::make_pair("key", ListType::GetChildType(StructType::GetChildType(type, 0))));
 	struct_child_types.push_back(std::make_pair("value", ListType::GetChildType(StructType::GetChildType(type, 1))));
 	auto struct_type = LogicalType::STRUCT(move(struct_child_types));
-	SetArrowFormat(root_holder, *child.children[0], struct_type);
+	SetArrowFormat(root_holder, *child.children[0], struct_type, map_data_child);
 }
 
-void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type) {
+void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
+                    ArrowArray &data_child) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		child.format = "b";
@@ -236,10 +243,11 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		root_holder.nested_children.back().resize(1);
 		root_holder.nested_children_ptr.emplace_back();
 		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
-		InitializeChild(root_holder.nested_children.back()[0]);
+		auto &list_data_child = *data_child.children[0];
+		InitializeChild(root_holder.nested_children.back()[0], list_data_child);
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		child.children[0]->name = "l";
-		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type));
+		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), list_data_child);
 		break;
 	}
 	case LogicalTypeId::STRUCT: {
@@ -255,7 +263,9 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		}
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
-			InitializeChild(*child.children[type_idx]);
+			auto &struct_data_child = *data_child.children[type_idx];
+
+			InitializeChild(*child.children[type_idx], struct_data_child);
 
 			auto &struct_col_name = child_types[type_idx].first;
 			unique_ptr<char[]> name_ptr = unique_ptr<char[]>(new char[struct_col_name.size() + 1]);
@@ -266,12 +276,12 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			root_holder.owned_type_names.push_back(move(name_ptr));
 
 			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
-			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second);
+			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, struct_data_child);
 		}
 		break;
 	}
 	case LogicalTypeId::MAP: {
-		SetArrowMapFormat(root_holder, child, type);
+		SetArrowMapFormat(root_holder, child, type, data_child);
 		break;
 	}
 	default:
@@ -279,7 +289,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	}
 }
 
-void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
+void QueryResult::ToArrowSchema(ArrowSchema *out_schema, ArrowArray *data) {
 	D_ASSERT(out_schema);
 
 	// Allocate as unique_ptr first to cleanup properly on error
@@ -302,10 +312,13 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 	out_schema->dictionary = nullptr;
 
 	// Configure all child schemas
+	D_ASSERT(data->n_children == (int64_t)ColumnCount());
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
+
 		auto &child = root_holder->children[col_idx];
-		InitializeChild(child, names[col_idx]);
-		SetArrowFormat(*root_holder, child, types[col_idx]);
+		auto &data_child = *data->children[col_idx];
+		InitializeChild(child, data_child, names[col_idx]);
+		SetArrowFormat(*root_holder, child, types[col_idx], data_child);
 	}
 
 	// Release ownership to caller
