@@ -11,18 +11,23 @@ BindResult ExpressionBinder::BindExpression(CastExpression &expr, idx_t depth) {
 	if (!error.empty()) {
 		return BindResult(error);
 	}
-	if (expr.try_cast) {
-		throw NotImplementedException("TRY_CAST not implemented yet in binder");
-	}
 	// the children have been successfully resolved
 	auto &child = (BoundExpression &)*expr.child;
-	if (child.expr->type == ExpressionType::VALUE_PARAMETER) {
-		auto &parameter = (BoundParameterExpression &)*child.expr;
-		// parameter: move types into the parameter expression itself
-		parameter.return_type = expr.cast_type;
+	if (expr.try_cast) {
+		if (child.expr->return_type == expr.cast_type) {
+			// no cast required: type matches
+			return BindResult(move(child.expr));
+		}
+		child.expr = make_unique<BoundCastExpression>(move(child.expr), expr.cast_type, true);
 	} else {
-		// otherwise add a cast to the target type
-		child.expr = BoundCastExpression::AddCastToType(move(child.expr), expr.cast_type);
+		if (child.expr->type == ExpressionType::VALUE_PARAMETER) {
+			auto &parameter = (BoundParameterExpression &)*child.expr;
+			// parameter: move types into the parameter expression itself
+			parameter.return_type = expr.cast_type;
+		} else {
+			// otherwise add a cast to the target type
+			child.expr = BoundCastExpression::AddCastToType(move(child.expr), expr.cast_type);
+		}
 	}
 	return BindResult(move(child.expr));
 }

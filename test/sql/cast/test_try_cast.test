@@ -5,9 +5,15 @@
 statement ok
 PRAGMA enable_verification
 
-# try cast is only implemented in the parser for now: we expect this to fail in the binding phase
-statement error
+# TRY_CAST turns a failed cast into NULL
+query I
 SELECT TRY_CAST('hello' as INTEGER)
+----
+NULL
+
+# CAST throws an error
+statement error
+SELECT CAST('hello' as INTEGER)
 
 # not a reserved keyword
 statement ok

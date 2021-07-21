@@ -41,6 +41,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 	if (!child_stats) {
 		return nullptr;
 	}
+	unique_ptr<BaseStatistics> result_stats;
 	switch (cast.child->return_type.InternalType()) {
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -49,10 +50,15 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		return StatisticsNumericCastSwitch(child_stats.get(), cast.return_type);
+		result_stats = StatisticsNumericCastSwitch(child_stats.get(), cast.return_type);
+		break;
 	default:
 		return nullptr;
 	}
+	if (cast.try_cast) {
+		result_stats->validity_stats = make_unique<ValidityStatistics>(true, true);
+	}
+	return result_stats;
 }
 
 } // namespace duckdb

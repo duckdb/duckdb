@@ -14,10 +14,12 @@ namespace duckdb {
 
 class BoundCastExpression : public Expression {
 public:
-	BoundCastExpression(unique_ptr<Expression> child, LogicalType target_type);
+	BoundCastExpression(unique_ptr<Expression> child, LogicalType target_type, bool try_cast = false);
 
 	//! The child type
 	unique_ptr<Expression> child;
+	//! Whether to use try_cast or not. try_cast converts cast failures into NULLs instead of throwing an error.
+	bool try_cast;
 
 public:
 	LogicalType source_type() {

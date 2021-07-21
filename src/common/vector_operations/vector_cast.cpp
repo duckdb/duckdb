@@ -376,49 +376,35 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 	return true;
 }
 
-template <class OP>
 static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, string &error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
-		UnaryExecutor::Execute<string_t, bool, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, bool, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::TINYINT:
-		UnaryExecutor::Execute<string_t, int8_t, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, int8_t, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::SMALLINT:
-		UnaryExecutor::Execute<string_t, int16_t, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, int16_t, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::INTEGER:
-		UnaryExecutor::Execute<string_t, int32_t, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, int32_t, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::BIGINT:
-		UnaryExecutor::Execute<string_t, int64_t, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, int64_t, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::UTINYINT:
-		UnaryExecutor::Execute<string_t, uint8_t, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, uint8_t, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::USMALLINT:
-		UnaryExecutor::Execute<string_t, uint16_t, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, uint16_t, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::UINTEGER:
-		UnaryExecutor::Execute<string_t, uint32_t, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, uint32_t, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::UBIGINT:
-		UnaryExecutor::Execute<string_t, uint64_t, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, uint64_t, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::HUGEINT:
-		UnaryExecutor::Execute<string_t, hugeint_t, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, hugeint_t, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::FLOAT:
-		UnaryExecutor::Execute<string_t, float, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, float, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::DOUBLE:
-		UnaryExecutor::Execute<string_t, double, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, double, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::INTERVAL:
-		UnaryExecutor::Execute<string_t, interval_t, OP>(source, result, count);
-		break;
+		return VectorTryCastLoop<string_t, interval_t, duckdb::TryCast>(source, result, count, false, error_message);
 	case LogicalTypeId::DECIMAL:
 		return ToDecimalCast<string_t>(source, result, count, error_message);
 	default:
@@ -446,7 +432,7 @@ static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 	case LogicalTypeId::BLOB:
 		return VectorTryCastStringLoop<string_t, string_t, duckdb::TryCastToBlob>(source, result, count, strict, error_message);
 	default:
-		return VectorStringCastNumericSwitch<duckdb::Cast>(source, result, count, error_message);
+		return VectorStringCastNumericSwitch(source, result, count, error_message);
 	}
 }
 

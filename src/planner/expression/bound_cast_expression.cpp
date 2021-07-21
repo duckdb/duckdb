@@ -4,9 +4,9 @@
 
 namespace duckdb {
 
-BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p)
+BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p, bool try_cast_p)
     : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, move(target_type_p)),
-      child(move(child_p)) {
+      child(move(child_p)), try_cast(try_cast_p) {
 }
 
 unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, const LogicalType &target_type) {
@@ -71,7 +71,7 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 }
 
 string BoundCastExpression::ToString() const {
-	return "CAST(" + child->GetName() + " AS " + return_type.ToString() + ")";
+	return (try_cast ? "TRY_CAST(" : "CAST(") + child->GetName() + " AS " + return_type.ToString() + ")";
 }
 
 bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
@@ -82,11 +82,14 @@ bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(child.get(), other->child.get())) {
 		return false;
 	}
+	if (try_cast != other->try_cast) {
+		return false;
+	}
 	return true;
 }
 
 unique_ptr<Expression> BoundCastExpression::Copy() {
-	auto copy = make_unique<BoundCastExpression>(child->Copy(), return_type);
+	auto copy = make_unique<BoundCastExpression>(child->Copy(), return_type, try_cast);
 	copy->CopyProperties(*this);
 	return move(copy);
 }
