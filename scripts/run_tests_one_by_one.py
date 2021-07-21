@@ -38,6 +38,8 @@ test_count = len(test_cases)
 for test_number in range(test_count):
 	print("[" + str(test_number) + "/" + str(test_count) + "]: " + test_cases[test_number])
 	proc = subprocess.Popen([unittest_program, '--start-offset=' + str(test_number), '--end-offset=' + str(test_number + 1)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	stdout = proc.stdout.read().decode('utf8')
+	stderr = proc.stderr.read().decode('utf8')
 	proc.wait()
 	proc.terminate()
 	if proc.returncode is not None and proc.returncode != 0:
