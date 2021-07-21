@@ -15,7 +15,7 @@ test_that("duckdb_register_arrow() works", {
   expect_true(identical(res2, res3))
   duckdb::duckdb_unregister_arrow(con, "myreader")
   # cant read after unregister
-  expect_error(dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10"))
+  expect_error(dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 100"))
 
 #   # cant register something non-arrow
 #   expect_error(duckdb_register_arrow(con, "asdf", data.frame()))
@@ -43,4 +43,45 @@ test_that("duckdb_register_arrow() works with datasets", {
 
     dbDisconnect(con, shutdown = T)
   }
+})
+
+
+test_that("duckdb_register_arrow() performs projection pushdown", {
+
+    con <- dbConnect(duckdb::duckdb())
+
+    # Registering a dataset + aggregation
+    ds <- arrow::open_dataset("userdata1.parquet")
+    duckdb::duckdb_register_arrow(con, "mydatasetreader", ds)
+
+    res1 <- dbGetQuery(con, "SELECT last_name, salary, first_name FROM mydatasetreader")
+    res2 <- dbGetQuery(con, "SELECT last_name, salary, first_name FROM parquet_scan('userdata1.parquet')")
+    expect_true(identical(res1, res2))
+    # we can read with > 3 cores
+    dbExecute(con, "PRAGMA threads=4")
+    res3 <- dbGetQuery(con, "SELECT last_name, salary, first_name FROM mydatasetreader")
+    expect_true(identical(res2, res3))
+    duckdb::duckdb_unregister_arrow(con, "mydatasetreader")
+
+    dbDisconnect(con, shutdown = T)
+})
+
+test_that("duckdb_register_arrow() performs selection pushdown", {
+
+    con <- dbConnect(duckdb::duckdb())
+
+    # Registering a dataset + aggregation
+    ds <- arrow::open_dataset("userdata1.parquet")
+    duckdb::duckdb_register_arrow(con, "mydatasetreader", ds)
+
+    res1 <- dbGetQuery(con, "SELECT last_name, first_name FROM mydatasetreader where salary > 130000")
+    res2 <- dbGetQuery(con, "SELECT last_name, first_name FROM parquet_scan('userdata1.parquet')  where salary > 130000")
+    expect_true(identical(res1, res2))
+    # we can read with > 3 cores
+    dbExecute(con, "PRAGMA threads=4")
+    res3 <- dbGetQuery(con, "SELECT last_name, first_name FROM mydatasetreader where salary > 130000")
+    expect_true(identical(res2, res3))
+    duckdb::duckdb_unregister_arrow(con, "mydatasetreader")
+
+    dbDisconnect(con, shutdown = T)
 })
