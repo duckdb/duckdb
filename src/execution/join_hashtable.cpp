@@ -33,6 +33,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 
 		condition_types.push_back(type);
 	}
+	auto data = new data_t[10000];
 	// at least one equality is necessary
 	D_ASSERT(!equality_types.empty());
 
