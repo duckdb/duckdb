@@ -21,7 +21,7 @@ jobs:
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
-      ASAN_OPTIONS: quarantine_size_mb=64
+      ASAN_OPTIONS: quarantine_size_mb=64:malloc_context_size=10
 
     steps:
     - uses: actions/checkout@v2
