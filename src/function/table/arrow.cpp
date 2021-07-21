@@ -16,7 +16,7 @@
 #include "utf8proc_wrapper.hpp"
 
 #include "duckdb/common/operator/multiply.hpp"
-#include <mutex>
+#include "duckdb/common/mutex.hpp"
 namespace duckdb {
 
 LogicalType GetArrowLogicalType(ArrowSchema &schema,
