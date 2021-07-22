@@ -406,10 +406,12 @@ void BufferedCSVReader::SetDateFormat(const string &format_specifier, const Logi
 bool BufferedCSVReader::TryCastValue(const Value &value, const LogicalType &sql_type) {
 	if (options.has_format[LogicalTypeId::DATE] && sql_type.id() == LogicalTypeId::DATE) {
 		date_t result;
-		return options.date_format[LogicalTypeId::DATE].TryParseDate(string_t(value.str_value), result);
+		string error_message;
+		return options.date_format[LogicalTypeId::DATE].TryParseDate(string_t(value.str_value), result, error_message);
 	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
-		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(value.str_value), result);
+		string error_message;
+		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(value.str_value), result, error_message);
 	} else {
 		Value new_value;
 		return value.TryCastAs(sql_type, new_value, true);

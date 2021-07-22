@@ -129,7 +129,7 @@ private:
 	data_ptr_t hashes_end_ptr; // of hashes
 	idx_t hash_offset;         // Offset into the layout of the hash column
 
-	idx_t hash_prefix_shift;
+	hash_t hash_prefix_shift;
 	idx_t payload_page_offset;
 
 	//! Bitmask for getting relevant bits from the hashes to determine the position

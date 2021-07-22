@@ -142,8 +142,12 @@ static void NextValDependency(BoundFunctionExpression &expr, unordered_set<Catal
 void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT, NextValFunction<NextSequenceValueOperator>, true,
 	                               NextValBind, NextValDependency));
+}
+
+void CurrvalFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(ScalarFunction("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT, NextValFunction<CurrentSequenceValueOperator>, true,
 	                               NextValBind, NextValDependency));
 }
+
 
 } // namespace duckdb
