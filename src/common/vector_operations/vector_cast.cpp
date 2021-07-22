@@ -7,6 +7,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/vector_operations/decimal_cast.hpp"
+#include "duckdb/common/operator/numeric_cast.hpp"
 
 namespace duckdb {
 
@@ -36,7 +37,7 @@ struct VectorTryCastOperator {
 		auto data = (VectorTryCastData *) dataptr;
 		RESULT_TYPE output;
 		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->strict)) {
-			return HandleVectorCastError::Operation<RESULT_TYPE>(CastException<INPUT_TYPE, RESULT_TYPE>(input), mask, idx, data->error_message, data->all_converted);
+			return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask, idx, data->error_message, data->all_converted);
 		}
 		return output;
 	}
@@ -56,7 +57,7 @@ struct VectorTryCastStringOperator {
 		auto data = (VectorTryCastData *) dataptr;
 		RESULT_TYPE output;
 		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->result, data->error_message, data->strict)) {
-			return HandleVectorCastError::Operation<RESULT_TYPE>(CastException<INPUT_TYPE, RESULT_TYPE>(input), mask, idx, data->error_message, data->all_converted);
+			return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask, idx, data->error_message, data->all_converted);
 		}
 		return output;
 	}
@@ -81,40 +82,40 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
-		UnaryExecutor::Execute<SRC, bool, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, bool, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::TINYINT:
-		UnaryExecutor::Execute<SRC, int8_t, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, int8_t, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::SMALLINT:
-		UnaryExecutor::Execute<SRC, int16_t, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, int16_t, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::INTEGER:
-		UnaryExecutor::Execute<SRC, int32_t, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, int32_t, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::BIGINT:
-		UnaryExecutor::Execute<SRC, int64_t, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, int64_t, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::UTINYINT:
-		UnaryExecutor::Execute<SRC, uint8_t, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, uint8_t, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::USMALLINT:
-		UnaryExecutor::Execute<SRC, uint16_t, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, uint16_t, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::UINTEGER:
-		UnaryExecutor::Execute<SRC, uint32_t, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, uint32_t, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::UBIGINT:
-		UnaryExecutor::Execute<SRC, uint64_t, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, uint64_t, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::HUGEINT:
-		UnaryExecutor::Execute<SRC, hugeint_t, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, hugeint_t, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::FLOAT:
-		UnaryExecutor::Execute<SRC, float, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, float, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::DOUBLE:
-		UnaryExecutor::Execute<SRC, double, duckdb::Cast>(source, result, count);
+		UnaryExecutor::Execute<SRC, double, duckdb::NumericCast>(source, result, count);
 		break;
 	case LogicalTypeId::DECIMAL:
 		return ToDecimalCast<SRC>(source, result, count, error_message);

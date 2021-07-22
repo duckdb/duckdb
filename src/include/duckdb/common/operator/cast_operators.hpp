@@ -28,7 +28,7 @@ struct TryCast {
 };
 
 template<class SRC, class DST>
-static string CastException(SRC input) {
+static string CastExceptionText(SRC input) {
 	return "Type " + TypeIdToString(GetTypeId<SRC>()) + " with value " +
 								ConvertToString::Operation<SRC>(input) +
 								" can't be cast to the destination type " +
@@ -40,12 +40,11 @@ struct Cast {
 	static inline DST Operation(SRC input) {
 		DST result;
 		if (!TryCast::Operation(input, result)) {
-			throw InvalidInputException(CastException<SRC, DST>(input));
+			throw InvalidInputException(CastExceptionText<SRC, DST>(input));
 		}
 		return result;
 	}
 };
-
 
 struct HandleCastError {
 	static void AssignError(string error_message, string *error_message_ptr) {

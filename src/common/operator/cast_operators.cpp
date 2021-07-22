@@ -1,5 +1,6 @@
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/string_cast.hpp"
+#include "duckdb/common/operator/numeric_cast.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/limits.hpp"
@@ -20,77 +21,6 @@
 #include <cstdlib>
 
 namespace duckdb {
-
-template <class SRC, class DST>
-static bool TryCastWithOverflowCheck(SRC value, DST &result) {
-	if (NumericLimits<SRC>::IsSigned() != NumericLimits<DST>::IsSigned()) {
-		if (NumericLimits<SRC>::IsSigned()) {
-			// signed to unsigned conversion
-			if (NumericLimits<SRC>::Digits() > NumericLimits<DST>::Digits()) {
-				if (value < 0 || value > (SRC)NumericLimits<DST>::Maximum()) {
-					return false;
-				}
-			} else {
-				if (value < 0) {
-					return false;
-				}
-			}
-			result = (DST)value;
-			return true;
-		} else {
-			// unsigned to signed conversion
-			if (NumericLimits<SRC>::Digits() >= NumericLimits<DST>::Digits()) {
-				if (value <= (SRC)NumericLimits<DST>::Maximum()) {
-					result = (DST)value;
-					return true;
-				}
-				return false;
-			} else {
-				result = (DST)value;
-				return true;
-			}
-		}
-	} else {
-		// same sign conversion
-		if (NumericLimits<DST>::Digits() >= NumericLimits<SRC>::Digits()) {
-			result = (DST) value;
-			return true;
-		} else {
-			if (value < SRC(NumericLimits<DST>::Minimum()) || value > SRC(NumericLimits<DST>::Maximum())) {
-				return false;
-			}
-			result = (DST)value;
-			return true;
-		}
-	}
-}
-
-template <>
-bool TryCastWithOverflowCheck(float value, int32_t &result) {
-	if (!(value >= -2147483648.0f && value < 2147483648.0f)) {
-		return false;
-	}
-	result = int32_t(value);
-	return true;
-}
-
-template <>
-bool TryCastWithOverflowCheck(float value, int64_t &result) {
-	if (!(value >= -9223372036854775808.0f && value < 9223372036854775808.0f)) {
-		return false;
-	}
-	result = int64_t(value);
-	return true;
-}
-
-template <>
-bool TryCastWithOverflowCheck(double value, int64_t &result) {
-	if (!(value >= -9223372036854775808.0 && value < 9223372036854775808.0)) {
-		return false;
-	}
-	result = int64_t(value);
-	return true;
-}
 
 //===--------------------------------------------------------------------===//
 // bool casts
