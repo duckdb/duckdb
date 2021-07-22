@@ -65,7 +65,7 @@ struct ICUCollatorInput {
 	static const char HEX_TABLE[];
 };
 
-static const char ICUCollatorInput::HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+const char ICUCollatorInput::HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
 struct ICUCollatorOperator {
 	template<class INPUT_TYPE, class RESULT_TYPE>
@@ -94,7 +94,7 @@ static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector
 	auto &collator = *info.collator;
 
 	ICUCollatorInput input(collator, result);
-	UnaryExecutor::Execute<string_t, string_t, ICUCollatorOperator>(args.data[0], result, args.size(), (void *) &input);
+	UnaryExecutor::GenericExecute<string_t, string_t, ICUCollatorOperator>(args.data[0], result, args.size(), (void *) &input);
 }
 
 static unique_ptr<FunctionData> icu_collate_bind(ClientContext &context, ScalarFunction &bound_function,

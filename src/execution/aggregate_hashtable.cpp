@@ -394,7 +394,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	addresses.Normalify(groups.size());
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
-	// now compute the entry in the table based on the hash using a modulo
+	// now compute the entry in the table based on the hash using the bitmask
 	UnaryExecutor::Execute<hash_t, uint64_t>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
 		D_ASSERT((element & bitmask) == (element % capacity));
 		return (element & bitmask);

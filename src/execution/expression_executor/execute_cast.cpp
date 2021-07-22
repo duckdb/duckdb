@@ -23,7 +23,7 @@ void ExpressionExecutor::Execute(const BoundCastExpression &expr, ExpressionStat
 	Execute(*expr.child, child_state, sel, count, child);
 	if (expr.try_cast) {
 		string error_message;
-		VectorOperations::TryCast(child, result, count, error_message);
+		VectorOperations::TryCast(child, result, count, &error_message);
 	} else {
 		// cast it to the type specified by the cast expression
 		D_ASSERT(result.GetType() == expr.return_type);

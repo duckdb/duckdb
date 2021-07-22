@@ -100,7 +100,7 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 idx_t Blob::GetBlobSize(string_t str) {
 	string error_message;
 	idx_t str_len;
-	if (!Blob::TryGetBlobSize(str, str_len, error_message)) {
+	if (!Blob::TryGetBlobSize(str, str_len, &error_message)) {
 		throw ConversionException(error_message);
 	}
 	return str_len;

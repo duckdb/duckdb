@@ -57,11 +57,18 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	}
 }
 
+struct LastYearOperator {
+	template<class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		auto last_year = (int32_t *) dataptr;
+		return Date::ExtractYear(input, last_year);
+	}
+};
+
 template <class T>
-static void LastYearOperator(DataChunk &args, ExpressionState &state, Vector &result) {
+static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	int32_t last_year = 0;
-	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
-	                                   [&](T input) { return Date::ExtractYear(input, &last_year); });
+	UnaryExecutor::GenericExecute<T, int64_t, LastYearOperator>(args.data[0], result, args.size(), &last_year);
 }
 
 template <class T, class OP>
@@ -921,7 +928,7 @@ struct DayNameOperator {
 
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
-	AddGenericDatePartOperator(set, "year", LastYearOperator<date_t>, LastYearOperator<timestamp_t>,
+	AddGenericDatePartOperator(set, "year", LastYearFunction<date_t>, LastYearFunction<timestamp_t>,
 	                           ScalarFunction::UnaryFunction<interval_t, int64_t, DateDatePart::YearOperator>,
 	                           DateDatePart::YearOperator::PropagateStatistics<date_t>,
 	                           DateDatePart::YearOperator::PropagateStatistics<timestamp_t>);

@@ -20,20 +20,15 @@ static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector
 	D_ASSERT(input.ColumnCount() == 1);
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
 
-	UnaryExecutor::Execute<timestamp_t, interval_t, IntervalUnaryOperator>(input.data[0], result, input.size(), (void *) &current_timestamp);
+	UnaryExecutor::GenericExecute<timestamp_t, interval_t, IntervalUnaryOperator>(input.data[0], result, input.size(), (void *) &current_timestamp);
 }
-
-struct IntervalBinaryOperator {
-	template <class TA, class TB, class TR>
-	static inline TR Operation(TA input1, TB input2) {
-		return Interval::GetDifference(input1, input2);
-	}
-};
 
 static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 2);
 
-	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t, IntervalBinaryOperator>(input.data[0], input.data[1], result, input.size());
+	BinaryExecutor::Execute<timestamp_t, timestamp_t, interval_t>(
+	    input.data[0], input.data[1], result, input.size(),
+	    [&](timestamp_t input1, timestamp_t input2) { return Interval::GetDifference(input1, input2); });
 }
 
 void AgeFun::RegisterFunction(BuiltinFunctions &set) {

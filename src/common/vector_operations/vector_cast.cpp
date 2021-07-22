@@ -45,7 +45,7 @@ struct VectorTryCastOperator {
 template<class SRC, class DST, class OP>
 static bool VectorTryCastLoop(Vector &source, Vector &result, idx_t count, bool strict, string *error_message) {
 	VectorTryCastData input(result, error_message, strict);
-	UnaryExecutor::GenericExecute<SRC, DST, VectorTryCastOperator>(source, result, count, &input, error_message);
+	UnaryExecutor::GenericExecute<SRC, DST, VectorTryCastOperator<OP>>(source, result, count, &input, error_message);
 	return input.all_converted;
 }
 
@@ -55,7 +55,7 @@ struct VectorTryCastStringOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (VectorTryCastData *) dataptr;
 		RESULT_TYPE output;
-		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->result, data->strict)) {
+		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->result, data->error_message, data->strict)) {
 			return HandleVectorCastError::Operation<RESULT_TYPE>(CastException<INPUT_TYPE, RESULT_TYPE>(input), mask, idx, data->error_message, data->all_converted);
 		}
 		return output;
@@ -65,7 +65,7 @@ struct VectorTryCastStringOperator {
 template<class SRC, class DST, class OP>
 static bool VectorTryCastStringLoop(Vector &source, Vector &result, idx_t count, bool strict, string *error_message) {
 	VectorTryCastData input(result, error_message, strict);
-	UnaryExecutor::GenericExecute<SRC, DST, VectorTryCastOperator>(source, result, count, &input, error_message);
+	UnaryExecutor::GenericExecute<SRC, DST, VectorTryCastStringOperator<OP>>(source, result, count, &input, error_message);
 	return input.all_converted;
 }
 

@@ -29,8 +29,9 @@ static void StrReverseUnicode(const char *input, idx_t n, char *output) {
 	});
 }
 
-static void ReverseFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+struct ReverseOperator {
+	template<class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 
@@ -41,7 +42,11 @@ static void ReverseFunction(DataChunk &args, ExpressionState &state, Vector &res
 		}
 		target.Finalize();
 		return target;
-	});
+	}
+};
+
+static void ReverseFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<ReverseOperator>>(args.data[0], result, args.size(), &result);
 }
 
 void ReverseFun::RegisterFunction(BuiltinFunctions &set) {

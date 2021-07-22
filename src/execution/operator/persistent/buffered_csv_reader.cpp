@@ -420,7 +420,8 @@ struct TryCastDateTimeInput {
 	TryCastDateTimeInput(BufferedCSVReaderOptions &options) : options(options) {}
 
 	BufferedCSVReaderOptions &options;
-	bool success = true;
+	bool all_converted = true;
+	string error_message;
 };
 
 struct TryCastDateOperator {
@@ -428,8 +429,8 @@ struct TryCastDateOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (TryCastDateTimeInput *) dataptr;
 		date_t result;
-		if (!data->options.date_format[LogicalTypeId::DATE].TryParseDate(input, result)) {
-			data->success = false;
+		if (!data->options.date_format[LogicalTypeId::DATE].TryParseDate(input, result, data->error_message)) {
+			data->all_converted = false;
 		}
 		return result;
 	}
@@ -440,8 +441,8 @@ struct TryCastTimestampOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (TryCastDateTimeInput *) dataptr;
 		timestamp_t result;
-		if (!data->options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result)) {
-			data->success = false;
+		if (!data->options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result, data->error_message)) {
+			data->all_converted = false;
 		}
 		return result;
 	}
@@ -455,12 +456,12 @@ bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const
 			// use the date format to cast the chunk
 			TryCastDateTimeInput cast_options(options);
 			UnaryExecutor::GenericExecute<string_t, date_t, TryCastDateOperator>(parse_chunk_col, dummy_result, size, (void *) &cast_options);
-			return cast_options.success;
+			return cast_options.all_converted;
 		} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
 			// use the date format to cast the chunk
 			TryCastDateTimeInput cast_options(options);
 			UnaryExecutor::GenericExecute<string_t, timestamp_t, TryCastTimestampOperator>(parse_chunk_col, dummy_result, size, (void *) &cast_options);
-			return cast_options.success;
+			return cast_options.all_converted;
 		} else {
 			// target type is not varchar: perform a cast
 			VectorOperations::Cast(parse_chunk_col, dummy_result, size, true);
@@ -1581,16 +1582,19 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			try {
 				if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
 					// use the date format to cast the chunk
-					UnaryExecutor::Execute<string_t, date_t>(
-					    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(),
-					    [&](string_t input) { return options.date_format[LogicalTypeId::DATE].ParseDate(input); });
+					TryCastDateTimeInput cast_options(options);
+					UnaryExecutor::GenericExecute<string_t, date_t, TryCastDateOperator>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), (void *) &cast_options);
+					if (!cast_options.all_converted) {
+						throw Exception(cast_options.error_message);
+					}
 				} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
 				           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 					// use the date format to cast the chunk
-					UnaryExecutor::Execute<string_t, timestamp_t>(
-					    parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), [&](string_t input) {
-						    return options.date_format[LogicalTypeId::TIMESTAMP].ParseTimestamp(input);
-					    });
+					TryCastDateTimeInput cast_options(options);
+					UnaryExecutor::GenericExecute<string_t, timestamp_t, TryCastTimestampOperator>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), (void *) &cast_options);
+					if (!cast_options.all_converted) {
+						throw Exception(cast_options.error_message);
+					}
 				} else {
 					// target type is not varchar: perform a cast
 					VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());

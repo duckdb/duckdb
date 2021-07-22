@@ -5,9 +5,8 @@ namespace duckdb {
 
 struct Base64EncodeOperator {
 	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto vector = (Vector *) dataptr;
-		auto result_str = StringVector::EmptyString(*vector, Blob::ToBase64Size(input));
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+		auto result_str = StringVector::EmptyString(result, Blob::ToBase64Size(input));
 		Blob::ToBase64(input, result_str.GetDataWriteable());
 		result_str.Finalize();
 		return result_str;
@@ -16,10 +15,9 @@ struct Base64EncodeOperator {
 
 struct Base64DecodeOperator {
 	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto vector = (Vector *) dataptr;
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto result_size = Blob::FromBase64Size(input);
-		auto result_blob = StringVector::EmptyString(*vector, result_size);
+		auto result_blob = StringVector::EmptyString(result, result_size);
 		Blob::FromBase64(input, (data_ptr_t)result_blob.GetDataWriteable(), result_size);
 		result_blob.Finalize();
 		return result_blob;
@@ -28,12 +26,12 @@ struct Base64DecodeOperator {
 
 static void Base64EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
-	UnaryExecutor::GenericExecute<string_t, string_t, Base64EncodeOperator>(args.data[0], result, args.size(), (void *) &result);
+	UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<Base64EncodeOperator>>(args.data[0], result, args.size(), (void *) &result);
 }
 
 static void Base64DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
-	UnaryExecutor::GenericExecute<string_t, string_t, Base64DecodeOperator>(args.data[0], result, args.size(), (void *) &result);
+	UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<Base64DecodeOperator>>(args.data[0], result, args.size(), (void *) &result);
 }
 
 void Base64Fun::RegisterFunction(BuiltinFunctions &set) {

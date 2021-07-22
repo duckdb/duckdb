@@ -6,17 +6,22 @@
 
 namespace duckdb {
 
-static void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &input = args.data[0];
-
-	UnaryExecutor::Execute<string_t, string_t>(input, result, args.size(), [&](string_t input) {
+struct MD5Operator {
+	template<class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto hash = StringVector::EmptyString(result, MD5Context::MD5_HASH_LENGTH_TEXT);
 		MD5Context context;
 		context.Add(input);
 		context.FinishHex(hash.GetDataWriteable());
 		hash.Finalize();
 		return hash;
-	});
+	}
+};
+
+static void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
+	auto &input = args.data[0];
+
+	UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<MD5Operator>>(input, result, args.size(), &result);
 }
 
 void MD5Fun::RegisterFunction(BuiltinFunctions &set) {

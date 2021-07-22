@@ -10,8 +10,9 @@
 namespace duckdb {
 
 template <bool LTRIM, bool RTRIM>
-static void UnaryTrimFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+struct TrimOperator {
+	template<class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto data = input.GetDataUnsafe();
 		auto size = input.GetSize();
 
@@ -54,7 +55,12 @@ static void UnaryTrimFunction(DataChunk &args, ExpressionState &state, Vector &r
 
 		target.Finalize();
 		return target;
-	});
+	}
+};
+
+template <bool LTRIM, bool RTRIM>
+static void UnaryTrimFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<TrimOperator<LTRIM, RTRIM>>>(args.data[0], result, args.size(), &result);
 }
 
 static void GetIgnoredCodepoints(string_t ignored, unordered_set<utf8proc_int32_t> &ignored_codepoints) {
