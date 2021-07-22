@@ -98,14 +98,6 @@ static void VectorStringCast(Vector &source, Vector &result, idx_t count) {
 	UnaryExecutor::GenericExecute<SRC, string_t, VectorStringCastOperator<OP>>(source, result, count, (void *) &result);
 }
 
-
-static void HandleCastError(string error_message, ValidityMask &mask, idx_t idx, void *dataptr) {
-	auto data = (VectorTryCastData *) dataptr;
-	HandleCastError::AssignError(error_message, data->error_message);
-	data->all_converted = false;
-	mask.SetInvalid(idx);
-}
-
 template <class SRC>
 static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type

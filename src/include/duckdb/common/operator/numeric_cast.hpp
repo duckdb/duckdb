@@ -141,6 +141,19 @@ TRY_CAST_HUGEINT(uint64_t)
 TRY_CAST_HUGEINT(float)
 TRY_CAST_HUGEINT(double)
 
+template <>
+bool TryCastWithOverflowCheck(double input, float &result) {
+	if (input < (double)NumericLimits<float>::Minimum() || input > (double)NumericLimits<float>::Maximum()) {
+		return false;
+	}
+	auto res = (float)input;
+	if (std::isnan(res) || std::isinf(res)) {
+		return false;
+	}
+	result = res;
+	return true;
+}
+
 struct NumericTryCast {
 	template <class SRC, class DST>
 	static inline bool Operation(SRC input, DST &result, bool strict = false) {

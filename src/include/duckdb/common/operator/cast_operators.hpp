@@ -61,171 +61,35 @@ struct HandleCastError {
 template <> \
 bool TryCast::Operation(SOURCE_TYPE input, TARGET_TYPE &result, bool strict)
 
-//===--------------------------------------------------------------------===//
-// bool casts
-//===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(bool, bool);
-TRY_CAST_TEMPLATE(bool, int8_t);
-TRY_CAST_TEMPLATE(bool, int16_t);
-TRY_CAST_TEMPLATE(bool, int32_t);
-TRY_CAST_TEMPLATE(bool, int64_t);
-TRY_CAST_TEMPLATE(bool, uint8_t);
-TRY_CAST_TEMPLATE(bool, uint16_t);
-TRY_CAST_TEMPLATE(bool, uint32_t);
-TRY_CAST_TEMPLATE(bool, uint64_t);
-TRY_CAST_TEMPLATE(bool, float);
-TRY_CAST_TEMPLATE(bool, double);
+#define NUMERIC_TRY_CAST_TEMPLATE(SOURCE_TYPE) \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, bool); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, int8_t); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, int16_t); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, int32_t); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, int64_t); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, hugeint_t); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, uint8_t); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, uint16_t); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, uint32_t); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, uint64_t); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, float); \
+TRY_CAST_TEMPLATE(SOURCE_TYPE, double);
 
 //===--------------------------------------------------------------------===//
-// int8_t casts
+// Numeric cast templates
 //===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(int8_t, bool);
-TRY_CAST_TEMPLATE(int8_t, int8_t);
-TRY_CAST_TEMPLATE(int8_t, int16_t);
-TRY_CAST_TEMPLATE(int8_t, int32_t);
-TRY_CAST_TEMPLATE(int8_t, int64_t);
-TRY_CAST_TEMPLATE(int8_t, uint8_t);
-TRY_CAST_TEMPLATE(int8_t, uint16_t);
-TRY_CAST_TEMPLATE(int8_t, uint32_t);
-TRY_CAST_TEMPLATE(int8_t, uint64_t);
-TRY_CAST_TEMPLATE(int8_t, float);
-TRY_CAST_TEMPLATE(int8_t, double);
-
-//===--------------------------------------------------------------------===//
-// int16_t casts
-//===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(int16_t, bool);
-TRY_CAST_TEMPLATE(int16_t, int8_t);
-TRY_CAST_TEMPLATE(int16_t, int16_t);
-TRY_CAST_TEMPLATE(int16_t, int32_t);
-TRY_CAST_TEMPLATE(int16_t, int64_t);
-TRY_CAST_TEMPLATE(int16_t, uint8_t);
-TRY_CAST_TEMPLATE(int16_t, uint16_t);
-TRY_CAST_TEMPLATE(int16_t, uint32_t);
-TRY_CAST_TEMPLATE(int16_t, uint64_t);
-TRY_CAST_TEMPLATE(int16_t, float);
-TRY_CAST_TEMPLATE(int16_t, double);
-
-//===--------------------------------------------------------------------===//
-// int32_t casts
-//===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(int32_t, bool);
-TRY_CAST_TEMPLATE(int32_t, int8_t);
-TRY_CAST_TEMPLATE(int32_t, int16_t);
-TRY_CAST_TEMPLATE(int32_t, int32_t);
-TRY_CAST_TEMPLATE(int32_t, int64_t);
-TRY_CAST_TEMPLATE(int32_t, uint8_t);
-TRY_CAST_TEMPLATE(int32_t, uint16_t);
-TRY_CAST_TEMPLATE(int32_t, uint32_t);
-TRY_CAST_TEMPLATE(int32_t, uint64_t);
-TRY_CAST_TEMPLATE(int32_t, float);
-TRY_CAST_TEMPLATE(int32_t, double);
-
-//===--------------------------------------------------------------------===//
-// int64_t casts
-//===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(int64_t, bool);
-TRY_CAST_TEMPLATE(int64_t, int8_t);
-TRY_CAST_TEMPLATE(int64_t, int16_t);
-TRY_CAST_TEMPLATE(int64_t, int32_t);
-TRY_CAST_TEMPLATE(int64_t, int64_t);
-TRY_CAST_TEMPLATE(int64_t, uint8_t);
-TRY_CAST_TEMPLATE(int64_t, uint16_t);
-TRY_CAST_TEMPLATE(int64_t, uint32_t);
-TRY_CAST_TEMPLATE(int64_t, uint64_t);
-TRY_CAST_TEMPLATE(int64_t, float);
-TRY_CAST_TEMPLATE(int64_t, double);
-
-//===--------------------------------------------------------------------===//
-// uint8_t casts
-//===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(uint8_t, bool);
-TRY_CAST_TEMPLATE(uint8_t, int8_t);
-TRY_CAST_TEMPLATE(uint8_t, int16_t);
-TRY_CAST_TEMPLATE(uint8_t, int32_t);
-TRY_CAST_TEMPLATE(uint8_t, int64_t);
-TRY_CAST_TEMPLATE(uint8_t, uint8_t);
-TRY_CAST_TEMPLATE(uint8_t, uint16_t);
-TRY_CAST_TEMPLATE(uint8_t, uint32_t);
-TRY_CAST_TEMPLATE(uint8_t, uint64_t);
-TRY_CAST_TEMPLATE(uint8_t, float);
-TRY_CAST_TEMPLATE(uint8_t, double);
-
-//===--------------------------------------------------------------------===//
-// uint16_t casts
-//===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(uint16_t, bool);
-TRY_CAST_TEMPLATE(uint16_t, int8_t);
-TRY_CAST_TEMPLATE(uint16_t, int16_t);
-TRY_CAST_TEMPLATE(uint16_t, int32_t);
-TRY_CAST_TEMPLATE(uint16_t, int64_t);
-TRY_CAST_TEMPLATE(uint16_t, uint8_t);
-TRY_CAST_TEMPLATE(uint16_t, uint16_t);
-TRY_CAST_TEMPLATE(uint16_t, uint32_t);
-TRY_CAST_TEMPLATE(uint16_t, uint64_t);
-TRY_CAST_TEMPLATE(uint16_t, float);
-TRY_CAST_TEMPLATE(uint16_t, double);
-
-//===--------------------------------------------------------------------===//
-// uint32_t casts
-//===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(uint32_t, bool);
-TRY_CAST_TEMPLATE(uint32_t, int8_t);
-TRY_CAST_TEMPLATE(uint32_t, int16_t);
-TRY_CAST_TEMPLATE(uint32_t, int32_t);
-TRY_CAST_TEMPLATE(uint32_t, int64_t);
-TRY_CAST_TEMPLATE(uint32_t, uint8_t);
-TRY_CAST_TEMPLATE(uint32_t, uint16_t);
-TRY_CAST_TEMPLATE(uint32_t, uint32_t);
-TRY_CAST_TEMPLATE(uint32_t, uint64_t);
-TRY_CAST_TEMPLATE(uint32_t, float);
-TRY_CAST_TEMPLATE(uint32_t, double);
-
-//===--------------------------------------------------------------------===//
-// uint64_t casts
-//===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(uint64_t, bool);
-TRY_CAST_TEMPLATE(uint64_t, int8_t);
-TRY_CAST_TEMPLATE(uint64_t, int16_t);
-TRY_CAST_TEMPLATE(uint64_t, int32_t);
-TRY_CAST_TEMPLATE(uint64_t, int64_t);
-TRY_CAST_TEMPLATE(uint64_t, uint8_t);
-TRY_CAST_TEMPLATE(uint64_t, uint16_t);
-TRY_CAST_TEMPLATE(uint64_t, uint32_t);
-TRY_CAST_TEMPLATE(uint64_t, uint64_t);
-TRY_CAST_TEMPLATE(uint64_t, float);
-TRY_CAST_TEMPLATE(uint64_t, double);
-
-//===--------------------------------------------------------------------===//
-// float casts
-//===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(float, bool);
-TRY_CAST_TEMPLATE(float, int8_t);
-TRY_CAST_TEMPLATE(float, int16_t);
-TRY_CAST_TEMPLATE(float, int32_t);
-TRY_CAST_TEMPLATE(float, int64_t);
-TRY_CAST_TEMPLATE(float, uint8_t);
-TRY_CAST_TEMPLATE(float, uint16_t);
-TRY_CAST_TEMPLATE(float, uint32_t);
-TRY_CAST_TEMPLATE(float, uint64_t);
-TRY_CAST_TEMPLATE(float, float);
-TRY_CAST_TEMPLATE(float, double);
-
-//===--------------------------------------------------------------------===//
-// double casts
-//===--------------------------------------------------------------------===//
-TRY_CAST_TEMPLATE(double, bool);
-TRY_CAST_TEMPLATE(double, int8_t);
-TRY_CAST_TEMPLATE(double, int16_t);
-TRY_CAST_TEMPLATE(double, int32_t);
-TRY_CAST_TEMPLATE(double, int64_t);
-TRY_CAST_TEMPLATE(double, uint8_t);
-TRY_CAST_TEMPLATE(double, uint16_t);
-TRY_CAST_TEMPLATE(double, uint32_t);
-TRY_CAST_TEMPLATE(double, uint64_t);
-template <>
-bool TryCast::Operation(double input, float &result, bool strict);
-TRY_CAST_TEMPLATE(double, double);
+NUMERIC_TRY_CAST_TEMPLATE(bool)
+NUMERIC_TRY_CAST_TEMPLATE(int8_t)
+NUMERIC_TRY_CAST_TEMPLATE(int16_t)
+NUMERIC_TRY_CAST_TEMPLATE(int32_t)
+NUMERIC_TRY_CAST_TEMPLATE(int64_t)
+NUMERIC_TRY_CAST_TEMPLATE(hugeint_t)
+NUMERIC_TRY_CAST_TEMPLATE(uint8_t)
+NUMERIC_TRY_CAST_TEMPLATE(uint16_t)
+NUMERIC_TRY_CAST_TEMPLATE(uint32_t)
+NUMERIC_TRY_CAST_TEMPLATE(uint64_t)
+NUMERIC_TRY_CAST_TEMPLATE(float)
+NUMERIC_TRY_CAST_TEMPLATE(double)
 
 //===--------------------------------------------------------------------===//
 // String -> Numeric Casts
@@ -254,69 +118,6 @@ template <>
 bool TryCast::Operation(string_t input, float &result, bool strict);
 template <>
 bool TryCast::Operation(string_t input, double &result, bool strict);
-
-//===--------------------------------------------------------------------===//
-// Hugeint casts
-//===--------------------------------------------------------------------===//
-// Numeric -> Hugeint casts
-template <>
-bool TryCast::Operation(bool input, hugeint_t &result, bool strict);
-template <>
-bool TryCast::Operation(int8_t input, hugeint_t &result, bool strict);
-template <>
-bool TryCast::Operation(int16_t input, hugeint_t &result, bool strict);
-template <>
-bool TryCast::Operation(int32_t input, hugeint_t &result, bool strict);
-template <>
-bool TryCast::Operation(int64_t input, hugeint_t &result, bool strict);
-template <>
-bool TryCast::Operation(uint8_t input, hugeint_t &result, bool strict);
-template <>
-bool TryCast::Operation(uint16_t input, hugeint_t &result, bool strict);
-template <>
-bool TryCast::Operation(uint32_t input, hugeint_t &result, bool strict);
-template <>
-bool TryCast::Operation(uint64_t input, hugeint_t &result, bool strict);
-template <>
-bool TryCast::Operation(float input, hugeint_t &result, bool strict);
-template <>
-bool TryCast::Operation(double input, hugeint_t &result, bool strict);
-
-// Hugeint -> numeric casts
-template <>
-bool TryCast::Operation(hugeint_t input, bool &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, int8_t &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, int16_t &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, int32_t &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, int64_t &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, uint8_t &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, uint16_t &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, uint32_t &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, uint64_t &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, float &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, double &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, date_t &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, dtime_t &result, bool strict);
-template <>
-bool TryCast::Operation(hugeint_t input, timestamp_t &result, bool strict);
-
-// nop cast
-template <>
-bool TryCast::Operation(hugeint_t input, hugeint_t &result, bool strict);
-template <>
-hugeint_t Cast::Operation(hugeint_t input);
 
 //===--------------------------------------------------------------------===//
 // Date Casts
