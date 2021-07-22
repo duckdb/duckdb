@@ -74,18 +74,18 @@ public:
 		    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&res->arrow_array_stream))));
 		SEXP export_call;
 
+		auto export_fun = r.Protect(VECTOR_ELT(factory->export_fun, 0));
 		if (project_columns.second.empty()) {
-
-			export_call = r.Protect(Rf_lang3(factory->export_fun, factory->arrow_scannable, stream_ptr_sexp));
+			export_call = r.Protect(Rf_lang3(export_fun, factory->arrow_scannable, stream_ptr_sexp));
 		} else {
 			auto projection_sexp = r.Protect(RApi::StringsToSexp(project_columns.second));
 			SEXP filters_sexp = r.Protect(Rf_ScalarLogical(true));
 			if (filters && filters->table_filters && !filters->table_filters->filters.empty()) {
 
-				filters_sexp = r.Protect(TransformFilter(*filters, project_columns.first));
+				filters_sexp = r.Protect(TransformFilter(*filters, project_columns.first, factory->export_fun));
 			}
-			export_call = r.Protect(Rf_lang5(factory->export_fun, factory->arrow_scannable, stream_ptr_sexp,
-			                                 projection_sexp, filters_sexp));
+			export_call = r.Protect(
+			    Rf_lang5(export_fun, factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp));
 		}
 
 		int err;
@@ -100,77 +100,108 @@ public:
 	SEXP export_fun;
 
 private:
-	static SEXP TransformFilterExpression(TableFilter &filter, string &column_name) {
+	static SEXP TransformFilterExpression(TableFilter &filter, string &column_name, SEXP functions) {
 		RProtector r;
-		auto filter_res = r.Protect(NEW_LIST(3));
 		auto column_name_sexp = r.Protect(Rf_mkString(column_name.c_str()));
+		auto column_name_expr = r.Protect(CreateFieldRef(functions, column_name_sexp));
 
 		switch (filter.filter_type) {
 		case TableFilterType::CONSTANT_COMPARISON: {
-			SET_ELEMENT(filter_res, 1, column_name_sexp);
-
 			auto constant_filter = (ConstantFilter &)filter;
-			SET_ELEMENT(filter_res, 2, RApiTypes::ValueToSexp(constant_filter.constant));
-
+			auto constant_sexp = r.Protect(RApiTypes::ValueToSexp(constant_filter.constant));
+			auto constant_expr = r.Protect(CreateScalar(functions, constant_sexp));
 			switch (constant_filter.comparison_type) {
 			case ExpressionType::COMPARE_EQUAL: {
-				SET_ELEMENT(filter_res, 0, Rf_mkString("CONSTANT_COMPARISON_EQUAL"));
-				break;
+				return CreateExpression(functions, "equal", column_name_expr, constant_expr);
 			}
 			case ExpressionType::COMPARE_GREATERTHAN: {
-				SET_ELEMENT(filter_res, 0, Rf_mkString("CONSTANT_COMPARISON_GREATERTHAN"));
-				break;
+				return CreateExpression(functions, "greater", column_name_expr, constant_expr);
+			}
+			case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
+				return CreateExpression(functions, "greater_equal", column_name_expr, constant_expr);
+			}
+			case ExpressionType::COMPARE_LESSTHAN: {
+				return CreateExpression(functions, "less", column_name_expr, constant_expr);
+			}
+			case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+				return CreateExpression(functions, "less_equal", column_name_expr, constant_expr);
+			}
+			case ExpressionType::COMPARE_NOTEQUAL: {
+				return CreateExpression(functions, "not_equal", column_name_expr, constant_expr);
 			}
 			default:
 				throw std::runtime_error("Comparison Type can't be an Arrow Scan Pushdown Filter");
 			}
-		} break;
+		}
 
 		case TableFilterType::IS_NOT_NULL: {
-			auto constant_field = column_name;
-			SET_ELEMENT(filter_res, 0, Rf_mkString("IS_NOT_NULL"));
-			SET_ELEMENT(filter_res, 1, column_name_sexp);
-
-		} break;
-
+			auto is_null_expr = r.Protect(CreateExpression(functions, "is_null", column_name_expr));
+			return r.Protect(CreateExpression(functions, "invert", is_null_expr));
+		}
 		case TableFilterType::CONJUNCTION_AND: {
 			auto &and_filter = (ConjunctionAndFilter &)filter;
 			auto fit = and_filter.child_filters.begin();
-			filter_res = r.Protect(TransformFilterExpression(**fit, column_name));
+			auto conjunction_sexp = r.Protect(TransformFilterExpression(**fit, column_name, functions));
 			fit++;
 			for (; fit != and_filter.child_filters.end(); ++fit) {
-				SEXP rhs = r.Protect(TransformFilterExpression(**fit, column_name));
-				filter_res = r.Protect(Conjunction(filter_res, rhs));
+				SEXP rhs = r.Protect(TransformFilterExpression(**fit, column_name, functions));
+				conjunction_sexp = r.Protect(CreateExpression(functions, "and", conjunction_sexp, rhs));
 			}
-		} break;
+			return conjunction_sexp;
+		}
 
 		default:
 			throw NotImplementedException("Arrow table filter pushdown %s not supported yet",
 			                              filter.ToString(column_name));
 		}
-		return filter_res;
+		return R_NilValue;
 	}
 
-	static SEXP Conjunction(SEXP lhs, SEXP rhs) {
-		RProtector r;
-		auto newexpr = r.Protect(NEW_LIST(3));
-		SET_ELEMENT(newexpr, 0, Rf_mkString("CONJUNCTION_AND"));
-		SET_ELEMENT(newexpr, 1, lhs);
-		SET_ELEMENT(newexpr, 2, rhs);
-		return newexpr;
-	}
-
-	static SEXP TransformFilter(TableFilterCollection &filter_collection, std::unordered_map<idx_t, string> &columns) {
+	static SEXP TransformFilter(TableFilterCollection &filter_collection, std::unordered_map<idx_t, string> &columns,
+	                            SEXP functions) {
 		RProtector r;
 
 		auto fit = filter_collection.table_filters->filters.begin();
-		SEXP res = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first]));
+		SEXP res = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions));
 		fit++;
 		for (; fit != filter_collection.table_filters->filters.end(); ++fit) {
-			SEXP rhs = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first]));
-			res = r.Protect(Conjunction(res, rhs));
+			SEXP rhs = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions));
+			res = r.Protect(CreateExpression(functions, "and", res, rhs));
 		}
 		return res;
+	}
+
+	static SEXP CallArrowFactory(SEXP functions, idx_t idx, SEXP op1, SEXP op2 = R_NilValue, SEXP op3 = R_NilValue) {
+		RProtector r;
+		auto create_fun = r.Protect(VECTOR_ELT(functions, idx));
+		SEXP create_call;
+		if (Rf_isNull(op2)) {
+			create_call = r.Protect(Rf_lang2(create_fun, op1));
+		} else if (Rf_isNull(op3)) {
+			create_call = r.Protect(Rf_lang3(create_fun, op1, op2));
+		} else {
+			create_call = r.Protect(Rf_lang4(create_fun, op1, op2, op3));
+		}
+		int err;
+		auto res = r.Protect(R_tryEval(create_call, R_GlobalEnv, &err));
+		if (err) {
+			Rf_error("Failed to create binary expression");
+		}
+		return res;
+	}
+
+	static SEXP CreateExpression(SEXP functions, const string name, SEXP op1, SEXP op2 = R_NilValue) {
+		RProtector r;
+		auto name_sexp = r.Protect(Rf_mkString(name.c_str()));
+		return CallArrowFactory(functions, 1, name_sexp, op1, op2);
+	}
+
+	static SEXP CreateFieldRef(SEXP functions, SEXP op) {
+		return CallArrowFactory(functions, 2, op);
+	}
+
+	static SEXP CreateScalar(SEXP functions, SEXP op) {
+		return CallArrowFactory(functions, 3, op);
 	}
 };
 
@@ -202,8 +233,8 @@ SEXP RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP
 		Rf_error("duckdb_register_R: name parameter cannot be empty");
 	}
 
-	if (!Rf_isFunction(export_funsexp)) {
-		Rf_error("duckdb_register_R: Need function parameter for export function");
+	if (!IS_LIST(export_funsexp)) {
+		Rf_error("duckdb_register_R: Need function list for export function");
 	}
 
 	RProtector r;

@@ -36,23 +36,6 @@ duckdb_unregister <- function(conn, name) {
   invisible(TRUE)
 }
 
-tdea<- function(expr) {
-switch(expr[[1]],
-    CONJUNCTION_AND = {
-        return(arrow::Expression$create("and", tdea(expr[[2]]), tdea(expr[[3]])))
-    },
-    CONSTANT_COMPARISON_GREATERTHAN={
-        return(arrow::Expression$create("greater", arrow::Expression$field_ref(expr[[2]]), arrow::Expression$scalar(expr[[3]])))
-    },
-    IS_NOT_NULL= {
-        return(arrow::Expression$create("invert", arrow::Expression$create("is_null", arrow::Expression$field_ref(expr[[2]]))))
-    },
-    default = {
-        stop("eeek")
-    }
-    )
-}
-
 #' Register an Arrow data source as a virtual table
 #'
 #' `duckdb_register_arrow()` registers an Arrow data source as a virtual table (view)
@@ -70,13 +53,11 @@ duckdb_register_arrow <- function(conn, name, arrow_scannable) {
 
     # create some R functions to pass to c-land
     export_fun <- function(arrow_scannable, stream_ptr, projection=NULL, filter=TRUE) {
-        if (is.list(filter)) {
-            filter = tdea(filter)
-        }
-        record_batch_reader <- arrow::Scanner$create(arrow_scannable, projection, filter)$ToRecordBatchReader()
-        record_batch_reader$export_to_c(stream_ptr)
+        arrow::Scanner$create(arrow_scannable, projection, filter)$ToRecordBatchReader()$export_to_c(stream_ptr)
     }
-  .Call(duckdb_register_arrow_R, conn@conn_ref, as.character(name), export_fun, arrow_scannable)
+   # pass some functions to c land so we don't have to look them up there
+   function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar)
+  .Call(duckdb_register_arrow_R, conn@conn_ref, as.character(name), function_list, arrow_scannable)
   invisible(TRUE)
 }
 
