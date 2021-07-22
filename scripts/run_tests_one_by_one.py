@@ -7,8 +7,12 @@ if len(sys.argv) < 2:
 	exit(1)
 
 unittest_program = sys.argv[1]
+extra_args = []
+if len(sys.argv) > 2:
+	extra_args = [sys.argv[2]]
 
-proc = subprocess.Popen([unittest_program, '-l'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+proc = subprocess.Popen([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 stdout = proc.stdout.read().decode('utf8')
 stderr = proc.stderr.read().decode('utf8')
 if proc.returncode is not None and proc.returncode != 0:
@@ -24,7 +28,9 @@ current_test = None
 for line in stdout.splitlines():
 	if 'All available test cases:' in line:
 		continue
-	if len(re.findall('\d+ test cases', line)) != 0:
+	if 'Matching test cases:' in line:
+		continue
+	if len(re.findall('\d+ .*test cases', line)) != 0:
 		continue
 	if len(line.strip()) == 0:
 		continue
