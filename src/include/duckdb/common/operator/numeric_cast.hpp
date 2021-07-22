@@ -99,12 +99,12 @@ bool TryCastWithOverflowCheck(hugeint_t value, hugeint_t &result) {
 #define TRY_CAST_BOOL(SOURCE_TYPE) \
 template <> \
 bool TryCastWithOverflowCheck(SOURCE_TYPE value, bool &result) { \
-	result = value != 0 ? true : false; \
+	result = bool(value); \
 	return true; \
 } \
 template <> \
 bool TryCastWithOverflowCheck(bool value, SOURCE_TYPE &result) { \
-	result = value ? 1 : 0; \
+	result = SOURCE_TYPE(value); \
 	return true; \
 }
 
@@ -126,9 +126,20 @@ TRY_CAST_BOOL(uint8_t)
 TRY_CAST_BOOL(uint16_t)
 TRY_CAST_BOOL(uint32_t)
 TRY_CAST_BOOL(uint64_t)
-TRY_CAST_BOOL(hugeint_t)
 TRY_CAST_BOOL(float)
 TRY_CAST_BOOL(double)
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t input, bool &result) {
+	result = input.upper > 0 || (input.upper == 0 && input.lower > 0);
+	return true;
+}
+template <>
+bool TryCastWithOverflowCheck(bool input, hugeint_t &result) {
+	result.upper = 0;
+	result.lower = input ? 1 : 0;
+	return true;
+}
 
 TRY_CAST_HUGEINT(int8_t)
 TRY_CAST_HUGEINT(int16_t)

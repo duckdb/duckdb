@@ -103,7 +103,7 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
-		return VectorTryCastLoop<SRC, int8_t, duckdb::NumericTryCast>(source, result, count, error_message);
+		return VectorTryCastLoop<SRC, bool, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::TINYINT:
 		return VectorTryCastLoop<SRC, int8_t, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::SMALLINT:
@@ -143,35 +143,35 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 	return true;
 }
 
-static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
+static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, bool strict, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::BOOLEAN:
-		return VectorTryCastLoop<string_t, bool, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, bool, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::TINYINT:
-		return VectorTryCastLoop<string_t, int8_t, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, int8_t, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::SMALLINT:
-		return VectorTryCastLoop<string_t, int16_t, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, int16_t, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::INTEGER:
-		return VectorTryCastLoop<string_t, int32_t, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, int32_t, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::BIGINT:
-		return VectorTryCastLoop<string_t, int64_t, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, int64_t, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::UTINYINT:
-		return VectorTryCastLoop<string_t, uint8_t, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, uint8_t, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::USMALLINT:
-		return VectorTryCastLoop<string_t, uint16_t, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, uint16_t, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::UINTEGER:
-		return VectorTryCastLoop<string_t, uint32_t, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, uint32_t, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::UBIGINT:
-		return VectorTryCastLoop<string_t, uint64_t, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, uint64_t, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::HUGEINT:
-		return VectorTryCastLoop<string_t, hugeint_t, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, hugeint_t, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::FLOAT:
-		return VectorTryCastLoop<string_t, float, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, float, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::DOUBLE:
-		return VectorTryCastLoop<string_t, double, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, double, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::INTERVAL:
-		return VectorTryCastLoop<string_t, interval_t, duckdb::TryCast>(source, result, count, error_message);
+		return VectorTryCastStrictLoop<string_t, interval_t, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::DECIMAL:
 		return ToDecimalCast<string_t>(source, result, count, error_message);
 	default:
@@ -199,7 +199,7 @@ static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 	case LogicalTypeId::BLOB:
 		return VectorTryCastStringLoop<string_t, string_t, duckdb::TryCastToBlob>(source, result, count, strict, error_message);
 	default:
-		return VectorStringCastNumericSwitch(source, result, count, error_message);
+		return VectorStringCastNumericSwitch(source, result, count, strict, error_message);
 	}
 }
 
