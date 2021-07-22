@@ -23,15 +23,21 @@ struct HandleVectorCastError {
 	}
 };
 
-static NotImplementedException UnimplementedCast(const LogicalType &source_type, const LogicalType &target_type) {
-	return NotImplementedException("Unimplemented type for cast (%s -> %s)", source_type.ToString(),
+static string UnimplementedCastMessage(const LogicalType &source_type, const LogicalType &target_type) {
+	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(),
 	                               target_type.ToString());
 }
 
+static NotImplementedException UnimplementedCast(const LogicalType &source_type, const LogicalType &target_type) {
+	return NotImplementedException(UnimplementedCastMessage(source_type, target_type));
+}
+
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
-static void VectorNullCast(Vector &source, Vector &result, idx_t count) {
+static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, string *error_message) {
+	bool success = true;
 	if (VectorOperations::HasNotNull(source, count)) {
-		throw UnimplementedCast(source.GetType(), result.GetType());
+		HandleCastError::AssignError(UnimplementedCastMessage(source.GetType(), result.GetType()), error_message);
+		success = false;
 	}
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -40,6 +46,11 @@ static void VectorNullCast(Vector &source, Vector &result, idx_t count) {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 		FlatVector::Validity(result).SetAllInvalid(count);
 	}
+	return success;
+}
+
+static void VectorNullCast(Vector &source, Vector &result, idx_t count) {
+	TryVectorNullCast(source, result, count, nullptr);
 }
 
 }

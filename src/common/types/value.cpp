@@ -1052,28 +1052,33 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type_, rhs);
 }
 
-Value Value::CastAs(const LogicalType &target_type, bool strict) const {
+bool Value::TryCastAs(const LogicalType &target_type, Value &new_value, string *error_message, bool strict) const {
 	if (type_ == target_type) {
-		return Copy();
+		new_value = Copy();
+		return true;
 	}
 	Vector input(*this);
 	Vector result(target_type);
-	VectorOperations::Cast(input, result, 1, strict);
-	return result.GetValue(0);
-}
-
-bool Value::TryCastAs(const LogicalType &target_type, Value &new_value, bool strict) const {
-	try {
-		new_value = CastAs(target_type, strict);
-		return true;
-	} catch (Exception &) {
+	if (!VectorOperations::TryCast(input, result, 1, error_message, strict)) {
 		return false;
 	}
+	new_value = result.GetValue(0);
+	return true;
+}
+
+Value Value::CastAs(const LogicalType &target_type, bool strict) const {
+	Value new_value;
+	string error_message;
+	if (!TryCastAs(target_type, new_value, &error_message, strict)) {
+		throw InvalidInputException("Failed to cast value: %s\n", error_message);
+	}
+	return new_value;
 }
 
 bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
 	Value new_value;
-	if (!TryCastAs(target_type, new_value, strict)) {
+	string error_message;
+	if (!TryCastAs(target_type, new_value, &error_message, strict)) {
 		return false;
 	}
 	type_ = target_type;

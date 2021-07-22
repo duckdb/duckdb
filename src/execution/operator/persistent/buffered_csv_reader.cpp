@@ -414,7 +414,8 @@ bool BufferedCSVReader::TryCastValue(const Value &value, const LogicalType &sql_
 		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(value.str_value), result, error_message);
 	} else {
 		Value new_value;
-		return value.TryCastAs(sql_type, new_value, true);
+		string error_message;
+		return value.TryCastAs(sql_type, new_value, &error_message, true);
 	}
 }
 
@@ -451,27 +452,23 @@ struct TryCastTimestampOperator {
 };
 
 bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
-	try {
-		// try vector-cast from string to sql_type
-		Vector dummy_result(sql_type);
-		if (options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
-			// use the date format to cast the chunk
-			TryCastDateTimeInput cast_options(options);
-			UnaryExecutor::GenericExecute<string_t, date_t, TryCastDateOperator>(parse_chunk_col, dummy_result, size, (void *) &cast_options);
-			return cast_options.all_converted;
-		} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
-			// use the date format to cast the chunk
-			TryCastDateTimeInput cast_options(options);
-			UnaryExecutor::GenericExecute<string_t, timestamp_t, TryCastTimestampOperator>(parse_chunk_col, dummy_result, size, (void *) &cast_options);
-			return cast_options.all_converted;
-		} else {
-			// target type is not varchar: perform a cast
-			VectorOperations::Cast(parse_chunk_col, dummy_result, size, true);
-		}
-	} catch (const std::exception &e) {
-		return false;
+	// try vector-cast from string to sql_type
+	Vector dummy_result(sql_type);
+	if (options.has_format[LogicalTypeId::DATE] && sql_type == LogicalTypeId::DATE) {
+		// use the date format to cast the chunk
+		TryCastDateTimeInput cast_options(options);
+		UnaryExecutor::GenericExecute<string_t, date_t, TryCastDateOperator>(parse_chunk_col, dummy_result, size, (void *) &cast_options);
+		return cast_options.all_converted;
+	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type == LogicalTypeId::TIMESTAMP) {
+		// use the date format to cast the chunk
+		TryCastDateTimeInput cast_options(options);
+		UnaryExecutor::GenericExecute<string_t, timestamp_t, TryCastTimestampOperator>(parse_chunk_col, dummy_result, size, (void *) &cast_options);
+		return cast_options.all_converted;
+	} else {
+		// target type is not varchar: perform a cast
+		string error_message;
+		return VectorOperations::TryCast(parse_chunk_col, dummy_result, size, &error_message, true);
 	}
-	return true;
 }
 
 enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
@@ -754,8 +751,7 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 	first_row_nulls = true;
 	for (idx_t col = 0; col < best_sql_types_candidates.size(); col++) {
 		auto dummy_val = best_header_row.GetValue(col, 0);
-		// try cast as SQLNULL
-		if (!dummy_val.TryCastAs(LogicalType::SQLNULL, true)) {
+		if (!dummy_val.is_null) {
 			first_row_nulls = false;
 		}
 
@@ -1581,27 +1577,26 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			}
 			insert_chunk.data[col_idx].Reference(parse_chunk.data[col_idx]);
 		} else {
-			try {
-				if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
-					// use the date format to cast the chunk
-					TryCastDateTimeInput cast_options(options);
-					UnaryExecutor::GenericExecute<string_t, date_t, TryCastDateOperator>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), (void *) &cast_options);
-					if (!cast_options.all_converted) {
-						throw Exception(cast_options.error_message);
-					}
-				} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
-				           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
-					// use the date format to cast the chunk
-					TryCastDateTimeInput cast_options(options);
-					UnaryExecutor::GenericExecute<string_t, timestamp_t, TryCastTimestampOperator>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), (void *) &cast_options);
-					if (!cast_options.all_converted) {
-						throw Exception(cast_options.error_message);
-					}
-				} else {
-					// target type is not varchar: perform a cast
-					VectorOperations::Cast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size());
-				}
-			} catch (const std::exception &e) {
+			string error_message;
+			bool success;
+			if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
+				// use the date format to cast the chunk
+				TryCastDateTimeInput cast_options(options);
+				UnaryExecutor::GenericExecute<string_t, date_t, TryCastDateOperator>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), (void *) &cast_options);
+				success = cast_options.all_converted;
+				error_message = move(cast_options.error_message);
+			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
+						sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+				// use the date format to cast the chunk
+				TryCastDateTimeInput cast_options(options);
+				UnaryExecutor::GenericExecute<string_t, timestamp_t, TryCastTimestampOperator>(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), (void *) &cast_options);
+				success = cast_options.all_converted;
+				error_message = move(cast_options.error_message);
+			} else {
+				// target type is not varchar: perform a cast
+				success = VectorOperations::TryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), &error_message);
+			}
+			if (!success) {
 				string col_name = to_string(col_idx);
 				if (col_idx < col_names.size()) {
 					col_name = "\"" + col_names[col_idx] + "\"";
@@ -1612,11 +1607,11 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 					                            "options: %s. Consider either increasing the sample size "
 					                            "(SAMPLE_SIZE=X [X rows] or SAMPLE_SIZE=-1 [all rows]), "
 					                            "or skipping column conversion (ALL_VARCHAR=1)",
-					                            e.what(), col_name, linenr - parse_chunk.size() + 1, linenr,
+					                            error_message, col_name, linenr - parse_chunk.size() + 1, linenr,
 					                            options.toString());
 				} else {
 					throw InvalidInputException("%s between line %llu and %llu in column %s. Parser options: %s ",
-					                            e.what(), linenr - parse_chunk.size(), linenr, col_name,
+					                            error_message, linenr - parse_chunk.size(), linenr, col_name,
 					                            options.toString());
 				}
 			}

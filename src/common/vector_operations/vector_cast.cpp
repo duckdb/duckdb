@@ -198,6 +198,8 @@ static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 		return VectorTryCastStrictLoop<string_t, timestamp_t, duckdb::TryCastToTimestampMS>(source, result, count, strict, error_message);
 	case LogicalTypeId::BLOB:
 		return VectorTryCastStringLoop<string_t, string_t, duckdb::TryCastToBlob>(source, result, count, strict, error_message);
+	case LogicalTypeId::SQLNULL:
+		return TryVectorNullCast(source, result, count, error_message);
 	default:
 		return VectorStringCastNumericSwitch(source, result, count, strict, error_message);
 	}
