@@ -57,73 +57,88 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 }
 
 py::object GetScalar(Value &constant) {
-	py::object scalar = py::module_::import("pyarrow.dataset").attr("scalar");
+	py::object scalar = py::module_::import("pyarrow").attr("scalar");
+	py::object dataset_scalar = py::module_::import("pyarrow.dataset").attr("scalar");
 	py::object scalar_value;
 	switch (constant.type().id()) {
 	case LogicalTypeId::BOOLEAN:
-		scalar_value = scalar(constant.GetValue<bool>());
+		scalar_value = dataset_scalar(constant.GetValue<bool>());
 		return scalar_value;
 	case LogicalTypeId::TINYINT:
-		scalar_value = scalar(constant.GetValue<int8_t>());
+		scalar_value = dataset_scalar(constant.GetValue<int8_t>());
 		return scalar_value;
 	case LogicalTypeId::SMALLINT:
-		scalar_value = scalar(constant.GetValue<int16_t>());
+		scalar_value = dataset_scalar(constant.GetValue<int16_t>());
 		return scalar_value;
 	case LogicalTypeId::INTEGER:
-		scalar_value = scalar(constant.GetValue<int32_t>());
+		scalar_value = dataset_scalar(constant.GetValue<int32_t>());
 		return scalar_value;
 	case LogicalTypeId::BIGINT:
-		scalar_value = scalar(constant.GetValue<int64_t>());
+		scalar_value = dataset_scalar(constant.GetValue<int64_t>());
 		return scalar_value;
-	case LogicalTypeId::HUGEINT:
-		scalar_value = scalar(constant.GetValue<hugeint_t>());
+	case LogicalTypeId::HUGEINT: {
+		py::object date_type = py::module_::import("pyarrow").attr("decimal128");
+		scalar_value = dataset_scalar(scalar(constant.GetValue<hugeint_t>(), date_type(38)));
 		return scalar_value;
-	case LogicalTypeId::DATE:
-		scalar_value = scalar(constant.GetValue<int32_t>());
+	}
+
+	case LogicalTypeId::DATE: {
+		py::object date_type = py::module_::import("pyarrow").attr("date32");
+		scalar_value = dataset_scalar(scalar(constant.GetValue<int32_t>(), date_type()));
 		return scalar_value;
+	}
 	case LogicalTypeId::TIME:
-		scalar_value = scalar(constant.GetValue<int64_t>());
+		scalar_value = dataset_scalar(constant.GetValue<int64_t>());
 		return scalar_value;
-	case LogicalTypeId::TIMESTAMP:
-		scalar_value = scalar(constant.GetValue<int64_t>());
+	case LogicalTypeId::TIMESTAMP: {
+		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
+		scalar_value = dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
 		return scalar_value;
+	}
 	case LogicalTypeId::UTINYINT:
-		scalar_value = scalar(constant.GetValue<uint8_t>());
+		scalar_value = dataset_scalar(constant.GetValue<uint8_t>());
 		return scalar_value;
 	case LogicalTypeId::USMALLINT:
-		scalar_value = scalar(constant.GetValue<uint16_t>());
+		scalar_value = dataset_scalar(constant.GetValue<uint16_t>());
 		return scalar_value;
 	case LogicalTypeId::UINTEGER:
-		scalar_value = scalar(constant.GetValue<uint32_t>());
+		scalar_value = dataset_scalar(constant.GetValue<uint32_t>());
 		return scalar_value;
 	case LogicalTypeId::UBIGINT:
-		scalar_value = scalar(constant.GetValue<uint64_t>());
+		scalar_value = dataset_scalar(constant.GetValue<uint64_t>());
 		return scalar_value;
 	case LogicalTypeId::FLOAT:
-		scalar_value = scalar(constant.GetValue<float>());
+		scalar_value = dataset_scalar(constant.GetValue<float>());
 		return scalar_value;
 	case LogicalTypeId::DOUBLE:
-		scalar_value = scalar(constant.GetValue<double>());
+		scalar_value = dataset_scalar(constant.GetValue<double>());
 		return scalar_value;
 	case LogicalTypeId::VARCHAR:
-		scalar_value = scalar(constant.ToString());
+		scalar_value = dataset_scalar(constant.ToString());
 		return scalar_value;
-	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::DECIMAL: {
+		py::object date_type = py::module_::import("pyarrow").attr("decimal128");
+		uint8_t width;
+		uint8_t scale;
+		constant.type().GetDecimalProperties(width, scale);
 		switch (constant.type().InternalType()) {
+
 		case PhysicalType::INT16:
-			scalar_value = scalar(constant.GetValue<int16_t>());
+			scalar_value = dataset_scalar(scalar(constant.GetValue<int16_t>(), date_type(width, scale)));
 			return scalar_value;
 		case PhysicalType::INT32:
-			scalar_value = scalar(constant.GetValue<int32_t>());
+			scalar_value = dataset_scalar(scalar(constant.GetValue<int32_t>(), date_type(width, scale)));
 			return scalar_value;
 		case PhysicalType::INT64:
-			scalar_value = scalar(constant.GetValue<int64_t>());
+			scalar_value = dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type(width, scale)));
 			return scalar_value;
 		default:
-			scalar_value = scalar(constant.GetValue<hugeint_t>());
+			scalar_value = dataset_scalar(scalar(constant.GetValue<hugeint_t>(), date_type(width, scale)));
 			return scalar_value;
 		}
-		break;
+	}
+
+	break;
 	default:
 		throw NotImplementedException("Unimplemented type \"%s\" for Arrow Filter Pushdown",
 		                              constant.type().ToString());
