@@ -70,7 +70,7 @@ For example, in this part of the statement:
 ```yacc
    from_list ',' table_ref   { $$ = lappend($1, $3); }
 ```
-We are really saying: take the return value of `from_list` (a list) and the return value of `table_ref` (a node) and append it to the list. That list then becomes the return value.
+We are really saying: take the return value of `from_list` (a list) and the return value of `table_ref` (a node) and append it to the list. That list then becomes the return value. Note that we use `$3` to refer to `table_ref`. That is because the second rule (`$2`)  is actually the comma in the middle.
 
 `list_make1` and `lappend` are regular C functions defined by Postgres (see `third_party/libpg_query/include/nodes/pg_list.hpp`).
 
