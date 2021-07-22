@@ -91,7 +91,7 @@ public:
 		int err;
 		R_tryEval(export_call, R_GlobalEnv, &err);
 		if (err) {
-			Rf_error("Failed to produce Arrow stream");
+			throw IOException("Failed to produce Arrow stream");
 		}
 		return res;
 	}
@@ -100,7 +100,7 @@ public:
 	SEXP export_fun;
 
 private:
-	static SEXP TransformFilterExpression(TableFilter &filter, string &column_name, SEXP functions) {
+	static SEXP TransformFilterExpression(TableFilter &filter, const string &column_name, SEXP functions) {
 		RProtector r;
 		auto column_name_sexp = r.Protect(Rf_mkString(column_name.c_str()));
 		auto column_name_expr = r.Protect(CreateFieldRef(functions, column_name_sexp));
@@ -130,31 +130,43 @@ private:
 				return CreateExpression(functions, "not_equal", column_name_expr, constant_expr);
 			}
 			default:
-				throw std::runtime_error("Comparison Type can't be an Arrow Scan Pushdown Filter");
+				throw InternalException("%s can't be transformed to Arrow Scan Pushdown Filter",
+				                        filter.ToString(column_name));
 			}
 		}
-
+		case TableFilterType::IS_NULL: {
+			return CreateExpression(functions, "is_null", column_name_expr);
+		}
 		case TableFilterType::IS_NOT_NULL: {
 			auto is_null_expr = r.Protect(CreateExpression(functions, "is_null", column_name_expr));
-			return r.Protect(CreateExpression(functions, "invert", is_null_expr));
+			return CreateExpression(functions, "invert", is_null_expr);
 		}
 		case TableFilterType::CONJUNCTION_AND: {
 			auto &and_filter = (ConjunctionAndFilter &)filter;
-			auto fit = and_filter.child_filters.begin();
-			auto conjunction_sexp = r.Protect(TransformFilterExpression(**fit, column_name, functions));
-			fit++;
-			for (; fit != and_filter.child_filters.end(); ++fit) {
-				SEXP rhs = r.Protect(TransformFilterExpression(**fit, column_name, functions));
-				conjunction_sexp = r.Protect(CreateExpression(functions, "and", conjunction_sexp, rhs));
-			}
-			return conjunction_sexp;
+			return TransformChildFilters(functions, column_name, "and", and_filter.child_filters);
+		}
+		case TableFilterType::CONJUNCTION_OR: {
+			auto &and_filter = (ConjunctionAndFilter &)filter;
+			return TransformChildFilters(functions, column_name, "or", and_filter.child_filters);
 		}
 
 		default:
 			throw NotImplementedException("Arrow table filter pushdown %s not supported yet",
 			                              filter.ToString(column_name));
 		}
-		return R_NilValue;
+	}
+
+	static SEXP TransformChildFilters(SEXP functions, const string &column_name, const string op,
+	                                  vector<unique_ptr<TableFilter>> &filters) {
+		auto fit = filters.begin();
+		RProtector r;
+		auto conjunction_sexp = r.Protect(TransformFilterExpression(**fit, column_name, functions));
+		fit++;
+		for (; fit != filters.end(); ++fit) {
+			SEXP rhs = r.Protect(TransformFilterExpression(**fit, column_name, functions));
+			conjunction_sexp = r.Protect(CreateExpression(functions, op, conjunction_sexp, rhs));
+		}
+		return conjunction_sexp;
 	}
 
 	static SEXP TransformFilter(TableFilterCollection &filter_collection, std::unordered_map<idx_t, string> &columns,
@@ -185,7 +197,7 @@ private:
 		int err;
 		auto res = r.Protect(R_tryEval(create_call, R_GlobalEnv, &err));
 		if (err) {
-			Rf_error("Failed to create binary expression");
+			throw InternalException("Failed to create Arrow expression");
 		}
 		return res;
 	}
