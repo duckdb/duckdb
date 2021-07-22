@@ -207,7 +207,7 @@ public:
 		out << val.ToString();
 		return out;
 	}
-	void Print();
+	void Print() const;
 
 private:
 	//! The logical of the value

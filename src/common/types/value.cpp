@@ -1206,7 +1206,7 @@ Value Value::Deserialize(Deserializer &source) {
 	return new_value;
 }
 
-void Value::Print() {
+void Value::Print() const {
 	Printer::Print(ToString());
 }
 

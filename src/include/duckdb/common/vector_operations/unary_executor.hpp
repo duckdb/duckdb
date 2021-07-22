@@ -67,7 +67,7 @@ private:
 		ASSERT_RESTRICT(ldata, ldata + count, result_data, result_data + count);
 
 		if (!mask.AllValid()) {
-			if (adds_nulls) {
+			if (!adds_nulls) {
 				result_mask.Initialize(mask);
 			} else {
 				result_mask.Copy(mask, count);

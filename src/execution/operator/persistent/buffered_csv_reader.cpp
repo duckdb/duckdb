@@ -284,8 +284,6 @@ void BufferedCSVReader::ResetStream() {
 }
 
 void BufferedCSVReader::InitParseChunk(idx_t num_cols) {
-	bytes_in_chunk = 0;
-
 	// adapt not null info
 	if (options.force_not_null.size() != num_cols) {
 		options.force_not_null.resize(num_cols, false);
@@ -306,6 +304,8 @@ void BufferedCSVReader::JumpToBeginning(idx_t skip_rows = 0, bool skip_header = 
 	ResetStream();
 	SkipRowsAndReadHeader(skip_rows, skip_header);
 	sample_chunk_idx = 0;
+	bytes_in_chunk = 0;
+	end_of_file_reached = false;
 	bom_checked = false;
 }
 
@@ -805,7 +805,7 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 }
 
 vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalType> &type_candidates, const vector<LogicalType> &requested_types, vector<vector<LogicalType>> &best_sql_types_candidates, map<LogicalTypeId, vector<string>> &best_format_candidates) {
-	// sql_types and parse_chunk have to be in line with new info
+	// for the type refine we set the SQL types to VARCHAR for all columns
 	sql_types.clear();
 	sql_types.assign(options.num_cols, LogicalType::VARCHAR);
 

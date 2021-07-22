@@ -39,13 +39,8 @@ static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, strin
 		HandleCastError::AssignError(UnimplementedCastMessage(source.GetType(), result.GetType()), error_message);
 		success = false;
 	}
-	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
-	} else {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
-		FlatVector::Validity(result).SetAllInvalid(count);
-	}
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	ConstantVector::SetNull(result, true);
 	return success;
 }
 
