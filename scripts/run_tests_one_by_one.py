@@ -65,5 +65,5 @@ STDERR
 --------------------
 """)
 		print(stderr)
-		exit(0)
+		exit(1)
 
