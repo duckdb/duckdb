@@ -1,7 +1,7 @@
 import os, sys, re
 from python_helpers import open_utf8
 
-vector_sizes = [2, 512]
+vector_sizes = [2]
 
 current_dir = os.getcwd()
 build_dir = os.path.join(os.getcwd(), 'build', 'release')

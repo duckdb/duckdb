@@ -49,9 +49,21 @@ for test_number in range(test_count):
 	proc.wait()
 	proc.terminate()
 	if proc.returncode is not None and proc.returncode != 0:
-		print("Failed to run test")
+		print("FAILURE IN RUNNING TEST")
+		print("""--------------------
+RETURNCODE
+--------------------
+""")
 		print(proc.returncode)
+		print("""--------------------
+STDOUT
+--------------------
+""")
 		print(stdout)
+		print("""--------------------
+STDERR
+--------------------
+""")
 		print(stderr)
 		exit(1)
 
