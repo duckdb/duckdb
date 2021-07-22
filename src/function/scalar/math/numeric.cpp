@@ -455,7 +455,7 @@ struct RoundDecimalOperator {
 		// e.g. 10.5 + 0.5 = 11, floor(11) = 11
 		//      10.4 + 0.5 = 10.9, floor(10.9) = 10
 		RoundDecimalData<T> data(power_of_ten, addition);
-		UnaryExecutor::GenericExecute<T, T, RoundDecimalUnaryOperator>(input.data[0], result, input.size(), &power_of_ten);
+		UnaryExecutor::GenericExecute<T, T, RoundDecimalUnaryOperator>(input.data[0], result, input.size(), &data);
 	}
 };
 
