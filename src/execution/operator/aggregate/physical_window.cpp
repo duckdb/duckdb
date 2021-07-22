@@ -529,16 +529,18 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 	case WindowBoundary::CURRENT_ROW_RANGE:
 		bounds.window_start = bounds.peer_start;
 		break;
-	case WindowBoundary::EXPR_PRECEDING: {
+	case WindowBoundary::EXPR_PRECEDING_ROWS: {
 		bounds.window_start = (int64_t)row_idx - GetCell<int64_t>(boundary_start_collection, 0,
 		                                                          wexpr->start_expr->IsScalar() ? 0 : row_idx);
 		break;
 	}
-	case WindowBoundary::EXPR_FOLLOWING: {
+	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
 		bounds.window_start =
 		    row_idx + GetCell<int64_t>(boundary_start_collection, 0, wexpr->start_expr->IsScalar() ? 0 : row_idx);
 		break;
 	}
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
 	default:
 		throw InternalException("Unsupported window start boundary");
 	}
@@ -553,15 +555,17 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 	case WindowBoundary::UNBOUNDED_FOLLOWING:
 		bounds.window_end = bounds.partition_end;
 		break;
-	case WindowBoundary::EXPR_PRECEDING:
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
 		bounds.window_end = (int64_t)row_idx -
 		                    GetCell<int64_t>(boundary_end_collection, 0, wexpr->end_expr->IsScalar() ? 0 : row_idx) + 1;
 		break;
-	case WindowBoundary::EXPR_FOLLOWING:
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
 		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
 		bounds.window_end =
 		    row_idx + GetCell<int64_t>(boundary_end_collection, 0, wexpr->end_expr->IsScalar() ? 0 : row_idx) + 1;
 		break;
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
 	default:
 		throw InternalException("Unsupported window end boundary");
 	}
@@ -612,15 +616,14 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		}
 	}
 
-	// evaluate boundaries if present.
+	// evaluate boundaries if present. Parser has checked boundary types.
 	ChunkCollection boundary_start_collection;
-	if (wexpr->start_expr &&
-	    (wexpr->start == WindowBoundary::EXPR_PRECEDING || wexpr->start == WindowBoundary::EXPR_FOLLOWING)) {
+	if (wexpr->start_expr) {
 		MaterializeExpression(wexpr->start_expr.get(), input, boundary_start_collection, wexpr->start_expr->IsScalar());
 	}
+
 	ChunkCollection boundary_end_collection;
-	if (wexpr->end_expr &&
-	    (wexpr->end == WindowBoundary::EXPR_PRECEDING || wexpr->end == WindowBoundary::EXPR_FOLLOWING)) {
+	if (wexpr->end_expr) {
 		MaterializeExpression(wexpr->end_expr.get(), input, boundary_end_collection, wexpr->end_expr->IsScalar());
 	}
 
