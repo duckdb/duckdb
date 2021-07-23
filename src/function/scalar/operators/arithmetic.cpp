@@ -380,8 +380,8 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 		}
 	}
 	// we can subtract dates from each other
-	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::DATE}, LogicalType::INTEGER,
-	                                     GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
+	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::DATE}, LogicalType::BIGINT,
+	                                     ScalarFunction::BinaryFunction<date_t, date_t, int64_t, SubtractOperator>));
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
 	                                     ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>));
 	// we can subtract timestamps from each other
