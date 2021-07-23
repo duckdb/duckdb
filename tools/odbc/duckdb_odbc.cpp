@@ -11,4 +11,5 @@ duckdb::OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
 	odbc_fetcher = make_unique<OdbcFetch>();
 }
 
-duckdb::OdbcHandleStmt::~OdbcHandleStmt() {}
+duckdb::OdbcHandleStmt::~OdbcHandleStmt() {
+}
