@@ -9,6 +9,19 @@ PRAGMA force_parallelism
 statement ok
 PRAGMA threads=3
 
+# do one asc test to hit some coverage, the rest is desc
+statement ok
+create table test as (select range i from range(100000) order by i desc);
+
+# all fixed-size
+query T
+select * from test order by i asc;
+----
+100000 values hashing to 1933b84f18ddb7545c63962be5d10bb5
+
+statement ok
+drop table test
+
 # internal/external, different memory limits
 foreach pragma force_external disable_force_external
 

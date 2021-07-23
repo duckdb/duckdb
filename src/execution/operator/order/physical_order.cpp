@@ -1389,6 +1389,7 @@ public:
 			}
 		}
 		// Set up the write block
+		// Each merge task produces a SortedBlock exactly state.block_capacity or less
 		result->InitializeWrite();
 		// Initialize arrays to store merge data
 		bool left_smaller[STANDARD_VECTOR_SIZE];
@@ -1530,6 +1531,9 @@ public:
 		const idx_t l_count = l.Count();
 		const idx_t r_count = r.Count();
 		// Cover some edge cases
+		// Code coverage off because these edge cases cannot happen unless other code changes
+		// Edge cases have been tested extensively while developing Merge Path in a script
+		// LCOV_EXCL_START
 		if (sum >= l_count + r_count) {
 			l_idx = l_count;
 			r_idx = r_count;
@@ -1547,6 +1551,7 @@ public:
 			l_idx = sum;
 			return;
 		}
+		// LCOV_EXCL_STOP
 		// Determine offsets for the binary search
 		const idx_t l_offset = MinValue(l_count, sum);
 		const idx_t r_offset = sum > l_count ? sum - l_count : 0;
@@ -1750,13 +1755,6 @@ public:
 			}
 			const idx_t &l_count = !l_done ? l_block->count : 0;
 			const idx_t &r_count = !r_done ? r_block->count : 0;
-			// Create new result block (if needed)
-			if (result_block->count == result_block->capacity) {
-				result->CreateBlock();
-				result_block = &result->radix_sorting_data.back();
-				result_handle = buffer_manager.Pin(result_block->block);
-				result_ptr = result_handle->Ptr();
-			}
 			// Copy using computed merge
 			if (!l_done && !r_done) {
 				// Both sides have data - merge
@@ -1832,25 +1830,6 @@ public:
 			}
 			const idx_t &l_count = !l_done ? l_data.data_blocks[l_data.block_idx].count : 0;
 			const idx_t &r_count = !r_done ? r_data.data_blocks[r_data.block_idx].count : 0;
-			// Create new result data block (if needed)
-			if (result_data_block->count == result_data_block->capacity) {
-				// Shrink down the last heap block to fit the data
-				if (!layout.AllConstant() && state.external &&
-				    result_heap_block->byte_offset < result_heap_block->capacity &&
-				    result_heap_block->byte_offset >= Storage::BLOCK_SIZE) {
-					buffer_manager.ReAllocate(result_heap_block->block, result_heap_block->byte_offset);
-					result_heap_block->capacity = result_heap_block->byte_offset;
-				}
-				result_data.CreateBlock();
-				result_data_block = &result_data.data_blocks.back();
-				result_data_handle = buffer_manager.Pin(result_data_block->block);
-				result_data_ptr = result_data_handle->Ptr();
-				if (!layout.AllConstant() && state.external) {
-					result_heap_block = &result_data.heap_blocks.back();
-					result_heap_handle = buffer_manager.Pin(result_heap_block->block);
-					result_heap_ptr = result_heap_handle->Ptr();
-				}
-			}
 			// Perform the merge
 			if (layout.AllConstant() || !state.external) {
 				// If all constant size, or if we are doing an in-memory sort, we do not need to touch the heap
@@ -2140,6 +2119,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 	state.l_start = 0;
 	state.r_start = 0;
 	// Compute how many tasks there will be
+	// Each merge task produces a SortedBlock exactly state.block_capacity or less
 	idx_t num_tasks = 0;
 	const idx_t tuples_per_block = state.block_capacity;
 	for (idx_t block_idx = 0; block_idx < num_blocks; block_idx += 2) {
