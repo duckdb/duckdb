@@ -63,7 +63,7 @@ true
 
 # expression list
 statement ok
-CREATE MACRO in_expression_list(x, y, z) AS (SELECT x IN (VALUES (x), (y)))
+CREATE MACRO in_expression_list(x, y, z) AS (SELECT x IN (VALUES (y), (z)))
 
 query T
 SELECT in_expression_list(1, 2, 3)

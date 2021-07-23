@@ -58,6 +58,9 @@ protected:
 		expression_class = other.expression_class;
 		alias = other.alias;
 		return_type = other.return_type;
+		if (other.stats) {
+			stats = other.stats->Copy();
+		}
 	}
 };
 

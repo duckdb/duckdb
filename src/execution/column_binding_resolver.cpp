@@ -77,7 +77,9 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 		if (expr.binding == bindings[i]) {
 			auto result = make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, i);
 			if (expr.stats) {
-				result->stats = move(expr.stats);
+				// FIXME: only copy validity stats for now, bug with copying all stats
+				result->stats = make_unique<BaseStatistics>(expr.stats->type);
+				result->stats->validity_stats = move(expr.stats->validity_stats);
 			}
 			return move(result);
 		}
