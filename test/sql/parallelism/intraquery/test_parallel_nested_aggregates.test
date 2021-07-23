@@ -1,0 +1,74 @@
+# name: test/sql/parallelism/intraquery/test_parallel_nested_aggregates.test
+# description: Test parallel aggregations
+# group: [intraquery]
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+statement ok
+PRAGMA enable_profiling
+
+statement ok
+PRAGMA profiling_output='__TEST_DIR__/test.json'
+
+statement ok
+PRAGMA profiling_mode = detailed
+
+statement ok
+create table t as select range a, range%10 b from range(100000);
+
+# non-deterministic so we can't check the result
+statement ok
+select first([a]) from t group by b%2;
+
+query II
+select min([a]), max([a]) from t group by b%2;
+----
+[0]	[99998]
+[1]	[99999]
+
+query II
+select min([-a, 1, a]), max([-a, 1, a]) from t group by b%2;
+----
+[-99998, 1, 99998]	[0, 1, 0]
+[-99999, 1, 99999]	[-1, 1, 1]
+
+query II
+select min({'i': a}), max({'i': a}) from t group by b%2;
+----
+{'i': 0}	{'i': 99998}
+{'i': 1}	{'i': 99999}
+
+query II
+select min({'i': a, 'j': a % 2}), max({'i': a, 'j': a % 2}) from t group by b%2;
+----
+{'i': 0, 'j': 0}	{'i': 99998, 'j': 0}
+{'i': 1, 'j': 1}	{'i': 99999, 'j': 1}
+
+# NULL inputs
+query I
+select first(NULL::INT[]) from t group by b%2;
+----
+NULL
+NULL
+
+query I
+select min(NULL::INT[]) from t group by b%2;
+----
+NULL
+NULL
+
+query I
+select first(NULL::ROW(i INTEGER)) from t group by b%2;
+----
+NULL
+NULL
+
+query I
+select min(NULL::ROW(i INTEGER)) from t group by b%2;
+----
+NULL
+NULL

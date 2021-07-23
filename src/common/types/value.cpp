@@ -75,6 +75,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::SMALLINT:
 		return Value::SMALLINT(NumericLimits<int16_t>::Minimum());
 	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::SQLNULL:
 		return Value::INTEGER(NumericLimits<int32_t>::Minimum());
 	case LogicalTypeId::DATE:
 		return Value::DATE(date_t(NumericLimits<int32_t>::Minimum()));
@@ -139,6 +140,7 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::SMALLINT:
 		return Value::SMALLINT(NumericLimits<int16_t>::Maximum());
 	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::SQLNULL:
 		return Value::INTEGER(NumericLimits<int32_t>::Maximum());
 	case LogicalTypeId::DATE:
 		return Value::DATE(date_t(NumericLimits<int32_t>::Maximum()));

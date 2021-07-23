@@ -16,7 +16,8 @@ add_library(
   prepared.cpp
   result.cpp
   api_info.cpp
-  statement_functions.cpp)
+  statement_functions.cpp
+  odbc_interval.cpp)
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
 

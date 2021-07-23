@@ -162,11 +162,14 @@ SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_p
 
 SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
                      SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
-	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		size_t col_nr_internal = column_number - 1;
-		if (col_nr_internal >= stmt->bound_cols.size()) {
-			stmt->bound_cols.resize(col_nr_internal);
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
+		D_ASSERT(column_number > 0);
+
+		if (column_number > stmt->bound_cols.size()) {
+			stmt->bound_cols.resize(column_number);
 		}
+
+		size_t col_nr_internal = column_number - 1;
 
 		stmt->bound_cols[col_nr_internal].type = target_type;
 		stmt->bound_cols[col_nr_internal].ptr = target_value_ptr;

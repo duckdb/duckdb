@@ -14,12 +14,13 @@ void ScanPandasColumn(py::array &numpy_col, idx_t count, idx_t offset, Vector &o
 template <class T>
 void ScanPandasNumeric(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
 	ScanPandasColumn<T>(bind_data.numpy_col, count, offset, out);
+	auto &result_mask = FlatVector::Validity(out);
 	if (bind_data.mask) {
 		auto mask = (bool *)bind_data.mask->numpy_array.data();
 		for (idx_t i = 0; i < count; i++) {
 			auto is_null = mask[offset + i];
 			if (is_null) {
-				FlatVector::SetNull(out, i, true);
+				result_mask.SetInvalid(i);
 			}
 		}
 	}
@@ -153,6 +154,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 	case PandasType::VARCHAR: {
 		auto src_ptr = (PyObject **)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
+		auto &out_mask = FlatVector::Validity(out);
 		for (idx_t row = 0; row < count; row++) {
 			auto source_idx = offset + row;
 			auto val = src_ptr[source_idx];
@@ -160,7 +162,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 			// Python 3 string representation:
 			// https://github.com/python/cpython/blob/3a8fdb28794b2f19f6c8464378fb8b46bce1f5f4/Include/cpython/unicodeobject.h#L79
 			if (!PyUnicode_CheckExact(val)) {
-				FlatVector::SetNull(out, row, true);
+				out_mask.SetInvalid(row);
 				continue;
 			}
 			if (PyUnicode_IS_COMPACT_ASCII(val)) {
@@ -212,7 +214,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 			} else if (PyUnicode_CheckExact(val)) {
 				throw std::runtime_error("Unicode is only supported in Python 3 and up.");
 			} else {
-				FlatVector::SetNull(out, row, true);
+				out_mask.SetInvalid(row);
 				continue;
 			}
 #endif

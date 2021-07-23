@@ -59,6 +59,11 @@ T MinValue(T a, T b) {
 }
 
 template <typename T>
+T AbsValue(T a) {
+	return a < 0 ? -a : a;
+}
+
+template <typename T>
 const T Load(const_data_ptr_t ptr) {
 	T ret;
 	memcpy(&ret, ptr, sizeof(ret));

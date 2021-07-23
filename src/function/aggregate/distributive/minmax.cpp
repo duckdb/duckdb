@@ -312,7 +312,7 @@ static bool TemplatedOptimumStruct(Vector &left, idx_t lidx, idx_t lcount, Vecto
 		}
 
 		if (col_no == lchildren.size() - 1) {
-			return false;
+			break;
 		}
 
 		// Strict comparisons use IS NOT DISTINCT for possible
@@ -452,7 +452,10 @@ struct VectorMinMaxBase {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->value) {
-			mask.SetInvalid(idx);
+			// we need to use FlatVector::SetNull here
+			// since for STRUCT columns only setting the validity mask of the struct is incorrect
+			// as for a struct column, we need to also set ALL child columns to NULL
+			FlatVector::SetNull(result, idx, true);
 		} else {
 			VectorOperations::Copy(*state->value, result, 1, 0, idx);
 		}

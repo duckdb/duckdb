@@ -12,7 +12,6 @@
 #include "duckdb/execution/expression_executor_state.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/random_engine.hpp"
 
 namespace duckdb {
 class ExecutionContext;
@@ -136,7 +135,5 @@ protected:
 private:
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;
-	//! the random number generator used for adaptive expression reordering
-	RandomEngine random;
 };
 } // namespace duckdb

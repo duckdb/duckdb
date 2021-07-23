@@ -7,6 +7,8 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/storage/statistics/list_statistics.hpp"
+#include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
 
@@ -177,10 +179,26 @@ static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFu
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
+static unique_ptr<BaseStatistics> ListExtractStats(ClientContext &context, BoundFunctionExpression &expr,
+                                                   FunctionData *bind_data,
+                                                   vector<unique_ptr<BaseStatistics>> &child_stats) {
+	if (!child_stats[0]) {
+		return nullptr;
+	}
+	auto &list_stats = (ListStatistics &)*child_stats[0];
+	if (!list_stats.child_stats) {
+		return nullptr;
+	}
+	auto child_copy = list_stats.child_stats->Copy();
+	// list_extract always pushes a NULL, since if the offset is out of range for a list it inserts a null
+	child_copy->validity_stats = make_unique<ValidityStatistics>(true);
+	return child_copy;
+}
+
 void ListExtractFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
 	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::ANY,
-	                    ListExtractFunction, false, ListExtractBind);
+	                    ListExtractFunction, false, ListExtractBind, nullptr, ListExtractStats);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR, ListExtractFunction, false,
 	                    nullptr);

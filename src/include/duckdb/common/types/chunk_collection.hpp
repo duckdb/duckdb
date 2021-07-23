@@ -54,12 +54,18 @@ public:
 	//! Merge is like Append but messes up the order and destroys the other collection
 	DUCKDB_API void Merge(ChunkCollection &other);
 
+	//! Fuse adds new columns to the right of the collection
+	DUCKDB_API void Fuse(ChunkCollection &other);
+
 	DUCKDB_API void Verify();
 
 	//! Gets the value of the column at the specified index
 	DUCKDB_API Value GetValue(idx_t column, idx_t index);
 	//! Sets the value of the column at the specified index
 	DUCKDB_API void SetValue(idx_t column, idx_t index, const Value &value);
+
+	//! Copy a single cell to a target vector
+	DUCKDB_API void CopyCell(idx_t column, idx_t index, Vector &target, idx_t target_offset);
 
 	DUCKDB_API string ToString() const {
 		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"

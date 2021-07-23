@@ -167,8 +167,8 @@ string StringStatistics::ToString() {
 	                          validity_stats ? validity_stats->ToString() : "");
 }
 
-void StringStatistics::Verify(Vector &vector, idx_t count) {
-	BaseStatistics::Verify(vector, count);
+void StringStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
+	BaseStatistics::Verify(vector, sel, count);
 
 	string_t min_string((const char *)min, MAX_STRING_MINMAX_SIZE);
 	string_t max_string((const char *)max, MAX_STRING_MINMAX_SIZE);
@@ -177,13 +177,15 @@ void StringStatistics::Verify(Vector &vector, idx_t count) {
 	vector.Orrify(count, vdata);
 	auto data = (string_t *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		auto index = vdata.sel->get_index(i);
+		auto idx = sel.get_index(i);
+		auto index = vdata.sel->get_index(idx);
 		if (!vdata.validity.RowIsValid(index)) {
 			continue;
 		}
 		auto value = data[index];
 		auto data = value.GetDataUnsafe();
 		auto len = value.GetSize();
+		// LCOV_EXCL_START
 		if (len > max_string_length) {
 			throw InternalException(
 			    "Statistics mismatch: string value exceeds maximum string length.\nStatistics: %s\nVector: %s",
@@ -207,6 +209,7 @@ void StringStatistics::Verify(Vector &vector, idx_t count) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
 		}
+		// LCOV_EXCL_STOP
 	}
 }
 

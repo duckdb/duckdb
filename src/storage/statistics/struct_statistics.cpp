@@ -1,5 +1,6 @@
 #include "duckdb/storage/statistics/struct_statistics.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/serializer.hpp"
 
 namespace duckdb {
 
@@ -22,14 +23,17 @@ void StructStatistics::Merge(const BaseStatistics &other_p) {
 	for (idx_t i = 0; i < child_stats.size(); i++) {
 		if (child_stats[i] && other.child_stats[i]) {
 			child_stats[i]->Merge(*other.child_stats[i]);
+		} else {
+			child_stats[i].reset();
 		}
 	}
 }
 
+// LCOV_EXCL_START
 FilterPropagateResult StructStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
-	// for now...
-	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	throw InternalException("Struct zonemaps are not supported yet");
 }
+// LCOV_EXCL_STOP
 
 unique_ptr<BaseStatistics> StructStatistics::Copy() {
 	auto copy = make_unique<StructStatistics>(type);
@@ -37,9 +41,7 @@ unique_ptr<BaseStatistics> StructStatistics::Copy() {
 		copy->validity_stats = validity_stats->Copy();
 	}
 	for (idx_t i = 0; i < child_stats.size(); i++) {
-		if (child_stats[i]) {
-			copy->child_stats[i] = child_stats[i]->Copy();
-		}
+		copy->child_stats[i] = child_stats[i] ? child_stats[i]->Copy() : nullptr;
 	}
 	return move(copy);
 }
@@ -47,8 +49,10 @@ unique_ptr<BaseStatistics> StructStatistics::Copy() {
 void StructStatistics::Serialize(Serializer &serializer) {
 	BaseStatistics::Serialize(serializer);
 	for (idx_t i = 0; i < child_stats.size(); i++) {
-		D_ASSERT(child_stats[i]);
-		child_stats[i]->Serialize(serializer);
+		serializer.Write<bool>(child_stats[i] ? true : false);
+		if (child_stats[i]) {
+			child_stats[i]->Serialize(serializer);
+		}
 	}
 }
 
@@ -57,7 +61,12 @@ unique_ptr<BaseStatistics> StructStatistics::Deserialize(Deserializer &source, L
 	auto result = make_unique<StructStatistics>(move(type));
 	auto &child_types = StructType::GetChildTypes(result->type);
 	for (idx_t i = 0; i < child_types.size(); i++) {
-		result->child_stats[i] = BaseStatistics::Deserialize(source, child_types[i].second);
+		auto has_child = source.Read<bool>();
+		if (has_child) {
+			result->child_stats[i] = BaseStatistics::Deserialize(source, child_types[i].second);
+		} else {
+			result->child_stats[i].reset();
+		}
 	}
 	return move(result);
 }
@@ -77,12 +86,14 @@ string StructStatistics::ToString() {
 	return result;
 }
 
-void StructStatistics::Verify(Vector &vector, idx_t count) {
-	BaseStatistics::Verify(vector, count);
+void StructStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
+	BaseStatistics::Verify(vector, sel, count);
 
 	auto &child_entries = StructVector::GetEntries(vector);
 	for (idx_t i = 0; i < child_entries.size(); i++) {
-		child_stats[i]->Verify(*child_entries[i], count);
+		if (child_stats[i]) {
+			child_stats[i]->Verify(*child_entries[i], sel, count);
+		}
 	}
 }
 

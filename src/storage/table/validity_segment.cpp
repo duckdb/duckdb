@@ -197,8 +197,9 @@ void ValiditySegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &re
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 	ValidityMask mask((validity_t *)handle->node->buffer);
+	auto &result_mask = FlatVector::Validity(result);
 	if (!mask.RowIsValidUnsafe(row_id)) {
-		FlatVector::SetNull(result, result_idx, true);
+		result_mask.SetInvalid(result_idx);
 	}
 }
 

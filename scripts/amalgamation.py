@@ -74,6 +74,7 @@ if '--extended' in sys.argv:
         "duckdb/planner/filter/conjunction_filter.hpp",
         "duckdb/planner/filter/constant_filter.hpp",
         "duckdb/execution/operator/persistent/buffered_csv_reader.hpp",
+        "duckdb/common/types/vector_cache.hpp",
         "duckdb/planner/filter/null_filter.hpp"]]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))

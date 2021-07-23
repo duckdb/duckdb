@@ -61,8 +61,6 @@ ConstantSegment::scan_function_t GetScanFunction(PhysicalType type) {
 		return ScanFunction<float>;
 	case PhysicalType::DOUBLE:
 		return ScanFunction<double>;
-	case PhysicalType::INTERVAL:
-		return ScanFunction<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for constant segment");
 	}
@@ -133,8 +131,6 @@ ConstantSegment::fill_function_t GetFillFunction(PhysicalType type) {
 		return FillFunction<float>;
 	case PhysicalType::DOUBLE:
 		return FillFunction<double>;
-	case PhysicalType::INTERVAL:
-		return FillFunction<interval_t>;
 	default:
 		throw NotImplementedException("Unimplemented type for constant segment");
 	}
