@@ -23,26 +23,20 @@ if proc.returncode is not None and proc.returncode != 0:
 	exit(1)
 
 test_cases = []
-current_test = None
-
+first_line = True
 for line in stdout.splitlines():
-	if 'All available test cases:' in line:
-		continue
-	if 'Matching test cases:' in line:
-		continue
-	if len(re.findall('\d+ .*test cases', line)) != 0:
+	if first_line:
+		first_line = False
 		continue
 	if len(line.strip()) == 0:
 		continue
-	if current_test is None:
-		current_test = line.strip()
-	else:
-		test_cases.append(current_test)
-		current_test = None
+	splits = line.rsplit('\t', 1)
+	test_cases.append(splits[0])
 
 test_count = len(test_cases)
 for test_number in range(test_count):
 	print("[" + str(test_number) + "/" + str(test_count) + "]: " + test_cases[test_number])
+	continue
 	proc = subprocess.Popen([unittest_program, test_cases[test_number]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 	stdout = proc.stdout.read().decode('utf8')
 	stderr = proc.stderr.read().decode('utf8')
