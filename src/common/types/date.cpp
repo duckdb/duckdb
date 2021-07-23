@@ -136,17 +136,32 @@ date_t Date::FromDate(int32_t year, int32_t month, int32_t day) {
 	if (!Date::IsValid(year, month, day)) {
 		throw ConversionException("Date out of range: %d-%d-%d", year, month, day);
 	}
-	while (year < 1970) {
-		year += Date::YEAR_INTERVAL;
-		n -= Date::DAYS_PER_YEAR_INTERVAL;
-	}
-	while (year >= 2370) {
-		year -= Date::YEAR_INTERVAL;
-		n += Date::DAYS_PER_YEAR_INTERVAL;
-	}
-	n += Date::CUMULATIVE_YEAR_DAYS[year - 1970];
 	n += Date::IsLeapYear(year) ? Date::CUMULATIVE_LEAP_DAYS[month - 1] : Date::CUMULATIVE_DAYS[month - 1];
 	n += day - 1;
+	if (year < 1970) {
+		int32_t diff_from_base = 1970 - year;
+		int32_t year_index = 400 - (diff_from_base % 400);
+		int32_t fractions = diff_from_base / 400;
+		n += Date::CUMULATIVE_YEAR_DAYS[year_index];
+		n -= Date::DAYS_PER_YEAR_INTERVAL;
+		n -= fractions * Date::DAYS_PER_YEAR_INTERVAL;
+	} else if (year >= 2370) {
+		int32_t diff_from_base = year - 2370;
+		int32_t year_index = diff_from_base % 400;
+		int32_t fractions = diff_from_base / 400;
+		n += Date::CUMULATIVE_YEAR_DAYS[year_index];
+		n += Date::DAYS_PER_YEAR_INTERVAL;
+		n += fractions * Date::DAYS_PER_YEAR_INTERVAL;
+	} else {
+		n += Date::CUMULATIVE_YEAR_DAYS[year];
+	}
+#ifdef DEBUG
+	int32_t y, m, d;
+	Date::Convert(date_t(n), y, m, d);
+	D_ASSERT(year == y);
+	D_ASSERT(month == m);
+	D_ASSERT(day == d);
+#endif
 	return date_t(n);
 }
 
@@ -194,15 +209,9 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	// first parse the year
 	for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
 		year = (buf[pos] - '0') + year * 10;
-		if (year > Date::MAX_YEAR) {
-			break;
-		}
 	}
 	if (yearneg) {
 		year = -year;
-		if (year < Date::MIN_YEAR) {
-			return false;
-		}
 	}
 
 	if (pos >= len) {
@@ -239,17 +248,13 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	}
 
 	// check for an optional trailing " (BC)""
-	if (len - pos >= 5 && StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' && buf[pos + 2] == 'B' &&
-	    buf[pos + 3] == 'C' && buf[pos + 4] == ')') {
+	if (len - pos >= 5 && StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' && StringUtil::CharacterToLower(buf[pos + 2]) == 'b' &&
+	    StringUtil::CharacterToLower(buf[pos + 3]) == 'c' && buf[pos + 4] == ')') {
 		if (yearneg || year == 0) {
 			return false;
 		}
 		year = -year + 1;
 		pos += 5;
-
-		if (year < Date::MIN_YEAR) {
-			return false;
-		}
 	}
 
 	// in strict mode, check remaining string for non-space characters
@@ -312,18 +317,32 @@ bool Date::IsValid(int32_t year, int32_t month, int32_t day) {
 	if (month < 1 || month > 12) {
 		return false;
 	}
-	if (year < Date::MIN_YEAR || year > Date::MAX_YEAR) {
-		return false;
-	}
 	if (day < 1) {
 		return false;
+	}
+	if (year <= DATE_MIN_YEAR) {
+		if (year < DATE_MIN_YEAR) {
+			return false;
+		} else if (year == DATE_MIN_YEAR) {
+			if (month < DATE_MIN_MONTH || (month == DATE_MIN_MONTH && day < DATE_MIN_DAY)) {
+				return false;
+			}
+		}
+	}
+	if (year >= DATE_MAX_YEAR) {
+		if (year > DATE_MAX_YEAR) {
+			return false;
+		} else if (year == DATE_MAX_YEAR) {
+			if (month > DATE_MAX_MONTH || (month == DATE_MAX_MONTH && day > DATE_MAX_DAY)) {
+				return false;
+			}
+		}
 	}
 	return Date::IsLeapYear(year) ? day <= Date::LEAP_DAYS[month] : day <= Date::NORMAL_DAYS[month];
 }
 
 int32_t Date::MonthDays(int32_t year, int32_t month) {
 	D_ASSERT(month >= 1 && month <= 12);
-	D_ASSERT(year >= Date::MIN_YEAR && Date::MAX_YEAR);
 	return Date::IsLeapYear(year) ? Date::LEAP_DAYS[month] : Date::NORMAL_DAYS[month];
 }
 

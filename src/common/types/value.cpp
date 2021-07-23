@@ -77,12 +77,10 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::SQLNULL:
 		return Value::INTEGER(NumericLimits<int32_t>::Minimum());
-	case LogicalTypeId::DATE:
-		return Value::DATE(date_t(NumericLimits<int32_t>::Minimum()));
-	case LogicalTypeId::TIME:
-		return Value::TIME(dtime_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
+	case LogicalTypeId::HUGEINT:
+		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Minimum());
 	case LogicalTypeId::USMALLINT:
@@ -91,6 +89,10 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::UINTEGER(NumericLimits<uint32_t>::Minimum());
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Minimum());
+	case LogicalTypeId::DATE:
+		return Value::DATE(date_t(NumericLimits<int32_t>::Minimum()));
+	case LogicalTypeId::TIME:
+		return Value::TIME(dtime_t(0));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -99,8 +101,6 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::TimestampMs(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TimestampNs(timestamp_t(NumericLimits<int64_t>::Minimum()));
-	case LogicalTypeId::HUGEINT:
-		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Minimum());
 	case LogicalTypeId::DOUBLE:
@@ -142,12 +142,10 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::SQLNULL:
 		return Value::INTEGER(NumericLimits<int32_t>::Maximum());
-	case LogicalTypeId::DATE:
-		return Value::DATE(date_t(NumericLimits<int32_t>::Maximum()));
-	case LogicalTypeId::TIME:
-		return Value::TIME(dtime_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
+	case LogicalTypeId::HUGEINT:
+		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Maximum());
 	case LogicalTypeId::USMALLINT:
@@ -156,6 +154,10 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::UINTEGER(NumericLimits<uint32_t>::Maximum());
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Maximum());
+	case LogicalTypeId::DATE:
+		return Value::DATE(date_t(NumericLimits<int32_t>::Maximum()));
+	case LogicalTypeId::TIME:
+		return Value::TIME(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -164,8 +166,6 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::TimestampNs(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TimestampSec(timestamp_t(NumericLimits<int64_t>::Maximum()));
-	case LogicalTypeId::HUGEINT:
-		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Maximum());
 	case LogicalTypeId::DOUBLE:

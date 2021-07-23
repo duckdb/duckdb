@@ -32,6 +32,15 @@ double SubtractOperator::Operation(double left, double right) {
 }
 
 template <>
+date_t SubtractOperator::Operation(date_t left, int32_t right) {
+	int32_t result;
+	if (!TrySubtractOperator::Operation(left.days, right, result)) {
+		throw OutOfRangeException("Date out of range");
+	}
+	return date_t(result);
+}
+
+template <>
 interval_t SubtractOperator::Operation(interval_t left, interval_t right) {
 	interval_t result;
 	result.months = left.months - right.months;

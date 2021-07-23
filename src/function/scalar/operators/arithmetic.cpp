@@ -244,9 +244,9 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 	// we can add integers to dates
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
-	                                     GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
+	                                     ScalarFunction::BinaryFunction<date_t, int32_t, date_t, AddOperator>));
 	functions.AddFunction(ScalarFunction({LogicalType::INTEGER, LogicalType::DATE}, LogicalType::DATE,
-	                                     GetScalarBinaryFunction<AddOperator>(PhysicalType::INT32)));
+	                                     ScalarFunction::BinaryFunction<int32_t, date_t, date_t, AddOperator>));
 	// we can add intervals together
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::INTERVAL, LogicalType::INTERVAL}, LogicalType::INTERVAL,
@@ -383,7 +383,7 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::DATE}, LogicalType::INTEGER,
 	                                     GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
 	functions.AddFunction(ScalarFunction({LogicalType::DATE, LogicalType::INTEGER}, LogicalType::DATE,
-	                                     GetScalarBinaryFunction<SubtractOperator>(PhysicalType::INT32)));
+	                                     ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>));
 	// we can subtract timestamps from each other
 	functions.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP}, LogicalType::INTERVAL,

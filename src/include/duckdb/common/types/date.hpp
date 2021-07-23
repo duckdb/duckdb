@@ -14,8 +14,7 @@
 
 namespace duckdb {
 
-//! The Date class is a static class that holds helper functions for the Date
-//! type.
+//! The Date class is a static class that holds helper functions for the Date type.
 class Date {
 public:
 	static const string_t MONTH_NAMES[12];
@@ -30,8 +29,15 @@ public:
 	static const int8_t MONTH_PER_DAY_OF_YEAR[365];
 	static const int8_t LEAP_MONTH_PER_DAY_OF_YEAR[366];
 
-	constexpr static const int32_t MIN_YEAR = -290307;
-	constexpr static const int32_t MAX_YEAR = 294247;
+
+	// min date is 5877642-06-23 (BC) (-2^31)
+	constexpr static const int32_t DATE_MIN_YEAR = -5877641;
+	constexpr static const int32_t DATE_MIN_MONTH = 6;
+	constexpr static const int32_t DATE_MIN_DAY = 23;
+	// max date is 5881580-07-11 (2^31)
+	constexpr static const int32_t DATE_MAX_YEAR = 5881580;
+	constexpr static const int32_t DATE_MAX_MONTH = 7;
+	constexpr static const int32_t DATE_MAX_DAY = 11;
 	constexpr static const int32_t EPOCH_YEAR = 1970;
 
 	constexpr static const int32_t YEAR_INTERVAL = 400;

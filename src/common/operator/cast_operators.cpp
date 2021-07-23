@@ -422,8 +422,7 @@ bool TryCast::Operation(date_t input, date_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(date_t input, timestamp_t &result, bool strict) {
-	result = Timestamp::FromDatetime(input, Time::FromTime(0, 0, 0));
-	return true;
+	return Timestamp::TryFromDatetime(input, Time::FromTime(0, 0, 0), result);
 }
 
 //===--------------------------------------------------------------------===//

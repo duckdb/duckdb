@@ -205,7 +205,7 @@ static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 	}
 }
 
-static void DateCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool DateCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
@@ -214,12 +214,12 @@ static void DateCastSwitch(Vector &source, Vector &result, idx_t count) {
 		break;
 	case LogicalTypeId::TIMESTAMP:
 		// date to timestamp
-		UnaryExecutor::Execute<date_t, timestamp_t, duckdb::Cast>(source, result, count);
-		break;
+		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCast>(source, result, count, error_message);
 	default:
 		VectorNullCast(source, result, count);
 		break;
 	}
+	return true;
 }
 
 static void TimeCastSwitch(Vector &source, Vector &result, idx_t count) {
@@ -486,8 +486,7 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 	case LogicalTypeId::DOUBLE:
 		return NumericCastSwitch<double>(source, result, count, error_message);
 	case LogicalTypeId::DATE:
-		DateCastSwitch(source, result, count);
-		break;
+		return DateCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::TIME:
 		TimeCastSwitch(source, result, count);
 		break;

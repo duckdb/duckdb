@@ -29,8 +29,7 @@ bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &res
 	}
 	if (pos == len) {
 		// no time: only a date
-		result = Timestamp::FromDatetime(date, dtime_t(0));
-		return true;
+		return Timestamp::TryFromDatetime(date, dtime_t(0), result);
 	}
 	// try to parse a time field
 	if (str[pos] == ' ' || str[pos] == 'T') {
@@ -41,7 +40,9 @@ bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &res
 		return false;
 	}
 	pos += time_pos;
-	result = Timestamp::FromDatetime(date, time);
+	if (!Timestamp::TryFromDatetime(date, time, result)) {
+		return false;
+	}
 	if (pos < len) {
 		// skip a "Z" at the end (as per the ISO8601 specs)
 		if (str[pos] == 'Z') {
@@ -142,12 +143,19 @@ dtime_t Timestamp::GetTime(timestamp_t timestamp) {
 	return dtime_t(timestamp.value - (int64_t(date.days) * int64_t(Interval::MICROS_PER_DAY)));
 }
 
-timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
-	timestamp_t result;
+bool Timestamp::TryFromDatetime(date_t date, dtime_t time, timestamp_t &result) {
 	if (!TryMultiplyOperator::Operation<int64_t, int64_t, int64_t>(date.days, Interval::MICROS_PER_DAY, result.value)) {
-		throw Exception("Overflow exception in date/time -> timestamp conversion");
+		return false;
 	}
 	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(result.value, time.micros, result.value)) {
+		return false;
+	}
+	return true;
+}
+
+timestamp_t Timestamp::FromDatetime(date_t date, dtime_t time) {
+	timestamp_t result;
+	if (!TryFromDatetime(date, time, result)) {
 		throw Exception("Overflow exception in date/time -> timestamp conversion");
 	}
 	return result;
