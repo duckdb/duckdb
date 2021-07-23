@@ -1,6 +1,7 @@
 #include "duckdb_odbc.hpp"
-#include "statement_functions.hpp"
 #include "api_info.hpp"
+#include "odbc_fetch.hpp"
+#include "statement_functions.hpp"
 
 SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                          SQLINTEGER string_length) {
@@ -21,11 +22,13 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_ROW_ARRAY_SIZE: {
-			// this should be 1 (for now!)
 			// TODO allow fetch to put more rows in bound cols
-			auto new_size = (SQLULEN)value_ptr;
-			if (new_size != 1) {
-				return SQL_ERROR;
+			if (value_ptr) {
+				SQLULEN new_size = (SQLULEN)value_ptr;
+				if (new_size < 1) {
+					return SQL_ERROR;
+				}
+				stmt->odbc_fetcher->rows_to_fetch = new_size;
 			}
 			return SQL_SUCCESS;
 		}
@@ -34,11 +37,15 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_ROW_BIND_TYPE: {
-			if (value_ptr && (uint64_t)value_ptr != SQL_BIND_BY_COLUMN) {
+			if (value_ptr && (SQLULEN)value_ptr != SQL_BIND_BY_COLUMN) {
 				//! it's a row-wise binding orientation (SQLFetch should support it)
-				stmt->row_length = value_ptr;
-				stmt->row_wise = true;
+				stmt->odbc_fetcher->row_length = (SQLULEN *)value_ptr;
+				stmt->odbc_fetcher->orientation = duckdb::FetchOrientation::ROW;
 			}
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_ROW_STATUS_PTR: {
+			stmt->odbc_fetcher->row_status_buff = (SQLUSMALLINT *)value_ptr;
 			return SQL_SUCCESS;
 		}
 		default:
