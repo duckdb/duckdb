@@ -156,12 +156,12 @@ test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
 
 # })
 
-
 test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
     con <- dbConnect(duckdb::duckdb())
+    dbExecute(con, paste0("CREATE TABLE test (a  VARCHAR, b VARCHAR, c VARCHAR)"))
+    dbExecute(con, "INSERT INTO  test VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)")
+    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE))
 
-    arrow_table <- arrow::read_feather("simple-feather/VARCHAR.feather")
-    duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
     # Try ==
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='1'")[[1]], 1)
     # Try >
@@ -190,9 +190,9 @@ test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
 
 test_that("duckdb_register_arrow() performs selection pushdown bool type", {
     con <- dbConnect(duckdb::duckdb())
-
-    arrow_table <- arrow::read_feather("simple-feather/BOOL.feather")
-    duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
+    dbExecute(con, paste0("CREATE TABLE test (a  BOOL, b BOOL)"))
+    dbExecute(con, "INSERT INTO  test VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)")
+    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE))
     # Try ==
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a =True")[[1]], 2)
 
@@ -211,10 +211,11 @@ test_that("duckdb_register_arrow() performs selection pushdown bool type", {
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown time type", {
-    con <- dbConnect(duckdb::duckdb())
 
-    arrow_table <- arrow::read_feather("simple-feather/TIME.feather")
-    duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
+    con <- dbConnect(duckdb::duckdb())
+    dbExecute(con, paste0("CREATE TABLE test (a  TIME, b TIME, c TIME)"))
+    dbExecute(con, "INSERT INTO  test VALUES ('00:01:00','00:01:00','00:01:00'),('00:10:00','00:10:00','00:10:00'),('01:00:00','00:10:00','01:00:00'),(NULL,NULL,NULL)")
+    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE))
     # Try ==
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='00:01:00'")[[1]], 1)
     # Try >
@@ -244,9 +245,9 @@ test_that("duckdb_register_arrow() performs selection pushdown time type", {
 
 test_that("duckdb_register_arrow() performs selection pushdown timestamp type", {
     con <- dbConnect(duckdb::duckdb())
-
-    arrow_table <- arrow::read_feather("simple-feather/TIMESTAMP.feather")
-    duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
+    dbExecute(con, paste0("CREATE TABLE test (a  TIMESTAMP, b TIMESTAMP, c TIMESTAMP)"))
+    dbExecute(con, "INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
+    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE))
     # Try ==
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='2008-01-01 00:00:01'")[[1]], 1)
     # Try >
@@ -275,9 +276,11 @@ test_that("duckdb_register_arrow() performs selection pushdown timestamp type", 
 
 test_that("duckdb_register_arrow() performs selection pushdown date type", {
     con <- dbConnect(duckdb::duckdb())
+    dbExecute(con, paste0("CREATE TABLE test (a  DATE, b DATE, c DATE)"))
+    dbExecute(con, ""INSERT INTO  test VALUES ('2000-01-01','2000-01-01','2000-01-01'),('2000-10-01','2000-10-01','2000-10-01'),('2010-01-01','2000-10-01','2010-01-01'),(NULL,NULL,NULL)"")
+    
+    arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE))
 
-    arrow_table <- arrow::read_feather("simple-feather/DATE.feather")
-    duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
     # Try ==
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='2000-01-01'")[[1]], 1)
     # Try >
