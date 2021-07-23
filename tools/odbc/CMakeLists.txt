@@ -10,6 +10,9 @@ include_directories(${ODBC_INCLUDE_DIRS} include)
 
 add_library(
   duckdb_odbc SHARED
+  odbc_fetch.cpp # should be first because of foward declaration, i.e., circular
+                 # dependencies with duckdb_odbc.cpp
+  duckdb_odbc.cpp
   driver.cpp
   connection.cpp
   statement.cpp

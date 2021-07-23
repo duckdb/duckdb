@@ -77,6 +77,9 @@ SQLRETURN SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type);
 } // extern "C"
 
 namespace duckdb {
+
+class OdbcFetch;
+
 enum OdbcHandleType { ENV, DBC, STMT };
 struct OdbcHandle {
 	explicit OdbcHandle(OdbcHandleType type_p) : type(type_p) {};
@@ -112,17 +115,8 @@ struct OdbcBoundCol {
 };
 
 struct OdbcHandleStmt : public OdbcHandle {
-	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p)
-	    : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
-		D_ASSERT(dbc_p);
-		D_ASSERT(dbc_p->conn);
-		// default is column-wise orientation
-		row_wise = false;
-	};
-
-	// dictates binding and fetching orientation
-	bool row_wise;
-	SQLPOINTER row_length;
+	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p);
+	~OdbcHandleStmt();
 
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
@@ -136,6 +130,10 @@ struct OdbcHandleStmt : public OdbcHandle {
 
 	// appending all statement error messages into it
 	vector<std::string> error_messages;
+
+	unique_ptr<OdbcFetch> odbc_fetcher;
+
+	SQLLEN row_count;
 };
 
 struct OdbcUtils {
