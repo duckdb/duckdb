@@ -23,7 +23,7 @@ struct RApi {
 
 	static SEXP Bind(SEXP stmtsexp, SEXP paramsexp);
 
-	static SEXP Execute(SEXP stmtsexp);
+	static SEXP Execute(SEXP stmtsexp, SEXP arrowsexp);
 
 	static SEXP Release(SEXP stmtsexp);
 

@@ -70,7 +70,7 @@ setMethod(
 #' @export
 setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
-  function(conn, statement, params = NULL, ...) {
+  function(conn, statement, params = NULL, ..., arrow=FALSE) {
     if (conn@debug) {
       message("Q ", statement)
     }
@@ -79,7 +79,8 @@ setMethod(
 
     res <- duckdb_result(
       connection = conn,
-      stmt_lst = stmt_lst
+      stmt_lst = stmt_lst,
+      arrow = arrow
     )
     if (length(params) > 0) {
       dbBind(res, params)

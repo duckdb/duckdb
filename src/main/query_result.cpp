@@ -291,6 +291,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 
 void QueryResult::ToArrowSchema(ArrowSchema *out_schema, ArrowArray *data) {
 	D_ASSERT(out_schema);
+	D_ASSERT(data);
 
 	// Allocate as unique_ptr first to cleanup properly on error
 	auto root_holder = make_unique<DuckDBArrowSchemaHolder>();

@@ -91,7 +91,7 @@ public:
 		int err;
 		R_tryEval(export_call, R_GlobalEnv, &err);
 		if (err) {
-			throw IOException("Failed to produce Arrow stream");
+			throw IOException("Failed to produce Arrow stream %s", R_curErrorBuf());
 		}
 		return res;
 	}
@@ -197,7 +197,7 @@ private:
 		int err;
 		auto res = r.Protect(R_tryEval(create_call, R_GlobalEnv, &err));
 		if (err) {
-			throw InternalException("Failed to create Arrow expression");
+			throw InternalException("Failed to create Arrow expression %s", R_curErrorBuf());
 		}
 		return res;
 	}

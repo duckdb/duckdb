@@ -1,8 +1,9 @@
+#include "altrepstring.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "altrepstring.hpp"
 
-#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/arrow.hpp"
 
 using namespace duckdb;
 
@@ -90,7 +91,9 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 		case LogicalTypeId::BOOLEAN:
 			rtype = "logical";
 			break;
+		case LogicalTypeId::UTINYINT:
 		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
 			rtype = "integer";
@@ -104,6 +107,8 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 		case LogicalTypeId::TIME:
 			rtype = "difftime";
 			break;
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:
 		case LogicalTypeId::FLOAT:
@@ -184,11 +189,15 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		case LogicalTypeId::BOOLEAN:
 			varvalue = r_varvalue.Protect(NEW_LOGICAL(nrows));
 			break;
+		case LogicalTypeId::UTINYINT:
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::INTEGER:
 			varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
 			break;
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:
 		case LogicalTypeId::FLOAT:
@@ -246,9 +255,17 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				VectorToR<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), LOGICAL_POINTER(dest), dest_offset,
 				                            NA_LOGICAL);
 				break;
+			case LogicalTypeId::UTINYINT:
+				VectorToR<uint8_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
+				                             NA_INTEGER);
+				break;
 			case LogicalTypeId::TINYINT:
 				VectorToR<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
 				                            NA_INTEGER);
+				break;
+			case LogicalTypeId::USMALLINT:
+				VectorToR<uint16_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
+				                              NA_INTEGER);
 				break;
 			case LogicalTypeId::SMALLINT:
 				VectorToR<int16_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
@@ -311,6 +328,14 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				Rf_setAttrib(dest, Rf_install("units"), r_time.Protect(Rf_mkString("secs")));
 				break;
 			}
+			case LogicalTypeId::UINTEGER:
+				VectorToR<uint32_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
+				                            NA_REAL);
+				break;
+			case LogicalTypeId::UBIGINT:
+				VectorToR<uint64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
+				                            NA_REAL);
+				break;
 			case LogicalTypeId::BIGINT:
 				VectorToR<int64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
 				                           NA_REAL);
@@ -397,9 +422,12 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	return retlist;
 }
 
-SEXP RApi::Execute(SEXP stmtsexp) {
+SEXP RApi::Execute(SEXP stmtsexp, SEXP arrowsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_execute_R: Need external pointer parameter");
+		Rf_error("duckdb_execute_R: Need external pointer for first parameter");
+	}
+	if (TYPEOF(arrowsexp) != LGLSXP) {
+		Rf_error("duckdb_execute_R: Need logical for second parameter");
 	}
 	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
 	if (!stmtholder || !stmtholder->stmt) {
@@ -409,6 +437,7 @@ SEXP RApi::Execute(SEXP stmtsexp) {
 	RProtector r;
 	SEXP out;
 
+	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
 	{
 		auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, false);
 
@@ -418,9 +447,64 @@ SEXP RApi::Execute(SEXP stmtsexp) {
 		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
 		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
 
-		// Protect during destruction of generic_result
-		out = r.Protect(duckdb_execute_R_impl(result));
-	}
+		if (!arrow_fetch) {
+			out = r.Protect(duckdb_execute_R_impl(result));
+		} else {
+			// TODO move this to separate method, maybe
+			// somewhat dark magic below
+			SEXP arrow_name_sexp = r.Protect(StringsToSexp({"arrow"}));
+			SEXP arrow_namespace_call = r.Protect(Rf_lang2(Rf_install("getNamespace"), arrow_name_sexp));
 
+			int err;
+			SEXP arrow_namespace = R_tryEval(arrow_namespace_call, R_GlobalEnv, &err);
+			if (err) {
+				Rf_error("Failed to load arrow namespace, is arrow installed?");
+			}
+
+			ArrowArray arrow_data;
+			ArrowSchema arrow_schema;
+
+			SEXP batches_sexp = r.Protect(NEW_LIST(result->collection.ChunkCount()));
+			idx_t batch_idx = 0;
+
+			auto schema_ptr_sexp =
+			    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_schema))));
+			auto data_ptr_sexp =
+			    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_data))));
+
+			auto schema_import_from_c = r.Protect(Rf_lang2(Rf_install("ImportSchema"), schema_ptr_sexp));
+			auto batch_import_from_c =
+			    r.Protect(Rf_lang3(Rf_install("ImportRecordBatch"), data_ptr_sexp, schema_ptr_sexp));
+
+			SEXP schema_arrow_obj;
+
+			bool convert_schema = true;
+			for (auto &data_chunk : result->collection.Chunks()) {
+				data_chunk->ToArrowArray(&arrow_data);
+				result->ToArrowSchema(&arrow_schema, &arrow_data);
+				if (convert_schema) {
+					schema_arrow_obj = r.Protect(R_tryEval(schema_import_from_c, arrow_namespace, &err));
+					if (err) {
+						Rf_error("Failed to convert schema %s", R_curErrorBuf());
+					}
+					result->ToArrowSchema(&arrow_schema, &arrow_data);
+					convert_schema = false;
+				}
+
+				SEXP batch_arrow_obj = r.Protect(R_tryEval(batch_import_from_c, arrow_namespace, &err));
+				if (err) {
+					Rf_error("Failed to convert batch %s", R_curErrorBuf());
+				}
+				SET_VECTOR_ELT(batches_sexp, batch_idx++, batch_arrow_obj);
+			}
+
+			auto from_record_batches =
+			    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_sexp, schema_arrow_obj));
+			out = r.Protect(R_tryEval(from_record_batches, arrow_namespace, &err));
+			if (err) {
+				Rf_error("Failed to convert record batches to table", R_curErrorBuf());
+			}
+		}
+	}
 	return out;
 }
