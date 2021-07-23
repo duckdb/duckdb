@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/intraquery/test_aggregations_parallelism.test
+# name: test/sql/parallelism/intraquery/test_aggregations_parallelism.test_coverage
 # description: Test parallel aggregations
 # group: [intraquery]
 
@@ -147,3 +147,15 @@ query I
 select histogram(b) from t;
 ----
 {0=10000, 1=10001, 2=10001, 3=10000, 4=10000, 5=10000, 6=10000, 7=10000, 8=10000, 9=10000}
+
+query I
+select string_split(string_agg('a', ','), ',')[100] from t group by b%2;
+----
+a
+a
+
+query I
+select string_split(string_agg(NULL, ','), ',')[100] from t group by b%2;
+----
+NULL
+NULL

@@ -18,6 +18,9 @@ select * from parquet_scan('data/parquet-testing/cache/cache1.parquet')
 ----
 1	hello
 
+# writer requires vector_size >= 64
+require vector_size 64
+
 # copy cache1.parquet to cached.parquet
 statement ok
 COPY (

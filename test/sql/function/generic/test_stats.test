@@ -71,3 +71,12 @@ query I
 SELECT STATS(i+1) FROM integers LIMIT 1;
 ----
 No statistics
+
+# we can enable the optimizer again
+statement ok
+PRAGMA enable_optimizer
+
+query I
+SELECT STATS(i*-1) FROM integers LIMIT 1;
+----
+<REGEX>:.*-3.*-1.*

@@ -4,6 +4,8 @@
 
 require parquet
 
+require vector_size 64
+
 statement ok
 PRAGMA enable_verification
 

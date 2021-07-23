@@ -187,3 +187,8 @@ SELECT EXTRACT(epoch FROM interval '6 months ago')
 ----
 -15552000
 
+statement error
+SELECT EXTRACT(doy FROM interval '6 months ago')
+
+statement error
+SELECT EXTRACT(dow FROM interval '6 months ago')

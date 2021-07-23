@@ -273,7 +273,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = WritePadded2(target, data[1]);
 		break;
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
-		target = WritePadded2(target, data[0] % 100);
+		target = WritePadded2(target, AbsValue(data[0]) % 100);
 		break;
 	case StrTimeSpecifier::YEAR_DECIMAL:
 		if (data[0] >= 0 && data[0] <= 9999) {
@@ -571,7 +571,7 @@ struct StrfTimeBindData : public FunctionData {
 
 static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[1]->IsScalar()) {
+	if (!arguments[1]->IsFoldable()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
@@ -851,20 +851,12 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				result_data[5] = number;
 				break;
 			case StrTimeSpecifier::MICROSECOND_PADDED:
-				if (number >= 1000000ULL) {
-					error_message = "Microseconds out of range, expected a value between 0 and 999999";
-					error_position = start_pos;
-					return false;
-				}
+				D_ASSERT(number < 1000000ULL); // enforced by the length of the number
 				// milliseconds
 				result_data[6] = number;
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
-				if (number >= 1000ULL) {
-					error_message = "Milliseconds out of range, expected a value between 0 and 999";
-					error_position = start_pos;
-					return false;
-				}
+				D_ASSERT(number < 1000ULL); // enforced by the length of the number
 				// milliseconds
 				result_data[6] = number * 1000;
 				break;
@@ -1089,8 +1081,8 @@ struct StrpTimeBindData : public FunctionData {
 
 static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[1]->IsScalar()) {
-		throw InvalidInputException("strftime format must be a constant");
+	if (!arguments[1]->IsFoldable()) {
+		throw InvalidInputException("strptime format must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	StrpTimeFormat format;

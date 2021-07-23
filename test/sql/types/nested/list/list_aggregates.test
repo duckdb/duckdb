@@ -46,6 +46,21 @@ select first([i]) from range(10) tbl(i);
 ----
 [0]
 
+query I
+select first([0]) from range(10) tbl(i);
+----
+[0]
+
+query I
+select first(i) from range(10) tbl(i) WHERE i=-1;
+----
+NULL
+
+query I
+select first(NULL::INT[]) from range(10) tbl(i) WHERE i=-1;
+----
+NULL
+
 query II
 select i%3 a, first([i]) from range(10) tbl(i) group by a order by a;
 ----
