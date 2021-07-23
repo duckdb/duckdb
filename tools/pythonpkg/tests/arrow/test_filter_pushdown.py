@@ -197,7 +197,3 @@ class TestArrowFilterPushdown(object):
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a ='2010-01-01' and b = '2000-10-01' and c = '2010-01-01'").fetchone()[0] == 1
         # Try Or
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '2010-01-01' or b ='2000-01-01'").fetchone()[0] == 2
-
-    def test_filter_pushdown_all_types(self,duckdb_cursor):
-        if not can_run:
-            return
