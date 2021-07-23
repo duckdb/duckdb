@@ -506,6 +506,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_VISUALIZER: 1
+      DISABLE_SANITIZER: 1
 
     steps:
     - uses: actions/checkout@v2
