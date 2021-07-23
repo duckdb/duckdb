@@ -508,6 +508,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_VISUALIZER: 1
+      DISABLE_SANITIZER: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -522,7 +523,7 @@ jobs:
 
     - name: Test
       run: |
-          build/relassert/test/unittest "*"
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
 
   force-storage:
     name: Force Storage
@@ -584,20 +585,11 @@ jobs:
 
     - name: Test
       run: |
-          build/reldebug/test/unittest --end-offset-percentage=10
-          build/reldebug/test/unittest --start-offset-percentage=10 --end-offset-percentage=20
-          build/reldebug/test/unittest --start-offset-percentage=20 --end-offset-percentage=30
-          build/reldebug/test/unittest --start-offset-percentage=30 --end-offset-percentage=40
-          build/reldebug/test/unittest --start-offset-percentage=40 --end-offset-percentage=50
-          build/reldebug/test/unittest --start-offset-percentage=50 --end-offset-percentage=60
-          build/reldebug/test/unittest --start-offset-percentage=60 --end-offset-percentage=70
-          build/reldebug/test/unittest --start-offset-percentage=70 --end-offset-percentage=80
-          build/reldebug/test/unittest --start-offset-percentage=80 --end-offset-percentage=90
-          build/reldebug/test/unittest --start-offset-percentage=90
-          build/reldebug/test/unittest "[intraquery]"
-          build/reldebug/test/unittest "[interquery]"
-          build/reldebug/test/unittest "[detailed_profiler]"
-          build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
   valgrind:
     name: Valgrind
@@ -656,7 +648,7 @@ jobs:
       - name: Run Tests
         run: |
           mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_ARROW_ABI_TEST=1 -DBUILD_PARQUET_EXTENSION=1 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_ARROW_ABI_TEST=1 -DBUILD_PARQUET_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
           build/coverage/test/unittest
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"

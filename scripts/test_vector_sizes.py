@@ -1,7 +1,7 @@
 import os, sys, re
 from python_helpers import open_utf8
 
-vector_sizes = [2, 512]
+vector_sizes = [2]
 
 current_dir = os.getcwd()
 build_dir = os.path.join(os.getcwd(), 'build', 'release')
@@ -25,4 +25,4 @@ for vector_size in vector_sizes:
 	replace_in_file('src/include/duckdb/common/vector_size.hpp', '#define STANDARD_VECTOR_SIZE \d+', '#define STANDARD_VECTOR_SIZE %d' % (vector_size,))
 	execute_system_command('rm -rf build')
 	execute_system_command('make relassert')
-	execute_system_command('build/relassert/test/unittest')
+	execute_system_command('python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest')
