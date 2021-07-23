@@ -199,6 +199,16 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		return res;
 	}
 
+	case LogicalTypeId::DATE: {
+		res = r.Protect(NEW_NUMERIC(1));
+		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
+		dest_ptr[0] = (double)int32_t(val.value_.date);
+		// some dresssup for R
+		RProtector r_date;
+		SET_CLASS(res, r_date.Protect(Rf_mkString("Date")));
+		return res;
+	}
+
 	default:
 		throw NotImplementedException("Can't convert %s of type %s", val.ToString(), val.type().ToString());
 	}
