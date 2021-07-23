@@ -1,5 +1,6 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 using namespace duckdb;
 
@@ -183,6 +184,31 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		res = r.Protect(NEW_STRING(1));
 		SET_STRING_ELT(res, 0, cpp_str_to_charsexp(val.ToString()));
 		return res;
+	case LogicalTypeId::TIMESTAMP: {
+		// TODO bit of duplication here with statement.cpp, fix this
+		res = r.Protect(NEW_NUMERIC(1));
+		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
+		dest_ptr[0] = (double)Timestamp::GetEpochSeconds(val.value_.timestamp);
+		// some dresssup for R
+		RProtector r_ts;
+		SEXP cl = r_ts.Protect(NEW_STRING(2));
+		SET_STRING_ELT(cl, 0, r_ts.Protect(Rf_mkChar("POSIXct")));
+		SET_STRING_ELT(cl, 1, r_ts.Protect(Rf_mkChar("POSIXt")));
+		SET_CLASS(res, cl);
+		Rf_setAttrib(res, Rf_install("tzone"), r_ts.Protect(Rf_mkString("UTC")));
+		return res;
+	}
+
+	case LogicalTypeId::DATE: {
+		res = r.Protect(NEW_NUMERIC(1));
+		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
+		dest_ptr[0] = (double)int32_t(val.value_.date);
+		// some dresssup for R
+		RProtector r_date;
+		SET_CLASS(res, r_date.Protect(Rf_mkString("Date")));
+		return res;
+	}
+
 	default:
 		throw NotImplementedException("Can't convert %s of type %s", val.ToString(), val.type().ToString());
 	}
