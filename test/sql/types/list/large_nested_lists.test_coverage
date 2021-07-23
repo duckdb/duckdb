@@ -1,4 +1,4 @@
-# name: test/sql/types/list/large_nested_lists.test
+# name: test/sql/types/list/large_nested_lists.test_coverage
 # description: Test large nested lists
 # group: [list]
 

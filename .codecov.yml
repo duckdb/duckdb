@@ -6,7 +6,7 @@ coverage:
         # basic
         # for now
         target: auto
-        threshold: 0%
+        threshold: 0.5%
         base: auto
         paths:
           - "src"
@@ -18,8 +18,8 @@ coverage:
     patch:
       default:
         # basic
-        target: auto
-        threshold: 0%
+        target: number
+        threshold: 100%
         base: auto
         # advanced
         branches:
