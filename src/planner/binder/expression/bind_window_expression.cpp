@@ -58,12 +58,42 @@ static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> 
 	return move(bound.expr);
 }
 
+static LogicalType BindRangeExpression(ClientContext &context, const string &name, unique_ptr<ParsedExpression> &expr,
+                                       unique_ptr<ParsedExpression> &order_expr) {
+
+	vector<unique_ptr<Expression>> children;
+
+	D_ASSERT(order_expr.get());
+	D_ASSERT(order_expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	auto &bound_order = (BoundExpression &)*order_expr;
+	children.emplace_back(bound_order.expr->Copy());
+
+	D_ASSERT(expr.get());
+	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	auto &bound = (BoundExpression &)*expr;
+	children.emplace_back(move(bound.expr));
+
+	string error;
+	auto function = ScalarFunction::BindScalarFunction(context, DEFAULT_SCHEMA, name, move(children), error, true);
+	if (!function) {
+		throw BinderException(error);
+	}
+	bound.expr = move(function);
+	return bound.expr->return_type;
+}
+
 BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	if (inside_window) {
 		throw BinderException("window function calls cannot be nested");
 	}
 	if (depth > 0) {
 		throw BinderException("correlated columns in window functions not supported");
+	}
+	// If we have range expressions, then only one order by clause is allowed.
+	if ((window.start == WindowBoundary::EXPR_PRECEDING_RANGE || window.start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
+	     window.end == WindowBoundary::EXPR_PRECEDING_RANGE || window.end == WindowBoundary::EXPR_FOLLOWING_RANGE) &&
+	    window.orders.size() != 1) {
+		throw BinderException("RANGE frames must have only one ORDER BY expression");
 	}
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
@@ -150,6 +180,49 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));
 	}
+
+	// Convert RANGE boundary expressions to ORDER +/- expressions .
+	auto startType = LogicalType::BIGINT;
+	auto hasRangeExpr = false;
+	if (window.start == WindowBoundary::EXPR_PRECEDING_RANGE) {
+		startType = BindRangeExpression(context, "-", window.start_expr, window.orders[0].expression);
+		hasRangeExpr = true;
+	} else if (window.start == WindowBoundary::EXPR_FOLLOWING_RANGE) {
+		startType = BindRangeExpression(context, "+", window.start_expr, window.orders[0].expression);
+		hasRangeExpr = true;
+	}
+
+	auto endType = LogicalType::BIGINT;
+	if (window.end == WindowBoundary::EXPR_PRECEDING_RANGE) {
+		endType = BindRangeExpression(context, "-", window.end_expr, window.orders[0].expression);
+		hasRangeExpr = true;
+	} else if (window.end == WindowBoundary::EXPR_FOLLOWING_RANGE) {
+		endType = BindRangeExpression(context, "+", window.end_expr, window.orders[0].expression);
+		hasRangeExpr = true;
+	}
+
+	// Cast ORDER and boundary expressions to the same type
+	auto orderType = LogicalType::INVALID;
+	if (hasRangeExpr) {
+		D_ASSERT(window.orders.size() == 1);
+
+		auto &order_expr = window.orders[0].expression;
+		D_ASSERT(order_expr.get());
+		D_ASSERT(order_expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		auto &bound_order = (BoundExpression &)*order_expr;
+		auto orderType = bound_order.expr->return_type;
+		if (window.start_expr) {
+			orderType = LogicalType::MaxLogicalType(orderType, startType);
+		}
+		if (window.end_expr) {
+			orderType = LogicalType::MaxLogicalType(orderType, endType);
+		}
+
+		// Cast all three to match
+		bound_order.expr = BoundCastExpression::AddCastToType(move(bound_order.expr), orderType);
+		startType = endType = orderType;
+	}
+
 	auto &config = DBConfig::GetConfig(context);
 	for (auto &order : window.orders) {
 		auto type = order.type == OrderType::ORDER_DEFAULT ? config.default_order_type : order.type;
@@ -159,8 +232,8 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		result->orders.emplace_back(type, null_order, move(expression));
 	}
 
-	result->start_expr = CastWindowExpression(window.start_expr, LogicalType::BIGINT);
-	result->end_expr = CastWindowExpression(window.end_expr, LogicalType::BIGINT);
+	result->start_expr = CastWindowExpression(window.start_expr, startType);
+	result->end_expr = CastWindowExpression(window.end_expr, endType);
 	result->offset_expr = CastWindowExpression(window.offset_expr, LogicalType::BIGINT);
 	result->default_expr = CastWindowExpression(window.default_expr, result->return_type);
 	result->start = window.start;
