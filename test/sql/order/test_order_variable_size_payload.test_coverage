@@ -1,4 +1,4 @@
-# name: test/sql/order/test_order_variable_size_payload.test
+# name: test/sql/order/test_order_variable_size_payload.test_coverage
 # description: Test ORDER BY keyword (variable size sorting/payload columns)
 # group: [order]
 

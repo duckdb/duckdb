@@ -75,7 +75,11 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {
-			return make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, i);
+			auto result = make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, i);
+			if (expr.stats) {
+				result->stats = move(expr.stats);
+			}
+			return move(result);
 		}
 	}
 	// LCOV_EXCL_START

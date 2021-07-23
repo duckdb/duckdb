@@ -8,11 +8,12 @@
 
 #pragma once
 
-#include "duckdb/parser/base_expression.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/parser/base_expression.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
-class BaseStatistics;
+// class BaseStatistics;
 
 //!  The Expression class represents a bound Expression with a return type
 class Expression : public BaseExpression {
@@ -57,6 +58,9 @@ protected:
 		expression_class = other.expression_class;
 		alias = other.alias;
 		return_type = other.return_type;
+		if (other.stats) {
+			stats = other.stats->Copy();
+		}
 	}
 };
 

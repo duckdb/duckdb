@@ -105,7 +105,6 @@ protected:
 	virtual void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, QueryNode &node);
 	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, TableRef &ref);
-	virtual void CheckForSideEffects(FunctionExpression &function, idx_t depth, string &error);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();
