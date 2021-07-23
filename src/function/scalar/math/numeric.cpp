@@ -272,26 +272,19 @@ unique_ptr<FunctionData> BindGenericRoundFunctionDecimal(ClientContext &context,
 	return nullptr;
 }
 
-template<class T>
-struct CeilDecimalGenericOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto power_of_ten = *((T *) dataptr);
-		if (input < 0) {
-			// below 0 we floor the number (e.g. -10.5 -> -10)
-			return input / power_of_ten;
-		} else {
-			// above 0 we ceil the number
-			return ((input - 1) / power_of_ten) + 1;
-		}
-	}
-};
-
 struct CeilDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
-		UnaryExecutor::GenericExecute<T, T, CeilDecimalGenericOperator<T>>(input.data[0], result, input.size(), &power_of_ten);
+		UnaryExecutor::ExecuteLambda<T, T>(input.data[0], result, input.size(), [&](T input) {
+			if (input < 0) {
+				// below 0 we floor the number (e.g. -10.5 -> -10)
+				return input / power_of_ten;
+			} else {
+				// above 0 we ceil the number
+				return ((input - 1) / power_of_ten) + 1;
+			}
+		});
 	}
 };
 
@@ -335,25 +328,19 @@ struct FloorOperator {
 	}
 };
 
-struct FloorDecimalUnaryOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto power_of_ten = *((INPUT_TYPE *) dataptr);
-		if (input < 0) {
-			// below 0 we ceil the number (e.g. -10.5 -> -11)
-			return ((input + 1) / power_of_ten) - 1;
-		} else {
-			// above 0 we floor the number
-			return input / power_of_ten;
-		}
-	}
-};
-
 struct FloorDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
-		UnaryExecutor::GenericExecute<T, T, FloorDecimalUnaryOperator>(input.data[0], result, input.size(), &power_of_ten);
+		UnaryExecutor::ExecuteLambda<T, T>(input.data[0], result, input.size(), [&](T input) {
+			if (input < 0) {
+				// below 0 we ceil the number (e.g. -10.5 -> -11)
+				return ((input + 1) / power_of_ten) - 1;
+			} else {
+				// above 0 we floor the number
+				return input / power_of_ten;
+			}
+		});
 	}
 };
 
@@ -419,29 +406,6 @@ struct RoundOperator {
 	}
 };
 
-template<class T>
-struct RoundDecimalData {
-	RoundDecimalData(T power_of_ten_p, T addition_p) :
-       power_of_ten(power_of_ten_p), addition(addition_p) {}
-
-	T power_of_ten;
-	T addition;
-};
-
-struct RoundDecimalUnaryOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (RoundDecimalData<INPUT_TYPE> *) dataptr;
-		if (input < 0) {
-			input -= data->addition;
-		} else {
-			input += data->addition;
-		}
-		return input / data->power_of_ten;
-	}
-};
-
-
 struct RoundDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
@@ -454,8 +418,14 @@ struct RoundDecimalOperator {
 		// and then flooring the number
 		// e.g. 10.5 + 0.5 = 11, floor(11) = 11
 		//      10.4 + 0.5 = 10.9, floor(10.9) = 10
-		RoundDecimalData<T> data(power_of_ten, addition);
-		UnaryExecutor::GenericExecute<T, T, RoundDecimalUnaryOperator>(input.data[0], result, input.size(), &data);
+		UnaryExecutor::ExecuteLambda<T, T>(input.data[0], result, input.size(), [&](T input) {
+			if (input < 0) {
+				input -= addition;
+			} else {
+				input += addition;
+			}
+			return input / power_of_ten;
+		});
 	}
 };
 
@@ -467,29 +437,6 @@ struct RoundPrecisionFunctionData : public FunctionData {
 
 	unique_ptr<FunctionData> Copy() override {
 		return make_unique<RoundPrecisionFunctionData>(target_scale);
-	}
-};
-
-template<class T>
-struct DecimalRoundNegativePrecisionData {
-	DecimalRoundNegativePrecisionData(T divide_power_of_ten_p, T multiply_power_of_ten_p, T addition_p) :
-       divide_power_of_ten(divide_power_of_ten_p), multiply_power_of_ten(multiply_power_of_ten_p), addition(addition_p) {}
-
-	T divide_power_of_ten;
-	T multiply_power_of_ten;
-	T addition;
-};
-
-struct DecimalRoundNegativePrecisionOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (DecimalRoundNegativePrecisionData<INPUT_TYPE> *) dataptr;
-		if (input < 0) {
-			input -= data->addition;
-		} else {
-			input += data->addition;
-		}
-		return input / data->divide_power_of_ten * data->multiply_power_of_ten;
 	}
 };
 
@@ -508,32 +455,16 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 	T divide_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale];
 	T multiply_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale];
 	T addition = divide_power_of_ten / 2;
-	DecimalRoundNegativePrecisionData<T> data(divide_power_of_ten, multiply_power_of_ten, addition);
 
-	UnaryExecutor::GenericExecute<T, T, DecimalRoundNegativePrecisionOperator>(input.data[0], result, input.size(), &data);
-}
-
-template<class T>
-struct DecimalRoundPositivePrecisionData {
-	DecimalRoundPositivePrecisionData(T power_of_ten_p, T addition_p) :
-       power_of_ten(power_of_ten_p), addition(addition_p) {}
-
-	T power_of_ten;
-	T addition;
-};
-
-struct DecimalRoundPositivePrecisionOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (DecimalRoundPositivePrecisionData<INPUT_TYPE> *) dataptr;
+	UnaryExecutor::ExecuteLambda<T, T>(input.data[0], result, input.size(), [&](T input) {
 		if (input < 0) {
-			input -= data->addition;
+			input -= addition;
 		} else {
-			input += data->addition;
+			input += addition;
 		}
-		return input / data->power_of_ten;
-	}
-};
+		return input / divide_power_of_ten * multiply_power_of_ten;
+	});
+}
 
 template <class T, class POWERS_OF_TEN_CLASS>
 static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionState &state, Vector &result) {
@@ -542,8 +473,14 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale];
 	T addition = power_of_ten / 2;
-	DecimalRoundPositivePrecisionData<T> data(power_of_ten, addition);
-	UnaryExecutor::GenericExecute<T, T, DecimalRoundPositivePrecisionOperator>(input.data[0], result, input.size(), &data);
+	UnaryExecutor::ExecuteLambda<T, T>(input.data[0], result, input.size(), [&](T input) {
+		if (input < 0) {
+			input -= addition;
+		} else {
+			input += addition;
+		}
+		return input / power_of_ten;
+	});
 }
 
 unique_ptr<FunctionData> BindDecimalRoundPrecision(ClientContext &context, ScalarFunction &bound_function,

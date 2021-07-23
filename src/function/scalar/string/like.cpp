@@ -446,22 +446,15 @@ static unique_ptr<BaseStatistics> ILikePropagateStats(ClientContext &context, Bo
 	return nullptr;
 }
 
-template<bool INVERT>
-struct LikeMatcherOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto matcher = (LikeMatcher *) dataptr;
-		return INVERT ? !matcher->Match(input) : matcher->Match(input);
-	}
-};
-
 template <class OP, bool INVERT>
 static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	if (func_expr.bind_info) {
 		auto &matcher = (LikeMatcher &)*func_expr.bind_info;
 		// use fast like matcher
-		UnaryExecutor::GenericExecute<string_t, bool, LikeMatcherOperator<INVERT>>(input.data[0], result, input.size(), &matcher);
+		UnaryExecutor::ExecuteLambda<string_t, bool>(input.data[0], result, input.size(), [&](string_t input) {
+			return INVERT ? !matcher.Match(input) : matcher.Match(input);
+		});
 	} else {
 		// use generic like matcher
 		BinaryExecutor::ExecuteStandard<string_t, string_t, bool, OP>(input.data[0], input.data[1], result,

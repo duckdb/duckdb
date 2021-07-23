@@ -60,7 +60,7 @@ struct TrimOperator {
 
 template <bool LTRIM, bool RTRIM>
 static void UnaryTrimFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<TrimOperator<LTRIM, RTRIM>>>(args.data[0], result, args.size(), &result);
+	UnaryExecutor::ExecuteString<string_t, string_t, TrimOperator<LTRIM, RTRIM>>(args.data[0], result, args.size());
 }
 
 static void GetIgnoredCodepoints(string_t ignored, unordered_set<utf8proc_int32_t> &ignored_codepoints) {

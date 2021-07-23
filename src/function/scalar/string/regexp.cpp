@@ -89,16 +89,6 @@ struct RegexFullMatch {
 	}
 };
 
-template<class OP>
-struct RegexConstantPatternOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto constant_pattern = (duckdb_re2::RE2 *) dataptr;
-		return OP::Operation(CreateStringPiece(input), *constant_pattern);
-	}
-
-};
-
 template <class OP>
 static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &strings = args.data[0];
@@ -108,7 +98,9 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
 
 	if (info.constant_pattern) {
-		UnaryExecutor::GenericExecute<string_t, bool, RegexConstantPatternOperator<OP>>(strings, result, args.size(), (void *) info.constant_pattern.get());
+		UnaryExecutor::ExecuteLambda<string_t, bool>(strings, result, args.size(), [&](string_t input) {
+			return OP::Operation(CreateStringPiece(input), *info.constant_pattern);
+		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, bool>(strings, patterns, result, args.size(),
 		                                                  [&](string_t input, string_t pattern) {

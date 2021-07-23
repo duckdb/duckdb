@@ -21,7 +21,7 @@ struct MD5Operator {
 static void MD5Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &input = args.data[0];
 
-	UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<MD5Operator>>(input, result, args.size(), &result);
+	UnaryExecutor::ExecuteString<string_t, string_t, MD5Operator>(input, result, args.size());
 }
 
 void MD5Fun::RegisterFunction(BuiltinFunctions &set) {

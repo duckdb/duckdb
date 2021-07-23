@@ -80,20 +80,6 @@ struct NextValData {
 };
 
 template<class OP>
-struct NextValOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE value, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto info = (NextValData *) dataptr;
-		auto qname = QualifiedName::Parse(value.GetString());
-		// fetch the sequence from the catalog
-		auto sequence = Catalog::GetCatalog(info->bind_data.context)
-							.GetEntry<SequenceCatalogEntry>(info->bind_data.context, qname.schema, qname.name);
-		// finally get the next value from the sequence
-		return OP::Operation(info->transaction, sequence);
-	}
-};
-
-template<class OP>
 static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (NextvalBindData &)*func_expr.bind_info;
@@ -112,7 +98,14 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	} else {
 		NextValData next_val_input(info, transaction);
 		// sequence to use comes from the input
-		UnaryExecutor::GenericExecute<string_t, int64_t, NextValOperator<OP>>(input, result, args.size(), &next_val_input);
+		UnaryExecutor::ExecuteLambda<string_t, int64_t>(input, result, args.size(), [&](string_t value) {
+			auto qname = QualifiedName::Parse(value.GetString());
+			// fetch the sequence from the catalog
+			auto sequence = Catalog::GetCatalog(info.context)
+								.GetEntry<SequenceCatalogEntry>(info.context, qname.schema, qname.name);
+			// finally get the next value from the sequence
+			return OP::Operation(transaction, sequence);
+		});
 	}
 }
 

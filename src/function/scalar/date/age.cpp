@@ -8,19 +8,13 @@
 
 namespace duckdb {
 
-struct IntervalUnaryOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto current_timestamp = (timestamp_t *) dataptr;
-		return Interval::GetDifference(*current_timestamp, input);
-	}
-};
-
 static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
 
-	UnaryExecutor::GenericExecute<timestamp_t, interval_t, IntervalUnaryOperator>(input.data[0], result, input.size(), (void *) &current_timestamp);
+	UnaryExecutor::ExecuteLambda<timestamp_t, interval_t>(input.data[0], result, input.size(), [&](timestamp_t input) {
+		return Interval::GetDifference(current_timestamp, input);
+	});
 }
 
 static void AgeFunction(DataChunk &input, ExpressionState &state, Vector &result) {

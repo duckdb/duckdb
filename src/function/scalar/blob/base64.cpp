@@ -26,12 +26,12 @@ struct Base64DecodeOperator {
 
 static void Base64EncodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
-	UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<Base64EncodeOperator>>(args.data[0], result, args.size(), (void *) &result);
+	UnaryExecutor::ExecuteString<string_t, string_t, Base64EncodeOperator>(args.data[0], result, args.size());
 }
 
 static void Base64DecodeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// decode is also a nop cast, but requires verification if the provided string is actually
-	UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<Base64DecodeOperator>>(args.data[0], result, args.size(), (void *) &result);
+	UnaryExecutor::ExecuteString<string_t, string_t, Base64DecodeOperator>(args.data[0], result, args.size());
 }
 
 void Base64Fun::RegisterFunction(BuiltinFunctions &set) {

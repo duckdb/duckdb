@@ -363,22 +363,6 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	RowOperations::FinalizeStates(layout, addresses, result, 0);
 }
 
-struct HTBitmaskOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto bitmask = (hash_t *) dataptr;
-		return input & *bitmask;
-	}
-};
-
-struct HTSaltOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto hash_prefix_shift = (hash_t *) dataptr;
-		return input >> *hash_prefix_shift;
-	}
-};
-
 template <class ENTRY>
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
                                                             SelectionVector &new_groups_out) {
@@ -410,13 +394,17 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	addresses.Normalify(groups.size());
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
-	// now compute the entry in the table based on the hash using the bitmask
-	UnaryExecutor::GenericExecute<hash_t, uint64_t, HTBitmaskOperator>(group_hashes, ht_offsets, groups.size(), &bitmask);
+	// now compute the entry in the table based on the hash using a modulo
+	UnaryExecutor::ExecuteLambda<hash_t, uint64_t>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
+		D_ASSERT((element & bitmask) == (element % capacity));
+		return (element & bitmask);
+	});
 	auto ht_offsets_ptr = FlatVector::GetData<uint64_t>(ht_offsets);
 
 	// precompute the hash salts for faster comparison below
 	D_ASSERT(hash_salts.GetType() == LogicalType::SMALLINT);
-	UnaryExecutor::GenericExecute<hash_t, uint16_t, HTSaltOperator>(group_hashes, hash_salts, groups.size(), &hash_prefix_shift);
+	UnaryExecutor::ExecuteLambda<hash_t, uint16_t>(group_hashes, hash_salts, groups.size(),
+	                                         [&](hash_t element) { return (element >> hash_prefix_shift); });
 	auto hash_salts_ptr = FlatVector::GetData<uint16_t>(hash_salts);
 
 	// we start out with all entries [0, 1, 2, ..., groups.size()]

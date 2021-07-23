@@ -586,27 +586,6 @@ static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, Sca
 	return make_unique<StrfTimeBindData>(format);
 }
 
-struct StrfTimeOperatorInfo {
-	StrfTimeOperatorInfo(Vector &result_p, StrfTimeFormat &format_p) :
-		result(result_p), format(format_p) {}
-
-	Vector &result;
-	StrfTimeFormat &format;
-};
-
-struct StrfTimeDateOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (StrfTimeOperatorInfo *) dataptr;
-		dtime_t time(0);
-		idx_t len = data->format.GetLength(input, time);
-		string_t target = StringVector::EmptyString(data->result, len);
-		data->format.FormatString(input, time, target.GetDataWriteable());
-		target.Finalize();
-		return target;
-	}
-};
-
 static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StrfTimeBindData &)*func_expr.bind_info;
@@ -616,24 +595,15 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	StrfTimeOperatorInfo data(result, info.format);
-	UnaryExecutor::GenericExecute<date_t, string_t, StrfTimeDateOperator>(args.data[0], result, args.size(), &data);
-}
-
-struct StrfTimeTimestampOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (StrfTimeOperatorInfo *) dataptr;
-		date_t date;
-		dtime_t time;
-		Timestamp::Convert(input, date, time);
-		idx_t len = data->format.GetLength(date, time);
-		string_t target = StringVector::EmptyString(data->result, len);
-		data->format.FormatString(date, time, target.GetDataWriteable());
+	UnaryExecutor::ExecuteLambda<date_t, string_t>(args.data[0], result, args.size(), [&](date_t input) {
+		dtime_t time(0);
+		idx_t len = info.format.GetLength(input, time);
+		string_t target = StringVector::EmptyString(result, len);
+		info.format.FormatString(input, time, target.GetDataWriteable());
 		target.Finalize();
 		return target;
-	}
-};
+	});
+}
 
 static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
@@ -645,8 +615,16 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 		return;
 	}
 
-	StrfTimeOperatorInfo data(result, info.format);
-	UnaryExecutor::GenericExecute<timestamp_t, string_t, StrfTimeTimestampOperator>(args.data[0], result, args.size(), &data);
+	UnaryExecutor::ExecuteLambda<timestamp_t, string_t>(args.data[0], result, args.size(), [&](timestamp_t input) {
+		date_t date;
+		dtime_t time;
+		Timestamp::Convert(input, date, time);
+		idx_t len = info.format.GetLength(date, time);
+		string_t target = StringVector::EmptyString(result, len);
+		info.format.FormatString(date, time, target.GetDataWriteable());
+		target.Finalize();
+		return target;
+	});
 }
 
 void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
@@ -1176,14 +1154,6 @@ timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
 	return result.ToTimestamp();
 }
 
-struct StrpTimeOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto format = (StrpTimeFormat *) dataptr;
-		return format->ParseTimestamp(input);
-	}
-};
-
 static void StrpTimeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (StrpTimeBindData &)*func_expr.bind_info;
@@ -1193,7 +1163,9 @@ static void StrpTimeFunction(DataChunk &args, ExpressionState &state, Vector &re
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	UnaryExecutor::GenericExecute<string_t, timestamp_t, StrpTimeOperator>(args.data[0], result, args.size(), &info.format);
+	UnaryExecutor::ExecuteLambda<string_t, timestamp_t>(args.data[0], result, args.size(), [&](string_t input) {
+		return info.format.ParseTimestamp(input);
+	});
 }
 
 void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {

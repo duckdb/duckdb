@@ -57,18 +57,12 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	}
 }
 
-struct LastYearOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto last_year = (int32_t *) dataptr;
-		return Date::ExtractYear(input, last_year);
-	}
-};
-
 template <class T>
 static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	int32_t last_year = 0;
-	UnaryExecutor::GenericExecute<T, int64_t, LastYearOperator>(args.data[0], result, args.size(), &last_year);
+	UnaryExecutor::ExecuteLambda<T, int64_t>(args.data[0], result, args.size(), [&](T input) {
+		return Date::ExtractYear(input, &last_year);
+	});
 }
 
 template <class T, class OP>

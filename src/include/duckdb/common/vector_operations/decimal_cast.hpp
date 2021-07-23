@@ -30,7 +30,7 @@ struct VectorDecimalCastOperator {
 		auto data = (VectorDecimalCastData *) dataptr;
 		RESULT_TYPE result_value;
 		if (!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, result_value, data->error_message, data->width, data->scale)) {
-			return HandleVectorCastError::Operation<RESULT_TYPE>("Eek", mask, idx, data->error_message, data->all_converted);
+			return HandleVectorCastError::Operation<RESULT_TYPE>("Failed to cast decimal value", mask, idx, data->error_message, data->all_converted);
 		}
 		return result_value;
 	}

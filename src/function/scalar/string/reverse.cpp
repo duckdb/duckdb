@@ -46,7 +46,7 @@ struct ReverseOperator {
 };
 
 static void ReverseFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<ReverseOperator>>(args.data[0], result, args.size(), &result);
+	UnaryExecutor::ExecuteString<string_t, string_t, ReverseOperator>(args.data[0], result, args.size());
 }
 
 void ReverseFun::RegisterFunction(BuiltinFunctions &set) {

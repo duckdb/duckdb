@@ -36,7 +36,7 @@ struct IcuBindData : public FunctionData {
 	}
 };
 
-static int32_t icu_get_sort_key(icu::Collator &collator, string_t input, unique_ptr<char[]> &buffer,
+static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, unique_ptr<char[]> &buffer,
                                 int32_t &buffer_size) {
 	int32_t string_size =
 	    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
@@ -53,51 +53,33 @@ static int32_t icu_get_sort_key(icu::Collator &collator, string_t input, unique_
 	return string_size;
 }
 
-struct ICUCollatorInput {
-	ICUCollatorInput(icu::Collator &collator_p, Vector &result_p) :
-		collator(collator_p), result(result_p) {}
+static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	const char HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
-	icu::Collator &collator;
-	Vector &result;
-	unique_ptr<char[]> buffer;
-	int32_t buffer_size = 0;
-
-	static const char HEX_TABLE[];
-};
-
-const char ICUCollatorInput::HEX_TABLE[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
-
-struct ICUCollatorOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto data = (ICUCollatorInput *) dataptr;
-		// create a sort key from the string
-		int32_t string_size = icu_get_sort_key(data->collator, input, data->buffer, data->buffer_size);
-		// convert the sort key to hexadecimal
-		auto str_result = StringVector::EmptyString(data->result, (string_size - 1) * 2);
-		auto str_data = str_result.GetDataWriteable();
-		for (idx_t i = 0; i < string_size - 1; i++) {
-			uint8_t byte = uint8_t(data->buffer[i]);
-			assert(byte != 0);
-			str_data[i * 2] = ICUCollatorInput::HEX_TABLE[byte / 16];
-			str_data[i * 2 + 1] = ICUCollatorInput::HEX_TABLE[byte % 16];
-		}
-		// printf("%s: %s\n", input.GetString().c_str(), str_result.GetString().c_str());
-		return str_result;
-	}
-};
-
-
-static void icu_collate_function(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (IcuBindData &)*func_expr.bind_info;
 	auto &collator = *info.collator;
 
-	ICUCollatorInput input(collator, result);
-	UnaryExecutor::GenericExecute<string_t, string_t, ICUCollatorOperator>(args.data[0], result, args.size(), (void *) &input);
+	unique_ptr<char[]> buffer;
+	int32_t buffer_size = 0;
+	UnaryExecutor::ExecuteLambda<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+		// create a sort key from the string
+		int32_t string_size = ICUGetSortKey(collator, input, buffer, buffer_size);
+		// convert the sort key to hexadecimal
+		auto str_result = StringVector::EmptyString(result, (string_size - 1) * 2);
+		auto str_data = str_result.GetDataWriteable();
+		for (idx_t i = 0; i < string_size - 1; i++) {
+			uint8_t byte = uint8_t(buffer[i]);
+			assert(byte != 0);
+			str_data[i * 2] = HEX_TABLE[byte / 16];
+			str_data[i * 2 + 1] = HEX_TABLE[byte % 16];
+		}
+		// printf("%s: %s\n", input.GetString().c_str(), str_result.GetString().c_str());
+		return str_result;
+	});
 }
 
-static unique_ptr<FunctionData> icu_collate_bind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
 	auto splits = StringUtil::Split(bound_function.name, "_");
 	if (splits.size() == 1) {
@@ -109,7 +91,7 @@ static unique_ptr<FunctionData> icu_collate_bind(ClientContext &context, ScalarF
 	}
 }
 
-static unique_ptr<FunctionData> icu_sort_key_bind(ClientContext &context, ScalarFunction &bound_function,
+static unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
                                                   vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) with non-constant collation is not supported");
@@ -128,9 +110,9 @@ static unique_ptr<FunctionData> icu_sort_key_bind(ClientContext &context, Scalar
 	}
 }
 
-static ScalarFunction get_icu_function(string collation) {
-	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, icu_collate_function, false,
-	                      icu_collate_bind);
+static ScalarFunction GetICUFunction(string collation) {
+	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, false,
+	                      ICUCollateBind);
 }
 
 void ICUExtension::Load(DuckDB &db) {
@@ -154,12 +136,12 @@ void ICUExtension::Load(DuckDB &db) {
 		}
 		collation = StringUtil::Lower(collation);
 
-		CreateCollationInfo info(collation, get_icu_function(collation), false, true);
+		CreateCollationInfo info(collation, GetICUFunction(collation), false, true);
 		info.on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 		catalog.CreateCollation(*con.context, &info);
 	}
 	ScalarFunction sort_key("icu_sort_key", {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                        icu_collate_function, false, icu_sort_key_bind);
+	                        ICUCollateFunction, false, ICUSortKeyBind);
 
 	CreateScalarFunctionInfo sort_key_info(move(sort_key));
 	catalog.CreateFunction(*con.context, &sort_key_info);
