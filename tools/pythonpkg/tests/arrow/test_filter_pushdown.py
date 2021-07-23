@@ -40,6 +40,8 @@ def numeric_operators(data_type):
 
 class TestArrowFilterPushdown(object):
     def test_filter_pushdown_numeric(self,duckdb_cursor):
+        if not can_run:
+            return
         numeric_types = ['TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT', 
         'FLOAT', 'DOUBLE']
 
@@ -57,6 +59,8 @@ class TestArrowFilterPushdown(object):
     #         numeric_operators(data_type)
 
     def test_filter_pushdown_varchar(self,duckdb_cursor):
+        if not can_run:
+            return
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE test (a  VARCHAR, b VARCHAR, c VARCHAR)")
         duckdb_conn.execute("INSERT INTO  test VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)")
@@ -87,6 +91,8 @@ class TestArrowFilterPushdown(object):
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '100' or b ='1'").fetchone()[0] == 2
 
     def test_filter_pushdown_bool(self,duckdb_cursor):
+        if not can_run:
+            return
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE test (a  BOOL, b BOOL)")
         duckdb_conn.execute("INSERT INTO  test VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)")
@@ -108,6 +114,8 @@ class TestArrowFilterPushdown(object):
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = True or b =True").fetchone()[0] == 3
 
     def test_filter_pushdown_time(self,duckdb_cursor):
+        if not can_run:
+            return
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE test (a  TIME, b TIME, c TIME)")
         duckdb_conn.execute("INSERT INTO  test VALUES ('00:01:00','00:01:00','00:01:00'),('00:10:00','00:10:00','00:10:00'),('01:00:00','00:10:00','01:00:00'),(NULL,NULL,NULL)")
@@ -138,6 +146,8 @@ class TestArrowFilterPushdown(object):
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '01:00:00' or b ='00:01:00'").fetchone()[0] == 2
 
     def test_filter_pushdown_timestamp(self,duckdb_cursor):
+        if not can_run:
+            return
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE test (a  TIMESTAMP, b TIMESTAMP, c TIMESTAMP)")
         duckdb_conn.execute("INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
@@ -169,6 +179,8 @@ class TestArrowFilterPushdown(object):
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '2020-03-01 10:00:01' or b ='2008-01-01 00:00:01'").fetchone()[0] == 2
    
     def test_filter_pushdown_date(self,duckdb_cursor):
+        if not can_run:
+            return
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE test (a  DATE, b DATE, c DATE)")
         duckdb_conn.execute("INSERT INTO  test VALUES ('2000-01-01','2000-01-01','2000-01-01'),('2000-10-01','2000-10-01','2000-10-01'),('2010-01-01','2000-10-01','2010-01-01'),(NULL,NULL,NULL)")

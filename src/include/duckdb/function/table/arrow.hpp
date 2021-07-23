@@ -12,6 +12,7 @@
 #include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/mutex.hpp"
 #include <map>
 
 namespace duckdb {
@@ -74,7 +75,6 @@ struct ArrowScanState : public FunctionOperatorData {
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	unique_ptr<ArrowArrayWrapper> chunk;
 	idx_t chunk_offset = 0;
-	idx_t chunk_idx = 0;
 	vector<column_t> column_ids;
 	//! Store child vectors for Arrow Dictionary Vectors (col-idx,vector)
 	unordered_map<idx_t, unique_ptr<Vector>> arrow_dictionary_vectors;

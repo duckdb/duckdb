@@ -47,6 +47,8 @@ test_that("duckdb_register_arrow() works with datasets", {
 
 
 test_that("duckdb_register_arrow() performs projection pushdown", {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
 
     con <- dbConnect(duckdb::duckdb())
 
@@ -67,6 +69,8 @@ test_that("duckdb_register_arrow() performs projection pushdown", {
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown", {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
 
     con <- dbConnect(duckdb::duckdb())
 
@@ -87,8 +91,10 @@ test_that("duckdb_register_arrow() performs selection pushdown", {
 })
 
 
-library("arrow")
+# library("arrow")
 numeric_operators <- function(data_type) {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a ",data_type,", b ",data_type,", c ",data_type,")"))
     dbExecute(con, "INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
@@ -124,6 +130,8 @@ numeric_operators <- function(data_type) {
 
 
 test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
 
     numeric_types <- c('TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT',
     'FLOAT', 'DOUBLE')
@@ -157,6 +165,8 @@ test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
 # })
 
 test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  VARCHAR, b VARCHAR, c VARCHAR)"))
     dbExecute(con, "INSERT INTO  test VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)")
@@ -190,6 +200,8 @@ test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown bool type", {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  BOOL, b BOOL)"))
     dbExecute(con, "INSERT INTO  test VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)")
@@ -214,6 +226,8 @@ test_that("duckdb_register_arrow() performs selection pushdown bool type", {
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown time type", {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
 
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  TIME, b TIME, c TIME)"))
@@ -249,6 +263,9 @@ test_that("duckdb_register_arrow() performs selection pushdown time type", {
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown timestamp type", {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
+
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  TIMESTAMP, b TIMESTAMP, c TIMESTAMP)"))
     dbExecute(con, "INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
@@ -282,6 +299,9 @@ test_that("duckdb_register_arrow() performs selection pushdown timestamp type", 
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown date type", {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
+    
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  DATE, b DATE, c DATE)"))
     dbExecute(con, ""INSERT INTO  test VALUES ('2000-01-01','2000-01-01','2000-01-01'),('2000-10-01','2000-10-01','2000-10-01'),('2010-01-01','2000-10-01','2010-01-01'),(NULL,NULL,NULL)"") 

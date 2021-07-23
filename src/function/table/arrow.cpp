@@ -16,7 +16,7 @@
 #include "utf8proc_wrapper.hpp"
 
 #include "duckdb/common/operator/multiply.hpp"
-#include <mutex>
+#include "duckdb/common/mutex.hpp"
 #include <map>
 
 namespace duckdb {
@@ -210,7 +210,7 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	return move(res);
 }
 
-unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(ArrowScanFunctionData &function, ArrowScanState &scan_state,
+unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData &function, ArrowScanState &scan_state,
                                                      TableFilterCollection *filters) {
 	//! Generate Projection Pushdown Vector
 	pair<unordered_map<idx_t, string>, vector<string>> project_columns;
@@ -241,7 +241,7 @@ unique_ptr<FunctionOperatorData> ArrowTableFunction::ArrowScanInit(ClientContext
 	auto current_chunk = make_unique<ArrowArrayWrapper>();
 	auto result = make_unique<ArrowScanState>(move(current_chunk));
 	result->column_ids = column_ids;
-	auto &data = (ArrowScanFunctionData &)*bind_data;
+	auto &data = (const ArrowScanFunctionData &)*bind_data;
 	result->stream = ProduceArrowScan(data, *result, filters);
 	return move(result);
 }
@@ -1051,10 +1051,10 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	if (bind_data.number_of_rows == -1) {
+	if (bind_data.number_of_rows <= 0 || context.force_parallelism) {
 		return context.db->NumberOfThreads();
 	}
-	return (bind_data.number_of_rows + bind_data.rows_per_thread - 1) / bind_data.rows_per_thread;
+	return ((bind_data.number_of_rows + bind_data.rows_per_thread - 1) / bind_data.rows_per_thread) + 1;
 }
 
 unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientContext &context,
@@ -1065,18 +1065,22 @@ unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientC
 bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                                     FunctionOperatorData *operator_state,
                                                     ParallelState *parallel_state_p) {
-	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
-	lock_guard<mutex> parallel_lock(parallel_state.lock);
-	auto &bind_data = (ArrowScanFunctionData &)*bind_data_p;
+	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	auto &state = (ArrowScanState &)*operator_state;
+	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
+
+	lock_guard<mutex> parallel_lock(parallel_state.lock);
 	if (!parallel_state.stream) {
-		//! Generate Projection Pushdown Vector
+		//! Generate a Stream
 		parallel_state.stream = ProduceArrowScan(bind_data, state, state.filters);
 	}
 	state.chunk_offset = 0;
 
-	state.chunk = parallel_state.stream->GetNextChunk();
-
+	auto current_chunk = parallel_state.stream->GetNextChunk();
+	while (current_chunk->arrow_array.length == 0 && current_chunk->arrow_array.release) {
+		current_chunk = parallel_state.stream->GetNextChunk();
+	}
+	state.chunk = move(current_chunk);
 	//! have we run out of chunks? we are done
 	if (!state.chunk->arrow_array.release) {
 		return false;
