@@ -9,7 +9,7 @@
 using duckdb::OdbcFetch;
 using duckdb::OdbcHandleStmt;
 
-OdbcFetch::~OdbcFetch() = default;
+OdbcFetch::~OdbcFetch() {}
 
 SQLRETURN OdbcFetch::Fetch(SQLHSTMT statement_handle, OdbcHandleStmt *stmt) {
 	// case there is no bound column
