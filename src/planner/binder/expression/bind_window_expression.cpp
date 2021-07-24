@@ -7,6 +7,7 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
@@ -182,45 +183,45 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 
 	// Convert RANGE boundary expressions to ORDER +/- expressions .
-	auto startType = LogicalType::BIGINT;
-	auto hasRangeExpr = false;
+	auto start_type = LogicalType::BIGINT;
+	auto has_range_expr = false;
 	if (window.start == WindowBoundary::EXPR_PRECEDING_RANGE) {
-		startType = BindRangeExpression(context, "-", window.start_expr, window.orders[0].expression);
-		hasRangeExpr = true;
+		start_type = BindRangeExpression(context, "-", window.start_expr, window.orders[0].expression);
+		has_range_expr = true;
 	} else if (window.start == WindowBoundary::EXPR_FOLLOWING_RANGE) {
-		startType = BindRangeExpression(context, "+", window.start_expr, window.orders[0].expression);
-		hasRangeExpr = true;
+		start_type = BindRangeExpression(context, "+", window.start_expr, window.orders[0].expression);
+		has_range_expr = true;
 	}
 
-	auto endType = LogicalType::BIGINT;
+	auto end_type = LogicalType::BIGINT;
 	if (window.end == WindowBoundary::EXPR_PRECEDING_RANGE) {
-		endType = BindRangeExpression(context, "-", window.end_expr, window.orders[0].expression);
-		hasRangeExpr = true;
+		end_type = BindRangeExpression(context, "-", window.end_expr, window.orders[0].expression);
+		has_range_expr = true;
 	} else if (window.end == WindowBoundary::EXPR_FOLLOWING_RANGE) {
-		endType = BindRangeExpression(context, "+", window.end_expr, window.orders[0].expression);
-		hasRangeExpr = true;
+		end_type = BindRangeExpression(context, "+", window.end_expr, window.orders[0].expression);
+		has_range_expr = true;
 	}
 
 	// Cast ORDER and boundary expressions to the same type
-	auto orderType = LogicalType::INVALID;
-	if (hasRangeExpr) {
+	auto order_type = LogicalType::INVALID;
+	if (has_range_expr) {
 		D_ASSERT(window.orders.size() == 1);
 
 		auto &order_expr = window.orders[0].expression;
 		D_ASSERT(order_expr.get());
 		D_ASSERT(order_expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
 		auto &bound_order = (BoundExpression &)*order_expr;
-		auto orderType = bound_order.expr->return_type;
+		auto order_type = bound_order.expr->return_type;
 		if (window.start_expr) {
-			orderType = LogicalType::MaxLogicalType(orderType, startType);
+			order_type = LogicalType::MaxLogicalType(order_type, start_type);
 		}
 		if (window.end_expr) {
-			orderType = LogicalType::MaxLogicalType(orderType, endType);
+			order_type = LogicalType::MaxLogicalType(order_type, end_type);
 		}
 
 		// Cast all three to match
-		bound_order.expr = BoundCastExpression::AddCastToType(move(bound_order.expr), orderType);
-		startType = endType = orderType;
+		bound_order.expr = BoundCastExpression::AddCastToType(move(bound_order.expr), order_type);
+		start_type = end_type = order_type;
 	}
 
 	auto &config = DBConfig::GetConfig(context);
@@ -232,8 +233,8 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		result->orders.emplace_back(type, null_order, move(expression));
 	}
 
-	result->start_expr = CastWindowExpression(window.start_expr, startType);
-	result->end_expr = CastWindowExpression(window.end_expr, endType);
+	result->start_expr = CastWindowExpression(window.start_expr, start_type);
+	result->end_expr = CastWindowExpression(window.end_expr, end_type);
 	result->offset_expr = CastWindowExpression(window.offset_expr, LogicalType::BIGINT);
 	result->default_expr = CastWindowExpression(window.default_expr, result->return_type);
 	result->start = window.start;
