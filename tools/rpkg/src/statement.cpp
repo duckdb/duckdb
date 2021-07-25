@@ -422,6 +422,48 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	return retlist;
 }
 
+// Turn a DuckDB materialized result set into an Arrow Table
+SEXP duckdb_execute_arrow(MaterializedQueryResult *result) {
+	RProtector r;
+	// somewhat dark magic below
+	SEXP arrow_name_sexp = r.Protect(RApi::StringsToSexp({"arrow"}));
+	SEXP arrow_namespace_call = r.Protect(Rf_lang2(Rf_install("getNamespace"), arrow_name_sexp));
+
+	SEXP arrow_namespace = r.Protect(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
+
+	ArrowArray arrow_data;
+	ArrowSchema arrow_schema;
+
+	SEXP batches_sexp = r.Protect(NEW_LIST(result->collection.ChunkCount()));
+	idx_t batch_idx = 0;
+
+	auto schema_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_schema))));
+	auto data_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_data))));
+
+	auto schema_import_from_c = r.Protect(Rf_lang2(Rf_install("ImportSchema"), schema_ptr_sexp));
+	auto batch_import_from_c = r.Protect(Rf_lang3(Rf_install("ImportRecordBatch"), data_ptr_sexp, schema_ptr_sexp));
+
+	SEXP schema_arrow_obj;
+
+	bool convert_schema = true;
+	for (auto &data_chunk : result->collection.Chunks()) {
+		data_chunk->ToArrowArray(&arrow_data);
+		result->ToArrowSchema(&arrow_schema, &arrow_data);
+		if (convert_schema) {
+			schema_arrow_obj = r.Protect(RApi::REvalRerror(schema_import_from_c, arrow_namespace));
+			result->ToArrowSchema(&arrow_schema, &arrow_data);
+			convert_schema = false;
+		}
+
+		SEXP batch_arrow_obj = r.Protect(RApi::REvalRerror(batch_import_from_c, arrow_namespace));
+		SET_VECTOR_ELT(batches_sexp, batch_idx++, batch_arrow_obj);
+	}
+
+	auto from_record_batches =
+	    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_sexp, schema_arrow_obj));
+	return RApi::REvalRerror(from_record_batches, arrow_namespace);
+}
+
 SEXP RApi::Execute(SEXP stmtsexp, SEXP arrowsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_execute_R: Need external pointer for first parameter");
@@ -434,77 +476,18 @@ SEXP RApi::Execute(SEXP stmtsexp, SEXP arrowsexp) {
 		Rf_error("duckdb_execute_R: Invalid statement");
 	}
 
-	RProtector r;
-	SEXP out;
-
 	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
-	{
-		auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, false);
+	auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, false);
 
-		if (!generic_result->success) {
-			Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
-		}
-		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
-		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
-
-		if (!arrow_fetch) {
-			out = r.Protect(duckdb_execute_R_impl(result));
-		} else {
-			// TODO move this to separate method, maybe
-			// somewhat dark magic below
-			SEXP arrow_name_sexp = r.Protect(StringsToSexp({"arrow"}));
-			SEXP arrow_namespace_call = r.Protect(Rf_lang2(Rf_install("getNamespace"), arrow_name_sexp));
-
-			int err;
-			SEXP arrow_namespace = R_tryEval(arrow_namespace_call, R_GlobalEnv, &err);
-			if (err) {
-				Rf_error("Failed to load arrow namespace, is arrow installed?");
-			}
-
-			ArrowArray arrow_data;
-			ArrowSchema arrow_schema;
-
-			SEXP batches_sexp = r.Protect(NEW_LIST(result->collection.ChunkCount()));
-			idx_t batch_idx = 0;
-
-			auto schema_ptr_sexp =
-			    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_schema))));
-			auto data_ptr_sexp =
-			    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_data))));
-
-			auto schema_import_from_c = r.Protect(Rf_lang2(Rf_install("ImportSchema"), schema_ptr_sexp));
-			auto batch_import_from_c =
-			    r.Protect(Rf_lang3(Rf_install("ImportRecordBatch"), data_ptr_sexp, schema_ptr_sexp));
-
-			SEXP schema_arrow_obj;
-
-			bool convert_schema = true;
-			for (auto &data_chunk : result->collection.Chunks()) {
-				data_chunk->ToArrowArray(&arrow_data);
-				result->ToArrowSchema(&arrow_schema, &arrow_data);
-				if (convert_schema) {
-					schema_arrow_obj = r.Protect(R_tryEval(schema_import_from_c, arrow_namespace, &err));
-					if (err) {
-						Rf_error("Failed to convert schema %s", R_curErrorBuf());
-					}
-					result->ToArrowSchema(&arrow_schema, &arrow_data);
-					convert_schema = false;
-				}
-
-				SEXP batch_arrow_obj = r.Protect(R_tryEval(batch_import_from_c, arrow_namespace, &err));
-				if (err) {
-					Rf_error("Failed to convert batch %s", R_curErrorBuf());
-				}
-				SET_VECTOR_ELT(batches_sexp, batch_idx++, batch_arrow_obj);
-			}
-
-			auto from_record_batches =
-			    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_sexp, schema_arrow_obj));
-			out = r.Protect(R_tryEval(from_record_batches, arrow_namespace, &err));
-			if (err) {
-				Rf_error("Failed to convert record batches to table", R_curErrorBuf());
-			}
-		}
+	if (!generic_result->success) {
+		Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
 	}
-	return out;
+	D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
+	MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
+
+	if (arrow_fetch) {
+		return duckdb_execute_arrow(result);
+	} else {
+		return duckdb_execute_R_impl(result);
+	}
 }

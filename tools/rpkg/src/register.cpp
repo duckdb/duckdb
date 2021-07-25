@@ -87,12 +87,7 @@ public:
 			export_call = r.Protect(
 			    Rf_lang5(export_fun, factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp));
 		}
-
-		int err;
-		R_tryEval(export_call, R_GlobalEnv, &err);
-		if (err) {
-			throw IOException("Failed to produce Arrow stream %s", R_curErrorBuf());
-		}
+		RApi::REvalThrows(export_call);
 		return res;
 	}
 
@@ -194,12 +189,8 @@ private:
 		} else {
 			create_call = r.Protect(Rf_lang4(create_fun, op1, op2, op3));
 		}
-		int err;
-		auto res = r.Protect(R_tryEval(create_call, R_GlobalEnv, &err));
-		if (err) {
-			throw InternalException("Failed to create Arrow expression %s", R_curErrorBuf());
-		}
-		return res;
+
+		return RApi::REvalThrows(create_call);
 	}
 
 	static SEXP CreateExpression(SEXP functions, const string name, SEXP op1, SEXP op2 = R_NilValue) {

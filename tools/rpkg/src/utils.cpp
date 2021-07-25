@@ -213,3 +213,21 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		throw NotImplementedException("Can't convert %s of type %s", val.ToString(), val.type().ToString());
 	}
 }
+
+SEXP RApi::REvalThrows(SEXP call, SEXP env) {
+	RProtector r;
+	int err;
+	auto res = r.Protect(R_tryEval(call, env, &err));
+	if (err) {
+		throw InternalException("Failed to eval R expression %s", R_curErrorBuf());
+	}
+	return res;
+}
+
+SEXP RApi::REvalRerror(SEXP call, SEXP env) {
+	try {
+		return REvalThrows(call, env);
+	} catch (std::exception &e) {
+		Rf_error(e.what());
+	}
+}
