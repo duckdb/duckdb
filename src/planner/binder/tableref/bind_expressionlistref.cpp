@@ -34,7 +34,7 @@ unique_ptr<BoundTableRef> Binder::Bind(ExpressionListRef &expr) {
 		}
 		result->values.push_back(move(list));
 	}
-	if (result->types.empty() && expr.values.size() > 0) {
+	if (result->types.empty() && !expr.values.empty()) {
 		// there are no types specified
 		// we have to figure out the result types
 		// for each column, we iterate over all of the expressions and select the max logical type
