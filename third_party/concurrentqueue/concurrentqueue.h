@@ -226,13 +226,15 @@ namespace duckdb_moodycamel { namespace details {
 
 // Compiler-specific likely/unlikely hints
 namespace duckdb_moodycamel { namespace details {
-#if defined(__GNUC__)
-	static inline bool (likely)(bool x) { return __builtin_expect((x), true); }
-	static inline bool (unlikely)(bool x) { return __builtin_expect((x), false); }
-#else
+// disabled those hints. they caused compiler warnings and are of questionable to say the least
+//
+//#if defined(__GNUC__)
+//	static inline bool (likely)(bool x) { return __builtin_expect((x), true); }
+//	static inline bool (unlikely)(bool x) { return __builtin_expect((x), false); }
+//#else
 	static inline bool (likely)(bool x) { return x; }
-	static inline bool (unlikely)(bool x) { return x; }
-#endif
+//	static inline bool (unlikely)(bool x) { return x; }
+//#endif
 } }
 
 namespace duckdb_moodycamel {
@@ -245,11 +247,12 @@ namespace details {
 			: static_cast<T>(-1);
 	};
 
-#if defined(__GLIBCXX__)
-	typedef ::max_align_t std_max_align_t;      // libstdc++ forgot to add it to std:: for a while
-#else
+    // we hope this is now in all compilers
+//#if defined(__GLIBCXX__)
+//	typedef ::max_align_t std_max_align_t;      // libstdc++ forgot to add it to std:: for a while
+//#else
 	typedef std::max_align_t std_max_align_t;   // Others (e.g. MSVC) insist it can *only* be accessed via std::
-#endif
+//#endif
 
 	// Some platforms have incorrectly set max_align_t to a type with <8 bytes alignment even while supporting
 	// 8-byte aligned scalar values (*cough* 32-bit iOS). Work around this with our own union. See issue #64.
@@ -1320,7 +1323,7 @@ private:
 		}
 		auto prodCount = producerCount.load(std::memory_order_relaxed);
 		auto globalOffset = globalExplicitConsumerOffset.load(std::memory_order_relaxed);
-		if ((details::unlikely)(token.desiredProducer == nullptr)) {
+		if (token.desiredProducer == nullptr) {
 			// Aha, first time we're dequeueing anything.
 			// Figure out our local position
 			// Note: offset is from start, not end, but we're traversing from end -- subtract from count first

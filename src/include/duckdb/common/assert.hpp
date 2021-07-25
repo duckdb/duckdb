@@ -8,6 +8,11 @@
 
 #pragma once
 
+// if nothing is defined we want NDEBUG
+#if (!defined(DEBUG) && !defined NDEBUG)
+#define NDEBUG
+#endif
+
 #if (defined(DUCKDB_USE_STANDARD_ASSERT) || !defined(DEBUG)) && !defined(DUCKDB_FORCE_ASSERT)
 
 #include <assert.h>
