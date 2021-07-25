@@ -187,7 +187,9 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 		}
 		case SQL_DESC_OCTET_LENGTH:
 			// 0 DuckDB doesn't provide octet length
-			*numeric_attribute_ptr = 0;
+			if(numeric_attribute_ptr) {
+				*numeric_attribute_ptr = 0;
+			}
 			return SQL_SUCCESS;
 		case SQL_DESC_TYPE_NAME: {
 			if (buffer_length <= 0) {
