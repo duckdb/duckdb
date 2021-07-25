@@ -8,6 +8,7 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

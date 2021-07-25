@@ -315,29 +315,27 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				time = val.GetValue<dtime_t>();
 				break;
 			case LogicalTypeId::TIMESTAMP_SEC: {
-				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time,
-				                                                              duckdb::Timestamp::FromEpochSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time, duckdb::Timestamp::FromEpochSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_MS: {
-				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time,
-				                                                              duckdb::Timestamp::FromEpochMs)) {
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time, duckdb::Timestamp::FromEpochMs)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP: {
-				if (!CastTimestampValue<duckdb::Cast, dtime_t>(
-				        stmt, val, time, duckdb::Timestamp::FromEpochMicroSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time,
+				                                               duckdb::Timestamp::FromEpochMicroSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_NS: {
-				if (!CastTimestampValue<duckdb::Cast, dtime_t>(
-				        stmt, val, time, duckdb::Timestamp::FromEpochNanoSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time,
+				                                               duckdb::Timestamp::FromEpochNanoSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
