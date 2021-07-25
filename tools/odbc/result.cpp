@@ -28,9 +28,15 @@ SQLRETURN SQLFetch(SQLHSTMT statement_handle) {
 			if (!stmt->chunk) {
 				stmt->open = false;
 				return SQL_NO_DATA;
+			} else {
+				// count rows processed
+				if (stmt->res->type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
+					stmt->row_count += ((duckdb::MaterializedQueryResult *)stmt->res.get())->collection.Count();
+				} else {
+					stmt->row_count += stmt->chunk->size();
+				}
 			}
 			stmt->chunk_row = -1;
-			stmt->row_count += stmt->chunk->size();
 		}
 		if (stmt->rows_fetched_ptr) {
 			(*stmt->rows_fetched_ptr)++;
