@@ -103,7 +103,7 @@ static SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Va
 		auto casted_value = val.CastAs(type).GetValue<T>();
 		Store<T>(casted_value, (duckdb::data_ptr_t)target_value_ptr);
 		if (str_len_or_ind_ptr) {
-			// *str_len_or_ind_ptr = sizeof(T);
+			*str_len_or_ind_ptr = sizeof(casted_value);
 		}
 		return SQL_SUCCESS;
 	} catch (std::exception &ex) {
