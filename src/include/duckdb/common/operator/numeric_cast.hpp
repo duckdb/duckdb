@@ -85,74 +85,6 @@ bool TryCastWithOverflowCheck(double value, int64_t &result) {
 }
 
 template <>
-bool TryCastWithOverflowCheck(bool value, bool &result) {
-	result = value;
-	return true;
-}
-
-template <>
-bool TryCastWithOverflowCheck(hugeint_t value, hugeint_t &result) {
-	result = value;
-	return true;
-}
-
-#define TRY_CAST_BOOL(SOURCE_TYPE) \
-template <> \
-bool TryCastWithOverflowCheck(SOURCE_TYPE value, bool &result) { \
-	result = bool(value); \
-	return true; \
-} \
-template <> \
-bool TryCastWithOverflowCheck(bool value, SOURCE_TYPE &result) { \
-	result = SOURCE_TYPE(value); \
-	return true; \
-}
-
-#define TRY_CAST_HUGEINT(SOURCE_TYPE) \
-template <> \
-bool TryCastWithOverflowCheck(SOURCE_TYPE value, hugeint_t &result) { \
-	return Hugeint::TryConvert(value, result); \
-} \
-template <> \
-bool TryCastWithOverflowCheck(hugeint_t value, SOURCE_TYPE &result) { \
-	return Hugeint::TryCast(value, result); \
-}
-
-TRY_CAST_BOOL(int8_t)
-TRY_CAST_BOOL(int16_t)
-TRY_CAST_BOOL(int32_t)
-TRY_CAST_BOOL(int64_t)
-TRY_CAST_BOOL(uint8_t)
-TRY_CAST_BOOL(uint16_t)
-TRY_CAST_BOOL(uint32_t)
-TRY_CAST_BOOL(uint64_t)
-TRY_CAST_BOOL(float)
-TRY_CAST_BOOL(double)
-
-template <>
-bool TryCastWithOverflowCheck(hugeint_t input, bool &result) {
-	result = input.upper != 0 || input.lower != 0;
-	return true;
-}
-template <>
-bool TryCastWithOverflowCheck(bool input, hugeint_t &result) {
-	result.upper = 0;
-	result.lower = input ? 1 : 0;
-	return true;
-}
-
-TRY_CAST_HUGEINT(int8_t)
-TRY_CAST_HUGEINT(int16_t)
-TRY_CAST_HUGEINT(int32_t)
-TRY_CAST_HUGEINT(int64_t)
-TRY_CAST_HUGEINT(uint8_t)
-TRY_CAST_HUGEINT(uint16_t)
-TRY_CAST_HUGEINT(uint32_t)
-TRY_CAST_HUGEINT(uint64_t)
-TRY_CAST_HUGEINT(float)
-TRY_CAST_HUGEINT(double)
-
-template <>
 bool TryCastWithOverflowCheck(double input, float &result) {
 	if (input < (double)NumericLimits<float>::Minimum() || input > (double)NumericLimits<float>::Maximum()) {
 		return false;
@@ -163,6 +95,263 @@ bool TryCastWithOverflowCheck(double input, float &result) {
 	}
 	result = res;
 	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast Numeric -> bool
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastWithOverflowCheck(bool value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(int8_t value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(int16_t value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(int32_t value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(int64_t value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(uint8_t value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(uint16_t value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(uint32_t value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(uint64_t value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, bool &result) {
+	result = bool(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t input, bool &result) {
+	result = input.upper != 0 || input.lower != 0;
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast bool -> Numeric
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastWithOverflowCheck(bool value, int8_t &result) {
+	result = int8_t(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(bool value, int16_t &result) {
+	result = int16_t(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(bool value, int32_t &result) {
+	result = int32_t(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(bool value, int64_t &result) {
+	result = int64_t(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(bool value, uint8_t &result) {
+	result = uint8_t(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(bool value, uint16_t &result) {
+	result = uint16_t(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(bool value, uint32_t &result) {
+	result = uint32_t(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(bool value, uint64_t &result) {
+	result = uint64_t(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(bool value, float &result) {
+	result = float(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(bool value, double &result) {
+	result = double(value);
+	return true;
+}
+
+template <>
+bool TryCastWithOverflowCheck(bool input, hugeint_t &result) {
+	result.upper = 0;
+	result.lower = input ? 1 : 0;
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast Numeric -> hugeint
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastWithOverflowCheck(int8_t value, hugeint_t &result) {
+	return Hugeint::TryConvert(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(int16_t value, hugeint_t &result) {
+	return Hugeint::TryConvert(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(int32_t value, hugeint_t &result) {
+	return Hugeint::TryConvert(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(int64_t value, hugeint_t &result) {
+	return Hugeint::TryConvert(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(uint8_t value, hugeint_t &result) {
+	return Hugeint::TryConvert(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(uint16_t value, hugeint_t &result) {
+	return Hugeint::TryConvert(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(uint32_t value, hugeint_t &result) {
+	return Hugeint::TryConvert(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(uint64_t value, hugeint_t &result) {
+	return Hugeint::TryConvert(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(float value, hugeint_t &result) {
+	return Hugeint::TryConvert(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(double value, hugeint_t &result) {
+	return Hugeint::TryConvert(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, hugeint_t &result) {
+	result = value;
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast Hugeint -> Numeric
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, int8_t &result) {
+	return Hugeint::TryCast(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, int16_t &result) {
+	return Hugeint::TryCast(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, int32_t &result) {
+	return Hugeint::TryCast(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, int64_t &result) {
+	return Hugeint::TryCast(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, uint8_t &result) {
+	return Hugeint::TryCast(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, uint16_t &result) {
+	return Hugeint::TryCast(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, uint32_t &result) {
+	return Hugeint::TryCast(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, uint64_t &result) {
+	return Hugeint::TryCast(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, float &result) {
+	return Hugeint::TryCast(value, result);
+}
+
+template <>
+bool TryCastWithOverflowCheck(hugeint_t value, double &result) {
+	return Hugeint::TryCast(value, result);
 }
 
 struct NumericTryCast {

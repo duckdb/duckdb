@@ -10,6 +10,7 @@
 
 #include "duckdb/common/vector_operations/general_cast.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 
 namespace duckdb {
 
