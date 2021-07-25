@@ -177,7 +177,9 @@ void Time::Convert(dtime_t dtime, int32_t &hour, int32_t &min, int32_t &sec, int
 	sec = int32_t(time / Interval::MICROS_PER_SEC);
 	time -= int64_t(sec) * Interval::MICROS_PER_SEC;
 	micros = int32_t(time);
+#ifdef DEBUG
 	D_ASSERT(AssertValidTime(hour, min, sec, micros));
+#endif
 }
 
 } // namespace duckdb

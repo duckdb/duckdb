@@ -709,11 +709,9 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			auto tgt_ptr = (int16_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
-#ifdef DEBUG
-					auto result =
-#endif
-					    Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
+					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 					D_ASSERT(result);
+					(void)result;
 				}
 			}
 			break;
@@ -722,11 +720,9 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			auto tgt_ptr = (int32_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
-#ifdef DEBUG
-					auto result =
-#endif
-					    Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
+					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 					D_ASSERT(result);
+					(void)result;
 				}
 			}
 			break;
@@ -735,11 +731,9 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 			auto tgt_ptr = (int64_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
-#ifdef DEBUG
-					auto result =
-#endif
-					    Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
+					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 					D_ASSERT(result);
+					(void)result;
 				}
 			}
 			break;

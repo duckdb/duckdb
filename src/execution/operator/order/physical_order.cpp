@@ -1427,8 +1427,9 @@ public:
 			         right.entry_idx == right.payload_data->entry_idx);
 			D_ASSERT(result->radix_sorting_data.size() == result->payload_data->data_blocks.size());
 		}
+#ifdef DEBUG
 		D_ASSERT(result->Count() == l_count + r_count);
-
+#endif
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
 		if (parent.finished_tasks == parent.total_tasks) {
