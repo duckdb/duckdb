@@ -245,7 +245,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			} else {
 				hugeint_t huge_int;
 				string error_message;
-				if (!duckdb::TryCastToDecimal::Operation<string_t, hugeint_t>(str_t, huge_int, error_message,
+				if (!duckdb::TryCastToDecimal::Operation<string_t, hugeint_t>(str_t, huge_int, &error_message,
 				                                                              numeric->precision, numeric->scale)) {
 					return SQL_ERROR;
 				}
@@ -288,10 +288,9 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			}
 			case LogicalTypeId::VARCHAR: {
 				string val_str = val.GetValue<string>();
-				try {
-					date = duckdb::CastToDate::Operation<string_t, date_t>(string_t(val_str));
-				} catch (duckdb::Exception &ex) {
-					stmt->error_messages.emplace_back(ex.what());
+				auto str_input = string_t(val_str);
+				if (!TryCast::Operation<string_t, date_t>(str_input, date)) {
+					stmt->error_messages.emplace_back(CastExceptionText<string_t, date_t>(str_input));
 					return SQL_ERROR;
 				}
 				break;
@@ -302,15 +301,12 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			} // end switch "val.type().id()": SQL_C_TYPE_DATE
 
 			SQL_DATE_STRUCT *date_struct = (SQL_DATE_STRUCT *)target_value_ptr;
-			try {
-				date_struct->year = duckdb::Date::ExtractYear(date);
-				date_struct->month = duckdb::Date::ExtractMonth(date);
-				date_struct->day = duckdb::Date::ExtractDay(date);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
+			int32_t year, month, day;
+			Date::Convert(date, year, month, day);
+			date_struct->year = year;
+			date_struct->month = month;
+			date_struct->day = day;
+			return SQL_SUCCESS;
 		}
 		case SQL_C_TYPE_TIME: {
 			dtime_t time;
@@ -319,28 +315,28 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				time = val.GetValue<dtime_t>();
 				break;
 			case LogicalTypeId::TIMESTAMP_SEC: {
-				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(stmt, val, time,
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time,
 				                                                              duckdb::Timestamp::FromEpochSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_MS: {
-				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(stmt, val, time,
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time,
 				                                                              duckdb::Timestamp::FromEpochMs)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP: {
-				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(
 				        stmt, val, time, duckdb::Timestamp::FromEpochMicroSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_NS: {
-				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(
 				        stmt, val, time, duckdb::Timestamp::FromEpochNanoSeconds)) {
 					return SQL_ERROR;
 				}
@@ -348,10 +344,9 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			}
 			case LogicalTypeId::VARCHAR: {
 				string val_str = val.GetValue<string>();
-				try {
-					time = duckdb::CastToTime::Operation<string_t, dtime_t>(string_t(val_str));
-				} catch (duckdb::Exception &ex) {
-					stmt->error_messages.emplace_back(ex.what());
+				auto str_input = string_t(val_str);
+				if (!TryCast::Operation<string_t, dtime_t>(str_input, time)) {
+					stmt->error_messages.emplace_back(CastExceptionText<string_t, dtime_t>(str_input));
 					return SQL_ERROR;
 				}
 				break;
@@ -362,18 +357,13 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			} // end switch "val.type().id()": SQL_C_TYPE_TIME
 
 			SQL_TIME_STRUCT *time_struct = (SQL_TIME_STRUCT *)target_value_ptr;
-			try {
-				int32_t hour, minute, second, micros;
-				duckdb::Time::Convert(time, hour, minute, second, micros);
+			int32_t hour, minute, second, micros;
+			duckdb::Time::Convert(time, hour, minute, second, micros);
 
-				time_struct->hour = hour;
-				time_struct->minute = minute;
-				time_struct->second = second;
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
+			time_struct->hour = hour;
+			time_struct->minute = minute;
+			time_struct->second = second;
+			return SQL_SUCCESS;
 		}
 		case SQL_C_TYPE_TIMESTAMP: {
 			timestamp_t timestamp;
@@ -391,20 +381,18 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				timestamp = duckdb::Timestamp::FromEpochNanoSeconds(val.GetValue<int64_t>());
 				break;
 			case LogicalTypeId::DATE: {
-				try {
-					timestamp = duckdb::CastDateToTimestamp::Operation<date_t, timestamp_t>(val.GetValue<date_t>());
-				} catch (duckdb::Exception &ex) {
-					stmt->error_messages.emplace_back(ex.what());
+				auto date_input = val.GetValue<date_t>();
+				if (!TryCast::Operation<date_t, timestamp_t>(date_input, timestamp)) {
+					stmt->error_messages.emplace_back(CastExceptionText<date_t, timestamp_t>(date_input));
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::VARCHAR: {
 				string val_str = val.GetValue<string>();
-				try {
-					timestamp = duckdb::CastToTimestamp::Operation<string_t, timestamp_t>(string_t(val_str));
-				} catch (duckdb::Exception &ex) {
-					stmt->error_messages.emplace_back(ex.what());
+				auto str_input = string_t(val_str);
+				if (!TryCast::Operation<string_t, timestamp_t>(str_input, timestamp)) {
+					stmt->error_messages.emplace_back(CastExceptionText<string_t, timestamp_t>(str_input));
 					return SQL_ERROR;
 				}
 				break;
@@ -415,25 +403,23 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			} // end switch "val.type().id()"
 
 			SQL_TIMESTAMP_STRUCT *timestamp_struct = (SQL_TIMESTAMP_STRUCT *)target_value_ptr;
-			try {
-				date_t date = duckdb::Timestamp::GetDate(timestamp);
-				timestamp_struct->year = duckdb::Date::ExtractYear(date);
-				timestamp_struct->month = duckdb::Date::ExtractMonth(date);
-				timestamp_struct->day = duckdb::Date::ExtractDay(date);
+			date_t date = duckdb::Timestamp::GetDate(timestamp);
 
-				dtime_t time = duckdb::Timestamp::GetTime(timestamp);
-				int32_t hour, minute, second, micros;
-				duckdb::Time::Convert(time, hour, minute, second, micros);
-				timestamp_struct->hour = hour;
-				timestamp_struct->minute = minute;
-				timestamp_struct->second = second;
-				timestamp_struct->fraction = micros;
+			int32_t year, month, day;
+			Date::Convert(date, year, month, day);
+			timestamp_struct->year = year;
+			timestamp_struct->month = month;
+			timestamp_struct->day = day;
 
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
-			}
+			dtime_t time = duckdb::Timestamp::GetTime(timestamp);
+			int32_t hour, minute, second, micros;
+			duckdb::Time::Convert(time, hour, minute, second, micros);
+			timestamp_struct->hour = hour;
+			timestamp_struct->minute = minute;
+			timestamp_struct->second = second;
+			timestamp_struct->fraction = micros;
+
+			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_YEAR: {
 			interval_t interval;
