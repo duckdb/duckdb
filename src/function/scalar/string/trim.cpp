@@ -11,7 +11,7 @@ namespace duckdb {
 
 template <bool LTRIM, bool RTRIM>
 struct TrimOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto data = input.GetDataUnsafe();
 		auto size = input.GetSize();

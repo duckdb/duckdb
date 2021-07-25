@@ -73,13 +73,14 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 		if (data[i] == '\\') {
 			if (i + 3 >= len) {
 				string error = "Invalid hex escape code encountered in string -> blob conversion: "
-				                          "unterminated escape code at end of blob";
+				               "unterminated escape code at end of blob";
 				HandleCastError::AssignError(error, error_message);
 				return false;
 			}
 			if (data[i + 1] != 'x' || Blob::HEX_MAP[data[i + 2]] < 0 || Blob::HEX_MAP[data[i + 3]] < 0) {
-				string error = StringUtil::Format("Invalid hex escape code encountered in string -> blob conversion: %s",
-				                          string((char *)data + i, 4));
+				string error =
+				    StringUtil::Format("Invalid hex escape code encountered in string -> blob conversion: %s",
+				                       string((char *)data + i, 4));
 				HandleCastError::AssignError(error, error_message);
 				return false;
 			}
@@ -89,7 +90,7 @@ bool Blob::TryGetBlobSize(string_t str, idx_t &str_len, string *error_message) {
 			str_len++;
 		} else {
 			string error = "Invalid byte encountered in STRING -> BLOB conversion. All non-ascii characters "
-			                          "must be escaped with hex codes (e.g. \\xAA)";
+			               "must be escaped with hex codes (e.g. \\xAA)";
 			HandleCastError::AssignError(error, error_message);
 			return false;
 		}

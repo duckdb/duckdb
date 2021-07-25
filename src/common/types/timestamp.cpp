@@ -64,7 +64,6 @@ bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &res
 	return true;
 }
 
-
 timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	timestamp_t result;
 	if (!Timestamp::TryConvertTimestamp(str, len, result)) {

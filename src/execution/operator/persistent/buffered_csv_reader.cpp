@@ -411,7 +411,8 @@ bool BufferedCSVReader::TryCastValue(const Value &value, const LogicalType &sql_
 	} else if (options.has_format[LogicalTypeId::TIMESTAMP] && sql_type.id() == LogicalTypeId::TIMESTAMP) {
 		timestamp_t result;
 		string error_message;
-		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(value.str_value), result, error_message);
+		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(string_t(value.str_value), result,
+		                                                                       error_message);
 	} else {
 		Value new_value;
 		string error_message;
@@ -426,13 +427,15 @@ struct TryCastDateOperator {
 };
 
 struct TryCastTimestampOperator {
-	static bool Operation(BufferedCSVReaderOptions &options, string_t input, timestamp_t &result, string &error_message) {
+	static bool Operation(BufferedCSVReaderOptions &options, string_t input, timestamp_t &result,
+	                      string &error_message) {
 		return options.date_format[LogicalTypeId::TIMESTAMP].TryParseTimestamp(input, result, error_message);
 	}
 };
 
-template<class OP, class T>
-static bool TemplatedTryCastDateVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count, string &error_message) {
+template <class OP, class T>
+static bool TemplatedTryCastDateVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector,
+                                       idx_t count, string &error_message) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
 	UnaryExecutor::ExecuteLambda<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
@@ -445,12 +448,16 @@ static bool TemplatedTryCastDateVector(BufferedCSVReaderOptions &options, Vector
 	return all_converted;
 }
 
-bool TryCastDateVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count, string &error_message) {
-	return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count, error_message);
+bool TryCastDateVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
+                       string &error_message) {
+	return TemplatedTryCastDateVector<TryCastDateOperator, date_t>(options, input_vector, result_vector, count,
+	                                                               error_message);
 }
 
-bool TryCastTimestampVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count, string &error_message) {
-	return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector, count, error_message);
+bool TryCastTimestampVector(BufferedCSVReaderOptions &options, Vector &input_vector, Vector &result_vector, idx_t count,
+                            string &error_message) {
+	return TemplatedTryCastDateVector<TryCastTimestampOperator, timestamp_t>(options, input_vector, result_vector,
+	                                                                         count, error_message);
 }
 
 bool BufferedCSVReader::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
@@ -742,7 +749,8 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 	}
 }
 
-void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql_types_candidates, const DataChunk &best_header_row) {
+void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql_types_candidates,
+                                     const DataChunk &best_header_row) {
 	// information for header detection
 	bool first_row_consistent = true;
 	bool first_row_nulls = false;
@@ -804,7 +812,10 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 	}
 }
 
-vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalType> &type_candidates, const vector<LogicalType> &requested_types, vector<vector<LogicalType>> &best_sql_types_candidates, map<LogicalTypeId, vector<string>> &best_format_candidates) {
+vector<LogicalType> BufferedCSVReader::RefineTypeDetection(const vector<LogicalType> &type_candidates,
+                                                           const vector<LogicalType> &requested_types,
+                                                           vector<vector<LogicalType>> &best_sql_types_candidates,
+                                                           map<LogicalTypeId, vector<string>> &best_format_candidates) {
 	// for the type refine we set the SQL types to VARCHAR for all columns
 	sql_types.clear();
 	sql_types.assign(options.num_cols, LogicalType::VARCHAR);
@@ -1074,7 +1085,7 @@ in_quotes:
 	} while (ReadBuffer(start));
 	// still in quoted state at the end of the file, error:
 	error_message = StringUtil::Format("Error in file \"%s\" on line %s: unterminated quotes. (%s)", options.file_path,
-	                            GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
+	                                   GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
 	return false;
 unquote:
 	/* state: unquote */
@@ -1145,9 +1156,9 @@ handle_escape:
 			}
 		}
 	} while (ReadBuffer(start));
-	error_message = StringUtil::Format(
-	    "Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)", options.file_path,
-	    GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
+	error_message =
+	    StringUtil::Format("Error in file \"%s\" on line %s: neither QUOTE nor ESCAPE is proceeded by ESCAPE. (%s)",
+	                       options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
 	return false;
 carriage_return:
 	/* state: carriage_return */
@@ -1303,10 +1314,10 @@ unquote:
 		offset = 1;
 		goto add_row;
 	} else {
-		error_message = StringUtil::Format("Error in file \"%s\" on line %s: quote should be followed by end of value, end of "
-		                            "row or another quote. (%s)",
-		                            options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(),
-		                            options.toString());
+		error_message = StringUtil::Format(
+		    "Error in file \"%s\" on line %s: quote should be followed by end of value, end of "
+		    "row or another quote. (%s)",
+		    options.file_path, GetLineNumberStr(linenr, linenr_estimated).c_str(), options.toString());
 		return false;
 	}
 handle_escape:
@@ -1401,7 +1412,6 @@ bool BufferedCSVReader::ReadBuffer(idx_t &start) {
 
 	return read_count > 0;
 }
-
 
 void BufferedCSVReader::ParseCSV(DataChunk &insert_chunk) {
 	// if no auto-detect or auto-detect with jumping samples, we have nothing cached and start from the beginning
@@ -1581,14 +1591,17 @@ void BufferedCSVReader::Flush(DataChunk &insert_chunk) {
 			bool success;
 			if (options.has_format[LogicalTypeId::DATE] && sql_types[col_idx].id() == LogicalTypeId::DATE) {
 				// use the date format to cast the chunk
-				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), error_message);
+				success = TryCastDateVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx],
+				                            parse_chunk.size(), error_message);
 			} else if (options.has_format[LogicalTypeId::TIMESTAMP] &&
-						sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
+			           sql_types[col_idx].id() == LogicalTypeId::TIMESTAMP) {
 				// use the date format to cast the chunk
-				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), error_message);
+				success = TryCastTimestampVector(options, parse_chunk.data[col_idx], insert_chunk.data[col_idx],
+				                                 parse_chunk.size(), error_message);
 			} else {
 				// target type is not varchar: perform a cast
-				success = VectorOperations::TryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx], parse_chunk.size(), &error_message);
+				success = VectorOperations::TryCast(parse_chunk.data[col_idx], insert_chunk.data[col_idx],
+				                                    parse_chunk.size(), &error_message);
 			}
 			if (!success) {
 				string col_name = to_string(col_idx);

@@ -245,7 +245,8 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			} else {
 				hugeint_t huge_int;
 				string error_message;
-				if (!duckdb::TryCastToDecimal::Operation<string_t, hugeint_t>(str_t, huge_int, error_message, numeric->precision, numeric->scale)) {
+				if (!duckdb::TryCastToDecimal::Operation<string_t, hugeint_t>(str_t, huge_int, error_message,
+				                                                              numeric->precision, numeric->scale)) {
 					return SQL_ERROR;
 				}
 				memcpy(dataptr, &huge_int.lower, sizeof(huge_int.lower));
@@ -260,29 +261,27 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				date = val.GetValue<date_t>();
 				break;
 			case LogicalTypeId::TIMESTAMP_SEC: {
-				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date,
-				                                                             duckdb::Timestamp::FromEpochSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date, duckdb::Timestamp::FromEpochSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_MS: {
-				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date,
-				                                                             duckdb::Timestamp::FromEpochMs)) {
+				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date, duckdb::Timestamp::FromEpochMs)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP: {
-				if (!CastTimestampValue<duckdb::Cast, date_t>(
-				        stmt, val, date, duckdb::Timestamp::FromEpochMicroSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date,
+				                                              duckdb::Timestamp::FromEpochMicroSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_NS: {
 				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date,
-				                                                             duckdb::Timestamp::FromEpochNanoSeconds)) {
+				                                              duckdb::Timestamp::FromEpochNanoSeconds)) {
 					return SQL_ERROR;
 				}
 				break;

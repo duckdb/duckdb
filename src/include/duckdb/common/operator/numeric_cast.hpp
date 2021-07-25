@@ -45,7 +45,7 @@ static bool TryCastWithOverflowCheck(SRC value, DST &result) {
 	} else {
 		// same sign conversion
 		if (NumericLimits<DST>::Digits() >= NumericLimits<SRC>::Digits()) {
-			result = (DST) value;
+			result = (DST)value;
 			return true;
 		} else {
 			if (value < SRC(NumericLimits<DST>::Minimum()) || value > SRC(NumericLimits<DST>::Maximum())) {
@@ -372,5 +372,4 @@ struct NumericCast {
 	}
 };
 
-}
-
+} // namespace duckdb

@@ -1,6 +1,6 @@
 # name: test/sql/types/hugeint/hugeint_try_cast.test
 # description: Test try_cast for hugeint
-# group: [decimal]
+# group: [hugeint]
 
 statement ok
 PRAGMA enable_verification

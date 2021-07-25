@@ -5,7 +5,7 @@
 namespace duckdb {
 
 struct NFCNormalizeOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();

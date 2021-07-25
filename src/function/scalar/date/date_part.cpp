@@ -9,8 +9,6 @@
 
 namespace duckdb {
 
-
-
 bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &result) {
 	auto specifier = StringUtil::Lower(specifier_p);
 	if (specifier == "year" || specifier == "y" || specifier == "years") {
@@ -71,9 +69,8 @@ DatePartSpecifier GetDatePartSpecifier(const string &specifier) {
 template <class T>
 static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	int32_t last_year = 0;
-	UnaryExecutor::ExecuteLambda<T, int64_t>(args.data[0], result, args.size(), [&](T input) {
-		return Date::ExtractYear(input, &last_year);
-	});
+	UnaryExecutor::ExecuteLambda<T, int64_t>(args.data[0], result, args.size(),
+	                                         [&](T input) { return Date::ExtractYear(input, &last_year); });
 }
 
 template <class T, class OP>

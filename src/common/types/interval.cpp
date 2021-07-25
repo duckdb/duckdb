@@ -139,7 +139,8 @@ interval_parse_identifier:
 	}
 	specifier_str = string(str + start_pos, pos - start_pos);
 	if (!TryGetDatePartSpecifier(specifier_str, specifier)) {
-		HandleCastError::AssignError(StringUtil::Format("extract specifier \"%s\" not recognized", specifier_str), error_message);
+		HandleCastError::AssignError(StringUtil::Format("extract specifier \"%s\" not recognized", specifier_str),
+		                             error_message);
 		return false;
 	}
 	// add the specifier to the interval
@@ -184,7 +185,8 @@ interval_parse_identifier:
 		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_HOUR);
 		break;
 	default:
-		HandleCastError::AssignError(StringUtil::Format("extract specifier \"%s\" not supported for interval", specifier_str), error_message);
+		HandleCastError::AssignError(
+		    StringUtil::Format("extract specifier \"%s\" not supported for interval", specifier_str), error_message);
 		return false;
 	}
 	found_any = true;

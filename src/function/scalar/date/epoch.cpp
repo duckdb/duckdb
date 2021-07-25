@@ -8,7 +8,7 @@
 namespace duckdb {
 
 struct EpochSecOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input) {
 		return Timestamp::FromEpochSeconds(input);
 	}
@@ -21,7 +21,7 @@ static void EpochSecFunction(DataChunk &input, ExpressionState &state, Vector &r
 }
 
 struct EpochMillisOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input) {
 		return Timestamp::FromEpochMs(input);
 	}

@@ -8,7 +8,6 @@
 
 #pragma once
 
-
 #if __GNUC__
 #define DUCKDB_BUILTIN_EXPECT(cond, expected_value) (__builtin_expect(cond, expected_value))
 #else

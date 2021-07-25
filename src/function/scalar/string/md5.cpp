@@ -7,7 +7,7 @@
 namespace duckdb {
 
 struct MD5Operator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto hash = StringVector::EmptyString(result, MD5Context::MD5_HASH_LENGTH_TEXT);
 		MD5Context context;

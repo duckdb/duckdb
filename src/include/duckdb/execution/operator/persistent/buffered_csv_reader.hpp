@@ -227,7 +227,10 @@ private:
 	//! Third phase of auto detection: detect header of CSV file
 	void DetectHeader(const vector<vector<LogicalType>> &best_sql_types_candidates, const DataChunk &best_header_row);
 	//! Fourth phase of auto detection: refine the types of each column and select which types to use for each column
-	vector<LogicalType> RefineTypeDetection(const vector<LogicalType> &type_candidates, const vector<LogicalType> &requested_types, vector<vector<LogicalType>> &best_sql_types_candidates, map<LogicalTypeId, vector<string>> &best_format_candidates);
+	vector<LogicalType> RefineTypeDetection(const vector<LogicalType> &type_candidates,
+	                                        const vector<LogicalType> &requested_types,
+	                                        vector<vector<LogicalType>> &best_sql_types_candidates,
+	                                        map<LogicalTypeId, vector<string>> &best_format_candidates);
 };
 
 } // namespace duckdb

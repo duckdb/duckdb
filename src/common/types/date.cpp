@@ -260,8 +260,9 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	}
 
 	// check for an optional trailing " (BC)""
-	if (len - pos >= 5 && StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' && StringUtil::CharacterToLower(buf[pos + 2]) == 'b' &&
-	    StringUtil::CharacterToLower(buf[pos + 3]) == 'c' && buf[pos + 4] == ')') {
+	if (len - pos >= 5 && StringUtil::CharacterIsSpace(buf[pos]) && buf[pos + 1] == '(' &&
+	    StringUtil::CharacterToLower(buf[pos + 2]) == 'b' && StringUtil::CharacterToLower(buf[pos + 3]) == 'c' &&
+	    buf[pos + 4] == ')') {
 		if (yearneg || year == 0) {
 			return false;
 		}

@@ -139,4 +139,4 @@ duckdb::string_t StringCast::Operation(timestamp_t input, Vector &vector) {
 	return result;
 }
 
-}
+} // namespace duckdb

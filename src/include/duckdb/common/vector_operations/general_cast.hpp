@@ -14,8 +14,9 @@
 namespace duckdb {
 
 struct HandleVectorCastError {
-	template<class RESULT_TYPE>
-	static RESULT_TYPE Operation(string error_message, ValidityMask &mask, idx_t idx, string *error_message_ptr, bool &all_converted) {
+	template <class RESULT_TYPE>
+	static RESULT_TYPE Operation(string error_message, ValidityMask &mask, idx_t idx, string *error_message_ptr,
+	                             bool &all_converted) {
 		HandleCastError::AssignError(error_message, error_message_ptr);
 		all_converted = false;
 		mask.SetInvalid(idx);
@@ -24,8 +25,7 @@ struct HandleVectorCastError {
 };
 
 static string UnimplementedCastMessage(const LogicalType &source_type, const LogicalType &target_type) {
-	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(),
-	                               target_type.ToString());
+	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(), target_type.ToString());
 }
 
 static NotImplementedException UnimplementedCast(const LogicalType &source_type, const LogicalType &target_type) {
@@ -48,4 +48,4 @@ static void VectorNullCast(Vector &source, Vector &result, idx_t count) {
 	TryVectorNullCast(source, result, count, nullptr);
 }
 
-}
+} // namespace duckdb

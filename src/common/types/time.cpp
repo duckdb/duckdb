@@ -124,7 +124,6 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	return true;
 }
 
-
 dtime_t Time::FromCString(const char *buf, idx_t len, bool strict) {
 	dtime_t result;
 	idx_t pos;

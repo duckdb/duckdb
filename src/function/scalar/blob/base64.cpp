@@ -4,7 +4,7 @@
 namespace duckdb {
 
 struct Base64EncodeOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto result_str = StringVector::EmptyString(result, Blob::ToBase64Size(input));
 		Blob::ToBase64(input, result_str.GetDataWriteable());
@@ -14,7 +14,7 @@ struct Base64EncodeOperator {
 };
 
 struct Base64DecodeOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto result_size = Blob::FromBase64Size(input);
 		auto result_blob = StringVector::EmptyString(result, result_size);

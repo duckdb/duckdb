@@ -253,7 +253,8 @@ static void TestStringCastDouble(vector<string> &working_values, vector<DST> &ex
 		REQUIRE(TryCast::Operation<string_t, DST>(string_t(value), result));
 		REQUIRE(ApproxEqual(result, expected_value));
 
-		auto to_str_and_back = Cast::Operation<string_t, DST>(string_t(ConvertToString::Operation<DST>(expected_value)));
+		auto to_str_and_back =
+		    Cast::Operation<string_t, DST>(string_t(ConvertToString::Operation<DST>(expected_value)));
 		REQUIRE(ApproxEqual(to_str_and_back, expected_value));
 	}
 	for (auto &value : broken_values) {

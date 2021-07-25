@@ -34,13 +34,10 @@ struct TryCastErrorMessage {
 	}
 };
 
-
-template<class SRC, class DST>
+template <class SRC, class DST>
 static string CastExceptionText(SRC input) {
-	return "Type " + TypeIdToString(GetTypeId<SRC>()) + " with value " +
-								ConvertToString::Operation<SRC>(input) +
-								" can't be cast to the destination type " +
-								TypeIdToString(GetTypeId<DST>());
+	return "Type " + TypeIdToString(GetTypeId<SRC>()) + " with value " + ConvertToString::Operation<SRC>(input) +
+	       " can't be cast to the destination type " + TypeIdToString(GetTypeId<DST>());
 }
 
 struct Cast {
@@ -618,12 +615,14 @@ duckdb::string_t CastFromBlob::Operation(duckdb::string_t input, Vector &vector)
 
 struct TryCastToBlob {
 	template <class SRC, class DST>
-	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message, bool strict = false) {
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
+	                             bool strict = false) {
 		throw InternalException("Unsupported type for try cast to blob");
 	}
 };
 
 template <>
-bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message, bool strict);
+bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
+                              bool strict);
 
 } // namespace duckdb

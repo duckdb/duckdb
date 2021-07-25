@@ -26,8 +26,8 @@ struct UnaryOperatorWrapper {
 struct UnaryLambdaWrapper {
 	template <class FUNC, class INPUT_TYPE, class RESULT_TYPE>
 	static inline RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-			auto fun = (FUNC *) dataptr;
-			return (*fun)(input);
+		auto fun = (FUNC *)dataptr;
+		return (*fun)(input);
 	}
 };
 
@@ -38,11 +38,11 @@ struct GenericUnaryWrapper {
 	}
 };
 
-template<class OP>
+template <class OP>
 struct UnaryStringOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
-		auto vector = (Vector *) dataptr;
+		auto vector = (Vector *)dataptr;
 		return OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, *vector);
 	}
 };
@@ -60,8 +60,8 @@ private:
 			for (idx_t i = 0; i < count; i++) {
 				auto idx = sel_vector->get_index(i);
 				if (mask.RowIsValidUnsafe(idx)) {
-					result_data[i] = OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(ldata[idx],
-					                                                                                  result_mask, i, dataptr);
+					result_data[i] =
+					    OPWRAPPER::template Operation<OP, INPUT_TYPE, RESULT_TYPE>(ldata[idx], result_mask, i, dataptr);
 				} else {
 					result_mask.SetInvalid(i);
 				}
@@ -149,8 +149,8 @@ private:
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 
-			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(
-			    ldata, result_data, count, FlatVector::Validity(input), FlatVector::Validity(result), dataptr, adds_nulls);
+			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, FlatVector::Validity(input),
+			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
 			break;
 		}
 		default: {
@@ -161,8 +161,8 @@ private:
 			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
 			auto ldata = (INPUT_TYPE *)vdata.data;
 
-			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(
-			    ldata, result_data, count, vdata.sel, vdata.validity, FlatVector::Validity(result), dataptr, adds_nulls);
+			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel, vdata.validity,
+			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
 			break;
 		}
 		}
@@ -176,7 +176,7 @@ public:
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
 	static void ExecuteLambda(Vector &input, Vector &result, idx_t count, FUNC fun) {
-		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count, (void*) &fun, false);
+		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count, (void *)&fun, false);
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
@@ -186,7 +186,8 @@ public:
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void ExecuteString(Vector &input, Vector &result, idx_t count) {
-		UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<OP>>(input, result, count, (void *) &result);
+		UnaryExecutor::GenericExecute<string_t, string_t, UnaryStringOperator<OP>>(input, result, count,
+		                                                                           (void *)&result);
 	}
 };
 

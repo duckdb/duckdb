@@ -69,7 +69,8 @@ bool TryCastFromDecimal::Operation(int32_t input, int8_t &result, string *error_
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, int8_t &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, int8_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(hugeint_t input, int8_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Cast Decimal <-> int16_t
@@ -90,8 +91,8 @@ bool TryCastFromDecimal::Operation(int32_t input, int16_t &result, string *error
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, int16_t &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, int16_t &result, string *error_message, uint8_t width, uint8_t scale);
-
+bool TryCastFromDecimal::Operation(hugeint_t input, int16_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Cast Decimal <-> int32_t
@@ -112,7 +113,8 @@ bool TryCastFromDecimal::Operation(int32_t input, int32_t &result, string *error
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, int32_t &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, int32_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(hugeint_t input, int32_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Cast Decimal <-> int64_t
@@ -133,7 +135,8 @@ bool TryCastFromDecimal::Operation(int32_t input, int64_t &result, string *error
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, int64_t &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, int64_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(hugeint_t input, int64_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Cast Decimal <-> hugeint_t
@@ -145,17 +148,21 @@ bool TryCastToDecimal::Operation(hugeint_t input, int32_t &result, string *error
 template <>
 bool TryCastToDecimal::Operation(hugeint_t input, int64_t &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastToDecimal::Operation(hugeint_t input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastToDecimal::Operation(hugeint_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                 uint8_t scale);
 
 template <>
-bool TryCastFromDecimal::Operation(int16_t input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int16_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(int32_t input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int32_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(int64_t input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int64_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale);
-
+bool TryCastFromDecimal::Operation(hugeint_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Cast Decimal <-> uint8_t
@@ -176,8 +183,8 @@ bool TryCastFromDecimal::Operation(int32_t input, uint8_t &result, string *error
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, uint8_t &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, uint8_t &result, string *error_message, uint8_t width, uint8_t scale);
-
+bool TryCastFromDecimal::Operation(hugeint_t input, uint8_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Cast Decimal <-> uint16_t
@@ -189,17 +196,21 @@ bool TryCastToDecimal::Operation(uint16_t input, int32_t &result, string *error_
 template <>
 bool TryCastToDecimal::Operation(uint16_t input, int64_t &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastToDecimal::Operation(uint16_t input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastToDecimal::Operation(uint16_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                 uint8_t scale);
 
 template <>
-bool TryCastFromDecimal::Operation(int16_t input, uint16_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int16_t input, uint16_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(int32_t input, uint16_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int32_t input, uint16_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(int64_t input, uint16_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int64_t input, uint16_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, uint16_t &result, string *error_message, uint8_t width, uint8_t scale);
-
+bool TryCastFromDecimal::Operation(hugeint_t input, uint16_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Cast Decimal <-> uint32_t
@@ -211,17 +222,21 @@ bool TryCastToDecimal::Operation(uint32_t input, int32_t &result, string *error_
 template <>
 bool TryCastToDecimal::Operation(uint32_t input, int64_t &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastToDecimal::Operation(uint32_t input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastToDecimal::Operation(uint32_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                 uint8_t scale);
 
 template <>
-bool TryCastFromDecimal::Operation(int16_t input, uint32_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int16_t input, uint32_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(int32_t input, uint32_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int32_t input, uint32_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(int64_t input, uint32_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int64_t input, uint32_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, uint32_t &result, string *error_message, uint8_t width, uint8_t scale);
-
+bool TryCastFromDecimal::Operation(hugeint_t input, uint32_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Cast Decimal <-> uint64_t
@@ -233,16 +248,21 @@ bool TryCastToDecimal::Operation(uint64_t input, int32_t &result, string *error_
 template <>
 bool TryCastToDecimal::Operation(uint64_t input, int64_t &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastToDecimal::Operation(uint64_t input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastToDecimal::Operation(uint64_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                 uint8_t scale);
 
 template <>
-bool TryCastFromDecimal::Operation(int16_t input, uint64_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int16_t input, uint64_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(int32_t input, uint64_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int32_t input, uint64_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(int64_t input, uint64_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(int64_t input, uint64_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, uint64_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(hugeint_t input, uint64_t &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Cast Decimal <-> float
@@ -284,7 +304,8 @@ bool TryCastFromDecimal::Operation(int32_t input, double &result, string *error_
 template <>
 bool TryCastFromDecimal::Operation(int64_t input, double &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastFromDecimal::Operation(hugeint_t input, double &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastFromDecimal::Operation(hugeint_t input, double &result, string *error_message, uint8_t width,
+                                   uint8_t scale);
 
 //===--------------------------------------------------------------------===//
 // Cast Decimal -> VARCHAR
@@ -296,7 +317,8 @@ bool TryCastToDecimal::Operation(string_t input, int32_t &result, string *error_
 template <>
 bool TryCastToDecimal::Operation(string_t input, int64_t &result, string *error_message, uint8_t width, uint8_t scale);
 template <>
-bool TryCastToDecimal::Operation(string_t input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale);
+bool TryCastToDecimal::Operation(string_t input, hugeint_t &result, string *error_message, uint8_t width,
+                                 uint8_t scale);
 
 struct StringCastFromDecimal {
 	template <class SRC>
@@ -314,4 +336,4 @@ string_t StringCastFromDecimal::Operation(int64_t input, uint8_t width, uint8_t 
 template <>
 string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_t scale, Vector &result);
 
-}
+} // namespace duckdb

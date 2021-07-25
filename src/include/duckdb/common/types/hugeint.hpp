@@ -40,10 +40,10 @@ public:
 		return value;
 	}
 
-	template<class T>
+	template <class T>
 	static bool TryConvert(T value, hugeint_t &result);
 
-	template<class T>
+	template <class T>
 	static hugeint_t Convert(T value) {
 		hugeint_t result;
 		if (!TryConvert(value, result)) {

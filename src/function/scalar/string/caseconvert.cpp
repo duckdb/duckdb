@@ -116,10 +116,9 @@ static string_t UnicodeCaseConvert(Vector &result, const char *input_data, idx_t
 	return result_str;
 }
 
-
-template<bool IS_UPPER>
+template <bool IS_UPPER>
 struct CaseConvertOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
@@ -134,7 +133,7 @@ static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector 
 
 template <bool IS_UPPER>
 struct CaseConvertOperatorASCII {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
@@ -144,7 +143,8 @@ struct CaseConvertOperatorASCII {
 
 template <bool IS_UPPER>
 static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result, args.size());
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result,
+	                                                                                     args.size());
 }
 
 template <bool IS_UPPER>

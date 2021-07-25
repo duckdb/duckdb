@@ -15,7 +15,7 @@ bool StripAccentsFun::IsAscii(const char *input, idx_t n) {
 }
 
 struct StripAccentsOperator {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		if (StripAccentsFun::IsAscii(input.GetDataUnsafe(), input.GetSize())) {
 			return input;

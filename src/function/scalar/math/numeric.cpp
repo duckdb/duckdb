@@ -36,9 +36,9 @@ static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalT
 	return function;
 }
 
-template<class OP>
+template <class OP>
 struct UnaryDoubleWrapper {
-	template<class INPUT_TYPE, class RESULT_TYPE>
+	template <class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		RESULT_TYPE result = OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
 		if (std::isnan(result) || std::isinf(result) || errno != 0) {

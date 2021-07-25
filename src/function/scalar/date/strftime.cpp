@@ -1114,8 +1114,9 @@ timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
 }
 
 string StrpTimeFormat::ParseResult::FormatError(string_t input, const string &format_specifier) {
-	return StringUtil::Format("Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetString(),
-		    format_specifier, FormatStrpTimeError(input.GetString(), error_position), error_message);
+	return StringUtil::Format("Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s",
+	                          input.GetString(), format_specifier,
+	                          FormatStrpTimeError(input.GetString(), error_position), error_message);
 }
 
 bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_message) {
@@ -1163,9 +1164,8 @@ static void StrpTimeFunction(DataChunk &args, ExpressionState &state, Vector &re
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	UnaryExecutor::ExecuteLambda<string_t, timestamp_t>(args.data[0], result, args.size(), [&](string_t input) {
-		return info.format.ParseTimestamp(input);
-	});
+	UnaryExecutor::ExecuteLambda<string_t, timestamp_t>(
+	    args.data[0], result, args.size(), [&](string_t input) { return info.format.ParseTimestamp(input); });
 }
 
 void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {

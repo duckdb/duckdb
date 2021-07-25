@@ -57,11 +57,11 @@ struct NextSequenceValueOperator {
 			seq->counter += seq->increment;
 			if (result < seq->min_value) {
 				throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq->name,
-										seq->min_value);
+				                        seq->min_value);
 			}
 			if (result > seq->max_value) {
 				throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq->name,
-										seq->max_value);
+				                        seq->max_value);
 			}
 		}
 		seq->last_value = result;
@@ -72,14 +72,15 @@ struct NextSequenceValueOperator {
 };
 
 struct NextValData {
-	NextValData(NextvalBindData &bind_data_p, Transaction &transaction_p) :
-		bind_data(bind_data_p), transaction(transaction_p) {}
+	NextValData(NextvalBindData &bind_data_p, Transaction &transaction_p)
+	    : bind_data(bind_data_p), transaction(transaction_p) {
+	}
 
 	NextvalBindData &bind_data;
 	Transaction &transaction;
 };
 
-template<class OP>
+template <class OP>
 static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (NextvalBindData &)*func_expr.bind_info;
@@ -102,7 +103,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
 			auto sequence = Catalog::GetCatalog(info.context)
-								.GetEntry<SequenceCatalogEntry>(info.context, qname.schema, qname.name);
+			                    .GetEntry<SequenceCatalogEntry>(info.context, qname.schema, qname.name);
 			// finally get the next value from the sequence
 			return OP::Operation(transaction, sequence);
 		});
@@ -133,14 +134,14 @@ static void NextValDependency(BoundFunctionExpression &expr, unordered_set<Catal
 }
 
 void NextvalFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT, NextValFunction<NextSequenceValueOperator>, true,
-	                               NextValBind, NextValDependency));
+	set.AddFunction(ScalarFunction("nextval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                               NextValFunction<NextSequenceValueOperator>, true, NextValBind, NextValDependency));
 }
 
 void CurrvalFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ScalarFunction("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT, NextValFunction<CurrentSequenceValueOperator>, true,
-	                               NextValBind, NextValDependency));
+	set.AddFunction(ScalarFunction("currval", {LogicalType::VARCHAR}, LogicalType::BIGINT,
+	                               NextValFunction<CurrentSequenceValueOperator>, true, NextValBind,
+	                               NextValDependency));
 }
-
 
 } // namespace duckdb

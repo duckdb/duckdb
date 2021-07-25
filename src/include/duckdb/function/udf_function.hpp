@@ -132,10 +132,10 @@ public:
 private:
 	//-------------------------------- Templated functions --------------------------------//
 	struct UnaryUDFExecutor {
-		template<class INPUT_TYPE, class RESULT_TYPE>
+		template <class INPUT_TYPE, class RESULT_TYPE>
 		static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 			typedef RESULT_TYPE (*unary_function_t)(INPUT_TYPE);
-			auto udf = (unary_function_t) dataptr;
+			auto udf = (unary_function_t)dataptr;
 			return udf(input);
 		}
 	};
@@ -143,7 +143,8 @@ private:
 	template <typename TR, typename TA>
 	static scalar_function_t CreateUnaryFunction(const string &name, TR (*udf_func)(TA)) {
 		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
-			UnaryExecutor::GenericExecute<TA, TR, UnaryUDFExecutor>(input.data[0], result, input.size(), (void *) udf_func);
+			UnaryExecutor::GenericExecute<TA, TR, UnaryUDFExecutor>(input.data[0], result, input.size(),
+			                                                        (void *)udf_func);
 		};
 		return udf_function;
 	}
@@ -235,7 +236,8 @@ private:
 		}
 
 		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
-			UnaryExecutor::GenericExecute<TA, TR, UnaryUDFExecutor>(input.data[0], result, input.size(), (void *) udf_func);
+			UnaryExecutor::GenericExecute<TA, TR, UnaryUDFExecutor>(input.data[0], result, input.size(),
+			                                                        (void *)udf_func);
 		};
 		return udf_function;
 	}

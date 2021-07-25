@@ -55,4 +55,4 @@ duckdb::string_t StringCast::Operation(dtime_t input, Vector &result);
 template <>
 duckdb::string_t StringCast::Operation(timestamp_t input, Vector &result);
 
-}
+} // namespace duckdb
