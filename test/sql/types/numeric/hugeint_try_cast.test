@@ -151,3 +151,44 @@ NULL
 0
 170141183460469231731687303715884105727
 NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::HUGEINT FROM hugeints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,0)::HUGEINT FROM hugeints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,0)::HUGEINT FROM hugeints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,0)::HUGEINT FROM hugeints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::HUGEINT FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,0))::HUGEINT FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,0))::HUGEINT FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,0))::HUGEINT FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL

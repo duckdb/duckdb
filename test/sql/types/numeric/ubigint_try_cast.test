@@ -125,3 +125,46 @@ NULL
 0
 18446744073709551615
 NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::UBIGINT FROM ubigints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,0)::UBIGINT FROM ubigints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,0)::UBIGINT FROM ubigints ORDER BY i
+
+query I
+SELECT i::DECIMAL(38,0)::UBIGINT FROM ubigints ORDER BY i
+----
+0
+18446744073709551615
+
+statement error
+SELECT i::DECIMAL(38,20)::UBIGINT FROM ubigints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::UBIGINT FROM ubigints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,0))::UBIGINT FROM ubigints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,0))::UBIGINT FROM ubigints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,20))::UBIGINT FROM ubigints ORDER BY i
+----
+0
+NULL

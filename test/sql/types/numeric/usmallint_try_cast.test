@@ -63,7 +63,7 @@ SELECT i::BIGINT FROM usmallints ORDER BY i
 65535
 
 query I
-SELECT i::HUGEINT FROM usmallints ORDER BY i
+SELECT i::HUGEINT::USMALLINT FROM usmallints ORDER BY i
 ----
 0
 65535
@@ -112,4 +112,59 @@ NULL
 0
 0
 65535
+NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::USMALLINT FROM usmallints ORDER BY i
+
+query I
+SELECT i::DECIMAL(9,0)::USMALLINT FROM usmallints ORDER BY i
+----
+0
+65535
+
+query I
+SELECT i::DECIMAL(18,0)::USMALLINT FROM usmallints ORDER BY i
+----
+0
+65535
+
+query I
+SELECT i::DECIMAL(38,0)::USMALLINT FROM usmallints ORDER BY i
+----
+0
+65535
+
+statement error
+SELECT i::DECIMAL(9,5)::USMALLINT FROM usmallints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,14)::USMALLINT FROM usmallints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,34)::USMALLINT FROM usmallints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::USMALLINT FROM usmallints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,5))::USMALLINT FROM usmallints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,14))::USMALLINT FROM usmallints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,34))::USMALLINT FROM usmallints ORDER BY i
+----
+0
 NULL

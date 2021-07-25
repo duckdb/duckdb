@@ -23,25 +23,25 @@ statement error
 SELECT i::UBIGINT FROM tinyints
 
 query I
-SELECT i::UTINYINT FROM tinyints WHERE i>=0 ORDER BY i
+SELECT i::UTINYINT::TINYINT FROM tinyints WHERE i>=0 ORDER BY i
 ----
 0
 127
 
 query I
-SELECT i::USMALLINT FROM tinyints WHERE i>=0 ORDER BY i
+SELECT i::USMALLINT::TINYINT FROM tinyints WHERE i>=0 ORDER BY i
 ----
 0
 127
 
 query I
-SELECT i::UINTEGER FROM tinyints WHERE i>=0 ORDER BY i
+SELECT i::UINTEGER::TINYINT FROM tinyints WHERE i>=0 ORDER BY i
 ----
 0
 127
 
 query I
-SELECT i::UBIGINT FROM tinyints WHERE i>=0 ORDER BY i
+SELECT i::UBIGINT::TINYINT FROM tinyints WHERE i>=0 ORDER BY i
 ----
 0
 127
@@ -76,28 +76,28 @@ NULL
 
 # tinyint -> signed
 query I
-SELECT i::SMALLINT FROM tinyints ORDER BY i
+SELECT i::SMALLINT::TINYINT FROM tinyints ORDER BY i
 ----
 -128
 0
 127
 
 query I
-SELECT i::INTEGER FROM tinyints ORDER BY i
+SELECT i::INTEGER::TINYINT FROM tinyints ORDER BY i
 ----
 -128
 0
 127
 
 query I
-SELECT i::BIGINT FROM tinyints ORDER BY i
+SELECT i::BIGINT::TINYINT FROM tinyints ORDER BY i
 ----
 -128
 0
 127
 
 query I
-SELECT i::HUGEINT FROM tinyints ORDER BY i
+SELECT i::HUGEINT::TINYINT FROM tinyints ORDER BY i
 ----
 -128
 0
@@ -128,7 +128,7 @@ True
 
 # tinyint -> varchar
 query I
-SELECT i::VARCHAR FROM tinyints ORDER BY i
+SELECT i::VARCHAR::TINYINT FROM tinyints ORDER BY i
 ----
 -128
 0
@@ -150,4 +150,73 @@ NULL
 -128
 0
 127
+NULL
+
+# -> decimal casts
+query I
+SELECT i::DECIMAL(3,0)::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+query I
+SELECT i::DECIMAL(9,0)::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+query I
+SELECT i::DECIMAL(18,0)::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+query I
+SELECT i::DECIMAL(38,0)::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+statement error
+SELECT i::DECIMAL(3,1)::TINYINT FROM tinyints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,7)::TINYINT FROM tinyints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,16)::TINYINT FROM tinyints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,36)::TINYINT FROM tinyints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,1))::TINYINT FROM tinyints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,7))::TINYINT FROM tinyints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,16))::TINYINT FROM tinyints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,36))::TINYINT FROM tinyints ORDER BY i
+----
+NULL
+0
 NULL

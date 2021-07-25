@@ -394,8 +394,8 @@ bool HugeintTryCastInteger(hugeint_t input, DST &result) {
 			return false;
 		}
 		// negative number: check if the negative number is in range
-		if (input.lower > NumericLimits<uint64_t>::Maximum() - uint64_t(NumericLimits<DST>::Maximum())) {
-			result = -DST(NumericLimits<uint64_t>::Maximum() - input.lower + 1);
+		if (input.lower >= NumericLimits<uint64_t>::Maximum() - uint64_t(NumericLimits<DST>::Maximum())) {
+			result = -DST(NumericLimits<uint64_t>::Maximum() - input.lower) - 1;
 			return true;
 		}
 		break;

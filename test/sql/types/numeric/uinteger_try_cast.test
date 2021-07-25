@@ -119,3 +119,52 @@ NULL
 0
 4294967295
 NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::UINTEGER FROM uintegers ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,0)::UINTEGER FROM uintegers ORDER BY i
+
+query I
+SELECT i::DECIMAL(18,0)::UINTEGER FROM uintegers ORDER BY i
+----
+0
+4294967295
+
+query I
+SELECT i::DECIMAL(38,0)::UINTEGER FROM uintegers ORDER BY i
+----
+0
+4294967295
+
+statement error
+SELECT i::DECIMAL(18,9)::UINTEGER FROM uintegers ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,29)::UINTEGER FROM uintegers ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::UINTEGER FROM uintegers ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,0))::UINTEGER FROM uintegers ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,9))::UINTEGER FROM uintegers ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,29))::UINTEGER FROM uintegers ORDER BY i
+----
+0
+NULL
