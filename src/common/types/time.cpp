@@ -119,8 +119,9 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 				return true;
 			}
 		}
+		return false;
 	}
-	return false;
+	return true;
 }
 
 
