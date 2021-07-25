@@ -1,0 +1,45 @@
+# name: test/sql/types/numeric/bool_casts.test
+# description: Bool casts
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE booleans AS SELECT b::BOOLEAN b FROM (VALUES (NULL), (0), (1)) tbl(b)
+
+foreach type <numeric> DECIMAL(9,8) DECIMAL(18,7) DECIMAL(38,1) DECIMAL(38,5) DECIMAL(4,3)
+
+query I
+SELECT b::${type} FROM booleans
+----
+NULL
+0
+1
+
+# round-trip
+query I
+SELECT b::${type}::bool FROM booleans
+----
+NULL
+False
+True
+
+endloop
+
+# decimal with scale = width
+foreach type DECIMAL(1,1) DECIMAL(4,4) DECIMAL(8,8) DECIMAL(16,16) DECIMAL(32,32)
+
+statement ok
+SELECT b::${type}::VARCHAR FROM booleans
+
+# round-trip
+query I
+SELECT b::${type}::bool FROM booleans
+----
+NULL
+False
+True
+
+endloop
+

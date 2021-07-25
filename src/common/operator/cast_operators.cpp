@@ -871,24 +871,36 @@ string_t StringCastFromDecimal::Operation(hugeint_t input, uint8_t width, uint8_
 //===--------------------------------------------------------------------===//
 // Decimal <-> Bool
 //===--------------------------------------------------------------------===//
+template<class T, class OP = NumericHelper>
+bool TryCastBoolToDecimal(bool input, T &result, string *error_message, uint8_t width, uint8_t scale) {
+	if (width > scale) {
+		result = input ? OP::POWERS_OF_TEN[scale] : 0;
+		return true;
+	} else {
+		return TryCast::Operation<bool, T>(input, result);
+	}
+}
+
+
+
 template <>
 bool TryCastToDecimal::Operation(bool input, int16_t &result, string *error_message, uint8_t width, uint8_t scale) {
-	return TryCast::Operation<bool, int16_t>(input, result);
+	return TryCastBoolToDecimal<int16_t>(input, result, error_message, width, scale);
 }
 
 template <>
 bool TryCastToDecimal::Operation(bool input, int32_t &result, string *error_message, uint8_t width, uint8_t scale) {
-	return TryCast::Operation<bool, int32_t>(input, result);
+	return TryCastBoolToDecimal<int32_t>(input, result, error_message, width, scale);
 }
 
 template <>
 bool TryCastToDecimal::Operation(bool input, int64_t &result, string *error_message, uint8_t width, uint8_t scale) {
-	return TryCast::Operation<bool, int64_t>(input, result);
+	return TryCastBoolToDecimal<int64_t>(input, result, error_message, width, scale);
 }
 
 template <>
 bool TryCastToDecimal::Operation(bool input, hugeint_t &result, string *error_message, uint8_t width, uint8_t scale) {
-	return TryCast::Operation<bool, hugeint_t>(input, result);
+	return TryCastBoolToDecimal<hugeint_t, Hugeint>(input, result, error_message, width, scale);
 }
 
 template <>

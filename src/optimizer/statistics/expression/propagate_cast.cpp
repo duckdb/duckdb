@@ -55,7 +55,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 	default:
 		return nullptr;
 	}
-	if (cast.try_cast) {
+	if (cast.try_cast && result_stats) {
 		result_stats->validity_stats = make_unique<ValidityStatistics>(true, true);
 	}
 	return result_stats;

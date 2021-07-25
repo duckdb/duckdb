@@ -131,7 +131,7 @@ TRY_CAST_BOOL(double)
 
 template <>
 bool TryCastWithOverflowCheck(hugeint_t input, bool &result) {
-	result = input.upper > 0 || (input.upper == 0 && input.lower > 0);
+	result = input.upper != 0 || input.lower != 0;
 	return true;
 }
 template <>
