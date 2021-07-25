@@ -77,7 +77,7 @@ test('''
 CREATE TABLE a (i STRING);
 INSERT INTO a VALUES ('XXXX');
 SELECT CAST(i AS INTEGER) FROM a;
-''' , err='can\'t be cast')
+''' , err='Could not convert')
 
 test('.auth ON', err='sqlite3_set_authorizer')
 test('.auth OFF', err='sqlite3_set_authorizer')
@@ -164,7 +164,7 @@ test('.load %s' % tf(), err="Error")
 # error in streaming result
 test('''
 SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);
-''', err='can\'t be cast')
+''', err='Could not convert string')
 
 # this should be fixed
 test('.selftest', err='sqlite3_table_column_metadata')

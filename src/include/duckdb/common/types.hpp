@@ -542,6 +542,11 @@ PhysicalType GetTypeId() {
 	}
 }
 
+template<class T>
+bool TypeIsNumber() {
+	return std::is_integral<T>() || std::is_integral<T>() || std::is_same<T, hugeint_t>();
+}
+
 template <class T>
 bool IsValidType() {
 	return GetTypeId<T>() != PhysicalType::INVALID;

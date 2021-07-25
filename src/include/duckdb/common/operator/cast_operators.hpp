@@ -36,6 +36,13 @@ struct TryCastErrorMessage {
 
 template <class SRC, class DST>
 static string CastExceptionText(SRC input) {
+	if (std::is_same<SRC, string_t>()) {
+		return "Could not convert string '" + ConvertToString::Operation<SRC>(input) + "' to " + TypeIdToString(GetTypeId<DST>());
+	}
+	if (TypeIsNumber<SRC>() && TypeIsNumber<DST>()) {
+		return "Type " + TypeIdToString(GetTypeId<SRC>()) + " with value " + ConvertToString::Operation<SRC>(input) +
+			" can't be cast because the value is out of range for the destination type " + TypeIdToString(GetTypeId<DST>());
+	}
 	return "Type " + TypeIdToString(GetTypeId<SRC>()) + " with value " + ConvertToString::Operation<SRC>(input) +
 	       " can't be cast to the destination type " + TypeIdToString(GetTypeId<DST>());
 }
