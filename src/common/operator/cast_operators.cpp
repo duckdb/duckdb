@@ -615,8 +615,8 @@ timestamp_t Cast::Operation(string_t input) {
 // Cast From Interval
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCast::Operation(string_t input, interval_t &result, bool strict) {
-	return Interval::FromCString(input.GetDataUnsafe(), input.GetSize(), result);
+bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *error_message, bool strict) {
+	return Interval::FromCString(input.GetDataUnsafe(), input.GetSize(), result, error_message, strict);
 }
 
 //===--------------------------------------------------------------------===//
@@ -722,10 +722,6 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 	result = data.hugeint;
 	return true;
 }
-
-//===--------------------------------------------------------------------===//
-// Hugeint -> Numeric
-//===--------------------------------------------------------------------===//
 
 //===--------------------------------------------------------------------===//
 // Decimal String Cast

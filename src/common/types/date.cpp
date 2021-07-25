@@ -131,10 +131,10 @@ void Date::Convert(date_t d, int32_t &year, int32_t &month, int32_t &day) {
 	D_ASSERT(month > 0 && month <= 12);
 }
 
-date_t Date::FromDate(int32_t year, int32_t month, int32_t day) {
+bool Date::TryFromDate(int32_t year, int32_t month, int32_t day, date_t &result) {
 	int32_t n = 0;
 	if (!Date::IsValid(year, month, day)) {
-		throw ConversionException("Date out of range: %d-%d-%d", year, month, day);
+		return false;
 	}
 	n += Date::IsLeapYear(year) ? Date::CUMULATIVE_LEAP_DAYS[month - 1] : Date::CUMULATIVE_DAYS[month - 1];
 	n += day - 1;
@@ -153,7 +153,7 @@ date_t Date::FromDate(int32_t year, int32_t month, int32_t day) {
 		n += Date::DAYS_PER_YEAR_INTERVAL;
 		n += fractions * Date::DAYS_PER_YEAR_INTERVAL;
 	} else {
-		n += Date::CUMULATIVE_YEAR_DAYS[year];
+		n += Date::CUMULATIVE_YEAR_DAYS[year - 1970];
 	}
 #ifdef DEBUG
 	int32_t y, m, d;
@@ -162,7 +162,16 @@ date_t Date::FromDate(int32_t year, int32_t month, int32_t day) {
 	D_ASSERT(month == m);
 	D_ASSERT(day == d);
 #endif
-	return date_t(n);
+	result = date_t(n);
+	return true;
+}
+
+date_t Date::FromDate(int32_t year, int32_t month, int32_t day) {
+	date_t result;
+	if (!Date::TryFromDate(year, month, day, result)) {
+		throw ConversionException("Date out of range: %d-%d-%d", year, month, day);
+	}
+	return result;
 }
 
 bool Date::ParseDoubleDigit(const char *buf, idx_t len, idx_t &pos, int32_t &result) {
@@ -274,8 +283,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		}
 	}
 
-	result = Date::FromDate(year, month, day);
-	return true;
+	return Date::TryFromDate(year, month, day, result);
 }
 
 date_t Date::FromCString(const char *buf, idx_t len, bool strict) {

@@ -61,6 +61,7 @@ public:
 	static void Convert(date_t date, int32_t &out_year, int32_t &out_month, int32_t &out_day);
 	//! Create a Date object from a specified (year, month, day) combination
 	static date_t FromDate(int32_t year, int32_t month, int32_t day);
+	static bool TryFromDate(int32_t year, int32_t month, int32_t day, date_t &result);
 
 	//! Returns true if (year) is a leap year, and false otherwise
 	static bool IsLeapYear(int32_t year);

@@ -58,6 +58,21 @@ struct VectorTryCastStrictOperator {
 };
 
 template<class OP>
+struct VectorTryCastErrorOperator {
+	template<class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
+		auto data = (VectorTryCastData *) dataptr;
+		RESULT_TYPE output;
+		if (DUCKDB_UNLIKELY(!OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->error_message, data->strict))) {
+			bool has_error = data->error_message && !data->error_message->empty();
+			return HandleVectorCastError::Operation<RESULT_TYPE>(has_error ? *data->error_message : CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask, idx, data->error_message, data->all_converted);
+		}
+		return output;
+	}
+};
+
+
+template<class OP>
 struct VectorTryCastStringOperator {
 	template<class INPUT_TYPE, class RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
@@ -85,6 +100,11 @@ static bool VectorTryCastLoop(Vector &source, Vector &result, idx_t count, strin
 template<class SRC, class DST, class OP>
 static bool VectorTryCastStrictLoop(Vector &source, Vector &result, idx_t count, bool strict, string *error_message) {
 	return TemplatedVectorTryCastLoop<SRC, DST, VectorTryCastStrictOperator<OP>>(source, result, count, strict, error_message);
+}
+
+template<class SRC, class DST, class OP>
+static bool VectorTryCastErrorLoop(Vector &source, Vector &result, idx_t count, bool strict, string *error_message) {
+	return TemplatedVectorTryCastLoop<SRC, DST, VectorTryCastErrorOperator<OP>>(source, result, count, strict, error_message);
 }
 
 template<class SRC, class DST, class OP>
@@ -171,7 +191,7 @@ static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t 
 	case LogicalTypeId::DOUBLE:
 		return VectorTryCastStrictLoop<string_t, double, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::INTERVAL:
-		return VectorTryCastStrictLoop<string_t, interval_t, duckdb::TryCast>(source, result, count, strict, error_message);
+		return VectorTryCastErrorLoop<string_t, interval_t, duckdb::TryCastErrorMessage>(source, result, count, strict, error_message);
 	case LogicalTypeId::DECIMAL:
 		return ToDecimalCast<string_t>(source, result, count, error_message);
 	default:

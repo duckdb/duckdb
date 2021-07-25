@@ -27,6 +27,14 @@ struct TryCast {
 	}
 };
 
+struct TryCastErrorMessage {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, string *error_message, bool strict = false) {
+		throw NotImplementedException("Unimplemented type for cast (%s -> %s)", GetTypeId<SRC>(), GetTypeId<DST>());
+	}
+};
+
+
 template<class SRC, class DST>
 static string CastExceptionText(SRC input) {
 	return "Type " + TypeIdToString(GetTypeId<SRC>()) + " with value " +
@@ -174,7 +182,7 @@ timestamp_t Cast::Operation(string_t input);
 // String -> Interval Casts
 //===--------------------------------------------------------------------===//
 template <>
-bool TryCast::Operation(string_t input, interval_t &result, bool strict);
+bool TryCastErrorMessage::Operation(string_t input, interval_t &result, string *error_message, bool strict);
 
 //===--------------------------------------------------------------------===//
 // Decimal Casts

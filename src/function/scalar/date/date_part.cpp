@@ -9,52 +9,63 @@
 
 namespace duckdb {
 
-DatePartSpecifier GetDatePartSpecifier(string specifier) {
-	specifier = StringUtil::Lower(specifier);
+
+
+bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &result) {
+	auto specifier = StringUtil::Lower(specifier_p);
 	if (specifier == "year" || specifier == "y" || specifier == "years") {
-		return DatePartSpecifier::YEAR;
+		result = DatePartSpecifier::YEAR;
 	} else if (specifier == "month" || specifier == "mon" || specifier == "months" || specifier == "mons") {
-		return DatePartSpecifier::MONTH;
+		result = DatePartSpecifier::MONTH;
 	} else if (specifier == "day" || specifier == "days" || specifier == "d") {
-		return DatePartSpecifier::DAY;
+		result = DatePartSpecifier::DAY;
 	} else if (specifier == "decade" || specifier == "decades") {
-		return DatePartSpecifier::DECADE;
+		result = DatePartSpecifier::DECADE;
 	} else if (specifier == "century" || specifier == "centuries") {
-		return DatePartSpecifier::CENTURY;
+		result = DatePartSpecifier::CENTURY;
 	} else if (specifier == "millennium" || specifier == "millenia") {
-		return DatePartSpecifier::MILLENNIUM;
+		result = DatePartSpecifier::MILLENNIUM;
 	} else if (specifier == "microseconds" || specifier == "microsecond") {
-		return DatePartSpecifier::MICROSECONDS;
+		result = DatePartSpecifier::MICROSECONDS;
 	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms" || specifier == "msec" ||
 	           specifier == "msecs") {
-		return DatePartSpecifier::MILLISECONDS;
+		result = DatePartSpecifier::MILLISECONDS;
 	} else if (specifier == "second" || specifier == "seconds" || specifier == "s") {
-		return DatePartSpecifier::SECOND;
+		result = DatePartSpecifier::SECOND;
 	} else if (specifier == "minute" || specifier == "minutes" || specifier == "m") {
-		return DatePartSpecifier::MINUTE;
+		result = DatePartSpecifier::MINUTE;
 	} else if (specifier == "hour" || specifier == "hours" || specifier == "h") {
-		return DatePartSpecifier::HOUR;
+		result = DatePartSpecifier::HOUR;
 	} else if (specifier == "epoch") {
 		// seconds since 1970-01-01
-		return DatePartSpecifier::EPOCH;
+		result = DatePartSpecifier::EPOCH;
 	} else if (specifier == "dow") {
 		// day of the week (Sunday = 0, Saturday = 6)
-		return DatePartSpecifier::DOW;
+		result = DatePartSpecifier::DOW;
 	} else if (specifier == "isodow") {
 		// isodow (Monday = 1, Sunday = 7)
-		return DatePartSpecifier::ISODOW;
+		result = DatePartSpecifier::ISODOW;
 	} else if (specifier == "week" || specifier == "weeks" || specifier == "w") {
 		// week number
-		return DatePartSpecifier::WEEK;
+		result = DatePartSpecifier::WEEK;
 	} else if (specifier == "doy") {
 		// day of the year (1-365/366)
-		return DatePartSpecifier::DOY;
+		result = DatePartSpecifier::DOY;
 	} else if (specifier == "quarter" || specifier == "quarters") {
 		// quarter of the year (1-4)
-		return DatePartSpecifier::QUARTER;
+		result = DatePartSpecifier::QUARTER;
 	} else {
+		return false;
+	}
+	return true;
+}
+
+DatePartSpecifier GetDatePartSpecifier(const string &specifier) {
+	DatePartSpecifier result;
+	if (!TryGetDatePartSpecifier(specifier, result)) {
 		throw ConversionException("extract specifier \"%s\" not recognized", specifier);
 	}
+	return result;
 }
 
 template <class T>
