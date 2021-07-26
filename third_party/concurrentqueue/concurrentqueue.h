@@ -226,15 +226,14 @@ namespace duckdb_moodycamel { namespace details {
 
 // Compiler-specific likely/unlikely hints
 namespace duckdb_moodycamel { namespace details {
-// disabled those hints. they caused compiler warnings and are of questionable to say the least
-//
-//#if defined(__GNUC__)
-//	static inline bool (likely)(bool x) { return __builtin_expect((x), true); }
+
+#if defined(__GNUC__)
+	static inline bool (likely)(bool x) { return __builtin_expect((x), true); }
 //	static inline bool (unlikely)(bool x) { return __builtin_expect((x), false); }
-//#else
+#else
 	static inline bool (likely)(bool x) { return x; }
 //	static inline bool (unlikely)(bool x) { return x; }
-//#endif
+#endif
 } }
 
 namespace duckdb_moodycamel {
