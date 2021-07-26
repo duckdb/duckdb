@@ -98,7 +98,10 @@ static unique_ptr<BaseStatistics> PropagateStructExtractStats(ClientContext &con
 	}
 	auto &struct_stats = (StructStatistics &)*child_stats[0];
 	auto &info = (StructExtractBindData &)*bind_data;
-	return info.index < struct_stats.child_stats.size() ? struct_stats.child_stats[info.index]->Copy() : nullptr;
+	if (info.index >= struct_stats.child_stats.size() || !struct_stats.child_stats[info.index]) {
+		return nullptr;
+	}
+	return struct_stats.child_stats[info.index]->Copy();
 }
 
 ScalarFunction StructExtractFun::GetFunction() {

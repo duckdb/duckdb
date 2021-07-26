@@ -56,16 +56,23 @@ unique_ptr<BaseStatistics> ValidityStatistics::Deserialize(Deserializer &source)
 	return make_unique<ValidityStatistics>(has_null, has_no_null);
 }
 
-void ValidityStatistics::Verify(Vector &vector, idx_t count) {
-	if (!has_no_null) {
-		if (VectorOperations::HasNotNull(vector, count)) {
+void ValidityStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
+	if (has_null && has_no_null) {
+		// nothing to verify
+		return;
+	}
+	VectorData vdata;
+	vector.Orrify(count, vdata);
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = sel.get_index(i);
+		auto index = vdata.sel->get_index(idx);
+		bool row_is_valid = vdata.validity.RowIsValid(index);
+		if (row_is_valid && !has_no_null) {
 			throw InternalException(
 			    "Statistics mismatch: vector labeled as having only NULL values, but vector contains valid values: %s",
 			    vector.ToString(count));
 		}
-	}
-	if (!has_null) {
-		if (VectorOperations::HasNull(vector, count)) {
+		if (!row_is_valid && !has_null) {
 			throw InternalException(
 			    "Statistics mismatch: vector labeled as not having NULL values, but vector contains null values: %s",
 			    vector.ToString(count));

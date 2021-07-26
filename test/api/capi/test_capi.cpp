@@ -450,7 +450,9 @@ TEST_CASE("Test errors in C API", "[capi]") {
 
 	REQUIRE(duckdb_prepare(tester.connection, "SELECT * from INVALID_TABLE", &stmt) == DuckDBError);
 	REQUIRE(stmt != nullptr);
-	REQUIRE(duckdb_prepare_error(stmt) != nullptr);
+	auto err_msg = duckdb_prepare_error(stmt);
+	REQUIRE(err_msg != nullptr);
+	duckdb_free((void *)err_msg);
 	duckdb_destroy_prepare(&stmt);
 
 	REQUIRE(duckdb_bind_boolean(NULL, 0, true) == DuckDBError);
@@ -460,7 +462,9 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	// fail to query arrow
 	duckdb_arrow out_arrow;
 	REQUIRE(duckdb_query_arrow(tester.connection, "SELECT * from INVALID_TABLE", &out_arrow) == DuckDBError);
-	REQUIRE(duckdb_query_arrow_error(out_arrow) != nullptr);
+	err_msg = duckdb_query_arrow_error(out_arrow);
+	REQUIRE(err_msg != nullptr);
+	duckdb_free((void *)err_msg);
 	duckdb_destroy_arrow(&out_arrow);
 }
 
@@ -855,9 +859,22 @@ TEST_CASE("Test arrow in C API", "[capi]") {
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
 
+	// test rows changed
+	{
+		REQUIRE_NO_FAIL(tester.Query("CREATE TABLE test(a INTEGER)"));
+		REQUIRE(duckdb_query_arrow(tester.connection, "INSERT INTO test VALUES (1), (2);", &arrow_result) ==
+		        DuckDBSuccess);
+		REQUIRE(duckdb_arrow_rows_changed(arrow_result) == 2);
+		duckdb_destroy_arrow(&arrow_result);
+		REQUIRE_NO_FAIL(tester.Query("drop table test"));
+	}
+
 	// test query arrow
 	{
 		REQUIRE(duckdb_query_arrow(tester.connection, "SELECT 42 AS VALUE", &arrow_result) == DuckDBSuccess);
+		REQUIRE(duckdb_arrow_row_count(arrow_result) == 1);
+		REQUIRE(duckdb_arrow_column_count(arrow_result) == 1);
+		REQUIRE(duckdb_arrow_rows_changed(arrow_result) == 0);
 
 		// query schema
 		ArrowSchema *arrow_schema = new ArrowSchema();
@@ -918,6 +935,7 @@ TEST_CASE("Test arrow in C API", "[capi]") {
 			delete arrow_array;
 		}
 		duckdb_destroy_arrow(&arrow_result);
+		REQUIRE_NO_FAIL(tester.Query("drop table test"));
 	}
 
 	// test prepare query arrow

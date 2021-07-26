@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/assert.hpp"
 
@@ -116,6 +117,23 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		chunk->Initialize(types);
 		new_chunk.Copy(*chunk, offset);
 		chunks.push_back(move(chunk));
+	}
+}
+
+void ChunkCollection::Fuse(ChunkCollection &other) {
+	if (count == 0) {
+		Append(other);
+	} else {
+		D_ASSERT(this->ChunkCount() == other.ChunkCount());
+		for (idx_t chunk_idx = 0; chunk_idx < ChunkCount(); ++chunk_idx) {
+			auto &lhs = this->GetChunk(chunk_idx);
+			auto &rhs = other.GetChunk(chunk_idx);
+			D_ASSERT(lhs.size() == rhs.size());
+			for (auto &v : rhs.data) {
+				lhs.data.emplace_back(Vector(v));
+			}
+		}
+		types.insert(types.end(), other.types.begin(), other.types.end());
 	}
 }
 
@@ -394,6 +412,13 @@ Value ChunkCollection::GetValue(idx_t column, idx_t index) {
 
 void ChunkCollection::SetValue(idx_t column, idx_t index, const Value &value) {
 	chunks[LocateChunk(index)]->SetValue(column, index % STANDARD_VECTOR_SIZE, value);
+}
+
+void ChunkCollection::CopyCell(idx_t column, idx_t index, Vector &target, idx_t target_offset) {
+	auto &chunk = GetChunkForRow(index);
+	auto &source = chunk.data[column];
+	const auto source_offset = index % STANDARD_VECTOR_SIZE;
+	VectorOperations::Copy(source, target, source_offset + 1, source_offset, target_offset);
 }
 
 void ChunkCollection::Print() {

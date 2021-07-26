@@ -464,9 +464,32 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	return DuckDBSuccess;
 }
 
+idx_t duckdb_arrow_row_count(duckdb_arrow result) {
+	auto wrapper = (ArrowResultWrapper *)result;
+	return wrapper->result->collection.Count();
+}
+
+idx_t duckdb_arrow_column_count(duckdb_arrow result) {
+	auto wrapper = (ArrowResultWrapper *)result;
+	return wrapper->result->types.size();
+}
+
+idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
+	auto wrapper = (ArrowResultWrapper *)result;
+	idx_t rows_changed = 0;
+	idx_t row_count = wrapper->result->collection.Count();
+	if (row_count > 0 && StatementTypeReturnChanges(wrapper->result->statement_type)) {
+		auto row_changes = wrapper->result->GetValue(0, 0);
+		if (!row_changes.is_null && row_changes.TryCastAs(LogicalType::BIGINT)) {
+			rows_changed = row_changes.GetValue<int64_t>();
+		}
+	}
+	return rows_changed;
+}
+
 const char *duckdb_query_arrow_error(duckdb_arrow result) {
 	auto wrapper = (ArrowResultWrapper *)result;
-	return wrapper->result->error.c_str();
+	return strdup(wrapper->result->error.c_str());
 }
 
 void duckdb_destroy_arrow(duckdb_arrow *result) {
@@ -545,7 +568,7 @@ const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement) {
 	if (!wrapper || !wrapper->statement || wrapper->statement->success) {
 		return nullptr;
 	}
-	return wrapper->statement->error.c_str();
+	return strdup(wrapper->statement->error.c_str());
 }
 
 duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t *nparams_out) {

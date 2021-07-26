@@ -27,9 +27,9 @@ public:
 		return child_readers[child_idx].get();
 	}
 
-	void IntializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
+	void InitializeRead(const std::vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
 		for (auto &child : child_readers) {
-			child->IntializeRead(columns, protocol_p);
+			child->InitializeRead(columns, protocol_p);
 		}
 	}
 

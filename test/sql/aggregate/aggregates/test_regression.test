@@ -2,10 +2,6 @@
 # description: Test Regression Functions
 # group: [aggregates]
 
-#Corner cases
-statement error
-select regr_avgx()
-
 query I
 select regr_avgx(NULL,NULL)
 ----
@@ -15,6 +11,10 @@ query I
 select regr_avgx(1,1)
 ----
 1
+
+#Corner cases
+statement error
+select regr_avgx()
 
 statement error
 select regr_avgx(*)
@@ -80,11 +80,36 @@ select regr_r2(1,1)
 ----
 NULL
 
+#Corner cases
+statement error
+select regr_r2(0, 1e230*i) from range(5) tbl(i);
+
+statement error
+select regr_r2(1e230*i, i) from range(5) tbl(i);
+
+query I
+select regr_r2(1e230*i, 0) from range(5) tbl(i);
+----
+NULL
+
+query I
+select regr_r2(0, i) from range(5) tbl(i);
+----
+1
+
 statement error
 select regr_r2(*)
 
 statement error
 select regr_sxx()
+
+statement error
+select regr_sxx(0, 2e230*i) from range(5) tbl(i)
+
+query I
+select regr_sxx(2e230*i, 0) from range(5) tbl(i)
+----
+0
 
 query I
 select regr_sxx(NULL,NULL)

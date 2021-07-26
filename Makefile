@@ -123,7 +123,7 @@ unittest: debug
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
-	build/debug/test/unittest
+	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 allunit: release_expanded # uses release build because otherwise allunit takes forever

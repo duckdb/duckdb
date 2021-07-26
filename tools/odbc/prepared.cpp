@@ -1,18 +1,15 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
 #include "api_info.hpp"
+
 #include "duckdb/main/prepared_statement_data.hpp"
-#include "duckdb/common/types/string_type.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/exception.hpp"
 
 using duckdb::Decimal;
 using duckdb::hugeint_t;
 using duckdb::idx_t;
 using duckdb::Load;
 using duckdb::LogicalType;
-using duckdb::string_t;
 using duckdb::Value;
 
 bool IsNumeric(SQLSMALLINT value_type) {
@@ -162,11 +159,14 @@ SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_p
 
 SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
                      SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
-	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		size_t col_nr_internal = column_number - 1;
-		if (col_nr_internal >= stmt->bound_cols.size()) {
-			stmt->bound_cols.resize(col_nr_internal);
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
+		D_ASSERT(column_number > 0);
+
+		if (column_number > stmt->bound_cols.size()) {
+			stmt->bound_cols.resize(column_number);
 		}
+
+		size_t col_nr_internal = column_number - 1;
 
 		stmt->bound_cols[col_nr_internal].type = target_type;
 		stmt->bound_cols[col_nr_internal].ptr = target_value_ptr;

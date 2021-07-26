@@ -15,6 +15,8 @@
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
+struct SelectionVector;
+
 class Serializer;
 class Deserializer;
 class Vector;
@@ -45,7 +47,8 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source, LogicalType type);
 	//! Verify that a vector does not violate the statistics
-	virtual void Verify(Vector &vector, idx_t count);
+	virtual void Verify(Vector &vector, const SelectionVector &sel, idx_t count);
+	void Verify(Vector &vector, idx_t count);
 
 	virtual string ToString();
 };

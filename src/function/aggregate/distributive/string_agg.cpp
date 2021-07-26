@@ -42,7 +42,7 @@ struct StringAggBaseFunction {
 
 	static inline void PerformOperation(StringAggState *state, const char *str, const char *sep, idx_t str_size,
 	                                    idx_t sep_size) {
-		if (state->dataptr == nullptr) {
+		if (!state->dataptr) {
 			// first iteration: allocate space for the string and copy it into the state
 			state->alloc_size = MaxValue<idx_t>(8, NextPowerOfTwo(str_size));
 			state->dataptr = new char[state->alloc_size];
@@ -104,7 +104,7 @@ struct StringAggSingleFunction : public StringAggBaseFunction {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE *target) {
-		if (source.dataptr == nullptr) {
+		if (!source.dataptr) {
 			// source is not set: skip combining
 			return;
 		}

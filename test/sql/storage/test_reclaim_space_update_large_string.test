@@ -2,13 +2,13 @@
 # description: Test that we reclaim space when updating a large string
 # group: [storage]
 
-# FIXME: overflow strings are not reclaimed yet when overwritten on updates
-mode skip
-
 load __TEST_DIR__/test_reclaim_space.db
 
 statement ok
 PRAGMA force_checkpoint;
+
+# FIXME: overflow strings are not reclaimed yet when overwritten on updates
+mode skip
 
 # create a big string
 statement ok

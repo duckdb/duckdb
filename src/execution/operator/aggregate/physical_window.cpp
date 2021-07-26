@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
@@ -457,6 +458,24 @@ static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 	       wexpr->type == ExpressionType::WINDOW_RANK_DENSE || wexpr->type == ExpressionType::WINDOW_CUME_DIST;
 }
 
+template <typename T>
+static T GetCell(ChunkCollection &collection, idx_t column, idx_t index) {
+	D_ASSERT(collection.ColumnCount() > column);
+	auto &chunk = collection.GetChunkForRow(index);
+	auto &source = chunk.data[column];
+	const auto source_offset = index % STANDARD_VECTOR_SIZE;
+	const auto data = FlatVector::GetData<T>(source);
+	return data[source_offset];
+}
+
+static bool CellIsNull(ChunkCollection &collection, idx_t column, idx_t index) {
+	D_ASSERT(collection.ColumnCount() > column);
+	auto &chunk = collection.GetChunkForRow(index);
+	auto &source = chunk.data[column];
+	const auto source_offset = index % STANDARD_VECTOR_SIZE;
+	return FlatVector::IsNull(source, source_offset);
+}
+
 static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t input_size, const idx_t row_idx,
                                    ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
                                    const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask,
@@ -511,17 +530,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		bounds.window_start = bounds.peer_start;
 		break;
 	case WindowBoundary::EXPR_PRECEDING: {
-		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
-		bounds.window_start =
-		    (int64_t)row_idx -
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
+		bounds.window_start = (int64_t)row_idx - GetCell<int64_t>(boundary_start_collection, 0,
+		                                                          wexpr->start_expr->IsScalar() ? 0 : row_idx);
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING: {
-		D_ASSERT(boundary_start_collection.ColumnCount() > 0);
 		bounds.window_start =
-		    row_idx +
-		    boundary_start_collection.GetValue(0, wexpr->start_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>();
+		    row_idx + GetCell<int64_t>(boundary_start_collection, 0, wexpr->start_expr->IsScalar() ? 0 : row_idx);
 		break;
 	}
 	default:
@@ -539,16 +554,13 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		bounds.window_end = bounds.partition_end;
 		break;
 	case WindowBoundary::EXPR_PRECEDING:
-		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
-		bounds.window_end =
-		    (int64_t)row_idx -
-		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
+		bounds.window_end = (int64_t)row_idx -
+		                    GetCell<int64_t>(boundary_end_collection, 0, wexpr->end_expr->IsScalar() ? 0 : row_idx) + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING:
 		D_ASSERT(boundary_end_collection.ColumnCount() > 0);
 		bounds.window_end =
-		    row_idx +
-		    boundary_end_collection.GetValue(0, wexpr->end_expr->IsScalar() ? 0 : row_idx).GetValue<int64_t>() + 1;
+		    row_idx + GetCell<int64_t>(boundary_end_collection, 0, wexpr->end_expr->IsScalar() ? 0 : row_idx) + 1;
 		break;
 	default:
 		throw InternalException("Unsupported window end boundary");
@@ -636,6 +648,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			output_chunk.Reset();
 			output_chunk.SetCardinality(MinValue(idx_t(STANDARD_VECTOR_SIZE), input.Count() - row_idx));
 		}
+		auto &result = output_chunk.data[0];
 
 		// special case, OVER (), aggregate over everything
 		UpdateWindowBoundaries(wexpr, input.Count(), row_idx, boundary_start_collection, boundary_end_collection,
@@ -653,49 +666,51 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			rank_equal++;
 		}
 
-		Value res;
-
 		// if no values are read for window, result is NULL
 		if (bounds.window_start >= bounds.window_end) {
-			output_chunk.SetValue(0, output_offset, res);
+			FlatVector::SetNull(result, output_offset, true);
 			continue;
 		}
 
 		switch (wexpr->type) {
 		case ExpressionType::WINDOW_AGGREGATE: {
-			auto &result = output_chunk.data[0];
 			segment_tree->Compute(result, output_offset, bounds.window_start, bounds.window_end);
-			continue;
+			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
-			res = Value::Numeric(wexpr->return_type, row_idx - bounds.partition_start + 1);
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = row_idx - bounds.partition_start + 1;
 			break;
 		}
 		case ExpressionType::WINDOW_RANK_DENSE: {
-			res = Value::Numeric(wexpr->return_type, dense_rank);
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = dense_rank;
 			break;
 		}
 		case ExpressionType::WINDOW_RANK: {
-			res = Value::Numeric(wexpr->return_type, rank);
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = rank;
 			break;
 		}
 		case ExpressionType::WINDOW_PERCENT_RANK: {
 			int64_t denom = (int64_t)bounds.partition_end - bounds.partition_start - 1;
 			double percent_rank = denom > 0 ? ((double)rank - 1) / denom : 0;
-			res = Value(percent_rank);
+			auto rdata = FlatVector::GetData<double>(result);
+			rdata[output_offset] = percent_rank;
 			break;
 		}
 		case ExpressionType::WINDOW_CUME_DIST: {
 			int64_t denom = (int64_t)bounds.partition_end - bounds.partition_start;
 			double cume_dist = denom > 0 ? ((double)(bounds.peer_end - bounds.partition_start)) / denom : 0;
-			res = Value(cume_dist);
+			auto rdata = FlatVector::GetData<double>(result);
+			rdata[output_offset] = cume_dist;
 			break;
 		}
 		case ExpressionType::WINDOW_NTILE: {
 			if (payload_collection.ColumnCount() != 1) {
 				throw BinderException("NTILE needs a parameter");
 			}
-			auto n_param = payload_collection.GetValue(0, row_idx).GetValue<int64_t>();
+			auto n_param = GetCell<int64_t>(payload_collection, 0, row_idx);
 			// With thanks from SQLite's ntileValueFunc()
 			int64_t n_total = bounds.partition_end - bounds.partition_start;
 			if (n_param > n_total) {
@@ -721,19 +736,15 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 			// result has to be between [1, NTILE]
 			D_ASSERT(result_ntile >= 1 && result_ntile <= n_param);
-			res = Value::Numeric(wexpr->return_type, result_ntile);
+			auto rdata = FlatVector::GetData<int64_t>(result);
+			rdata[output_offset] = result_ntile;
 			break;
 		}
 		case ExpressionType::WINDOW_LEAD:
 		case ExpressionType::WINDOW_LAG: {
-			Value def_val = Value(wexpr->return_type);
 			int64_t offset = 1;
 			if (wexpr->offset_expr) {
-				offset = leadlag_offset_collection.GetValue(0, wexpr->offset_expr->IsScalar() ? 0 : row_idx)
-				             .GetValue<int64_t>();
-			}
-			if (wexpr->default_expr) {
-				def_val = leadlag_default_collection.GetValue(0, wexpr->default_expr->IsScalar() ? 0 : row_idx);
+				offset = GetCell<int64_t>(leadlag_offset_collection, 0, wexpr->offset_expr->IsScalar() ? 0 : row_idx);
 			}
 			int64_t val_idx = (int64_t)row_idx;
 			if (wexpr->type == ExpressionType::WINDOW_LEAD) {
@@ -743,25 +754,43 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 
 			if (val_idx >= int64_t(bounds.partition_start) && val_idx < int64_t(bounds.partition_end)) {
-				res = payload_collection.GetValue(0, val_idx);
+				payload_collection.CopyCell(0, val_idx, result, output_offset);
+			} else if (wexpr->default_expr) {
+				const auto source_row = wexpr->default_expr->IsScalar() ? 0 : row_idx;
+				leadlag_default_collection.CopyCell(0, source_row, result, output_offset);
 			} else {
-				res = def_val;
+				FlatVector::SetNull(result, output_offset, true);
 			}
 			break;
 		}
-		case ExpressionType::WINDOW_FIRST_VALUE: {
-			res = payload_collection.GetValue(0, bounds.window_start);
+		case ExpressionType::WINDOW_FIRST_VALUE:
+			payload_collection.CopyCell(0, bounds.window_start, result, output_offset);
 			break;
-		}
-		case ExpressionType::WINDOW_LAST_VALUE: {
-			res = payload_collection.GetValue(0, bounds.window_end - 1);
+		case ExpressionType::WINDOW_LAST_VALUE:
+			payload_collection.CopyCell(0, bounds.window_end - 1, result, output_offset);
+			break;
+		case ExpressionType::WINDOW_NTH_VALUE: {
+			if (payload_collection.ColumnCount() != 2) {
+				throw BinderException("NTH_VALUE needs a parameter");
+			}
+			// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
+			// returns NULL if there is no such row.
+			if (CellIsNull(payload_collection, 1, row_idx)) {
+				FlatVector::SetNull(result, output_offset, true);
+			} else {
+				auto n_param = GetCell<int64_t>(payload_collection, 1, row_idx);
+				int64_t n_total = bounds.window_end - bounds.window_start;
+				if (0 < n_param && n_param <= n_total) {
+					payload_collection.CopyCell(0, bounds.window_start + n_param - 1, result, output_offset);
+				} else {
+					FlatVector::SetNull(result, output_offset, true);
+				}
+			}
 			break;
 		}
 		default:
 			throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr->type));
 		}
-
-		output_chunk.SetValue(0, output_offset, res);
 	}
 
 	// Push the last chunk
@@ -801,28 +830,10 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 	}
 
 	//	Compute the functions columnwise
-	ChunkCollection hack_collection;
 	for (idx_t expr_idx = 0; expr_idx < window_exprs.size(); ++expr_idx) {
 		ChunkCollection column_collection;
 		ComputeWindowExpression(window_exprs[expr_idx], big_data, column_collection, partition_bits, order_bits);
-		if (expr_idx == 0) {
-			hack_collection.Append(column_collection);
-		} else {
-			D_ASSERT(hack_collection.ChunkCount() == column_collection.ChunkCount());
-			for (idx_t chunk_idx = 0; chunk_idx < hack_collection.ChunkCount(); ++chunk_idx) {
-				auto &lhs = hack_collection.GetChunk(chunk_idx);
-				auto &rhs = column_collection.GetChunk(chunk_idx);
-				D_ASSERT(lhs.size() == rhs.size());
-				for (auto &v : rhs.data) {
-					lhs.data.emplace_back(Vector(v));
-				}
-			}
-		}
-	}
-
-	// Append the hack chunks to the results
-	for (const auto &chunk : hack_collection.Chunks()) {
-		window_results.Append(*chunk);
+		window_results.Fuse(column_collection);
 	}
 }
 
