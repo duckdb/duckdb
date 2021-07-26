@@ -110,7 +110,7 @@ rs_check_disabled <- function(observer) {
   if (getOption("duckdb.force_rstudio_connection_pane", FALSE)) {
     return(FALSE)
   }
-  is.null(observer) || !interactive() || !getOption("duckdb.enable_rstudio_connection_pane", TRUE)
+  is.null(observer) || !interactive() || !getOption("duckdb.enable_rstudio_connection_pane", FALSE)
 }
 
 rs_on_connection_closed <- function(connection) {
