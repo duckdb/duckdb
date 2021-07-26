@@ -1,18 +1,15 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
 #include "api_info.hpp"
+
 #include "duckdb/main/prepared_statement_data.hpp"
-#include "duckdb/common/types/string_type.hpp"
-#include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/types/decimal.hpp"
-#include "duckdb/common/exception.hpp"
 
 using duckdb::Decimal;
 using duckdb::hugeint_t;
 using duckdb::idx_t;
 using duckdb::Load;
 using duckdb::LogicalType;
-using duckdb::string_t;
 using duckdb::Value;
 
 bool IsNumeric(SQLSMALLINT value_type) {
