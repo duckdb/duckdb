@@ -422,40 +422,72 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	return retlist;
 }
 
+struct AppendableRList {
+	AppendableRList() {
+		the_list = r.Protect(NEW_LIST(capacity));
+	}
+	void PrepAppend() {
+		if (size >= capacity) {
+			capacity = capacity * 2;
+			SEXP new_list = r.Protect(NEW_LIST(capacity));
+			D_ASSERT(new_list);
+			for (idx_t i = 0; i < size; i++) {
+				SET_VECTOR_ELT(new_list, i, VECTOR_ELT(the_list, i));
+			}
+			the_list = new_list;
+		}
+	}
+
+	void Append(SEXP val) {
+		D_ASSERT(size < capacity);
+		D_ASSERT(the_list != R_NilValue);
+		SET_VECTOR_ELT(the_list, size++, val);
+	}
+	SEXP the_list;
+	idx_t capacity = 1000;
+	idx_t size = 0;
+	RProtector r;
+};
+
 // Turn a DuckDB materialized result set into an Arrow Table
-SEXP duckdb_execute_arrow(MaterializedQueryResult *result) {
+SEXP duckdb_execute_arrow(QueryResult *result) {
 	RProtector r;
 	// somewhat dark magic below
 	SEXP arrow_name_sexp = r.Protect(RApi::StringsToSexp({"arrow"}));
 	SEXP arrow_namespace_call = r.Protect(Rf_lang2(Rf_install("getNamespace"), arrow_name_sexp));
-
 	SEXP arrow_namespace = r.Protect(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
 
-	ArrowArray arrow_data;
+	// export schema setup
 	ArrowSchema arrow_schema;
-
-	SEXP batches_sexp = r.Protect(NEW_LIST(result->collection.ChunkCount()));
-	idx_t batch_idx = 0;
-
 	auto schema_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_schema))));
-	auto data_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_data))));
-
 	auto schema_import_from_c = r.Protect(Rf_lang2(Rf_install("ImportSchema"), schema_ptr_sexp));
+
+	// export data setup
+	ArrowArray arrow_data;
+	auto data_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_data))));
 	auto batch_import_from_c = r.Protect(Rf_lang3(Rf_install("ImportRecordBatch"), data_ptr_sexp, schema_ptr_sexp));
-
-	SEXP schema_arrow_obj;
-	schema_arrow_obj = r.Protect(RApi::REvalRerror(schema_import_from_c, arrow_namespace));
-	result->ToArrowSchema(&arrow_schema);
-
-	for (auto &data_chunk : result->collection.Chunks()) {
+	// create data batches
+	unique_ptr<DataChunk> data_chunk;
+	AppendableRList batches_list;
+	while (true) {
+		data_chunk = result->Fetch();
+		if (!data_chunk || data_chunk->size() == 0) {
+			break;
+		}
+		result->ToArrowSchema(&arrow_schema);
 		data_chunk->ToArrowArray(&arrow_data);
-		// result->ToArrowSchema(&arrow_schema);
-		SEXP batch_arrow_obj = r.Protect(RApi::REvalRerror(batch_import_from_c, arrow_namespace));
-		SET_VECTOR_ELT(batches_sexp, batch_idx++, batch_arrow_obj);
+		batches_list.PrepAppend();
+		batches_list.Append(RApi::REvalRerror(batch_import_from_c, arrow_namespace));
 	}
 
+	SET_LENGTH(batches_list.the_list, batches_list.size);
+
+	result->ToArrowSchema(&arrow_schema);
+	SEXP schema_arrow_obj = r.Protect(RApi::REvalRerror(schema_import_from_c, arrow_namespace));
+
+	// create arrow::Table
 	auto from_record_batches =
-	    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_sexp, schema_arrow_obj));
+	    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_list.the_list, schema_arrow_obj));
 	return RApi::REvalRerror(from_record_batches, arrow_namespace);
 }
 
@@ -472,17 +504,17 @@ SEXP RApi::Execute(SEXP stmtsexp, SEXP arrowsexp) {
 	}
 
 	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
-	auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, false);
-
+	auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, arrow_fetch);
 	if (!generic_result->success) {
 		Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
 	}
-	D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
-	MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
 
 	if (arrow_fetch) {
-		return duckdb_execute_arrow(result);
+
+		return duckdb_execute_arrow(generic_result.get());
 	} else {
+		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
+		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
 		return duckdb_execute_R_impl(result);
 	}
 }
