@@ -144,9 +144,7 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	});
 	vector<SequenceCatalogEntry *> sequences;
 	schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) {
-		if (entry->internal) {
-			return;
-		}
+		D_ASSERT(!entry->internal);
 		sequences.push_back((SequenceCatalogEntry *)entry);
 	});
 

@@ -9,6 +9,11 @@ query I
 show tables
 ----
 
+query I
+select current_user
+----
+duckdb
+
 statement ok
 create table anno as select 42
 

@@ -4,6 +4,12 @@
 
 namespace duckdb {
 
+MacroCatalogEntry::MacroCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateMacroInfo *info)
+    : StandardEntry(CatalogType::MACRO_ENTRY, schema, catalog, info->name), function(move(info->function)) {
+	this->temporary = info->temporary;
+	this->internal = info->internal;
+}
+
 void MacroCatalogEntry::Serialize(Serializer &serializer) {
 	D_ASSERT(!internal);
 	serializer.WriteString(schema->name);
