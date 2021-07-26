@@ -18,8 +18,8 @@
 
 namespace duckdb {
 
-TableDataWriter::TableDataWriter(DatabaseInstance &db, TableCatalogEntry &table, MetaBlockWriter &meta_writer)
-    : db(db), table(table), meta_writer(meta_writer) {
+TableDataWriter::TableDataWriter(DatabaseInstance &, TableCatalogEntry &table, MetaBlockWriter &meta_writer)
+    : table(table), meta_writer(meta_writer) {
 }
 
 TableDataWriter::~TableDataWriter() {

@@ -160,6 +160,7 @@ dtime_t Time::FromTime(int32_t hour, int32_t minute, int32_t second, int32_t mic
 }
 
 // LCOV_EXCL_START
+#ifdef DEBUG
 static bool AssertValidTime(int32_t hour, int32_t minute, int32_t second, int32_t microseconds) {
 	if (hour < 0 || hour >= 24) {
 		return false;
@@ -175,6 +176,7 @@ static bool AssertValidTime(int32_t hour, int32_t minute, int32_t second, int32_
 	}
 	return true;
 }
+#endif
 // LCOV_EXCL_STOP
 
 void Time::Convert(dtime_t dtime, int32_t &hour, int32_t &min, int32_t &sec, int32_t &micros) {
@@ -186,7 +188,9 @@ void Time::Convert(dtime_t dtime, int32_t &hour, int32_t &min, int32_t &sec, int
 	sec = int32_t(time / Interval::MICROS_PER_SEC);
 	time -= int64_t(sec) * Interval::MICROS_PER_SEC;
 	micros = int32_t(time);
+#ifdef DEBUG
 	D_ASSERT(AssertValidTime(hour, min, sec, micros));
+#endif
 }
 
 } // namespace duckdb

@@ -274,6 +274,7 @@ def generate_amalgamation(source_file, header_file):
         header_file_name = header_file.split(os.sep)[-1]
         sfile.write('#include "' + header_file_name + '"\n\n')
         sfile.write("#ifndef DUCKDB_AMALGAMATION\n#error header mismatch\n#endif\n\n")
+        sfile.write("#if (!defined(DEBUG) && !defined NDEBUG)\n#define NDEBUG\n#endif\n\n")
         for compile_dir in compile_directories:
             sfile.write(write_dir(compile_dir))
         # for windows we write file_system.cpp last

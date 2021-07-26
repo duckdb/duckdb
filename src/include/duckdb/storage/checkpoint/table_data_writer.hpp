@@ -32,7 +32,6 @@ public:
 	}
 
 private:
-	DatabaseInstance &db;
 	TableCatalogEntry &table;
 	MetaBlockWriter &meta_writer;
 };
