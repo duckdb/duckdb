@@ -542,7 +542,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 
 	idx_t current_row = row_start_aligned;
 	while (current_row < end) {
-		CreateIndexScan(state, column_ids, chunk, true);
+		ScanCreateIndex(state, chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		if (chunk.size() == 0) {
 			break;
 		}
@@ -731,7 +731,8 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	result.Initialize(types);
 
 	row_group->InitializeScanWithOffset(state.row_group_scan_state, row_group_vector_idx);
-	row_group->IndexScan(state.row_group_scan_state, result, false);
+	row_group->ScanCommitted(state.row_group_scan_state, result,
+	                         TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES);
 	result.Slice(sel, count);
 
 	info->indexes.Scan([&](Index &index) {
@@ -970,18 +971,10 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vec
 	InitializeScan(state, column_ids);
 }
 
-void DataTable::CreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids, DataChunk &result,
-                                bool allow_pending_updates) {
-	// scan the persistent segments
-	if (ScanCreateIndex(state, result, allow_pending_updates)) {
-		return;
-	}
-}
-
-bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, bool allow_pending_updates) {
+bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, TableScanType type) {
 	auto current_row_group = state.row_group_scan_state.row_group;
 	while (current_row_group) {
-		current_row_group->IndexScan(state.row_group_scan_state, result, allow_pending_updates);
+		current_row_group->ScanCommitted(state.row_group_scan_state, result, type);
 		if (result.size() > 0) {
 			return true;
 		} else {
@@ -1024,7 +1017,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 		while (true) {
 			intermediate.Reset();
 			// scan a new chunk from the table to index
-			CreateIndexScan(state, column_ids, intermediate);
+			ScanCreateIndex(state, intermediate, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
 			if (intermediate.size() == 0) {
 				// finished scanning for index creation
 				// release all locks

@@ -48,6 +48,8 @@ TransactionManager::TransactionManager(DatabaseInstance &db) : db(db), thread_is
 	current_transaction_id = TRANSACTION_ID_START;
 	// the current active query id
 	current_query_number = 1;
+	lowest_active_id = TRANSACTION_ID_START;
+	lowest_active_start = MAX_TRANSACTION_ID;
 }
 
 TransactionManager::~TransactionManager() {
@@ -65,6 +67,10 @@ Transaction *TransactionManager::StartTransaction(ClientContext &context) {
 	transaction_t start_time = current_start_timestamp++;
 	transaction_t transaction_id = current_transaction_id++;
 	timestamp_t start_timestamp = Timestamp::GetCurrentTimestamp();
+	if (active_transactions.empty()) {
+		lowest_active_start = start_time;
+		lowest_active_id = transaction_id;
+	}
 
 	// create the actual transaction
 	auto &catalog = Catalog::GetCatalog(db);
@@ -240,6 +246,7 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 	idx_t t_index = active_transactions.size();
 	// check for the lowest and highest start time in the list of transactions
 	transaction_t lowest_start_time = TRANSACTION_ID_START;
+	transaction_t lowest_transaction_id = MAX_TRANSACTION_ID;
 	transaction_t lowest_active_query = MAXIMUM_QUERY_ID;
 	for (idx_t i = 0; i < active_transactions.size(); i++) {
 		if (active_transactions[i].get() == transaction) {
@@ -248,8 +255,12 @@ void TransactionManager::RemoveTransaction(Transaction *transaction) noexcept {
 			transaction_t active_query = active_transactions[i]->active_query;
 			lowest_start_time = MinValue(lowest_start_time, active_transactions[i]->start_time);
 			lowest_active_query = MinValue(lowest_active_query, active_query);
+			lowest_transaction_id = MinValue(lowest_transaction_id, active_transactions[i]->transaction_id);
 		}
 	}
+	lowest_active_start = lowest_start_time;
+	lowest_active_id = lowest_transaction_id;
+
 	transaction_t lowest_stored_query = lowest_start_time;
 	D_ASSERT(t_index != active_transactions.size());
 	auto current_transaction = move(active_transactions[t_index]);
