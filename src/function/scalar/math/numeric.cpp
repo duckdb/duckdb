@@ -276,7 +276,7 @@ struct CeilDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
-		UnaryExecutor::ExecuteLambda<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 			if (input < 0) {
 				// below 0 we floor the number (e.g. -10.5 -> -10)
 				return input / power_of_ten;
@@ -332,7 +332,7 @@ struct FloorDecimalOperator {
 	template <class T, class POWERS_OF_TEN_CLASS>
 	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
 		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
-		UnaryExecutor::ExecuteLambda<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 			if (input < 0) {
 				// below 0 we ceil the number (e.g. -10.5 -> -11)
 				return ((input + 1) / power_of_ten) - 1;
@@ -418,7 +418,7 @@ struct RoundDecimalOperator {
 		// and then flooring the number
 		// e.g. 10.5 + 0.5 = 11, floor(11) = 11
 		//      10.4 + 0.5 = 10.9, floor(10.9) = 10
-		UnaryExecutor::ExecuteLambda<T, T>(input.data[0], result, input.size(), [&](T input) {
+		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 			if (input < 0) {
 				input -= addition;
 			} else {
@@ -456,7 +456,7 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 	T multiply_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale];
 	T addition = divide_power_of_ten / 2;
 
-	UnaryExecutor::ExecuteLambda<T, T>(input.data[0], result, input.size(), [&](T input) {
+	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 		if (input < 0) {
 			input -= addition;
 		} else {
@@ -473,7 +473,7 @@ static void DecimalRoundPositivePrecisionFunction(DataChunk &input, ExpressionSt
 	auto source_scale = DecimalType::GetScale(func_expr.children[0]->return_type);
 	T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[source_scale - info.target_scale];
 	T addition = power_of_ten / 2;
-	UnaryExecutor::ExecuteLambda<T, T>(input.data[0], result, input.size(), [&](T input) {
+	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 		if (input < 0) {
 			input -= addition;
 		} else {

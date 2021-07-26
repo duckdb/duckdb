@@ -395,7 +395,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	auto addresses_ptr = FlatVector::GetData<data_ptr_t>(addresses);
 
 	// now compute the entry in the table based on the hash using a modulo
-	UnaryExecutor::ExecuteLambda<hash_t, uint64_t>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
+	UnaryExecutor::Execute<hash_t, uint64_t>(group_hashes, ht_offsets, groups.size(), [&](hash_t element) {
 		D_ASSERT((element & bitmask) == (element % capacity));
 		return (element & bitmask);
 	});
@@ -403,7 +403,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	// precompute the hash salts for faster comparison below
 	D_ASSERT(hash_salts.GetType() == LogicalType::SMALLINT);
-	UnaryExecutor::ExecuteLambda<hash_t, uint16_t>(group_hashes, hash_salts, groups.size(),
+	UnaryExecutor::Execute<hash_t, uint16_t>(group_hashes, hash_salts, groups.size(),
 	                                               [&](hash_t element) { return (element >> hash_prefix_shift); });
 	auto hash_salts_ptr = FlatVector::GetData<uint16_t>(hash_salts);
 

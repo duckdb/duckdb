@@ -175,7 +175,7 @@ public:
 	}
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
-	static void ExecuteLambda(Vector &input, Vector &result, idx_t count, FUNC fun) {
+	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun) {
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(input, result, count, (void *)&fun, false);
 	}
 

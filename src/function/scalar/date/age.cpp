@@ -12,7 +12,7 @@ static void AgeFunctionStandard(DataChunk &input, ExpressionState &state, Vector
 	D_ASSERT(input.ColumnCount() == 1);
 	auto current_timestamp = Timestamp::GetCurrentTimestamp();
 
-	UnaryExecutor::ExecuteLambda<timestamp_t, interval_t>(input.data[0], result, input.size(), [&](timestamp_t input) {
+	UnaryExecutor::Execute<timestamp_t, interval_t>(input.data[0], result, input.size(), [&](timestamp_t input) {
 		return Interval::GetDifference(current_timestamp, input);
 	});
 }

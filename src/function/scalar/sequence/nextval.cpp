@@ -99,7 +99,7 @@ static void NextValFunction(DataChunk &args, ExpressionState &state, Vector &res
 	} else {
 		NextValData next_val_input(info, transaction);
 		// sequence to use comes from the input
-		UnaryExecutor::ExecuteLambda<string_t, int64_t>(input, result, args.size(), [&](string_t value) {
+		UnaryExecutor::Execute<string_t, int64_t>(input, result, args.size(), [&](string_t value) {
 			auto qname = QualifiedName::Parse(value.GetString());
 			// fetch the sequence from the catalog
 			auto sequence = Catalog::GetCatalog(info.context)

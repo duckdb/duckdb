@@ -438,7 +438,7 @@ static bool TemplatedTryCastDateVector(BufferedCSVReaderOptions &options, Vector
                                        idx_t count, string &error_message) {
 	D_ASSERT(input_vector.GetType().id() == LogicalTypeId::VARCHAR);
 	bool all_converted = true;
-	UnaryExecutor::ExecuteLambda<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
+	UnaryExecutor::Execute<string_t, T>(input_vector, result_vector, count, [&](string_t input) {
 		T result;
 		if (!OP::Operation(options, input, result, error_message)) {
 			all_converted = false;
