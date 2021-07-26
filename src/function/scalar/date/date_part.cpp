@@ -70,7 +70,7 @@ template <class T>
 static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	int32_t last_year = 0;
 	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
-	                                         [&](T input) { return Date::ExtractYear(input, &last_year); });
+	                                   [&](T input) { return Date::ExtractYear(input, &last_year); });
 }
 
 template <class T, class OP>

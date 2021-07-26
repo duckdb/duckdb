@@ -404,7 +404,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 	// precompute the hash salts for faster comparison below
 	D_ASSERT(hash_salts.GetType() == LogicalType::SMALLINT);
 	UnaryExecutor::Execute<hash_t, uint16_t>(group_hashes, hash_salts, groups.size(),
-	                                               [&](hash_t element) { return (element >> hash_prefix_shift); });
+	                                         [&](hash_t element) { return (element >> hash_prefix_shift); });
 	auto hash_salts_ptr = FlatVector::GetData<uint16_t>(hash_salts);
 
 	// we start out with all entries [0, 1, 2, ..., groups.size()]

@@ -41,8 +41,8 @@ struct VectorTryCastOperator {
 			return output;
 		}
 		auto data = (VectorTryCastData *)dataptr;
-		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input),
-																mask, idx, data->error_message, data->all_converted);
+		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask,
+		                                                     idx, data->error_message, data->all_converted);
 	}
 };
 
@@ -55,8 +55,8 @@ struct VectorTryCastStrictOperator {
 		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->strict))) {
 			return output;
 		}
-		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input),
-																mask, idx, data->error_message, data->all_converted);
+		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask,
+		                                                     idx, data->error_message, data->all_converted);
 	}
 };
 
@@ -66,13 +66,14 @@ struct VectorTryCastErrorOperator {
 	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		auto data = (VectorTryCastData *)dataptr;
 		RESULT_TYPE output;
-		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->error_message, data->strict))) {
+		if (DUCKDB_LIKELY(
+		        OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->error_message, data->strict))) {
 			return output;
 		}
 		bool has_error = data->error_message && !data->error_message->empty();
 		return HandleVectorCastError::Operation<RESULT_TYPE>(
-			has_error ? *data->error_message : CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask, idx,
-			data->error_message, data->all_converted);
+		    has_error ? *data->error_message : CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask, idx,
+		    data->error_message, data->all_converted);
 	}
 };
 
@@ -83,11 +84,11 @@ struct VectorTryCastStringOperator {
 		auto data = (VectorTryCastData *)dataptr;
 		RESULT_TYPE output;
 		if (DUCKDB_LIKELY(OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input, output, data->result,
-		                                                                     data->error_message, data->strict))) {
+		                                                                  data->error_message, data->strict))) {
 			return output;
 		}
-		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input),
-																mask, idx, data->error_message, data->all_converted);
+		return HandleVectorCastError::Operation<RESULT_TYPE>(CastExceptionText<INPUT_TYPE, RESULT_TYPE>(input), mask,
+		                                                     idx, data->error_message, data->all_converted);
 	}
 };
 

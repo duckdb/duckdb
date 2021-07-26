@@ -1164,8 +1164,8 @@ static void StrpTimeFunction(DataChunk &args, ExpressionState &state, Vector &re
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-	UnaryExecutor::Execute<string_t, timestamp_t>(
-	    args.data[0], result, args.size(), [&](string_t input) { return info.format.ParseTimestamp(input); });
+	UnaryExecutor::Execute<string_t, timestamp_t>(args.data[0], result, args.size(),
+	                                              [&](string_t input) { return info.format.ParseTimestamp(input); });
 }
 
 void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
