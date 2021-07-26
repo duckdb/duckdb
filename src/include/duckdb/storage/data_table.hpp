@@ -18,6 +18,7 @@
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/common/enums/scan_options.hpp"
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -229,12 +230,10 @@ private:
 	                              TableFilterSet *table_filters, RowGroup *row_group, idx_t vector_index,
 	                              idx_t max_row);
 	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state);
-	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, bool allow_pending_updates = false);
 
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
-	void CreateIndexScan(CreateIndexScanState &structure, const vector<column_t> &column_ids, DataChunk &result,
-	                     bool allow_pending_updates = false);
+	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, TableScanType type);
 
 private:
 	//! Lock for appending entries to the table
