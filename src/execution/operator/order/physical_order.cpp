@@ -108,8 +108,7 @@ struct SortingState {
 class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(SortingState sorting_state, RowLayout payload_layout)
-	    : sorting_state(move(sorting_state)), payload_layout(move(payload_layout)), total_count(0),
-	      sorting_heap_capacity(Storage::BLOCK_SIZE), payload_heap_capacity(Storage::BLOCK_SIZE), external(false) {
+	    : sorting_state(move(sorting_state)), payload_layout(move(payload_layout)), total_count(0), external(false) {
 		auto thinnest_row = MinValue(sorting_state.entry_size, payload_layout.GetRowWidth());
 		if (!sorting_state.all_constant) {
 			thinnest_row = MinValue(thinnest_row, sorting_state.blob_layout.GetRowWidth());
@@ -137,9 +136,6 @@ public:
 	idx_t total_count;
 	//! Capacity (number of rows) used to initialize blocks
 	idx_t block_capacity;
-	//! Capacity (number of bytes) used to initialize blocks
-	idx_t sorting_heap_capacity;
-	idx_t payload_heap_capacity;
 
 	//! Whether we are doing an external sort
 	bool external;
@@ -154,36 +150,25 @@ public:
 	OrderLocalState() : initialized(false) {
 	}
 
-	//! Whether this local state has been initialized
-	bool initialized;
-	//! Local copy of the sorting expression executor
-	ExpressionExecutor executor;
-	//! Holds a vector of incoming sorting columns
-	DataChunk sort;
-
 	//! Initialize the local state using the global state
 	void Initialize(ClientContext &context, OrderGlobalState &gstate) {
 		auto &buffer_manager = BufferManager::GetBufferManager(context);
 		auto &sorting_state = gstate.sorting_state;
 		auto &payload_layout = gstate.payload_layout;
 		// Radix sorting data
-		idx_t vectors_per_block =
-		    (Storage::BLOCK_SIZE / sorting_state.entry_size + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
-		radix_sorting_data = make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE,
-		                                                    sorting_state.entry_size);
+		radix_sorting_data = make_unique<RowDataCollection>(
+		    buffer_manager, VectorsPerBlock(sorting_state.entry_size) * STANDARD_VECTOR_SIZE, sorting_state.entry_size);
 		// Blob sorting data
 		if (!sorting_state.all_constant) {
 			auto blob_row_width = sorting_state.blob_layout.GetRowWidth();
-			vectors_per_block = (Storage::BLOCK_SIZE / blob_row_width + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
-			blob_sorting_data = make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE,
-			                                                   blob_row_width);
+			blob_sorting_data = make_unique<RowDataCollection>(
+			    buffer_manager, VectorsPerBlock(blob_row_width) * STANDARD_VECTOR_SIZE, blob_row_width);
 			blob_sorting_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 		}
 		// Payload data
 		auto payload_row_width = payload_layout.GetRowWidth();
-		vectors_per_block = (Storage::BLOCK_SIZE / payload_row_width + STANDARD_VECTOR_SIZE) / STANDARD_VECTOR_SIZE;
-		payload_data =
-		    make_unique<RowDataCollection>(buffer_manager, vectors_per_block * STANDARD_VECTOR_SIZE, payload_row_width);
+		payload_data = make_unique<RowDataCollection>(
+		    buffer_manager, VectorsPerBlock(payload_row_width) * STANDARD_VECTOR_SIZE, payload_row_width);
 		payload_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 		// Init done
 		initialized = true;
@@ -196,13 +181,13 @@ public:
 		if (!sorting_state.all_constant) {
 			size_in_bytes += blob_sorting_data->count * sorting_state.blob_layout.GetRowWidth();
 			for (auto &block : blob_sorting_heap->blocks) {
-				size_in_bytes += block.byte_offset;
+				size_in_bytes += block.capacity;
 			}
 		}
 		size_in_bytes += payload_data->count * payload_layout.GetRowWidth();
 		if (!payload_layout.AllConstant()) {
 			for (auto &block : payload_data->blocks) {
-				size_in_bytes += block.byte_offset;
+				size_in_bytes += block.capacity;
 			}
 		}
 		// Get the max memory and number of threads
@@ -214,6 +199,19 @@ public:
 		// We take 15% of the max memory, to be VERY conservative
 		return size_in_bytes > (0.15 * max_memory / num_threads);
 	}
+
+private:
+	idx_t VectorsPerBlock(idx_t width) {
+		return (Storage::BLOCK_SIZE / width + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+	}
+
+public:
+	//! Whether this local state has been initialized
+	bool initialized;
+	//! Local copy of the sorting expression executor
+	ExpressionExecutor executor;
+	//! Holds a vector of incoming sorting columns
+	DataChunk sort;
 
 	//! Radix/memcmp sortable data
 	unique_ptr<RowDataCollection> radix_sorting_data;
@@ -373,7 +371,7 @@ public:
 	void CreateBlock() {
 		data_blocks.emplace_back(buffer_manager, state.block_capacity, layout.GetRowWidth());
 		if (!layout.AllConstant() && state.external) {
-			heap_blocks.emplace_back(buffer_manager, heap_capacity, 1);
+			heap_blocks.emplace_back(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
 			D_ASSERT(data_blocks.size() == heap_blocks.size());
 		}
 	}
@@ -495,10 +493,8 @@ public:
 	void InitializeWrite() {
 		CreateBlock();
 		if (!sorting_state.all_constant) {
-			blob_sorting_data->heap_capacity = state.sorting_heap_capacity;
 			blob_sorting_data->CreateBlock();
 		}
-		payload_data->heap_capacity = state.payload_heap_capacity;
 		payload_data->CreateBlock();
 	}
 	//! Init new block to write to
@@ -1114,7 +1110,6 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 		ties[i] = ties[i] && memcmp(dataptr, dataptr + sorting_state.entry_size, tie_size) == 0;
 		dataptr += sorting_state.entry_size;
 	}
-	ties[count - 1] = false;
 }
 
 //! Textbook LSD radix sort
@@ -1576,7 +1571,11 @@ public:
 					return;
 				}
 				if (l_idx == 0 || r_idx == r_count) {
+					// This case is incredibly difficult to cover as it is dependent on parallelism randomness
+					// But it has been tested extensively during development in a script
+					// LCOV_EXCL_START
 					return;
+					// LCOV_EXCL_STOP
 				} else {
 					break;
 				}
@@ -1587,15 +1586,6 @@ public:
 			} else {
 				right = middle - 1;
 			}
-		}
-		// Shift by one (if needed)
-		if (l_idx == 0) {
-			comp_res = CompareUsingGlobalIndex(l, r, l_idx, r_idx);
-			if (comp_res > 0) {
-				l_idx--;
-				r_idx++;
-			}
-			return;
 		}
 		int l_r_min1 = CompareUsingGlobalIndex(l, r, l_idx, r_idx - 1);
 		int l_min1_r = CompareUsingGlobalIndex(l, r, l_idx - 1, r_idx);
@@ -2053,29 +2043,13 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	idx_t total_heap_size =
 	    std::accumulate(state.sorted_blocks.begin(), state.sorted_blocks.end(), (idx_t)0,
 	                    [](idx_t a, const unique_ptr<SortedBlock> &b) { return a + b->HeapSize(); });
-	if (total_heap_size > 0.25 * BufferManager::GetBufferManager(context).GetMaxMemory()) {
+	if (state.external || total_heap_size > 0.25 * BufferManager::GetBufferManager(context).GetMaxMemory()) {
 		state.external = true;
 	}
 	// Use the data that we have to determine which block size to use during the merge
-	const auto &sorting_state = state.sorting_state;
 	for (auto &sb : state.sorted_blocks) {
 		auto &block = sb->radix_sorting_data.back();
 		state.block_capacity = MaxValue(state.block_capacity, block.capacity);
-	}
-	// Sorting heap data
-	if (!sorting_state.all_constant && state.external) {
-		for (auto &sb : state.sorted_blocks) {
-			auto &heap_block = sb->blob_sorting_data->heap_blocks.back();
-			state.sorting_heap_capacity = MaxValue(state.sorting_heap_capacity, heap_block.capacity);
-		}
-	}
-	// Payload heap data
-	const auto &payload_layout = state.payload_layout;
-	if (!payload_layout.AllConstant() && state.external) {
-		for (auto &sb : state.sorted_blocks) {
-			auto &heap_block = sb->payload_data->heap_blocks.back();
-			state.payload_heap_capacity = MaxValue(state.sorting_heap_capacity, heap_block.capacity);
-		}
 	}
 	// Unswizzle and pin heap blocks if we can fit everything in memory
 	if (!state.external) {

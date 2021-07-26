@@ -18,15 +18,21 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 	idx_t append_count = 0;
 	data_ptr_t dataptr;
 	if (entry_sizes) {
-		// compute how many entries fit if entry size if variable
+		D_ASSERT(entry_size == 1);
+		// compute how many entries fit if entry size is variable
 		dataptr = handle.node->buffer + block.byte_offset;
 		for (idx_t i = 0; i < remaining; i++) {
-			if (block.byte_offset + entry_sizes[i] > block_capacity * entry_size) {
-				while (entry_sizes[i] > block_capacity * entry_size) {
-					// if an entry does not fit, increase capacity until it does
-					block_capacity *= 2;
+			if (block.byte_offset + entry_sizes[i] > block.capacity) {
+				if (append_count == 0 && entry_sizes[i] > block.capacity) {
+					// if a single entry does not fit, increase capacity until it does
+					while (entry_sizes[i] > block.capacity) {
+						block.capacity *= 2;
+					}
+					buffer_manager.ReAllocate(block.block, block.capacity);
+					dataptr = handle.node->buffer + block.byte_offset;
+				} else {
+					break;
 				}
-				break;
 			}
 			append_count++;
 			block.byte_offset += entry_sizes[i];
@@ -37,6 +43,7 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 	}
 	append_entries.emplace_back(dataptr, append_count);
 	block.count += append_count;
+	D_ASSERT(block.count > 0);
 	return append_count;
 }
 
@@ -74,14 +81,11 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining, offset_entry_sizes);
 			remaining -= append_count;
 
-			if (new_block.count > 0) {
-				// in case 0 tuples fit the block (huge entry, e.g. large string) we do not add
-				blocks.push_back(move(new_block));
-				if (keep_pinned) {
-					pinned_blocks.push_back(move(handle));
-				} else {
-					handles.push_back(move(handle));
-				}
+			blocks.push_back(move(new_block));
+			if (keep_pinned) {
+				pinned_blocks.push_back(move(handle));
+			} else {
+				handles.push_back(move(handle));
 			}
 		}
 	}

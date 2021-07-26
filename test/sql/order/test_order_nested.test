@@ -18,7 +18,32 @@ statement ok
 CREATE TABLE test0 (i ${type}[])
 
 statement ok
-INSERT INTO test0 VALUES ([2]), ([1]), ([1, 2]), ([]), ([2, 2]), ([NULL]), (NULL), ([2, 3])
+INSERT INTO test0 VALUES ([2]), ([1]), ([1, 2]), ([]), ([2, 2]), ([NULL]), ([2, 3])
+
+query T
+SELECT * FROM test0 ORDER BY i
+----
+[]
+[1]
+[1, 2]
+[2]
+[2, 2]
+[2, 3]
+[NULL]
+
+query T
+SELECT * FROM test0 ORDER BY i DESC
+----
+[NULL]
+[2, 3]
+[2, 2]
+[2]
+[1, 2]
+[1]
+[]
+
+statement ok
+INSERT INTO test0 VALUES (NULL)
 
 query T
 SELECT * FROM test0 ORDER BY i

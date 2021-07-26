@@ -50,6 +50,16 @@ Shipping and Receiving Clerk	Berndt
 Shipping and Receiving Clerk	Kuppa
 Shipping and Receiving Supervisor	Ackerman
 
+query TT
+SELECT * FROM test0 ORDER BY job, name DESC
+----
+Shipping and Receiving Supervisor	Ackerman
+Shipping and Receiving Clerk	Kuppa
+Shipping and Receiving Clerk	Berndt
+Production Supervisor - WC60	Campbell
+Production Supervisor - WC60	Brown
+Production Supervisor - WC40	Dsa
+
 statement ok
 CREATE TABLE test1 (s VARCHAR)
 
