@@ -79,7 +79,6 @@ fix_rownames <- function(df) {
   return(df)
 }
 
-#' @export
 duckdb_fetch_arrow <- function(res) {
   return (res@env$resultset)
 }

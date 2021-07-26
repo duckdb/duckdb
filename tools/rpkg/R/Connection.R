@@ -67,6 +67,7 @@ setMethod(
 #' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbSendQuery
 #' @inheritParams DBI::dbBind
+#' @param arrow Whether the query should be returned as an Arrow Table
 #' @export
 setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),

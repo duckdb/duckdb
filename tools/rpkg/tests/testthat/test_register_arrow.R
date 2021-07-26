@@ -24,7 +24,6 @@ test_that("duckdb_register_arrow() works", {
 })
 
 test_that("duckdb_register_arrow() works with datasets", {
-  for (i in 1:10) {
     skip_on_os("windows")
     skip_if_not_installed("arrow", "4.0.1")
     con <- dbConnect(duckdb::duckdb())
@@ -42,7 +41,7 @@ test_that("duckdb_register_arrow() works with datasets", {
     duckdb::duckdb_unregister_arrow(con, "mydatasetreader")
 
     dbDisconnect(con, shutdown = T)
-  }
+  
 })
 
 
