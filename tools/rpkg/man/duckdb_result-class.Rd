@@ -6,6 +6,7 @@
 \alias{duckdb_result}
 \alias{show,duckdb_result-method}
 \alias{dbClearResult,duckdb_result-method}
+\alias{duckdb_fetch_arrow}
 \alias{dbFetch,duckdb_result-method}
 \alias{dbHasCompleted,duckdb_result-method}
 \alias{dbGetInfo,duckdb_result-method}
@@ -20,6 +21,8 @@
 \S4method{show}{duckdb_result}(object)
 
 \S4method{dbClearResult}{duckdb_result}(res, ...)
+
+duckdb_fetch_arrow(res)
 
 \S4method{dbFetch}{duckdb_result}(res, n = -1, ...)
 
@@ -42,7 +45,7 @@
 \arguments{
 \item{object}{Any R object}
 
-\item{res}{An object inheriting from \linkS4class{DBIResult}.}
+\item{res}{Query result to be converted to an Arrow Table}
 
 \item{...}{Other arguments passed on to methods.}
 

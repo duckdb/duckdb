@@ -79,6 +79,9 @@ fix_rownames <- function(df) {
   return(df)
 }
 
+#' @rdname duckdb_result-class
+#' @param res Query result to be converted to an Arrow Table
+#' @export
 duckdb_fetch_arrow <- function(res) {
   return (res@env$resultset)
 }
