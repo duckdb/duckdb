@@ -131,6 +131,9 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	vector<TableCatalogEntry *> tables;
 	vector<ViewCatalogEntry *> views;
 	schema.Scan(CatalogType::TABLE_ENTRY, [&](CatalogEntry *entry) {
+		if (entry->internal) {
+			return;
+		}
 		if (entry->type == CatalogType::TABLE_ENTRY) {
 			tables.push_back((TableCatalogEntry *)entry);
 		} else if (entry->type == CatalogType::VIEW_ENTRY) {
@@ -140,11 +143,18 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		}
 	});
 	vector<SequenceCatalogEntry *> sequences;
-	schema.Scan(CatalogType::SEQUENCE_ENTRY,
-	            [&](CatalogEntry *entry) { sequences.push_back((SequenceCatalogEntry *)entry); });
+	schema.Scan(CatalogType::SEQUENCE_ENTRY, [&](CatalogEntry *entry) {
+		if (entry->internal) {
+			return;
+		}
+		sequences.push_back((SequenceCatalogEntry *)entry);
+	});
 
 	vector<MacroCatalogEntry *> macros;
 	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
+		if (entry->internal) {
+			return;
+		}
 		if (entry->type == CatalogType::MACRO_ENTRY) {
 			macros.push_back((MacroCatalogEntry *)entry);
 		}

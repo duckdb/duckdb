@@ -5,6 +5,7 @@
 namespace duckdb {
 
 void MacroCatalogEntry::Serialize(Serializer &serializer) {
+	D_ASSERT(!internal);
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
 	function->expression->Serialize(serializer);
