@@ -75,7 +75,6 @@ bool is_keyword(const char *text) {
 std::vector<PGSimplifiedToken> tokenize(const char *str) {
 	core_yyscan_t yyscanner;
 	base_yy_extra_type yyextra;
-	int yyresult;
 
 	std::vector<PGSimplifiedToken> result;
 	yyscanner = scanner_init(str, &yyextra.core_yy_extra, ScanKeywords, NumScanKeywords);
