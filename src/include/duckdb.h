@@ -142,8 +142,7 @@ typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
 //! query duckdb result as arrow data structure
 DUCKDB_API duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result);
 //! get arrow schema
-DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow *data_array,
-                                                  duckdb_arrow_schema *out_schema);
+DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema);
 //! get arrow data array
 //! This function can be called multiple time to get next chunks, which will free the previous out_array.
 //! So consume the out_array before call this function again

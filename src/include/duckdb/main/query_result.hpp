@@ -79,7 +79,7 @@ public:
 		}
 	}
 
-	DUCKDB_API void ToArrowSchema(ArrowSchema *out_array, ArrowArray *data);
+	DUCKDB_API void ToArrowSchema(ArrowSchema *out_array);
 
 private:
 	//! The current chunk used by the iterator

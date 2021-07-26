@@ -444,17 +444,12 @@ SEXP duckdb_execute_arrow(MaterializedQueryResult *result) {
 	auto batch_import_from_c = r.Protect(Rf_lang3(Rf_install("ImportRecordBatch"), data_ptr_sexp, schema_ptr_sexp));
 
 	SEXP schema_arrow_obj;
+	schema_arrow_obj = r.Protect(RApi::REvalRerror(schema_import_from_c, arrow_namespace));
+	result->ToArrowSchema(&arrow_schema);
 
-	bool convert_schema = true;
 	for (auto &data_chunk : result->collection.Chunks()) {
 		data_chunk->ToArrowArray(&arrow_data);
-		result->ToArrowSchema(&arrow_schema, &arrow_data);
-		if (convert_schema) {
-			schema_arrow_obj = r.Protect(RApi::REvalRerror(schema_import_from_c, arrow_namespace));
-			result->ToArrowSchema(&arrow_schema, &arrow_data);
-			convert_schema = false;
-		}
-
+		// result->ToArrowSchema(&arrow_schema);
 		SEXP batch_arrow_obj = r.Protect(RApi::REvalRerror(batch_import_from_c, arrow_namespace));
 		SET_VECTOR_ELT(batches_sexp, batch_idx++, batch_arrow_obj);
 	}
