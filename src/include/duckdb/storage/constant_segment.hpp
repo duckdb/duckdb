@@ -8,14 +8,14 @@
 
 #pragma once
 
-#include "duckdb/storage/uncompressed_segment.hpp"
+#include "duckdb/storage/base_segment.hpp"
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
 class SegmentStatistics;
 
-class ConstantSegment : public UncompressedSegment {
+class ConstantSegment : public BaseSegment {
 public:
 	ConstantSegment(DatabaseInstance &db, SegmentStatistics &stats, idx_t row_start);
 
@@ -29,8 +29,6 @@ public:
 	                 idx_t result_offset) override;
 
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) override;
-
-	idx_t Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) override;
 
 public:
 	typedef void (*scan_function_t)(ConstantSegment &segment, Vector &result);

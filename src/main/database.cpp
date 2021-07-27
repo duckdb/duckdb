@@ -8,12 +8,17 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/function/compression_function.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
 #endif
 
 namespace duckdb {
+
+DBConfig::DBConfig() {
+	compression_functions = make_unique<CompressionFunctionSet>();
+}
 
 DBConfig::~DBConfig() {
 }

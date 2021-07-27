@@ -30,7 +30,7 @@ struct ColumnCheckpointState {
 	vector<DataPointer> data_pointers;
 	unique_ptr<BaseStatistics> global_stats;
 
-	unique_ptr<UncompressedSegment> current_segment;
+	unique_ptr<BaseSegment> current_segment;
 	unique_ptr<SegmentStatistics> segment_stats;
 
 public:

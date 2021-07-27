@@ -51,8 +51,8 @@ public:
 	ColumnSegmentType segment_type;
 	//! The statistics for the segment
 	SegmentStatistics stats;
-	//! The uncompressed segment holding the data
-	unique_ptr<UncompressedSegment> data;
+	//! The segment holding the data
+	unique_ptr<BaseSegment> data;
 
 public:
 	void InitializeScan(ColumnScanState &state);

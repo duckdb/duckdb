@@ -17,11 +17,15 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/common/set.hpp"
+#include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 
 namespace duckdb {
 class ClientContext;
 class TableFunctionRef;
+class CompressionFunction;
+
+struct CompressionFunctionSet;
 
 enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
 enum class CheckpointAbort : uint8_t { NO_ABORT = 0, DEBUG_ABORT_BEFORE_TRUNCATE = 1, DEBUG_ABORT_BEFORE_HEADER = 2 };
@@ -50,6 +54,7 @@ struct DBConfig {
 	friend class StorageManager;
 
 public:
+	DUCKDB_API DBConfig();
 	DUCKDB_API ~DBConfig();
 
 	//! Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)
@@ -108,6 +113,14 @@ public:
 	DUCKDB_API void SetOption(const ConfigurationOption &option, const Value &value);
 
 	DUCKDB_API static idx_t ParseMemoryLimit(const string &arg);
+
+	//! Return the list of possible compression functions for the specific physical type
+	DUCKDB_API vector<CompressionFunction*> GetCompressionFunctions(PhysicalType data_type);
+	//! Return the compression function for the specified compression type/physical type combo
+	DUCKDB_API CompressionFunction *GetCompressionFunction(CompressionType type, PhysicalType data_type);
+
+private:
+	unique_ptr<CompressionFunctionSet> compression_functions;
 };
 
 } // namespace duckdb

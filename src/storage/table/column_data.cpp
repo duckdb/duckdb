@@ -21,6 +21,8 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 
+#include "duckdb/main/config.hpp"
+
 namespace duckdb {
 
 ColumnData::ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent)
@@ -157,7 +159,7 @@ void ColumnData::Select(Transaction &transaction, idx_t vector_index, ColumnScan
                         SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 	result.Normalify(scan_count);
-	UncompressedSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
+	BaseSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
 }
 
 void ColumnData::FilterScan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -367,7 +369,9 @@ void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
 
 	idx_t offset = 0;
 	while (count > 0) {
-		idx_t appended = current_segment->Append(*segment_stats, vdata, offset, count);
+		D_ASSERT(current_segment->IsUncompressed());
+		auto &uncompressed = (UncompressedSegment &) *current_segment;
+		idx_t appended = uncompressed.Append(*segment_stats, vdata, offset, count);
 		if (appended == count) {
 			// appended everything: finished
 			return;
@@ -479,8 +483,11 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
 	checkpoint_state->CreateEmptySegment();
 
+	auto &config = DBConfig::GetConfig(info.db);
 	bool is_validity = type.id() == LogicalTypeId::VALIDITY;
 	auto scan_type = is_validity ? LogicalType::BOOLEAN : type;
+	auto compression_functions = config.GetCompressionFunctions(type.InternalType());
+
 	Vector intermediate(scan_type, true, is_validity);
 	// we create a new segment tree with all the new segments
 	// we do this by scanning the current segments of the column and checking for changes

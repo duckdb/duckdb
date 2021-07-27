@@ -9,7 +9,7 @@ static ConstantSegment::scan_function_t GetScanFunction(PhysicalType type);
 static ConstantSegment::fill_function_t GetFillFunction(PhysicalType type);
 
 ConstantSegment::ConstantSegment(DatabaseInstance &db, SegmentStatistics &stats, idx_t row_start)
-    : UncompressedSegment(db, stats.type.InternalType(), row_start), stats(stats) {
+    : BaseSegment(db, stats.type.InternalType(), row_start), stats(stats) {
 	scan_function = GetScanFunction(stats.type.InternalType());
 	fill_function = GetFillFunction(stats.type.InternalType());
 }
@@ -142,13 +142,6 @@ ConstantSegment::fill_function_t GetFillFunction(PhysicalType type) {
 
 void ConstantSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	fill_function(*this, result, result_idx, 1);
-}
-
-//===--------------------------------------------------------------------===//
-// Append
-//===--------------------------------------------------------------------===//
-idx_t ConstantSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
-	throw InternalException("Cannot append to a constant segment");
 }
 
 } // namespace duckdb
