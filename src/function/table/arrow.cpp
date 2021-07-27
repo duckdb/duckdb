@@ -737,45 +737,40 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::DECIMAL: {
 		auto val_mask = FlatVector::Validity(vector);
 		//! We have to convert from INT128
+		auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+		if (nested_offset != -1) {
+			src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
+		}
 		switch (vector.GetType().InternalType()) {
 		case PhysicalType::INT16: {
-			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
-			if (nested_offset != -1) {
-				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
-			}
 			auto tgt_ptr = (int16_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
 					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 					D_ASSERT(result);
+					(void)result;
 				}
 			}
 			break;
 		}
 		case PhysicalType::INT32: {
-			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
-			if (nested_offset != -1) {
-				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
-			}
 			auto tgt_ptr = (int32_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
 					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 					D_ASSERT(result);
+					(void)result;
 				}
 			}
 			break;
 		}
 		case PhysicalType::INT64: {
-			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
-			if (nested_offset != -1) {
-				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
-			}
 			auto tgt_ptr = (int64_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
 					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 					D_ASSERT(result);
+					(void)result;
 				}
 			}
 			break;
@@ -1012,6 +1007,7 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 
 	auto &data = (ArrowScanFunctionData &)*bind_data;
 	auto &state = (ArrowScanState &)*operator_state;
+
 	//! have we run out of data on the current chunk? move to next one
 	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
 		state.chunk_offset = 0;

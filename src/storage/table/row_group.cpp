@@ -10,6 +10,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -124,7 +125,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
-		IndexScan(scan_state.row_group_scan_state, scan_chunk, true);
+		ScanCommitted(scan_state.row_group_scan_state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
@@ -278,8 +279,10 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 	return true;
 }
 
-template <bool SCAN_DELETES, bool SCAN_COMMITTED, bool ALLOW_UPDATES>
+template <TableScanType TYPE>
 void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result) {
+	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
+	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	auto &table_filters = state.parent.table_filters;
 	auto &column_ids = state.parent.column_ids;
 	auto &adaptive_filter = state.parent.adaptive_filter;
@@ -298,9 +301,21 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 		// second, scan the version chunk manager to figure out which tuples to load for this transaction
 		idx_t count;
 		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
-		if (SCAN_DELETES) {
+		if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
 			D_ASSERT(transaction);
 			count = state.row_group->GetSelVector(*transaction, state.vector_index, valid_sel, max_count);
+			if (count == 0) {
+				// nothing to scan for this vector, skip the entire vector
+				NextVector(state);
+				continue;
+			}
+		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED) {
+			auto &transaction_manager = TransactionManager::Get(db);
+			auto lowest_active_start = transaction_manager.LowestActiveStart();
+			auto lowest_active_id = transaction_manager.LowestActiveId();
+
+			count = state.row_group->GetCommittedSelVector(lowest_active_start, lowest_active_id, state.vector_index,
+			                                               valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
 				NextVector(state);
@@ -318,12 +333,11 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 					D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
 					result.data[i].Sequence(this->start + current_row, 1);
 				} else {
-					if (SCAN_COMMITTED) {
+					if (TYPE != TableScanType::TABLE_SCAN_REGULAR) {
 						columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
 						                               ALLOW_UPDATES);
 					} else {
 						D_ASSERT(transaction);
-						D_ASSERT(ALLOW_UPDATES);
 						columns[column]->Scan(*transaction, state.vector_index, state.column_scans[i], result.data[i]);
 					}
 				}
@@ -382,8 +396,16 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 							result_data[sel_idx] = this->start + current_row + sel.get_index(sel_idx);
 						}
 					} else {
-						columns[column]->FilterScan(*transaction, state.vector_index, state.column_scans[i],
-						                            result.data[i], sel, approved_tuple_count);
+						if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
+							D_ASSERT(transaction);
+							columns[column]->FilterScan(*transaction, state.vector_index, state.column_scans[i],
+							                            result.data[i], sel, approved_tuple_count);
+						} else {
+							D_ASSERT(!transaction);
+							columns[column]->FilterScanCommitted(state.vector_index, state.column_scans[i],
+							                                     result.data[i], sel, approved_tuple_count,
+							                                     ALLOW_UPDATES);
+						}
 					}
 				}
 			}
@@ -401,14 +423,22 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 }
 
 void RowGroup::Scan(Transaction &transaction, RowGroupScanState &state, DataChunk &result) {
-	TemplatedScan<true, false, true>(&transaction, state, result);
+	TemplatedScan<TableScanType::TABLE_SCAN_REGULAR>(&transaction, state, result);
 }
 
-void RowGroup::IndexScan(RowGroupScanState &state, DataChunk &result, bool allow_pending_updates) {
-	if (allow_pending_updates) {
-		TemplatedScan<false, true, true>(nullptr, state, result);
-	} else {
-		TemplatedScan<false, true, false>(nullptr, state, result);
+void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableScanType type) {
+	switch (type) {
+	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
+		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS>(nullptr, state, result);
+		break;
+	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES:
+		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES>(nullptr, state, result);
+		break;
+	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
+		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED>(nullptr, state, result);
+		break;
+	default:
+		throw InternalException("Unrecognized table scan type");
 	}
 }
 
@@ -427,6 +457,17 @@ idx_t RowGroup::GetSelVector(Transaction &transaction, idx_t vector_idx, Selecti
 		return max_count;
 	}
 	return info->GetSelVector(transaction, sel_vector, max_count);
+}
+
+idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
+                                      SelectionVector &sel_vector, idx_t max_count) {
+	lock_guard<mutex> lock(row_group_lock);
+
+	auto info = GetChunkInfo(vector_idx);
+	if (!info) {
+		return max_count;
+	}
+	return info->GetCommittedSelVector(start_time, transaction_id, sel_vector, max_count);
 }
 
 bool RowGroup::Fetch(Transaction &transaction, idx_t row) {

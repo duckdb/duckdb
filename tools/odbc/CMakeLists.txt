@@ -10,6 +10,7 @@ include_directories(${ODBC_INCLUDE_DIRS} include)
 
 add_library(
   duckdb_odbc SHARED
+  duckdb_odbc.cpp
   driver.cpp
   connection.cpp
   statement.cpp
@@ -17,7 +18,8 @@ add_library(
   result.cpp
   api_info.cpp
   statement_functions.cpp
-  odbc_interval.cpp)
+  odbc_interval.cpp
+  odbc_fetch.cpp)
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
 

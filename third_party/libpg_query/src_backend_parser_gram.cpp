@@ -1166,7 +1166,6 @@ static PGNode *makeNullAConst(int location);
 static PGNode *makeAConst(PGValue *v, int location);
 static PGNode *makeBoolAConst(bool state, int location);
 static PGNode *makeParamRef(int number, int location);
-static PGNode *makeParamRefCast(int number, int location, PGTypeName *tpname);
 static void check_qualified_name(PGList *names, core_yyscan_t yyscanner);
 static PGList *check_func_name(PGList *names, core_yyscan_t yyscanner);
 static PGList *check_indirection(PGList *indirection, core_yyscan_t yyscanner);
@@ -1257,7 +1256,7 @@ typedef union YYSTYPE
 	PGViewCheckOption viewcheckoption;
 }
 /* Line 193 of yacc.c.  */
-#line 1261 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1260 "third_party/libpg_query/grammar/grammar_out.cpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
@@ -1282,7 +1281,7 @@ typedef struct YYLTYPE
 
 
 /* Line 216 of yacc.c.  */
-#line 1286 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 1285 "third_party/libpg_query/grammar/grammar_out.cpp"
 
 #ifdef short
 # undef short
@@ -23489,7 +23488,7 @@ yyreduce:
 
 
 /* Line 1267 of yacc.c.  */
-#line 23493 "third_party/libpg_query/grammar/grammar_out.cpp"
+#line 23492 "third_party/libpg_query/grammar/grammar_out.cpp"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -24046,12 +24045,6 @@ static PGNode* makeParamRef(int number, int location)
 	return (PGNode *) p;
 }
 
-static PGNode *
-makeParamRefCast(int number, int location, PGTypeName *tpname)
-{
-	PGNode *p = makeParamRef(number, location);
-	return makeTypeCast(p, tpname, 0, -1);
-}
 
 /* insertSelectOptions()
  * Insert ORDER BY, etc into an already-constructed SelectStmt.

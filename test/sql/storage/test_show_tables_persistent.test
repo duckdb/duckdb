@@ -1,0 +1,36 @@
+# name: test/sql/storage/test_show_tables_persistent.test
+# description: Test SHOW TABLES between restarts
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/show_tables.db
+
+query I
+show tables
+----
+
+query I
+select current_user
+----
+duckdb
+
+statement ok
+create table anno as select 42
+
+query I
+show tables
+----
+anno
+
+statement ok
+drop table if exists anno
+
+query I
+show tables
+----
+
+restart
+
+query I
+show tables
+----
