@@ -205,6 +205,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
 	result.plan = move(update);
+	this->allow_stream_result = false;
 	return result;
 }
 
