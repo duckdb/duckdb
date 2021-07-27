@@ -186,7 +186,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context,
 			break;
 		}
 		default:
-			throw CatalogException("Unsupported constraint for entry!");
+			throw InternalException("Unsupported constraint for entry!");
 		}
 		create_info->constraints.push_back(move(copy));
 	}
@@ -399,19 +399,8 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 	return types;
 }
 
-vector<LogicalType> TableCatalogEntry::GetTypes(const vector<column_t> &column_ids) {
-	vector<LogicalType> result;
-	for (auto &index : column_ids) {
-		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			result.push_back(LOGICAL_ROW_TYPE);
-		} else {
-			result.push_back(columns[index].type);
-		}
-	}
-	return result;
-}
-
 void TableCatalogEntry::Serialize(Serializer &serializer) {
+	D_ASSERT(!internal);
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
 	D_ASSERT(columns.size() <= NumericLimits<uint32_t>::Maximum());

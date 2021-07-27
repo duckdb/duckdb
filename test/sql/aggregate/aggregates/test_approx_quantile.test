@@ -10,32 +10,32 @@ create table quantile as select range r, random() from range(10000) union all va
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(r, 0.5) as approx_quantile ,quantile(r,0.5) as true_quantile FROM quantile) AS T
+	  WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
+		  THEN TRUE
+		  ELSE FALSE
+	  END
+	  FROM (SELECT approx_quantile(r, 0.5) as approx_quantile ,quantile(r,0.5) as true_quantile FROM quantile) AS T
 ----
 1
 
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(r, 1.0) as approx_quantile ,quantile(r, 1.0) as true_quantile FROM quantile) AS T
+	  WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
+		  THEN TRUE
+		  ELSE FALSE
+	  END
+	  FROM (SELECT approx_quantile(r, 1.0) as approx_quantile ,quantile(r, 1.0) as true_quantile FROM quantile) AS T
 ----
 1
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(r, 0.0) as approx_quantile ,quantile(r, 0.0) as true_quantile from quantile) AS T
+	  WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
+		  THEN TRUE
+		  ELSE FALSE
+	  END
+	  FROM (SELECT approx_quantile(r, 0.0) as approx_quantile ,quantile(r, 0.0) as true_quantile from quantile) AS T
 ----
 1
 
@@ -46,46 +46,51 @@ NULL	NULL
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(42, 0.5)  as approx_quantile ,quantile(42, 0.5)  as true_quantile) AS T
+	  WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
+		  THEN TRUE
+		  ELSE FALSE
+	  END
+	  FROM (SELECT approx_quantile(42, 0.5)  as approx_quantile ,quantile(42, 0.5)  as true_quantile) AS T
 ----
 1
 
 query II
-SELECT approx_quantile(NULL, 0.5)  as approx_quantile ,quantile(NULL, 0.5)  as true_quantile
+SELECT approx_quantile(NULL, 0.5)  as approx_quantile ,quantile(NULL, 0.5)  as true_quantile FROM quantile
 ----
 NULL	NULL
 
+query II
+SELECT approx_quantile(1, 0.5)  as approx_quantile ,quantile(1, 0.5)  as true_quantile FROM quantile
+----
+1	1
+
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(42, 0.5)  as approx_quantile ,quantile(42, 0.5)  as true_quantile) AS T
+	  WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
+		  THEN TRUE
+		  ELSE FALSE
+	  END
+	  FROM (SELECT approx_quantile(42, 0.5)  as approx_quantile ,quantile(42, 0.5)  as true_quantile) AS T
 ----
 1
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(r, 0.1)  as approx_quantile ,quantile(r, 0.1)  as true_quantile from quantile) AS T
+	  WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
+		  THEN TRUE
+		  ELSE FALSE
+	  END
+	  FROM (SELECT approx_quantile(r, 0.1)  as approx_quantile ,quantile(r, 0.1)  as true_quantile from quantile) AS T
 ----
 1
 
 query I
 SELECT CASE
-       WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(r, 0.9)  as approx_quantile ,quantile(r, 0.9)  as true_quantile from quantile) AS T
+	  WHEN ( approx_quantile between (true_quantile - 100) and (true_quantile + 100) )
+		  THEN TRUE
+		  ELSE FALSE
+	  END
+	  FROM (SELECT approx_quantile(r, 0.9)  as approx_quantile ,quantile(r, 0.9)  as true_quantile from quantile) AS T
 ----
 1
 
@@ -101,6 +106,9 @@ statement error
 SELECT approx_quantile(r, NULL) FROM quantile
 
 statement error
+SELECT approx_quantile(r, r) FROM quantile
+
+statement error
 SELECT approx_quantile(r::string, 0.5) FROM quantile
 
 statement error
@@ -108,7 +116,6 @@ SELECT approx_quantile(r) FROM quantile
 
 statement error
 SELECT approx_quantile(r, 0.1, 0.2) FROM quantile
-
 
 statement ok
 pragma threads=4
@@ -118,31 +125,31 @@ PRAGMA force_parallelism
 
 query I
 SELECT CASE
-       WHEN (approx_quantile between (true_quantile - (sumr * 0.01)) and (true_quantile + (sumr * 0.01)))
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(r, 0.1) as approx_quantile, quantile(r, 0.1) as true_quantile, SUM(r) as sumr from quantile) AS T
+	  WHEN (approx_quantile between (true_quantile - (sumr * 0.01)) and (true_quantile + (sumr * 0.01)))
+		  THEN TRUE
+		  ELSE FALSE
+	  END
+	  FROM (SELECT approx_quantile(r, 0.1) as approx_quantile, quantile(r, 0.1) as true_quantile, SUM(r) as sumr from quantile) AS T
 ----
 1
 
 query I
 SELECT CASE
-       WHEN (approx_quantile between (true_quantile - (sumr * 0.01)) and (true_quantile + (sumr * 0.01)))
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(r, 0.9) as approx_quantile, quantile(r, 0.9) as true_quantile, SUM(r) as sumr from quantile) AS T
+	  WHEN (approx_quantile between (true_quantile - (sumr * 0.01)) and (true_quantile + (sumr * 0.01)))
+		  THEN TRUE
+		  ELSE FALSE
+	  END
+	  FROM (SELECT approx_quantile(r, 0.9) as approx_quantile, quantile(r, 0.9) as true_quantile, SUM(r) as sumr from quantile) AS T
 ----
 1
 
 query I
 SELECT CASE
-       WHEN (approx_quantile between (true_quantile - (sumr * 0.01)) and (true_quantile + (sumr * 0.01)))
-            THEN TRUE
-            ELSE FALSE
-       END
-       FROM (SELECT approx_quantile(r, 0.5) as approx_quantile, quantile(r, 0.5) as true_quantile, SUM(r) as sumr from quantile) AS T
+	  WHEN (approx_quantile between (true_quantile - (sumr * 0.01)) and (true_quantile + (sumr * 0.01)))
+		  THEN TRUE
+		  ELSE FALSE
+	  END
+	  FROM (SELECT approx_quantile(r, 0.5) as approx_quantile, quantile(r, 0.5) as true_quantile, SUM(r) as sumr from quantile) AS T
 ----
 1
 
@@ -157,6 +164,12 @@ SELECT reservoir_quantile(r, 0.9)  from quantile
 statement ok
 SELECT reservoir_quantile(r, 0.9,1000)  from quantile
 
+# reservoir = 1
+query I
+SELECT reservoir_quantile(1, 0.5, 1) FROM quantile
+----
+1
+
 statement ok
 SELECT RESERVOIR_QUANTILE(b, 0.5)
 FROM (SELECT 'a' AS a, 1.0 AS b) y
@@ -170,3 +183,24 @@ FROM (
     UNION ALL SELECT 'b' AS a, 1.0 AS b
     ) y
 GROUP BY a
+
+statement error
+SELECT reservoir_quantile(r, r)  from quantile
+
+statement error
+SELECT reservoir_quantile(r, NULL)  from quantile
+
+statement error
+SELECT reservoir_quantile(r, r, r)  from quantile
+
+statement error
+SELECT reservoir_quantile(r, 0.9, NULL)  from quantile
+
+statement error
+SELECT reservoir_quantile(r, 0.9, r)  from quantile
+
+statement error
+SELECT reservoir_quantile(r, random()::float)  from quantile
+
+statement error
+SELECT reservoir_quantile(r, 0.9, random()::float)  from quantile

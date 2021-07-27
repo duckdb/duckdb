@@ -59,10 +59,6 @@ foreach(p LIB BIN INCLUDE CMAKE)
   endif()
 endforeach()
 
-set(M32_FLAG "")
-if(FORCE_32_BIT)
-  set(M32_FLAG " -m32 ")
-endif()
 
 
 option(DISABLE_UNITY "Disable unity builds." FALSE)
@@ -76,6 +72,15 @@ if(${FORCE_COLORED_OUTPUT})
     add_compile_options(-fcolor-diagnostics)
   endif()
 endif()
+
+option( "Enable address sanitizer." TRUE)
+
+set(M32_FLAG "")
+if(FORCE_32_BIT)
+  set(M32_FLAG " -m32 ")
+endif()
+
+option(FORCE_WARN_UNUSED "Unused code objects lead to compiler warnings." FALSE)
 
 option(ENABLE_SANITIZER "Enable address sanitizer." TRUE)
 option(ENABLE_THREAD_SANITIZER "Enable thread sanitizer." FALSE)
@@ -258,6 +263,12 @@ if(FORCE_ASSERT)
 endif()
 
 if(NOT MSVC)
+  if(${FORCE_WARN_UNUSED})
+    set(CXX_EXTRA "${CXX_EXTRA} -Wunused")
+  endif()
+  if(TREAT_WARNINGS_AS_ERRORS)
+    set(CXX_EXTRA "${CXX_EXTRA} -Werror")
+  endif()
   set(CMAKE_CXX_FLAGS_DEBUG
       "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
   set(CMAKE_CXX_FLAGS_RELEASE
@@ -265,11 +276,8 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
   set(CXX_EXTRA_DEBUG
-      "${CXX_EXTRA_DEBUG} -Wunused-variable -Wunused-const-variable -Werror=vla -Wnarrowing  -Wnarrowing -pedantic"
+      "${CXX_EXTRA_DEBUG} -Wunused -Werror=vla -Wnarrowing -pedantic"
   )
-  if(TREAT_WARNINGS_AS_ERRORS)
-    set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -Werror")
-  endif()
 
   if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION
                                                    VERSION_GREATER 8.0)

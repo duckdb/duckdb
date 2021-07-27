@@ -282,8 +282,9 @@ jobs:
         python scripts/amalgamation.py --extended
         python scripts/parquet_amalgamation.py
         cd src/amalgamation
-        clang++ -std=c++11 -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
-
+        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
 
   linux-release-64:
     name: Linux (64 Bit)
@@ -301,6 +302,8 @@ jobs:
       BUILD_REST: 1
       BUILD_JDBC: 1
       BUILD_HTTPFS: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
+      FORCE_WARN_UNUSED: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -506,6 +509,7 @@ jobs:
       BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_VISUALIZER: 1
+      DISABLE_SANITIZER: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -520,7 +524,7 @@ jobs:
 
     - name: Test
       run: |
-          build/relassert/test/unittest "*"
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
 
   force-storage:
     name: Force Storage
@@ -582,20 +586,11 @@ jobs:
 
     - name: Test
       run: |
-          build/reldebug/test/unittest --end-offset-percentage=10
-          build/reldebug/test/unittest --start-offset-percentage=10 --end-offset-percentage=20
-          build/reldebug/test/unittest --start-offset-percentage=20 --end-offset-percentage=30
-          build/reldebug/test/unittest --start-offset-percentage=30 --end-offset-percentage=40
-          build/reldebug/test/unittest --start-offset-percentage=40 --end-offset-percentage=50
-          build/reldebug/test/unittest --start-offset-percentage=50 --end-offset-percentage=60
-          build/reldebug/test/unittest --start-offset-percentage=60 --end-offset-percentage=70
-          build/reldebug/test/unittest --start-offset-percentage=70 --end-offset-percentage=80
-          build/reldebug/test/unittest --start-offset-percentage=80 --end-offset-percentage=90
-          build/reldebug/test/unittest --start-offset-percentage=90
-          build/reldebug/test/unittest "[intraquery]"
-          build/reldebug/test/unittest "[interquery]"
-          build/reldebug/test/unittest "[detailed_profiler]"
-          build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
   valgrind:
     name: Valgrind
@@ -622,33 +617,58 @@ jobs:
     - name: Test
       run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
-# borked somehow. needs investigation.
-#  codecov:
-#    name: Code Coverage
-#    runs-on: ubuntu-20.04
-#    needs: linux-debug
-#
-#    env:
-#      GEN: ninja
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#
-#    - uses: actions/setup-python@v2
-#      with:
-#        python-version: '3.7'
-#
-#    - name: Install
-#      run: pip install --user cpp-coveralls
-#
-#
-#    - name: Coverage
-#      run: |
-#        mkdir -p build/coverage
-#        (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make)
-#        build/coverage/test/unittest
-#        ~/.local/bin/coveralls -b build/coverage --exclude-pattern '.*CMake.*' --exclude tools --exclude benchmark --exclude examples --exclude third_party --exclude test --exclude src/common/enums --exclude src/parser/transform/helpers/nodetype_to_string.cpp --exclude build/coverage/third_party/libpg_query --exclude build/coverage/third_party/libpg_query/grammar --gcov-options '\-lp' > /dev/null
+  codecov:
+    name: CodeCov
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+    env:
+      GEN: ninja
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
+      - name: Install
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.9'
+
+      - name: Before Install
+        run: |
+          pip install requests
+          sudo apt-get install g++
+
+      - name: Coverage Reset
+        run: |
+          lcov --config-file .github/workflows/lcovrc --zerocounters --directory .
+          lcov --config-file .github/workflows/lcovrc --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
+
+      - name: Run Tests
+        run: |
+          mkdir -p build/coverage
+          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_ARROW_ABI_TEST=1 -DBUILD_PARQUET_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+          build/coverage/test/unittest
+          build/coverage/test/unittest "[intraquery]"
+          build/coverage/test/unittest "[interquery]"
+          build/coverage/test/unittest "[coverage]"
+          build/coverage/test/unittest "[detailed_profiler]"
+          build/coverage/test/unittest "[tpch]"
+          build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+          python tools/shell/shell-test.py build/coverage/duckdb
+
+      - name: Generate Coverage
+        run: |
+          lcov --config-file .github/workflows/lcovrc --directory . --base-directory . --no-external --capture --output-file coverage.info
+          lcov --config-file .github/workflows/lcovrc --remove coverage.info '/usr*' '*/cl.hpp' '*/tools/*' '*/benchmark/*' '*/examples/*' '*/third_party/*' '*/test/*' -o lcov.info
+
+      - name: CodeCov Upload
+        uses: codecov/codecov-action@v1
+        with:
+          files: lcov.info
+          fail_ci_if_error: true
 
   vector-sizes:
     name: Vector Sizes
@@ -846,6 +866,9 @@ jobs:
         echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=:memory:\n" > odbc.ini
         cd psqlodbc
         export ODBCSYSINI=.. && export PSQLODBC_TEST_DSN="DuckDB"
+        # creating contrib_regression database used by some tests
+        (./build/debug/reset-db < sampletables.sql) || (cat /tmp/odbctrace; exit 1)
+        # running supported tests
         (./build/debug/psql_odbc_test -f ../tools/odbc/supported_tests) || (cat /tmp/odbctrace; exit 1)
 
 
@@ -859,7 +882,7 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" && (pip install --prefer-binary "pyarrow>=4.0.0" || true)'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" && pip install --prefer-binary "requests>=2.26" && (pip install --extra-index-url https://pypi.fury.io/arrow-nightlies/ --prefer-binary --pre pyarrow || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
@@ -899,7 +922,7 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'yum install -y openssl-devel && pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=0.24" && (pip install --prefer-binary "pyarrow>=4.0.0" || true)'
+      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=0.24"  && pip install --prefer-binary "requests>=2.26" && (pip install --extra-index-url https://pypi.fury.io/arrow-nightlies/ --prefer-binary --pre pyarrow || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       CIBW_ENVIRONMENT: 'BUILD_HTTPFS=1'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
@@ -924,40 +947,6 @@ jobs:
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           cibuildwheel --output-dir wheelhouse duckdb_tarball
 
-  linux-python2:
-    name: Python 2 Linux
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CIBW_BUILD: 'cp27-*'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-      CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" '
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: pip install cibuildwheel twine
-
-    - name: Build
-      run: |
-        cd tools/pythonpkg
-        python setup.py sdist
-        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cibuildwheel --output-dir wheelhouse duckdb_tarball
-
-
   osx-python3:
     name: Python 3 OSX
     runs-on: macos-latest
@@ -967,7 +956,7 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pyarrow>=4.0.0"'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" && (pip install --extra-index-url https://pypi.fury.io/arrow-nightlies/ --prefer-binary --pre pyarrow || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
@@ -1109,6 +1098,38 @@ jobs:
         if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
 
+  linux-tarball-v2:
+    name: Python 2 Tarball
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '2.7'
+
+    - name: Install
+      run: |
+        pip install setuptools-scm==5.0.2
+        pip install numpy pytest pandas
+
+    - name: Build
+      run: |
+        python --version
+        git archive --format zip --output test-tarball.zip HEAD
+        mkdir duckdb-test-tarball
+        mv test-tarball.zip duckdb-test-tarball
+        cd duckdb-test-tarball
+        unzip test-tarball.zip
+        cd tools/pythonpkg
+        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+        python setup.py install --user
+        (cd tests/ && python -m pytest)
+
   linux-tarball:
     name: Python 3 Tarball
     runs-on: ubuntu-20.04
@@ -1124,10 +1145,11 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: pip install numpy
+      run: pip install numpy pytest pandas
 
     - name: Build
       run: |
+        python --version
         git archive --format zip --output test-tarball.zip HEAD
         mkdir duckdb-test-tarball
         mv test-tarball.zip duckdb-test-tarball
@@ -1135,7 +1157,8 @@ jobs:
         unzip test-tarball.zip
         cd tools/pythonpkg
         export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-        python3 setup.py install --user
+        python setup.py install --user
+        (cd tests/ && python -m pytest)
 
   linux-nodejs:
     name: node.js Linux

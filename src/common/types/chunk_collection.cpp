@@ -3,6 +3,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/assert.hpp"
 
@@ -116,6 +117,23 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 		chunk->Initialize(types);
 		new_chunk.Copy(*chunk, offset);
 		chunks.push_back(move(chunk));
+	}
+}
+
+void ChunkCollection::Fuse(ChunkCollection &other) {
+	if (count == 0) {
+		Append(other);
+	} else {
+		D_ASSERT(this->ChunkCount() == other.ChunkCount());
+		for (idx_t chunk_idx = 0; chunk_idx < ChunkCount(); ++chunk_idx) {
+			auto &lhs = this->GetChunk(chunk_idx);
+			auto &rhs = other.GetChunk(chunk_idx);
+			D_ASSERT(lhs.size() == rhs.size());
+			for (auto &v : rhs.data) {
+				lhs.data.emplace_back(Vector(v));
+			}
+		}
+		types.insert(types.end(), other.types.begin(), other.types.end());
 	}
 }
 
@@ -388,93 +406,19 @@ static void TemplatedSetValues(ChunkCollection *src_coll, Vector &tgt_vec, idx_t
 	}
 }
 
-// TODO: reorder functionality is similar, perhaps merge
-void ChunkCollection::MaterializeSortedChunk(DataChunk &target, idx_t order[], idx_t start_offset) {
-	idx_t remaining_data = MinValue<idx_t>(STANDARD_VECTOR_SIZE, count - start_offset);
-	D_ASSERT(target.GetTypes() == types);
-
-	target.SetCardinality(remaining_data);
-	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
-		switch (types[col_idx].InternalType()) {
-		case PhysicalType::BOOL:
-		case PhysicalType::INT8:
-			TemplatedSetValues<int8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::INT16:
-			TemplatedSetValues<int16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::INT32:
-			TemplatedSetValues<int32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::INT64:
-			TemplatedSetValues<int64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::UINT8:
-			TemplatedSetValues<uint8_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::UINT16:
-			TemplatedSetValues<uint16_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::UINT32:
-			TemplatedSetValues<uint32_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::UINT64:
-			TemplatedSetValues<uint64_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::INT128:
-			TemplatedSetValues<hugeint_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::FLOAT:
-			TemplatedSetValues<float>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::DOUBLE:
-			TemplatedSetValues<double>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::VARCHAR:
-			TemplatedSetValues<string_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::INTERVAL:
-			TemplatedSetValues<interval_t>(this, target.data[col_idx], order, col_idx, start_offset, remaining_data);
-			break;
-		case PhysicalType::LIST:
-		case PhysicalType::STRUCT: {
-			for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {
-				idx_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
-				idx_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
-
-				auto &src_chunk = chunks[chunk_idx_src];
-				Vector &src_vec = src_chunk->data[col_idx];
-				auto &tgt_vec = target.data[col_idx];
-				if (FlatVector::IsNull(src_vec, vector_idx_src)) {
-					FlatVector::SetNull(tgt_vec, row_idx, true);
-				} else {
-					tgt_vec.SetValue(row_idx, src_vec.GetValue(vector_idx_src));
-				}
-			}
-		} break;
-		default:
-			throw NotImplementedException("Type is unsupported in MaterializeSortedChunk()");
-		}
-	}
-	target.Verify();
-}
-
 Value ChunkCollection::GetValue(idx_t column, idx_t index) {
 	return chunks[LocateChunk(index)]->GetValue(column, index % STANDARD_VECTOR_SIZE);
 }
 
-vector<Value> ChunkCollection::GetRow(idx_t index) {
-	vector<Value> values;
-	values.resize(ColumnCount());
-
-	for (idx_t p_idx = 0; p_idx < ColumnCount(); p_idx++) {
-		values[p_idx] = GetValue(p_idx, index);
-	}
-	return values;
-}
-
 void ChunkCollection::SetValue(idx_t column, idx_t index, const Value &value) {
 	chunks[LocateChunk(index)]->SetValue(column, index % STANDARD_VECTOR_SIZE, value);
+}
+
+void ChunkCollection::CopyCell(idx_t column, idx_t index, Vector &target, idx_t target_offset) {
+	auto &chunk = GetChunkForRow(index);
+	auto &source = chunk.data[column];
+	const auto source_offset = index % STANDARD_VECTOR_SIZE;
+	VectorOperations::Copy(source, target, source_offset + 1, source_offset, target_offset);
 }
 
 void ChunkCollection::Print() {

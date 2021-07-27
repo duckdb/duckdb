@@ -73,6 +73,8 @@ if '--extended' in sys.argv:
         "duckdb/storage/statistics/numeric_statistics.hpp",
         "duckdb/planner/filter/conjunction_filter.hpp",
         "duckdb/planner/filter/constant_filter.hpp",
+        "duckdb/execution/operator/persistent/buffered_csv_reader.hpp",
+        "duckdb/common/types/vector_cache.hpp",
         "duckdb/planner/filter/null_filter.hpp"]]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
@@ -272,6 +274,7 @@ def generate_amalgamation(source_file, header_file):
         header_file_name = header_file.split(os.sep)[-1]
         sfile.write('#include "' + header_file_name + '"\n\n')
         sfile.write("#ifndef DUCKDB_AMALGAMATION\n#error header mismatch\n#endif\n\n")
+        sfile.write("#if (!defined(DEBUG) && !defined NDEBUG)\n#define NDEBUG\n#endif\n\n")
         for compile_dir in compile_directories:
             sfile.write(write_dir(compile_dir))
         # for windows we write file_system.cpp last

@@ -32,7 +32,7 @@ public:
 	unique_ptr<BaseStatistics> Copy() override;
 	void Serialize(Serializer &serializer) override;
 	static unique_ptr<BaseStatistics> Deserialize(Deserializer &source);
-	void Verify(Vector &vector, idx_t count) override;
+	void Verify(Vector &vector, const SelectionVector &sel, idx_t count) override;
 
 	static unique_ptr<BaseStatistics> Combine(const unique_ptr<BaseStatistics> &lstats,
 	                                          const unique_ptr<BaseStatistics> &rstats);

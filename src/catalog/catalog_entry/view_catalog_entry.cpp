@@ -26,9 +26,7 @@ ViewCatalogEntry::ViewCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::AlterEntry(ClientContext &context, AlterInfo *info) {
-	if (internal) {
-		throw CatalogException("Cannot use ALTER VIEW to alter a system view");
-	}
+	D_ASSERT(!internal);
 	if (info->type != AlterType::ALTER_VIEW) {
 		throw CatalogException("Can only modify view with ALTER VIEW statement");
 	}
@@ -81,7 +79,8 @@ unique_ptr<CreateViewInfo> ViewCatalogEntry::Deserialize(Deserializer &source) {
 
 string ViewCatalogEntry::ToSQL() {
 	if (sql.empty()) {
-		throw NotImplementedException("Cannot convert VIEW to SQL because it was not created with a SQL statement");
+		//! Return empty sql with view name so pragma view_tables don't complain
+		return sql;
 	}
 	return sql + "\n;";
 }

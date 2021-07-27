@@ -16,7 +16,7 @@ namespace duckdb {
 
 struct RandomEngine {
 	std::mt19937 random_engine;
-	explicit RandomEngine(int64_t seed) {
+	RandomEngine(int64_t seed = -1) {
 		if (seed < 0) {
 			std::random_device rd;
 			random_engine.seed(rd());

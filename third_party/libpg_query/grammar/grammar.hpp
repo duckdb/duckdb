@@ -135,7 +135,6 @@ static PGNode *makeNullAConst(int location);
 static PGNode *makeAConst(PGValue *v, int location);
 static PGNode *makeBoolAConst(bool state, int location);
 static PGNode *makeParamRef(int number, int location);
-static PGNode *makeParamRefCast(int number, int location, PGTypeName *tpname);
 static void check_qualified_name(PGList *names, core_yyscan_t yyscanner);
 static PGList *check_func_name(PGList *names, core_yyscan_t yyscanner);
 static PGList *check_indirection(PGList *indirection, core_yyscan_t yyscanner);

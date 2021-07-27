@@ -11,7 +11,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "pcg_random.hpp"
 
 #include <queue>
 
@@ -28,10 +27,8 @@ public:
 
 	void ReplaceElement();
 
-	//! These are only for pcg generator
-	unique_ptr<pcg32> rng;
-	unique_ptr<std::uniform_real_distribution<double>> uniform_dist;
-
+	//! The random generator
+	RandomEngine random;
 	//! Priority queue of [random element, index] for each of the elements in the sample
 	std::priority_queue<std::pair<double, idx_t>> reservoir_weights;
 	//! The next element to sample
@@ -46,7 +43,7 @@ public:
 
 class BlockingSample {
 public:
-	explicit BlockingSample(int64_t seed) : random(seed), reservoirSampling(seed) {
+	explicit BlockingSample(int64_t seed) : base_reservoir_sample(seed), random(base_reservoir_sample.random) {
 	}
 	virtual ~BlockingSample() {
 	}
@@ -59,10 +56,9 @@ public:
 	virtual unique_ptr<DataChunk> GetChunk() = 0;
 
 protected:
-	//! The random generator
-	RandomEngine random;
 	//! The reservoir sampling
-	BaseReservoirSampling reservoirSampling;
+	BaseReservoirSampling base_reservoir_sample;
+	RandomEngine &random;
 };
 
 //! The reservoir sample class maintains a streaming sample of fixed size "sample_count"

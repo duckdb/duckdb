@@ -1,0 +1,44 @@
+# name: test/sql/window/test_window_string_agg.test
+# description: Test string_agg with window functions
+# group: [window]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table a as select range%3 j, range::varchar AS s, case when range%3=0 then '-' else '|' end sep from range(1, 7, 1)
+
+# regular string_agg
+query III
+select j, s, string_agg(s) over (partition by j order by s) from a order by j, s;
+----
+0	3	3
+0	6	3,6
+1	1	1
+1	4	1,4
+2	2	2
+2	5	2,5
+
+# custom separator
+query III
+select j, s, string_agg(s, '|') over (partition by j order by s) from a order by j, s;
+----
+0	3	3
+0	6	3|6
+1	1	1
+1	4	1|4
+2	2	2
+2	5	2|5
+
+# different separator per group
+query III
+select j, s, string_agg(s, sep) over (partition by j order by s) from a order by j, s;
+----
+0	3	3
+0	6	3-6
+1	1	1
+1	4	1|4
+2	2	2
+2	5	2|5

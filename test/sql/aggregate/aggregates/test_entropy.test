@@ -35,8 +35,6 @@ SELECT entropy(2) FROM range(100);
 ----
 0
 
-
-
 query I
 select entropy(k) from aggr group by k%2
 ----

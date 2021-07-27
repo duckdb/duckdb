@@ -136,6 +136,9 @@ public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
+	BufferedCSVReader(FileSystem &fs, BufferedCSVReaderOptions options,
+	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
+
 	FileSystem &fs;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
@@ -219,7 +222,7 @@ private:
 	//! Reads a new buffer from the CSV file if the current one has been exhausted
 	bool ReadBuffer(idx_t &start);
 
-	unique_ptr<FileHandle> OpenCSV(ClientContext &context, const BufferedCSVReaderOptions &options);
+	unique_ptr<FileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
 };
 
 } // namespace duckdb

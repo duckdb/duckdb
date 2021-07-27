@@ -31,6 +31,23 @@ vector<ConfigurationOption> DBConfig::GetOptions() {
 	return options;
 }
 
+idx_t DBConfig::GetOptionCount() {
+	idx_t count = 0;
+	for (idx_t index = 0; internal_options[index].name; index++) {
+		count++;
+	}
+	return count;
+}
+
+ConfigurationOption *DBConfig::GetOptionByIndex(idx_t target_index) {
+	for (idx_t index = 0; internal_options[index].name; index++) {
+		if (index == target_index) {
+			return internal_options + index;
+		}
+	}
+	return nullptr;
+}
+
 ConfigurationOption *DBConfig::GetOptionByName(const string &name) {
 	for (idx_t index = 0; internal_options[index].name; index++) {
 		if (internal_options[index].name == name) {
@@ -96,9 +113,9 @@ void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) 
 		maximum_threads = value.GetValue<int64_t>();
 		break;
 	}
-	default:
+	default: // LCOV_EXCL_START
 		break;
-	}
+	} // LCOV_EXCL_STOP
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {

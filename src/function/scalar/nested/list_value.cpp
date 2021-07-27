@@ -4,6 +4,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/storage/statistics/list_statistics.hpp"
 
 namespace duckdb {
 
@@ -39,13 +40,29 @@ static unique_ptr<FunctionData> ListValueBind(ClientContext &context, ScalarFunc
 	}
 
 	// this is more for completeness reasons
+	bound_function.varargs = child_type;
 	bound_function.return_type = LogicalType::LIST(move(child_type));
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 
+unique_ptr<BaseStatistics> ListValueStats(ClientContext &context, BoundFunctionExpression &expr,
+                                          FunctionData *bind_data, vector<unique_ptr<BaseStatistics>> &child_stats) {
+	auto list_stats = make_unique<ListStatistics>(expr.return_type);
+	for (idx_t i = 0; i < child_stats.size(); i++) {
+		if (child_stats[i]) {
+			list_stats->child_stats->Merge(*child_stats[i]);
+		} else {
+			list_stats->child_stats.reset();
+			return move(list_stats);
+		}
+	}
+	return move(list_stats);
+}
+
 void ListValueFun::RegisterFunction(BuiltinFunctions &set) {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, false, ListValueBind);
+	ScalarFunction fun("list_value", {}, LogicalTypeId::LIST, ListValueFunction, false, ListValueBind, nullptr,
+	                   ListValueStats);
 	fun.varargs = LogicalType::ANY;
 	set.AddFunction(fun);
 	fun.name = "list_pack";

@@ -49,7 +49,7 @@ DatePartSpecifier GetDatePartSpecifier(string specifier) {
 	} else if (specifier == "doy") {
 		// day of the year (1-365/366)
 		return DatePartSpecifier::DOY;
-	} else if (specifier == "quarter") {
+	} else if (specifier == "quarter" || specifier == "quarters") {
 		// quarter of the year (1-4)
 		return DatePartSpecifier::QUARTER;
 	} else {
@@ -646,15 +646,6 @@ int64_t DateDatePart::MonthOperator::Operation(interval_t input) {
 }
 
 template <>
-unique_ptr<BaseStatistics>
-DateDatePart::MonthOperator::PropagateStatistics<interval_t>(ClientContext &context, BoundFunctionExpression &expr,
-                                                             FunctionData *bind_data,
-                                                             vector<unique_ptr<BaseStatistics>> &child_stats) {
-	// interval months range from 0-11
-	return PropagateSimpleDatePartStatistics<0, 11>(child_stats);
-}
-
-template <>
 int64_t DateDatePart::DayOperator::Operation(timestamp_t input) {
 	return DayOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
@@ -687,15 +678,6 @@ int64_t DateDatePart::QuarterOperator::Operation(timestamp_t input) {
 template <>
 int64_t DateDatePart::QuarterOperator::Operation(interval_t input) {
 	return MonthOperator::Operation<interval_t, int64_t>(input) / Interval::MONTHS_PER_QUARTER + 1;
-}
-
-template <>
-unique_ptr<BaseStatistics>
-DateDatePart::QuarterOperator::PropagateStatistics<interval_t>(ClientContext &context, BoundFunctionExpression &expr,
-                                                               FunctionData *bind_data,
-                                                               vector<unique_ptr<BaseStatistics>> &child_stats) {
-	// negative interval quarters range from -2 to 4
-	return PropagateSimpleDatePartStatistics<-2, 4>(child_stats);
 }
 
 template <>

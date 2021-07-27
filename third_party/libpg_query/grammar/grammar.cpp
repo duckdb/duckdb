@@ -331,12 +331,6 @@ static PGNode* makeParamRef(int number, int location)
 	return (PGNode *) p;
 }
 
-static PGNode *
-makeParamRefCast(int number, int location, PGTypeName *tpname)
-{
-	PGNode *p = makeParamRef(number, location);
-	return makeTypeCast(p, tpname, 0, -1);
-}
 
 /* insertSelectOptions()
  * Insert ORDER BY, etc into an already-constructed SelectStmt.

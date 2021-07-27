@@ -45,11 +45,15 @@ public:
 	string CommitTransaction(ClientContext &context, Transaction *transaction);
 	//! Rollback the given transaction
 	void RollbackTransaction(Transaction *transaction);
-	//! Add the catalog set
-	void AddCatalogSet(ClientContext &context, unique_ptr<CatalogSet> catalog_set);
 
 	transaction_t GetQueryNumber() {
 		return current_query_number++;
+	}
+	transaction_t LowestActiveId() {
+		return lowest_active_id;
+	}
+	transaction_t LowestActiveStart() {
+		return lowest_active_start;
 	}
 
 	void Checkpoint(ClientContext &context, bool force = false);
@@ -71,6 +75,10 @@ private:
 	transaction_t current_start_timestamp;
 	//! The current transaction ID used by transactions
 	transaction_t current_transaction_id;
+	//! The lowest active transaction id
+	atomic<transaction_t> lowest_active_id;
+	//! The lowest active transaction timestamp
+	atomic<transaction_t> lowest_active_start;
 	//! Set of currently running transactions
 	vector<unique_ptr<Transaction>> active_transactions;
 	//! Set of recently committed transactions

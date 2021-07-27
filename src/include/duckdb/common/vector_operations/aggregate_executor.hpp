@@ -312,7 +312,7 @@ public:
 	}
 
 	template <class STATE_TYPE, class RESULT_TYPE, class OP>
-	static void Finalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
+	static void Finalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count, idx_t offset) {
 		if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 
@@ -328,21 +328,19 @@ public:
 			auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 			for (idx_t i = 0; i < count; i++) {
 				OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[i], rdata,
-				                                               FlatVector::Validity(result), i);
+				                                               FlatVector::Validity(result), i + offset);
 			}
 		}
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
 	static void UnaryWindow(Vector &input, FunctionData *bind_data, data_ptr_t state, const FrameBounds &frame,
-	                        const FrameBounds &prev, Vector &result) {
+	                        const FrameBounds &prev, Vector &result, idx_t rid) {
 
 		auto idata = FlatVector::GetData<const INPUT_TYPE>(input) - MinValue(frame.first, prev.first);
 		const auto &ivalid = FlatVector::Validity(input);
-		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
-		auto &rvalid = ConstantVector::Validity(result);
 		OP::template Window<STATE, INPUT_TYPE, RESULT_TYPE>(idata, ivalid, bind_data, (STATE *)state, frame, prev,
-		                                                    rdata, rvalid);
+		                                                    result, rid);
 	}
 
 	template <class STATE_TYPE, class OP>

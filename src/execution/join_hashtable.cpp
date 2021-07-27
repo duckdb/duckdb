@@ -1,13 +1,11 @@
 #include "duckdb/execution/join_hashtable.hpp"
 
-#include "duckdb/storage/buffer_manager.hpp"
-
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/row_operations/row_operations.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
 
@@ -17,7 +15,7 @@ using ScanStructure = JoinHashTable::ScanStructure;
 JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), build_types(move(btypes)), entry_size(0), tuple_size(0),
-      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false), count(0) {
+      vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false) {
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
@@ -36,7 +34,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		condition_types.push_back(type);
 	}
 	// at least one equality is necessary
-	D_ASSERT(equality_types.size() > 0);
+	D_ASSERT(!equality_types.empty());
 
 	// Types for the layout
 	vector<LogicalType> layout_types(condition_types);
@@ -47,7 +45,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 		layout_types.emplace_back(LogicalType::BOOLEAN);
 	}
 	layout_types.emplace_back(LogicalType::HASH);
-	layout.Initialize(layout_types);
+	layout.Initialize(layout_types, false);
 
 	const auto &offsets = layout.GetOffsets();
 	tuple_size = offsets[condition_types.size() + build_types.size()];
@@ -55,8 +53,9 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	entry_size = layout.GetRowWidth();
 
 	// compute the per-block capacity of this HT
-	block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_ALLOC_SIZE / entry_size) + 1);
-	string_heap = make_unique<RowDataCollection>(buffer_manager, Storage::BLOCK_ALLOC_SIZE / 8, 8);
+	idx_t block_capacity = MaxValue<idx_t>(STANDARD_VECTOR_SIZE, (Storage::BLOCK_SIZE / entry_size) + 1);
+	block_collection = make_unique<RowDataCollection>(buffer_manager, block_capacity, entry_size);
+	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 }
 
 JoinHashTable::~JoinHashTable() {
@@ -105,14 +104,6 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 			VectorOperations::CombineHash(hashes, keys.data[i], sel, count);
 		}
 	}
-}
-idx_t JoinHashTable::AppendToBlock(HTDataBlock &block, BufferHandle &handle, vector<BlockAppendEntry> &append_entries,
-                                   idx_t remaining) {
-	idx_t append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
-	auto dataptr = handle.node->buffer + block.count * entry_size;
-	append_entries.emplace_back(dataptr, append_count);
-	block.count += append_count;
-	return append_count;
 }
 
 static idx_t FilterNullValues(VectorData &vdata, const SelectionVector &sel, idx_t count, SelectionVector &result) {
@@ -191,56 +182,10 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 		return;
 	}
 
-	vector<unique_ptr<BufferHandle>> handles;
-	vector<BlockAppendEntry> append_entries;
-	// first allocate space of where to serialize the keys and payload columns
-	idx_t remaining = added_count;
-	{
-		// first append to the last block (if any)
-		lock_guard<mutex> append_lock(ht_lock);
-		count += added_count;
-
-		if (!blocks.empty()) {
-			auto &last_block = blocks.back();
-			if (last_block.count < last_block.capacity) {
-				// last block has space: pin the buffer of this block
-				auto handle = buffer_manager.Pin(last_block.block);
-				// now append to the block
-				idx_t append_count = AppendToBlock(last_block, *handle, append_entries, remaining);
-				remaining -= append_count;
-				handles.push_back(move(handle));
-			}
-		}
-		while (remaining > 0) {
-			// now for the remaining data, allocate new buffers to store the data and append there
-			auto block = buffer_manager.RegisterMemory(block_capacity * entry_size, false);
-			auto handle = buffer_manager.Pin(block);
-
-			HTDataBlock new_block;
-			new_block.count = 0;
-			new_block.capacity = block_capacity;
-			new_block.block = move(block);
-
-			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining);
-			remaining -= append_count;
-			handles.push_back(move(handle));
-			blocks.push_back(move(new_block));
-		}
-	}
-	// now set up the key_locations based on the append entries
+	// build out the buffer space
 	Vector addresses(LogicalType::POINTER);
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
-
-	idx_t append_idx = 0;
-	for (auto &append_entry : append_entries) {
-		idx_t next = append_idx + append_entry.count;
-		for (; append_idx < next; append_idx++) {
-			// Set the validity mask (clearing is less common)
-			auto idx = current_sel->get_index(append_idx);
-			key_locations[idx] = append_entry.baseptr;
-			append_entry.baseptr += entry_size;
-		}
-	}
+	auto handles = block_collection->Build(added_count, key_locations, nullptr, current_sel);
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
@@ -312,7 +257,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 void JoinHashTable::Finalize() {
 	// the build has finished, now iterate over all the nodes and construct the final hash table
 	// select a HT that has at least 50% empty space
-	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(count * 2, (Storage::BLOCK_ALLOC_SIZE / sizeof(data_ptr_t)) + 1));
+	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(Count() * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
 	// size needs to be a power of 2
 	D_ASSERT((capacity & (capacity - 1)) == 0);
 	bitmask = capacity - 1;
@@ -328,7 +273,7 @@ void JoinHashTable::Finalize() {
 	// as we can the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
 	// this is so that we can keep pointers around to the blocks
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
-	for (auto &block : blocks) {
+	for (auto &block : block_collection->blocks) {
 		auto handle = buffer_manager.Pin(block.block);
 		data_ptr_t dataptr = handle->node->buffer;
 		idx_t entry = 0;
@@ -352,7 +297,7 @@ void JoinHashTable::Finalize() {
 }
 
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
-	D_ASSERT(count > 0); // should be handled before
+	D_ASSERT(Count() > 0); // should be handled before
 	D_ASSERT(finalized);
 
 	// set up the scan structure
@@ -422,7 +367,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 		NextSingleJoin(keys, left, result);
 		break;
 	default:
-		throw Exception("Unhandled join type in JoinHashTable");
+		throw InternalException("Unhandled join type in JoinHashTable");
 	}
 }
 
@@ -634,7 +579,7 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 	D_ASSERT(result.ColumnCount() == input.ColumnCount() + 1);
 	D_ASSERT(result.data.back().GetType() == LogicalType::BOOLEAN);
 	// this method should only be called for a non-empty HT
-	D_ASSERT(ht.count > 0);
+	D_ASSERT(ht.Count() > 0);
 
 	ScanKeyMatches(keys);
 	if (ht.correlated_mark_join_info.correlated_types.empty()) {
@@ -786,8 +731,8 @@ void JoinHashTable::ScanFullOuter(DataChunk &result, JoinHTScanState &state) {
 	idx_t found_entries = 0;
 	{
 		lock_guard<mutex> state_lock(state.lock);
-		for (; state.block_position < blocks.size(); state.block_position++, state.position = 0) {
-			auto &block = blocks[state.block_position];
+		for (; state.block_position < block_collection->blocks.size(); state.block_position++, state.position = 0) {
+			auto &block = block_collection->blocks[state.block_position];
 			auto &handle = pinned_handles[state.block_position];
 			auto baseptr = handle->node->buffer;
 			for (; state.position < block.count; state.position++) {

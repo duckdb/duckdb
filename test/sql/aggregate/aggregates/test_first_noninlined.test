@@ -25,6 +25,20 @@ SELECT FIRST(b) FROM tbl WHERE a=1
 ----
 NULL
 
+query T
+SELECT FIRST(b) FROM tbl WHERE a=1 GROUP BY a
+----
+NULL
+
+query T
+SELECT FIRST(b) FROM tbl WHERE a=0
+----
+NULL
+
+query T
+SELECT FIRST(b) FROM tbl WHERE a=0 GROUP BY b
+----
+
 # grouped aggregate
 query IT
 SELECT a, FIRST(b) FROM tbl GROUP BY a ORDER BY a
@@ -36,3 +50,7 @@ thisisalongstring
 3
 thisisalsoalongstring
 
+query I
+SELECT FIRST(i) FROM (VALUES (NULL::INT32)) tbl(i)
+----
+NULL

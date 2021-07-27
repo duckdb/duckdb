@@ -70,6 +70,8 @@ public:
 	                    SelectionVector &sel, idx_t &count, const TableFilter &filter);
 	virtual void FilterScan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                        SelectionVector &sel, idx_t count);
+	virtual void FilterScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	                                 idx_t count, bool allow_updates);
 
 	//! Skip the scan forward by "count" rows
 	virtual void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE);

@@ -23,9 +23,7 @@ public:
 	idx_t size;
 
 public:
-	virtual idx_t Next(const char *input) {
-		return 0;
-	}
+	virtual idx_t Next(const char *input) = 0;
 	bool HasNext() {
 		return offset < size;
 	}
@@ -209,11 +207,12 @@ static void StringSplitExecutor(DataChunk &args, ExpressionState &state, Vector 
 	auto list_vector_type = LogicalType::LIST(LogicalType::VARCHAR);
 
 	idx_t total_len = 0;
+	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t i = 0; i < args.size(); i++) {
 		auto input_idx = input_data.sel->get_index(i);
 		auto delim_idx = delim_data.sel->get_index(i);
 		if (!input_data.validity.RowIsValid(input_idx)) {
-			FlatVector::SetNull(result, i, true);
+			result_mask.SetInvalid(i);
 			continue;
 		}
 		string_t input = inputs[input_idx];
@@ -253,7 +252,7 @@ void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 
 	set.AddFunction(
-	    {"string_split", "str_split", "string_to_array"},
+	    {"string_split", "str_split", "string_to_array", "split"},
 	    ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, varchar_list_type, StringSplitFunction));
 	set.AddFunction(
 	    {"string_split_regex", "str_split_regex", "regexp_split_to_array"},

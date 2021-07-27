@@ -21,10 +21,10 @@ void ReservoirSample::AddToReservoir(DataChunk &input) {
 	idx_t remaining = input.size();
 	idx_t base_offset = 0;
 	while (true) {
-		idx_t offset = reservoirSampling.next_index - reservoirSampling.current_count;
+		idx_t offset = base_reservoir_sample.next_index - base_reservoir_sample.current_count;
 		if (offset >= remaining) {
 			// not in this chunk! increment current count and go to the next chunk
-			reservoirSampling.current_count += remaining;
+			base_reservoir_sample.current_count += remaining;
 			return;
 		}
 		// in this chunk! replace the element
@@ -43,9 +43,9 @@ void ReservoirSample::ReplaceElement(DataChunk &input, idx_t index_in_chunk) {
 	// replace the entry in the reservoir
 	// 8. The item in R with the minimum key is replaced by item vi
 	for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-		reservoir.SetValue(col_idx, reservoirSampling.min_entry, input.GetValue(col_idx, index_in_chunk));
+		reservoir.SetValue(col_idx, base_reservoir_sample.min_entry, input.GetValue(col_idx, index_in_chunk));
 	}
-	reservoirSampling.ReplaceElement();
+	base_reservoir_sample.ReplaceElement();
 }
 
 idx_t ReservoirSample::FillReservoir(DataChunk &input) {
@@ -65,7 +65,7 @@ idx_t ReservoirSample::FillReservoir(DataChunk &input) {
 	input.SetCardinality(required_count);
 	reservoir.Append(input);
 
-	reservoirSampling.InitializeReservoir(reservoir.Count(), sample_count);
+	base_reservoir_sample.InitializeReservoir(reservoir.Count(), sample_count);
 
 	// check if there are still elements remaining
 	// this happens if we are on a boundary
@@ -103,15 +103,14 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 
 			input.SetCardinality(append_to_current_sample_count);
 			current_sample->AddToReservoir(input);
-
-			if (append_to_next_sample > 0) {
-				// slice the input for the remainder
-				SelectionVector sel(STANDARD_VECTOR_SIZE);
-				for (idx_t i = 0; i < append_to_next_sample; i++) {
-					sel.set_index(i, append_to_current_sample_count + i);
-				}
-				input.Slice(sel, append_to_next_sample);
+		}
+		if (append_to_next_sample > 0) {
+			// slice the input for the remainder
+			SelectionVector sel(STANDARD_VECTOR_SIZE);
+			for (idx_t i = 0; i < append_to_next_sample; i++) {
+				sel.set_index(i, append_to_current_sample_count + i);
 			}
+			input.Slice(sel, append_to_next_sample);
 		}
 		// now our first sample is filled: append it to the set of finished samples
 		finished_samples.push_back(move(current_sample));
@@ -124,8 +123,8 @@ void ReservoirSamplePercentage::AddToReservoir(DataChunk &input) {
 		current_count = append_to_next_sample;
 	} else {
 		// we can just append to the current sample
-		current_sample->AddToReservoir(input);
 		current_count += input.size();
+		current_sample->AddToReservoir(input);
 	}
 }
 
@@ -163,26 +162,14 @@ void ReservoirSamplePercentage::Finalize() {
 	is_finalized = true;
 }
 
-BaseReservoirSampling::BaseReservoirSampling(int64_t seed) {
+BaseReservoirSampling::BaseReservoirSampling(int64_t seed) : random(seed) {
 	next_index = 0;
 	min_threshold = 0;
 	min_entry = 0;
 	current_count = 0;
-	//! Make a random number engine
-	rng = make_unique<pcg32>(seed);
-	uniform_dist = make_unique<std::uniform_real_distribution<double>>(0, 1);
 }
 
-BaseReservoirSampling::BaseReservoirSampling() {
-	next_index = 0;
-	min_threshold = 0;
-	min_entry = 0;
-	current_count = 0;
-	//! Seed with a real random value, if available
-	pcg_extras::seed_seq_from<std::random_device> seed_source;
-	//! Make a random number engine
-	rng = make_unique<pcg32>(seed_source);
-	uniform_dist = make_unique<std::uniform_real_distribution<double>>(0, 1);
+BaseReservoirSampling::BaseReservoirSampling() : BaseReservoirSampling(-1) {
 }
 
 void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_size) {
@@ -193,7 +180,7 @@ void BaseReservoirSampling::InitializeReservoir(idx_t cur_size, idx_t sample_siz
 		//! we then define the threshold to enter the reservoir T_w as the minimum key of R
 		//! we use a priority queue to extract the minimum key in O(1) time
 		for (idx_t i = 0; i < sample_size; i++) {
-			double k_i = (*uniform_dist)(*rng);
+			double k_i = random.NextRandom();
 			reservoir_weights.push(std::make_pair(-k_i, i));
 		}
 		SetNextEntry();
@@ -204,7 +191,7 @@ void BaseReservoirSampling::SetNextEntry() {
 	//! 4. Let r = random(0, 1) and Xw = log(r) / log(T_w)
 	auto &min_key = reservoir_weights.top();
 	double t_w = -min_key.first;
-	double r = (*uniform_dist)(*rng);
+	double r = random.NextRandom();
 	double x_w = log(r) / log(t_w);
 	//! 5. From the current item vc skip items until item vi , such that:
 	//! 6. wc +wc+1 +···+wi−1 < Xw <= wc +wc+1 +···+wi−1 +wi
@@ -223,8 +210,7 @@ void BaseReservoirSampling::ReplaceElement() {
 	//! 8. Let tw = Tw i , r2 = random(tw,1) and vi’s key: ki = (r2)1/wi
 	//! 9. The new threshold Tw is the new minimum key of R
 	//! we generate a random number between (min_threshold, 1)
-	std::uniform_real_distribution<double> dist(min_threshold, 1);
-	double r2 = dist(*rng);
+	double r2 = random.NextRandom(min_threshold, 1);
 	//! now we insert the new weight into the reservoir
 	reservoir_weights.push(std::make_pair(-r2, min_entry));
 	//! we update the min entry with the new min entry in the reservoir

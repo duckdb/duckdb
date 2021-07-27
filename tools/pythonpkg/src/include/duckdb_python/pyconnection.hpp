@@ -102,7 +102,7 @@ public:
 	py::dict FetchNumpy();
 	py::object FetchDF();
 
-	py::object FetchDFChunk() const;
+	py::object FetchDFChunk(const idx_t vectors_per_chunk = 1) const;
 
 	py::object FetchArrow();
 

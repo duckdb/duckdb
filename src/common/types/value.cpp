@@ -75,6 +75,7 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::SMALLINT:
 		return Value::SMALLINT(NumericLimits<int16_t>::Minimum());
 	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::SQLNULL:
 		return Value::INTEGER(NumericLimits<int32_t>::Minimum());
 	case LogicalTypeId::DATE:
 		return Value::DATE(date_t(NumericLimits<int32_t>::Minimum()));
@@ -139,6 +140,7 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::SMALLINT:
 		return Value::SMALLINT(NumericLimits<int16_t>::Maximum());
 	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::SQLNULL:
 		return Value::INTEGER(NumericLimits<int32_t>::Maximum());
 	case LogicalTypeId::DATE:
 		return Value::DATE(date_t(NumericLimits<int32_t>::Maximum()));
@@ -1116,17 +1118,17 @@ void Value::Serialize(Serializer &serializer) {
 		case PhysicalType::DOUBLE:
 			serializer.Write<double>(value_.double_);
 			break;
-		case PhysicalType::POINTER:
-			serializer.Write<uintptr_t>(value_.pointer);
-			break;
 		case PhysicalType::INTERVAL:
 			serializer.Write<interval_t>(value_.interval);
 			break;
 		case PhysicalType::VARCHAR:
 			serializer.WriteString(str_value);
 			break;
-		default:
-			throw NotImplementedException("Value type not implemented for serialization!");
+		default: {
+			Vector v(*this);
+			v.Serialize(1, serializer);
+			break;
+		}
 		}
 	}
 }
@@ -1176,17 +1178,17 @@ Value Value::Deserialize(Deserializer &source) {
 	case PhysicalType::DOUBLE:
 		new_value.value_.double_ = source.Read<double>();
 		break;
-	case PhysicalType::POINTER:
-		new_value.value_.pointer = source.Read<uint64_t>();
-		break;
 	case PhysicalType::INTERVAL:
 		new_value.value_.interval = source.Read<interval_t>();
 		break;
 	case PhysicalType::VARCHAR:
 		new_value.str_value = source.Read<string>();
 		break;
-	default:
-		throw NotImplementedException("Value type not implemented for deserialization");
+	default: {
+		Vector v(type);
+		v.Deserialize(1, source);
+		return v.GetValue(0);
+	}
 	}
 	return new_value;
 }

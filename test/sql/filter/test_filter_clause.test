@@ -8,6 +8,7 @@ PRAGMA enable_verification
 statement ok
 create temporary table t as select range i, mod(range,10) j,mod(range,10)*10000000 k from range(1000);
 
+loop i 0 2
 
 query II
 SELECT
@@ -48,7 +49,6 @@ SELECT
 FROM t;
 ----
 499500	100
-
 
 query I
 SELECT
@@ -112,8 +112,6 @@ group by j ORDER BY j;
 50300	NULL
 50400	NULL
 
-
-
 query III
  SELECT
   COUNT(*) AS unfiltered,
@@ -133,8 +131,6 @@ group by j ORDER BY j;
 100	1	8
 100	1	9
 
-
-
 query II
 SELECT
   SUM(i) AS unfiltered,
@@ -152,9 +148,6 @@ group by j ORDER BY j;
 50200	7
 50300	8
 50400	9
-
-
-
 
 query III
 SELECT
@@ -174,7 +167,6 @@ group by j ORDER BY j;
 50200	NULL	7
 50300	NULL	8
 50400	NULL	9
-
 
 query I
 SELECT
@@ -279,8 +271,6 @@ group by k ORDER BY k;
 50300	NULL
 50400	NULL
 
-
-
 query II
  SELECT
   COUNT(*) AS unfiltered,
@@ -298,8 +288,6 @@ group by k ORDER BY k;
 100	1
 100	1
 100	1
-
-
 
 query II
 SELECT
@@ -319,9 +307,6 @@ group by k ORDER BY k;
 50300	8
 50400	9
 
-
-
-
 query III
 SELECT
   SUM(i) AS unfiltered,
@@ -340,7 +325,6 @@ group by k ORDER BY k;
 50200	NULL	70000000
 50300	NULL	80000000
 50400	NULL	90000000
-
 
 query I
 SELECT
@@ -439,6 +423,11 @@ where i < 5 ORDER BY sq
 2
 3
 4
+
+statement ok
+PRAGMA perfect_ht_threshold=0
+
+endloop
 
 #Query with many different filter clauses (e.g. 5 aggregates, 5 different filters)
 statement ok

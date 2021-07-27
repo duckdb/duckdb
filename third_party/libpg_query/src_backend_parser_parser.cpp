@@ -75,7 +75,6 @@ bool is_keyword(const char *text) {
 std::vector<PGSimplifiedToken> tokenize(const char *str) {
 	core_yyscan_t yyscanner;
 	base_yy_extra_type yyextra;
-	int yyresult;
 
 	std::vector<PGSimplifiedToken> result;
 	yyscanner = scanner_init(str, &yyextra.core_yy_extra, ScanKeywords, NumScanKeywords);
@@ -115,9 +114,6 @@ std::vector<PGSimplifiedToken> tokenize(const char *str) {
 		case GREATER_EQUALS:
 		case NOT_EQUALS:
 			current_token.type = PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_OPERATOR;
-			break;
-		case COMMENT:
-			current_token.type = PGSimplifiedTokenType::PG_SIMPLIFIED_TOKEN_COMMENT;
 			break;
 		default:
 			if (token >= 255) {

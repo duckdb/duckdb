@@ -42,6 +42,14 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_INTEGER,
 	// int64_t
 	DUCKDB_TYPE_BIGINT,
+	// uint8_t
+	DUCKDB_TYPE_UTINYINT,
+	// uint16_t
+	DUCKDB_TYPE_USMALLINT,
+	// uint32_t
+	DUCKDB_TYPE_UINTEGER,
+	// uint64_t
+	DUCKDB_TYPE_UBIGINT,
 	// float
 	DUCKDB_TYPE_FLOAT,
 	// double
@@ -78,7 +86,7 @@ typedef struct {
 	int8_t hour;
 	int8_t min;
 	int8_t sec;
-	int16_t micros;
+	int32_t micros;
 } duckdb_time;
 
 typedef struct {
@@ -117,27 +125,60 @@ typedef struct {
 	char *error_message;
 } duckdb_result;
 
-// typedef struct {
-// 	void *data;
-// 	bool *nullmask;
-// } duckdb_column_data;
-
-// typedef struct {
-// 	int column_count;
-// 	int count;
-// 	duckdb_column_data *columns;
-// } duckdb_chunk;
-
 typedef void *duckdb_database;
 typedef void *duckdb_connection;
 typedef void *duckdb_prepared_statement;
 typedef void *duckdb_appender;
+typedef void *duckdb_arrow;
+typedef void *duckdb_config;
+// we don't need to spell out the schema/array in here
+// because it's a common interface, users can consume
+// the data in their own logic.
+typedef void *duckdb_arrow_schema;
+typedef void *duckdb_arrow_array;
 
 typedef enum { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;
+
+//! query duckdb result as arrow data structure
+DUCKDB_API duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result);
+//! get arrow schema
+DUCKDB_API duckdb_state duckdb_query_arrow_schema(duckdb_arrow result, duckdb_arrow_schema *out_schema);
+//! get arrow data array
+//! This function can be called multiple time to get next chunks, which will free the previous out_array.
+//! So consume the out_array before call this function again
+DUCKDB_API duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *out_array);
+//! get arrow row count
+DUCKDB_API idx_t duckdb_arrow_row_count(duckdb_arrow result);
+//! get arrow column count
+DUCKDB_API idx_t duckdb_arrow_column_count(duckdb_arrow result);
+//! get arrow rows changed
+DUCKDB_API idx_t duckdb_arrow_rows_changed(duckdb_arrow result);
+//! get arrow error message
+DUCKDB_API const char *duckdb_query_arrow_error(duckdb_arrow result);
+//! Destroys the arrow result
+DUCKDB_API void duckdb_destroy_arrow(duckdb_arrow *result);
+
+//! Creates a DuckDB configuration object. The created object must be destroyed with duckdb_destroy_config.
+DUCKDB_API duckdb_state duckdb_create_config(duckdb_config *out_config);
+//! Returns the amount of config options available.
+//! Should not be called in a loop as it internally loops over all the options.
+DUCKDB_API size_t duckdb_config_count();
+//! Returns the config name and description for the config at the specified index
+//! The result MUST NOT be freed
+//! Returns failure if the index is out of range (i.e. >= duckdb_config_count)
+DUCKDB_API duckdb_state duckdb_get_config_flag(size_t index, const char **out_name, const char **out_description);
+//! Sets the specified config option for the configuration
+DUCKDB_API duckdb_state duckdb_set_config(duckdb_config config, const char *name, const char *option);
+//! Destroys a config object created with duckdb_create_config
+DUCKDB_API void duckdb_destroy_config(duckdb_config *config);
 
 //! Opens a database file at the given path (nullptr for in-memory). Returns DuckDBSuccess on success, or DuckDBError on
 //! failure. [OUT: database]
 DUCKDB_API duckdb_state duckdb_open(const char *path, duckdb_database *out_database);
+//! Opens a database file at the given path using the specified configuration
+//! If error is set the error will be reported
+DUCKDB_API duckdb_state duckdb_open_ext(const char *path, duckdb_database *out_database, duckdb_config config,
+                                        char **error);
 //! Closes the database.
 DUCKDB_API void duckdb_close(duckdb_database *database);
 
@@ -200,6 +241,7 @@ DUCKDB_API void duckdb_free(void *ptr);
 DUCKDB_API duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                                        duckdb_prepared_statement *out_prepared_statement);
 
+DUCKDB_API const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement);
 DUCKDB_API duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t *nparams_out);
 
 //! binds parameters to prepared statement
@@ -225,6 +267,10 @@ DUCKDB_API duckdb_state duckdb_bind_null(duckdb_prepared_statement prepared_stat
 //! Executes the prepared statements with currently bound parameters
 DUCKDB_API duckdb_state duckdb_execute_prepared(duckdb_prepared_statement prepared_statement,
                                                 duckdb_result *out_result);
+
+//! Executes the prepared statements with currently bound parameters and return arrow result
+DUCKDB_API duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement,
+                                                      duckdb_arrow *out_result);
 
 //! Destroys the specified prepared statement descriptor
 DUCKDB_API void duckdb_destroy_prepare(duckdb_prepared_statement *prepared_statement);

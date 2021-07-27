@@ -19,13 +19,15 @@ timestamp_t Cast::Operation(date_t date) {
 
 using FrameBounds = std::pair<idx_t, idx_t>;
 
-template <class SAVE_TYPE>
 struct QuantileState {
 	data_ptr_t v;
 	idx_t len;
 	idx_t pos;
 
-	SAVE_TYPE moving;
+	// List temporaries
+	std::vector<idx_t> disturbed;
+	std::vector<idx_t> lower;
+	std::vector<idx_t> upper;
 
 	QuantileState() : v(nullptr), len(0), pos(0) {
 	}
@@ -85,13 +87,10 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 	}
 }
 
-template <class INPUT_TYPE, class STATE>
-static bool ReplaceIndex(STATE *state, const INPUT_TYPE *fdata, const idx_t k, const FrameBounds &frame,
-                         const FrameBounds &prev) {
+template <class STATE>
+static idx_t ReplaceIndex(STATE *state, const FrameBounds &frame, const FrameBounds &prev) {
 	D_ASSERT(state->v);
 	auto index = (idx_t *)state->v;
-
-	auto same = false;
 
 	idx_t j = 0;
 	for (idx_t p = 0; p < (prev.second - prev.first); ++p) {
@@ -106,11 +105,23 @@ static bool ReplaceIndex(STATE *state, const INPUT_TYPE *fdata, const idx_t k, c
 	}
 	index[j] = frame.second - 1;
 
+	return j;
+}
+
+template <class INPUT_TYPE, class STATE>
+static inline bool CanReplace(STATE *state, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0, const idx_t k1) {
+	auto same = false;
+
+	D_ASSERT(state->v);
+	auto index = (idx_t *)state->v;
+
 	auto curr = fdata[index[j]];
-	if (k < j) {
-		same = state->moving < curr;
-	} else if (j < k) {
-		same = curr < state->moving;
+	if (k1 < j) {
+		auto hi = fdata[index[k1]];
+		same = hi < curr;
+	} else if (j < k0) {
+		auto lo = fdata[index[k0]];
+		same = curr < lo;
 	}
 
 	return same;
@@ -139,11 +150,73 @@ struct IndirectLess {
 	const INPUT_TYPE *inputs;
 };
 
+template <class INPUT_TYPE, class TARGET_TYPE, bool DISCRETE>
+struct Interpolator {
+	Interpolator(const float q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(ceil(RN)) {
+	}
+
+	TARGET_TYPE operator()(INPUT_TYPE *v_t) const {
+		if (CRN == FRN) {
+			std::nth_element(v_t, v_t + FRN, v_t + n);
+			return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
+		} else {
+			std::nth_element(v_t, v_t + FRN, v_t + n);
+			std::nth_element(v_t + FRN, v_t + CRN, v_t + n);
+			auto lo = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
+			auto hi = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[CRN]);
+			auto delta = hi - lo;
+			return lo + delta * (RN - FRN);
+		}
+	}
+
+	TARGET_TYPE operator()(const INPUT_TYPE *v_t, const idx_t *index) const {
+		if (CRN == FRN) {
+			return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]]);
+		} else {
+			auto lo = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]]);
+			auto hi = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[CRN]]);
+			auto delta = hi - lo;
+			return lo + delta * (RN - FRN);
+		}
+	}
+
+	const idx_t n;
+	const double RN;
+	const idx_t FRN;
+	const idx_t CRN;
+};
+
+template <class INPUT_TYPE, class TARGET_TYPE>
+struct Interpolator<INPUT_TYPE, TARGET_TYPE, true> {
+	Interpolator(const float q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(FRN) {
+	}
+
+	TARGET_TYPE operator()(INPUT_TYPE *v_t) const {
+		std::nth_element(v_t, v_t + FRN, v_t + n);
+		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
+	}
+
+	TARGET_TYPE operator()(const INPUT_TYPE *v_t, const idx_t *index) {
+		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]]);
+	}
+
+	const idx_t n;
+	const double RN;
+	const idx_t FRN;
+	const idx_t CRN;
+};
+
 struct QuantileBindData : public FunctionData {
-	explicit QuantileBindData(float quantile_p) : quantiles(1, quantile_p) {
+	explicit QuantileBindData(float quantile_p) : quantiles(1, quantile_p), order(1, 0) {
 	}
 
 	explicit QuantileBindData(const vector<float> &quantiles_p) : quantiles(quantiles_p) {
+		for (idx_t i = 0; i < quantiles.size(); ++i) {
+			order.push_back(i);
+		}
+
+		IndirectLess<float> lt(quantiles.data());
+		std::sort(order.begin(), order.end(), lt);
 	}
 
 	unique_ptr<FunctionData> Copy() override {
@@ -156,6 +229,7 @@ struct QuantileBindData : public FunctionData {
 	}
 
 	vector<float> quantiles;
+	vector<idx_t> order;
 };
 
 template <typename SAVE_TYPE>
@@ -204,11 +278,16 @@ struct QuantileOperation {
 };
 
 template <class STATE_TYPE, class RESULT_TYPE, class OP>
-static void ExecuteListFinalize(Vector &states, FunctionData *bind_data, Vector &result, idx_t count) {
+static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count, idx_t offset) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+
+	D_ASSERT(bind_data_p);
+	auto bind_data = (QuantileBindData *)bind_data_p;
+	ListVector::SetListSize(result, 0);
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ListVector::Reserve(result, bind_data->quantiles.size());
 
 		auto sdata = ConstantVector::GetData<STATE_TYPE *>(states);
 		auto rdata = ConstantVector::GetData<RESULT_TYPE>(result);
@@ -217,12 +296,13 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data, Vector 
 	} else {
 		D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
+		ListVector::Reserve(result, count * bind_data->quantiles.size());
 
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &mask = FlatVector::Validity(result);
 		for (idx_t i = 0; i < count; i++) {
-			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[i], rdata, mask, i);
+			OP::template Finalize<RESULT_TYPE, STATE_TYPE>(result, bind_data, sdata[i], rdata, mask, i + offset);
 		}
 	}
 
@@ -239,8 +319,8 @@ static AggregateFunction QuantileListAggregate(const LogicalType &input_type, co
 	    AggregateFunction::StateDestroy<STATE, OP>);
 }
 
-template <class SAVE_TYPE>
-struct DiscreteQuantileOperation : public QuantileOperation<SAVE_TYPE> {
+template <class SAVE_TYPE, bool DISCRETE>
+struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
 
 	template <class RESULT_TYPE, class STATE>
 	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
@@ -253,16 +333,19 @@ struct DiscreteQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
 		D_ASSERT(bind_data->quantiles.size() == 1);
+		Interpolator<SAVE_TYPE, RESULT_TYPE, DISCRETE> interp(bind_data->quantiles[0], state->pos);
 		auto v_t = (SAVE_TYPE *)state->v;
-		auto offset = (idx_t)((double)(state->pos - 1) * bind_data->quantiles[0]);
-		std::nth_element(v_t, v_t + offset, v_t + state->pos);
-		target[idx] = v_t[offset];
+		target[idx] = interp(v_t);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, RESULT_TYPE *result, ValidityMask &rmask) {
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t ridx) {
+		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
+		auto &rmask = FlatVector::Validity(result);
+
 		//  Lazily initialise frame state
+		const auto prev_valid = state->pos == (prev.second - prev.first);
 		state->pos = frame.second - frame.first;
 		state->template Resize<idx_t>(state->pos);
 
@@ -271,39 +354,47 @@ struct DiscreteQuantileOperation : public QuantileOperation<SAVE_TYPE> {
 
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
-		auto offset = (idx_t)(double(state->pos - 1) * bind_data->quantiles[0]);
-		auto same = false;
 
-		if (dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		// Find the two positions needed
+		const auto q = bind_data->quantiles[0];
+
+		bool same = false;
+		if (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
-			same = ReplaceIndex<INPUT_TYPE>(state, data, offset, frame, prev);
+			const auto j = ReplaceIndex(state, frame, prev);
+			Interpolator<INPUT_TYPE, RESULT_TYPE, DISCRETE> interp(q, state->pos);
+			same = CanReplace(state, data, j, interp.FRN, interp.CRN);
 		} else {
 			ReuseIndexes(index, frame, prev);
 		}
 
 		if (!same) {
-			auto valid = state->pos;
 			if (!dmask.AllValid()) {
 				IndirectNotNull not_null(dmask, MinValue(frame.first, prev.first));
-				valid = std::partition(index, index + valid, not_null) - index;
-				offset = (idx_t)(double(valid - 1) * bind_data->quantiles[0]);
+				state->pos = std::partition(index, index + state->pos, not_null) - index;
 			}
-			if (valid) {
+			if (state->pos) {
+				Interpolator<INPUT_TYPE, RESULT_TYPE, DISCRETE> interp(q, state->pos);
 				IndirectLess<INPUT_TYPE> lt(data);
-				std::nth_element(index, index + offset, index + valid, lt);
-				state->moving = SAVE_TYPE(data[index[offset]]);
+				std::nth_element(index, index + interp.FRN, index + state->pos, lt);
+				if (interp.CRN != interp.FRN) {
+					std::nth_element(index + interp.CRN, index + interp.CRN, index + interp.n, lt);
+				}
+				rdata[ridx] = interp(data, index);
 			} else {
-				rmask.Set(0, false);
+				rmask.Set(ridx, false);
 			}
+		} else {
+			Interpolator<INPUT_TYPE, RESULT_TYPE, DISCRETE> interp(q, state->pos);
+			rdata[ridx] = interp(data, index);
 		}
-		result[0] = RESULT_TYPE(state->moving);
 	}
 };
 
 template <typename INPUT_TYPE>
 AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &type) {
-	using STATE = QuantileState<INPUT_TYPE>;
-	using OP = DiscreteQuantileOperation<INPUT_TYPE>;
+	using STATE = QuantileState;
+	using OP = QuantileScalarOperation<INPUT_TYPE, true>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	return fun;
@@ -355,8 +446,8 @@ AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) 
 	}
 }
 
-template <class SAVE_TYPE>
-struct DiscreteQuantileListOperation : public QuantileOperation<SAVE_TYPE> {
+template <class SAVE_TYPE, class CHILD_TYPE, bool DISCRETE>
+struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 
 	template <class RESULT_TYPE, class STATE>
 	static void Finalize(Vector &result_list, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
@@ -365,26 +456,118 @@ struct DiscreteQuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 			mask.SetInvalid(idx);
 			return;
 		}
-		D_ASSERT(state->v);
+
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
-		target[idx].offset = ListVector::GetListSize(result_list);
+
+		auto &result = ListVector::GetEntry(result_list);
+		auto ridx = ListVector::GetListSize(result_list);
+		ListVector::Reserve(result_list, ridx + bind_data->quantiles.size());
+		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
+
+		D_ASSERT(state->v);
 		auto v_t = (SAVE_TYPE *)state->v;
+
+		target[idx].offset = ridx;
 		for (const auto &quantile : bind_data->quantiles) {
-			auto offset = (idx_t)((double)(state->pos - 1) * quantile);
-			std::nth_element(v_t, v_t + offset, v_t + state->pos);
-			auto val = Value::CreateValue(v_t[offset]);
-			ListVector::PushBack(result_list, val);
+			Interpolator<SAVE_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);
+			rdata[ridx] = interp(v_t);
+			++ridx;
 		}
 		target[idx].length = bind_data->quantiles.size();
+
+		ListVector::SetListSize(result_list, ridx);
+	}
+
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
+	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &list, idx_t lidx) {
+		D_ASSERT(bind_data_p);
+		auto bind_data = (QuantileBindData *)bind_data_p;
+
+		// Result is a constant LIST<RESULT_TYPE> with a fixed length
+		auto ldata = FlatVector::GetData<RESULT_TYPE>(list);
+		auto &lmask = FlatVector::Validity(list);
+		auto &lentry = ldata[lidx];
+		lentry.offset = ListVector::GetListSize(list);
+		lentry.length = bind_data->quantiles.size();
+
+		ListVector::Reserve(list, lentry.offset + lentry.length);
+		ListVector::SetListSize(list, lentry.offset + lentry.length);
+		auto &result = ListVector::GetEntry(list);
+		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
+
+		//  Lazily initialise frame state
+		const auto prev_valid = state->pos == (prev.second - prev.first);
+		state->pos = frame.second - frame.first;
+		state->template Resize<idx_t>(state->pos);
+
+		D_ASSERT(state->v);
+		auto index = (idx_t *)state->v;
+
+		bool fixed = false;
+		auto j = state->pos;
+		if (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+			//  Fixed frame size
+			j = ReplaceIndex(state, frame, prev);
+			fixed = true;
+		} else {
+			ReuseIndexes(index, frame, prev);
+			if (!dmask.AllValid()) {
+				IndirectNotNull not_null(dmask, MinValue(frame.first, prev.first));
+				state->pos = std::partition(index, index + state->pos, not_null) - index;
+			}
+		}
+
+		if (!state->pos) {
+			lmask.Set(lidx, false);
+			return;
+		}
+
+		// First pass: Fill in the undisturbed values and find the islands of stability.
+		state->disturbed.clear();
+		state->lower.clear();
+		state->upper.clear();
+		idx_t lb = 0;
+		for (idx_t i = 0; i < bind_data->order.size(); ++i) {
+			const auto q = bind_data->order[i];
+			const auto &quantile = bind_data->quantiles[q];
+			Interpolator<INPUT_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);
+
+			if (fixed && CanReplace(state, data, j, interp.FRN, interp.CRN)) {
+				rdata[lentry.offset + q] = interp(data, index);
+				state->upper.resize(state->lower.size(), interp.FRN);
+			} else {
+				state->disturbed.push_back(q);
+				state->lower.push_back(MinValue(lb, interp.FRN));
+			}
+			lb = interp.CRN + 1;
+		}
+		state->upper.resize(state->lower.size(), state->pos);
+
+		// Second pass: select the disturbed values
+		for (idx_t i = 0; i < state->disturbed.size(); ++i) {
+			const auto &q = state->disturbed[i];
+			const auto &quantile = bind_data->quantiles[q];
+			Interpolator<INPUT_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);
+
+			IndirectLess<INPUT_TYPE> lt(data);
+			std::nth_element(index + state->lower[i], index + interp.FRN, index + state->upper[i], lt);
+			if (interp.CRN != interp.FRN) {
+				std::nth_element(index + interp.CRN, index + interp.CRN, index + state->upper[i], lt);
+			}
+			rdata[lentry.offset + q] = interp(data, index);
+		}
 	}
 };
 
 template <typename INPUT_TYPE>
 AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalType &type) {
-	using STATE = QuantileState<INPUT_TYPE>;
-	using OP = DiscreteQuantileListOperation<INPUT_TYPE>;
-	return QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
+	using STATE = QuantileState;
+	using OP = QuantileListOperation<INPUT_TYPE, INPUT_TYPE, true>;
+	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
+	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
+	return fun;
 }
 
 AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &type) {
@@ -433,50 +616,14 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 	}
 }
 
-template <class INPUT_TYPE, class TARGET_TYPE>
-static TARGET_TYPE Interpolate(INPUT_TYPE *v_t, const float q, const idx_t n) {
-	const auto RN = ((double)(n - 1) * q);
-	const auto FRN = idx_t(floor(RN));
-	const auto CRN = idx_t(ceil(RN));
-
-	if (CRN == FRN) {
-		std::nth_element(v_t, v_t + FRN, v_t + n);
-		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
-	} else {
-		std::nth_element(v_t, v_t + FRN, v_t + n);
-		std::nth_element(v_t + FRN, v_t + CRN, v_t + n);
-		auto lo = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
-		auto hi = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[CRN]);
-		auto delta = hi - lo;
-		return lo + delta * (RN - FRN);
-	}
-}
-
-template <class SAVE_TYPE>
-struct ContinuousQuantileOperation : public QuantileOperation<SAVE_TYPE> {
-
-	template <class RESULT_TYPE, class STATE>
-	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
-	                     ValidityMask &mask, idx_t idx) {
-		if (state->pos == 0) {
-			mask.SetInvalid(idx);
-			return;
-		}
-		D_ASSERT(state->v);
-		D_ASSERT(bind_data_p);
-		auto bind_data = (QuantileBindData *)bind_data_p;
-		D_ASSERT(bind_data->quantiles.size() == 1);
-		auto v_t = (SAVE_TYPE *)state->v;
-		target[idx] = Interpolate<SAVE_TYPE, RESULT_TYPE>(v_t, bind_data->quantiles[0], state->pos);
-	}
-};
-
 template <typename INPUT_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType &input_type,
                                                               const LogicalType &target_type) {
-	using STATE = QuantileState<INPUT_TYPE>;
-	using OP = ContinuousQuantileOperation<INPUT_TYPE>;
-	return AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
+	using STATE = QuantileState;
+	using OP = QuantileScalarOperation<INPUT_TYPE, false>;
+	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
+	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
+	return fun;
 }
 
 AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type) {
@@ -523,36 +670,14 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 	}
 }
 
-template <class SAVE_TYPE, class CHILD_TYPE>
-struct ContinuousQuantileListOperation : public QuantileOperation<SAVE_TYPE> {
-
-	template <class RESULT_TYPE, class STATE>
-	static void Finalize(Vector &result_list, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
-	                     ValidityMask &mask, idx_t idx) {
-		if (state->pos == 0) {
-			mask.SetInvalid(idx);
-			return;
-		}
-		D_ASSERT(state->v);
-		D_ASSERT(bind_data_p);
-		auto bind_data = (QuantileBindData *)bind_data_p;
-		target[idx].offset = ListVector::GetListSize(result_list);
-		auto v_t = (SAVE_TYPE *)state->v;
-		for (const auto &quantile : bind_data->quantiles) {
-			auto child = Interpolate<SAVE_TYPE, CHILD_TYPE>(v_t, quantile, state->pos);
-			auto val = Value::CreateValue(child);
-			ListVector::PushBack(result_list, val);
-		}
-		target[idx].length = bind_data->quantiles.size();
-	}
-};
-
 template <typename INPUT_TYPE, typename CHILD_TYPE>
 AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalType &input_type,
                                                                   const LogicalType &result_type) {
-	using STATE = QuantileState<INPUT_TYPE>;
-	using OP = ContinuousQuantileListOperation<INPUT_TYPE, CHILD_TYPE>;
-	return QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);
+	using STATE = QuantileState;
+	using OP = QuantileListOperation<INPUT_TYPE, CHILD_TYPE, false>;
+	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);
+	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
+	return fun;
 }
 
 AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &type) {
@@ -625,7 +750,7 @@ static float CheckQuantile(const Value &quantile_val) {
 
 unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction &function,
                                       vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[1]->IsScalar()) {
+	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("QUANTILE can only take constant parameters");
 	}
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
@@ -659,7 +784,8 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimal(ClientContext &context, A
 }
 
 AggregateFunction GetMedianAggregate(const LogicalType &type) {
-	auto fun = GetDiscreteQuantileAggregateFunction(type);
+	auto fun = (type.id() != LogicalTypeId::INTERVAL) ? GetContinuousQuantileAggregateFunction(type)
+	                                                  : GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindMedian;
 	return fun;
 }

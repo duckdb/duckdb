@@ -8,6 +8,7 @@ imdb: third_party/imdb/data
 GENERATOR=
 FORCE_COLOR=
 WARNINGS_AS_ERRORS=
+FORCE_WARN_UNUSED_FLAG=
 DISABLE_UNITY_FLAG=
 DISABLE_SANITIZER_FLAG=
 ifeq ($(GEN),ninja)
@@ -16,6 +17,9 @@ ifeq ($(GEN),ninja)
 endif
 ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
 	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
+endif
+ifeq (${FORCE_WARN_UNUSED}, 1)
+	FORCE_WARN_UNUSED_FLAG=-DFORCE_WARN_UNUSED=1
 endif
 ifeq (${DISABLE_UNITY}, 1)
 	DISABLE_UNITY_FLAG=-DDISABLE_UNITY=1
@@ -73,7 +77,7 @@ ifeq (${BUILD_ODBC}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_ODBC_DRIVER=1
 endif
 ifeq (${BUILD_PYTHON}, 1)
-	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 DBUILD_TPCDS=1
+	EXTENSIONS:=${EXTENSIONS} -DBUILD_PYTHON=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1
 endif
 ifeq (${BUILD_R}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
@@ -103,7 +107,7 @@ debug:
 release_expanded:
 	mkdir -p build/release_expanded && \
 	cd build/release_expanded && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 cldebug:
@@ -123,7 +127,7 @@ unittest: debug
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
-	build/debug/test/unittest
+	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 allunit: release_expanded # uses release build because otherwise allunit takes forever
@@ -139,7 +143,7 @@ doxygen: docs
 release:
 	mkdir -p build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 reldebug:
@@ -164,7 +168,7 @@ amaldebug:
 tidy-check:
 	mkdir -p build/tidy && \
 	cd build/tidy && \
-	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
+	cmake -DCLANG_TIDY=1 -DDISABLE_UNITY=1 -DBUILD_ODBC_DRIVER=TRUE -DBUILD_PARQUET_EXTENSION=TRUE -DBUILD_PYTHON_PKG=TRUE -DBUILD_SHELL=0 -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ../.. && \
 	python3 ../../scripts/run-clang-tidy.py -quiet ${TIDY_THREAD_PARAMETER}
 
 tidy-fix:

@@ -1,3 +1,10 @@
+alter-test
+bindcol-test
+boolsaschar-test
+colattribute-test
 connect-test
-select-test
 numeric-test
+quotes-test
+result-conversions-test
+row-wise-fetching-test
+select-test

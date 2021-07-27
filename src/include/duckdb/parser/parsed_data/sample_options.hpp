@@ -23,7 +23,7 @@ struct SampleOptions {
 	Value sample_size;
 	bool is_percentage;
 	SampleMethod method;
-	int64_t seed;
+	int64_t seed = -1;
 
 	unique_ptr<SampleOptions> Copy();
 	void Serialize(Serializer &serializer);

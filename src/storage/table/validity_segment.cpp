@@ -1,6 +1,7 @@
 #include "duckdb/storage/table/validity_segment.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
+
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 
 namespace duckdb {
@@ -174,7 +175,7 @@ ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t row_start, block_id
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// no block id specified: allocate a buffer for the uncompressed segment
-		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_ALLOC_SIZE, false);
+		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_SIZE, false);
 		// pin the block and initialize
 		auto handle = buffer_manager.Pin(block);
 		memset(handle->node->buffer, 0xFF, Storage::BLOCK_SIZE);
@@ -196,8 +197,9 @@ void ValiditySegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &re
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);
 	ValidityMask mask((validity_t *)handle->node->buffer);
+	auto &result_mask = FlatVector::Validity(result);
 	if (!mask.RowIsValidUnsafe(row_id)) {
-		FlatVector::SetNull(result, result_idx, true);
+		result_mask.SetInvalid(result_idx);
 	}
 }
 

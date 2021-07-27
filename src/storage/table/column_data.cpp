@@ -168,6 +168,12 @@ void ColumnData::FilterScan(Transaction &transaction, idx_t vector_index, Column
 	result.Slice(sel, count);
 }
 
+void ColumnData::FilterScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
+                                     idx_t count, bool allow_updates) {
+	ScanCommitted(vector_index, state, result, allow_updates);
+	result.Slice(sel, count);
+}
+
 void ColumnData::Skip(ColumnScanState &state, idx_t count) {
 	state.Next(count);
 }
