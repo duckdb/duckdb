@@ -575,9 +575,9 @@ static idx_t FindTypedRangeBound(ChunkCollection &over, const idx_t order_col, c
 	ChunkCollectionIterator<T> begin(over, order_col, order_begin);
 	ChunkCollectionIterator<T> end(over, order_col, order_end);
 	if (FROM) {
-		return std::lower_bound(begin, end, val, comp);
+		return idx_t(std::lower_bound(begin, end, val, comp));
 	} else {
-		return std::upper_bound(begin, end, val, comp);
+		return idx_t(std::upper_bound(begin, end, val, comp));
 	}
 }
 
