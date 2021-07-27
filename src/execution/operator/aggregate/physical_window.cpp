@@ -531,7 +531,7 @@ struct ChunkCollectionIterator {
 	inline reference operator*() const {
 		return GetCell<T>(*coll, col_no, pos);
 	}
-	inline operator pointer() const {
+	inline explicit operator pointer() const {
 		return pos;
 	}
 

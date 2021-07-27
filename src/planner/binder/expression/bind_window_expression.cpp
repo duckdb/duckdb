@@ -224,7 +224,6 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	}
 
 	// Cast ORDER and boundary expressions to the same type
-	auto order_type = LogicalType::INVALID;
 	if (range_sense != OrderType::INVALID) {
 		D_ASSERT(window.orders.size() == 1);
 
