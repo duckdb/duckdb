@@ -141,10 +141,12 @@ struct OdbcUtils {
 		return len == SQL_NTS ? string((const char *)ptr) : string((const char *)ptr, (size_t)len);
 	}
 
-	static void WriteString(string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, SQLSMALLINT *out_len) {
-		auto printf_len = snprintf((char *)out_buf, buf_len, "%s", s.c_str());
+	static void WriteString(const string &s, SQLCHAR *out_buf, SQLSMALLINT buf_len, SQLSMALLINT *out_len) {
+		if (out_buf) {
+			snprintf((char *)out_buf, buf_len, "%s", s.c_str());
+		}
 		if (out_len) {
-			*out_len = printf_len;
+			*out_len = s.size();
 		}
 	}
 };

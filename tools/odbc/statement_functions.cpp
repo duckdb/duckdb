@@ -96,13 +96,13 @@ static void LogInvalidCast(const LogicalType &from_type, const LogicalType &to_t
 	stmt->error_messages.emplace_back(msg);
 }
 
-template <class T>
+template <class SRC, class DEST=SRC>
 static SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value &val, const LogicalType &type,
                                   SQLLEN buffer_length, SQLPOINTER target_value_ptr, SQLLEN *str_len_or_ind_ptr) {
-	D_ASSERT(((size_t)buffer_length) >= sizeof(T));
+	D_ASSERT(((size_t)buffer_length) >= sizeof(DEST));
 	try {
-		auto casted_value = val.CastAs(type).GetValue<T>();
-		Store<T>(casted_value, (duckdb::data_ptr_t)target_value_ptr);
+		auto casted_value = val.CastAs(type).GetValue<SRC>();
+		Store<DEST>(casted_value, (duckdb::data_ptr_t)target_value_ptr);
 		if (str_len_or_ind_ptr) {
 			*str_len_or_ind_ptr = sizeof(casted_value);
 		}
@@ -148,40 +148,40 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 
 		switch (target_type) {
 		case SQL_C_SSHORT:
-			return GetInternalValue<SQLSMALLINT>(stmt, val, LogicalType::SMALLINT, buffer_length, target_value_ptr,
+			return GetInternalValue<int16_t, SQLSMALLINT>(stmt, val, LogicalType::SMALLINT, buffer_length, target_value_ptr,
 			                                     str_len_or_ind_ptr);
 		case SQL_C_USHORT:
-			return GetInternalValue<SQLUSMALLINT>(stmt, val, LogicalType::USMALLINT, buffer_length, target_value_ptr,
+			return GetInternalValue<uint16_t, SQLUSMALLINT>(stmt, val, LogicalType::USMALLINT, buffer_length, target_value_ptr,
 			                                      str_len_or_ind_ptr);
 		case SQL_C_LONG:
 		case SQL_C_SLONG:
-			return GetInternalValue<SQLINTEGER>(stmt, val, LogicalType::INTEGER, buffer_length, target_value_ptr,
+			return GetInternalValue<int32_t, SQLINTEGER>(stmt, val, LogicalType::INTEGER, buffer_length, target_value_ptr,
 			                                    str_len_or_ind_ptr);
 		case SQL_C_ULONG:
-			return GetInternalValue<SQLUINTEGER>(stmt, val, LogicalType::UINTEGER, buffer_length, target_value_ptr,
+			return GetInternalValue<uint32_t, SQLUINTEGER>(stmt, val, LogicalType::UINTEGER, buffer_length, target_value_ptr,
 			                                     str_len_or_ind_ptr);
 		case SQL_C_FLOAT:
-			return GetInternalValue<SQLREAL>(stmt, val, LogicalType::FLOAT, buffer_length, target_value_ptr,
+			return GetInternalValue<float, SQLREAL>(stmt, val, LogicalType::FLOAT, buffer_length, target_value_ptr,
 			                                 str_len_or_ind_ptr);
 		case SQL_C_DOUBLE:
-			return GetInternalValue<SQLFLOAT>(stmt, val, LogicalType::DOUBLE, buffer_length, target_value_ptr,
+			return GetInternalValue<double, SQLFLOAT>(stmt, val, LogicalType::DOUBLE, buffer_length, target_value_ptr,
 			                                  str_len_or_ind_ptr);
 		case SQL_C_BIT: {
 			LogicalType char_type = LogicalType(LogicalTypeId::CHAR);
 			return GetInternalValue<SQLCHAR>(stmt, val, char_type, buffer_length, target_value_ptr, str_len_or_ind_ptr);
 		}
 		case SQL_C_STINYINT:
-			return GetInternalValue<SQLSCHAR>(stmt, val, LogicalType::TINYINT, buffer_length, target_value_ptr,
+			return GetInternalValue<int8_t, SQLSCHAR>(stmt, val, LogicalType::TINYINT, buffer_length, target_value_ptr,
 			                                  str_len_or_ind_ptr);
 		case SQL_C_UTINYINT:
-			return GetInternalValue<SQLSCHAR>(stmt, val, LogicalType::UTINYINT, buffer_length, target_value_ptr,
+			return GetInternalValue<uint8_t, uint8_t>(stmt, val, LogicalType::UTINYINT, buffer_length, target_value_ptr,
 			                                  str_len_or_ind_ptr);
 		case SQL_C_SBIGINT:
-			return GetInternalValue<SQLBIGINT>(stmt, val, LogicalType::BIGINT, buffer_length, target_value_ptr,
+			return GetInternalValue<int64_t, SQLBIGINT>(stmt, val, LogicalType::BIGINT, buffer_length, target_value_ptr,
 			                                   str_len_or_ind_ptr);
 		case SQL_C_UBIGINT:
 			// case SQL_C_BOOKMARK: // same ODBC type (\\TODO we don't support bookmark types)
-			return GetInternalValue<SQLUBIGINT>(stmt, val, LogicalType::UBIGINT, buffer_length, target_value_ptr,
+			return GetInternalValue<uint64_t, SQLUBIGINT>(stmt, val, LogicalType::UBIGINT, buffer_length, target_value_ptr,
 			                                    str_len_or_ind_ptr);
 		case SQL_C_WCHAR: {
 			std::string str = val.GetValue<std::string>();
@@ -448,7 +448,6 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_YEAR: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
-				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
 				return SQL_ERROR;
 			}
 

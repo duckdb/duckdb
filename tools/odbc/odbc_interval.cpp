@@ -15,6 +15,9 @@ bool OdbcInterval::GetInterval(Value &value, interval_t &interval, duckdb::OdbcH
 		string error_message;
 		string val_str = value.GetValue<string>();
 		if (!TryCastErrorMessage::Operation<string_t, interval_t>(string_t(val_str), interval, &error_message)) {
+			if (error_message.empty()) {
+				error_message = CastExceptionText<string_t, interval_t>(string_t(val_str));
+			}
 			stmt->error_messages.emplace_back(error_message);
 			return false;
 		}
