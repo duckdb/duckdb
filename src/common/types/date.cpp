@@ -290,7 +290,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	return Date::TryFromDate(year, month, day, result);
 }
 
-string Date::ConversionError(string str) {
+string Date::ConversionError(const string &str) {
 	return StringUtil::Format("date field value out of range: \"%s\", "
 	                          "expected format is (YYYY-MM-DD)",
 	                          str);

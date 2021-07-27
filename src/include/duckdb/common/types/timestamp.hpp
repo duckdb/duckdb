@@ -65,7 +65,7 @@ public:
 
 	static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset, int &minute_offset);
 
-	static string ConversionError(string str);
+	static string ConversionError(const string &str);
 	static string ConversionError(string_t str);
 };
 } // namespace duckdb

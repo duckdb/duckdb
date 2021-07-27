@@ -1,4 +1,4 @@
-# name: test/sql/types/hugeint/test_hugeint_conversion.test
+# name: test/sql/types/hugeint/test_hugeint_exponent.test
 # description: Test hugeint conversion
 # group: [hugeint]
 
