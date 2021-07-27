@@ -96,7 +96,7 @@ static void LogInvalidCast(const LogicalType &from_type, const LogicalType &to_t
 	stmt->error_messages.emplace_back(msg);
 }
 
-template <class SRC, class DEST=SRC>
+template <class SRC, class DEST = SRC>
 static SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value &val, const LogicalType &type,
                                   SQLLEN buffer_length, SQLPOINTER target_value_ptr, SQLLEN *str_len_or_ind_ptr) {
 	D_ASSERT(((size_t)buffer_length) >= sizeof(DEST));
@@ -148,41 +148,41 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 
 		switch (target_type) {
 		case SQL_C_SSHORT:
-			return GetInternalValue<int16_t, SQLSMALLINT>(stmt, val, LogicalType::SMALLINT, buffer_length, target_value_ptr,
-			                                     str_len_or_ind_ptr);
+			return GetInternalValue<int16_t, SQLSMALLINT>(stmt, val, LogicalType::SMALLINT, buffer_length,
+			                                              target_value_ptr, str_len_or_ind_ptr);
 		case SQL_C_USHORT:
-			return GetInternalValue<uint16_t, SQLUSMALLINT>(stmt, val, LogicalType::USMALLINT, buffer_length, target_value_ptr,
-			                                      str_len_or_ind_ptr);
+			return GetInternalValue<uint16_t, SQLUSMALLINT>(stmt, val, LogicalType::USMALLINT, buffer_length,
+			                                                target_value_ptr, str_len_or_ind_ptr);
 		case SQL_C_LONG:
 		case SQL_C_SLONG:
-			return GetInternalValue<int32_t, SQLINTEGER>(stmt, val, LogicalType::INTEGER, buffer_length, target_value_ptr,
-			                                    str_len_or_ind_ptr);
+			return GetInternalValue<int32_t, SQLINTEGER>(stmt, val, LogicalType::INTEGER, buffer_length,
+			                                             target_value_ptr, str_len_or_ind_ptr);
 		case SQL_C_ULONG:
-			return GetInternalValue<uint32_t, SQLUINTEGER>(stmt, val, LogicalType::UINTEGER, buffer_length, target_value_ptr,
-			                                     str_len_or_ind_ptr);
+			return GetInternalValue<uint32_t, SQLUINTEGER>(stmt, val, LogicalType::UINTEGER, buffer_length,
+			                                               target_value_ptr, str_len_or_ind_ptr);
 		case SQL_C_FLOAT:
 			return GetInternalValue<float, SQLREAL>(stmt, val, LogicalType::FLOAT, buffer_length, target_value_ptr,
-			                                 str_len_or_ind_ptr);
+			                                        str_len_or_ind_ptr);
 		case SQL_C_DOUBLE:
 			return GetInternalValue<double, SQLFLOAT>(stmt, val, LogicalType::DOUBLE, buffer_length, target_value_ptr,
-			                                  str_len_or_ind_ptr);
+			                                          str_len_or_ind_ptr);
 		case SQL_C_BIT: {
 			LogicalType char_type = LogicalType(LogicalTypeId::CHAR);
 			return GetInternalValue<SQLCHAR>(stmt, val, char_type, buffer_length, target_value_ptr, str_len_or_ind_ptr);
 		}
 		case SQL_C_STINYINT:
 			return GetInternalValue<int8_t, SQLSCHAR>(stmt, val, LogicalType::TINYINT, buffer_length, target_value_ptr,
-			                                  str_len_or_ind_ptr);
+			                                          str_len_or_ind_ptr);
 		case SQL_C_UTINYINT:
 			return GetInternalValue<uint8_t, uint8_t>(stmt, val, LogicalType::UTINYINT, buffer_length, target_value_ptr,
-			                                  str_len_or_ind_ptr);
+			                                          str_len_or_ind_ptr);
 		case SQL_C_SBIGINT:
 			return GetInternalValue<int64_t, SQLBIGINT>(stmt, val, LogicalType::BIGINT, buffer_length, target_value_ptr,
-			                                   str_len_or_ind_ptr);
+			                                            str_len_or_ind_ptr);
 		case SQL_C_UBIGINT:
 			// case SQL_C_BOOKMARK: // same ODBC type (\\TODO we don't support bookmark types)
-			return GetInternalValue<uint64_t, SQLUBIGINT>(stmt, val, LogicalType::UBIGINT, buffer_length, target_value_ptr,
-			                                    str_len_or_ind_ptr);
+			return GetInternalValue<uint64_t, SQLUBIGINT>(stmt, val, LogicalType::UBIGINT, buffer_length,
+			                                              target_value_ptr, str_len_or_ind_ptr);
 		case SQL_C_WCHAR: {
 			std::string str = val.GetValue<std::string>();
 			std::wstring w_str = std::wstring(str.begin(), str.end());

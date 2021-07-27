@@ -1070,7 +1070,7 @@ Value Value::CastAs(const LogicalType &target_type, bool strict) const {
 	Value new_value;
 	string error_message;
 	if (!TryCastAs(target_type, new_value, &error_message, strict)) {
-		throw InvalidInputException("Failed to cast value: %s\n", error_message);
+		throw InvalidInputException("Failed to cast value: %s", error_message);
 	}
 	return new_value;
 }
