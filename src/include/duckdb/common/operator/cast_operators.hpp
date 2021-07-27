@@ -469,6 +469,8 @@ bool TryCast::Operation(interval_t input, interval_t &result, bool strict);
 // String -> Date Casts
 //===--------------------------------------------------------------------===//
 template <>
+bool TryCastErrorMessage::Operation(string_t input, date_t &result, string *error_message, bool strict);
+template <>
 bool TryCast::Operation(string_t input, date_t &result, bool strict);
 template <>
 date_t Cast::Operation(string_t input);
@@ -476,12 +478,16 @@ date_t Cast::Operation(string_t input);
 // String -> Time Casts
 //===--------------------------------------------------------------------===//
 template <>
+bool TryCastErrorMessage::Operation(string_t input, dtime_t &result, string *error_message, bool strict);
+template <>
 bool TryCast::Operation(string_t input, dtime_t &result, bool strict);
 template <>
 dtime_t Cast::Operation(string_t input);
 //===--------------------------------------------------------------------===//
-// String -> Time Casts
+// String -> Timestamp Casts
 //===--------------------------------------------------------------------===//
+template <>
+bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, string *error_message, bool strict);
 template <>
 bool TryCast::Operation(string_t input, timestamp_t &result, bool strict);
 template <>

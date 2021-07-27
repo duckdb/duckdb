@@ -1297,6 +1297,15 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 // Cast To Date
 //===--------------------------------------------------------------------===//
 template <>
+bool TryCastErrorMessage::Operation(string_t input, date_t &result, string *error_message, bool strict) {
+	if (!TryCast::Operation<string_t, date_t>(input, result, strict)) {
+		HandleCastError::AssignError(Date::ConversionError(input), error_message);
+		return false;
+	}
+	return true;
+}
+
+template <>
 bool TryCast::Operation(string_t input, date_t &result, bool strict) {
 	idx_t pos;
 	return Date::TryConvertDate(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
@@ -1311,6 +1320,15 @@ date_t Cast::Operation(string_t input) {
 // Cast To Time
 //===--------------------------------------------------------------------===//
 template <>
+bool TryCastErrorMessage::Operation(string_t input, dtime_t &result, string *error_message, bool strict) {
+	if (!TryCast::Operation<string_t, dtime_t>(input, result, strict)) {
+		HandleCastError::AssignError(Time::ConversionError(input), error_message);
+		return false;
+	}
+	return true;
+}
+
+template <>
 bool TryCast::Operation(string_t input, dtime_t &result, bool strict) {
 	idx_t pos;
 	return Time::TryConvertTime(input.GetDataUnsafe(), input.GetSize(), pos, result, strict);
@@ -1324,6 +1342,15 @@ dtime_t Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 // Cast To Timestamp
 //===--------------------------------------------------------------------===//
+template <>
+bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, string *error_message, bool strict) {
+	if (!TryCast::Operation<string_t, timestamp_t>(input, result, strict)) {
+		HandleCastError::AssignError(Timestamp::ConversionError(input), error_message);
+		return false;
+	}
+	return true;
+}
+
 template <>
 bool TryCast::Operation(string_t input, timestamp_t &result, bool strict) {
 	return Timestamp::TryConvertTimestamp(input.GetDataUnsafe(), input.GetSize(), result);

@@ -64,5 +64,8 @@ public:
 	static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
 
 	static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset, int &minute_offset);
+
+	static string ConversionError(string str);
+	static string ConversionError(string_t str);
 };
 } // namespace duckdb

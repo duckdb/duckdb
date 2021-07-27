@@ -290,13 +290,21 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	return Date::TryFromDate(year, month, day, result);
 }
 
+string Date::ConversionError(string str) {
+	return StringUtil::Format("date field value out of range: \"%s\", "
+		                          "expected format is (YYYY-MM-DD)",
+		                          str);
+}
+
+string Date::ConversionError(string_t str) {
+	return ConversionError(str.GetString());
+}
+
 date_t Date::FromCString(const char *buf, idx_t len, bool strict) {
 	date_t result;
 	idx_t pos;
 	if (!TryConvertDate(buf, len, pos, result, strict)) {
-		throw ConversionException("date/time field value out of range: \"%s\", "
-		                          "expected format is (YYYY-MM-DD)",
-		                          string(buf, len));
+		throw ConversionException(ConversionError(string(buf, len)));
 	}
 	return result;
 }

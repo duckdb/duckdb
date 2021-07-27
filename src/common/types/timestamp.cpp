@@ -64,12 +64,20 @@ bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &res
 	return true;
 }
 
+string Timestamp::ConversionError(string str) {
+	return StringUtil::Format("timestamp field value out of range: \"%s\", "
+		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
+		                          str);
+}
+
+string Timestamp::ConversionError(string_t str) {
+	return Timestamp::ConversionError(str.GetString());
+}
+
 timestamp_t Timestamp::FromCString(const char *str, idx_t len) {
 	timestamp_t result;
 	if (!Timestamp::TryConvertTimestamp(str, len, result)) {
-		throw ConversionException("timestamp field value out of range: \"%s\", "
-		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
-		                          string(str, len));
+		throw ConversionException(Timestamp::ConversionError(string(str, len)));
 	}
 	return result;
 }

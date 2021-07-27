@@ -124,13 +124,21 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	return true;
 }
 
+string Time::ConversionError(string str) {
+	return StringUtil::Format("time field value out of range: \"%s\", "
+		                          "expected format is ([YYY-MM-DD ]HH:MM:SS[.MS])",
+		                          str);
+}
+
+string Time::ConversionError(string_t str) {
+	return Time::ConversionError(str.GetString());
+}
+
 dtime_t Time::FromCString(const char *buf, idx_t len, bool strict) {
 	dtime_t result;
 	idx_t pos;
 	if (!Time::TryConvertTime(buf, len, pos, result, strict)) {
-		throw ConversionException("time field value out of range: \"%s\", "
-		                          "expected format is ([YYY-MM-DD ]HH:MM:SS[.MS])",
-		                          string(buf, len));
+		throw ConversionException(ConversionError(string(buf, len)));
 	}
 	return result;
 }
