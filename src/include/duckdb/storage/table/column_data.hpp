@@ -30,6 +30,7 @@ class Transaction;
 struct DataTableInfo;
 
 class ColumnData {
+	friend class ColumnDataCheckpointer;
 public:
 	ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent);
 	virtual ~ColumnData();
