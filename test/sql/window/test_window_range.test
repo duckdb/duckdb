@@ -1,0 +1,940 @@
+# name: test/sql/window/test_window_range.test
+# description: Range functionality tests. Taken from sqlite test/window8.test
+# group: [window]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+
+statement ok
+CREATE TABLE t1(a REAL, b INTEGER);
+
+statement ok
+
+statement ok
+INSERT INTO t1 VALUES
+  (5, 10), (10, 20), (13, 26), (13, 26),
+  (15, 30), (20, 40), (22,80), (30, 90);
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 5 PRECEDING AND 5 FOLLOWING )
+----
+5	30
+10	112
+13	102
+13	102
+15	142
+20	150
+22	120
+30	90
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 10 PRECEDING AND 5 PRECEDING )
+----
+5	NULL
+10	10
+13	10
+13	10
+15	30
+20	102
+22	82
+30	120
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 2 FOLLOWING AND 3 FOLLOWING )
+----
+5	NULL
+10	52
+13	30
+13	30
+15	NULL
+20	80
+22	NULL
+30	NULL
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a DESC RANGE BETWEEN 5 PRECEDING AND 5 FOLLOWING )
+----
+30	90
+22	120
+20	150
+15	142
+13	102
+13	102
+10	112
+5	30
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a DESC RANGE BETWEEN 10 PRECEDING AND 5 PRECEDING )
+----
+30	NULL
+22	90
+20	90
+15	120
+13	120
+13	120
+10	70
+5	102
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a DESC RANGE BETWEEN 2 FOLLOWING AND 3 FOLLOWING )
+----
+30	NULL
+22	40
+20	NULL
+15	52
+13	20
+13	20
+10	NULL
+5	NULL
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 5.1 PRECEDING AND 5.3 FOLLOWING )
+----
+5	30
+10	112
+13	102
+13	102
+15	142
+20	150
+22	120
+30	90
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 10.2 PRECEDING AND 5.4 PRECEDING )
+----
+5	NULL
+10	NULL
+13	10
+13	10
+15	10
+20	72
+22	82
+30	120
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a RANGE BETWEEN 2.6 FOLLOWING AND 3.5 FOLLOWING )
+----
+5	NULL
+10	52
+13	NULL
+13	NULL
+15	NULL
+20	NULL
+22	NULL
+30	NULL
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a DESC RANGE BETWEEN 5.7 PRECEDING AND 5.8 FOLLOWING )
+----
+30	90
+22	120
+20	150
+15	142
+13	102
+13	102
+10	112
+5	30
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a DESC RANGE BETWEEN UNBOUNDED PRECEDING AND 5.9 PRECEDING )
+----
+30	NULL
+22	90
+20	90
+15	170
+13	210
+13	210
+10	210
+5	292
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a DESC RANGE BETWEEN 2.1 FOLLOWING AND UNBOUNDED FOLLOWING )
+----
+30	232
+22	112
+20	112
+15	30
+13	30
+13	30
+10	10
+5	NULL
+
+query II
+SELECT CAST(a AS INTEGER), sum(b) OVER win FROM t1 WINDOW win AS ( ORDER BY a RANGE 5.1 PRECEDING )
+----
+5	10
+10	30
+13	72
+13	72
+15	102
+20	70
+22	120
+30	90
+
+#==========================================================================
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+CREATE TABLE t1(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO t1 VALUES
+    (NULL, 1), (NULL, 2), (NULL, 3), (10, 4), (10, 5);
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a RANGE BETWEEN 5 PRECEDING AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1;
+----
+6
+6
+6
+9
+9
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a DESC RANGE BETWEEN 5 PRECEDING AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1;
+----
+6
+6
+6
+9
+9
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a RANGE BETWEEN 5 FOLLOWING AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1 NULLS FIRST;
+----
+NULL
+NULL
+6
+6
+6
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a RANGE BETWEEN 5 FOLLOWING AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1 NULLS LAST;
+----
+6
+6
+6
+NULL
+NULL
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a DESC RANGE BETWEEN 5 FOLLOWING AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1 NULLS FIRST;
+----
+NULL
+NULL
+6
+6
+6
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a DESC RANGE BETWEEN 5 FOLLOWING AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1 NULLS LAST;
+----
+6
+6
+6
+NULL
+NULL
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a NULLS FIRST RANGE BETWEEN UNBOUNDED PRECEDING AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1 NULLS FIRST;
+----
+6
+6
+6
+15
+15
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a NULLS LAST RANGE BETWEEN UNBOUNDED PRECEDING AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1 NULLS LAST;
+----
+9
+9
+15
+15
+15
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a ASC  NULLS LAST RANGE BETWEEN UNBOUNDED PRECEDING AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1 NULLS LAST;
+----
+9
+9
+15
+15
+15
+
+query I
+SELECT sum(b) OVER (
+    ORDER BY a DESC NULLS FIRST RANGE
+    BETWEEN UNBOUNDED PRECEDING AND 10 FOLLOWING
+  ) FROM t1 ORDER BY 1 NULLS LAST;
+----
+6
+6
+6
+15
+15
+
+#==========================================================================
+
+statement ok
+DROP TABLE IF EXISTS t2;
+
+statement ok
+CREATE TABLE t2(a TEXT, b INTEGER);
+
+statement ok
+INSERT INTO t2 VALUES('A', NULL);
+
+statement ok
+INSERT INTO t2 VALUES('B', NULL);
+
+statement ok
+INSERT INTO t2 VALUES('C', 1);
+
+query I
+SELECT group_concat(a, '.') OVER (
+    ORDER BY b NULLS FIRST RANGE BETWEEN 7 PRECEDING AND 2 PRECEDING
+  )
+  FROM t2
+----
+A.B
+A.B
+NULL
+
+query I
+SELECT group_concat(a, '.') OVER (
+    ORDER BY b DESC NULLS LAST RANGE BETWEEN 7 PRECEDING AND 2 PRECEDING
+  )
+  FROM t2
+----
+NULL
+A.B
+A.B
+
+#==========================================================================
+
+statement ok
+DROP TABLE IF EXISTS t2;
+
+statement ok
+CREATE TABLE t2(a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO t2 VALUES(1, 65);
+
+statement ok
+INSERT INTO t2 VALUES(2,	NULL);
+
+statement ok
+INSERT INTO t2 VALUES(3,	NULL);
+
+statement ok
+INSERT INTO t2 VALUES(4,	NULL);
+
+statement ok
+INSERT INTO t2 VALUES(5, 66);
+
+statement ok
+INSERT INTO t2 VALUES(6, 67);
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 6 FOLLOWING AND UNBOUNDED FOLLOWING
+  );
+----
+9
+9
+9
+9
+9
+9
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 1 PRECEDING AND 2 PRECEDING
+  );
+----
+NULL
+NULL
+NULL
+9
+9
+9
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 2 FOLLOWING AND 1 FOLLOWING
+  );
+----
+NULL
+NULL
+NULL
+9
+9
+9
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 1 PRECEDING AND 2 PRECEDING
+  );
+----
+9
+9
+9
+NULL
+NULL
+NULL
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 2 FOLLOWING AND 1 FOLLOWING
+  );
+----
+9
+9
+9
+NULL
+NULL
+NULL
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 1000 PRECEDING AND 2 PRECEDING
+  );
+----
+NULL
+NULL
+1
+9
+9
+9
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 2000 FOLLOWING AND 1000 FOLLOWING
+  );
+----
+NULL
+NULL
+NULL
+9
+9
+9
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 1000 PRECEDING AND 2000 PRECEDING
+  );
+----
+9
+9
+9
+NULL
+NULL
+NULL
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 2000 FOLLOWING AND 1000 FOLLOWING
+  );
+----
+9
+9
+9
+NULL
+NULL
+NULL
+
+query I
+SELECT min (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 6 FOLLOWING AND UNBOUNDED FOLLOWING
+  );
+----
+2
+2
+2
+2
+2
+2
+
+query I
+SELECT min (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 1 PRECEDING AND 2 PRECEDING
+  );
+----
+NULL
+NULL
+NULL
+2
+2
+2
+
+query I
+SELECT min (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 2 FOLLOWING AND 1 FOLLOWING
+  );
+----
+NULL
+NULL
+NULL
+2
+2
+2
+
+query I
+SELECT min (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 1 PRECEDING AND 2 PRECEDING
+  );
+----
+2
+2
+2
+NULL
+NULL
+NULL
+
+query I
+SELECT min (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 2 FOLLOWING AND 1 FOLLOWING
+  );
+----
+2
+2
+2
+NULL
+NULL
+NULL
+
+query I
+SELECT min (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 1000 PRECEDING AND 2 PRECEDING
+  );
+----
+NULL
+NULL
+1
+2
+2
+2
+
+query I
+SELECT min (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 2000 FOLLOWING AND 1000 FOLLOWING
+  );
+----
+NULL
+NULL
+NULL
+2
+2
+2
+
+query I
+SELECT min (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 1000 PRECEDING AND 2000 PRECEDING
+  );
+----
+2
+2
+2
+NULL
+NULL
+NULL
+
+query I
+SELECT min (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 2000 FOLLOWING AND 1000 FOLLOWING
+  );
+----
+2
+2
+2
+NULL
+NULL
+NULL
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 6 FOLLOWING AND UNBOUNDED FOLLOWING
+  );
+----
+9
+9
+9
+9
+9
+9
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 1 PRECEDING AND 2 PRECEDING
+  );
+----
+NULL
+NULL
+NULL
+9
+9
+9
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 2 FOLLOWING AND 1 FOLLOWING
+  );
+----
+NULL
+NULL
+NULL
+9
+9
+9
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 1 PRECEDING AND 2 PRECEDING
+  );
+----
+9
+9
+9
+NULL
+NULL
+NULL
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 2 FOLLOWING AND 1 FOLLOWING
+  );
+----
+9
+9
+9
+NULL
+NULL
+NULL
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 1000 PRECEDING AND 2 PRECEDING
+  );
+----
+NULL
+NULL
+1
+9
+9
+9
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 2000 FOLLOWING AND 1000 FOLLOWING
+  );
+----
+NULL
+NULL
+NULL
+9
+9
+9
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 1000 PRECEDING AND 2000 PRECEDING
+  );
+----
+9
+9
+9
+NULL
+NULL
+NULL
+
+query I
+SELECT sum (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 2000 FOLLOWING AND 1000 FOLLOWING
+  );
+----
+9
+9
+9
+NULL
+NULL
+NULL
+
+query I
+SELECT max (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 6 FOLLOWING AND UNBOUNDED FOLLOWING
+  );
+----
+4
+4
+4
+4
+4
+4
+
+query I
+SELECT max (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 1 PRECEDING AND 2 PRECEDING
+  );
+----
+NULL
+NULL
+NULL
+4
+4
+4
+
+query I
+SELECT max (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 2 FOLLOWING AND 1 FOLLOWING
+  );
+----
+NULL
+NULL
+NULL
+4
+4
+4
+
+query I
+SELECT max (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 1 PRECEDING AND 2 PRECEDING
+  );
+----
+4
+4
+4
+NULL
+NULL
+NULL
+
+query I
+SELECT max (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 2 FOLLOWING AND 1 FOLLOWING
+  );
+----
+4
+4
+4
+NULL
+NULL
+NULL
+
+query I
+SELECT max (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 1000 PRECEDING AND 2 PRECEDING
+  );
+----
+NULL
+NULL
+1
+4
+4
+4
+
+query I
+SELECT max (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS LAST RANGE BETWEEN 2000 FOLLOWING AND 1000 FOLLOWING
+  );
+----
+NULL
+NULL
+NULL
+4
+4
+4
+
+query I
+SELECT max (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 1000 PRECEDING AND 2000 PRECEDING
+  );
+----
+4
+4
+4
+NULL
+NULL
+NULL
+
+query I
+SELECT max (a) OVER win FROM t2
+  WINDOW win AS (
+      ORDER BY b NULLS FIRST RANGE BETWEEN 2000 FOLLOWING AND 1000 FOLLOWING
+  );
+----
+4
+4
+4
+NULL
+NULL
+NULL
+
+#==========================================================================
+
+statement ok
+DROP TABLE IF EXISTS tx;
+
+statement ok
+CREATE TABLE tx(a INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO tx VALUES(1), (2), (3), (4), (5), (6);
+
+statement ok
+DROP TABLE IF EXISTS map;
+
+statement ok
+CREATE TABLE map(v INTEGER PRIMARY KEY, t TEXT);
+
+statement ok
+INSERT INTO map VALUES
+    (1, 'odd'), (2, 'even'), (3, 'odd'),
+    (4, 'even'), (5, 'odd'), (6, 'even');
+
+query I
+SELECT sum(a) OVER (
+    PARTITION BY (
+SELECT t FROM map WHERE v=a
+    ) ORDER BY a
+  ) FROM tx;
+----
+2
+6
+12
+1
+4
+9
+
+query I
+SELECT sum(a) OVER win FROM tx
+  WINDOW win AS (
+    PARTITION BY (
+SELECT t FROM map WHERE v=a
+    ) ORDER BY a
+  );
+----
+2
+6
+12
+1
+4
+9
+
+query I
+  WITH map2 AS (
+SELECT * FROM map
+  )
+SELECT sum(a) OVER (
+    PARTITION BY (
+SELECT t FROM map2 WHERE v=a
+    ) ORDER BY a
+  ) FROM tx;
+----
+2
+6
+12
+1
+4
+9
+
+query I
+  WITH map2 AS (
+SELECT * FROM map
+  )
+SELECT sum(a) OVER win FROM tx
+  WINDOW win AS (
+    PARTITION BY (
+SELECT t FROM map2 WHERE v=a
+    ) ORDER BY a
+  );
+----
+2
+6
+12
+1
+4
+9
+
+#==========================================================================
+
+statement ok
+DROP TABLE IF EXISTS t1;
+
+statement ok
+DROP TABLE IF EXISTS t2;
+
+statement ok
+CREATE TABLE t1(a INTEGER);
+
+statement ok
+CREATE TABLE t2(y INTEGER);
+
+# Binder Error: correlated columns in window functions not supported
+statement error
+SELECT (
+SELECT max(a) OVER ( ORDER BY (SELECT sum(a) FROM t1) )
+         + min(a) OVER()
+  )
+  FROM t1
+#----
+#NULL

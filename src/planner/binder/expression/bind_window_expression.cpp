@@ -38,6 +38,14 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, Logic
 	}
 }
 
+static inline OrderType ResolveOrderType(const DBConfig &config, OrderType type) {
+	return (type == OrderType::ORDER_DEFAULT) ? config.default_order_type : type;
+}
+
+static inline OrderByNullType ResolveNullOrder(const DBConfig &config, OrderByNullType null_order) {
+	return (null_order == OrderByNullType::ORDER_DEFAULT) ? config.default_null_order : null_order;
+}
+
 static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) {
 	if (!expr) {
 		return nullptr;
@@ -183,29 +191,41 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		result->partitions.push_back(GetExpression(child));
 	}
 
-	// Convert RANGE boundary expressions to ORDER +/- expressions .
+	// Convert RANGE boundary expressions to ORDER +/- expressions.
+	// Note that PRECEEDING and FOLLOWING refer to the sequential order in the frame,
+	// not the natural ordering of the type. This means that the offset arithmetic must be reversed
+	// for ORDER BY DESC.
+	auto &config = DBConfig::GetConfig(context);
+	auto range_sense = OrderType::INVALID;
 	auto start_type = LogicalType::BIGINT;
-	auto has_range_expr = false;
 	if (window.start == WindowBoundary::EXPR_PRECEDING_RANGE) {
-		start_type = BindRangeExpression(context, "-", window.start_expr, window.orders[0].expression);
-		has_range_expr = true;
+		D_ASSERT(window.orders.size() == 1);
+		range_sense = ResolveOrderType(config, window.orders[0].type);
+		const auto name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
+		start_type = BindRangeExpression(context, name, window.start_expr, window.orders[0].expression);
 	} else if (window.start == WindowBoundary::EXPR_FOLLOWING_RANGE) {
-		start_type = BindRangeExpression(context, "+", window.start_expr, window.orders[0].expression);
-		has_range_expr = true;
+		D_ASSERT(window.orders.size() == 1);
+		range_sense = ResolveOrderType(config, window.orders[0].type);
+		const auto name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
+		start_type = BindRangeExpression(context, name, window.start_expr, window.orders[0].expression);
 	}
 
 	auto end_type = LogicalType::BIGINT;
 	if (window.end == WindowBoundary::EXPR_PRECEDING_RANGE) {
-		end_type = BindRangeExpression(context, "-", window.end_expr, window.orders[0].expression);
-		has_range_expr = true;
+		D_ASSERT(window.orders.size() == 1);
+		range_sense = ResolveOrderType(config, window.orders[0].type);
+		const auto name = (range_sense == OrderType::ASCENDING) ? "-" : "+";
+		end_type = BindRangeExpression(context, name, window.end_expr, window.orders[0].expression);
 	} else if (window.end == WindowBoundary::EXPR_FOLLOWING_RANGE) {
-		end_type = BindRangeExpression(context, "+", window.end_expr, window.orders[0].expression);
-		has_range_expr = true;
+		D_ASSERT(window.orders.size() == 1);
+		range_sense = ResolveOrderType(config, window.orders[0].type);
+		const auto name = (range_sense == OrderType::ASCENDING) ? "+" : "-";
+		end_type = BindRangeExpression(context, name, window.end_expr, window.orders[0].expression);
 	}
 
 	// Cast ORDER and boundary expressions to the same type
 	auto order_type = LogicalType::INVALID;
-	if (has_range_expr) {
+	if (range_sense != OrderType::INVALID) {
 		D_ASSERT(window.orders.size() == 1);
 
 		auto &order_expr = window.orders[0].expression;
@@ -225,11 +245,9 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		start_type = end_type = order_type;
 	}
 
-	auto &config = DBConfig::GetConfig(context);
 	for (auto &order : window.orders) {
-		auto type = order.type == OrderType::ORDER_DEFAULT ? config.default_order_type : order.type;
-		auto null_order =
-		    order.null_order == OrderByNullType::ORDER_DEFAULT ? config.default_null_order : order.null_order;
+		auto type = ResolveOrderType(config, order.type);
+		auto null_order = ResolveNullOrder(config, order.null_order);
 		auto expression = GetExpression(order.expression);
 		result->orders.emplace_back(type, null_order, move(expression));
 	}
