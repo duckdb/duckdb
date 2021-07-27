@@ -1430,7 +1430,9 @@ struct HugeIntegerCastOperation {
 
 	template <class T, bool NEGATIVE>
 	static bool HandleExponent(T &result, int64_t exponent) {
-		result.Flush();
+		if (!result.Flush()) {
+			return false;
+		}
 		if (exponent < -38 || exponent > 38) {
 			// out of range for exact exponent: use double and convert
 			double dbl_res = Hugeint::Cast<double>(result.hugeint) * std::pow(10.0L, exponent);

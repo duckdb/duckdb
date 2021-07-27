@@ -46,9 +46,9 @@ public:
 	template <class T>
 	static hugeint_t Convert(T value) {
 		hugeint_t result;
-		if (!TryConvert(value, result)) {
+		if (!TryConvert(value, result)) { // LCOV_EXCL_START
 			throw ValueOutOfRangeException(double(value), GetTypeId<T>(), GetTypeId<hugeint_t>());
-		}
+		} // LCOV_EXCL_STOP
 		return result;
 	}
 
