@@ -226,13 +226,14 @@ static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::DATE:
-		return VectorTryCastErrorLoop<string_t, date_t, duckdb::TryCastErrorMessage>(source, result, count, strict, error_message);
+		return VectorTryCastErrorLoop<string_t, date_t, duckdb::TryCastErrorMessage>(source, result, count, strict,
+		                                                                             error_message);
 	case LogicalTypeId::TIME:
 		return VectorTryCastErrorLoop<string_t, dtime_t, duckdb::TryCastErrorMessage>(source, result, count, strict,
-		                                                                   error_message);
+		                                                                              error_message);
 	case LogicalTypeId::TIMESTAMP:
 		return VectorTryCastErrorLoop<string_t, timestamp_t, duckdb::TryCastErrorMessage>(source, result, count, strict,
-		                                                                       error_message);
+		                                                                                  error_message);
 	case LogicalTypeId::TIMESTAMP_NS:
 		return VectorTryCastStrictLoop<string_t, timestamp_t, duckdb::TryCastToTimestampNS>(source, result, count,
 		                                                                                    strict, error_message);

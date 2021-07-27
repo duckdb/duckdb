@@ -66,8 +66,8 @@ bool Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &res
 
 string Timestamp::ConversionError(string str) {
 	return StringUtil::Format("timestamp field value out of range: \"%s\", "
-		                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
-		                          str);
+	                          "expected format is (YYYY-MM-DD HH:MM:SS[.MS])",
+	                          str);
 }
 
 string Timestamp::ConversionError(string_t str) {

@@ -116,6 +116,7 @@ public:
 
 	static string ConversionError(string str);
 	static string ConversionError(string_t str);
+
 private:
 	static void ExtractYearOffset(int32_t &n, int32_t &year, int32_t &year_offset);
 };

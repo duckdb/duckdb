@@ -126,8 +126,8 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 
 string Time::ConversionError(string str) {
 	return StringUtil::Format("time field value out of range: \"%s\", "
-		                          "expected format is ([YYY-MM-DD ]HH:MM:SS[.MS])",
-		                          str);
+	                          "expected format is ([YYY-MM-DD ]HH:MM:SS[.MS])",
+	                          str);
 }
 
 string Time::ConversionError(string_t str) {

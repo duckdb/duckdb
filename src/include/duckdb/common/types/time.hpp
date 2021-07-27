@@ -32,6 +32,7 @@ public:
 
 	static string ConversionError(string str);
 	static string ConversionError(string_t str);
+
 private:
 	static bool TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict);
 };

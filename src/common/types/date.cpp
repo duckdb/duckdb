@@ -292,8 +292,8 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 
 string Date::ConversionError(string str) {
 	return StringUtil::Format("date field value out of range: \"%s\", "
-		                          "expected format is (YYYY-MM-DD)",
-		                          str);
+	                          "expected format is (YYYY-MM-DD)",
+	                          str);
 }
 
 string Date::ConversionError(string_t str) {
