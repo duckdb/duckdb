@@ -282,8 +282,9 @@ jobs:
         python scripts/amalgamation.py --extended
         python scripts/parquet_amalgamation.py
         cd src/amalgamation
-        clang++ -std=c++11 -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
-
+        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
 
   linux-release-64:
     name: Linux (64 Bit)
@@ -301,6 +302,8 @@ jobs:
       BUILD_REST: 1
       BUILD_JDBC: 1
       BUILD_HTTPFS: 1
+      TREAT_WARNINGS_AS_ERRORS: 1
+      FORCE_WARN_UNUSED: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -879,7 +882,7 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow>=4.0.0" || true)'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" && pip install --prefer-binary "requests>=2.26" && (pip install --extra-index-url https://pypi.fury.io/arrow-nightlies/ --prefer-binary --pre pyarrow || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
@@ -919,7 +922,7 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'yum install -y openssl-devel && pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=0.24"  && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow>=4.0.0" || true)'
+      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=0.24"  && pip install --prefer-binary "requests>=2.26" && (pip install --extra-index-url https://pypi.fury.io/arrow-nightlies/ --prefer-binary --pre pyarrow || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       CIBW_ENVIRONMENT: 'BUILD_HTTPFS=1'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
@@ -953,7 +956,7 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" "pyarrow>=4.0.0"'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" && (pip install --extra-index-url https://pypi.fury.io/arrow-nightlies/ --prefer-binary --pre pyarrow || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'

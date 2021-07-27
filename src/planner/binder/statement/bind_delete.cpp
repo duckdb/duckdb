@@ -78,6 +78,7 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	result.plan = move(del);
 	result.names = {"Count"};
 	result.types = {LogicalType::BIGINT};
+	this->allow_stream_result = false;
 	return result;
 }
 

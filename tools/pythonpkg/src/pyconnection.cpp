@@ -167,10 +167,6 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::ob
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	auto py_object_type = string(py::str(table.get_type().attr("__name__")));
-	if (table.is_none() || (py_object_type != "Table" && py_object_type != "FileSystemDataset")) {
-		throw std::runtime_error("Only arrow tables/datasets are supported");
-	}
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
@@ -270,13 +266,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 		throw std::runtime_error("connection closed");
 	}
 	py::gil_scoped_acquire acquire;
-
-	// the following is a careful dance around having to depend on pyarrow
-	auto py_object_type = string(py::str(table.get_type().attr("__name__")));
-	if (table.is_none() || (py_object_type != "Table" && py_object_type != "FileSystemDataset")) {
-		throw std::runtime_error("Only arrow tables/datasets are supported");
-	}
-
 	string name = "arrow_table_" + GenerateRandomName();
 
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());

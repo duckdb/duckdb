@@ -450,7 +450,9 @@ TEST_CASE("Test errors in C API", "[capi]") {
 
 	REQUIRE(duckdb_prepare(tester.connection, "SELECT * from INVALID_TABLE", &stmt) == DuckDBError);
 	REQUIRE(stmt != nullptr);
-	REQUIRE(duckdb_prepare_error(stmt) != nullptr);
+	auto err_msg = duckdb_prepare_error(stmt);
+	REQUIRE(err_msg != nullptr);
+	duckdb_free((void *)err_msg);
 	duckdb_destroy_prepare(&stmt);
 
 	REQUIRE(duckdb_bind_boolean(NULL, 0, true) == DuckDBError);
@@ -460,7 +462,9 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	// fail to query arrow
 	duckdb_arrow out_arrow;
 	REQUIRE(duckdb_query_arrow(tester.connection, "SELECT * from INVALID_TABLE", &out_arrow) == DuckDBError);
-	REQUIRE(duckdb_query_arrow_error(out_arrow) != nullptr);
+	err_msg = duckdb_query_arrow_error(out_arrow);
+	REQUIRE(err_msg != nullptr);
+	duckdb_free((void *)err_msg);
 	duckdb_destroy_arrow(&out_arrow);
 }
 
