@@ -448,6 +448,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_INTERVAL_YEAR: {
 			interval_t interval;
 			if (!OdbcInterval::GetInterval(val, interval, stmt)) {
+				LogInvalidCast(val.type(), LogicalType::INTERVAL, stmt);
 				return SQL_ERROR;
 			}
 
