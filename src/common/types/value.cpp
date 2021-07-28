@@ -77,12 +77,10 @@ Value Value::MinimumValue(const LogicalType &type) {
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::SQLNULL:
 		return Value::INTEGER(NumericLimits<int32_t>::Minimum());
-	case LogicalTypeId::DATE:
-		return Value::DATE(date_t(NumericLimits<int32_t>::Minimum()));
-	case LogicalTypeId::TIME:
-		return Value::TIME(dtime_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
+	case LogicalTypeId::HUGEINT:
+		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Minimum());
 	case LogicalTypeId::USMALLINT:
@@ -91,6 +89,10 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::UINTEGER(NumericLimits<uint32_t>::Minimum());
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Minimum());
+	case LogicalTypeId::DATE:
+		return Value::DATE(date_t(NumericLimits<int32_t>::Minimum()));
+	case LogicalTypeId::TIME:
+		return Value::TIME(dtime_t(0));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIMESTAMP_SEC:
@@ -99,8 +101,6 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::TimestampMs(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TimestampNs(timestamp_t(NumericLimits<int64_t>::Minimum()));
-	case LogicalTypeId::HUGEINT:
-		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Minimum());
 	case LogicalTypeId::DOUBLE:
@@ -142,12 +142,10 @@ Value Value::MaximumValue(const LogicalType &type) {
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::SQLNULL:
 		return Value::INTEGER(NumericLimits<int32_t>::Maximum());
-	case LogicalTypeId::DATE:
-		return Value::DATE(date_t(NumericLimits<int32_t>::Maximum()));
-	case LogicalTypeId::TIME:
-		return Value::TIME(dtime_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
+	case LogicalTypeId::HUGEINT:
+		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Maximum());
 	case LogicalTypeId::USMALLINT:
@@ -156,6 +154,10 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::UINTEGER(NumericLimits<uint32_t>::Maximum());
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Maximum());
+	case LogicalTypeId::DATE:
+		return Value::DATE(date_t(NumericLimits<int32_t>::Maximum()));
+	case LogicalTypeId::TIME:
+		return Value::TIME(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC));
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -164,8 +166,6 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::TimestampNs(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TimestampSec(timestamp_t(NumericLimits<int64_t>::Maximum()));
-	case LogicalTypeId::HUGEINT:
-		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Maximum());
 	case LogicalTypeId::DOUBLE:
@@ -613,11 +613,11 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::HUGEINT:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
 	case LogicalTypeId::DATE:
-		return Cast::Operation<int32_t, T>(value_.integer);
+		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
-		return Cast::Operation<int64_t, T>(value_.bigint);
+		return Cast::Operation<dtime_t, T>(value_.time);
 	case LogicalTypeId::TIMESTAMP:
-		return Cast::Operation<int64_t, T>(value_.bigint);
+		return Cast::Operation<timestamp_t, T>(value_.timestamp);
 	case LogicalTypeId::UTINYINT:
 		return Cast::Operation<uint8_t, T>(value_.utinyint);
 	case LogicalTypeId::USMALLINT:
@@ -1052,29 +1052,42 @@ bool Value::operator>=(const int64_t &rhs) const {
 	return *this >= Value::Numeric(type_, rhs);
 }
 
-Value Value::CastAs(const LogicalType &target_type, bool strict) const {
+bool Value::TryCastAs(const LogicalType &target_type, Value &new_value, string *error_message, bool strict) const {
 	if (type_ == target_type) {
-		return Copy();
+		new_value = Copy();
+		return true;
 	}
 	Vector input(*this);
 	Vector result(target_type);
-	VectorOperations::Cast(input, result, 1, strict);
-	return result.GetValue(0);
+	if (!VectorOperations::TryCast(input, result, 1, error_message, strict)) {
+		return false;
+	}
+	new_value = result.GetValue(0);
+	return true;
+}
+
+Value Value::CastAs(const LogicalType &target_type, bool strict) const {
+	Value new_value;
+	string error_message;
+	if (!TryCastAs(target_type, new_value, &error_message, strict)) {
+		throw InvalidInputException("Failed to cast value: %s", error_message);
+	}
+	return new_value;
 }
 
 bool Value::TryCastAs(const LogicalType &target_type, bool strict) {
-	try {
-		Value new_value = CastAs(target_type, strict);
-		type_ = target_type;
-		is_null = new_value.is_null;
-		value_ = new_value.value_;
-		str_value = new_value.str_value;
-		struct_value = new_value.struct_value;
-		list_value = new_value.list_value;
-		return true;
-	} catch (Exception &) {
+	Value new_value;
+	string error_message;
+	if (!TryCastAs(target_type, new_value, &error_message, strict)) {
 		return false;
 	}
+	type_ = target_type;
+	is_null = new_value.is_null;
+	value_ = new_value.value_;
+	str_value = new_value.str_value;
+	struct_value = new_value.struct_value;
+	list_value = new_value.list_value;
+	return true;
 }
 
 void Value::Serialize(Serializer &serializer) {
@@ -1193,7 +1206,7 @@ Value Value::Deserialize(Deserializer &source) {
 	return new_value;
 }
 
-void Value::Print() {
+void Value::Print() const {
 	Printer::Print(ToString());
 }
 

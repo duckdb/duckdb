@@ -1,0 +1,170 @@
+# name: test/sql/types/numeric/ubigint_try_cast.test
+# description: ubigint try cast
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# ubigint casts
+statement ok
+CREATE TABLE ubigints AS SELECT i::UBIGINT i FROM (VALUES (0), (18446744073709551615)) tbl(i)
+
+# unsigned
+statement error
+SELECT i::UTINYINT FROM ubigints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS UTINYINT) FROM ubigints ORDER BY i
+----
+0
+NULL
+
+statement error
+SELECT i::USMALLINT FROM ubigints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS USMALLINT) FROM ubigints ORDER BY i
+----
+0
+NULL
+
+statement error
+SELECT i::UINTEGER FROM ubigints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS UINTEGER) FROM ubigints ORDER BY i
+----
+0
+NULL
+
+# signed
+statement error
+SELECT i::TINYINT FROM ubigints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS TINYINT) FROM ubigints ORDER BY i
+----
+0
+NULL
+
+statement error
+SELECT i::SMALLINT FROM ubigints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS SMALLINT) FROM ubigints ORDER BY i
+----
+0
+NULL
+
+statement error
+SELECT i::INTEGER FROM ubigints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS INTEGER) FROM ubigints ORDER BY i
+----
+0
+NULL
+
+statement error
+SELECT i::BIGINT FROM ubigints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS BIGINT) FROM ubigints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT i::HUGEINT FROM ubigints ORDER BY i
+----
+0
+18446744073709551615
+
+# -> float
+query I
+SELECT i::FLOAT FROM ubigints ORDER BY i
+----
+0
+18446744073709551615
+
+query I
+SELECT i::DOUBLE FROM ubigints ORDER BY i
+----
+0
+18446744073709551615
+
+# -> bool
+query I
+SELECT i::BOOL FROM ubigints ORDER BY i
+----
+False
+True
+
+# -> varchar
+query I
+SELECT i::VARCHAR FROM ubigints ORDER BY i
+----
+0
+18446744073709551615
+
+# from string casts
+statement ok
+CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'), ('-1'), ('-0'), ('0'), ('18446744073709551615'), ('100000000000000000000')) tbl(s)
+
+statement error
+SELECT s::UBIGINT FROM strings
+
+query I
+SELECT TRY_CAST(s AS UBIGINT) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+0
+0
+18446744073709551615
+NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::UBIGINT FROM ubigints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,0)::UBIGINT FROM ubigints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,0)::UBIGINT FROM ubigints ORDER BY i
+
+query I
+SELECT i::DECIMAL(38,0)::UBIGINT FROM ubigints ORDER BY i
+----
+0
+18446744073709551615
+
+statement error
+SELECT i::DECIMAL(38,20)::UBIGINT FROM ubigints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::UBIGINT FROM ubigints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,0))::UBIGINT FROM ubigints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,0))::UBIGINT FROM ubigints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,20))::UBIGINT FROM ubigints ORDER BY i
+----
+0
+NULL

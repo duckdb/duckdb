@@ -1410,8 +1410,10 @@ public:
 		bool left_smaller[STANDARD_VECTOR_SIZE];
 		idx_t next_entry_sizes[STANDARD_VECTOR_SIZE];
 		// Merge loop
+#ifdef DEBUG
 		auto l_count = left.Remaining();
 		auto r_count = right.Remaining();
+#endif
 		while (true) {
 			auto l_remaining = left.Remaining();
 			auto r_remaining = right.Remaining();
@@ -1441,8 +1443,9 @@ public:
 			         right.entry_idx == right.payload_data->entry_idx);
 			D_ASSERT(result->radix_sorting_data.size() == result->payload_data->data_blocks.size());
 		}
+#ifdef DEBUG
 		D_ASSERT(result->Count() == l_count + r_count);
-
+#endif
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
 		if (parent.finished_tasks == parent.total_tasks) {

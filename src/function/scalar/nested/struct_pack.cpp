@@ -8,12 +8,12 @@
 namespace duckdb {
 
 static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+#ifdef DEBUG
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
 	auto &info = (VariableReturnBindData &)*func_expr.bind_info;
-
 	// this should never happen if the binder below is sane
 	D_ASSERT(args.ColumnCount() == StructType::GetChildTypes(info.stype).size());
-
+#endif
 	bool all_const = true;
 	auto &child_entries = StructVector::GetEntries(result);
 	for (size_t i = 0; i < args.ColumnCount(); i++) {

@@ -16,6 +16,7 @@
 #include "utf8proc_wrapper.hpp"
 
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/mutex.hpp"
 namespace duckdb {
 
 LogicalType GetArrowLogicalType(ArrowSchema &schema,
@@ -700,45 +701,40 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 	case LogicalTypeId::DECIMAL: {
 		auto val_mask = FlatVector::Validity(vector);
 		//! We have to convert from INT128
+		auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
+		if (nested_offset != -1) {
+			src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
+		}
 		switch (vector.GetType().InternalType()) {
 		case PhysicalType::INT16: {
-			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
-			if (nested_offset != -1) {
-				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
-			}
 			auto tgt_ptr = (int16_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
 					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 					D_ASSERT(result);
+					(void)result;
 				}
 			}
 			break;
 		}
 		case PhysicalType::INT32: {
-			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
-			if (nested_offset != -1) {
-				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
-			}
 			auto tgt_ptr = (int32_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
 					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 					D_ASSERT(result);
+					(void)result;
 				}
 			}
 			break;
 		}
 		case PhysicalType::INT64: {
-			auto src_ptr = (hugeint_t *)array.buffers[1] + scan_state.chunk_offset + array.offset;
-			if (nested_offset != -1) {
-				src_ptr = (hugeint_t *)array.buffers[1] + nested_offset + array.offset;
-			}
 			auto tgt_ptr = (int64_t *)FlatVector::GetData(vector);
 			for (idx_t row = 0; row < size; row++) {
 				if (val_mask.RowIsValid(row)) {
 					auto result = Hugeint::TryCast(src_ptr[row], tgt_ptr[row]);
 					D_ASSERT(result);
+					(void)result;
 				}
 			}
 			break;
@@ -1034,9 +1030,12 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
                                                     ParallelState *parallel_state_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	auto &state = (ArrowScanState &)*operator_state;
-
+	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
+	lock_guard<mutex> parallel_lock(parallel_state.lock);
 	state.chunk_offset = 0;
+
 	state.chunk = bind_data.stream->GetNextChunk();
+
 	//! have we run out of chunks? we are done
 	if (!state.chunk->arrow_array.release) {
 		return false;

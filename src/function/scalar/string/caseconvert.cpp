@@ -117,21 +117,34 @@ static string_t UnicodeCaseConvert(Vector &result, const char *input_data, idx_t
 }
 
 template <bool IS_UPPER>
-static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+struct CaseConvertOperator {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		return UnicodeCaseConvert<IS_UPPER>(result, input_data, input_length);
-	});
+	}
+};
+
+template <bool IS_UPPER>
+static void CaseConvertFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperator<IS_UPPER>>(args.data[0], result, args.size());
 }
 
 template <bool IS_UPPER>
-static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+struct CaseConvertOperatorASCII {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		return ASCIICaseConvert<IS_UPPER>(result, input_data, input_length);
-	});
+	}
+};
+
+template <bool IS_UPPER>
+static void CaseConvertFunctionASCII(DataChunk &args, ExpressionState &state, Vector &result) {
+	UnaryExecutor::ExecuteString<string_t, string_t, CaseConvertOperatorASCII<IS_UPPER>>(args.data[0], result,
+	                                                                                     args.size());
 }
 
 template <bool IS_UPPER>

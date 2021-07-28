@@ -125,6 +125,7 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 	insert->AddChild(move(root));
 
 	result.plan = move(insert);
+	this->allow_stream_result = false;
 	return result;
 }
 
