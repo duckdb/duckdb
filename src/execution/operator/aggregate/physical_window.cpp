@@ -337,16 +337,19 @@ static idx_t FindNextStart(const BitArray<W> &mask, idx_t l, const idx_t r) {
 template <typename W>
 static idx_t FindPrevStart(const BitArray<W> &mask, const idx_t l, idx_t r) {
 	while (l < r) {
-		//	If r-1 is aligned with the start of a block, and the block is blank, then skip backwards one block.
+		// If r is aligned with the start of a block, and the previous block is blank,
+		// then skip backwards one block.
 		const auto block = mask.GetBlock(mask.Block(r - 1));
-		auto shift = mask.Shift(r - 1);
+		auto shift = mask.Shift(r);
 		if (!block && !shift) {
+			// r is nonzero (> l) and word aligned, so this will not underflow.
 			r -= mask.BITS_PER_WORD;
 			continue;
 		}
 
 		// Loop backwards over the block
-		for (++shift; shift-- > 0; --r) {
+		// shift is probing r-1 >= l >= 0
+		for (shift = mask.Shift(r - 1) + 1; shift-- > 0; --r) {
 			if (mask.TestBit(block, shift)) {
 				return MaxValue(l, r - 1);
 			}
@@ -395,12 +398,14 @@ static OrderByNullType NormaliseNullOrder(OrderType type, OrderByNullType null_o
 		return null_order;
 	}
 
-	if (null_order == OrderByNullType::NULLS_FIRST) {
+	switch (null_order) {
+	case OrderByNullType::NULLS_FIRST:
 		return OrderByNullType::NULLS_LAST;
-	} else if (null_order == OrderByNullType::NULLS_LAST) {
+	case OrderByNullType::NULLS_LAST:
 		return OrderByNullType::NULLS_FIRST;
+	default:
+		throw InternalException("Unknown NULL order type");
 	}
-	return null_order;
 }
 
 static void SortCollectionForPartition(BoundWindowExpression *wexpr, ChunkCollection &input,
@@ -592,43 +597,30 @@ static idx_t FindRangeBound(ChunkCollection &over, const idx_t order_col, const 
 	D_ASSERT(boundary_types[0] == over_types[order_col]);
 
 	switch (over_types[order_col].InternalType()) {
-	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		return FindTypedRangeBound<int8_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::INT16:
 		return FindTypedRangeBound<int16_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::INT32:
 		return FindTypedRangeBound<int32_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::INT64:
 		return FindTypedRangeBound<int64_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::UINT8:
 		return FindTypedRangeBound<uint8_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::UINT16:
 		return FindTypedRangeBound<uint16_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::UINT32:
 		return FindTypedRangeBound<uint32_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::UINT64:
 		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::INT128:
 		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::FLOAT:
 		return FindTypedRangeBound<float, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::DOUBLE:
 		return FindTypedRangeBound<double, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	case PhysicalType::INTERVAL:
 		return FindTypedRangeBound<interval_t, OP, FROM>(over, order_col, order_begin, order_end, boundary, expr_idx);
-		break;
 	default:
 		throw InternalException("Unsupported column type for RANGE");
 	}
@@ -702,7 +694,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 			                                                wexpr->end == WindowBoundary::EXPR_FOLLOWING_RANGE)) {
 				// Exclude any trailing NULLs
 				if (CellIsNull(over_collection, order_col, bounds.valid_end - 1)) {
-					bounds.valid_end = FindPrevStart(order_mask, bounds.valid_start, bounds.valid_end - 1);
+					bounds.valid_end = FindPrevStart(order_mask, bounds.valid_start, bounds.valid_end);
 				}
 			}
 
