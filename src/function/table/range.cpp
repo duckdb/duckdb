@@ -3,9 +3,13 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/operator/add.hpp"
 
 namespace duckdb {
 
+//===--------------------------------------------------------------------===//
+// Range (integers)
+//===--------------------------------------------------------------------===//
 struct RangeFunctionBindData : public TableFunctionData {
 	int64_t start;
 	int64_t end;
@@ -90,6 +94,116 @@ unique_ptr<NodeStatistics> RangeCardinality(ClientContext &context, const Functi
 	return make_unique<NodeStatistics>(cardinality, cardinality);
 }
 
+//===--------------------------------------------------------------------===//
+// Range (timestamp)
+//===--------------------------------------------------------------------===//
+struct RangeDateTimeBindData : public TableFunctionData {
+	timestamp_t start;
+	timestamp_t end;
+	interval_t increment;
+	bool inclusive_bound;
+	bool greater_than_check;
+
+	bool Finished(timestamp_t current_value) {
+		if (greater_than_check) {
+			if (inclusive_bound) {
+				return current_value > end;
+			} else {
+				return current_value >= end;
+			}
+		} else {
+			if (inclusive_bound) {
+				return current_value < end;
+			} else {
+				return current_value <= end;
+			}
+		}
+	}
+};
+
+template <bool GENERATE_SERIES>
+static unique_ptr<FunctionData>
+RangeDateTimeBind(ClientContext &context, vector<Value> &inputs, unordered_map<string, Value> &named_parameters,
+                  vector<LogicalType> &input_table_types, vector<string> &input_table_names,
+                  vector<LogicalType> &return_types, vector<string> &names) {
+	auto result = make_unique<RangeDateTimeBindData>();
+	D_ASSERT(inputs.size() == 3);
+	result->start = inputs[0].GetValue<timestamp_t>();
+	result->end = inputs[1].GetValue<timestamp_t>();
+	result->increment = inputs[2].GetValue<interval_t>();
+
+	if (result->increment.months == 0 && result->increment.days == 0 && result->increment.micros == 0) {
+		throw BinderException("interval cannot be 0!");
+	}
+	// all elements should point in the same direction
+	if (result->increment.months > 0 || result->increment.days > 0 || result->increment.micros > 0) {
+		if (result->increment.months < 0 || result->increment.days < 0 || result->increment.micros < 0) {
+			throw BinderException("RANGE with composite interval that has mixed signs is not supported");
+		}
+		result->greater_than_check = true;
+		if (result->start > result->end) {
+			throw BinderException(
+			    "start is bigger than end, but increment is positive: cannot generate infinite series");
+		}
+	} else {
+		result->greater_than_check = false;
+		if (result->start < result->end) {
+			throw BinderException(
+			    "start is smaller than end, but increment is negative: cannot generate infinite series");
+		}
+	}
+	return_types.push_back(inputs[0].type());
+	if (GENERATE_SERIES) {
+		// generate_series has inclusive bounds on the RHS
+		result->inclusive_bound = true;
+		names.emplace_back("generate_series");
+	} else {
+		result->inclusive_bound = false;
+		names.emplace_back("range");
+	}
+	return move(result);
+}
+
+struct RangeDateTimeState : public FunctionOperatorData {
+	RangeDateTimeState(timestamp_t start_p) : current_state(start_p) {
+	}
+
+	timestamp_t current_state;
+	bool finished = false;
+};
+
+static unique_ptr<FunctionOperatorData> RangeDateTimeInit(ClientContext &context, const FunctionData *bind_data_p,
+                                                          const vector<column_t> &column_ids,
+                                                          TableFilterCollection *filters) {
+	auto &bind_data = (RangeDateTimeBindData &)*bind_data_p;
+	return make_unique<RangeDateTimeState>(bind_data.start);
+}
+
+static void RangeDateTimeFunction(ClientContext &context, const FunctionData *bind_data_p,
+                                  FunctionOperatorData *state_p, DataChunk *input, DataChunk &output) {
+	auto &bind_data = (RangeDateTimeBindData &)*bind_data_p;
+	auto &state = (RangeDateTimeState &)*state_p;
+	if (state.finished) {
+		return;
+	}
+
+	idx_t size = 0;
+	auto data = FlatVector::GetData<timestamp_t>(output.data[0]);
+	while (true) {
+		data[size++] = state.current_state;
+		state.current_state =
+		    AddOperator::Operation<timestamp_t, interval_t, timestamp_t>(state.current_state, bind_data.increment);
+		if (bind_data.Finished(state.current_state)) {
+			state.finished = true;
+			break;
+		}
+		if (size >= STANDARD_VECTOR_SIZE) {
+			break;
+		}
+	}
+	output.SetCardinality(size);
+}
+
 void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	TableFunctionSet range("range");
 
@@ -103,6 +217,8 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	range.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT}, RangeFunction,
 	                                RangeFunctionBind<false>, RangeFunctionInit, nullptr, nullptr, nullptr,
 	                                RangeCardinality));
+	range.AddFunction(TableFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
+	                                RangeDateTimeFunction, RangeDateTimeBind<false>, RangeDateTimeInit));
 	set.AddFunction(range);
 	// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 	TableFunctionSet generate_series("generate_series");
@@ -114,6 +230,8 @@ void RangeTableFunction::RegisterFunction(BuiltinFunctions &set) {
 	generate_series.AddFunction(TableFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                          RangeFunction, RangeFunctionBind<true>, RangeFunctionInit, nullptr,
 	                                          nullptr, nullptr, RangeCardinality));
+	generate_series.AddFunction(TableFunction({LogicalType::TIMESTAMP, LogicalType::TIMESTAMP, LogicalType::INTERVAL},
+	                                          RangeDateTimeFunction, RangeDateTimeBind<true>, RangeDateTimeInit));
 	set.AddFunction(generate_series);
 }
 
