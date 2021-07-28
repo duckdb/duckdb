@@ -1,3 +1,5 @@
+cff-version: "1.1.0"
+message: "If you use this software, please cite it using these metadata."
 authors: 
   - family-names: Raasveldt
     given-names: Mark
@@ -5,8 +7,5 @@ authors:
   - family-names: "Mühleisen"
     given-names: Hannes
     orcid: "https://orcid.org/0000-0001-8552-0029"
-cff-version: "1.1.0"
-identifiers: 
 license: MIT
-message: "If you use this software, please cite it using these metadata."
 title: DuckDB
