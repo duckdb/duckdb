@@ -4,7 +4,7 @@ authors:
 - family-names: "Raasveldt"
   given-names: "Mark"
   orcid: "https://orcid.org/0000-0001-5005-6844"
-- family-names: "Mühleisen"
+- family-names: "Muehleisen"
   given-names: "Hannes"
   orcid: "https://orcid.org/0000-0001-8552-0029"
 title: "DuckDB"
