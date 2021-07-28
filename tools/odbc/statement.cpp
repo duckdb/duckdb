@@ -6,9 +6,9 @@
 SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                          SQLINTEGER string_length) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		if (!value_ptr) {
-			return SQL_ERROR;
-		}
+		// if (!value_ptr) {
+		// 	return SQL_ERROR;
+		// }
 		switch (attribute) {
 		case SQL_ATTR_PARAMSET_SIZE: {
 			/* auto size = Load<SQLLEN>((data_ptr_t) value_ptr);
@@ -40,7 +40,7 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			if (value_ptr && (SQLULEN)value_ptr != SQL_BIND_BY_COLUMN) {
 				//! it's a row-wise binding orientation (SQLFetch should support it)
 				stmt->odbc_fetcher->row_length = (SQLULEN *)value_ptr;
-				stmt->odbc_fetcher->orientation = duckdb::FetchOrientation::ROW;
+				stmt->odbc_fetcher->bind_orientation = duckdb::FetchBindingOrientation::ROW;
 			}
 			return SQL_SUCCESS;
 		}
@@ -48,6 +48,13 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			stmt->odbc_fetcher->row_status_buff = (SQLUSMALLINT *)value_ptr;
 			return SQL_SUCCESS;
 		}
+		case SQL_ATTR_CURSOR_TYPE: {
+			stmt->odbc_fetcher->cursor_type = (SQLULEN)value_ptr;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_CONCURRENCY:
+			// needs to be implemented
+			return SQL_SUCCESS;
 		default:
 			stmt->error_messages.emplace_back("Unsupported attribute type.");
 			return SQL_ERROR;
@@ -277,7 +284,7 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 		}
 		if (option == SQL_CLOSE) {
 			stmt->res.reset();
-			stmt->chunk.reset();
+			stmt->odbc_fetcher->ClearChunks();
 			// stmt->stmt.reset(); // the statment can be reuse in prepared statement
 			stmt->bound_cols.clear();
 			stmt->params.clear();

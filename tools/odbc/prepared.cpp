@@ -118,6 +118,8 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 			}
 			break;
 		}
+		case SQL_C_BINARY: {
+		}
 		// TODO more types
 		default:
 			// TODO error message?
