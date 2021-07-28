@@ -123,6 +123,7 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 	auto &types = layout.GetTypes();
 
 	// Compute the entry size of the variable size columns
+	vector<unique_ptr<BufferHandle>> handles;
 	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
 	if (!layout.AllConstant()) {
 		idx_t entry_sizes[STANDARD_VECTOR_SIZE];
@@ -148,8 +149,8 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 			}
 		}
 
-		// Build out the buffer space
-		string_heap.Build(count, data_locations, entry_sizes);
+		// Build out the buffer space, keep buffers pinned
+		handles = string_heap.Build(count, data_locations, entry_sizes);
 
 		// Serialize information that is needed for swizzling if the computation goes out-of-core
 		const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
@@ -219,6 +220,8 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 			throw InternalException("Unsupported type for RowOperations::Scatter");
 		}
 	}
+	// Unpin string heap buffers
+	handles.clear();
 }
 
 } // namespace duckdb

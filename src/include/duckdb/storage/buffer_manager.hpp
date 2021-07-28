@@ -39,14 +39,14 @@ public:
 	//! Register an in-memory buffer of arbitrary size, as long as it is >= BLOCK_SIZE. can_destroy signifies whether or
 	//! not the buffer can be destroyed when unpinned, or whether or not it needs to be written to a temporary file so
 	//! it can be reloaded. The resulting buffer will already be allocated, but needs to be pinned in order to be used.
-	shared_ptr<BlockHandle> RegisterMemory(idx_t alloc_size, bool can_destroy);
+	shared_ptr<BlockHandle> RegisterMemory(idx_t block_size, bool can_destroy);
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
-	unique_ptr<BufferHandle> Allocate(idx_t alloc_size);
+	unique_ptr<BufferHandle> Allocate(idx_t block_size);
 
 	//! Reallocate an in-memory buffer that is pinned.
-	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t alloc_size);
+	void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size);
 
 	unique_ptr<BufferHandle> Pin(shared_ptr<BlockHandle> &handle);
 	void Unpin(shared_ptr<BlockHandle> &handle);

@@ -15,12 +15,12 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p)
 }
 
 BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
-                         bool can_destroy_p, idx_t alloc_size)
+                         bool can_destroy_p, idx_t block_size)
     : db(db), readers(0), block_id(block_id_p), eviction_timestamp(0), can_destroy(can_destroy_p) {
-	D_ASSERT(alloc_size >= Storage::BLOCK_SIZE);
+	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	buffer = move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
-	memory_usage = alloc_size + Storage::BLOCK_HEADER_SIZE;
+	memory_usage = block_size + Storage::BLOCK_HEADER_SIZE;
 }
 
 BlockHandle::~BlockHandle() {
@@ -41,8 +41,8 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 		return make_unique<BufferHandle>(handle, handle->buffer.get());
 	}
 	handle->state = BlockState::BLOCK_LOADED;
-
-	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
+	
+    auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
 	auto &block_manager = BlockManager::GetBlockManager(handle->db);
 	if (handle->block_id < MAXIMUM_BLOCK) {
 		auto block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
@@ -64,7 +64,7 @@ void BlockHandle::Unload() {
 		return;
 	}
 	D_ASSERT(CanUnload());
-	D_ASSERT(memory_usage >= Storage::BLOCK_SIZE);
+	D_ASSERT(memory_usage >= Storage::BLOCK_ALLOC_SIZE);
 	state = BlockState::BLOCK_UNLOADED;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
@@ -173,43 +173,49 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 	return result;
 }
 
-shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t alloc_size, bool can_destroy) {
+shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can_destroy) {
+	auto alloc_size = block_size + Storage::BLOCK_HEADER_SIZE;
 	// first evict blocks until we have enough memory to store this buffer
-	if (!EvictBlocks(alloc_size + Storage::BLOCK_HEADER_SIZE, maximum_memory)) {
+	if (!EvictBlocks(alloc_size, maximum_memory)) {
 		throw OutOfRangeException("Not enough memory to complete operation: could not allocate block of %lld bytes",
 		                          alloc_size);
 	}
 
 	// allocate the buffer
 	auto temp_id = ++temporary_id;
-	auto buffer = make_unique<ManagedBuffer>(db, alloc_size, can_destroy, temp_id);
+	auto buffer = make_unique<ManagedBuffer>(db, block_size, can_destroy, temp_id);
 
 	// create a new block pointer for this block
-	return make_shared<BlockHandle>(db, temp_id, move(buffer), can_destroy, alloc_size);
+	return make_shared<BlockHandle>(db, temp_id, move(buffer), can_destroy, block_size);
 }
 
-unique_ptr<BufferHandle> BufferManager::Allocate(idx_t alloc_size) {
-	auto block = RegisterMemory(alloc_size, true);
+unique_ptr<BufferHandle> BufferManager::Allocate(idx_t block_size) {
+	auto block = RegisterMemory(block_size, true);
 	return Pin(block);
 }
 
-void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t alloc_size) {
-	D_ASSERT(alloc_size >= Storage::BLOCK_SIZE);
+void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
+	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	lock_guard<mutex> lock(handle->lock);
-	auto total_size = alloc_size + Storage::BLOCK_HEADER_SIZE;
-	int64_t required_memory = total_size - handle->memory_usage;
-	if (required_memory > 0) {
-		// evict blocks until we have space to increase the size of this block
+	auto alloc_size = block_size + Storage::BLOCK_HEADER_SIZE;
+	int64_t required_memory = alloc_size - handle->memory_usage;
+	if (required_memory == 0) {
+		return;
+	} else if (required_memory > 0) {
+		// evict blocks until we have space to resize this block
 		if (!EvictBlocks(required_memory, maximum_memory)) {
-			throw OutOfRangeException("Not enough memory to complete operation: failed to increase block size");
+			throw OutOfRangeException(
+			    "Not enough memory to complete operation: failed to resize block from %lld to %lld",
+			    handle->memory_usage, alloc_size);
 		}
-	}
-	// re-allocate the buffer size and update its memory usage
-	handle->buffer->Resize(alloc_size);
-	if (required_memory < 0) {
+		handle->buffer->Resize(block_size);
+	} else {
+		// no need to evict blocks, just resize and adjust current memory
+		handle->buffer->Resize(block_size);
 		current_memory += required_memory;
 	}
-	handle->memory_usage = total_size;
+	// re-allocate the buffer size and update its memory usage
+	handle->memory_usage = alloc_size;
 }
 
 unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
@@ -227,7 +233,8 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	}
 	// evict blocks until we have space for the current block
 	if (!EvictBlocks(required_memory, maximum_memory)) {
-		throw OutOfRangeException("Not enough memory to complete operation: failed to pin block");
+		throw OutOfRangeException("Not enough memory to complete operation: failed to pin block of size %lld",
+		                          required_memory);
 	}
 	// lock the handle again and repeat the check (in case anybody loaded in the mean time)
 	lock_guard<mutex> lock(handle->lock);
@@ -353,15 +360,15 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	D_ASSERT(!temp_directory.empty());
 	D_ASSERT(temp_directory_handle.get());
-	idx_t alloc_size;
+	idx_t block_size;
 	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);
 	auto &fs = FileSystem::GetFileSystem(db);
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ);
-	handle->Read(&alloc_size, sizeof(idx_t), 0);
+	handle->Read(&block_size, sizeof(idx_t), 0);
 
 	// now allocate a buffer of this size and read the data into that buffer
-	auto buffer = make_unique<ManagedBuffer>(db, alloc_size, false, id);
+	auto buffer = make_unique<ManagedBuffer>(db, block_size, false, id);
 	buffer->Read(*handle, sizeof(idx_t));
 	return move(buffer);
 }

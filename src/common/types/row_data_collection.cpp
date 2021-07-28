@@ -43,7 +43,6 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 	}
 	append_entries.emplace_back(dataptr, append_count);
 	block.count += append_count;
-	D_ASSERT(block.count > 0);
 	return append_count;
 }
 
@@ -79,6 +78,7 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 			idx_t *offset_entry_sizes = entry_sizes ? entry_sizes + added_count - remaining : nullptr;
 
 			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining, offset_entry_sizes);
+			D_ASSERT(new_block.count > 0);
 			remaining -= append_count;
 
 			blocks.push_back(move(new_block));

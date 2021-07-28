@@ -51,7 +51,7 @@ Shipping and Receiving Clerk	Kuppa
 Shipping and Receiving Supervisor	Ackerman
 
 query TT
-SELECT * FROM test0 ORDER BY job, name DESC
+SELECT * FROM test0 ORDER BY job DESC, name DESC
 ----
 Shipping and Receiving Supervisor	Ackerman
 Shipping and Receiving Clerk	Kuppa
