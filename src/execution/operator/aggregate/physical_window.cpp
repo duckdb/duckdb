@@ -589,12 +589,10 @@ static idx_t FindTypedRangeBound(ChunkCollection &over, const idx_t order_col, c
 template <typename OP, bool FROM>
 static idx_t FindRangeBound(ChunkCollection &over, const idx_t order_col, const idx_t order_begin,
                             const idx_t order_end, ChunkCollection &boundary, const idx_t expr_idx) {
-	const auto &boundary_types = boundary.Types();
-	D_ASSERT(boundary_types.size() == 1);
-
 	const auto &over_types = over.Types();
 	D_ASSERT(over_types.size() > order_col);
-	D_ASSERT(boundary_types[0] == over_types[order_col]);
+	D_ASSERT(boundary.Types().size() == 1);
+	D_ASSERT(boundary.Types()[0] == over_types[order_col]);
 
 	switch (over_types[order_col].InternalType()) {
 	case PhysicalType::INT8:
