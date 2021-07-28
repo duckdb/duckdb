@@ -452,8 +452,8 @@ static void RegularLikeFunction(DataChunk &input, ExpressionState &state, Vector
 	if (func_expr.bind_info) {
 		auto &matcher = (LikeMatcher &)*func_expr.bind_info;
 		// use fast like matcher
-		UnaryExecutor::Execute<string_t, bool>(input.data[0], result, input.size(), [&](string_t str) {
-			return INVERT ? !matcher.Match(str) : matcher.Match(str);
+		UnaryExecutor::Execute<string_t, bool>(input.data[0], result, input.size(), [&](string_t input) {
+			return INVERT ? !matcher.Match(input) : matcher.Match(input);
 		});
 	} else {
 		// use generic like matcher

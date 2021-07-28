@@ -88,12 +88,23 @@ SELECT UNNEST(a) ua FROM (VALUES (LIST_VALUE(1, 2, 3, 4)), (LIST_VALUE()), (LIST
 NULL
 42
 
-# TODO this should work but does not. its also kind of obscure
-# SELECT UNNEST(a) ua FROM (VALUES (LIST_VALUE()), (LIST_VALUE(1, 2, 3, 4)), LIST_VALUE(NULL)), (LIST_VALUE(42))) lv(a));
-# 1, 2, 3, 4, Value(), 42
-# list child type mismatch
-statement error
+query I
+SELECT UNNEST(a) ua FROM (VALUES (LIST_VALUE()), (LIST_VALUE(1, 2, 3, 4)), (LIST_VALUE(NULL)), (LIST_VALUE(42))) lv(a);
+----
+1
+2
+3
+4
+NULL
+42
+
+# list types get cast to highest type in values list
+query I
 SELECT * FROM (VALUES (LIST_VALUE(1, 2)), (LIST_VALUE()), (LIST_VALUE('a'))) lv(a)
+----
+[1, 2]
+[]
+[a]
 
 # can't cast lists to stuff
 statement error

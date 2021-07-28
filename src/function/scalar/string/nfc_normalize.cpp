@@ -4,10 +4,9 @@
 
 namespace duckdb {
 
-static void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.ColumnCount() == 1);
-
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+struct NFCNormalizeOperator {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		auto input_data = input.GetDataUnsafe();
 		auto input_length = input.GetSize();
 		if (StripAccentsFun::IsAscii(input_data, input_length)) {
@@ -18,7 +17,13 @@ static void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector
 		auto result_str = StringVector::AddString(result, normalized_str);
 		free(normalized_str);
 		return result_str;
-	});
+	}
+};
+
+static void NFCNormalizeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 1);
+
+	UnaryExecutor::ExecuteString<string_t, string_t, NFCNormalizeOperator>(args.data[0], result, args.size());
 	StringVector::AddHeapReference(result, args.data[0]);
 }
 

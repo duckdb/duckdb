@@ -1,0 +1,194 @@
+# name: test/sql/types/numeric/hugeint_try_cast.test
+# description: Hugeint try cast
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# integer casts
+statement ok
+CREATE TABLE hugeints AS SELECT i::HUGEINT i FROM (VALUES (-170141183460469231731687303715884105727), (0), (170141183460469231731687303715884105727)) tbl(i)
+
+# -> unsigned
+statement error
+SELECT i::UTINYINT FROM hugeints
+
+statement error
+SELECT i::USMALLINT FROM hugeints
+
+statement error
+SELECT i::UINTEGER FROM hugeints
+
+statement error
+SELECT i::UBIGINT FROM hugeints
+
+statement error
+SELECT i::UTINYINT FROM hugeints WHERE i>=0 ORDER BY i
+
+statement error
+SELECT i::USMALLINT FROM hugeints WHERE i>=0 ORDER BY i
+
+statement error
+SELECT i::UINTEGER FROM hugeints WHERE i>=0 ORDER BY i
+
+statement error
+SELECT i::UBIGINT FROM hugeints WHERE i>=0 ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS UTINYINT) FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS USMALLINT) FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS UINTEGER) FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS UBIGINT) FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+# -> signed
+statement error
+SELECT i::TINYINT FROM hugeints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS TINYINT) FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+statement error
+SELECT i::SMALLINT FROM hugeints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS SMALLINT) FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+statement error
+SELECT i::INTEGER FROM hugeints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS INTEGER) FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+statement error
+SELECT i::BIGINT FROM hugeints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS BIGINT) FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+# -> float
+query I
+SELECT i::FLOAT FROM hugeints ORDER BY i
+----
+-170141183460469231731687303715884105727
+0
+170141183460469231731687303715884105727
+
+query I
+SELECT i::DOUBLE FROM hugeints ORDER BY i
+----
+-170141183460469231731687303715884105727
+0
+170141183460469231731687303715884105727
+
+# -> bool
+query I
+SELECT i::BOOL FROM hugeints ORDER BY i
+----
+True
+False
+True
+
+# -> varchar
+query I
+SELECT i::VARCHAR FROM hugeints ORDER BY i
+----
+-170141183460469231731687303715884105727
+0
+170141183460469231731687303715884105727
+
+# from string casts
+statement ok
+CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000000000000000000000000000000000000000'), ('-170141183460469231731687303715884105727'), ('0'), ('170141183460469231731687303715884105727'), ('1000000000000000000000000000000000000000')) tbl(s)
+
+statement error
+SELECT s::HUGEINT FROM strings
+
+query I
+SELECT TRY_CAST(s AS HUGEINT) FROM strings
+----
+NULL
+NULL
+NULL
+-170141183460469231731687303715884105727
+0
+170141183460469231731687303715884105727
+NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::HUGEINT FROM hugeints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,0)::HUGEINT FROM hugeints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,0)::HUGEINT FROM hugeints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,0)::HUGEINT FROM hugeints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::HUGEINT FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,0))::HUGEINT FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,0))::HUGEINT FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,0))::HUGEINT FROM hugeints ORDER BY i
+----
+NULL
+0
+NULL

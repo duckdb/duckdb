@@ -1,0 +1,94 @@
+# name: test/sql/types/timestamp/timestamp_limits.test
+# description: Test timestamp limits
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select timestamp '1970-01-01';
+----
+1970-01-01 00:00:00
+
+# timestamp micros
+# min date for timestamp micros is 290309-12-22 (BC) 00:00:00
+query I
+select '290309-12-22 (BC) 00:00:00'::timestamp
+----
+290309-12-22 (BC) 00:00:00
+
+statement error
+select '290309-12-21 (BC) 12:59:59.999999'::timestamp
+
+query I
+select '290309-12-22 (BC) 00:00:00'::timestamp + interval (1) day
+----
+290309-12-23 (BC) 00:00:00
+
+statement error
+select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) microsecond
+
+statement error
+select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) second
+
+statement error
+select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) day
+
+statement error
+select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) month
+
+statement error
+select '290309-12-22 (BC) 00:00:00'::timestamp - interval (1) year
+
+# max date for timestamp micros is 294247-01-10 04:00:54.775807
+query I
+select timestamp '294247-01-10 04:00:54.775807'
+----
+294247-01-10 04:00:54.775807
+
+statement error
+select timestamp '294247-01-10 04:00:54.775808'
+
+statement error
+select timestamp '294247-01-10 04:00:54.775807' + interval (1) microsecond
+
+statement error
+select timestamp '294247-01-10 04:00:54.775807' + interval (1) second
+
+statement error
+select timestamp '294247-01-10 04:00:54.775807' + interval (1) hour
+
+statement error
+select timestamp '294247-01-10 04:00:54.775807' + interval (1) day
+
+statement error
+select timestamp '294247-01-10 04:00:54.775807' + interval (1) month
+
+statement error
+select timestamp '294247-01-10 04:00:54.775807' + interval (1) year
+
+# functions on limits
+query II
+select epoch(timestamp '294247-01-10 04:00:54.775807'), epoch(timestamp '290309-12-22 (BC) 00:00:00')
+----
+9223372036854	-9223372022400
+
+query II
+select year(timestamp '294247-01-10 04:00:54.775807'), year(timestamp '290309-12-22 (BC) 00:00:00')
+----
+294247	-290308
+
+query II
+select decade(timestamp '294247-01-10 04:00:54.775807'), decade(timestamp '290309-12-22 (BC) 00:00:00')
+----
+29424	-29030
+
+query II
+select monthname(timestamp '294247-01-10 04:00:54.775807'), monthname(timestamp '290309-12-22 (BC) 00:00:00')
+----
+January	December
+
+query I
+select age(timestamp '294247-01-10 04:00:54.775807', '290309-12-22 (BC) 00:00:00'::timestamp)
+----
+584554 years 19 days 04:00:54.775807

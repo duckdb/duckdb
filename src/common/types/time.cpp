@@ -18,7 +18,7 @@ static_assert(sizeof(dtime_t) == sizeof(int64_t), "dtime_t was padded");
 // microseconds and Z are optional
 // ISO 8601
 
-bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict) {
+bool Time::TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict) {
 	int32_t hour = -1, min = -1, sec = -1, micros = -1;
 	pos = 0;
 
@@ -77,7 +77,7 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	if (!Date::ParseDoubleDigit(buf, len, pos, sec)) {
 		return false;
 	}
-	if (sec < 0 || sec > 60) {
+	if (sec < 0 || sec >= 60) {
 		return false;
 	}
 
@@ -109,17 +109,36 @@ bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &resul
 	return true;
 }
 
+bool Time::TryConvertTime(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict) {
+	if (!Time::TryConvertInternal(buf, len, pos, result, strict)) {
+		if (!strict) {
+			// last chance, check if we can parse as timestamp
+			timestamp_t timestamp;
+			if (Timestamp::TryConvertTimestamp(buf, len, timestamp)) {
+				result = Timestamp::GetTime(timestamp);
+				return true;
+			}
+		}
+		return false;
+	}
+	return true;
+}
+
+string Time::ConversionError(const string &str) {
+	return StringUtil::Format("time field value out of range: \"%s\", "
+	                          "expected format is ([YYY-MM-DD ]HH:MM:SS[.MS])",
+	                          str);
+}
+
+string Time::ConversionError(string_t str) {
+	return Time::ConversionError(str.GetString());
+}
+
 dtime_t Time::FromCString(const char *buf, idx_t len, bool strict) {
 	dtime_t result;
 	idx_t pos;
-	if (!TryConvertTime(buf, len, pos, result, strict)) {
-		// last chance, check if we can parse as timestamp
-		if (!strict) {
-			return Timestamp::GetTime(Timestamp::FromCString(buf, len));
-		}
-		throw ConversionException("time field value out of range: \"%s\", "
-		                          "expected format is ([YYY-MM-DD ]HH:MM:SS[.MS])",
-		                          string(buf, len));
+	if (!Time::TryConvertTime(buf, len, pos, result, strict)) {
+		throw ConversionException(ConversionError(string(buf, len)));
 	}
 	return result;
 }
