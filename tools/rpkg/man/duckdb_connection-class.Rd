@@ -23,7 +23,7 @@
 
 \S4method{dbIsValid}{duckdb_connection}(dbObj, ...)
 
-\S4method{dbSendQuery}{duckdb_connection,character}(conn, statement, params = NULL, ...)
+\S4method{dbSendQuery}{duckdb_connection,character}(conn, statement, params = NULL, ..., arrow = FALSE)
 
 \S4method{dbDataType}{duckdb_connection}(dbObj, obj, ...)
 
@@ -70,6 +70,8 @@ or a \linkS4class{DBIResult}}
 \item{statement}{a character string containing SQL.}
 
 \item{params}{A list of bindings, named or unnamed.}
+
+\item{arrow}{Whether the query should be returned as an Arrow Table}
 
 \item{obj}{An R object whose SQL type we want to determine.}
 
