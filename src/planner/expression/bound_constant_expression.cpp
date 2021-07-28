@@ -19,7 +19,7 @@ bool BoundConstantExpression::Equals(const BaseExpression *other_p) const {
 		return false;
 	}
 	auto other = (BoundConstantExpression *)other_p;
-	return value == other->value;
+	return !ValueOperations::DistinctFrom(value, other->value);
 }
 
 hash_t BoundConstantExpression::Hash() const {

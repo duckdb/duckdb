@@ -24,8 +24,10 @@ unique_ptr<BaseStatistics> StatisticsPropagator::StatisticsFromValue(const Value
 	case PhysicalType::VARCHAR: {
 		auto result = make_unique<StringStatistics>(input.type());
 		result->validity_stats = make_unique<ValidityStatistics>(input.is_null, !input.is_null);
-		string_t str(input.str_value.c_str(), input.str_value.size());
-		result->Update(str);
+		if (!input.is_null) {
+			string_t str(input.str_value.c_str(), input.str_value.size());
+			result->Update(str);
+		}
 		return move(result);
 	}
 	case PhysicalType::STRUCT: {

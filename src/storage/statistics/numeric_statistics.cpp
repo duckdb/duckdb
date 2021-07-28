@@ -91,15 +91,22 @@ NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_
 void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	BaseStatistics::Merge(other_p);
 	auto &other = (const NumericStatistics &)other_p;
-	if (other.min < min) {
+	if (other.min.is_null || min.is_null) {
+		min.is_null = true;
+	} else if (other.min < min) {
 		min = other.min;
 	}
-	if (other.max > max) {
+	if (other.max.is_null || max.is_null) {
+		max.is_null = true;
+	} else if (other.max > max) {
 		max = other.max;
 	}
 }
 
 FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
+	if (min.is_null || max.is_null) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		if (constant == min && constant == max) {
