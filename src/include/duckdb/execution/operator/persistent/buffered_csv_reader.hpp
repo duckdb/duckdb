@@ -13,8 +13,8 @@
 #include "duckdb/function/scalar/strftime.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
+#include "duckdb/common/map.hpp"
 
-#include <map>
 #include <sstream>
 #include <queue>
 
@@ -109,11 +109,7 @@ struct BufferedCSVReaderOptions {
 	}
 };
 
-enum class QuoteRule : uint8_t { QUOTES_RFC = 0, QUOTES_OTHER = 1, NO_QUOTES = 2 };
-
 enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2, PARSING_HEADER = 3 };
-
-static DataChunk DUMMY_CHUNK;
 
 //! Buffered CSV reader is a class that reads values from a stream and parses them as a CSV file
 class BufferedCSVReader {
@@ -122,15 +118,6 @@ class BufferedCSVReader {
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have the wrong delimiters
 	static constexpr idx_t MAXIMUM_CSV_LINE_SIZE = 1048576;
 	ParserMode mode;
-
-	//! Candidates for delimiter auto detection
-	vector<string> delim_candidates = {",", "|", ";", "\t"};
-	//! Candidates for quote rule auto detection
-	vector<QuoteRule> quoterule_candidates = {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
-	//! Candidates for quote sign auto detection (per quote rule)
-	vector<vector<string>> quote_candidates_map = {{"\""}, {"\"", "'"}, {""}};
-	//! Candidates for escape character auto detection (per quote rule)
-	vector<vector<string>> escape_candidates_map = {{""}, {"\\"}, {""}};
 
 public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
@@ -185,8 +172,12 @@ private:
 	void InitParseChunk(idx_t num_cols);
 	//! Initializes the TextSearchShiftArrays for complex parser
 	void PrepareComplexParser();
+	//! Try to parse a single datachunk from the file. Throws an exception if anything goes wrong.
+	void ParseCSV(ParserMode mode);
+	//! Try to parse a single datachunk from the file. Returns whether or not the parsing is successful
+	bool TryParseCSV(ParserMode mode);
 	//! Extract a single DataChunk from the CSV file and stores it in insert_chunk
-	void ParseCSV(ParserMode mode, DataChunk &insert_chunk = DUMMY_CHUNK);
+	bool TryParseCSV(ParserMode mode, DataChunk &insert_chunk, string &error_message);
 	//! Sniffs CSV dialect and determines skip rows, header row, column types and column names
 	vector<LogicalType> SniffCSV(const vector<LogicalType> &requested_types);
 	//! Change the date format for the type to the string
@@ -205,13 +196,11 @@ private:
 	void ResetBuffer();
 	//! Resets the steam
 	void ResetStream();
-	//! Prepare candidate sets for auto detection based on user input
-	void PrepareCandidateSets();
 
 	//! Parses a CSV file with a one-byte delimiter, escape and quote character
-	void ParseSimpleCSV(DataChunk &insert_chunk);
+	bool TryParseSimpleCSV(DataChunk &insert_chunk, string &error_message);
 	//! Parses more complex CSV files with multi-byte delimiters, escapes or quotes
-	void ParseComplexCSV(DataChunk &insert_chunk);
+	bool TryParseComplexCSV(DataChunk &insert_chunk, string &error_message);
 
 	//! Adds a value to the current row
 	void AddValue(char *str_val, idx_t length, idx_t &column, vector<idx_t> &escape_positions);
@@ -223,6 +212,25 @@ private:
 	bool ReadBuffer(idx_t &start);
 
 	unique_ptr<FileHandle> OpenCSV(const BufferedCSVReaderOptions &options);
+
+	//! First phase of auto detection: detect CSV dialect (i.e. delimiter, quote rules, etc)
+	void DetectDialect(const vector<LogicalType> &requested_types, BufferedCSVReaderOptions &original_options,
+	                   vector<BufferedCSVReaderOptions> &info_candidates, idx_t &best_num_cols);
+	//! Second phase of auto detection: detect candidate types for each column
+	void DetectCandidateTypes(const vector<LogicalType> &type_candidates,
+	                          const map<LogicalTypeId, vector<const char *>> &format_template_candidates,
+	                          const vector<BufferedCSVReaderOptions> &info_candidates,
+	                          BufferedCSVReaderOptions &original_options, idx_t best_num_cols,
+	                          vector<vector<LogicalType>> &best_sql_types_candidates,
+	                          std::map<LogicalTypeId, vector<string>> &best_format_candidates,
+	                          DataChunk &best_header_row);
+	//! Third phase of auto detection: detect header of CSV file
+	void DetectHeader(const vector<vector<LogicalType>> &best_sql_types_candidates, const DataChunk &best_header_row);
+	//! Fourth phase of auto detection: refine the types of each column and select which types to use for each column
+	vector<LogicalType> RefineTypeDetection(const vector<LogicalType> &type_candidates,
+	                                        const vector<LogicalType> &requested_types,
+	                                        vector<vector<LogicalType>> &best_sql_types_candidates,
+	                                        map<LogicalTypeId, vector<string>> &best_format_candidates);
 };
 
 } // namespace duckdb

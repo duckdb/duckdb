@@ -83,13 +83,18 @@ SELECT * FROM (VALUES (NULL, NULL), (3, 4)) v1;
 NULL	NULL
 3	4
 
-# this does not work: type is chosen by first value
-statement error
+# type is the max type of all input columns
+query I
 SELECT * FROM (VALUES (3), ('hello')) v1;
+----
+3
+hello
 
-# this also doesn't work: NULL defaults to integer type
-statement error
+query I
 SELECT * FROM (VALUES (NULL), ('hello')) v1;
+----
+NULL
+hello
 
 # unbalanced value list is not allowed
 statement error

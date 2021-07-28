@@ -1,0 +1,181 @@
+# name: test/sql/types/date/date_limits.test
+# description: Test date limits
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+# min date: 5877642-06-23 (BC)
+query I
+select '1969-01-01'::date
+----
+1969-01-01
+
+query I
+select '2370-01-01'::date
+----
+2370-01-01
+
+query I
+select '5877642-06-23 (BC)'::date
+----
+5877642-06-23 (BC)
+
+statement error
+select '5877642-06-22 (BC)'::date
+
+statement error
+select '5877680-06-22 (BC)'::date
+
+statement error
+select '99999999-06-22 (BC)'::date
+
+# min date for timestamp micros is -290307
+query I
+select '290308-01-01 (BC)'::date::timestamp
+----
+290308-01-01 (BC) 00:00:00
+
+statement error
+select '290309-01-01 (BC)'::date::timestamp
+
+statement error
+select '5877642-06-23 (BC)'::date::timestamp
+
+# date arithmetic
+query I
+select '5877642-06-23 (BC)'::date + 1
+----
+5877642-06-24 (BC)
+
+statement error
+select '5877642-06-23 (BC)'::date - 1
+
+statement error
+select '5877642-06-23 (BC)'::date - 365
+
+statement error
+select '5877642-06-23 (BC)'::date - 2147483647
+
+# interval arithmetic
+query I
+select '5877642-06-23 (BC)'::date + interval (1) day
+----
+5877642-06-24 (BC)
+
+statement error
+select '5877642-06-23 (BC)'::date - interval (1) day
+
+statement error
+select '5877642-06-23 (BC)'::date - interval (365) day
+
+statement error
+select '5877642-06-23 (BC)'::date - interval (2147483647) day
+
+statement error
+select '5877642-06-23 (BC)'::date - interval (9999999999999) second
+
+statement error
+select '5877642-06-23 (BC)'::date - interval (9223372036854775807) microsecond
+
+statement error
+select '5877642-06-23 (BC)'::date - interval '1147483647 days 9223372036854775807 microseconds'
+
+statement error
+select '5877642-06-23 (BC)'::date - interval '2147483647 days 9223372036854775807 microseconds'
+
+statement error
+select '5877642-06-23 (BC)'::date - interval '2007483647 days 9223372036854775807 microseconds'
+
+query I
+select '5877642-06-23 (BC)'::date + interval (1) month
+----
+5877642-07-23 (BC)
+
+statement error
+select '5877642-06-23 (BC)'::date - interval (1) month
+
+statement error
+select '5877642-06-23 (BC)'::date - interval (2147483647) month
+
+# max date: 5881580-07-11
+query I
+select '5881580-07-11'::date
+----
+5881580-07-11
+
+statement error
+select '5881580-07-12'::date
+
+statement error
+select '5881580-08-11'::date
+
+statement error
+select '99999999-01-01'::date
+
+# max date for timestamp micros is 294246
+query I
+select '294246-12-31'::date::timestamp
+----
+294246-12-31 00:00:00
+
+statement error
+select '294247-12-31'::date::timestamp
+
+# arithmetic
+query I
+select '5881580-07-11'::date - 1
+----
+5881580-07-10
+
+statement error
+select '5881580-07-11'::date + 1
+
+statement error
+select '5881580-07-11'::date + 365
+
+statement error
+select '5881580-07-11'::date + 2147483647
+
+# interval arithmetic
+query I
+select '5881580-07-11'::date - interval (1) day
+----
+5881580-07-10
+
+statement error
+select '5881580-07-11'::date + interval (1) day
+
+statement error
+select '5881580-07-11'::date + interval (365) day
+
+statement error
+select '5881580-07-11'::date + interval (2147483647) day
+
+statement error
+select '5881580-07-11'::date + interval (9999999999999) second
+
+statement error
+select '5881580-07-11'::date + interval (9223372036854775807) microsecond
+
+statement error
+select '5881580-07-11'::date + interval '1147483647 days 9223372036854775807 microseconds'
+
+statement error
+select '5881580-07-11'::date + interval '2147483647 days 9223372036854775807 microseconds'
+
+statement error
+select '5881580-07-11'::date + interval '2007483647 days 9223372036854775807 microseconds'
+
+statement error
+select '5881580-07-11'::date + interval (1) month
+
+query I
+select '5881580-07-11'::date - interval (1) month
+----
+5881580-06-11
+
+query I
+select '5881580-07-11'::date - '5877642-06-23 (BC)'::date
+----
+4294967295

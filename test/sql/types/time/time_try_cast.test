@@ -1,0 +1,83 @@
+# name: test/sql/types/time/time_try_cast.test
+# description: Test time try cast
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+# try cast on gibberish
+query I
+select try_cast('' as time)
+----
+NULL
+
+query I
+select try_cast('    ' as time)
+----
+NULL
+
+query I
+select try_cast('11' as time)
+----
+NULL
+
+query I
+select try_cast('11:' as time)
+----
+NULL
+
+query I
+select try_cast('11:11' as time)
+----
+NULL
+
+query I
+select try_cast('11:11:' as time)
+----
+NULL
+
+query I
+select try_cast('11:11:A' as time)
+----
+NULL
+
+query I
+select try_cast('11:11:A1' as time)
+----
+NULL
+
+query I
+select try_cast('11/11/11' as time)
+----
+00:00:00
+
+query I
+select try_cast('  11:11:11  ' as time)
+----
+11:11:11
+
+# try_cast on the limits
+query I
+select try_cast('24:00:00' as time)
+----
+NULL
+
+query I
+select try_cast('23:60:00' as time)
+----
+NULL
+
+query I
+select try_cast('23:59:60' as time)
+----
+NULL
+
+query I
+select try_cast('23:59:59' as time)
+----
+23:59:59
+
+query I
+select try_cast('23:59:59.999999' as time)
+----
+23:59:59.999999

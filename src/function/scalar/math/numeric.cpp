@@ -36,9 +36,10 @@ static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalT
 	return function;
 }
 
+template <class OP>
 struct UnaryDoubleWrapper {
-	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		RESULT_TYPE result = OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
 		if (std::isnan(result) || std::isinf(result) || errno != 0) {
 			errno = 0;
@@ -47,17 +48,13 @@ struct UnaryDoubleWrapper {
 		}
 		return result;
 	}
-
-	static bool AddsNulls() {
-		return true;
-	}
 };
 
 template <class T, class OP>
 static void UnaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() >= 1);
 	errno = 0;
-	UnaryExecutor::Execute<T, T, OP, UnaryDoubleWrapper>(input.data[0], result, input.size());
+	UnaryExecutor::GenericExecute<T, T, UnaryDoubleWrapper<OP>>(input.data[0], result, input.size(), nullptr, true);
 }
 
 struct BinaryDoubleWrapper {
@@ -458,6 +455,7 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 	T divide_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale];
 	T multiply_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale];
 	T addition = divide_power_of_ten / 2;
+
 	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 		if (input < 0) {
 			input -= addition;

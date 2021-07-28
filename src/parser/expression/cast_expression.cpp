@@ -13,7 +13,7 @@ CastExpression::CastExpression(LogicalType target, unique_ptr<ParsedExpression> 
 }
 
 string CastExpression::ToString() const {
-	return "CAST(" + child->ToString() + " AS " + cast_type.ToString() + ")";
+	return (try_cast ? "TRY_CAST(" : "CAST(") + child->ToString() + " AS " + cast_type.ToString() + ")";
 }
 
 bool CastExpression::Equals(const CastExpression *a, const CastExpression *b) {
