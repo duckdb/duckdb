@@ -165,7 +165,7 @@ RangeDateTimeBind(ClientContext &context, vector<Value> &inputs, unordered_map<s
 }
 
 struct RangeDateTimeState : public FunctionOperatorData {
-	RangeDateTimeState(timestamp_t start_p) : current_state(start_p) {
+	explicit RangeDateTimeState(timestamp_t start_p) : current_state(start_p) {
 	}
 
 	timestamp_t current_state;
