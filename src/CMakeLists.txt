@@ -32,10 +32,12 @@ if(AMALGAMATION_BUILD)
   endif()
 
   add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
+  target_link_libraries(duckdb ${CMAKE_DL_LIBS})
+  link_threads(duckdb)
+
   add_library(duckdb_static STATIC
               "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
-
-  link_threads(duckdb)
+  target_link_libraries(duckdb_static ${CMAKE_DL_LIBS})
   link_threads(duckdb_static)
 
   install(FILES "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
