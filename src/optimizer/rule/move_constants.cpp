@@ -36,6 +36,9 @@ unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expr
 	if (!arithmetic->return_type.IsNumeric()) {
 		return nullptr;
 	}
+	if (inner_constant->value.is_null || outer_constant->value.is_null) {
+		return make_unique<BoundConstantExpression>(Value(comparison->return_type));
+	}
 
 	int arithmetic_child_index = arithmetic->children[0].get() == inner_constant ? 1 : 0;
 	auto &op_type = arithmetic->function.name;
