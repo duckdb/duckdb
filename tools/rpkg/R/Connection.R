@@ -207,7 +207,7 @@ setMethod(
     duckdb_register(conn, view_name, value)
     dbExecute(conn, sprintf("INSERT INTO %s SELECT * FROM %s", table_name, view_name))
 
-    on_connection_updated(conn, hint=paste0("Updated table'", table_name,"'"))
+    rs_on_connection_updated(conn, hint=paste0("Updated table'", table_name,"'"))
 
     invisible(TRUE)
   }
@@ -287,6 +287,7 @@ setMethod(
       conn,
       sqlInterpolate(conn, "DROP TABLE ?", dbQuoteIdentifier(conn, name))
     )
+    rs_on_connection_updated(conn, "Table removed")
     invisible(TRUE)
   }
 )
@@ -326,7 +327,6 @@ setMethod(
   "dbCommit", "duckdb_connection",
   function(conn, ...) {
     dbExecute(conn, SQL("COMMIT"))
-    on_connection_updated(conn, "Committing changes")
     invisible(TRUE)
   }
 )
