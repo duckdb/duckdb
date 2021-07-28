@@ -1,10 +1,8 @@
 authors: 
-  -
-    family-names: Raasveldt
+  - family-names: Raasveldt
     given-names: Mark
     orcid: "https://orcid.org/0000-0001-5005-6844"
-  -
-    family-names: "Mühleisen"
+  - family-names: "Mühleisen"
     given-names: Hannes
     orcid: "https://orcid.org/0000-0001-8552-0029"
 cff-version: "1.1.0"
