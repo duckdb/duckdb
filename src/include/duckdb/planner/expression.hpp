@@ -8,12 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/types.hpp"
 #include "duckdb/parser/base_expression.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
-// class BaseStatistics;
+class BaseStatistics;
 
 //!  The Expression class represents a bound Expression with a return type
 class Expression : public BaseExpression {

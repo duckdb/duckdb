@@ -15,7 +15,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrde
 		if (expr->stats) {
 			order.statistics.push_back(expr->stats->Copy());
 		} else {
-			order.statistics.push_back(make_unique<BaseStatistics>(expr->return_type));
+			order.statistics.push_back(nullptr);
 		}
 	}
 	return move(node_stats);

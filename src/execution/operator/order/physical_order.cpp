@@ -370,12 +370,8 @@ public:
 	}
 	//! Unpin blocks and reset read indices to the given indices
 	void UnpinAndReset(idx_t block_idx_to, idx_t entry_idx_to) {
-		if (data_handle) {
-			data_handle.reset();
-		}
-		if (heap_handle) {
-			heap_handle.reset();
-		}
+		data_handle = nullptr;
+		heap_handle = nullptr;
 		data_ptr = nullptr;
 		heap_ptr = nullptr;
 		block_idx = block_idx_to;
@@ -998,8 +994,8 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 		return;
 	}
 	// Fill pointer array for sorting
-	auto ptr_block = unique_ptr<data_ptr_t[]>(new data_ptr_t[end - start]);
-	auto entry_ptrs = ptr_block.get();
+	auto ptr_block = buffer_manager.Allocate(MaxValue((end - start) * sizeof(data_ptr_t), (idx_t)Storage::BLOCK_SIZE));
+	auto entry_ptrs = (data_ptr_t *)ptr_block->Ptr();
 	for (idx_t i = start; i < end; i++) {
 		entry_ptrs[i - start] = row_ptr;
 		row_ptr += sorting_state.entry_size;
@@ -1018,15 +1014,14 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 		          return order * CompareVal(left_ptr, right_ptr, logical_type) < 0;
 	          });
 	// Re-order
-	auto temp_block = unique_ptr<data_t[]>(new data_t[(end - start) * sorting_state.entry_size]);
-	data_ptr_t temp_ptr = temp_block.get();
+	auto temp_block =
+	    buffer_manager.Allocate(MaxValue((end - start) * sorting_state.entry_size, (idx_t)Storage::BLOCK_SIZE));
+	data_ptr_t temp_ptr = temp_block->Ptr();
 	for (idx_t i = 0; i < end - start; i++) {
 		memcpy(temp_ptr, entry_ptrs[i], sorting_state.entry_size);
 		temp_ptr += sorting_state.entry_size;
 	}
-	memcpy(dataptr + start * sorting_state.entry_size, temp_block.get(), (end - start) * sorting_state.entry_size);
-	ptr_block.reset();
-	temp_block.reset();
+	memcpy(dataptr + start * sorting_state.entry_size, temp_block->Ptr(), (end - start) * sorting_state.entry_size);
 	// Determine if there are still ties (if this is not the last column)
 	if (tie_col < sorting_state.column_count - 1) {
 		data_ptr_t idx_ptr = dataptr + start * sorting_state.entry_size + sorting_state.comparison_size;
@@ -1091,8 +1086,8 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 //! Textbook LSD radix sort
 static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const idx_t &count, const idx_t &col_offset,
                       const idx_t &sorting_size, const SortingState &sorting_state) {
-	auto temp_block = unique_ptr<data_t[]>(new data_t[count * sorting_state.entry_size]);
-	auto temp = temp_block.get();
+	auto temp_block = buffer_manager.Allocate(MaxValue(count * sorting_state.entry_size, (idx_t)Storage::BLOCK_SIZE));
+	data_ptr_t temp = temp_block->Ptr();
 	bool swap = false;
 
 	idx_t counts[256];
@@ -1161,8 +1156,8 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 	// Radix sort and break ties until no more ties, or until all columns are sorted
 	idx_t sorting_size = 0;
 	idx_t col_offset = 0;
-	unique_ptr<bool[]> ties_ptr = nullptr;
-	bool *ties;
+	unique_ptr<BufferHandle> ties_handle;
+	bool *ties = nullptr;
 	for (idx_t i = 0; i < sorting_state.column_count; i++) {
 		sorting_size += sorting_state.column_sizes[i];
 		if (sorting_state.constant_size[i] && i < sorting_state.column_count - 1 && sorting_size < 32) {
@@ -1170,11 +1165,11 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 			continue;
 		}
 
-		if (!ties_ptr) {
+		if (!ties) {
 			// This is the first sort
 			RadixSort(buffer_manager, dataptr, count, col_offset, sorting_size, sorting_state);
-			ties_ptr = unique_ptr<bool[]>(new bool[count]);
-			ties = ties_ptr.get();
+			ties_handle = buffer_manager.Allocate(MaxValue(count, (idx_t)Storage::BLOCK_SIZE));
+			ties = (bool *)ties_handle->Ptr();
 			std::fill_n(ties, count - 1, true);
 			ties[count - 1] = false;
 		} else {
@@ -1228,7 +1223,6 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t so
 		sorting_ptr += sorting_entry_size;
 	}
 	// Replace the unordered data block with the re-ordered data block
-	unordered_data_handle.reset();
 	sd.data_blocks.clear();
 	sd.data_blocks.push_back(move(ordered_data_block));
 	// Deal with the heap (if necessary)
@@ -1254,13 +1248,13 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t so
 			ordered_heap_ptr += heap_row_size;
 			ordered_data_ptr += row_width;
 		}
-		heap.pinned_blocks.clear();
-		heap.blocks.clear();
-		heap.count = 0;
 		// Swizzle the base pointer to the offset of each row in the heap
 		RowOperations::SwizzleHeapPointer(sd.layout, ordered_data_handle->Ptr(), ordered_heap_handle->Ptr(), count);
 		// Move the re-ordered heap to the SortedData, and clear the local heap
 		sd.heap_blocks.push_back(move(ordered_heap_block));
+		heap.pinned_blocks.clear();
+		heap.blocks.clear();
+		heap.count = 0;
 	}
 }
 
@@ -1607,9 +1601,6 @@ public:
 			}
 			if (r_block_idx < right.radix_sorting_data.size() &&
 			    r_entry_idx == right.radix_sorting_data[r_block_idx].count) {
-				if (r_radix_handle) {
-					r_radix_handle.reset();
-				}
 				r_block_idx++;
 				r_entry_idx = 0;
 				if (!sorting_state.all_constant) {
@@ -2013,25 +2004,14 @@ private:
 bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
 	this->sink_state = move(state_p);
 	auto &state = (OrderGlobalState &)*this->sink_state;
-	if (state.sorted_blocks.empty()) {
-		return true;
-	}
 	// Set total count
 	for (auto &sb : state.sorted_blocks) {
 		state.total_count += sb->radix_sorting_data.back().count;
 	}
-	// No need to merge if we have 1 block
-	if (state.sorted_blocks.size() == 1) {
-		// Clean up sorting data - payload is sorted
-		for (auto &sb : state.sorted_blocks) {
-			sb->radix_sorting_data.clear();
-			if (!state.sorting_state.all_constant) {
-				sb->blob_sorting_data.reset();
-			}
-		}
+	// No need to merge if we have less than 2 blocks
+	if (state.sorted_blocks.size() < 2) {
 		return true;
 	}
-
 	// Determine if we need to use do an external sort
 	idx_t total_heap_size =
 	    std::accumulate(state.sorted_blocks.begin(), state.sorted_blocks.end(), (idx_t)0,

@@ -220,8 +220,6 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 			throw InternalException("Unsupported type for RowOperations::Scatter");
 		}
 	}
-	// Unpin string heap buffers
-	handles.clear();
 }
 
 } // namespace duckdb

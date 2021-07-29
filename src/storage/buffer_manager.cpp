@@ -185,8 +185,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 	auto alloc_size = block_size + Storage::BLOCK_HEADER_SIZE;
 	// first evict blocks until we have enough memory to store this buffer
 	if (!EvictBlocks(alloc_size, maximum_memory)) {
-		throw OutOfRangeException("Not enough memory to complete operation: could not allocate block of %lld bytes",
-		                          alloc_size);
+		throw OutOfMemoryException("could not allocate block of %lld bytes", alloc_size);
 	}
 
 	// allocate the buffer
@@ -216,9 +215,7 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 	} else if (required_memory > 0) {
 		// evict blocks until we have space to resize this block
 		if (!EvictBlocks(required_memory, maximum_memory)) {
-			throw OutOfRangeException(
-			    "Not enough memory to complete operation: failed to resize block from %lld to %lld",
-			    handle->memory_usage, alloc_size);
+			throw OutOfMemoryException("failed to resize block from %lld to %lld", handle->memory_usage, alloc_size);
 		}
 		handle->buffer->Resize(block_size);
 	} else {
@@ -249,8 +246,7 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	}
 	// evict blocks until we have space for the current block
 	if (!EvictBlocks(required_memory, maximum_memory)) {
-		throw OutOfRangeException("Not enough memory to complete operation: failed to pin block of size %lld",
-		                          required_memory);
+		throw OutOfMemoryException("failed to pin block of size %lld", required_memory);
 	}
 	// lock the handle again and repeat the check (in case anybody loaded in the mean time)
 	lock_guard<mutex> lock(handle->lock);
@@ -349,9 +345,8 @@ void BufferManager::SetLimit(idx_t limit) {
 	lock_guard<mutex> buffer_lock(manager_lock);
 	// try to evict until the limit is reached
 	if (!EvictBlocks(0, limit)) {
-		throw OutOfRangeException(
-		    "Failed to change memory limit to new limit %lld: could not free up enough memory for the new limit",
-		    limit);
+		throw OutOfMemoryException(
+		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit", limit);
 	}
 	idx_t old_limit = maximum_memory;
 	// set the global maximum memory to the new limit if successful
@@ -360,9 +355,8 @@ void BufferManager::SetLimit(idx_t limit) {
 	if (!EvictBlocks(0, limit)) {
 		// failed: go back to old limit
 		maximum_memory = old_limit;
-		throw OutOfRangeException(
-		    "Failed to change memory limit to new limit %lld: could not free up enough memory for the new limit",
-		    limit);
+		throw OutOfMemoryException(
+		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit", limit);
 	}
 }
 
