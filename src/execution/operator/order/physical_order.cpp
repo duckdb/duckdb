@@ -154,19 +154,19 @@ public:
 		auto &sorting_state = gstate.sorting_state;
 		auto &payload_layout = gstate.payload_layout;
 		// Radix sorting data
-		radix_sorting_data = make_unique<RowDataCollection>(
-		    buffer_manager, VectorsPerBlock(sorting_state.entry_size) * STANDARD_VECTOR_SIZE, sorting_state.entry_size);
+		radix_sorting_data = make_unique<RowDataCollection>(buffer_manager, EntriesPerBlock(sorting_state.entry_size),
+		                                                    sorting_state.entry_size);
 		// Blob sorting data
 		if (!sorting_state.all_constant) {
 			auto blob_row_width = sorting_state.blob_layout.GetRowWidth();
-			blob_sorting_data = make_unique<RowDataCollection>(
-			    buffer_manager, VectorsPerBlock(blob_row_width) * STANDARD_VECTOR_SIZE, blob_row_width);
+			blob_sorting_data =
+			    make_unique<RowDataCollection>(buffer_manager, EntriesPerBlock(blob_row_width), blob_row_width);
 			blob_sorting_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 		}
 		// Payload data
 		auto payload_row_width = payload_layout.GetRowWidth();
-		payload_data = make_unique<RowDataCollection>(
-		    buffer_manager, VectorsPerBlock(payload_row_width) * STANDARD_VECTOR_SIZE, payload_row_width);
+		payload_data =
+		    make_unique<RowDataCollection>(buffer_manager, EntriesPerBlock(payload_row_width), payload_row_width);
 		payload_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 		// Init done
 		initialized = true;
@@ -185,8 +185,8 @@ public:
 	}
 
 private:
-	idx_t VectorsPerBlock(idx_t width) {
-		return (Storage::BLOCK_SIZE / width + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
+	idx_t EntriesPerBlock(idx_t width) {
+		return (Storage::BLOCK_SIZE + width * STANDARD_VECTOR_SIZE - 1) / width;
 	}
 
 public:
@@ -324,9 +324,7 @@ public:
 	}
 	//! Pin the current block such that it can be read
 	void Pin() {
-		if (!data_handle || data_handle->handle->BlockId() != data_blocks[block_idx].block->BlockId()) {
-			PinData();
-		}
+		PinData();
 		if (!layout.AllConstant() && state.external) {
 			PinHeap();
 		}
@@ -434,10 +432,8 @@ private:
 	//! Pin the accompanying heap data (if any)
 	void PinHeap() {
 		D_ASSERT(!layout.AllConstant() && state.external);
-		if (!heap_handle || heap_handle->handle->BlockId() != heap_blocks[block_idx].block->BlockId()) {
-			heap_handle = buffer_manager.Pin(heap_blocks[block_idx].block);
-			heap_ptr = heap_handle->Ptr();
-		}
+		heap_handle = buffer_manager.Pin(heap_blocks[block_idx].block);
+		heap_ptr = heap_handle->Ptr();
 	}
 
 	//! The buffer manager

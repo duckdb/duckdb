@@ -25,7 +25,7 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 			if (block.byte_offset + entry_sizes[i] > block.capacity) {
 				if (block.count == 0 && append_count == 0 && entry_sizes[i] > block.capacity) {
 					// special case: single entry is bigger than block capacity
-					// resize block to fit it and append it, and move to the next block
+					// resize current block to fit the entry, append it, and move to the next block
 					block.capacity = entry_sizes[i];
 					buffer_manager.ReAllocate(block.block, block.capacity);
 					dataptr = handle.Ptr();
