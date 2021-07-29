@@ -97,12 +97,13 @@ fix_rownames <- function(df) {
 #' @param res Query result to be converted to an Arrow Table
 #' @param stream If we are streaming the query result or returning it all at once
 #' @param vector_per_chunk If streaming, how many vectors per chunk we should emit
+#' @param return_table If we return results as a list of RecordBatches or an Arrow Table
 #' @export
-duckdb_fetch_arrow <- function(res,stream=FALSE,vector_per_chunk=1) {
+duckdb_fetch_arrow <- function(res,stream=FALSE,vector_per_chunk=1,return_table=FALSE) {
   if (vector_per_chunk < 0) {
       stop("cannot fetch negative vector_per_chunk")
   }
-  result <- .Call(duckdb_fetch_arrow_R, res@query_result,stream,vector_per_chunk)
+  result <- .Call(duckdb_fetch_arrow_R, res@query_result,stream,vector_per_chunk,return_table)
   return (result)
 }
 

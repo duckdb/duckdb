@@ -455,6 +455,12 @@ struct RQueryResult {
 
 bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowArray &arrow_data,
                      ArrowSchema &arrow_schema, SEXP &batch_import_from_c, SEXP &arrow_namespace) {
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto stream_result = (StreamQueryResult *)result;
+		if (!stream_result->is_open) {
+			return false;
+		}
+	}
 	unique_ptr<DataChunk> data_chunk = result->Fetch();
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;
@@ -467,7 +473,8 @@ bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowAr
 }
 
 // Turn a DuckDB result set into an Arrow Table
-SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp) {
+SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
+                              SEXP return_tablesexp) {
 	RProtector r;
 	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
 	auto result = query_result_holder->result.get();
@@ -477,6 +484,7 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	SEXP arrow_namespace = r.Protect(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
 	bool stream = LOGICAL_POINTER(streamsexp)[0] != 0;
 	int num_of_vectors = NUMERIC_POINTER(vector_per_chunksexp)[0];
+	bool return_table = LOGICAL_POINTER(return_tablesexp)[0] != 0;
 	// export schema setup
 	ArrowSchema arrow_schema;
 	auto schema_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_schema))));
@@ -506,9 +514,12 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	SEXP schema_arrow_obj = r.Protect(RApi::REvalRerror(schema_import_from_c, arrow_namespace));
 
 	// create arrow::Table
-	auto from_record_batches =
-	    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_list.the_list, schema_arrow_obj));
-	return RApi::REvalRerror(from_record_batches, arrow_namespace);
+	if (return_table) {
+		auto from_record_batches =
+		    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_list.the_list, schema_arrow_obj));
+		return RApi::REvalRerror(from_record_batches, arrow_namespace);
+	}
+	return batches_list.the_list;
 }
 
 static SEXP DuckDBFinalizeQueryR(SEXP query_resultsexp) {

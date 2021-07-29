@@ -25,7 +25,8 @@ struct RApi {
 
 	static SEXP Execute(SEXP stmtsexp, SEXP arrowsexp);
 
-	static SEXP DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp);
+	static SEXP DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
+	                               SEXP return_tablesexp);
 
 	static SEXP Release(SEXP stmtsexp);
 
