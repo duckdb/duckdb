@@ -21,6 +21,8 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 
+#include "duckdb/function/compression_function.hpp"
+
 #include "duckdb/main/config.hpp"
 
 namespace duckdb {
@@ -496,7 +498,7 @@ public:
 		this->owned_segment = move(segment);
 	}
 
-	void ScanSegments(std::function<void(Vector &, idx_t)> callback) {
+	void ScanSegments(std::function<bool(Vector &, idx_t)> callback) {
 		Vector scan_vector(intermediate.GetType(), nullptr);
 		for(auto segment = (ColumnSegment *) owned_segment.get(); segment; segment = (ColumnSegment *) segment->next.get()) {
 			ColumnScanState scan_state;
@@ -511,9 +513,62 @@ public:
 
 				col_data.CheckpointScan(segment, scan_state, row_group.start, base_row_index, count, scan_vector);
 
-				callback(scan_vector, count);
+				if (!callback(scan_vector, count)) {
+					return;
+				}
 			}
 		}
+	}
+
+	unique_ptr<AnalyzeState> DetectBestCompressionMethod(idx_t &compression_idx) {
+		if (compression_functions.empty()) {
+			compression_idx = INVALID_INDEX;
+			return nullptr;
+		}
+		// set up the analyze states for each compression method
+		vector<unique_ptr<AnalyzeState>> analyze_states;
+		analyze_states.reserve(compression_functions.size());
+		for(idx_t i = 0; i < compression_functions.size(); i++) {
+			analyze_states.push_back(compression_functions[i]->init_analyze(col_data, col_data.type.InternalType()));
+		}
+
+		// scan over all the segments and run the analyze step
+		ScanSegments([&](Vector &scan_vector, idx_t count) {
+			bool has_compression_functions = false;
+			for(idx_t i = 0; i < compression_functions.size(); i++) {
+				if (!compression_functions[i]) {
+					continue;
+				}
+				auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+				if (!success) {
+					// could not use this compression function on this data set
+					// erase it
+					compression_functions[i] = nullptr;
+					analyze_states[i].reset();
+				} else {
+					has_compression_functions = true;
+				}
+			}
+			return has_compression_functions;
+		});
+
+		// now that we have passed over all the data, we need to figure out the best method
+		// we do this using the final_analyze method
+		unique_ptr<AnalyzeState> state;
+		compression_idx = INVALID_INDEX;
+		idx_t best_score = NumericLimits<idx_t>::Maximum();
+		for(idx_t i = 0; i < compression_functions.size(); i++) {
+			if (!compression_functions[i]) {
+				continue;
+			}
+			auto score = compression_functions[i]->final_analyze(*analyze_states[i]);
+			if (score < best_score) {
+				compression_idx = i;
+				best_score = score;
+				state = move(analyze_states[i]);
+			}
+		}
+		return state;
 	}
 
 	void WriteToDisk() {
@@ -534,13 +589,26 @@ public:
 			}
 		}
 
-		// now we actually write the data to disk
-		state.CreateEmptySegment();
-		ScanSegments([&](Vector &scan_vector, idx_t count) {
-			state.AppendData(scan_vector, count);
-		});
-		state.FlushSegment();
+		// now we need to write our segment
+		// we will first run an analyze step that determines which compression function to use
+		idx_t compression_idx;
+		auto analyze_state = DetectBestCompressionMethod(compression_idx);
 
+		// now that we have analyzed the compression functions we can start writing to disk
+		if (!analyze_state) {
+			// no compression method: store uncompressed
+			state.CreateEmptySegment();
+			ScanSegments([&](Vector &scan_vector, idx_t count) {
+				state.AppendData(scan_vector, count);
+				return true;
+			});
+			state.FlushSegment();
+		} else {
+			throw Exception("FIXME: compressed storage");
+		}
+
+
+		// now we actually write the data to disk
 		owned_segment.reset();
 	}
 

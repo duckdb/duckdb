@@ -18,12 +18,44 @@ unique_ptr<AnalyzeState> RLEInitAnalyze(ColumnData &col_data, PhysicalType type)
 
 template<class T>
 bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
-	throw InternalException("FIXME: RLE");
+	auto &rle_state = (RLEAnalyzeState<T> &) state;
+	VectorData vdata;
+	input.Orrify(count, vdata);
+
+	auto data = (T *) vdata.data;
+	for(idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (vdata.validity.RowIsValid(idx)) {
+			if (rle_state.seen_count == 0) {
+				// no value seen yet
+				// assign the current value, and set the seen_count to 1
+				// note that we increment last_seen_count rather than setting it to 1
+				// this is intentional: this is the first VALID value we see
+				// but it might not be the first value!
+				rle_state.last_value = data[idx];
+				rle_state.seen_count = 1;
+				rle_state.last_seen_count++;
+			} else if (rle_state.last_value == data[idx]) {
+				// the last value is identical to this value: increment the last_seen_count
+				rle_state.last_seen_count++;
+			} else {
+				// the values are different: increment the seen_count and put this value into the RLE slot
+				rle_state.last_value = data[idx];
+				rle_state.seen_count++;
+				rle_state.last_seen_count = 1;
+			}
+		} else {
+			// NULL value: we merely increment the last_seen_count
+			rle_state.last_seen_count++;
+		}
+	}
+	return true;
 }
 
 template<class T>
 idx_t RLEFinalAnalyze(AnalyzeState &state) {
-	throw InternalException("FIXME: RLE");
+	auto &rle_state = (RLEAnalyzeState<T> &) state;
+	return (sizeof(uint32_t) * sizeof(T)) * rle_state.seen_count;
 }
 
 template<class T>
