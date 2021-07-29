@@ -6,36 +6,36 @@ statement ok
 CREATE TABLE "MyTable"(i integer, "BigColumn" integer);
 
 statement ok
-ALTER TABLE MyTable ALTER BigColumn SET DATA TYPE VARCHAR
+ALTER TABLE MyTable ALTER BIGCOLUMN SET DATA TYPE VARCHAR
 
 statement ok
-ALTER TABLE MyTable DROP COLUMN BigColumn;
+ALTER TABLE MyTable DROP COLUMN BIGCOLUMN;
 
 statement error
-SELECT BigColumn FROM MyTable
+SELECT BIGCOLUMN FROM MyTable
 
 statement ok
-ALTER TABLE MyTable ADD COLUMN "BigColumn" VARCHAR;
+ALTER TABLE MyTable ADD COLUMN "BIGCOLUMN" VARCHAR;
 
 statement ok
-ALTER TABLE MyTable ALTER COLUMN BigColumn SET DEFAULT 3
+ALTER TABLE MyTable ALTER COLUMN BIGCOLUMN SET DEFAULT 3
 
 statement ok
-INSERT INTO MyTable(BigColumn) VALUES (DEFAULT)
+INSERT INTO MyTable(BIGCOLUMN) VALUES (DEFAULT)
 
 query I
-SELECT BigColumn FROM MyTable
+SELECT BIGCOLUMN FROM MyTable
 ----
 3
 
 statement ok
-ALTER TABLE MyTable ALTER COLUMN BigColumn DROP DEFAULT
+ALTER TABLE MyTable ALTER COLUMN BIGCOLUMN DROP DEFAULT
 
 statement ok
-SELECT BigColumn FROM MyTable
+SELECT BIGCOLUMN FROM MyTable
 
 statement ok
-ALTER TABLE MyTable RENAME BigColumn TO "SmallColumn"
+ALTER TABLE MyTable RENAME BIGCOLUMN TO "SmallColumn"
 
 statement ok
 SELECT SmallColumn FROM MyTable

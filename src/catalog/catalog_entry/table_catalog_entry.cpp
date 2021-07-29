@@ -50,18 +50,16 @@ void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &nam
 }
 
 idx_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
-	unordered_map<string, column_t> col_name_map;
-	for (idx_t i = 0; i < columns.size(); i++) {
-		col_name_map[columns[i].name] = column_t(i);
-	}
-	TableCatalogEntry::AddLowerCaseAliases(col_name_map);
-
-	auto entry = col_name_map.find(column_name);
-	if (entry == col_name_map.end()) {
-		if (if_exists) {
-			return INVALID_INDEX;
+	auto entry = name_map.find(column_name);
+	if (entry == name_map.end()) {
+		// entry not found: try lower-casing the name
+		entry = name_map.find(StringUtil::Lower(column_name));
+		if (entry == name_map.end()) {
+			if (if_exists) {
+				return INVALID_INDEX;
+			}
+			throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
 		}
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
 	}
 	column_name = columns[entry->second].name;
 	return idx_t(entry->second);
@@ -71,9 +69,12 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
                                      std::shared_ptr<DataTable> inherited_storage)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(move(inherited_storage)),
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
-      bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
+      bound_constraints(move(info->bound_constraints)) {
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
+	for (idx_t i = 0; i < columns.size(); i++) {
+		name_map[columns[i].name] = i;
+	}
 	AddLowerCaseAliases(name_map);
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
