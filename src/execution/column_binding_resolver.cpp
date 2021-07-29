@@ -1,14 +1,12 @@
 #include "duckdb/execution/column_binding_resolver.hpp"
 
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/to_string.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_delim_join.hpp"
-
-#include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
-
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/common/to_string.hpp"
 
 namespace duckdb {
 
@@ -75,13 +73,7 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 	// check the current set of column bindings to see which index corresponds to the column reference
 	for (idx_t i = 0; i < bindings.size(); i++) {
 		if (expr.binding == bindings[i]) {
-			auto result = make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, i);
-			if (expr.stats) {
-				// FIXME: only copy validity stats for now, bug with copying all stats
-				result->stats = make_unique<BaseStatistics>(expr.stats->type);
-				result->stats->validity_stats = move(expr.stats->validity_stats);
-			}
-			return move(result);
+			return make_unique<BoundReferenceExpression>(expr.alias, expr.return_type, i);
 		}
 	}
 	// LCOV_EXCL_START

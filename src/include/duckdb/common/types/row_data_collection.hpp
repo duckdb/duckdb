@@ -65,7 +65,7 @@ public:
 	//! The size (in bytes) of this RowDataCollection if it were stored in a single block
 	idx_t SizeInBytes() const {
 		idx_t bytes = 0;
-        if (entry_size == 1) {
+		if (entry_size == 1) {
 			for (auto &block : blocks) {
 				bytes += block.byte_offset;
 			}

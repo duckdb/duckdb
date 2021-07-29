@@ -13,7 +13,7 @@ loop i 0 2
 
 # string that is longer than Storage::BLOCK_SIZE - this tests whether RowDataCollection dynamically increases block capacity
 statement ok
-select range % 2 i, string_agg('thisstringis200characterslong..........................................................................................................................................................................') s from range(100000) group by i order by i
+select range % 2 i, string_agg('thisstringis200characterslong..........................................................................................................................................................................') s from range(5000) group by i order by i
 
 # weird one from SQLancer
 statement ok

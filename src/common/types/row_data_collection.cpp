@@ -20,16 +20,16 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 	if (entry_sizes) {
 		D_ASSERT(entry_size == 1);
 		// compute how many entries fit if entry size is variable
-		dataptr = handle.node->buffer + block.byte_offset;
+		dataptr = handle.Ptr() + block.byte_offset;
 		for (idx_t i = 0; i < remaining; i++) {
 			if (block.byte_offset + entry_sizes[i] > block.capacity) {
-				if (append_count == 0 && entry_sizes[i] > block.capacity) {
+				if (block.count == 0 && append_count == 0 && entry_sizes[i] > block.capacity) {
 					// if a single entry does not fit, increase capacity until it does
 					while (entry_sizes[i] > block.capacity) {
 						block.capacity *= 2;
 					}
 					buffer_manager.ReAllocate(block.block, block.capacity);
-					dataptr = handle.node->buffer + block.byte_offset;
+					dataptr = handle.Ptr();
 				} else {
 					break;
 				}
@@ -39,7 +39,7 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 		}
 	} else {
 		append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
-		dataptr = handle.node->buffer + block.count * entry_size;
+		dataptr = handle.Ptr() + block.count * entry_size;
 	}
 	append_entries.emplace_back(dataptr, append_count);
 	block.count += append_count;

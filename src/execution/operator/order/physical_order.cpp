@@ -18,8 +18,10 @@ namespace duckdb {
 
 using ValidityBytes = RowLayout::ValidityBytes;
 
-PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality)
-    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)) {
+PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders,
+                             vector<unique_ptr<BaseStatistics>> statistics, idx_t estimated_cardinality)
+    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)),
+      statistics(move(statistics)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -47,7 +49,7 @@ static idx_t GetSortingColSize(const LogicalType &type) {
 }
 
 struct SortingState {
-	explicit SortingState(const vector<BoundOrderByNode> &orders)
+	SortingState(const vector<BoundOrderByNode> &orders, const vector<unique_ptr<BaseStatistics>> &statistics)
 	    : column_count(orders.size()), all_constant(true), comparison_size(0), entry_size(0) {
 		vector<LogicalType> blob_layout_types;
 		for (idx_t i = 0; i < orders.size(); i++) {
@@ -64,12 +66,11 @@ struct SortingState {
 			column_sizes.push_back(0);
 			auto &col_size = column_sizes.back();
 
-			if (expr.stats) {
-				stats.push_back(expr.stats.get());
+			if (!statistics.empty() && statistics[i]) {
+				stats.push_back(statistics[i].get());
 				has_null.push_back(stats.back()->CanHaveNull());
 			} else {
 				stats.push_back(nullptr);
-				// No stats - we must assume that there are nulls
 				has_null.push_back(true);
 			}
 
@@ -108,11 +109,9 @@ struct SortingState {
 class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(PhysicalOrder &order, RowLayout payload_layout)
-	    : sorting_state(SortingState(order.orders)), payload_layout(move(payload_layout)), total_count(0),
-	      external(false) {
+	    : sorting_state(SortingState(order.orders, order.statistics)), payload_layout(move(payload_layout)),
+	      total_count(0), external(false) {
 	}
-
-	~OrderGlobalState() override;
 
 	//! The lock for updating the order global state
 	std::mutex lock;
@@ -501,37 +500,6 @@ public:
 		                         state.block_capacity);
 		radix_sorting_data.emplace_back(buffer_manager, capacity, sorting_state.entry_size);
 	}
-	//! Cleanup sorting data
-	void UnregisterSortingBlocks() {
-		for (auto &block : radix_sorting_data) {
-			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
-		}
-		if (!sorting_state.all_constant) {
-			blob_sorting_data->UnpinAndReset(0, 0);
-			for (auto &block : blob_sorting_data->data_blocks) {
-				buffer_manager.UnregisterBlock(block.block->BlockId(), true);
-			}
-			if (state.external) {
-				for (auto &block : blob_sorting_data->heap_blocks) {
-					buffer_manager.UnregisterBlock(block.block->BlockId(), true);
-				}
-			}
-		}
-	}
-	//! Cleanup payload data
-	void UnregisterPayloadBlocks() {
-        payload_data->UnpinAndReset(0, 0);
-		for (auto &block : payload_data->data_blocks) {
-			buffer_manager.UnregisterBlock(block.block->BlockId(), true);
-		}
-		if (state.external) {
-			if (!payload_data->layout.AllConstant()) {
-				for (auto &block : payload_data->heap_blocks) {
-					buffer_manager.UnregisterBlock(block.block->BlockId(), true);
-				}
-			}
-		}
-	}
 	//! Fill this sorted block by appending the blocks held by a vector of sorted blocks
 	void AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blocks) {
 		D_ASSERT(Count() == 0);
@@ -657,19 +625,11 @@ private:
 	const RowLayout &payload_layout;
 };
 
-OrderGlobalState::~OrderGlobalState() {
-	std::lock_guard<mutex> glock(lock);
-	for (auto &sb : sorted_blocks) {
-		sb->UnregisterPayloadBlocks();
-	}
-	sorted_blocks.clear();
-}
-
 //! Concatenates the blocks in a RowDataCollection into a single block
 static RowDataBlock ConcatenateBlocks(BufferManager &buffer_manager, RowDataCollection &row_data) {
 	// Create block with the correct capacity
 	const idx_t &entry_size = row_data.entry_size;
-	idx_t capacity = MaxValue(Storage::BLOCK_SIZE / entry_size + 1, row_data.count);
+	idx_t capacity = MaxValue((Storage::BLOCK_SIZE + entry_size - 1) / entry_size, row_data.count);
 	RowDataBlock new_block(buffer_manager, capacity, entry_size);
 	new_block.count = row_data.count;
 	auto new_block_handle = buffer_manager.Pin(new_block.block);
@@ -678,8 +638,6 @@ static RowDataBlock ConcatenateBlocks(BufferManager &buffer_manager, RowDataColl
 	for (auto &block : row_data.blocks) {
 		auto block_handle = buffer_manager.Pin(block.block);
 		memcpy(new_block_ptr, block_handle->Ptr(), block.count * entry_size);
-		block_handle.reset();
-		buffer_manager.UnregisterBlock(block.block->BlockId(), true);
 		new_block_ptr += block.count * entry_size;
 	}
 	row_data.blocks.clear();
@@ -1271,7 +1229,6 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t so
 	}
 	// Replace the unordered data block with the re-ordered data block
 	unordered_data_handle.reset();
-	buffer_manager.UnregisterBlock(unordered_data_block.block->BlockId(), true);
 	sd.data_blocks.clear();
 	sd.data_blocks.push_back(move(ordered_data_block));
 	// Deal with the heap (if necessary)
@@ -1296,11 +1253,6 @@ static void ReOrder(BufferManager &buffer_manager, SortedData &sd, data_ptr_t so
 			memcpy(ordered_heap_ptr, heap_row_ptr, heap_row_size);
 			ordered_heap_ptr += heap_row_size;
 			ordered_data_ptr += row_width;
-		}
-		// Now we can discard the unordered localstate heap
-		for (idx_t i = 0; i < heap.blocks.size(); i++) {
-			heap.pinned_blocks[i].reset();
-			buffer_manager.UnregisterBlock(heap.blocks[i].block->BlockId(), true);
 		}
 		heap.pinned_blocks.clear();
 		heap.blocks.clear();
@@ -1449,11 +1401,6 @@ public:
 		lock_guard<mutex> glock(state.lock);
 		parent.finished_tasks++;
 		if (parent.finished_tasks == parent.total_tasks) {
-			// Unregister processed data
-			for (auto &sb : state.sorted_blocks) {
-				sb->UnregisterSortingBlocks();
-				sb->UnregisterPayloadBlocks();
-			}
 			state.sorted_blocks.clear();
 			if (state.odd_one_out) {
 				state.sorted_blocks.push_back(move(state.odd_one_out));
@@ -2077,7 +2024,10 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	if (state.sorted_blocks.size() == 1) {
 		// Clean up sorting data - payload is sorted
 		for (auto &sb : state.sorted_blocks) {
-			sb->UnregisterSortingBlocks();
+			sb->radix_sorting_data.clear();
+			if (!state.sorting_state.all_constant) {
+				sb->blob_sorting_data.reset();
+			}
 		}
 		return true;
 	}
@@ -2112,7 +2062,10 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 	D_ASSERT(state.sorted_blocks_temp.empty());
 	if (state.sorted_blocks.size() == 1) {
 		for (auto &sb : state.sorted_blocks) {
-			sb->UnregisterSortingBlocks();
+			sb->radix_sorting_data.clear();
+			if (!state.sorting_state.all_constant) {
+				sb->blob_sorting_data.reset();
+			}
 		}
 		pipeline.Finish();
 		return;
@@ -2228,7 +2181,6 @@ void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk
 	}
 
 	if (!state.initialized) {
-		D_ASSERT(gstate.sorted_blocks.back()->Count() == gstate.total_count);
 		state.payload_data = gstate.sorted_blocks.back()->payload_data.get();
 		state.initialized = true;
 	}
