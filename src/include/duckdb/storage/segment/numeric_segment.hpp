@@ -8,12 +8,12 @@
 
 #pragma once
 
-#include "duckdb/storage/segment/uncompressed_segment.hpp"
+#include "duckdb/storage/segment/base_segment.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
 
-class NumericSegment : public UncompressedSegment {
+class NumericSegment : public BaseSegment {
 public:
 	NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
 

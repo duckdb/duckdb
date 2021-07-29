@@ -12,7 +12,7 @@
 namespace duckdb {
 
 StringSegment::StringSegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id)
-    : UncompressedSegment(db, PhysicalType::VARCHAR, row_start) {
+    : BaseSegment(db, PhysicalType::VARCHAR, row_start) {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
 		// start off with an empty string segment: allocate space for it

@@ -23,7 +23,6 @@ class ColumnData;
 class DatabaseInstance;
 class Transaction;
 class BaseStatistics;
-class UncompressedSegment;
 class UpdateSegment;
 class TableFilter;
 struct ColumnFetchState;

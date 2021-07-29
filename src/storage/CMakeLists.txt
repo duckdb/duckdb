@@ -18,7 +18,6 @@ add_library_unity(
   meta_block_writer.cpp
   storage_manager.cpp
   write_ahead_log.cpp
-  uncompressed_segment.cpp
   single_file_block_manager.cpp
   storage_info.cpp
   storage_lock.cpp

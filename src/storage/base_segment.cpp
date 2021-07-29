@@ -265,4 +265,12 @@ bool BaseSegment::RowRangeIsValid(idx_t row_id, idx_t count) const {
 	return row_id <= tuple_count && row_id + count <= tuple_count;
 }
 
+idx_t BaseSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
+	throw InternalException("Unsupported type for Append");
+}
+
+void BaseSegment::RevertAppend(idx_t start_row) {
+	tuple_count = start_row - this->row_start;
+}
+
 }

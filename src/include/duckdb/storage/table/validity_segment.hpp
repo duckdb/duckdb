@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/segment/uncompressed_segment.hpp"
+#include "duckdb/storage/segment/base_segment.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {
@@ -19,7 +19,7 @@ class SegmentStatistics;
 class Vector;
 struct VectorData;
 
-class ValiditySegment : public UncompressedSegment {
+class ValiditySegment : public BaseSegment {
 	static const validity_t LOWER_MASKS[65];
 	static const validity_t UPPER_MASKS[65];
 

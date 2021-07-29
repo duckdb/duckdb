@@ -26,15 +26,13 @@ void TransientSegment::InitializeAppend(ColumnAppendState &state) {
 }
 
 idx_t TransientSegment::Append(ColumnAppendState &state, VectorData &append_data, idx_t offset, idx_t count) {
-	auto &uncompressed = (UncompressedSegment &) *data;
-	idx_t appended = uncompressed.Append(stats, append_data, offset, count);
+	idx_t appended = data->Append(stats, append_data, offset, count);
 	this->count += appended;
 	return appended;
 }
 
 void TransientSegment::RevertAppend(idx_t start_row) {
-	auto &uncompressed = (UncompressedSegment &) *data;
-	uncompressed.RevertAppend(start_row);
+	data->RevertAppend(start_row);
 	this->count = start_row - this->start;
 }
 

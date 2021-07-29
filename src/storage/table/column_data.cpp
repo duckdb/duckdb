@@ -377,8 +377,7 @@ void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
 
 	idx_t offset = 0;
 	while (count > 0) {
-		D_ASSERT(current_segment->IsUncompressed());
-		auto &uncompressed = (UncompressedSegment &) *current_segment;
+		auto &uncompressed = (BaseSegment &) *current_segment;
 		idx_t appended = uncompressed.Append(*segment_stats, vdata, offset, count);
 		if (appended == count) {
 			// appended everything: finished

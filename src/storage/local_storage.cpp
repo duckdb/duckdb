@@ -3,7 +3,6 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/segment/uncompressed_segment.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/table_filter.hpp"

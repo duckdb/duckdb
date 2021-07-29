@@ -57,6 +57,13 @@ public:
 	//! Fetch a single value and append it to the vector
 	virtual void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) = 0;
 
+	//! Append a part of a vector to the uncompressed segment with the given append state, updating the provided stats
+	//! in the process. Returns the amount of tuples appended. If this is less than `count`, the uncompressed segment is
+	//! full.
+	virtual idx_t Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count);
+	//! Truncate a previous append
+	virtual void RevertAppend(idx_t start_row);
+
 	bool RowIdIsValid(idx_t row_id) const;
 	bool RowRangeIsValid(idx_t row_id, idx_t count) const;
 

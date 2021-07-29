@@ -167,7 +167,7 @@ const validity_t ValiditySegment::UPPER_MASKS[] = {0x0,
                                                    0xffffffffffffffff};
 
 ValiditySegment::ValiditySegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id)
-    : UncompressedSegment(db, PhysicalType::BIT, row_start) {
+    : BaseSegment(db, PhysicalType::BIT, row_start) {
 	// figure out how many vectors we want to store in this block
 
 	auto vector_size = ValidityMask::STANDARD_MASK_SIZE;
@@ -373,7 +373,7 @@ void ValiditySegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t sca
 
 void ValiditySegment::RevertAppend(idx_t start_row) {
 	idx_t start_bit = start_row - this->row_start;
-	UncompressedSegment::RevertAppend(start_row);
+	BaseSegment::RevertAppend(start_row);
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto handle = buffer_manager.Pin(block);

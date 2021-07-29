@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/storage/segment/uncompressed_segment.hpp"
+#include "duckdb/storage/segment/base_segment.hpp"
 
 namespace duckdb {
 class StorageManager;
@@ -40,7 +40,7 @@ struct string_location_t {
 	int32_t offset;
 };
 
-class StringSegment : public UncompressedSegment {
+class StringSegment : public BaseSegment {
 public:
 	StringSegment(DatabaseInstance &db, idx_t row_start, block_id_t block_id = INVALID_BLOCK);
 	~StringSegment() override;

@@ -16,7 +16,7 @@ namespace duckdb {
 static NumericSegment::append_function_t GetAppendFunction(PhysicalType type);
 
 NumericSegment::NumericSegment(DatabaseInstance &db, PhysicalType type, idx_t row_start, block_id_t block_id)
-    : UncompressedSegment(db, type, row_start) {
+    : BaseSegment(db, type, row_start) {
 	// set up the different functions for this type of segment
 	this->append_function = GetAppendFunction(type);
 
