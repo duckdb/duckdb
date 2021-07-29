@@ -19,8 +19,10 @@ enum class WindowBoundary : uint8_t {
 	UNBOUNDED_FOLLOWING = 2,
 	CURRENT_ROW_RANGE = 3,
 	CURRENT_ROW_ROWS = 4,
-	EXPR_PRECEDING = 5,
-	EXPR_FOLLOWING = 6
+	EXPR_PRECEDING_ROWS = 5,
+	EXPR_FOLLOWING_ROWS = 6,
+	EXPR_PRECEDING_RANGE = 7,
+	EXPR_FOLLOWING_RANGE = 8
 };
 
 //! The WindowExpression represents a window function in the query. They are a special case of aggregates which is why
