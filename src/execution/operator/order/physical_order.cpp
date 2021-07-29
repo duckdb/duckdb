@@ -360,7 +360,7 @@ public:
 	}
 	//! Initialize new block to write to
 	void CreateBlock() {
-		auto capacity = MaxValue((idx_t)(Storage::BLOCK_SIZE + layout.GetRowWidth() - 1) / layout.GetRowWidth(),
+		auto capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + layout.GetRowWidth() - 1) / layout.GetRowWidth(),
 		                         state.block_capacity);
 		data_blocks.emplace_back(buffer_manager, capacity, layout.GetRowWidth());
 		if (!layout.AllConstant() && state.external) {
@@ -492,7 +492,7 @@ public:
 	}
 	//! Init new block to write to
 	void CreateBlock() {
-		auto capacity = MaxValue((idx_t)(Storage::BLOCK_SIZE + sorting_state.entry_size - 1) / sorting_state.entry_size,
+		auto capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + sorting_state.entry_size - 1) / sorting_state.entry_size,
 		                         state.block_capacity);
 		radix_sorting_data.emplace_back(buffer_manager, capacity, sorting_state.entry_size);
 	}
@@ -625,7 +625,7 @@ private:
 static RowDataBlock ConcatenateBlocks(BufferManager &buffer_manager, RowDataCollection &row_data) {
 	// Create block with the correct capacity
 	const idx_t &entry_size = row_data.entry_size;
-	idx_t capacity = MaxValue((Storage::BLOCK_SIZE + entry_size - 1) / entry_size, row_data.count);
+	idx_t capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + entry_size - 1) / entry_size, row_data.count);
 	RowDataBlock new_block(buffer_manager, capacity, entry_size);
 	new_block.count = row_data.count;
 	auto new_block_handle = buffer_manager.Pin(new_block.block);
@@ -994,8 +994,8 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 		return;
 	}
 	// Fill pointer array for sorting
-	auto ptr_block = buffer_manager.Allocate(MaxValue((end - start) * sizeof(data_ptr_t), (idx_t)Storage::BLOCK_SIZE));
-	auto entry_ptrs = (data_ptr_t *)ptr_block->Ptr();
+	auto ptr_block = unique_ptr<data_ptr_t[]>(new data_ptr_t[end - start]);
+	auto entry_ptrs = (data_ptr_t *)ptr_block.get();
 	for (idx_t i = start; i < end; i++) {
 		entry_ptrs[i - start] = row_ptr;
 		row_ptr += sorting_state.entry_size;
@@ -1156,6 +1156,7 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 	// Radix sort and break ties until no more ties, or until all columns are sorted
 	idx_t sorting_size = 0;
 	idx_t col_offset = 0;
+	unique_ptr<bool[]> ties_ptr;
 	unique_ptr<BufferHandle> ties_handle;
 	bool *ties = nullptr;
 	for (idx_t i = 0; i < sorting_state.column_count; i++) {
@@ -1168,8 +1169,8 @@ static void SortInMemory(BufferManager &buffer_manager, SortedBlock &sb, const S
 		if (!ties) {
 			// This is the first sort
 			RadixSort(buffer_manager, dataptr, count, col_offset, sorting_size, sorting_state);
-			ties_handle = buffer_manager.Allocate(MaxValue(count, (idx_t)Storage::BLOCK_SIZE));
-			ties = (bool *)ties_handle->Ptr();
+			ties_ptr = unique_ptr<bool[]>(new bool[count]);
+			ties = ties_ptr.get();
 			std::fill_n(ties, count - 1, true);
 			ties[count - 1] = false;
 		} else {
@@ -2004,13 +2005,12 @@ private:
 bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
 	this->sink_state = move(state_p);
 	auto &state = (OrderGlobalState &)*this->sink_state;
+	if (state.sorted_blocks.empty()) {
+		return true;
+	}
 	// Set total count
 	for (auto &sb : state.sorted_blocks) {
 		state.total_count += sb->radix_sorting_data.back().count;
-	}
-	// No need to merge if we have less than 2 blocks
-	if (state.sorted_blocks.size() < 2) {
-		return true;
 	}
 	// Determine if we need to use do an external sort
 	idx_t total_heap_size =
@@ -2033,9 +2033,14 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 			sb->payload_data->Unswizzle();
 		}
 	}
-	// Start the merge sort
-	PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
-	return false;
+	// Start the merge or finish if a merge is not necessary
+	if (state.sorted_blocks.size() > 1) {
+		// More than one block - merge
+		PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
+		return false;
+	} else {
+		return true;
+	}
 }
 
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state) {

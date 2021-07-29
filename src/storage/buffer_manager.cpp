@@ -25,9 +25,6 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr
 
 BlockHandle::~BlockHandle() {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
-#ifdef DEBUG
-	lock_guard<mutex> vlock(buffer_manager.verification_lock);
-#endif
 	// no references remain to this block: erase
 	if (state == BlockState::BLOCK_LOADED) {
 		// the block is still loaded in memory: erase it
@@ -189,10 +186,6 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 
 	// create a new block pointer for this block
 	auto result = make_shared<BlockHandle>(db, temp_id, move(buffer), can_destroy, block_size);
-#ifdef DEBUG
-	lock_guard<mutex> lock(verification_lock);
-	temp_blocks[temp_id] = result.get();
-#endif
 	return result;
 }
 
@@ -216,14 +209,10 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 		}
 		handle->buffer->Resize(block_size);
 	} else {
-#ifdef DEBUG
-		lock_guard<mutex> vlock(verification_lock);
-#endif
 		// no need to evict blocks, just resize and adjust current memory
 		handle->buffer->Resize(block_size);
 		current_memory -= idx_t(-required_memory);
 	}
-	// re-allocate the buffer size and update its memory usage
 	handle->memory_usage = alloc_size;
 }
 
@@ -271,10 +260,6 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 }
 
 bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
-#ifdef DEBUG
-	lock_guard<mutex> vlock(verification_lock);
-	VerifyCurrentMemory();
-#endif
 	unique_ptr<BufferEvictionNode> node;
 	current_memory += extra_memory;
 	while (current_memory > memory_limit) {
@@ -305,24 +290,6 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	return true;
 }
 
-void BufferManager::VerifyCurrentMemory() {
-	//	lock_guard<mutex> vlock(temp_block_lock);
-	idx_t memory = 0;
-	for (auto &block : blocks) {
-		auto block_handle = block.second.lock();
-		if (block_handle->state == BlockState::BLOCK_LOADED) {
-			memory += block_handle->memory_usage;
-		}
-	}
-	for (auto &temp_block : temp_blocks) {
-		auto block_handle = temp_block.second;
-		if (block_handle->state == BlockState::BLOCK_LOADED) {
-			memory += block_handle->memory_usage;
-		}
-	}
-	D_ASSERT(memory == current_memory);
-}
-
 void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 	if (block_id >= MAXIMUM_BLOCK) {
 		// in-memory buffer: destroy the buffer
@@ -330,9 +297,6 @@ void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 			// buffer could have been offloaded to disk: remove the file
 			DeleteTemporaryFile(block_id);
 		}
-#ifdef DEBUG
-		temp_blocks.erase(block_id);
-#endif
 	} else {
 		lock_guard<mutex> lock(manager_lock);
 		// on-disk block: erase from list of blocks in manager

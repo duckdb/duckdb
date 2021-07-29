@@ -109,13 +109,5 @@ private:
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
-
-private:
-	//! Verify that current_memory is in a consistent, not corrupt state. DEBUG FUNCTION ONLY!
-	void VerifyCurrentMemory();
-	//! The lock for verifying the memory count and manipulating temp_blocks
-	mutex verification_lock;
-	//! A mapping of block id -> BlockHandle
-	unordered_map<block_id_t, BlockHandle *> temp_blocks;
 };
 } // namespace duckdb
