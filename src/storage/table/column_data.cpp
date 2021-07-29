@@ -11,7 +11,7 @@
 #include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 
-#include "duckdb/storage/segment/numeric_segment.hpp"
+#include "duckdb/storage/segment/compressed_segment.hpp"
 #include "duckdb/storage/segment/string_segment.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
@@ -358,15 +358,17 @@ ColumnCheckpointState::~ColumnCheckpointState() {
 }
 
 void ColumnCheckpointState::CreateEmptySegment() {
+	auto &db = column_data.GetDatabase();
 	auto type_id = column_data.type.InternalType();
 	if (type_id == PhysicalType::VARCHAR) {
-		auto string_segment = make_unique<StringSegment>(column_data.GetDatabase(), row_group.start);
+		auto string_segment = make_unique<StringSegment>(db, row_group.start);
 		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(column_data.GetDatabase());
 		current_segment = move(string_segment);
 	} else if (type_id == PhysicalType::BIT) {
-		current_segment = make_unique<ValiditySegment>(column_data.GetDatabase(), row_group.start);
+		current_segment = make_unique<ValiditySegment>(db, row_group.start);
 	} else {
-		current_segment = make_unique<NumericSegment>(column_data.GetDatabase(), type_id, row_group.start);
+		auto &config = DBConfig::GetConfig(db);
+		current_segment = make_unique<CompressedSegment>(db, type_id, row_group.start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type_id));
 	}
 	segment_stats = make_unique<SegmentStatistics>(column_data.type);
 }

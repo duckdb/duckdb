@@ -66,10 +66,6 @@ public:
 
 	bool RowIdIsValid(idx_t row_id) const;
 	bool RowRangeIsValid(idx_t row_id, idx_t count) const;
-
-	virtual bool IsUncompressed() {
-		return false;
-	}
 };
 
 } // namespace duckdb

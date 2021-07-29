@@ -26,6 +26,11 @@ class TransientSegment;
 class ValiditySegment;
 class TableFilterSet;
 
+struct SegmentScanState {
+	virtual ~SegmentScanState() {
+	}
+};
+
 struct IndexScanState {
 	virtual ~IndexScanState() {
 	}
@@ -40,6 +45,8 @@ struct ColumnScanState {
 	idx_t row_index;
 	//! The primary buffer handle
 	unique_ptr<BufferHandle> primary_handle;
+	//! Segment scan state
+	unique_ptr<SegmentScanState> scan_state;
 	//! Child states of the vector
 	vector<ColumnScanState> child_states;
 	//! Whether or not InitializeState has been called for this segment

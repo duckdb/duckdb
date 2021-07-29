@@ -2,7 +2,7 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/segment/numeric_segment.hpp"
+#include "duckdb/storage/segment/compressed_segment.hpp"
 #include "duckdb/storage/segment/string_segment.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
@@ -18,7 +18,8 @@ TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type
 	} else if (type.InternalType() == PhysicalType::BIT) {
 		data = make_unique<ValiditySegment>(db, start);
 	} else {
-		data = make_unique<NumericSegment>(db, type.InternalType(), start);
+		auto &config = DBConfig::GetConfig(db);
+		data = make_unique<CompressedSegment>(db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType()));
 	}
 }
 

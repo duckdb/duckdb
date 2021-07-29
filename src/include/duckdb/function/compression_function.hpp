@@ -14,7 +14,14 @@
 #include "duckdb/common/map.hpp"
 
 namespace duckdb {
+class DatabaseInstance;
 class ColumnData;
+class CompressedSegment;
+class SegmentStatistics;
+
+struct ColumnFetchState;
+struct ColumnScanState;
+struct SegmentScanState;
 
 struct AnalyzeState {
 	virtual ~AnalyzeState(){}
@@ -47,8 +54,11 @@ typedef idx_t (*compression_flush_state_t)(BufferHandle &block, idx_t data_writt
 
 // init scan function state
 // scan function
-// skip function
-// fetch function
+typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(CompressedSegment &segment);
+typedef void (*compression_scan_vector_t)(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result);
+typedef void (*compression_scan_partial_t)(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
+typedef void (*compression_fetch_row_t)(CompressedSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+typedef idx_t (*compression_append_t)(CompressedSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count);
 
 //! The type used for initializing hashed aggregate function states
 class CompressionFunction {
@@ -56,9 +66,12 @@ public:
 	CompressionFunction(CompressionType type, PhysicalType data_type, compression_init_analyze_t init_analyze,
 	                    compression_analyze_t analyze, compression_final_analyze_t final_analyze,
 	                    compression_init_compression_t init_compression, compression_compress_data_t compress,
-	                    compression_flush_state_t flush) :
+	                    compression_flush_state_t flush, compression_init_segment_scan_t init_scan,
+	                    compression_scan_vector_t scan_vector, compression_scan_partial_t scan_partial,
+	                    compression_fetch_row_t fetch_row, compression_append_t append) :
 	type(type), data_type(data_type), init_analyze(init_analyze), analyze(analyze), final_analyze(final_analyze),
-	init_compression(init_compression), compress(compress), flush(flush) {}
+	init_compression(init_compression), compress(compress), flush(flush), init_scan(init_scan),
+	scan_vector(scan_vector), scan_partial(scan_partial), fetch_row(fetch_row), append(append) {}
 
 	//! Compression type
 	CompressionType type;
@@ -71,6 +84,11 @@ public:
 	compression_init_compression_t init_compression;
 	compression_compress_data_t compress;
 	compression_flush_state_t flush;
+	compression_init_segment_scan_t init_scan;
+	compression_scan_vector_t scan_vector;
+	compression_scan_partial_t scan_partial;
+	compression_fetch_row_t fetch_row;
+	compression_append_t append;
 };
 
 //! The set of compression functions

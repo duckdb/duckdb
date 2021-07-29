@@ -13,6 +13,11 @@
 
 namespace duckdb {
 
+struct UncompressedFun {
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(PhysicalType type);
+};
+
 struct RLEFun {
 	static CompressionFunction GetFunction(PhysicalType type);
 	static bool TypeIsSupported(PhysicalType type);

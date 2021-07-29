@@ -1,0 +1,37 @@
+#include "duckdb/function/compression/compression.hpp"
+#include "duckdb/storage/segment/numeric_uncompressed.hpp"
+
+namespace duckdb {
+
+CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
+	switch(type) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+	case PhysicalType::INT16:
+	case PhysicalType::INT32:
+	case PhysicalType::INT64:
+	case PhysicalType::INT128:
+	case PhysicalType::UINT8:
+	case PhysicalType::UINT16:
+	case PhysicalType::UINT32:
+	case PhysicalType::UINT64:
+	case PhysicalType::FLOAT:
+	case PhysicalType::DOUBLE:
+	case PhysicalType::LIST:
+	case PhysicalType::INTERVAL:
+		return NumericUncompressed::GetFunction(type);
+	default:
+		throw InternalException("Unsupported type for Uncompressed");
+	}
+}
+
+bool UncompressedFun::TypeIsSupported(PhysicalType type) {
+	if (type == PhysicalType::VARCHAR) {
+		return false;
+	} else if (type == PhysicalType::BIT) {
+		return false;
+	}
+	return true;
+}
+
+}

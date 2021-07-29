@@ -1,5 +1,5 @@
-#include "duckdb/storage/segment/constant_segment.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
+#include "duckdb/storage/segment/constant_segment.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 
