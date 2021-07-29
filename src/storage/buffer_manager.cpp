@@ -12,7 +12,6 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p)
 	eviction_timestamp = 0;
 	state = BlockState::BLOCK_UNLOADED;
 	memory_usage = Storage::BLOCK_ALLOC_SIZE;
-	//    printf("allocated block with id %lld, size %lld\n", block_id, memory_usage);
 }
 
 BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr<FileBuffer> buffer_p,
@@ -22,7 +21,6 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr
 	buffer = move(buffer_p);
 	state = BlockState::BLOCK_LOADED;
 	memory_usage = block_size + Storage::BLOCK_HEADER_SIZE;
-	//	printf("allocated block with id %lld, size %lld\n", block_id, memory_usage);
 }
 
 BlockHandle::~BlockHandle() {
@@ -37,7 +35,6 @@ BlockHandle::~BlockHandle() {
 		buffer_manager.current_memory -= memory_usage;
 	}
 	buffer_manager.UnregisterBlock(block_id, can_destroy);
-	//    printf("destroyed block with id %lld, size %lld\n", block_id, memory_usage);
 }
 
 unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
@@ -46,7 +43,6 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 		D_ASSERT(handle->buffer);
 		return make_unique<BufferHandle>(handle, handle->buffer.get());
 	}
-	//	printf("loading block %lld with size %lld\n", handle->block_id, handle->memory_usage);
 
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
 	auto &block_manager = BlockManager::GetBlockManager(handle->db);
@@ -70,7 +66,6 @@ void BlockHandle::Unload() {
 		// already unloaded: nothing to do
 		return;
 	}
-	//    printf("unloading block %lld with size %lld\n", block_id, memory_usage);
 	D_ASSERT(CanUnload());
 	D_ASSERT(memory_usage >= Storage::BLOCK_ALLOC_SIZE);
 
@@ -194,8 +189,10 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 
 	// create a new block pointer for this block
 	auto result = make_shared<BlockHandle>(db, temp_id, move(buffer), can_destroy, block_size);
+#ifdef DEBUG
 	lock_guard<mutex> lock(verification_lock);
 	temp_blocks[temp_id] = result.get();
+#endif
 	return result;
 }
 
@@ -221,7 +218,6 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 	} else {
 #ifdef DEBUG
 		lock_guard<mutex> vlock(verification_lock);
-//		lock_guard<mutex> tblock(temp_block_lock);
 #endif
 		// no need to evict blocks, just resize and adjust current memory
 		handle->buffer->Resize(block_size);
@@ -334,7 +330,9 @@ void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 			// buffer could have been offloaded to disk: remove the file
 			DeleteTemporaryFile(block_id);
 		}
+#ifdef DEBUG
 		temp_blocks.erase(block_id);
+#endif
 	} else {
 		lock_guard<mutex> lock(manager_lock);
 		// on-disk block: erase from list of blocks in manager

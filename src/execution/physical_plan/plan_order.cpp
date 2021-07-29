@@ -9,8 +9,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOrder &op)
 
 	auto plan = CreatePlan(*op.children[0]);
 	if (!op.orders.empty()) {
-		auto order =
-		    make_unique<PhysicalOrder>(op.types, move(op.orders), move(op.statistics), op.estimated_cardinality);
+		vector<unique_ptr<BaseStatistics>> statistics;
+		for (auto &order : op.orders) {
+			auto &expr = order.expression;
+			if (expr->stats) {
+				statistics.push_back(order.expression->stats->Copy());
+			} else {
+				statistics.push_back(nullptr);
+			}
+		}
+		auto order = make_unique<PhysicalOrder>(op.types, move(op.orders), move(statistics), op.estimated_cardinality);
 		order->children.push_back(move(plan));
 		plan = move(order);
 	}

@@ -12,11 +12,6 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrde
 	for (idx_t i = 0; i < order.orders.size(); i++) {
 		auto &expr = order.orders[i].expression;
 		PropagateExpression(expr);
-		if (expr->stats) {
-			order.statistics.push_back(expr->stats->Copy());
-		} else {
-			order.statistics.push_back(nullptr);
-		}
 	}
 	return move(node_stats);
 }

@@ -76,8 +76,6 @@ private:
 	//! Evict blocks until the currently used memory + extra_memory fit, returns false if this was not possible
 	//! (i.e. not enough blocks could be evicted)
 	bool EvictBlocks(idx_t extra_memory, idx_t memory_limit);
-	//! Verify that current_memory is in a consistent, not corrupt state. DEBUG FUNCTION ONLY!
-	void VerifyCurrentMemory();
 
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(ManagedBuffer &buffer);
@@ -97,8 +95,6 @@ private:
 	atomic<idx_t> current_memory;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
 	atomic<idx_t> maximum_memory;
-	//! The lock for verifying the memory count
-	mutex verification_lock;
 	//! The directory name where temporary files are stored
 	string temp_directory;
 	//! Lock for creating the temp handle
@@ -109,13 +105,17 @@ private:
 	mutex manager_lock;
 	//! A mapping of block id -> BlockHandle
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
-	//! A mapping of block id -> BlockHandle
-	unordered_map<block_id_t, BlockHandle *> temp_blocks;
-	//! The lock reading/writing temp_blocks
-	//    mutex temp_block_lock;
 	//! Eviction queue
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
+
+private:
+	//! Verify that current_memory is in a consistent, not corrupt state. DEBUG FUNCTION ONLY!
+	void VerifyCurrentMemory();
+	//! The lock for verifying the memory count and manipulating temp_blocks
+	mutex verification_lock;
+	//! A mapping of block id -> BlockHandle
+	unordered_map<block_id_t, BlockHandle *> temp_blocks;
 };
 } // namespace duckdb

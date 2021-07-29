@@ -21,7 +21,6 @@ public:
 	}
 
 	vector<BoundOrderByNode> orders;
-	vector<unique_ptr<BaseStatistics>> statistics;
 
 	string ParamsToString() const override {
 		string result;
