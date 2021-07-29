@@ -72,23 +72,24 @@ string WindowExpression::ToString() const {
 	string from;
 	switch (start) {
 	case WindowBoundary::CURRENT_ROW_RANGE:
-		from = "CURRENT ROW";
-		units = "RANGE";
-		break;
 	case WindowBoundary::CURRENT_ROW_ROWS:
 		from = "CURRENT ROW";
-		units = "ROWS";
+		units = (start == WindowBoundary::CURRENT_ROW_RANGE) ? "RANGE" : "ROWS";
 		break;
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		if (end != WindowBoundary::CURRENT_ROW_RANGE) {
 			from = "UNBOUNDED PRECEDING";
 		}
 		break;
-	case WindowBoundary::EXPR_PRECEDING:
-		from = start_expr->ToString() + " PRECEDING";
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+		from = start_expr->GetName() + " PRECEDING";
+		units = (start == WindowBoundary::EXPR_PRECEDING_RANGE) ? "RANGE" : "ROWS";
 		break;
-	case WindowBoundary::EXPR_FOLLOWING:
-		from = start_expr->ToString() + " FOLLOWING";
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		from = start_expr->GetName() + " FOLLOWING";
+		units = (start == WindowBoundary::EXPR_FOLLOWING_RANGE) ? "RANGE" : "ROWS";
 		break;
 	default:
 		break;
@@ -109,11 +110,15 @@ string WindowExpression::ToString() const {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		to = "UNBOUNDED PRECEDING";
 		break;
-	case WindowBoundary::EXPR_PRECEDING:
-		to = end_expr->ToString() + " PRECEDING";
+	case WindowBoundary::EXPR_PRECEDING_ROWS:
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+		to = end_expr->GetName() + " PRECEDING";
+		units = (start == WindowBoundary::EXPR_PRECEDING_RANGE) ? "RANGE" : "ROWS";
 		break;
-	case WindowBoundary::EXPR_FOLLOWING:
-		to = end_expr->ToString() + " FOLLOWING";
+	case WindowBoundary::EXPR_FOLLOWING_ROWS:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		to = end_expr->GetName() + " FOLLOWING";
+		units = (start == WindowBoundary::EXPR_FOLLOWING_RANGE) ? "RANGE" : "ROWS";
 		break;
 	default:
 		break;
