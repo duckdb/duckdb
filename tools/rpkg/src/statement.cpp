@@ -1,8 +1,9 @@
+#include "altrepstring.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "altrepstring.hpp"
 
-#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/arrow.hpp"
 
 using namespace duckdb;
 
@@ -90,7 +91,9 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 		case LogicalTypeId::BOOLEAN:
 			rtype = "logical";
 			break;
+		case LogicalTypeId::UTINYINT:
 		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::SMALLINT:
 		case LogicalTypeId::INTEGER:
 			rtype = "integer";
@@ -104,6 +107,8 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 		case LogicalTypeId::TIME:
 			rtype = "difftime";
 			break;
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:
 		case LogicalTypeId::FLOAT:
@@ -154,94 +159,11 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp) {
 	}
 
 	for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
-		Value val;
 		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
 		if (Rf_length(valsexp) != 1) {
 			Rf_error("duckdb_bind_R: bind parameter values need to have length 1");
 		}
-		auto rtype = RApiTypes::DetectRType(valsexp);
-		switch (rtype) {
-		case RType::LOGICAL: {
-			auto lgl_val = INTEGER_POINTER(valsexp)[0];
-			val = Value::BOOLEAN(lgl_val);
-			val.is_null = RBooleanType::IsNull(lgl_val);
-			break;
-		}
-		case RType::INTEGER: {
-			auto int_val = INTEGER_POINTER(valsexp)[0];
-			val = Value::INTEGER(int_val);
-			val.is_null = RIntegerType::IsNull(int_val);
-			break;
-		}
-		case RType::NUMERIC: {
-			auto dbl_val = NUMERIC_POINTER(valsexp)[0];
-			val = Value::DOUBLE(dbl_val);
-			val.is_null = RDoubleType::IsNull(dbl_val);
-			break;
-		}
-		case RType::STRING: {
-			auto str_val = STRING_ELT(valsexp, 0);
-			val = Value(CHAR(str_val));
-			val.is_null = str_val == NA_STRING;
-			break;
-		}
-		case RType::FACTOR: {
-			auto int_val = INTEGER_POINTER(valsexp)[0];
-			auto levels = GET_LEVELS(valsexp);
-			bool is_null = RIntegerType::IsNull(int_val);
-			if (!is_null) {
-				auto str_val = STRING_ELT(levels, int_val - 1);
-				val = Value(CHAR(str_val));
-			} else {
-				val = Value(LogicalType::VARCHAR);
-			}
-			break;
-		}
-		case RType::TIMESTAMP: {
-			auto ts_val = NUMERIC_POINTER(valsexp)[0];
-			val = Value::TIMESTAMP(RTimestampType::Convert(ts_val));
-			val.is_null = RTimestampType::IsNull(ts_val);
-			break;
-		}
-		case RType::DATE: {
-			auto d_val = NUMERIC_POINTER(valsexp)[0];
-			val = Value::DATE(RDateType::Convert(d_val));
-			val.is_null = RDateType::IsNull(d_val);
-			break;
-		}
-		case RType::TIME_SECONDS: {
-			auto ts_val = NUMERIC_POINTER(valsexp)[0];
-			val = Value::TIME(RTimeSecondsType::Convert(ts_val));
-			val.is_null = RTimeSecondsType::IsNull(ts_val);
-			break;
-		}
-		case RType::TIME_MINUTES: {
-			auto ts_val = NUMERIC_POINTER(valsexp)[0];
-			val = Value::TIME(RTimeMinutesType::Convert(ts_val));
-			val.is_null = RTimeMinutesType::IsNull(ts_val);
-			break;
-		}
-		case RType::TIME_HOURS: {
-			auto ts_val = NUMERIC_POINTER(valsexp)[0];
-			val = Value::TIME(RTimeHoursType::Convert(ts_val));
-			val.is_null = RTimeHoursType::IsNull(ts_val);
-			break;
-		}
-		case RType::TIME_DAYS: {
-			auto ts_val = NUMERIC_POINTER(valsexp)[0];
-			val = Value::TIME(RTimeDaysType::Convert(ts_val));
-			val.is_null = RTimeDaysType::IsNull(ts_val);
-			break;
-		}
-		case RType::TIME_WEEKS: {
-			auto ts_val = NUMERIC_POINTER(valsexp)[0];
-			val = Value::TIME(RTimeWeeksType::Convert(ts_val));
-			val.is_null = RTimeWeeksType::IsNull(ts_val);
-			break;
-		}
-		default:
-			Rf_error("duckdb_bind_R: Unsupported parameter type");
-		}
+		auto val = RApiTypes::SexpToValue(valsexp);
 		stmtholder->parameters[param_idx] = val;
 	}
 	return R_NilValue;
@@ -267,11 +189,15 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 		case LogicalTypeId::BOOLEAN:
 			varvalue = r_varvalue.Protect(NEW_LOGICAL(nrows));
 			break;
+		case LogicalTypeId::UTINYINT:
 		case LogicalTypeId::TINYINT:
 		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::USMALLINT:
 		case LogicalTypeId::INTEGER:
 			varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
 			break;
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::UBIGINT:
 		case LogicalTypeId::BIGINT:
 		case LogicalTypeId::HUGEINT:
 		case LogicalTypeId::FLOAT:
@@ -329,9 +255,17 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				VectorToR<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), LOGICAL_POINTER(dest), dest_offset,
 				                            NA_LOGICAL);
 				break;
+			case LogicalTypeId::UTINYINT:
+				VectorToR<uint8_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
+				                             NA_INTEGER);
+				break;
 			case LogicalTypeId::TINYINT:
 				VectorToR<int8_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
 				                            NA_INTEGER);
+				break;
+			case LogicalTypeId::USMALLINT:
+				VectorToR<uint16_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
+				                              NA_INTEGER);
 				break;
 			case LogicalTypeId::SMALLINT:
 				VectorToR<int16_t, uint32_t>(chunk->data[col_idx], chunk->size(), INTEGER_POINTER(dest), dest_offset,
@@ -394,6 +328,14 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 				Rf_setAttrib(dest, Rf_install("units"), r_time.Protect(Rf_mkString("secs")));
 				break;
 			}
+			case LogicalTypeId::UINTEGER:
+				VectorToR<uint32_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
+				                            NA_REAL);
+				break;
+			case LogicalTypeId::UBIGINT:
+				VectorToR<uint64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
+				                            NA_REAL);
+				break;
 			case LogicalTypeId::BIGINT:
 				VectorToR<int64_t, double>(chunk->data[col_idx], chunk->size(), NUMERIC_POINTER(dest), dest_offset,
 				                           NA_REAL);
@@ -480,30 +422,99 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 	return retlist;
 }
 
-SEXP RApi::Execute(SEXP stmtsexp) {
+struct AppendableRList {
+	AppendableRList() {
+		the_list = r.Protect(NEW_LIST(capacity));
+	}
+	void PrepAppend() {
+		if (size >= capacity) {
+			capacity = capacity * 2;
+			SEXP new_list = r.Protect(NEW_LIST(capacity));
+			D_ASSERT(new_list);
+			for (idx_t i = 0; i < size; i++) {
+				SET_VECTOR_ELT(new_list, i, VECTOR_ELT(the_list, i));
+			}
+			the_list = new_list;
+		}
+	}
+
+	void Append(SEXP val) {
+		D_ASSERT(size < capacity);
+		D_ASSERT(the_list != R_NilValue);
+		SET_VECTOR_ELT(the_list, size++, val);
+	}
+	SEXP the_list;
+	idx_t capacity = 1000;
+	idx_t size = 0;
+	RProtector r;
+};
+
+// Turn a DuckDB materialized result set into an Arrow Table
+SEXP duckdb_execute_arrow(QueryResult *result) {
+	RProtector r;
+	// somewhat dark magic below
+	SEXP arrow_name_sexp = r.Protect(RApi::StringsToSexp({"arrow"}));
+	SEXP arrow_namespace_call = r.Protect(Rf_lang2(Rf_install("getNamespace"), arrow_name_sexp));
+	SEXP arrow_namespace = r.Protect(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
+
+	// export schema setup
+	ArrowSchema arrow_schema;
+	auto schema_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_schema))));
+	auto schema_import_from_c = r.Protect(Rf_lang2(Rf_install("ImportSchema"), schema_ptr_sexp));
+
+	// export data setup
+	ArrowArray arrow_data;
+	auto data_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_data))));
+	auto batch_import_from_c = r.Protect(Rf_lang3(Rf_install("ImportRecordBatch"), data_ptr_sexp, schema_ptr_sexp));
+	// create data batches
+	unique_ptr<DataChunk> data_chunk;
+	AppendableRList batches_list;
+	while (true) {
+		data_chunk = result->Fetch();
+		if (!data_chunk || data_chunk->size() == 0) {
+			break;
+		}
+		result->ToArrowSchema(&arrow_schema);
+		data_chunk->ToArrowArray(&arrow_data);
+		batches_list.PrepAppend();
+		batches_list.Append(RApi::REvalRerror(batch_import_from_c, arrow_namespace));
+	}
+
+	SET_LENGTH(batches_list.the_list, batches_list.size);
+
+	result->ToArrowSchema(&arrow_schema);
+	SEXP schema_arrow_obj = r.Protect(RApi::REvalRerror(schema_import_from_c, arrow_namespace));
+
+	// create arrow::Table
+	auto from_record_batches =
+	    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_list.the_list, schema_arrow_obj));
+	return RApi::REvalRerror(from_record_batches, arrow_namespace);
+}
+
+SEXP RApi::Execute(SEXP stmtsexp, SEXP arrowsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
-		Rf_error("duckdb_execute_R: Need external pointer parameter");
+		Rf_error("duckdb_execute_R: Need external pointer for first parameter");
+	}
+	if (TYPEOF(arrowsexp) != LGLSXP) {
+		Rf_error("duckdb_execute_R: Need logical for second parameter");
 	}
 	RStatement *stmtholder = (RStatement *)R_ExternalPtrAddr(stmtsexp);
 	if (!stmtholder || !stmtholder->stmt) {
 		Rf_error("duckdb_execute_R: Invalid statement");
 	}
 
-	RProtector r;
-	SEXP out;
-
-	{
-		auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, false);
-
-		if (!generic_result->success) {
-			Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
-		}
-		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
-		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
-
-		// Protect during destruction of generic_result
-		out = r.Protect(duckdb_execute_R_impl(result));
+	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
+	auto generic_result = stmtholder->stmt->Execute(stmtholder->parameters, arrow_fetch);
+	if (!generic_result->success) {
+		Rf_error("duckdb_execute_R: Failed to run query\nError: %s", generic_result->error.c_str());
 	}
 
-	return out;
+	if (arrow_fetch) {
+
+		return duckdb_execute_arrow(generic_result.get());
+	} else {
+		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
+		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();
+		return duckdb_execute_R_impl(result);
+	}
 }

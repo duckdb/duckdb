@@ -296,6 +296,15 @@ struct NegateOperator {
 	}
 };
 
+template <>
+interval_t NegateOperator::Operation(interval_t input) {
+	interval_t result;
+	result.months = NegateOperator::Operation<int32_t, int32_t>(input.months);
+	result.days = NegateOperator::Operation<int32_t, int32_t>(input.days);
+	result.micros = NegateOperator::Operation<int64_t, int64_t>(input.micros);
+	return result;
+}
+
 unique_ptr<FunctionData> DecimalNegateBind(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	auto &decimal_type = arguments[0]->return_type;
@@ -413,6 +422,8 @@ void SubtractFun::RegisterFunction(BuiltinFunctions &set) {
 			                                     nullptr, nullptr, NegateBindStatistics));
 		}
 	}
+	functions.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::INTERVAL,
+	                                     ScalarFunction::UnaryFunction<interval_t, interval_t, NegateOperator>));
 	set.AddFunction(functions);
 }
 

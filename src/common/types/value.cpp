@@ -632,6 +632,8 @@ T Value::GetValueInternal() const {
 		return Cast::Operation<double, T>(value_.double_);
 	case LogicalTypeId::VARCHAR:
 		return Cast::Operation<string_t, T>(str_value.c_str());
+	case LogicalTypeId::INTERVAL:
+		return Cast::Operation<interval_t, T>(value_.interval);
 	case LogicalTypeId::DECIMAL:
 		return CastAs(LogicalType::DOUBLE).GetValueInternal<T>();
 	default:
@@ -710,6 +712,11 @@ dtime_t Value::GetValue() const {
 template <>
 timestamp_t Value::GetValue() const {
 	return GetValueInternal<timestamp_t>();
+}
+
+template <>
+DUCKDB_API interval_t Value::GetValue() const {
+	return GetValueInternal<interval_t>();
 }
 
 uintptr_t Value::GetPointer() const {
