@@ -1,4 +1,4 @@
-#include "duckdb/storage/uncompressed_segment.hpp"
+#include "duckdb/storage/segment/uncompressed_segment.hpp"
 
 namespace duckdb {
 

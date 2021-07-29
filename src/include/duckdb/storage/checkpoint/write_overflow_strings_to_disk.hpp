@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/segment/string_segment.hpp"
 
 namespace duckdb {
 

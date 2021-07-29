@@ -7,9 +7,9 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
-#include "duckdb/storage/constant_segment.hpp"
-#include "duckdb/storage/numeric_segment.hpp"
-#include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/segment/constant_segment.hpp"
+#include "duckdb/storage/segment/numeric_segment.hpp"
+#include "duckdb/storage/segment/string_segment.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
 
 namespace duckdb {

@@ -1,4 +1,4 @@
-#include "duckdb/storage/numeric_segment.hpp"
+#include "duckdb/storage/segment/numeric_segment.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/table/append_state.hpp"

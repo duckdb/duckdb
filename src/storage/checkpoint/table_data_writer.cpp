@@ -6,8 +6,8 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 
-#include "duckdb/storage/numeric_segment.hpp"
-#include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/segment/numeric_segment.hpp"
+#include "duckdb/storage/segment/string_segment.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"

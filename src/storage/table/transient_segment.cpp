@@ -2,8 +2,8 @@
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/numeric_segment.hpp"
-#include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/segment/numeric_segment.hpp"
+#include "duckdb/storage/segment/string_segment.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
@@ -26,7 +26,6 @@ void TransientSegment::InitializeAppend(ColumnAppendState &state) {
 }
 
 idx_t TransientSegment::Append(ColumnAppendState &state, VectorData &append_data, idx_t offset, idx_t count) {
-	D_ASSERT(data->IsUncompressed());
 	auto &uncompressed = (UncompressedSegment &) *data;
 	idx_t appended = uncompressed.Append(stats, append_data, offset, count);
 	this->count += appended;
@@ -34,7 +33,6 @@ idx_t TransientSegment::Append(ColumnAppendState &state, VectorData &append_data
 }
 
 void TransientSegment::RevertAppend(idx_t start_row) {
-	D_ASSERT(data->IsUncompressed());
 	auto &uncompressed = (UncompressedSegment &) *data;
 	uncompressed.RevertAppend(start_row);
 	this->count = start_row - this->start;

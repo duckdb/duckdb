@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/storage/block.hpp"
-#include "duckdb/storage/uncompressed_segment.hpp"
+#include "duckdb/storage/segment/uncompressed_segment.hpp"
 #include "duckdb/common/types/validity_mask.hpp"
 
 namespace duckdb {

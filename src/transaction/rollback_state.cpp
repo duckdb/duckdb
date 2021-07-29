@@ -3,7 +3,7 @@
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 
-#include "duckdb/storage/uncompressed_segment.hpp"
+#include "duckdb/storage/segment/uncompressed_segment.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 
 #include "duckdb/catalog/catalog_entry.hpp"

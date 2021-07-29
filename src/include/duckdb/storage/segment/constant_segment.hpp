@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/constant_segment.hpp
+// duckdb/storage/segment/constant_segment.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/storage/base_segment.hpp"
+#include "duckdb/storage/segment/base_segment.hpp"
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {

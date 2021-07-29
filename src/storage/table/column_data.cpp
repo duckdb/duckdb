@@ -11,8 +11,8 @@
 #include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 
-#include "duckdb/storage/numeric_segment.hpp"
-#include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/segment/numeric_segment.hpp"
+#include "duckdb/storage/segment/string_segment.hpp"
 #include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/table/validity_column_data.hpp"
@@ -604,7 +604,7 @@ public:
 			});
 			state.FlushSegment();
 		} else {
-			throw Exception("FIXME: compressed storage");
+			throw Exception("FIXME: compression");
 		}
 
 

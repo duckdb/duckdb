@@ -14,9 +14,9 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
-#include "duckdb/storage/uncompressed_segment.hpp"
 
 namespace duckdb {
+class BaseSegment;
 class BlockManager;
 class ColumnSegment;
 class ColumnData;

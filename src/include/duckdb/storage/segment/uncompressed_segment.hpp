@@ -1,14 +1,14 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/uncompressed_segment.hpp
+// duckdb/storage/segment/uncompressed_segment.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/storage/base_segment.hpp"
+#include "duckdb/storage/segment/base_segment.hpp"
 
 namespace duckdb {
 
