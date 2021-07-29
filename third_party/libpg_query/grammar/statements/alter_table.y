@@ -454,5 +454,6 @@ alter_generic_options:
 
 
 opt_set_data: SET DATA_P							{ $$ = 1; }
+			| SET									{ $$ = 0; }
 			| /*EMPTY*/								{ $$ = 0; }
 		;
