@@ -207,12 +207,12 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 		if (!EvictBlocks(required_memory, maximum_memory)) {
 			throw OutOfMemoryException("failed to resize block from %lld to %lld", handle->memory_usage, alloc_size);
 		}
-		handle->buffer->Resize(block_size);
 	} else {
-		// no need to evict blocks, just resize and adjust current memory
-		handle->buffer->Resize(block_size);
+		// no need to evict blocks
 		current_memory -= idx_t(-required_memory);
 	}
+	// resize and adjust current memory
+	handle->buffer->Resize(block_size);
 	handle->memory_usage = alloc_size;
 }
 

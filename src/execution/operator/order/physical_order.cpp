@@ -218,10 +218,10 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	payload_layout.Initialize(types, false);
 	auto state = make_unique<OrderGlobalState>(*this, payload_layout);
 	// Memory usage per thread should scale with max mem / num threads
-	// We take 1/15th of this, to be VERY conservative
+	// We take 1/6th of this, to be conservative
 	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
 	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	state->memory_per_thread = (max_memory / num_threads) / 15;
+	state->memory_per_thread = (max_memory / num_threads) / 6;
 	state->external = context.force_external;
 	return move(state);
 }
