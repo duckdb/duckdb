@@ -238,6 +238,12 @@ py::object DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
 
 bool FetchArrowChunk(QueryResult *result, py::list &batches,
                      pybind11::detail::accessor<pybind11::detail::accessor_policies::str_attr> &batch_import_func) {
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto stream_result = (StreamQueryResult *)result;
+		if (!stream_result->is_open) {
+			return false;
+		}
+	}
 	auto data_chunk = result->Fetch();
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;
@@ -250,7 +256,7 @@ bool FetchArrowChunk(QueryResult *result, py::list &batches,
 	return true;
 }
 
-py::object DuckDBPyResult::FetchArrowTable(bool stream, idx_t num_of_vectors) {
+py::object DuckDBPyResult::FetchArrowTable(bool stream, idx_t num_of_vectors, bool return_table) {
 	if (!result) {
 		throw std::runtime_error("result closed");
 	}
@@ -275,12 +281,14 @@ py::object DuckDBPyResult::FetchArrowTable(bool stream, idx_t num_of_vectors) {
 		while (FetchArrowChunk(result.get(), batches, batch_import_func)) {
 		}
 	}
-
-	return from_batches_func(batches, schema_obj);
+	if (return_table) {
+		return from_batches_func(batches, schema_obj);
+	}
+	return std::move(batches);
 }
 
-py::object DuckDBPyResult::FetchArrowTableChunk(idx_t num_of_vectors) {
-	return FetchArrowTable(true, num_of_vectors);
+py::object DuckDBPyResult::FetchArrowTableChunk(idx_t num_of_vectors, bool return_table) {
+	return FetchArrowTable(true, num_of_vectors, return_table);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {

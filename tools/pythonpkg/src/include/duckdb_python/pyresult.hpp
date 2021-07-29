@@ -33,9 +33,9 @@ public:
 
 	py::object FetchDFChunk(idx_t vectors_per_chunk);
 
-	py::object FetchArrowTableChunk(idx_t num_of_vectors = 1);
+	py::object FetchArrowTableChunk(idx_t num_of_vectors = 1, bool return_table = false);
 
-	py::object FetchArrowTable(bool stream = false, idx_t num_of_vectors = 1);
+	py::object FetchArrowTable(bool stream = false, idx_t num_of_vectors = 1, bool return_table = true);
 
 	py::list Description();
 
