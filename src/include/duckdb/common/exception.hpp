@@ -10,8 +10,8 @@
 
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/exception_format_value.hpp"
+#include "duckdb/common/vector.hpp"
 
 #include <stdexcept>
 
@@ -72,7 +72,8 @@ enum class ExceptionType {
 	FATAL = 30, // Fatal exception: fatal exceptions are non-recoverable, and render the entire DB in an unusable state
 	INTERNAL =
 	    31, // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
-	INVALID_INPUT = 32 // Input or arguments error
+	INVALID_INPUT = 32, // Input or arguments error
+	OUT_OF_MEMORY = 33  // out of memory
 };
 
 class Exception : public std::exception {
@@ -181,6 +182,16 @@ public:
 	template <typename... Args>
 	explicit OutOfRangeException(const string &msg, Args... params)
 	    : OutOfRangeException(ConstructMessage(msg, params...)) {
+	}
+};
+
+class OutOfMemoryException : public Exception {
+public:
+	explicit OutOfMemoryException(const string &msg);
+
+	template <typename... Args>
+	explicit OutOfMemoryException(const string &msg, Args... params)
+	    : OutOfMemoryException(ConstructMessage(msg, params...)) {
 	}
 };
 

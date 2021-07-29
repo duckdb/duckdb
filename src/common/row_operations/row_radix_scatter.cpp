@@ -123,7 +123,7 @@ void RadixScatterListVector(Vector &v, VectorData &vdata, const SelectionVector 
 					key_locations[i][0] = 1;
 					key_locations[i]++;
 					RowOperations::RadixScatter(child_vector, list_size, FlatVector::INCREMENTAL_SELECTION_VECTOR, 1,
-					                            key_locations + i, false, has_null, false, prefix_len, width - 1,
+					                            key_locations + i, false, true, false, prefix_len, width - 1,
 					                            list_entry.offset);
 				} else {
 					// denote that the list is empty with a 0
@@ -154,7 +154,7 @@ void RadixScatterListVector(Vector &v, VectorData &vdata, const SelectionVector 
 				key_locations[i][0] = 1;
 				key_locations[i]++;
 				RowOperations::RadixScatter(child_vector, list_size, FlatVector::INCREMENTAL_SELECTION_VECTOR, 1,
-				                            key_locations + i, false, has_null, false, prefix_len, width - 1,
+				                            key_locations + i, false, true, false, prefix_len, width - 1,
 				                            list_entry.offset);
 			} else {
 				// denote that the list is empty with a 0
@@ -197,7 +197,7 @@ void RadixScatterStructVector(Vector &v, VectorData &vdata, idx_t vcount, const 
 	// serialize the struct
 	auto &child_vector = *StructVector::GetEntries(v)[0];
 	RowOperations::RadixScatter(child_vector, vcount, FlatVector::INCREMENTAL_SELECTION_VECTOR, add_count,
-	                            key_locations, false, has_null, false, prefix_len, width, offset);
+	                            key_locations, false, true, false, prefix_len, width, offset);
 	// invert bits if desc
 	if (desc) {
 		for (idx_t i = 0; i < add_count; i++) {

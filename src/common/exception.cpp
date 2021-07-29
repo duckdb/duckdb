@@ -1,7 +1,8 @@
 #include "duckdb/common/exception.hpp"
+
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/types.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
@@ -87,6 +88,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "INTERNAL";
 	case ExceptionType::INVALID_INPUT:
 		return "Invalid Input";
+	case ExceptionType::OUT_OF_MEMORY:
+		return "Out of Memory";
 	default:
 		return "Unknown";
 	}
@@ -196,6 +199,9 @@ InternalException::InternalException(const string &msg) : Exception(ExceptionTyp
 }
 
 InvalidInputException::InvalidInputException(const string &msg) : Exception(ExceptionType::INVALID_INPUT, msg) {
+}
+
+OutOfMemoryException::OutOfMemoryException(const string &msg) : Exception(ExceptionType::OUT_OF_MEMORY, msg) {
 }
 
 } // namespace duckdb

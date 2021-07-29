@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -21,6 +22,7 @@ public:
 	}
 
 	vector<BoundOrderByNode> orders;
+	vector<unique_ptr<BaseStatistics>> statistics;
 
 	string ParamsToString() const override {
 		string result;
