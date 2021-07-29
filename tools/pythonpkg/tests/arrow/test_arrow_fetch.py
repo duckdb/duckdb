@@ -1,7 +1,4 @@
 import duckdb
-import os
-import sys
-import datetime
 import pytest
 try:
     import pyarrow as pa
@@ -87,3 +84,17 @@ class TestArrowFetch(object):
             duckdb_conn.execute("EXECUTE s1("+str(value) + "," + str(value*2)+  ");")
 
         check_equal(duckdb_conn)
+
+    def test_multiple_fetch(self, duckdb_cursor):
+        if not can_run:
+            return
+
+        duckdb_conn = duckdb.connect()
+
+        duckdb_conn.execute("CREATE TABLE test (a  INTEGER)")
+        duckdb_conn.execute("INSERT INTO  test VALUES(1);")
+        result = duckdb_conn.execute("SELECT * from test")
+        result.fetch_arrow_table()
+        #This should fail since the result is empty
+        with pytest.raises(Exception):
+            result.fetch_arrow_table()

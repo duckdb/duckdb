@@ -20,6 +20,7 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetch_df", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
 	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable)
+	    .def("fetch_arrow_chunk", &DuckDBPyResult::FetchArrowTableChunk)
 	    .def("arrow", &DuckDBPyResult::FetchArrowTable)
 	    .def("df", &DuckDBPyResult::FetchDF);
 
@@ -235,7 +236,21 @@ py::object DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
 	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpy(true, num_of_vectors));
 }
 
-py::object DuckDBPyResult::FetchArrowTable() {
+bool FetchArrowChunk(QueryResult *result, py::list &batches,
+                     pybind11::detail::accessor<pybind11::detail::accessor_policies::str_attr> &batch_import_func) {
+	auto data_chunk = result->Fetch();
+	if (!data_chunk || data_chunk->size() == 0) {
+		return false;
+	}
+	ArrowArray data;
+	data_chunk->ToArrowArray(&data);
+	ArrowSchema arrow_schema;
+	result->ToArrowSchema(&arrow_schema);
+	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+	return true;
+}
+
+py::object DuckDBPyResult::FetchArrowTable(bool stream, idx_t num_of_vectors) {
 	if (!result) {
 		throw std::runtime_error("result closed");
 	}
@@ -250,18 +265,22 @@ py::object DuckDBPyResult::FetchArrowTable() {
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 
 	py::list batches;
-	while (true) {
-		auto data_chunk = result->Fetch();
-		if (!data_chunk || data_chunk->size() == 0) {
-			break;
+	if (stream) {
+		for (idx_t i = 0; i < num_of_vectors; i++) {
+			if (!FetchArrowChunk(result.get(), batches, batch_import_func)) {
+				break;
+			}
 		}
-		ArrowArray data;
-		data_chunk->ToArrowArray(&data);
-		ArrowSchema arrow_schema;
-		result->ToArrowSchema(&arrow_schema);
-		batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+	} else {
+		while (FetchArrowChunk(result.get(), batches, batch_import_func)) {
+		}
 	}
+
 	return from_batches_func(batches, schema_obj);
+}
+
+py::object DuckDBPyResult::FetchArrowTableChunk(idx_t num_of_vectors) {
+	return FetchArrowTable(true, num_of_vectors);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {

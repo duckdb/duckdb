@@ -46,6 +46,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1)
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
+	    .def("fetch_arrow_chunk", &DuckDBPyConnection::FetchDFChunk,
+	         "Fetch a chunk of the result as an Arrow Table following execute()", py::arg("vectors_per_chunk") = 1)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
@@ -377,6 +379,13 @@ py::object DuckDBPyConnection::FetchArrow() {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchArrowTable();
+}
+
+py::object DuckDBPyConnection::FetchArrowChunk(const idx_t vectors_per_chunk) const {
+	if (!result) {
+		throw std::runtime_error("no open result set");
+	}
+	return result->FetchArrowTableChunk(vectors_per_chunk);
 }
 
 static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str &table_name) {
