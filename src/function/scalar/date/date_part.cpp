@@ -46,7 +46,7 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 	} else if (specifier == "week" || specifier == "weeks" || specifier == "w") {
 		// week number
 		result = DatePartSpecifier::WEEK;
-	} else if (specifier == "doy") {
+	} else if (specifier == "doy" || specifier == "dayofyear") {
 		// day of the year (1-365/366)
 		result = DatePartSpecifier::DOY;
 	} else if (specifier == "quarter" || specifier == "quarters") {
@@ -405,7 +405,7 @@ struct TimeDatePart {
 	struct DayOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"month\" not recognized");
+			throw NotImplementedException("\"time\" units \"day\" not recognized");
 		}
 
 		template <class T>
