@@ -18,6 +18,21 @@ CREATE TABLE test2 (a INTEGER);
 statement ok
 INSERT INTO test2 VALUES (13), (12), (11)
 
+query II
+SELECT * FROM test ORDER BY a
+----
+NULL	NULL
+11	22
+12	21
+13	22
+
+query I
+SELECT * FROM test2 ORDER BY a
+----
+11
+12
+13
+
 loop i 0 10
 
 statement ok

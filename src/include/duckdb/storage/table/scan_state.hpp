@@ -51,7 +51,7 @@ struct ColumnScanState {
 	vector<ColumnScanState> child_states;
 	//! Whether or not InitializeState has been called for this segment
 	bool initialized = false;
-	//! If this segment has already been checked for skipping puorposes
+	//! If this segment has already been checked for skipping purposes
 	bool segment_checked = false;
 
 public:

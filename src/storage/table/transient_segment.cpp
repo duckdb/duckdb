@@ -4,7 +4,6 @@
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/segment/compressed_segment.hpp"
 #include "duckdb/storage/segment/string_segment.hpp"
-#include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -15,8 +14,6 @@ TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type
     : ColumnSegment(db, type_p, ColumnSegmentType::TRANSIENT, start) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(db, start);
-	} else if (type.InternalType() == PhysicalType::BIT) {
-		data = make_unique<ValiditySegment>(db, start);
 	} else {
 		auto &config = DBConfig::GetConfig(db);
 		data = make_unique<CompressedSegment>(db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType()));

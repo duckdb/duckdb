@@ -5,7 +5,7 @@ add_library_unity(
   constant_segment.cpp
   numeric_uncompressed.cpp
   string_segment.cpp
-  validity_segment.cpp)
+  validity_uncompressed.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_segment>
     PARENT_SCOPE)

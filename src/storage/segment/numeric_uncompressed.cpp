@@ -1,4 +1,4 @@
-#include "duckdb/storage/segment/numeric_uncompressed.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/table/append_state.hpp"
@@ -45,8 +45,8 @@ idx_t NumericFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-struct NumericCompressState : public CompressionState {
-	NumericCompressState(ColumnDataCheckpointer &checkpointer) :
+struct UncompressedCompressState : public CompressionState {
+	UncompressedCompressState(ColumnDataCheckpointer &checkpointer) :
 		checkpointer(checkpointer) {
 		auto &db = checkpointer.GetDatabase();
 		auto &config = DBConfig::GetConfig(db);
@@ -79,14 +79,12 @@ struct NumericCompressState : public CompressionState {
 	unique_ptr<SegmentStatistics> segment_stats;
 };
 
-template<class T>
-unique_ptr<CompressionState> NumericInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	return make_unique<NumericCompressState>(checkpointer);
+unique_ptr<CompressionState> UncompressedFunctions::InitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
+	return make_unique<UncompressedCompressState>(checkpointer);
 }
 
-template<class T>
-void NumericCompress(CompressionState& state_p, Vector &data, idx_t count) {
-	auto &state = (NumericCompressState &) state_p;
+void UncompressedFunctions::Compress(CompressionState& state_p, Vector &data, idx_t count) {
+	auto &state = (UncompressedCompressState &) state_p;
 	VectorData vdata;
 	data.Orrify(count, vdata);
 
@@ -108,9 +106,8 @@ void NumericCompress(CompressionState& state_p, Vector &data, idx_t count) {
 	}
 }
 
-template<class T>
-void NumericFinalizeCompress(CompressionState& state_p) {
-	auto &state = (NumericCompressState &) state_p;
+void UncompressedFunctions::FinalizeCompress(CompressionState& state_p) {
+	auto &state = (UncompressedCompressState &) state_p;
 	state.Finalize();
 }
 
@@ -234,14 +231,16 @@ CompressionFunction NumericGetFunction(PhysicalType data_type) {
 		NumericInitAnalyze,
 		NumericAnalyze,
 		NumericFinalAnalyze<T>,
-		NumericInitCompression<T>,
-		NumericCompress<T>,
-		NumericFinalizeCompress<T>,
+		UncompressedFunctions::InitCompression,
+		UncompressedFunctions::Compress,
+		UncompressedFunctions::FinalizeCompress,
 		NumericInitScan,
 		NumericScan<T>,
 		NumericScanPartial<T>,
 		NumericFetchRow<T>,
-		NumericAppend<T>
+		nullptr,
+		NumericAppend<T>,
+		nullptr
 	);
 }
 

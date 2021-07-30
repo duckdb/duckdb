@@ -1,5 +1,5 @@
 #include "duckdb/function/compression/compression.hpp"
-#include "duckdb/storage/segment/numeric_uncompressed.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
 
 namespace duckdb {
 
@@ -20,6 +20,8 @@ CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
 	case PhysicalType::LIST:
 	case PhysicalType::INTERVAL:
 		return NumericUncompressed::GetFunction(type);
+	case PhysicalType::BIT:
+		return ValidityUncompressed::GetFunction(type);
 	default:
 		throw InternalException("Unsupported type for Uncompressed");
 	}
@@ -27,8 +29,6 @@ CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
 
 bool UncompressedFun::TypeIsSupported(PhysicalType type) {
 	if (type == PhysicalType::VARCHAR) {
-		return false;
-	} else if (type == PhysicalType::BIT) {
 		return false;
 	}
 	return true;

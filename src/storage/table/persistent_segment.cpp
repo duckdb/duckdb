@@ -10,7 +10,6 @@
 #include "duckdb/storage/segment/constant_segment.hpp"
 #include "duckdb/storage/segment/compressed_segment.hpp"
 #include "duckdb/storage/segment/string_segment.hpp"
-#include "duckdb/storage/table/validity_segment.hpp"
 
 namespace duckdb {
 
@@ -23,8 +22,6 @@ PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t 
 		data = make_unique<ConstantSegment>(db, stats, start);
 	} else if (type.InternalType() == PhysicalType::VARCHAR) {
 		data = make_unique<StringSegment>(db, start, id);
-	} else if (type.InternalType() == PhysicalType::BIT) {
-		data = make_unique<ValiditySegment>(db, start, id);
 	} else {
 		auto &config = DBConfig::GetConfig(db);
 		data = make_unique<CompressedSegment>(db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType()), id);

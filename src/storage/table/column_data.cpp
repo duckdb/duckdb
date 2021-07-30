@@ -7,7 +7,6 @@
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/table/validity_segment.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
 
 #include "duckdb/storage/table/column_data_checkpointer.hpp"

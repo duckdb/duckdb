@@ -54,8 +54,9 @@ bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 
 template<class T>
 idx_t RLEFinalAnalyze(AnalyzeState &state) {
-	auto &rle_state = (RLEAnalyzeState<T> &) state;
-	return (sizeof(uint32_t) + sizeof(T)) * rle_state.seen_count;
+	// auto &rle_state = (RLEAnalyzeState<T> &) state;
+	return NumericLimits<idx_t>::Maximum();
+	// return (sizeof(uint32_t) + sizeof(T)) * rle_state.seen_count;
 }
 
 template<class T>
@@ -84,6 +85,8 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 		RLEInitCompression<T>,
 		RLECompress<T>,
 		RLEFinalizeCompress<T>,
+		nullptr,
+		nullptr,
 		nullptr,
 		nullptr,
 		nullptr,

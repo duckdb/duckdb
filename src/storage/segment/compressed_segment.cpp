@@ -11,6 +11,9 @@ CompressedSegment::CompressedSegment(DatabaseInstance &db, PhysicalType type, id
 	} else {
 		this->block = buffer_manager.RegisterBlock(block_id);
 	}
+	if (function->init_segment) {
+		function->init_segment(*this, block_id);
+	}
 }
 
 void CompressedSegment::InitializeScan(ColumnScanState &state) {
@@ -30,7 +33,17 @@ void CompressedSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &
 }
 
 idx_t CompressedSegment::Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
+	if (!function->append) {
+		throw InternalException("Attempting to append to a compressed segment without append method");
+	}
 	return function->append(*this, stats, data, offset, count);
+}
+
+void CompressedSegment::RevertAppend(idx_t start_row) {
+	if (function->revert_append) {
+		function->revert_append(*this, start_row);
+	}
+	BaseSegment::RevertAppend(start_row);
 }
 
 }
