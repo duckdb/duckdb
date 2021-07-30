@@ -176,6 +176,7 @@ unique_ptr<FunctionData> BindDecimalAddSubtract(ClientContext &context, ScalarFu
 		max_scale = MaxValue<uint8_t>(scale, max_scale);
 		max_width_over_scale = MaxValue<uint8_t>(width - scale, max_width_over_scale);
 	}
+	D_ASSERT(max_width > 0);
 	// for addition/subtraction, we add 1 to the width to ensure we don't overflow
 	bool check_overflow = false;
 	auto required_width = MaxValue<uint8_t>(max_scale + max_width_over_scale, max_width) + 1;
@@ -489,6 +490,7 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 		result_width += width;
 		result_scale += scale;
 	}
+	D_ASSERT(max_width > 0);
 	if (result_scale > Decimal::MAX_WIDTH_DECIMAL) {
 		throw OutOfRangeException(
 		    "Needed scale %d to accurately represent the multiplication result, but this is out of range of the "
@@ -515,7 +517,9 @@ unique_ptr<FunctionData> BindDecimalMultiply(ClientContext &context, ScalarFunct
 			bound_function.arguments[i] = argument_type;
 		} else {
 			uint8_t width, scale;
-			argument_type.GetDecimalProperties(width, scale);
+			if (!argument_type.GetDecimalProperties(width, scale)) {
+				scale = 0;
+			}
 
 			bound_function.arguments[i] = LogicalType::DECIMAL(result_width, scale);
 		}
