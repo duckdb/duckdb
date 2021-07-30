@@ -67,6 +67,7 @@ static void TryLoadCompression(DBConfig &config, vector<CompressionFunction*> &r
 
 vector<CompressionFunction*> DBConfig::GetCompressionFunctions(PhysicalType data_type) {
 	vector<CompressionFunction*> result;
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_UNCOMPRESSED, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_RLE, data_type);
 	return result;
 }

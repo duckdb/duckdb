@@ -52,7 +52,9 @@ void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
 			return;
 		}
 		// the segment is full: flush it to disk
-		FlushSegment();
+		FlushSegment(*current_segment, move(segment_stats->statistics));
+		current_segment.reset();
+		segment_stats.reset();
 
 		// now create a new segment and continue appending
 		CreateEmptySegment();
@@ -61,8 +63,8 @@ void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
 	}
 }
 
-void ColumnCheckpointState::FlushSegment() {
-	auto tuple_count = current_segment->tuple_count.load();
+void ColumnCheckpointState::FlushSegment(BaseSegment &segment, unique_ptr<BaseStatistics> stats) {
+	auto tuple_count = segment.tuple_count.load();
 	if (tuple_count == 0) {
 		return;
 	}
@@ -71,7 +73,7 @@ void ColumnCheckpointState::FlushSegment() {
 	auto &buffer_manager = BufferManager::GetBufferManager(column_data.GetDatabase());
 	auto &block_manager = BlockManager::GetBlockManager(column_data.GetDatabase());
 
-	bool block_is_constant = segment_stats->statistics->IsConstant();
+	bool block_is_constant = stats->IsConstant();
 
 	block_id_t block_id;
 	uint32_t offset_in_block;
@@ -95,28 +97,25 @@ void ColumnCheckpointState::FlushSegment() {
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	data_pointer.statistics = segment_stats->statistics->Copy();
+	data_pointer.statistics = stats->Copy();
 
 	// construct a persistent segment that points to this block, and append it to the new segment tree
 	auto persistent_segment = make_unique<PersistentSegment>(
 	    column_data.GetDatabase(), block_id, offset_in_block, column_data.type, data_pointer.row_start,
-	    data_pointer.tuple_count, segment_stats->statistics->Copy());
+	    data_pointer.tuple_count, stats->Copy());
 	new_tree.AppendSegment(move(persistent_segment));
 
 	data_pointers.push_back(move(data_pointer));
 
 	if (!block_is_constant) {
 		// write the block to disk
-		auto handle = buffer_manager.Pin(current_segment->block);
+		auto handle = buffer_manager.Pin(segment.block);
 		block_manager.Write(*handle->node, block_id);
 		handle.reset();
 	}
 
 	// merge the segment stats into the global stats
-	global_stats->Merge(*segment_stats->statistics);
-
-	current_segment.reset();
-	segment_stats.reset();
+	global_stats->Merge(*stats);
 }
 
 void ColumnCheckpointState::FlushToDisk() {

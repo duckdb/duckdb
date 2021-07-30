@@ -20,6 +20,9 @@ public:
 public:
 	DatabaseInstance &GetDatabase();
 	const LogicalType &GetType() const;
+	ColumnData &GetColumnData();
+	RowGroup &GetRowGroup();
+	ColumnCheckpointState &GetCheckpointState();
 
 	void Checkpoint(unique_ptr<SegmentBase> segment);
 

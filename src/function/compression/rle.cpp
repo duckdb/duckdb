@@ -59,17 +59,17 @@ idx_t RLEFinalAnalyze(AnalyzeState &state) {
 }
 
 template<class T>
-unique_ptr<CompressionState> RLEInitCompression(AnalyzeState &state) {
+unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
 	throw InternalException("FIXME: RLE");
 }
 
 template<class T>
-idx_t RLECompress(BufferHandle &block, idx_t data_written, Vector& intermediate, idx_t count, CompressionState& state) {
+void RLECompress(CompressionState& state, Vector &scan_vector, idx_t count) {
 	throw InternalException("FIXME: RLE");
 }
 
 template<class T>
-idx_t RLEFlush(BufferHandle &block, idx_t data_written, CompressionState& state) {
+void RLEFinalizeCompress(CompressionState& state) {
 	throw InternalException("FIXME: RLE");
 }
 
@@ -83,7 +83,7 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 		RLEFinalAnalyze<T>,
 		RLEInitCompression<T>,
 		RLECompress<T>,
-		RLEFlush<T>,
+		RLEFinalizeCompress<T>,
 		nullptr,
 		nullptr,
 		nullptr,

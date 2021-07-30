@@ -19,6 +19,18 @@ const LogicalType &ColumnDataCheckpointer::GetType() const {
 	return col_data.type;
 }
 
+ColumnData &ColumnDataCheckpointer::GetColumnData() {
+	return col_data;
+}
+
+RowGroup &ColumnDataCheckpointer::GetRowGroup() {
+	return row_group;
+}
+
+ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
+	return state;
+}
+
 void ColumnDataCheckpointer::ScanSegments(std::function<bool(Vector &, idx_t)> callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	for(auto segment = (ColumnSegment *) owned_segment.get(); segment; segment = (ColumnSegment *) segment->next.get()) {
@@ -123,13 +135,16 @@ void ColumnDataCheckpointer::WriteToDisk() {
 			state.AppendData(scan_vector, count);
 			return true;
 		});
-		state.FlushSegment();
+		state.FlushSegment(*state.current_segment, move(state.segment_stats->statistics));
 	} else {
-		// auto best_function = compression_functions[compression_idx];
-		// auto compress_state = best_function->init_compression(*this, state, *analyze_state);
-		throw Exception("FIXME: compression");
+		auto best_function = compression_functions[compression_idx];
+		auto compress_state = best_function->init_compression(*this, move(analyze_state));
+		ScanSegments([&](Vector &scan_vector, idx_t count) {
+			best_function->compress(*compress_state, scan_vector, count);
+			return true;
+		});
+		best_function->compress_finalize(*compress_state);
 	}
-
 
 	// now we actually write the data to disk
 	owned_segment.reset();
@@ -184,7 +199,6 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 		segment = (ColumnSegment *)owned_segment.get();
 	}
 }
-
 
 void ColumnDataCheckpointer::Checkpoint(unique_ptr<SegmentBase> segment) {
 	D_ASSERT(!owned_segment);

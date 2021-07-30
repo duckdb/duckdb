@@ -39,7 +39,7 @@ public:
 	}
 
 	virtual void CreateEmptySegment();
-	virtual void FlushSegment();
+	virtual void FlushSegment(BaseSegment &segment, unique_ptr<BaseStatistics> stats);
 	virtual void AppendData(Vector &data, idx_t count);
 	virtual void FlushToDisk();
 };

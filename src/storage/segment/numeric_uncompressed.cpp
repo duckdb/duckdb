@@ -11,6 +11,9 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/storage/segment/compressed_segment.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -42,8 +45,74 @@ idx_t NumericFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
+struct NumericCompressState : public CompressionState {
+	NumericCompressState(ColumnDataCheckpointer &checkpointer) :
+		checkpointer(checkpointer) {
+		auto &db = checkpointer.GetDatabase();
+		auto &config = DBConfig::GetConfig(db);
+		auto &type = checkpointer.GetType();
+		function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
+		CreateEmptySegment(checkpointer.GetRowGroup().start);
+	}
 
+	void CreateEmptySegment(idx_t row_start) {
+		auto &db = checkpointer.GetDatabase();
+		auto &type = checkpointer.GetType();
+		current_segment = make_unique<CompressedSegment>(db, type.InternalType(), row_start, function);
+		segment_stats = make_unique<SegmentStatistics>(type);
+	}
 
+	void FlushSegment() {
+		auto &state = checkpointer.GetCheckpointState();
+		state.FlushSegment(*current_segment, move(segment_stats->statistics));
+	}
+
+	void Finalize() {
+		FlushSegment();
+		current_segment.reset();
+		segment_stats.reset();
+	}
+
+	ColumnDataCheckpointer &checkpointer;
+	CompressionFunction *function;
+	unique_ptr<BaseSegment> current_segment;
+	unique_ptr<SegmentStatistics> segment_stats;
+};
+
+template<class T>
+unique_ptr<CompressionState> NumericInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
+	return make_unique<NumericCompressState>(checkpointer);
+}
+
+template<class T>
+void NumericCompress(CompressionState& state_p, Vector &data, idx_t count) {
+	auto &state = (NumericCompressState &) state_p;
+	VectorData vdata;
+	data.Orrify(count, vdata);
+
+	idx_t offset = 0;
+	while (count > 0) {
+		idx_t appended = state.current_segment->Append(*state.segment_stats, vdata, offset, count);
+		if (appended == count) {
+			// appended everything: finished
+			return;
+		}
+		auto next_start = state.current_segment->row_start + state.current_segment->tuple_count;
+		// the segment is full: flush it to disk
+		state.FlushSegment();
+
+		// now create a new segment and continue appending
+		state.CreateEmptySegment(next_start);
+		offset += appended;
+		count -= appended;
+	}
+}
+
+template<class T>
+void NumericFinalizeCompress(CompressionState& state_p) {
+	auto &state = (NumericCompressState &) state_p;
+	state.Finalize();
+}
 
 //===--------------------------------------------------------------------===//
 // Scan
@@ -165,9 +234,9 @@ CompressionFunction NumericGetFunction(PhysicalType data_type) {
 		NumericInitAnalyze,
 		NumericAnalyze,
 		NumericFinalAnalyze<T>,
-		nullptr,
-		nullptr,
-		nullptr,
+		NumericInitCompression<T>,
+		NumericCompress<T>,
+		NumericFinalizeCompress<T>,
 		NumericInitScan,
 		NumericScan<T>,
 		NumericScanPartial<T>,
