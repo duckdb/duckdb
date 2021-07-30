@@ -1,0 +1,202 @@
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
+
+namespace duckdb {
+
+ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p, ColumnCheckpointState &state_p) :
+	col_data(col_data_p), row_group(row_group_p), state(state_p), is_validity(GetType().id() == LogicalTypeId::VALIDITY),
+	intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity) {
+	auto &config = DBConfig::GetConfig(GetDatabase());
+	compression_functions = config.GetCompressionFunctions(GetType().InternalType());
+}
+
+DatabaseInstance &ColumnDataCheckpointer::GetDatabase() {
+	return col_data.GetDatabase();
+}
+
+const LogicalType &ColumnDataCheckpointer::GetType() const {
+	return col_data.type;
+}
+
+void ColumnDataCheckpointer::ScanSegments(std::function<bool(Vector &, idx_t)> callback) {
+	Vector scan_vector(intermediate.GetType(), nullptr);
+	for(auto segment = (ColumnSegment *) owned_segment.get(); segment; segment = (ColumnSegment *) segment->next.get()) {
+		ColumnScanState scan_state;
+		scan_state.current = segment;
+		segment->InitializeScan(scan_state);
+
+		for (idx_t base_row_index = 0; base_row_index < segment->count; base_row_index += STANDARD_VECTOR_SIZE) {
+			scan_vector.Reference(intermediate);
+
+			idx_t count = MinValue<idx_t>(segment->count - base_row_index, STANDARD_VECTOR_SIZE);
+			scan_state.row_index = segment->start + base_row_index;
+
+			col_data.CheckpointScan(segment, scan_state, row_group.start, base_row_index, count, scan_vector);
+
+			if (!callback(scan_vector, count)) {
+				return;
+			}
+		}
+	}
+}
+
+unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
+	if (compression_functions.empty()) {
+		compression_idx = INVALID_INDEX;
+		return nullptr;
+	}
+	// set up the analyze states for each compression method
+	vector<unique_ptr<AnalyzeState>> analyze_states;
+	analyze_states.reserve(compression_functions.size());
+	for(idx_t i = 0; i < compression_functions.size(); i++) {
+		analyze_states.push_back(compression_functions[i]->init_analyze(col_data, col_data.type.InternalType()));
+	}
+
+	// scan over all the segments and run the analyze step
+	ScanSegments([&](Vector &scan_vector, idx_t count) {
+		bool has_compression_functions = false;
+		for(idx_t i = 0; i < compression_functions.size(); i++) {
+			if (!compression_functions[i]) {
+				continue;
+			}
+			auto success = compression_functions[i]->analyze(*analyze_states[i], scan_vector, count);
+			if (!success) {
+				// could not use this compression function on this data set
+				// erase it
+				compression_functions[i] = nullptr;
+				analyze_states[i].reset();
+			} else {
+				has_compression_functions = true;
+			}
+		}
+		return has_compression_functions;
+	});
+
+	// now that we have passed over all the data, we need to figure out the best method
+	// we do this using the final_analyze method
+	unique_ptr<AnalyzeState> state;
+	compression_idx = INVALID_INDEX;
+	idx_t best_score = NumericLimits<idx_t>::Maximum();
+	for(idx_t i = 0; i < compression_functions.size(); i++) {
+		if (!compression_functions[i]) {
+			continue;
+		}
+		auto score = compression_functions[i]->final_analyze(*analyze_states[i]);
+		if (score < best_score) {
+			compression_idx = i;
+			best_score = score;
+			state = move(analyze_states[i]);
+		}
+	}
+	return state;
+}
+
+void ColumnDataCheckpointer::WriteToDisk() {
+	// there were changes or transient segments
+	// we need to rewrite the column segments to disk
+
+	// first we check the current segments
+	// if there are any persistent segments, we will mark their old block ids as modified
+	// since the segments will be rewritten their old on disk data is no longer required
+	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
+	for(auto segment = (ColumnSegment *) owned_segment.get(); segment; segment = (ColumnSegment *) segment->next.get()) {
+		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
+			auto &persistent = (PersistentSegment &)*segment;
+			// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
+			if (persistent.block_id != INVALID_BLOCK) {
+				block_manager.MarkBlockAsModified(persistent.block_id);
+			}
+		}
+	}
+
+	// now we need to write our segment
+	// we will first run an analyze step that determines which compression function to use
+	idx_t compression_idx;
+	auto analyze_state = DetectBestCompressionMethod(compression_idx);
+
+	// now that we have analyzed the compression functions we can start writing to disk
+	if (!analyze_state) {
+		// no compression method: store uncompressed
+		state.CreateEmptySegment();
+		ScanSegments([&](Vector &scan_vector, idx_t count) {
+			state.AppendData(scan_vector, count);
+			return true;
+		});
+		state.FlushSegment();
+	} else {
+		// auto best_function = compression_functions[compression_idx];
+		// auto compress_state = best_function->init_compression(*this, state, *analyze_state);
+		throw Exception("FIXME: compression");
+	}
+
+
+	// now we actually write the data to disk
+	owned_segment.reset();
+}
+
+bool ColumnDataCheckpointer::HasChanges() {
+	for(auto segment = (ColumnSegment *) owned_segment.get(); segment; segment = (ColumnSegment *) segment->next.get()) {
+		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
+			// transient segment: always need to write to disk
+			return true;
+		} else {
+			auto &persistent = (PersistentSegment &)*segment;
+			// persistent segment; check if there were any updates or deletions in this segment
+			idx_t start_row_idx = persistent.start - row_group.start;
+			idx_t end_row_idx = start_row_idx + persistent.count;
+			if (col_data.updates && col_data.updates->HasUpdates(start_row_idx, end_row_idx)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+void ColumnDataCheckpointer::WritePersistentSegments() {
+	// all segments are persistent and there are no updates
+	// we only need to write the metadata
+	auto segment = (ColumnSegment *)owned_segment.get();
+	while (segment) {
+		auto next_segment = move(segment->next);
+
+		D_ASSERT(segment->segment_type == ColumnSegmentType::PERSISTENT);
+		auto &persistent = (PersistentSegment &)*segment;
+
+		// set up the data pointer directly using the data from the persistent segment
+		DataPointer pointer;
+		pointer.block_pointer.block_id = persistent.block_id;
+		pointer.block_pointer.offset = 0;
+		pointer.row_start = segment->start;
+		pointer.tuple_count = persistent.count;
+		pointer.statistics = persistent.stats.statistics->Copy();
+
+		// merge the persistent stats into the global column stats
+		state.global_stats->Merge(*persistent.stats.statistics);
+
+		// directly append the current segment to the new tree
+		state.new_tree.AppendSegment(move(owned_segment));
+
+		state.data_pointers.push_back(move(pointer));
+
+		// move to the next segment in the list
+		owned_segment = move(next_segment);
+		segment = (ColumnSegment *)owned_segment.get();
+	}
+}
+
+
+void ColumnDataCheckpointer::Checkpoint(unique_ptr<SegmentBase> segment) {
+	D_ASSERT(!owned_segment);
+	this->owned_segment = move(segment);
+	// first check if any of the segments have changes
+	if (!HasChanges()) {
+		// no changes: only need to write the metadata for this column
+		WritePersistentSegments();
+	} else {
+		// there are changes: rewrite the set of columns
+		WriteToDisk();
+	}
+}
+
+}
