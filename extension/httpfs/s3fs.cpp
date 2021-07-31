@@ -1,3 +1,5 @@
+#include <cstring>
+#include <iostream>
 #include "s3fs.hpp"
 #include "crypto.hpp"
 #include "duckdb.hpp"
@@ -14,11 +16,13 @@ static HeaderMap create_s3_get_header(std::string url, std::string host, std::st
 	if (datetime_now.empty()) {
 		auto t = std::time(NULL);
 		auto tmp = std::gmtime(&t);
-		date_now.resize(8);
-		datetime_now.resize(16);
+		char buf[18];
 
-		strftime((char *)date_now.c_str(), date_now.size(), "%Y%m%d", tmp);
-		strftime((char *)datetime_now.c_str(), datetime_now.size(), "%Y%m%dT%H%M%SZ", tmp);
+		std::memset(buf, 0, sizeof(buf));
+		strftime(buf, sizeof(buf)-1, "%Y%m%d", tmp);
+		date_now = buf;
+		strftime(buf, sizeof(buf)-1, "%Y%m%dT%H%M%SZ", tmp);
+		datetime_now = buf;
 	}
 
 	HeaderMap res;
