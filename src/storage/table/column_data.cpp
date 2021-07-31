@@ -146,7 +146,7 @@ void ColumnData::Select(Transaction &transaction, idx_t vector_index, ColumnScan
                         SelectionVector &sel, idx_t &count, const TableFilter &filter) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 	result.Normalify(scan_count);
-	CompressedSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
+	ColumnSegment::FilterSelection(sel, result, filter, count, FlatVector::Validity(result));
 }
 
 void ColumnData::FilterScan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

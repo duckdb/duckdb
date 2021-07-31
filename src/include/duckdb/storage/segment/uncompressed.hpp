@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/storage/segment/compressed_segment.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 class DatabaseInstance;

@@ -3,7 +3,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
-#include "duckdb/storage/segment/compressed_segment.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {
@@ -11,15 +11,15 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-unique_ptr<SegmentScanState> ConstantInitScan(CompressedSegment &segment) {
+unique_ptr<SegmentScanState> ConstantInitScan(ColumnSegment &segment) {
 	return nullptr;
 }
 
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void ConstantScanFunctionValidity(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
-	auto &validity = (ValidityStatistics &)*segment.parent->stats.statistics;
+void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
 	if (validity.has_null) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, true);
@@ -27,8 +27,8 @@ void ConstantScanFunctionValidity(CompressedSegment &segment, ColumnScanState &s
 }
 
 template <class T>
-void ConstantScanFunction(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
-	auto &nstats = (NumericStatistics &)*segment.parent->stats.statistics;
+void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
 
 	auto data = FlatVector::GetData<T>(result);
 	data[0] = nstats.min.GetValueUnsafe<T>();
@@ -38,8 +38,8 @@ void ConstantScanFunction(CompressedSegment &segment, ColumnScanState &state, id
 //===--------------------------------------------------------------------===//
 // Scan Partial
 //===--------------------------------------------------------------------===//
-void FillFunctionValidity(CompressedSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
-	auto &validity = (ValidityStatistics &)*segment.parent->stats.statistics;
+void FillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
+	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
 	if (validity.has_null) {
 		auto &mask = FlatVector::Validity(result);
 		for (idx_t i = 0; i < count; i++) {
@@ -49,8 +49,8 @@ void FillFunctionValidity(CompressedSegment &segment, Vector &result, idx_t star
 }
 
 template <class T>
-void FillFunction(CompressedSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
-	auto &nstats = (NumericStatistics &)*segment.parent->stats.statistics;
+void FillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
+	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
 
 	auto data = FlatVector::GetData<T>(result);
 	auto constant_value = nstats.min.GetValueUnsafe<T>();
@@ -59,24 +59,24 @@ void FillFunction(CompressedSegment &segment, Vector &result, idx_t start_idx, i
 	}
 }
 
-void ConstantScanPartialValidity(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void ConstantScanPartialValidity(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	FillFunctionValidity(segment, result, result_offset, scan_count);
 }
 
 template<class T>
-void ConstantScanPartial(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	FillFunction<T>(segment, result, result_offset, scan_count);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void ConstantFetchRowValidity(CompressedSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void ConstantFetchRowValidity(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	FillFunctionValidity(segment, result, result_idx, 1);
 }
 
 template<class T>
-void ConstantFetchRow(CompressedSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void ConstantFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	FillFunction<T>(segment, result, result_idx, 1);
 }
 

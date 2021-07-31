@@ -6,7 +6,7 @@
 #include "duckdb/common/vector_size.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/storage/segment/compressed_segment.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
@@ -36,12 +36,12 @@ public:
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
-	static unique_ptr<SegmentScanState> StringInitScan(CompressedSegment &segment);
-	static void StringScanPartial(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
-	static void StringScan(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result);
-	static void StringFetchRow(CompressedSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
-	static unique_ptr<CompressedSegmentState> StringInitSegment(CompressedSegment &segment, block_id_t block_id);
-	static idx_t StringAppend(CompressedSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count);
+	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
+	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result);
+	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id);
+	static idx_t StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count);
 public:
 	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value)  {
 		auto &sstats = (StringStatistics &)*stats.statistics;
@@ -50,19 +50,19 @@ public:
 
 	static void SetDictionaryOffset(BufferHandle &handle, idx_t offset);
 	static idx_t GetDictionaryOffset(BufferHandle &handle);
-	static idx_t RemainingSpace(CompressedSegment &segment, BufferHandle &handle);
-	static void WriteString(CompressedSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
-	static void WriteStringMemory(CompressedSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
-	static string_t ReadString(CompressedSegment &segment, Vector &result, block_id_t block, int32_t offset);
+	static idx_t RemainingSpace(ColumnSegment &segment, BufferHandle &handle);
+	static void WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
+	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
+	static string_t ReadString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset);
 	static string_t ReadString(data_ptr_t target, int32_t offset);
-	static void ReadString(CompressedSegment &segment, string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
+	static void ReadString(ColumnSegment &segment, string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
 								idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
 	static string_location_t FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset);
-	static string_t FetchStringFromDict(CompressedSegment &segment, Vector &result, data_ptr_t baseptr, int32_t dict_offset);
-	static string_t FetchString(CompressedSegment &segment, Vector &result, data_ptr_t baseptr, string_location_t location);
+	static string_t FetchStringFromDict(ColumnSegment &segment, Vector &result, data_ptr_t baseptr, int32_t dict_offset);
+	static string_t FetchString(ColumnSegment &segment, Vector &result, data_ptr_t baseptr, string_location_t location);
 };
 
 //===--------------------------------------------------------------------===//
@@ -112,7 +112,7 @@ struct StringScanState : public SegmentScanState {
 	unique_ptr<BufferHandle> handle;
 };
 
-unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(CompressedSegment &segment) {
+unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSegment &segment) {
 	auto result = make_unique<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
@@ -122,7 +122,7 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(Compresse
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void UncompressedStringStorage::StringScanPartial(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = (StringScanState &) *state.scan_state;
 
@@ -135,14 +135,14 @@ void UncompressedStringStorage::StringScanPartial(CompressedSegment &segment, Co
 	}
 }
 
-void UncompressedStringStorage::StringScan(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
 	StringScanPartial(segment, state, start, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void UncompressedStringStorage::StringFetchRow(CompressedSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	data_ptr_t baseptr;
 
 	// fetch a single row from the string segment
@@ -170,7 +170,7 @@ void UncompressedStringStorage::StringFetchRow(CompressedSegment &segment, Colum
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(CompressedSegment &segment, block_id_t block_id) {
+unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t block_id) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
@@ -179,7 +179,7 @@ unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(
 	return make_unique<UncompressedStringSegmentState>();
 }
 
-idx_t UncompressedStringStorage::StringAppend(CompressedSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
+idx_t UncompressedStringStorage::StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 
@@ -188,7 +188,7 @@ idx_t UncompressedStringStorage::StringAppend(CompressedSegment &segment, Segmen
 	auto end = handle->node->buffer + Storage::BLOCK_SIZE;
 	for (idx_t i = 0; i < count; i++) {
 		auto source_idx = data.sel->get_index(offset + i);
-		auto target_idx = segment.tuple_count.load();
+		auto target_idx = segment.count.load();
 		idx_t remaining_space = RemainingSpace(segment, *handle);
 		if (remaining_space < sizeof(int32_t)) {
 			// string index does not fit in the block at all
@@ -246,7 +246,7 @@ idx_t UncompressedStringStorage::StringAppend(CompressedSegment &segment, Segmen
 			result_data[target_idx] = dictionary_offset;
 			SetDictionaryOffset(*handle, dictionary_offset);
 		}
-		segment.tuple_count++;
+		segment.count++;
 	}
 	return count;
 }
@@ -286,13 +286,13 @@ idx_t UncompressedStringStorage::GetDictionaryOffset(BufferHandle &handle) {
 	return Load<idx_t>(handle.node->buffer + Storage::BLOCK_SIZE - sizeof(idx_t));
 }
 
-idx_t UncompressedStringStorage::RemainingSpace(CompressedSegment &segment, BufferHandle &handle) {
-	idx_t used_space = GetDictionaryOffset(handle) + segment.tuple_count * sizeof(int32_t);
+idx_t UncompressedStringStorage::RemainingSpace(ColumnSegment &segment, BufferHandle &handle) {
+	idx_t used_space = GetDictionaryOffset(handle) + segment.count * sizeof(int32_t);
 	D_ASSERT(Storage::BLOCK_SIZE >= used_space);
 	return Storage::BLOCK_SIZE - used_space;
 }
 
-void UncompressedStringStorage::WriteString(CompressedSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset) {
+void UncompressedStringStorage::WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset) {
 	auto &state = (UncompressedStringSegmentState &) *segment.GetSegmentState();
 	if (state.overflow_writer) {
 		// overflow writer is set: write string there
@@ -303,7 +303,7 @@ void UncompressedStringStorage::WriteString(CompressedSegment &segment, string_t
 	}
 }
 
-void UncompressedStringStorage::WriteStringMemory(CompressedSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset) {
+void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset) {
 	uint32_t total_length = string.GetSize() + sizeof(uint32_t);
 	shared_ptr<BlockHandle> block;
 	unique_ptr<BufferHandle> handle;
@@ -341,7 +341,7 @@ void UncompressedStringStorage::WriteStringMemory(CompressedSegment &segment, st
 	state.head->offset += total_length;
 }
 
-string_t UncompressedStringStorage::ReadString(CompressedSegment &segment, Vector &result, block_id_t block, int32_t offset) {
+string_t UncompressedStringStorage::ReadString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset) {
 	D_ASSERT(offset < Storage::BLOCK_SIZE);
 	if (block == INVALID_BLOCK) {
 		return string_t(nullptr, 0);
@@ -404,7 +404,7 @@ string_t UncompressedStringStorage::ReadString(data_ptr_t target, int32_t offset
 	return string_t(str_ptr, str_length);
 }
 
-void UncompressedStringStorage::ReadString(CompressedSegment &segment, string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
+void UncompressedStringStorage::ReadString(ColumnSegment &segment, string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
                                idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index) {
 	result_data[res_idx] = FetchStringFromDict(segment, result, baseptr, dict_offset[src_idx]);
 }
@@ -444,14 +444,14 @@ string_location_t UncompressedStringStorage::FetchStringLocation(data_ptr_t base
 	return result;
 }
 
-string_t UncompressedStringStorage::FetchStringFromDict(CompressedSegment &segment, Vector &result, data_ptr_t baseptr, int32_t dict_offset) {
+string_t UncompressedStringStorage::FetchStringFromDict(ColumnSegment &segment, Vector &result, data_ptr_t baseptr, int32_t dict_offset) {
 	// fetch base data
 	D_ASSERT(dict_offset <= Storage::BLOCK_SIZE);
 	string_location_t location = FetchStringLocation(baseptr, dict_offset);
 	return FetchString(segment, result, baseptr, location);
 }
 
-string_t UncompressedStringStorage::FetchString(CompressedSegment &segment, Vector &result, data_ptr_t baseptr, string_location_t location) {
+string_t UncompressedStringStorage::FetchString(ColumnSegment &segment, Vector &result, data_ptr_t baseptr, string_location_t location) {
 	if (location.block_id != INVALID_BLOCK) {
 		// big string marker: read from separate block
 		return ReadString(segment, result, location.block_id, location.offset);

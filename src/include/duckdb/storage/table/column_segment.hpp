@@ -14,9 +14,12 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
+#include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/table/scan_state.hpp"
+#include "duckdb/function/compression_function.hpp"
 
 namespace duckdb {
-class CompressedSegment;
+class ColumnSegment;
 class BlockManager;
 class ColumnSegment;
 class ColumnData;
@@ -44,10 +47,12 @@ public:
 	idx_t type_size;
 	//! The column segment type (transient or persistent)
 	ColumnSegmentType segment_type;
+	//! The compression function
+	CompressionFunction *function;
 	//! The statistics for the segment
 	SegmentStatistics stats;
-	//! The segment holding the data
-	unique_ptr<CompressedSegment> data;
+	//! The block that this segment relates to
+	shared_ptr<BlockHandle> block;
 
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, const LogicalType &type_p, idx_t start, idx_t count, unique_ptr<BaseStatistics> statistics);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start);
@@ -59,6 +64,9 @@ public:
 	          bool entire_vector);
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+
+	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
+	                            idx_t &approved_tuple_count, ValidityMask &mask);
 
 	//! Initialize an append of this transient segment
 	void InitializeAppend(ColumnAppendState &state);
@@ -77,17 +85,28 @@ public:
 		return offset;
 	}
 
-public:
-	ColumnSegment(DatabaseInstance &db, LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count, unique_ptr<CompressedSegment> data);
+	CompressedSegmentState *GetSegmentState() {
+		return segment_state.get();
+	}
 
+public:
 	ColumnSegment(DatabaseInstance &db, LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
-	              unique_ptr<BaseStatistics> statistics, unique_ptr<CompressedSegment> data, block_id_t block_id, idx_t offset);
+	              CompressionFunction *function, unique_ptr<BaseStatistics> statistics, block_id_t block_id, idx_t offset);
+
+private:
+	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result);
+	void ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
+
+	bool RowIdIsValid(idx_t row_id) const;
+	bool RowRangeIsValid(idx_t row_id, idx_t count) const;
 
 private:
 	//! The block id that this segment relates to (persistent segment only)
 	block_id_t block_id;
 	//! The offset into the block (persistent segment only)
 	idx_t offset;
+	//! Storage associated with the compressed segment
+	unique_ptr<CompressedSegmentState> segment_state;
 };
 
 } // namespace duckdb

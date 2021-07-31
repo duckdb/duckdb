@@ -18,7 +18,7 @@ namespace duckdb {
 class DatabaseInstance;
 class ColumnData;
 class ColumnDataCheckpointer;
-class CompressedSegment;
+class ColumnSegment;
 class SegmentStatistics;
 
 struct ColumnFetchState;
@@ -63,17 +63,17 @@ typedef void (*compression_compress_finalize_t)(CompressionState& state);
 //===--------------------------------------------------------------------===//
 // Uncompress / Scan
 //===--------------------------------------------------------------------===//
-typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(CompressedSegment &segment);
-typedef void (*compression_scan_vector_t)(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result);
-typedef void (*compression_scan_partial_t)(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
-typedef void (*compression_fetch_row_t)(CompressedSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(ColumnSegment &segment);
+typedef void (*compression_scan_vector_t)(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result);
+typedef void (*compression_scan_partial_t)(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
+typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
 //===--------------------------------------------------------------------===//
 // Append (optional)
 //===--------------------------------------------------------------------===//
-typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(CompressedSegment &segment, block_id_t block_id);
-typedef idx_t (*compression_append_t)(CompressedSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count);
-typedef void (*compression_revert_append_t)(CompressedSegment &segment, idx_t start_row);
+typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(ColumnSegment &segment, block_id_t block_id);
+typedef idx_t (*compression_append_t)(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count);
+typedef void (*compression_revert_append_t)(ColumnSegment &segment, idx_t start_row);
 
 //! The type used for initializing hashed aggregate function states
 class CompressionFunction {

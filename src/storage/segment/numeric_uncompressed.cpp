@@ -5,7 +5,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/storage/segment/compressed_segment.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
@@ -43,40 +43,32 @@ idx_t NumericFinalAnalyze(AnalyzeState &state_p) {
 struct UncompressedCompressState : public CompressionState {
 	UncompressedCompressState(ColumnDataCheckpointer &checkpointer) :
 		checkpointer(checkpointer) {
-		auto &db = checkpointer.GetDatabase();
-		auto &config = DBConfig::GetConfig(db);
-		auto &type = checkpointer.GetType();
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment = make_unique<CompressedSegment>(nullptr, db, type.InternalType(), row_start, function);
+		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
 		if (type.InternalType() == PhysicalType::VARCHAR) {
 			auto &state = (UncompressedStringSegmentState &) *compressed_segment->GetSegmentState();
 			state.overflow_writer = make_unique<WriteOverflowStringsToDisk>(db);
 		}
 		current_segment = move(compressed_segment);
-		segment_stats = make_unique<SegmentStatistics>(type);
 	}
 
 	void FlushSegment() {
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(*current_segment, move(segment_stats->statistics));
+		state.FlushSegment(move(current_segment));
 	}
 
 	void Finalize() {
 		FlushSegment();
 		current_segment.reset();
-		segment_stats.reset();
 	}
 
 	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
-	unique_ptr<CompressedSegment> current_segment;
-	unique_ptr<SegmentStatistics> segment_stats;
+	unique_ptr<ColumnSegment> current_segment;
 };
 
 unique_ptr<CompressionState> UncompressedFunctions::InitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
@@ -88,14 +80,15 @@ void UncompressedFunctions::Compress(CompressionState& state_p, Vector &data, id
 	VectorData vdata;
 	data.Orrify(count, vdata);
 
+	ColumnAppendState append_state;
 	idx_t offset = 0;
 	while (count > 0) {
-		idx_t appended = state.current_segment->Append(*state.segment_stats, vdata, offset, count);
+		idx_t appended = state.current_segment->Append(append_state, vdata, offset, count);
 		if (appended == count) {
 			// appended everything: finished
 			return;
 		}
-		auto next_start = state.current_segment->row_start + state.current_segment->tuple_count;
+		auto next_start = state.current_segment->start + state.current_segment->count;
 		// the segment is full: flush it to disk
 		state.FlushSegment();
 
@@ -118,7 +111,7 @@ struct NumericScanState : public SegmentScanState {
 	unique_ptr<BufferHandle> handle;
 };
 
-unique_ptr<SegmentScanState> NumericInitScan(CompressedSegment &segment) {
+unique_ptr<SegmentScanState> NumericInitScan(ColumnSegment &segment) {
 	auto result = make_unique<NumericScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
@@ -129,10 +122,10 @@ unique_ptr<SegmentScanState> NumericInitScan(CompressedSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 template<class T>
-void NumericScanPartial(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void NumericScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
 	auto &scan_state = (NumericScanState &) *state.scan_state;
-	D_ASSERT(start <= segment.tuple_count);
-	D_ASSERT(start + scan_count <= segment.tuple_count);
+	D_ASSERT(start <= segment.count);
+	D_ASSERT(start + scan_count <= segment.count);
 
 	auto data = scan_state.handle->node->buffer;
 	auto source_data = data + start * sizeof(T);
@@ -143,7 +136,7 @@ void NumericScanPartial(CompressedSegment &segment, ColumnScanState &state, idx_
 }
 
 template<class T>
-void NumericScan(CompressedSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+void NumericScan(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
 	// FIXME: we should be able to do a zero-copy here
 	NumericScanPartial<T>(segment, state, start, scan_count, result, 0);
 }
@@ -152,7 +145,7 @@ void NumericScan(CompressedSegment &segment, ColumnScanState &state, idx_t start
 // Fetch
 //===--------------------------------------------------------------------===//
 template<class T>
-void NumericFetchRow(CompressedSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void NumericFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 
@@ -207,16 +200,16 @@ void AppendLoop<list_entry_t>(SegmentStatistics &stats, data_ptr_t target, idx_t
 }
 
 template<class T>
-idx_t NumericAppend(CompressedSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
+idx_t NumericAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 
 	auto target_ptr = handle->node->buffer;
 	idx_t max_tuple_count = Storage::BLOCK_SIZE / sizeof(T);
-	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.tuple_count);
+	idx_t copy_count = MinValue<idx_t>(count, max_tuple_count - segment.count);
 
-	AppendLoop<T>(stats, target_ptr, segment.tuple_count, data, offset, copy_count);
-	segment.tuple_count += copy_count;
+	AppendLoop<T>(stats, target_ptr, segment.count, data, offset, copy_count);
+	segment.count += copy_count;
 	return copy_count;
 }
 

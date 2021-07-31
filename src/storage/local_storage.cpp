@@ -7,7 +7,7 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
-#include "duckdb/storage/segment/compressed_segment.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 
@@ -142,7 +142,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			if (column_filters != state.table_filters->filters.end()) {
 				//! We have filters to apply here
 				auto &mask = FlatVector::Validity(result.data[i]);
-				CompressedSegment::FilterSelection(sel, result.data[i], *column_filters->second, approved_tuple_count,
+				ColumnSegment::FilterSelection(sel, result.data[i], *column_filters->second, approved_tuple_count,
 				                                     mask);
 				count = approved_tuple_count;
 			}

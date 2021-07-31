@@ -1,7 +1,6 @@
 add_library_unity(
   duckdb_storage_segment
   OBJECT
-  compressed_segment.cpp
   numeric_constant.cpp
   numeric_uncompressed.cpp
   string_uncompressed.cpp
