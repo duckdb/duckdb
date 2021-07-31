@@ -20,9 +20,8 @@ class LocalTableStorage;
 class Index;
 class RowGroup;
 class UpdateSegment;
-class PersistentSegment;
 class TableScanState;
-class TransientSegment;
+class ColumnSegment;
 class ValiditySegment;
 class TableFilterSet;
 

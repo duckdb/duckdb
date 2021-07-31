@@ -57,7 +57,7 @@ void ColumnCheckpointState::FlushSegment(CompressedSegment &segment, unique_ptr<
 	data_pointer.statistics = stats->Copy();
 
 	// construct a persistent segment that points to this block, and append it to the new segment tree
-	auto persistent_segment = make_unique<PersistentSegment>(
+	auto persistent_segment = ColumnSegment::CreatePersistentSegment(
 	    column_data.GetDatabase(), block_id, offset_in_block, column_data.type, data_pointer.row_start,
 	    data_pointer.tuple_count, stats->Copy());
 	segment.parent = persistent_segment.get();

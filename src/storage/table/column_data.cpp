@@ -1,6 +1,4 @@
 #include "duckdb/storage/table/column_data.hpp"
-#include "duckdb/storage/table/persistent_segment.hpp"
-#include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/data_pointer.hpp"
@@ -212,9 +210,9 @@ void ColumnData::InitializeAppend(ColumnAppendState &state) {
 		// no transient segments yet
 		auto total_rows = segment->start + segment->count;
 		AppendTransientSegment(total_rows);
-		state.current = (TransientSegment *)data.GetLastSegment();
+		state.current = (ColumnSegment *)data.GetLastSegment();
 	} else {
-		state.current = (TransientSegment *)segment;
+		state.current = (ColumnSegment *)segment;
 	}
 
 	D_ASSERT(state.current->segment_type == ColumnSegmentType::TRANSIENT);
@@ -236,7 +234,7 @@ void ColumnData::AppendData(BaseStatistics &stats, ColumnAppendState &state, Vec
 		{
 			lock_guard<mutex> tree_lock(data.node_lock);
 			AppendTransientSegment(state.current->start + state.current->count);
-			state.current = (TransientSegment *)data.GetLastSegment();
+			state.current = (ColumnSegment *)data.GetLastSegment();
 			state.current->InitializeAppend(state);
 		}
 		offset += copied_elements;
@@ -255,7 +253,7 @@ void ColumnData::RevertAppend(row_t start_row) {
 	// find the segment index that the current row belongs to
 	idx_t segment_index = data.GetSegmentIndex(start_row);
 	auto segment = data.nodes[segment_index].node;
-	auto &transient = (TransientSegment &)*segment;
+	auto &transient = (ColumnSegment &)*segment;
 	D_ASSERT(transient.segment_type == ColumnSegmentType::TRANSIENT);
 
 	// remove any segments AFTER this segment: they should be deleted entirely
@@ -315,7 +313,7 @@ unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {
 }
 
 void ColumnData::AppendTransientSegment(idx_t start_row) {
-	auto new_segment = make_unique<TransientSegment>(GetDatabase(), type, start_row);
+	auto new_segment = ColumnSegment::CreateTransientSegment(GetDatabase(), type, start_row);
 	data.AppendSegment(move(new_segment));
 }
 
@@ -324,9 +322,9 @@ void ColumnData::CommitDropColumn() {
 	auto segment = (ColumnSegment *)data.GetRootSegment();
 	while (segment) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-			auto &persistent = (PersistentSegment &)*segment;
-			if (persistent.block_id != INVALID_BLOCK) {
-				block_manager.MarkBlockAsModified(persistent.block_id);
+			auto block_id = segment->GetBlockId();
+			if (block_id != INVALID_BLOCK) {
+				block_manager.MarkBlockAsModified(block_id);
 			}
 		}
 		segment = (ColumnSegment *)segment->next.get();
@@ -380,7 +378,7 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 		data_pointer.statistics = BaseStatistics::Deserialize(source, type);
 
 		// create a persistent segment
-		auto segment = make_unique<PersistentSegment>(GetDatabase(), data_pointer.block_pointer.block_id,
+		auto segment = ColumnSegment::CreatePersistentSegment(GetDatabase(), data_pointer.block_pointer.block_id,
 		                                              data_pointer.block_pointer.offset, type, data_pointer.row_start,
 		                                              data_pointer.tuple_count, move(data_pointer.statistics));
 		data.AppendSegment(move(segment));
@@ -435,10 +433,9 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, v
 		// block_id
 		// block_offset
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-			auto &persistent = (PersistentSegment &)*segment;
 			column_info.push_back(Value::BOOLEAN(true));
-			column_info.push_back(Value::BIGINT(persistent.block_id));
-			column_info.push_back(Value::BIGINT(persistent.offset));
+			column_info.push_back(Value::BIGINT(segment->GetBlockId()));
+			column_info.push_back(Value::BIGINT(segment->GetBlockOffset()));
 		} else {
 			column_info.push_back(Value::BOOLEAN(false));
 			column_info.emplace_back();

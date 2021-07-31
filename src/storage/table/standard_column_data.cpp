@@ -2,8 +2,6 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/table/persistent_segment.hpp"
-#include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/table_filter.hpp"
 

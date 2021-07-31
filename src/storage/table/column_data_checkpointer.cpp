@@ -106,10 +106,10 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
 	for(auto segment = (ColumnSegment *) owned_segment.get(); segment; segment = (ColumnSegment *) segment->next.get()) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
-			auto &persistent = (PersistentSegment &)*segment;
 			// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
-			if (persistent.block_id != INVALID_BLOCK) {
-				block_manager.MarkBlockAsModified(persistent.block_id);
+			auto block_id = segment->GetBlockId();
+			if (block_id != INVALID_BLOCK) {
+				block_manager.MarkBlockAsModified(block_id);
 			}
 		}
 	}
@@ -141,10 +141,9 @@ bool ColumnDataCheckpointer::HasChanges() {
 			// transient segment: always need to write to disk
 			return true;
 		} else {
-			auto &persistent = (PersistentSegment &)*segment;
 			// persistent segment; check if there were any updates or deletions in this segment
-			idx_t start_row_idx = persistent.start - row_group.start;
-			idx_t end_row_idx = start_row_idx + persistent.count;
+			idx_t start_row_idx = segment->start - row_group.start;
+			idx_t end_row_idx = start_row_idx + segment->count;
 			if (col_data.updates && col_data.updates->HasUpdates(start_row_idx, end_row_idx)) {
 				return true;
 			}
@@ -161,18 +160,17 @@ void ColumnDataCheckpointer::WritePersistentSegments() {
 		auto next_segment = move(segment->next);
 
 		D_ASSERT(segment->segment_type == ColumnSegmentType::PERSISTENT);
-		auto &persistent = (PersistentSegment &)*segment;
 
 		// set up the data pointer directly using the data from the persistent segment
 		DataPointer pointer;
-		pointer.block_pointer.block_id = persistent.block_id;
-		pointer.block_pointer.offset = 0;
+		pointer.block_pointer.block_id = segment->GetBlockId();
+		pointer.block_pointer.offset = segment->GetBlockOffset();
 		pointer.row_start = segment->start;
-		pointer.tuple_count = persistent.count;
-		pointer.statistics = persistent.stats.statistics->Copy();
+		pointer.tuple_count = segment->count;
+		pointer.statistics = segment->stats.statistics->Copy();
 
 		// merge the persistent stats into the global column stats
-		state.global_stats->Merge(*persistent.stats.statistics);
+		state.global_stats->Merge(*segment->stats.statistics);
 
 		// directly append the current segment to the new tree
 		state.new_tree.AppendSegment(move(owned_segment));

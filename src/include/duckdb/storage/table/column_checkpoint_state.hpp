@@ -12,6 +12,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
+#include "duckdb/storage/segment/compressed_segment.hpp"
 
 namespace duckdb {
 class ColumnData;

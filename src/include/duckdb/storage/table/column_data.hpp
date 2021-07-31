@@ -11,7 +11,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
@@ -21,10 +20,10 @@
 
 namespace duckdb {
 class ColumnData;
+class ColumnSegment;
 class DatabaseInstance;
 class RowGroup;
 class TableDataWriter;
-class PersistentSegment;
 class Transaction;
 
 struct DataTableInfo;

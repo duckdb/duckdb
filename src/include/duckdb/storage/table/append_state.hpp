@@ -14,17 +14,17 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
+class ColumnSegment;
 class DataTable;
 class RowGroup;
 class UpdateSegment;
-class TransientSegment;
 class ValiditySegment;
 
 struct TableAppendState;
 
 struct ColumnAppendState {
 	//! The current segment of the append
-	TransientSegment *current;
+	ColumnSegment *current;
 	//! Child append states
 	vector<ColumnAppendState> child_appends;
 	//! The write lock that is held by the append
