@@ -38,9 +38,7 @@ public:
 		return global_stats->Copy();
 	}
 
-	virtual void CreateEmptySegment();
 	virtual void FlushSegment(CompressedSegment &segment, unique_ptr<BaseStatistics> stats);
-	virtual void AppendData(Vector &data, idx_t count);
 	virtual void FlushToDisk();
 };
 

@@ -27,7 +27,7 @@ public:
 	void Checkpoint(unique_ptr<SegmentBase> segment);
 
 private:
-	void ScanSegments(std::function<bool(Vector &, idx_t)> callback);
+	void ScanSegments(std::function<void(Vector &, idx_t)> callback);
 	unique_ptr<AnalyzeState> DetectBestCompressionMethod(idx_t &compression_idx);
 	void WriteToDisk();
 	bool HasChanges();

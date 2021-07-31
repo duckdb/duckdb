@@ -31,7 +31,7 @@ ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
 	return state;
 }
 
-void ColumnDataCheckpointer::ScanSegments(std::function<bool(Vector &, idx_t)> callback) {
+void ColumnDataCheckpointer::ScanSegments(std::function<void(Vector &, idx_t)> callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	for(auto segment = (ColumnSegment *) owned_segment.get(); segment; segment = (ColumnSegment *) segment->next.get()) {
 		ColumnScanState scan_state;
@@ -46,18 +46,14 @@ void ColumnDataCheckpointer::ScanSegments(std::function<bool(Vector &, idx_t)> c
 
 			col_data.CheckpointScan(segment, scan_state, row_group.start, base_row_index, count, scan_vector);
 
-			if (!callback(scan_vector, count)) {
-				return;
-			}
+			callback(scan_vector, count);
 		}
 	}
 }
 
 unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
-	if (compression_functions.empty()) {
-		compression_idx = INVALID_INDEX;
-		return nullptr;
-	}
+	D_ASSERT(!compression_functions.empty());
+
 	// set up the analyze states for each compression method
 	vector<unique_ptr<AnalyzeState>> analyze_states;
 	analyze_states.reserve(compression_functions.size());
@@ -67,7 +63,6 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 
 	// scan over all the segments and run the analyze step
 	ScanSegments([&](Vector &scan_vector, idx_t count) {
-		bool has_compression_functions = false;
 		for(idx_t i = 0; i < compression_functions.size(); i++) {
 			if (!compression_functions[i]) {
 				continue;
@@ -78,11 +73,8 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 				// erase it
 				compression_functions[i] = nullptr;
 				analyze_states[i].reset();
-			} else {
-				has_compression_functions = true;
 			}
 		}
-		return has_compression_functions;
 	});
 
 	// now that we have passed over all the data, we need to figure out the best method
@@ -127,24 +119,17 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	idx_t compression_idx;
 	auto analyze_state = DetectBestCompressionMethod(compression_idx);
 
-	// now that we have analyzed the compression functions we can start writing to disk
 	if (!analyze_state) {
-		// no compression method: store uncompressed
-		state.CreateEmptySegment();
-		ScanSegments([&](Vector &scan_vector, idx_t count) {
-			state.AppendData(scan_vector, count);
-			return true;
-		});
-		state.FlushSegment(*state.current_segment, move(state.segment_stats->statistics));
-	} else {
-		auto best_function = compression_functions[compression_idx];
-		auto compress_state = best_function->init_compression(*this, move(analyze_state));
-		ScanSegments([&](Vector &scan_vector, idx_t count) {
-			best_function->compress(*compress_state, scan_vector, count);
-			return true;
-		});
-		best_function->compress_finalize(*compress_state);
+		throw InternalException("No suitable compression/storage method found to store column");
 	}
+
+	// now that we have analyzed the compression functions we can start writing to disk
+	auto best_function = compression_functions[compression_idx];
+	auto compress_state = best_function->init_compression(*this, move(analyze_state));
+	ScanSegments([&](Vector &scan_vector, idx_t count) {
+		best_function->compress(*compress_state, scan_vector, count);
+	});
+	best_function->compress_finalize(*compress_state);
 
 	// now we actually write the data to disk
 	owned_segment.reset();

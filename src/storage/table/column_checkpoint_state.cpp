@@ -21,38 +21,6 @@ ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &co
 ColumnCheckpointState::~ColumnCheckpointState() {
 }
 
-void ColumnCheckpointState::CreateEmptySegment() {
-	auto &db = column_data.GetDatabase();
-	auto type_id = column_data.type.InternalType();
-	auto &config = DBConfig::GetConfig(db);
-	current_segment = make_unique<CompressedSegment>(nullptr, db, type_id, row_group.start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type_id));
-	segment_stats = make_unique<SegmentStatistics>(column_data.type);
-}
-
-void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
-	VectorData vdata;
-	data.Orrify(count, vdata);
-
-	idx_t offset = 0;
-	while (count > 0) {
-		auto &uncompressed = (CompressedSegment &) *current_segment;
-		idx_t appended = uncompressed.Append(*segment_stats, vdata, offset, count);
-		if (appended == count) {
-			// appended everything: finished
-			return;
-		}
-		// the segment is full: flush it to disk
-		FlushSegment(*current_segment, move(segment_stats->statistics));
-		current_segment.reset();
-		segment_stats.reset();
-
-		// now create a new segment and continue appending
-		CreateEmptySegment();
-		offset += appended;
-		count -= appended;
-	}
-}
-
 void ColumnCheckpointState::FlushSegment(CompressedSegment &segment, unique_ptr<BaseStatistics> stats) {
 	auto tuple_count = segment.tuple_count.load();
 	if (tuple_count == 0) {
