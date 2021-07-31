@@ -14,6 +14,7 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 
 namespace duckdb {
 
@@ -58,7 +59,12 @@ struct UncompressedCompressState : public CompressionState {
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		current_segment = make_unique<CompressedSegment>(db, type.InternalType(), row_start, function);
+		auto compressed_segment = make_unique<CompressedSegment>(db, type.InternalType(), row_start, function);
+		if (type.InternalType() == PhysicalType::VARCHAR) {
+			auto &state = (UncompressedStringSegmentState &) *compressed_segment->GetSegmentState();
+			state.overflow_writer = make_unique<WriteOverflowStringsToDisk>(db);
+		}
+		current_segment = move(compressed_segment);
 		segment_stats = make_unique<SegmentStatistics>(type);
 	}
 

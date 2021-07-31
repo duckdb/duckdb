@@ -2,7 +2,6 @@
 #include "duckdb/storage/table/column_data.hpp"
 
 #include "duckdb/storage/segment/compressed_segment.hpp"
-#include "duckdb/storage/segment/string_segment.hpp"
 #include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/table/validity_column_data.hpp"
 #include "duckdb/storage/table/standard_column_data.hpp"
@@ -25,14 +24,8 @@ ColumnCheckpointState::~ColumnCheckpointState() {
 void ColumnCheckpointState::CreateEmptySegment() {
 	auto &db = column_data.GetDatabase();
 	auto type_id = column_data.type.InternalType();
-	if (type_id == PhysicalType::VARCHAR) {
-		auto string_segment = make_unique<StringSegment>(db, row_group.start);
-		string_segment->overflow_writer = make_unique<WriteOverflowStringsToDisk>(column_data.GetDatabase());
-		current_segment = move(string_segment);
-	} else {
-		auto &config = DBConfig::GetConfig(db);
-		current_segment = make_unique<CompressedSegment>(db, type_id, row_group.start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type_id));
-	}
+	auto &config = DBConfig::GetConfig(db);
+	current_segment = make_unique<CompressedSegment>(db, type_id, row_group.start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type_id));
 	segment_stats = make_unique<SegmentStatistics>(column_data.type);
 }
 

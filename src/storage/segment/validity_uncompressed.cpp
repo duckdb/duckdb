@@ -381,12 +381,13 @@ void ValidityFetchRow(CompressedSegment &segment, ColumnFetchState &state, row_t
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-void ValidityInitSegment(CompressedSegment &segment, block_id_t block_id) {
+unique_ptr<CompressedSegmentState> ValidityInitSegment(CompressedSegment &segment, block_id_t block_id) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
 		memset(handle->node->buffer, 0xFF, Storage::BLOCK_SIZE);
 	}
+	return nullptr;
 }
 
 idx_t ValidityAppend(CompressedSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t vcount) {

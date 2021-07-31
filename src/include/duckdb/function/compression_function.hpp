@@ -33,6 +33,10 @@ struct CompressionState {
 	virtual ~CompressionState(){}
 };
 
+struct CompressedSegmentState {
+	virtual ~CompressedSegmentState(){}
+};
+
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
@@ -67,7 +71,7 @@ typedef void (*compression_fetch_row_t)(CompressedSegment &segment, ColumnFetchS
 //===--------------------------------------------------------------------===//
 // Append (optional)
 //===--------------------------------------------------------------------===//
-typedef void (*compression_init_segment_t)(CompressedSegment &segment, block_id_t block_id);
+typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(CompressedSegment &segment, block_id_t block_id);
 typedef idx_t (*compression_append_t)(CompressedSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count);
 typedef void (*compression_revert_append_t)(CompressedSegment &segment, idx_t start_row);
 

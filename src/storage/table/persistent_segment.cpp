@@ -9,7 +9,6 @@
 
 #include "duckdb/storage/segment/constant_segment.hpp"
 #include "duckdb/storage/segment/compressed_segment.hpp"
-#include "duckdb/storage/segment/string_segment.hpp"
 
 namespace duckdb {
 
@@ -20,8 +19,6 @@ PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t 
 	D_ASSERT(offset == 0);
 	if (block_id == INVALID_BLOCK) {
 		data = make_unique<ConstantSegment>(db, stats, start);
-	} else if (type.InternalType() == PhysicalType::VARCHAR) {
-		data = make_unique<StringSegment>(db, start, id);
 	} else {
 		auto &config = DBConfig::GetConfig(db);
 		data = make_unique<CompressedSegment>(db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType()), id);

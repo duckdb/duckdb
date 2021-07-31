@@ -30,6 +30,13 @@ public:
 
 	idx_t Append(SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) override;
 	void RevertAppend(idx_t start_row) override;
+
+	CompressedSegmentState *GetSegmentState() {
+		return segment_state.get();
+	}
+
+private:
+	unique_ptr<CompressedSegmentState> segment_state;
 };
 
 } // namespace duckdb

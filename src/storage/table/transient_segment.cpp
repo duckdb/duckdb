@@ -3,7 +3,6 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/segment/compressed_segment.hpp"
-#include "duckdb/storage/segment/string_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -12,12 +11,8 @@ namespace duckdb {
 
 TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type_p, idx_t start)
     : ColumnSegment(db, type_p, ColumnSegmentType::TRANSIENT, start) {
-	if (type.InternalType() == PhysicalType::VARCHAR) {
-		data = make_unique<StringSegment>(db, start);
-	} else {
-		auto &config = DBConfig::GetConfig(db);
-		data = make_unique<CompressedSegment>(db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType()));
-	}
+	auto &config = DBConfig::GetConfig(db);
+	data = make_unique<CompressedSegment>(db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType()));
 }
 
 void TransientSegment::InitializeAppend(ColumnAppendState &state) {

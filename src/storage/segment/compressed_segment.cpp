@@ -12,7 +12,7 @@ CompressedSegment::CompressedSegment(DatabaseInstance &db, PhysicalType type, id
 		this->block = buffer_manager.RegisterBlock(block_id);
 	}
 	if (function->init_segment) {
-		function->init_segment(*this, block_id);
+		segment_state = function->init_segment(*this, block_id);
 	}
 }
 
@@ -25,6 +25,7 @@ void CompressedSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_cou
 }
 
 void CompressedSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+	D_ASSERT(RowRangeIsValid(start, scan_count));
 	function->scan_partial(*this, state, start, scan_count, result, result_offset);
 }
 

@@ -22,15 +22,14 @@ CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
 		return NumericUncompressed::GetFunction(type);
 	case PhysicalType::BIT:
 		return ValidityUncompressed::GetFunction(type);
+	case PhysicalType::VARCHAR:
+		return StringUncompressed::GetFunction(type);
 	default:
 		throw InternalException("Unsupported type for Uncompressed");
 	}
 }
 
 bool UncompressedFun::TypeIsSupported(PhysicalType type) {
-	if (type == PhysicalType::VARCHAR) {
-		return false;
-	}
 	return true;
 }
 
