@@ -1,20 +1,14 @@
 #include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/transaction/update_info.hpp"
-#include "duckdb/transaction/transaction.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/vector_size.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
-#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/storage/segment/compressed_segment.hpp"
-#include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
 
@@ -59,7 +53,7 @@ struct UncompressedCompressState : public CompressionState {
 	void CreateEmptySegment(idx_t row_start) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
-		auto compressed_segment = make_unique<CompressedSegment>(db, type.InternalType(), row_start, function);
+		auto compressed_segment = make_unique<CompressedSegment>(nullptr, db, type.InternalType(), row_start, function);
 		if (type.InternalType() == PhysicalType::VARCHAR) {
 			auto &state = (UncompressedStringSegmentState &) *compressed_segment->GetSegmentState();
 			state.overflow_writer = make_unique<WriteOverflowStringsToDisk>(db);
@@ -81,7 +75,7 @@ struct UncompressedCompressState : public CompressionState {
 
 	ColumnDataCheckpointer &checkpointer;
 	CompressionFunction *function;
-	unique_ptr<BaseSegment> current_segment;
+	unique_ptr<CompressedSegment> current_segment;
 	unique_ptr<SegmentStatistics> segment_stats;
 };
 

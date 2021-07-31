@@ -2,5 +2,5 @@ deadlock:LockClients
 deadlock:RollbackTransaction
 deadlock:Checkpoint
 race:NextInnerJoin
-race:~BaseSegment
+race:~CompressedSegment
 race:~TransientSegment

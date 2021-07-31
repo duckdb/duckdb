@@ -12,7 +12,7 @@
 
 namespace duckdb {
 class ColumnData;
-class BaseSegment;
+class CompressedSegment;
 class RowGroup;
 class BaseStatistics;
 class SegmentStatistics;

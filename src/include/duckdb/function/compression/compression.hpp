@@ -13,6 +13,11 @@
 
 namespace duckdb {
 
+struct ConstantFun {
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(PhysicalType type);
+};
+
 struct UncompressedFun {
 	static CompressionFunction GetFunction(PhysicalType type);
 	static bool TypeIsSupported(PhysicalType type);

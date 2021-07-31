@@ -12,7 +12,7 @@ namespace duckdb {
 TransientSegment::TransientSegment(DatabaseInstance &db, const LogicalType &type_p, idx_t start)
     : ColumnSegment(db, type_p, ColumnSegmentType::TRANSIENT, start) {
 	auto &config = DBConfig::GetConfig(db);
-	data = make_unique<CompressedSegment>(db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType()));
+	data = make_unique<CompressedSegment>(this, db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType()));
 }
 
 void TransientSegment::InitializeAppend(ColumnAppendState &state) {

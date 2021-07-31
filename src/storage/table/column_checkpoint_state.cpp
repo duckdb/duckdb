@@ -25,7 +25,7 @@ void ColumnCheckpointState::CreateEmptySegment() {
 	auto &db = column_data.GetDatabase();
 	auto type_id = column_data.type.InternalType();
 	auto &config = DBConfig::GetConfig(db);
-	current_segment = make_unique<CompressedSegment>(db, type_id, row_group.start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type_id));
+	current_segment = make_unique<CompressedSegment>(nullptr, db, type_id, row_group.start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type_id));
 	segment_stats = make_unique<SegmentStatistics>(column_data.type);
 }
 
@@ -35,7 +35,7 @@ void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
 
 	idx_t offset = 0;
 	while (count > 0) {
-		auto &uncompressed = (BaseSegment &) *current_segment;
+		auto &uncompressed = (CompressedSegment &) *current_segment;
 		idx_t appended = uncompressed.Append(*segment_stats, vdata, offset, count);
 		if (appended == count) {
 			// appended everything: finished
@@ -53,7 +53,7 @@ void ColumnCheckpointState::AppendData(Vector &data, idx_t count) {
 	}
 }
 
-void ColumnCheckpointState::FlushSegment(BaseSegment &segment, unique_ptr<BaseStatistics> stats) {
+void ColumnCheckpointState::FlushSegment(CompressedSegment &segment, unique_ptr<BaseStatistics> stats) {
 	auto tuple_count = segment.tuple_count.load();
 	if (tuple_count == 0) {
 		return;
@@ -77,7 +77,6 @@ void ColumnCheckpointState::FlushSegment(BaseSegment &segment, unique_ptr<BaseSt
 	}
 
 	// construct the data pointer
-
 	DataPointer data_pointer;
 	data_pointer.block_pointer.block_id = block_id;
 	data_pointer.block_pointer.offset = offset_in_block;
@@ -93,6 +92,7 @@ void ColumnCheckpointState::FlushSegment(BaseSegment &segment, unique_ptr<BaseSt
 	auto persistent_segment = make_unique<PersistentSegment>(
 	    column_data.GetDatabase(), block_id, offset_in_block, column_data.type, data_pointer.row_start,
 	    data_pointer.tuple_count, stats->Copy());
+	segment.parent = persistent_segment.get();
 	new_tree.AppendSegment(move(persistent_segment));
 
 	data_pointers.push_back(move(data_pointer));

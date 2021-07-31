@@ -7,7 +7,6 @@
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 
-#include "duckdb/storage/segment/constant_segment.hpp"
 #include "duckdb/storage/segment/compressed_segment.hpp"
 
 namespace duckdb {
@@ -17,11 +16,12 @@ PersistentSegment::PersistentSegment(DatabaseInstance &db, block_id_t id, idx_t 
     : ColumnSegment(db, type_p, ColumnSegmentType::PERSISTENT, start, count, move(statistics)), block_id(id),
       offset(offset) {
 	D_ASSERT(offset == 0);
+	auto &config = DBConfig::GetConfig(db);
 	if (block_id == INVALID_BLOCK) {
-		data = make_unique<ConstantSegment>(db, stats, start);
+		data = make_unique<CompressedSegment>(this, db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType()), id);
 	} else {
 		auto &config = DBConfig::GetConfig(db);
-		data = make_unique<CompressedSegment>(db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType()), id);
+		data = make_unique<CompressedSegment>(this, db, type.InternalType(), start, config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType()), id);
 	}
 	data->tuple_count = count;
 }

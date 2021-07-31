@@ -30,7 +30,7 @@ struct ColumnCheckpointState {
 	vector<DataPointer> data_pointers;
 	unique_ptr<BaseStatistics> global_stats;
 
-	unique_ptr<BaseSegment> current_segment;
+	unique_ptr<CompressedSegment> current_segment;
 	unique_ptr<SegmentStatistics> segment_stats;
 
 public:
@@ -39,7 +39,7 @@ public:
 	}
 
 	virtual void CreateEmptySegment();
-	virtual void FlushSegment(BaseSegment &segment, unique_ptr<BaseStatistics> stats);
+	virtual void FlushSegment(CompressedSegment &segment, unique_ptr<BaseStatistics> stats);
 	virtual void AppendData(Vector &data, idx_t count);
 	virtual void FlushToDisk();
 };

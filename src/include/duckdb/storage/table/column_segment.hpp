@@ -16,7 +16,7 @@
 #include "duckdb/storage/statistics/segment_statistics.hpp"
 
 namespace duckdb {
-class BaseSegment;
+class CompressedSegment;
 class BlockManager;
 class ColumnSegment;
 class ColumnData;
@@ -51,7 +51,7 @@ public:
 	//! The statistics for the segment
 	SegmentStatistics stats;
 	//! The segment holding the data
-	unique_ptr<BaseSegment> data;
+	unique_ptr<CompressedSegment> data;
 
 public:
 	void InitializeScan(ColumnScanState &state);
