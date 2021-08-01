@@ -75,6 +75,10 @@ public:
 	//! Revert an append made to this transient segment
 	void RevertAppend(idx_t start_row);
 
+	//! Convert a transient in-memory segment into a persistent segment blocked by an on-disk block.
+	//! Only used during checkpointing.
+	void ConvertToPersistent(block_id_t block_id, idx_t offset_in_block);
+
 	block_id_t GetBlockId() {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
 		return block_id;
@@ -96,9 +100,6 @@ public:
 private:
 	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result);
 	void ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
-
-	bool RowIdIsValid(idx_t row_id) const;
-	bool RowRangeIsValid(idx_t row_id, idx_t count) const;
 
 private:
 	//! The block id that this segment relates to (persistent segment only)

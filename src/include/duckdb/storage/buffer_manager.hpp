@@ -41,6 +41,9 @@ public:
 	//! it can be reloaded. The resulting buffer will already be allocated, but needs to be pinned in order to be used.
 	shared_ptr<BlockHandle> RegisterMemory(idx_t alloc_size, bool can_destroy);
 
+	//! Convert an existing in-memory buffer into a persistent disk-backed block
+	shared_ptr<BlockHandle> ConvertToPersistent(BlockManager &block_manager, block_id_t block_id, shared_ptr<BlockHandle> old_block);
+
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.
 	unique_ptr<BufferHandle> Allocate(idx_t alloc_size);
@@ -88,6 +91,8 @@ private:
 	void DeleteTemporaryFile(block_id_t id);
 
 	void RequireTemporaryDirectory();
+
+	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
 private:
 	//! The database instance

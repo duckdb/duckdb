@@ -41,9 +41,15 @@ ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSeg
 	D_ASSERT(function);
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
-		// no block id specified: allocate a buffer for the uncompressed segment
-		this->block = buffer_manager.RegisterMemory(Storage::BLOCK_SIZE, false);
+		// no block id specified
+		// there are two cases here:
+		// transient: allocate a buffer for the uncompressed segment
+		// persistent: constant segment, no need to allocate anything
+		if (segment_type == ColumnSegmentType::TRANSIENT) {
+			this->block = buffer_manager.RegisterMemory(Storage::BLOCK_SIZE, false);
+		}
 	} else {
+		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
 		this->block = buffer_manager.RegisterBlock(block_id);
 	}
 	if (function->init_segment) {
@@ -79,7 +85,8 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, 
 }
 
 void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
-	D_ASSERT(RowRangeIsValid(start, scan_count));
+	D_ASSERT(start <= this->count);
+	D_ASSERT(start + scan_count <= this->count);
 	function->scan_partial(*this, state, start, scan_count, result, result_offset);
 }
 
@@ -113,12 +120,32 @@ void ColumnSegment::RevertAppend(idx_t start_row) {
 	this->count = start_row - this->start;
 }
 
-bool ColumnSegment::RowIdIsValid(idx_t row_id) const {
-	return row_id <= count;
-}
+//===--------------------------------------------------------------------===//
+// Convert To Persistent
+//===--------------------------------------------------------------------===//
+void ColumnSegment::ConvertToPersistent(block_id_t block_id_p, idx_t offset_p) {
+	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
+	segment_type = ColumnSegmentType::PERSISTENT;
+	block_id = block_id_p;
+	offset = offset_p;
 
-bool ColumnSegment::RowRangeIsValid(idx_t row_id, idx_t count) const {
-	return row_id <= count && row_id + count <= count;
+	if (block_id == INVALID_BLOCK) {
+		// constant block: reset the block buffer
+		block.reset();
+	} else {
+		// non-constant block: write the block to disk
+		auto &buffer_manager = BufferManager::GetBufferManager(db);
+		auto &block_manager = BlockManager::GetBlockManager(db);
+
+		// the data for the block already exists in-memory of our block
+		// instead of copying the data we alter some metadata so the buffer points to an on-disk block
+		block = buffer_manager.ConvertToPersistent(block_manager, block_id, move(block));
+	}
+
+	segment_state.reset();
+	if (function->init_segment) {
+		segment_state = function->init_segment(*this, block_id);
+	}
 }
 
 //===--------------------------------------------------------------------===//

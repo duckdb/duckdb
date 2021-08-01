@@ -22,59 +22,56 @@ ColumnCheckpointState::~ColumnCheckpointState() {
 }
 
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment) {
-	throw InternalException("FIXME: flush segment");
-	// auto tuple_count = segment->count.load();
-	// if (tuple_count == 0) {
-	// 	return;
-	// }
+	auto tuple_count = segment->count.load();
+	if (tuple_count == 0) {
+		return;
+	}
 
-	// // get the buffer of the segment and pin it
-	// auto &buffer_manager = BufferManager::GetBufferManager(column_data.GetDatabase());
-	// auto &block_manager = BlockManager::GetBlockManager(column_data.GetDatabase());
+	// merge the segment stats into the global stats
+	global_stats->Merge(*segment->stats.statistics);
 
-	// bool block_is_constant = stats->IsConstant();
+	// get the buffer of the segment and pin it
+	auto &db = column_data.GetDatabase();
+	auto &block_manager = BlockManager::GetBlockManager(db);
 
-	// block_id_t block_id;
-	// uint32_t offset_in_block;
-	// if (!block_is_constant) {
-	// 	// get a free block id to write to
-	// 	block_id = block_manager.GetFreeBlockId();
-	// 	offset_in_block = 0;
-	// } else {
-	// 	block_id = INVALID_BLOCK;
-	// 	offset_in_block = 0;
-	// }
+	bool block_is_constant = segment->stats.statistics->IsConstant();
 
-	// // construct the data pointer
-	// DataPointer data_pointer;
-	// data_pointer.block_pointer.block_id = block_id;
-	// data_pointer.block_pointer.offset = offset_in_block;
-	// data_pointer.row_start = row_group.start;
-	// if (!data_pointers.empty()) {
-	// 	auto &last_pointer = data_pointers.back();
-	// 	data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
-	// }
-	// data_pointer.tuple_count = tuple_count;
-	// data_pointer.statistics = stats->Copy();
+	block_id_t block_id;
+	uint32_t offset_in_block;
+	if (!block_is_constant) {
+		// non-constant block
+		// get a free block id to write to
+		block_id = block_manager.GetFreeBlockId();
+		offset_in_block = 0;
+	} else {
+		// constant block: no need to write anything to disk besides the stats
+		// set up the compression function to constant
+		block_id = INVALID_BLOCK;
+		offset_in_block = 0;
 
-	// // construct a persistent segment that points to this block, and append it to the new segment tree
-	// auto persistent_segment = ColumnSegment::CreatePersistentSegment(
-	//     column_data.GetDatabase(), block_id, offset_in_block, column_data.type, data_pointer.row_start,
-	//     data_pointer.tuple_count, stats->Copy());
-	// segment.parent = persistent_segment.get();
-	// new_tree.AppendSegment(move(persistent_segment));
+		auto &config = DBConfig::GetConfig(db);
+		segment->function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
+	}
 
-	// data_pointers.push_back(move(data_pointer));
+	// construct the data pointer
+	DataPointer data_pointer;
+	data_pointer.block_pointer.block_id = block_id;
+	data_pointer.block_pointer.offset = offset_in_block;
+	data_pointer.row_start = row_group.start;
+	if (!data_pointers.empty()) {
+		auto &last_pointer = data_pointers.back();
+		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
+	}
+	data_pointer.tuple_count = tuple_count;
+	data_pointer.statistics = segment->stats.statistics->Copy();
 
-	// if (!block_is_constant) {
-	// 	// write the block to disk
-	// 	auto handle = buffer_manager.Pin(segment.block);
-	// 	block_manager.Write(*handle->node, block_id);
-	// 	handle.reset();
-	// }
+	// convert the segment into a persistent segment that points to this block
+	segment->ConvertToPersistent(block_id, offset_in_block);
 
-	// // merge the segment stats into the global stats
-	// global_stats->Merge(*stats);
+	// append the segment to the new segment tree
+	new_tree.AppendSegment(move(segment));
+	data_pointers.push_back(move(data_pointer));
+
 }
 
 void ColumnCheckpointState::FlushToDisk() {

@@ -24,6 +24,8 @@ public:
 	//! been opened with DIRECT_IO on all operating systems, however, the entire buffer must be written to the file.
 	//! Note that the returned size is 8 bytes less than the allocation size to account for the checksum.
 	FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsiz);
+	FileBuffer(FileBuffer &source, FileBufferType type);
+
 	virtual ~FileBuffer();
 
 	Allocator &allocator;
@@ -50,7 +52,7 @@ public:
 		return internal_size;
 	}
 
-private:
+protected:
 	//! The pointer to the internal buffer that will be read or written, including the buffer header
 	data_ptr_t internal_buffer;
 	//! The aligned size as passed to the constructor. This is the size that is read or written to disk.
@@ -60,7 +62,7 @@ private:
 	data_ptr_t malloced_buffer;
 	uint64_t malloced_size;
 
-private:
+protected:
 	//! Sets malloced_size given the requested buffer size
 	void SetMallocedSize(uint64_t &bufsiz);
 	//! Constructs the Filebuffer object

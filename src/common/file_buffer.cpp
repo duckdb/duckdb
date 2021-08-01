@@ -17,6 +17,28 @@ FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsi
 	Construct(bufsiz);
 }
 
+FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) :
+	allocator(source.allocator), type(type_p) {
+	// take over the structures of the source buffer
+	buffer = source.buffer;
+	size = source.size;
+	internal_buffer = source.internal_buffer;
+	internal_size = source.internal_size;
+	malloced_buffer = source.malloced_buffer;
+	malloced_size = source.malloced_size;
+
+	source.buffer = nullptr;
+	source.size = 0;
+	source.internal_buffer = nullptr;
+	source.internal_size = 0;
+	source.malloced_buffer = nullptr;
+	source.malloced_size = 0;
+}
+
+FileBuffer::~FileBuffer() {
+	allocator.FreeData(malloced_buffer, malloced_size);
+}
+
 void FileBuffer::SetMallocedSize(uint64_t &bufsiz) {
 	// make room for the block header (if this is not the db file header)
 	if (type == FileBufferType::MANAGED_BUFFER && bufsiz != Storage::FILE_HEADER_SIZE) {
@@ -68,10 +90,6 @@ void FileBuffer::Resize(uint64_t bufsiz) {
 	SetMallocedSize(bufsiz);
 	malloced_buffer = allocator.ReallocateData(malloced_buffer, malloced_size);
 	Construct(bufsiz);
-}
-
-FileBuffer::~FileBuffer() {
-	allocator.FreeData(malloced_buffer, malloced_size);
 }
 
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {
