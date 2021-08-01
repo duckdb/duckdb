@@ -1045,7 +1045,11 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 	auto *appender_instance = (Appender *)appender;
 	try {
 		function(*appender_instance);
+	} catch (std::exception &ex) {
+		appender_instance->error = ex.what();
+		return DuckDBError;
 	} catch (...) {
+		appender_instance->error = "Unknown error";
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
@@ -1067,7 +1071,11 @@ duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 	auto *appender_instance = (Appender *)appender;
 	try {
 		appender_instance->Append<T>(value);
+	} catch (std::exception &ex) {
+		appender_instance->error = ex.what();
+		return DuckDBError;
 	} catch (...) {
+		appender_instance->error = "Unknown error";
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
@@ -1130,6 +1138,14 @@ duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *
 }
 duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length) {
 	return duckdb_append_internal<string_t>(appender, string_t((const char *)data, length));
+}
+
+const char *duckdb_appender_error(duckdb_appender appender) {
+	if (!appender) {
+		return nullptr;
+	}
+	auto *appender_instance = (Appender *)appender;
+	return strdup(appender_instance->error.c_str());
 }
 
 duckdb_state duckdb_appender_flush(duckdb_appender appender) {

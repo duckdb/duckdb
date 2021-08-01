@@ -43,6 +43,9 @@ public:
 	DUCKDB_API Appender(Connection &con, const string &table_name);
 	DUCKDB_API ~Appender();
 
+	//! The error string (in case execution was not successful)
+	string error;
+
 	//! Begins a new row append, after calling this the other AppendX() functions
 	//! should be called the correct amount of times. After that,
 	//! EndRow() should be called.

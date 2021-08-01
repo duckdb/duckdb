@@ -301,6 +301,7 @@ DUCKDB_API duckdb_state duckdb_append_varchar_length(duckdb_appender appender, c
 DUCKDB_API duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length);
 DUCKDB_API duckdb_state duckdb_append_null(duckdb_appender appender);
 
+DUCKDB_API const char *duckdb_appender_error(duckdb_appender appender);
 DUCKDB_API duckdb_state duckdb_appender_flush(duckdb_appender appender);
 DUCKDB_API duckdb_state duckdb_appender_close(duckdb_appender appender);
 
