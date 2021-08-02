@@ -36,7 +36,7 @@ using namespace duckdb;
 		}                                                                                                              \
 	}                                                                                                                  \
 	void RunBenchmark(DuckDBBenchmarkState *state) override {                                                          \
-		state->conn.Query("BEGIN QUERY");                                                                              \
+		state->conn.Query("BEGIN TRANSACTION");                                                                        \
 		Appender appender(state->conn, "test");                                                                        \
 		for (int32_t i = 0; i < 10000000; i++) {                                                                       \
 			appender.BeginRow();                                                                                       \
@@ -46,7 +46,7 @@ using namespace duckdb;
 				get_random_area_code(area_code);                                                                       \
 				appender.Append<string_t>(string_t(area_code, 6));                                                     \
 			} else {                                                                                                   \
-				appender.Append<nullptr_t>(nullptr);                                                                   \
+				appender.Append<std::nullptr_t>(nullptr);                                                              \
 			}                                                                                                          \
 			appender.Append<int32_t>(get_random_age());                                                                \
 			appender.Append<int32_t>(get_random_active());                                                             \
