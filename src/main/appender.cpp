@@ -8,6 +8,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/string_cast.hpp"
 
 namespace duckdb {
 
@@ -101,6 +102,9 @@ void Appender::AppendValueInternal(T input) {
 	case PhysicalType::DOUBLE:
 		AppendValueInternal<T, double>(col, input);
 		break;
+	case PhysicalType::VARCHAR:
+		FlatVector::GetData<string_t>(col)[chunk->size()] = StringCast::Operation<T>(input, col);
+		break;
 	default:
 		AppendValue(Value::CreateValue<T>(input));
 		return;
@@ -160,6 +164,11 @@ void Appender::Append(const char *value) {
 
 void Appender::Append(const char *value, uint32_t length) {
 	AppendValueInternal<string_t>(string_t(value, length));
+}
+
+template <>
+void Appender::Append(string_t value) {
+	AppendValueInternal<string_t>(value);
 }
 
 template <>
