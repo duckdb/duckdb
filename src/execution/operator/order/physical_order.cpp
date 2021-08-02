@@ -1329,7 +1329,36 @@ public:
 	}
 
 	void Execute() override {
-		ComputeWork();
+		while (true) {
+			{
+				// Acquire global lock to compute next intersection
+				lock_guard<mutex> glock(state.lock);
+				if (state.pair_idx < state.sorted_blocks_temp.size()) {
+					ComputeWork();
+				} else {
+					break;
+				}
+			}
+			ExecuteTaskInternal();
+			parent.finished_tasks++;
+		}
+		lock_guard<mutex> glock(state.lock);
+		if (parent.finished_tasks == parent.total_tasks) {
+			state.sorted_blocks.clear();
+			if (state.odd_one_out) {
+				state.sorted_blocks.push_back(move(state.odd_one_out));
+				state.odd_one_out = nullptr;
+			}
+			for (auto &sorted_block_vector : state.sorted_blocks_temp) {
+				state.sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, state));
+				state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
+			}
+			state.sorted_blocks_temp.clear();
+			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
+		}
+	}
+
+	void ExecuteTaskInternal() {
 		auto &left = *left_block;
 		auto &right = *right_block;
 		D_ASSERT(left.radix_sorting_data.size() == left.payload_data->data_blocks.size());
@@ -1389,27 +1418,10 @@ public:
 #ifdef DEBUG
 		D_ASSERT(result->Count() == l_count + r_count);
 #endif
-		lock_guard<mutex> glock(state.lock);
-		parent.finished_tasks++;
-		if (parent.finished_tasks == parent.total_tasks) {
-			state.sorted_blocks.clear();
-			if (state.odd_one_out) {
-				state.sorted_blocks.push_back(move(state.odd_one_out));
-				state.odd_one_out = nullptr;
-			}
-			for (auto &sorted_block_vector : state.sorted_blocks_temp) {
-				state.sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, state));
-				state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
-			}
-			state.sorted_blocks_temp.clear();
-			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
-		}
 	}
 
 	//! Sets the left and right block that this task will merge
 	void ComputeWork() {
-		// Acquire global lock to compute next intersection
-		lock_guard<mutex> glock(state.lock);
 		// Create result block
 		state.sorted_blocks_temp[state.pair_idx].push_back(make_unique<SortedBlock>(buffer_manager, state));
 		result = state.sorted_blocks_temp[state.pair_idx].back().get();
@@ -1443,6 +1455,8 @@ public:
 		state.l_start = l_end;
 		state.r_start = r_end;
 		if (state.l_start == l_count && state.r_start == r_count) {
+			state.sorted_blocks[state.pair_idx * 2].reset();
+			state.sorted_blocks[state.pair_idx * 2 + 1].reset();
 			state.pair_idx++;
 			state.l_start = 0;
 			state.r_start = 0;
@@ -2017,9 +2031,16 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	}
 	// Use the data that we have to determine which block size to use during the merge
 	state.block_capacity = state.sorted_blocks[0]->Count();
-	for (auto &sb : state.sorted_blocks) {
-		if (sb->SizeInBytes() >= state.memory_per_thread) {
-			state.block_capacity = MinValue(state.block_capacity, sb->Count());
+	if (total_heap_size > 0) {
+		// If we have variable size data we need to be conservative, as there might be skew
+		for (auto &sb : state.sorted_blocks) {
+			if (sb->SizeInBytes() >= state.memory_per_thread) {
+				state.block_capacity = MinValue(state.block_capacity, sb->Count());
+			}
+		}
+	} else {
+		for (auto &sb : state.sorted_blocks) {
+			state.block_capacity = MaxValue(state.block_capacity, sb->Count());
 		}
 	}
 	// Unswizzle and pin heap blocks if we can fit everything in memory
@@ -2063,7 +2084,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 	state.l_start = 0;
 	state.r_start = 0;
 	// Compute how many tasks there will be
-	// Each merge task produces a SortedBlock exactly state.block_capacity or less
+	// Each merge task produces a SortedBlock with exactly state.block_capacity or less
 	idx_t num_tasks = 0;
 	const idx_t tuples_per_block = state.block_capacity;
 	for (idx_t block_idx = 0; block_idx < num_blocks; block_idx += 2) {
@@ -2074,11 +2095,13 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 		// Allocate room for merge results
 		state.sorted_blocks_temp.emplace_back();
 	}
-	// Schedule the tasks
 	pipeline.total_tasks += num_tasks;
-	for (idx_t tnum = 0; tnum < num_tasks; tnum++) {
+	// Schedule tasks equal to the number of threads, which will each finish multiple tasks
+	auto &ts = TaskScheduler::GetScheduler(context);
+	idx_t num_threads = ts.NumberOfThreads();
+	for (idx_t tnum = 0; tnum < num_threads; tnum++) {
 		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state);
-		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
+		ts.ScheduleTask(pipeline.token, move(new_task));
 	}
 }
 
