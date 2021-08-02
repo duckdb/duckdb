@@ -52,11 +52,12 @@ duckdb_register_arrow <- function(conn, name, arrow_scannable) {
   stopifnot(dbIsValid(conn))
 
     # create some R functions to pass to c-land
-    export_fun <- function(arrow_scannable, stream_ptr) {
-        record_batch_reader <- arrow::Scanner$create(arrow_scannable)$ToRecordBatchReader()
-        record_batch_reader$export_to_c(stream_ptr)
+    export_fun <- function(arrow_scannable, stream_ptr, projection=NULL, filter=TRUE) {
+        arrow::Scanner$create(arrow_scannable, projection, filter)$ToRecordBatchReader()$export_to_c(stream_ptr)
     }
-  .Call(duckdb_register_arrow_R, conn@conn_ref, as.character(name), export_fun, arrow_scannable)
+   # pass some functions to c land so we don't have to look them up there
+   function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar)
+  .Call(duckdb_register_arrow_R, conn@conn_ref, as.character(name), function_list, arrow_scannable)
   invisible(TRUE)
 }
 

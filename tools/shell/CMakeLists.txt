@@ -1,20 +1,25 @@
+cmake_minimum_required(VERSION 3.17)
+project(shell)
 add_definitions(-DSQLITE_OMIT_LOAD_EXTENSION=1)
 
 set(SHELL_SOURCES shell.c)
 if(NOT WIN32)
   add_definitions(-DHAVE_LINENOISE=1)
   set(SHELL_SOURCES ${SHELL_SOURCES} linenoise.cpp)
-  include_directories(../../third_party/third_party/utf8proc/include)
+  include_directories(../../third_party/utf8proc/include)
 endif()
 
 option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)
+
+include_directories(/home/kepe/git/duckdb/src/include)
+link_directories(/home/kepe/git/duckdb/build/debug/src)
 
 include_directories(include)
 include_directories(../sqlite3_api_wrapper/include)
 add_executable(shell ${SHELL_SOURCES})
 target_link_libraries(shell sqlite3_api_wrapper_static
                       ${DUCKDB_EXTRA_LINK_FLAGS})
-link_threads(shell)
+# link_threads(shell)
 if(STATIC_LIBCPP)
   message("Statically linking CLI")
   target_link_libraries(shell -static-libstdc++ -static-libgcc)

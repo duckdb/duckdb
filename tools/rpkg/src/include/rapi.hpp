@@ -23,7 +23,7 @@ struct RApi {
 
 	static SEXP Bind(SEXP stmtsexp, SEXP paramsexp);
 
-	static SEXP Execute(SEXP stmtsexp);
+	static SEXP Execute(SEXP stmtsexp, SEXP arrowsexp);
 
 	static SEXP Release(SEXP stmtsexp);
 
@@ -37,6 +37,9 @@ struct RApi {
 
 	static SEXP PointerToString(SEXP extptr);
 	static SEXP StringsToSexp(vector<string> s);
+
+	static SEXP REvalThrows(SEXP call, SEXP env = R_GlobalEnv);
+	static SEXP REvalRerror(SEXP call, SEXP env = R_GlobalEnv);
 };
 
 struct RProtector {

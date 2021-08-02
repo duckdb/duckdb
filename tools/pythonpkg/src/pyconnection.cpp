@@ -270,8 +270,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 
-	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(uintptr_t factory) =
-	    PythonTableArrowArrayStreamFactory::Produce;
+	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto rel = make_unique<DuckDBPyRelation>(
 	    connection
 	        ->TableFunction("arrow_scan",

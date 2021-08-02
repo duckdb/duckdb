@@ -40,6 +40,7 @@ struct Binding {
 	unordered_map<string, column_t> name_map;
 
 public:
+	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
 	bool HasMatchingBinding(const string &column_name);
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
 };

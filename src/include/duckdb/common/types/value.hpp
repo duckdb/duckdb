@@ -335,6 +335,8 @@ template <>
 DUCKDB_API dtime_t Value::GetValue() const;
 template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
+template <>
+DUCKDB_API interval_t Value::GetValue() const;
 
 template <>
 DUCKDB_API int8_t &Value::GetValueUnsafe();

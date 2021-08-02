@@ -12,14 +12,15 @@
 #include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
+class TableCatalogEntry;
+
 //! The ALTER binder is responsible for binding an expression within alter statements
 class AlterBinder : public ExpressionBinder {
 public:
-	AlterBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns,
-	            vector<column_t> &bound_columns, LogicalType target_type);
+	AlterBinder(Binder &binder, ClientContext &context, TableCatalogEntry &table, vector<column_t> &bound_columns,
+	            LogicalType target_type);
 
-	string table;
-	vector<ColumnDefinition> &columns;
+	TableCatalogEntry &table;
 	vector<column_t> &bound_columns;
 
 protected:
