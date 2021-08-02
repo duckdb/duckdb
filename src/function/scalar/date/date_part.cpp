@@ -635,54 +635,134 @@ DatePart::EpochOperator::PropagateStatistics<dtime_t>(ClientContext &context, Bo
 	return PropagateSimpleDatePartStatistics<0, 86400>(child_stats);
 }
 
-template <class T, class OP>
+template <class T>
 static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
-		return OP::YearOperator::template Operation<T, int64_t>(element);
+		return DatePart::YearOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MONTH:
-		return OP::MonthOperator::template Operation<T, int64_t>(element);
+		return DatePart::MonthOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::DAY:
-		return OP::DayOperator::template Operation<T, int64_t>(element);
+		return DatePart::DayOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::DECADE:
-		return OP::DecadeOperator::template Operation<T, int64_t>(element);
+		return DatePart::DecadeOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::CENTURY:
-		return OP::CenturyOperator::template Operation<T, int64_t>(element);
+		return DatePart::CenturyOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MILLENNIUM:
-		return OP::MilleniumOperator::template Operation<T, int64_t>(element);
+		return DatePart::MilleniumOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::QUARTER:
-		return OP::QuarterOperator::template Operation<T, int64_t>(element);
+		return DatePart::QuarterOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::DOW:
-		return OP::DayOfWeekOperator::template Operation<T, int64_t>(element);
+		return DatePart::DayOfWeekOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::ISODOW:
-		return OP::ISODayOfWeekOperator::template Operation<T, int64_t>(element);
+		return DatePart::ISODayOfWeekOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::DOY:
-		return OP::DayOfYearOperator::template Operation<T, int64_t>(element);
+		return DatePart::DayOfYearOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::WEEK:
-		return OP::WeekOperator::template Operation<T, int64_t>(element);
+		return DatePart::WeekOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::EPOCH:
-		return OP::EpochOperator::template Operation<T, int64_t>(element);
+		return DatePart::EpochOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MICROSECONDS:
-		return OP::MicrosecondsOperator::template Operation<T, int64_t>(element);
+		return DatePart::MicrosecondsOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MILLISECONDS:
-		return OP::MillisecondsOperator::template Operation<T, int64_t>(element);
+		return DatePart::MillisecondsOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::SECOND:
-		return OP::SecondsOperator::template Operation<T, int64_t>(element);
+		return DatePart::SecondsOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MINUTE:
-		return OP::MinutesOperator::template Operation<T, int64_t>(element);
+		return DatePart::MinutesOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::HOUR:
-		return OP::HoursOperator::template Operation<T, int64_t>(element);
+		return DatePart::HoursOperator::template Operation<T, int64_t>(element);
 	default:
-		throw NotImplementedException("Specifier type not implemented");
+		throw NotImplementedException("Specifier type not implemented for DATEPART");
 	}
 }
 
-struct DatePartOperator {
+struct DatePartBinaryOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA specifier, TB date) {
-		return ExtractElement<TB, DatePart>(GetDatePartSpecifier(specifier.GetString()), date);
+		return ExtractElement<TB>(GetDatePartSpecifier(specifier.GetString()), date);
 	}
 };
+
+template <typename TA, typename TR>
+static void DatePartUnaryExecutor(DatePartSpecifier type, Vector &left, Vector &result, idx_t count) {
+	switch (type) {
+	case DatePartSpecifier::YEAR:
+		UnaryExecutor::Execute<TA, TR, DatePart::YearOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::MONTH:
+		UnaryExecutor::Execute<TA, TR, DatePart::MonthOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::DAY:
+		UnaryExecutor::Execute<TA, TR, DatePart::DayOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::DOW:
+		UnaryExecutor::Execute<TA, TR, DatePart::DayOfWeekOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::ISODOW:
+		UnaryExecutor::Execute<TA, TR, DatePart::ISODayOfWeekOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::DOY:
+		UnaryExecutor::Execute<TA, TR, DatePart::DayOfYearOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::DECADE:
+		UnaryExecutor::Execute<TA, TR, DatePart::DecadeOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::CENTURY:
+		UnaryExecutor::Execute<TA, TR, DatePart::CenturyOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::MILLENNIUM:
+		UnaryExecutor::Execute<TA, TR, DatePart::MilleniumOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::QUARTER:
+		UnaryExecutor::Execute<TA, TR, DatePart::QuarterOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::WEEK:
+		UnaryExecutor::Execute<TA, TR, DatePart::WeekOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::EPOCH:
+		UnaryExecutor::Execute<TA, TR, DatePart::EpochOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::MICROSECONDS:
+		UnaryExecutor::Execute<TA, TR, DatePart::MicrosecondsOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::MILLISECONDS:
+		UnaryExecutor::Execute<TA, TR, DatePart::MillisecondsOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::SECOND:
+		UnaryExecutor::Execute<TA, TR, DatePart::SecondsOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::MINUTE:
+		UnaryExecutor::Execute<TA, TR, DatePart::MinutesOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::HOUR:
+		UnaryExecutor::Execute<TA, TR, DatePart::HoursOperator>(left, result, count);
+		break;
+	default:
+		throw NotImplementedException("Specifier type not implemented for DATEPART");
+	}
+}
+
+template <typename T>
+static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 2);
+	auto &part_arg = args.data[0];
+	auto &date_arg = args.data[1];
+
+	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// Common case of constant part.
+		if (ConstantVector::IsNull(part_arg)) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result, true);
+		} else {
+			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
+			DatePartUnaryExecutor<T, int64_t>(type, date_arg, result, args.size());
+		}
+	} else {
+		BinaryExecutor::ExecuteStandard<string_t, T, int64_t, DatePartBinaryOperator>(part_arg, date_arg, result,
+		                                                                              args.size());
+	}
+}
 
 void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scalar_function_t date_func,
                                 scalar_function_t ts_func, scalar_function_t interval_func,
@@ -816,16 +896,14 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
-	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT,
-	                                     ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DatePartOperator>));
 	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DatePartOperator>));
-	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT,
-	                                     ScalarFunction::BinaryFunction<string_t, dtime_t, int64_t, DatePartOperator>));
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT, DatePartFunction<date_t>));
+	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
+	                                     DatePartFunction<timestamp_t>));
 	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, interval_t, int64_t, DatePartOperator>));
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT, DatePartFunction<dtime_t>));
+	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::BIGINT,
+	                                     DatePartFunction<interval_t>));
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);
