@@ -260,50 +260,101 @@ int64_t DateDiff::HoursOperator::Operation(dtime_t startdate, dtime_t enddate) {
 	return enddate.micros / Interval::MICROS_PER_HOUR - startdate.micros / Interval::MICROS_PER_HOUR;
 }
 
-template <typename TA, typename TB, typename OP>
+template <typename TA, typename TB, typename TR>
 static int64_t DifferenceDates(DatePartSpecifier type, TA startdate, TB enddate) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
-		return OP::YearOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::YearOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::MONTH:
-		return OP::MonthOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::MonthOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
 	case DatePartSpecifier::ISODOW:
 	case DatePartSpecifier::DOY:
-		return OP::DayOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::DayOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::DECADE:
-		return OP::DecadeOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::DecadeOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::CENTURY:
-		return OP::CenturyOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::CenturyOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::MILLENNIUM:
-		return OP::MilleniumOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::MilleniumOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::QUARTER:
-		return OP::QuarterOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::QuarterOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::WEEK:
-		return OP::WeekOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::WeekOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::MICROSECONDS:
-		return OP::MicrosecondsOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::MicrosecondsOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::MILLISECONDS:
-		return OP::MillisecondsOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::MillisecondsOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::SECOND:
 	case DatePartSpecifier::EPOCH:
-		return OP::SecondsOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::SecondsOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::MINUTE:
-		return OP::MinutesOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::MinutesOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::HOUR:
-		return OP::HoursOperator::template Operation<TA, TB, int64_t>(startdate, enddate);
+		return DateDiff::HoursOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATEDIFF");
 	}
 }
 
-struct DateDiffOperator {
+struct DateDiffTernaryOperator {
 	template <typename TS, typename TA, typename TB, typename TR>
 	static inline TR Operation(TS part, TA startdate, TB enddate) {
-		return DifferenceDates<TA, TB, DateDiff>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
+		return DifferenceDates<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
 	}
 };
+
+template <typename TA, typename TB, typename TR>
+static void DateDiffBinaryExecutor(DatePartSpecifier type, Vector &left, Vector &right, Vector &result, idx_t count) {
+	switch (type) {
+	case DatePartSpecifier::YEAR:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::YearOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::MONTH:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MonthOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::DAY:
+	case DatePartSpecifier::DOW:
+	case DatePartSpecifier::ISODOW:
+	case DatePartSpecifier::DOY:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::DayOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::DECADE:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::DecadeOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::CENTURY:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::CenturyOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::MILLENNIUM:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MilleniumOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::QUARTER:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::QuarterOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::WEEK:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::WeekOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::MICROSECONDS:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MicrosecondsOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::MILLISECONDS:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MillisecondsOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::SECOND:
+	case DatePartSpecifier::EPOCH:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::SecondsOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::MINUTE:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::MinutesOperator>(left, right, result, count);
+		break;
+	case DatePartSpecifier::HOUR:
+		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::HoursOperator>(left, right, result, count);
+		break;
+	default:
+		throw NotImplementedException("Specifier type not implemented for DATEDIFF");
+	}
+}
 
 template <typename T>
 static void DateDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -312,8 +363,19 @@ static void DateDiffFunction(DataChunk &args, ExpressionState &state, Vector &re
 	auto &startdate_arg = args.data[1];
 	auto &enddate_arg = args.data[2];
 
-	TernaryExecutor::Execute<string_t, T, T, int64_t>(part_arg, startdate_arg, enddate_arg, result, args.size(),
-	                                                  DateDiffOperator::Operation<string_t, T, T, int64_t>);
+	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		// Common case of constant part.
+		if (ConstantVector::IsNull(part_arg)) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(result, true);
+		} else {
+			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
+			DateDiffBinaryExecutor<T, T, int64_t>(type, startdate_arg, enddate_arg, result, args.size());
+		}
+	} else {
+		TernaryExecutor::Execute<string_t, T, T, int64_t>(part_arg, startdate_arg, enddate_arg, result, args.size(),
+		                                                  DateDiffTernaryOperator::Operation<string_t, T, T, int64_t>);
+	}
 }
 
 void DateDiffFun::RegisterFunction(BuiltinFunctions &set) {
