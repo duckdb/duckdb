@@ -1,7 +1,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
-
+#include "duckdb/parser/qualified_name.hpp"
 namespace duckdb {
 
 void DuckDBPyRelation::Initialize(py::handle &m) {
@@ -251,17 +251,13 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
-	//! Check if we have a schema for thestd::string s = "scott>=tiger";
-	std::string delimiter = ".";
-	auto pos = table.find(delimiter);
-	if (pos == std::string::npos) {
+	auto parsed_info = QualifiedName::Parse(table);
+	if (parsed_info.schema == INVALID_SCHEMA) {
 		//! No Schema Defined, we use default schema.
 		rel->Insert(table);
 	} else {
 		//! Schema defined, we try to insert into it.
-		std::string schema = table.substr(0, pos);
-		std::string table_name = table.substr(pos + 1, table.length());
-		rel->Insert(schema, table_name);
+		rel->Insert(parsed_info.schema, parsed_info.name);
 	};
 }
 
