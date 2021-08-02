@@ -53,6 +53,7 @@ using namespace duckdb;
 			appender.EndRow();                                                                                         \
 		}                                                                                                              \
 		appender.Close();                                                                                              \
+		state->conn.Query("COMMIT");                                                                                   \
 	}                                                                                                                  \
 	void Cleanup(DuckDBBenchmarkState *state) override {                                                               \
 		state->conn.Query("DROP INDEX IF EXISTS pk_index");                                                            \
@@ -63,7 +64,7 @@ using namespace duckdb;
 		return string();                                                                                               \
 	}                                                                                                                  \
 	string BenchmarkInfo() override {                                                                                  \
-		return "Append 100M rows to a table using an Appender";                                                        \
+		return "Append 10M rows to a table using an Appender";                                                        \
 	}                                                                                                                  \
 	size_t Timeout() override {                                                                                        \
 		return 600;                                                                                                    \
