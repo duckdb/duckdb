@@ -151,13 +151,32 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		}
 		break;
 	}
-	case PandasType::VARCHAR: {
+	case PandasType::VARCHAR:
+	case PandasType::OBJECT: {
 		auto src_ptr = (PyObject **)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
 		for (idx_t row = 0; row < count; row++) {
 			auto source_idx = offset + row;
-			auto val = src_ptr[source_idx];
+			py::str str_val;
+			PyObject *val = src_ptr[source_idx];
+			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
+				py::handle object_handle = val;
+				if (val == Py_None) {
+					out_mask.SetInvalid(row);
+					continue;
+				}
+				if (py::isinstance<py::float_>(val)) {
+					bool is_nan = py::cast<bool>(object_handle.attr("__ne__")(object_handle));
+					if (is_nan) {
+						out_mask.SetInvalid(row);
+						continue;
+					}
+				}
+				str_val = py::str(object_handle);
+				val = str_val.ptr();
+			}
+
 #if PY_MAJOR_VERSION >= 3
 			// Python 3 string representation:
 			// https://github.com/python/cpython/blob/3a8fdb28794b2f19f6c8464378fb8b46bce1f5f4/Include/cpython/unicodeobject.h#L79
@@ -260,8 +279,11 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 	} else if (col_type == "float64") {
 		duckdb_col_type = LogicalType::DOUBLE;
 		pandas_type = PandasType::DOUBLE;
-	} else if (col_type == "object" || col_type == "string") {
-		// this better be strings
+	} else if (col_type == "object") {
+		//! this better be castable to strings
+		duckdb_col_type = LogicalType::VARCHAR;
+		pandas_type = PandasType::OBJECT;
+	} else if (col_type == "string") {
 		duckdb_col_type = LogicalType::VARCHAR;
 		pandas_type = PandasType::VARCHAR;
 	} else if (col_type == "timedelta64[ns]") {
