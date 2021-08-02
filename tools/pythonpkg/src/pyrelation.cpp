@@ -252,7 +252,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string
 
 void DuckDBPyRelation::InsertInto(const string &table) {
 	auto parsed_info = QualifiedName::Parse(table);
-	if (parsed_info.schema == INVALID_SCHEMA) {
+	if (parsed_info.schema.empty()) {
 		//! No Schema Defined, we use default schema.
 		rel->Insert(table);
 	} else {
