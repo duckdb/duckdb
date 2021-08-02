@@ -1,14 +1,85 @@
 #include "duckdb/function/compression/compression.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/function/compression_function.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include <functional>
 
 namespace duckdb {
 
+using rle_count_t = uint16_t;
+
+//===--------------------------------------------------------------------===//
+// Analyze
+//===--------------------------------------------------------------------===//
+struct EmptyRLEWriter {
+	template<class VALUE_TYPE>
+	static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr) {
+	}
+};
+
+template<class T>
+struct RLEState {
+	RLEState() : seen_count(0), last_value(NullValue<T>()), last_seen_count(0), dataptr(nullptr) {}
+
+	rle_count_t seen_count;
+	T last_value;
+	rle_count_t last_seen_count;
+	void *dataptr;
+
+public:
+	template<class OP>
+	void Flush() {
+		OP::template Operation<T>(last_value, last_seen_count, dataptr);
+	}
+
+	template<class OP=EmptyRLEWriter>
+	void Update(T *data, ValidityMask &validity, idx_t idx) {
+		if (validity.RowIsValid(idx)) {
+			if (seen_count == 0) {
+				// no value seen yet
+				// assign the current value, and set the seen_count to 1
+				// note that we increment last_seen_count rather than setting it to 1
+				// this is intentional: this is the first VALID value we see
+				// but it might not be the first value in case of nulls!
+				last_value = data[idx];
+				seen_count = 1;
+				last_seen_count++;
+			} else if (last_value == data[idx]) {
+				// the last value is identical to this value: increment the last_seen_count
+				last_seen_count++;
+			} else {
+				// the values are different
+				// issue the callback on the last value
+				Flush<OP>();
+
+				// increment the seen_count and put the new value into the RLE slot
+				last_value = data[idx];
+				seen_count++;
+				last_seen_count = 1;
+			}
+		} else {
+			// NULL value: we merely increment the last_seen_count
+			last_seen_count++;
+		}
+		if (last_seen_count == NumericLimits<rle_count_t>::Maximum()) {
+			// we have seen the same value so many times in a row we are at the limit of what fits in our count
+			// write away the value and move to the next value
+			Flush<OP>();
+			last_seen_count = 0;
+			seen_count++;
+		}
+	}
+};
+
 template<class T>
 struct RLEAnalyzeState : public AnalyzeState {
-	RLEAnalyzeState() : seen_count(0), last_seen_count(0) {}
+	RLEAnalyzeState() {}
 
-	idx_t seen_count;
-	T last_value;
-	idx_t last_seen_count;
+	RLEState<T> state;
 };
 
 template<class T>
@@ -25,55 +96,193 @@ bool RLEAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto data = (T *) vdata.data;
 	for(idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
-		if (vdata.validity.RowIsValid(idx)) {
-			if (rle_state.seen_count == 0) {
-				// no value seen yet
-				// assign the current value, and set the seen_count to 1
-				// note that we increment last_seen_count rather than setting it to 1
-				// this is intentional: this is the first VALID value we see
-				// but it might not be the first value!
-				rle_state.last_value = data[idx];
-				rle_state.seen_count = 1;
-				rle_state.last_seen_count++;
-			} else if (rle_state.last_value == data[idx]) {
-				// the last value is identical to this value: increment the last_seen_count
-				rle_state.last_seen_count++;
-			} else {
-				// the values are different: increment the seen_count and put this value into the RLE slot
-				rle_state.last_value = data[idx];
-				rle_state.seen_count++;
-				rle_state.last_seen_count = 1;
-			}
-		} else {
-			// NULL value: we merely increment the last_seen_count
-			rle_state.last_seen_count++;
-		}
+		rle_state.state.Update(data, vdata.validity, idx);
 	}
 	return true;
 }
 
 template<class T>
 idx_t RLEFinalAnalyze(AnalyzeState &state) {
-	// auto &rle_state = (RLEAnalyzeState<T> &) state;
-	return NumericLimits<idx_t>::Maximum();
-	// return (sizeof(uint32_t) + sizeof(T)) * rle_state.seen_count;
+	auto &rle_state = (RLEAnalyzeState<T> &) state;
+	return (sizeof(rle_count_t) + sizeof(T)) * rle_state.state.seen_count;
 }
+
+//===--------------------------------------------------------------------===//
+// Compress
+//===--------------------------------------------------------------------===//
+template<class T>
+struct RLECompressState : public CompressionState {
+	struct RLEWriter {
+		template<class VALUE_TYPE>
+		static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr) {
+			auto state = (RLECompressState<T> *) dataptr;
+			state->WriteValue(value, count);
+		}
+	};
+
+	static idx_t MaxRLECount() {
+		auto entry_size = sizeof(T) + sizeof(rle_count_t);
+		auto entry_count = Storage::BLOCK_SIZE / entry_size;
+		auto max_vector_count = entry_count / STANDARD_VECTOR_SIZE;
+		return max_vector_count * STANDARD_VECTOR_SIZE;
+	}
+
+	RLECompressState(ColumnDataCheckpointer &checkpointer_p) :
+	    checkpointer(checkpointer_p) {
+		auto &db = checkpointer.GetDatabase();
+		auto &type = checkpointer.GetType();
+		auto &config = DBConfig::GetConfig(db);
+		function = config.GetCompressionFunction(CompressionType::COMPRESSION_RLE, type.InternalType());
+		CreateEmptySegment(checkpointer.GetRowGroup().start);
+
+		state.dataptr = (void *) this;
+		max_rle_count = MaxRLECount();
+	}
+
+	void CreateEmptySegment(idx_t row_start) {
+		auto &db = checkpointer.GetDatabase();
+		auto &type = checkpointer.GetType();
+		auto column_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+		column_segment->function = function;
+		current_segment = move(column_segment);
+		auto &buffer_manager = BufferManager::GetBufferManager(db);
+		handle = buffer_manager.Pin(current_segment->block);
+	}
+
+	void Append(VectorData &vdata, idx_t count) {
+		auto data = (T *) vdata.data;
+		for(idx_t i = 0; i < count; i++) {
+			auto idx = vdata.sel->get_index(i);
+			state.template Update<RLECompressState<T>::RLEWriter>(data, vdata.validity, idx);
+		}
+	}
+
+	void WriteValue(T value, rle_count_t count) {
+		// write the RLE entry
+		auto handle_ptr = handle->Ptr();
+		auto data_pointer = (T *) handle_ptr;
+		auto index_pointer = (rle_count_t *) (handle_ptr + max_rle_count * sizeof(T));
+		data_pointer[entry_count] = value;
+		index_pointer[entry_count] = count;
+		entry_count++;
+
+		// update meta data
+		NumericStatistics::Update<T>(current_segment->stats, value);
+		current_segment->count += count;
+
+		if (entry_count == max_rle_count) {
+			throw InternalException("FIXME: overflow in RLE count");
+		}
+	}
+
+	void FlushSegment() {
+		state.template Flush<RLECompressState<T>::RLEWriter>();
+
+		handle.reset();
+
+		auto &state = checkpointer.GetCheckpointState();
+		state.FlushSegment(move(current_segment));
+	}
+
+	void Finalize() {
+		FlushSegment();
+		current_segment.reset();
+	}
+
+	ColumnDataCheckpointer &checkpointer;
+	CompressionFunction *function;
+	unique_ptr<ColumnSegment> current_segment;
+	unique_ptr<BufferHandle> handle;
+
+	RLEState<T> state;
+	idx_t entry_count = 0;
+	idx_t max_rle_count;
+};
 
 template<class T>
 unique_ptr<CompressionState> RLEInitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state) {
-	throw InternalException("FIXME: RLE");
+	return make_unique<RLECompressState<T>>(checkpointer);
 }
 
 template<class T>
-void RLECompress(CompressionState& state, Vector &scan_vector, idx_t count) {
-	throw InternalException("FIXME: RLE");
+void RLECompress(CompressionState& state_p, Vector &scan_vector, idx_t count) {
+	auto &state = (RLECompressState<T> &) state_p;
+	VectorData vdata;
+	scan_vector.Orrify(count, vdata);
+
+	state.Append(vdata, count);
 }
 
 template<class T>
-void RLEFinalizeCompress(CompressionState& state) {
-	throw InternalException("FIXME: RLE");
+void RLEFinalizeCompress(CompressionState& state_p) {
+	auto &state = (RLECompressState<T> &) state_p;
+	state.Finalize();
 }
 
+//===--------------------------------------------------------------------===//
+// Scan
+//===--------------------------------------------------------------------===//
+struct RLEScanState : public SegmentScanState {
+	unique_ptr<BufferHandle> handle;
+	idx_t entry_pos;
+	idx_t position_in_entry;
+	idx_t max_rle_count;
+};
+
+template<class T>
+unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
+	auto result = make_unique<RLEScanState>();
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	result->handle = buffer_manager.Pin(segment.block);
+	result->entry_pos = 0;
+	result->position_in_entry = 0;
+	result->max_rle_count = RLECompressState<T>::MaxRLECount();
+	return move(result);
+}
+
+//===--------------------------------------------------------------------===//
+// Scan base data
+//===--------------------------------------------------------------------===//
+template<class T>
+void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
+	auto &scan_state = (RLEScanState &) *state.scan_state;
+
+	auto data = scan_state.handle->node->buffer;
+	auto data_pointer = (T *) data;
+	auto index_pointer = (rle_count_t *) (data + (scan_state.max_rle_count * sizeof(T)));
+
+	auto result_data = FlatVector::GetData<T>(result);
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	for(idx_t i = 0; i < scan_count; i++) {
+		// assign the current value
+		result_data[result_offset + i] = data_pointer[scan_state.entry_pos];
+		scan_state.position_in_entry++;
+		if (scan_state.position_in_entry >= index_pointer[scan_state.entry_pos]) {
+			// handled all entries in this RLE value
+			// move to the next entry
+			scan_state.entry_pos++;
+			scan_state.position_in_entry = 0;
+		}
+	}
+}
+
+template<class T>
+void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	// FIXME: dictionary vector
+	RLEScanPartial<T>(segment, state, scan_count, result, 0);
+}
+
+//===--------------------------------------------------------------------===//
+// Fetch
+//===--------------------------------------------------------------------===//
+template<class T>
+void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+	throw InternalException("FIXME RLE FETCH ROW");
+}
+
+//===--------------------------------------------------------------------===//
+// Get Function
+//===--------------------------------------------------------------------===//
 template<class T>
 CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	return CompressionFunction(
@@ -85,10 +294,10 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 		RLEInitCompression<T>,
 		RLECompress<T>,
 		RLEFinalizeCompress<T>,
-		nullptr,
-		nullptr,
-		nullptr,
-		nullptr,
+		RLEInitScan<T>,
+		RLEScan<T>,
+		RLEScanPartial<T>,
+		RLEFetchRow<T>,
 		nullptr,
 		nullptr,
 		nullptr
@@ -98,7 +307,6 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 	switch(type) {
 	case PhysicalType::BOOL:
-		return GetRLEFunction<bool>(type);
 	case PhysicalType::INT8:
 		return GetRLEFunction<int8_t>(type);
 	case PhysicalType::INT16:
