@@ -129,7 +129,6 @@ void ChunkCollection::Append(unique_ptr<DataChunk> new_chunk) {
 	chunks.push_back(move(new_chunk));
 }
 
-
 void ChunkCollection::Fuse(ChunkCollection &other) {
 	if (count == 0) {
 		Append(other);

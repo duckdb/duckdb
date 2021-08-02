@@ -64,7 +64,7 @@ using namespace duckdb;
 		return string();                                                                                               \
 	}                                                                                                                  \
 	string BenchmarkInfo() override {                                                                                  \
-		return "Append 10M rows to a table using an Appender";                                                        \
+		return "Append 10M rows to a table using an Appender";                                                         \
 	}                                                                                                                  \
 	size_t Timeout() override {                                                                                        \
 		return 600;                                                                                                    \
