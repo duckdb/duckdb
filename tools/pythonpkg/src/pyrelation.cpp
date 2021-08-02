@@ -251,7 +251,18 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
-	rel->Insert(table);
+	//! Check if we have a schema for thestd::string s = "scott>=tiger";
+	std::string delimiter = ".";
+	auto pos = table.find(delimiter);
+	if (pos == std::string::npos) {
+		//! No Schema Defined, we use default schema.
+		rel->Insert(table);
+	} else {
+		//! Schema defined, we try to insert into it.
+		std::string schema = table.substr(0, pos);
+		std::string table_name = table.substr(pos + 1, table.length());
+		rel->Insert(schema, table_name);
+	};
 }
 
 void DuckDBPyRelation::Insert(py::object params) {
