@@ -30,6 +30,12 @@ public:
 	static bool CharacterIsDigit(char c) {
 		return c >= '0' && c <= '9';
 	}
+	static char CharacterToLower(char c) {
+		if (c >= 'A' && c <= 'Z') {
+			return c - ('A' - 'a');
+		}
+		return c;
+	}
 
 	//! Returns true if the needle string exists in the haystack
 	static bool Contains(const string &haystack, const string &needle);

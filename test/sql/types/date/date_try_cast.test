@@ -1,0 +1,152 @@
+# name: test/sql/types/date/date_try_cast.test
+# description: Test date try cast
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+# try cast on gibberish
+query I
+select try_cast('' as date)
+----
+NULL
+
+query I
+select try_cast('    ' as date)
+----
+NULL
+
+query I
+select try_cast('1111' as date)
+----
+NULL
+
+query I
+select try_cast('  1111   ' as date)
+----
+NULL
+
+query I
+select try_cast('1111-' as date)
+----
+NULL
+
+query I
+select try_cast('1111-11' as date)
+----
+NULL
+
+query I
+select try_cast('1111-11-' as date)
+----
+NULL
+
+query I
+select try_cast('1111-111-1' as date)
+----
+NULL
+
+query I
+select try_cast('1111-11-111' as date)
+----
+NULL
+
+query I
+select try_cast('1111-11-11' as date)
+----
+1111-11-11
+
+query I
+select try_cast('1111-11-11 (bc)' as date)
+----
+1111-11-11 (BC)
+
+# leap years
+query I
+select try_cast('2001-02-29' as date)
+----
+NULL
+
+query I
+select try_cast('2004-02-29' as date)
+----
+2004-02-29
+
+# separators
+query I
+select try_cast('2004/02/29' as date)
+----
+2004-02-29
+
+query I
+select try_cast('2004/02-29' as date)
+----
+NULL
+
+# try cast on dates near the limits
+query I
+select try_cast('5877642-06-23 (BC)' as date)
+----
+5877642-06-23 (BC)
+
+query I
+select try_cast('5877642-06-22 (BC)' as date)
+----
+NULL
+
+query I
+select try_cast('5877680-06-22 (BC)' as date);
+----
+NULL
+
+query I
+select try_cast('99999999-06-22 (BC)' as date);
+----
+NULL
+
+# min date for timestamp micros is -290307
+query I
+select try_cast('290308-01-01 (BC)'::date as timestamp)
+----
+290308-01-01 (BC) 00:00:00
+
+query I
+select try_cast('290309-01-01 (BC)'::date as timestamp)
+----
+NULL
+
+query I
+select try_cast('5877642-06-23 (BC)'::date as timestamp)
+----
+NULL
+
+query I
+select try_cast('5881580-07-11' as date)
+----
+5881580-07-11
+
+query I
+select try_cast('5881580-07-12' as date)
+----
+NULL
+
+query I
+select try_cast('5881580-08-11' as date)
+----
+NULL
+
+query I
+select try_cast('99999999-01-01' as date)
+----
+NULL
+
+# max date for timestamp micros is 294246
+query I
+select try_cast('294246-12-31'::date as timestamp)
+----
+294246-12-31 00:00:00
+
+query I
+select try_cast('294247-12-31'::date as timestamp)
+----
+NULL

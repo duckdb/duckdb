@@ -66,7 +66,7 @@ struct ArrowScanState : public FunctionOperatorData {
 struct ParallelArrowScanState : public ParallelState {
 	ParallelArrowScanState() {
 	}
-	bool finished = false;
+	std::mutex lock;
 };
 
 struct ArrowTableFunction {

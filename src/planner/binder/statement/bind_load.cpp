@@ -11,6 +11,7 @@ BoundStatement Binder::Bind(LoadStatement &stmt) {
 	result.names = {"Success"};
 
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_LOAD, move(stmt.info));
+	this->allow_stream_result = false;
 	return result;
 }
 

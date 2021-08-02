@@ -162,12 +162,6 @@ class TestArrowNested(object):
         # Map with struct as key and/or value
         compare_results("SELECT MAP(LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}),LIST_VALUE({'i':1,'j':2},{'i':3,'j':4}))")
 
-        # Struct that is NULL entirely
-        compare_results("SELECT * FROM (VALUES ({'i':1,'j':2}), (NULL), ({'i':1,'j':2}), (NULL)) as a")
-
         # Null checks on lists with structs 
         compare_results("SELECT [{'i':1,'j':[2,3]},NULL,{'i':1,'j':[2,3]}]")
         
-        # MAP that is NULL entirely 
-        compare_results("SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),(NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a")
-

@@ -8,6 +8,7 @@ imdb: third_party/imdb/data
 GENERATOR=
 FORCE_COLOR=
 WARNINGS_AS_ERRORS=
+FORCE_WARN_UNUSED_FLAG=
 DISABLE_UNITY_FLAG=
 DISABLE_SANITIZER_FLAG=
 ifeq ($(GEN),ninja)
@@ -16,6 +17,9 @@ ifeq ($(GEN),ninja)
 endif
 ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
 	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
+endif
+ifeq (${FORCE_WARN_UNUSED}, 1)
+	FORCE_WARN_UNUSED_FLAG=-DFORCE_WARN_UNUSED=1
 endif
 ifeq (${DISABLE_UNITY}, 1)
 	DISABLE_UNITY_FLAG=-DDISABLE_UNITY=1
@@ -103,7 +107,7 @@ debug:
 release_expanded:
 	mkdir -p build/release_expanded && \
 	cd build/release_expanded && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 cldebug:
@@ -139,7 +143,7 @@ doxygen: docs
 release:
 	mkdir -p build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 reldebug:
@@ -186,6 +190,9 @@ format-fix:
 	python3 scripts/format.py --all --fix --noconfirm
 
 format-head:
+	python3 scripts/format.py HEAD --fix --noconfirm
+
+format-changes:
 	python3 scripts/format.py HEAD --fix --noconfirm
 
 format-master:

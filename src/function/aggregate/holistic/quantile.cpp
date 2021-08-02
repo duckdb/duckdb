@@ -12,11 +12,6 @@
 
 namespace duckdb {
 
-template <>
-timestamp_t Cast::Operation(date_t date) {
-	return Timestamp::FromDatetime(date, dtime_t(0));
-}
-
 using FrameBounds = std::pair<idx_t, idx_t>;
 
 struct QuantileState {

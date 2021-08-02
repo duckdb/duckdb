@@ -400,6 +400,7 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 }
 
 void TableCatalogEntry::Serialize(Serializer &serializer) {
+	D_ASSERT(!internal);
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
 	D_ASSERT(columns.size() <= NumericLimits<uint32_t>::Maximum());

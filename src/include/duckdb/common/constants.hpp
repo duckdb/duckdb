@@ -58,6 +58,7 @@ extern const column_t COLUMN_IDENTIFIER_ROW_ID;
 extern const row_t MAX_ROW_ID;
 
 extern const transaction_t TRANSACTION_ID_START;
+extern const transaction_t MAX_TRANSACTION_ID;
 extern const transaction_t MAXIMUM_QUERY_ID;
 extern const transaction_t NOT_DELETED_ID;
 

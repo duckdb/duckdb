@@ -523,17 +523,28 @@ PhysicalType GetTypeId() {
 		return PhysicalType::UINT64;
 	} else if (std::is_same<T, hugeint_t>()) {
 		return PhysicalType::INT128;
+	} else if (std::is_same<T, date_t>()) {
+		return PhysicalType::DATE32;
+	} else if (std::is_same<T, dtime_t>()) {
+		return PhysicalType::TIME32;
+	} else if (std::is_same<T, timestamp_t>()) {
+		return PhysicalType::TIMESTAMP;
 	} else if (std::is_same<T, float>()) {
 		return PhysicalType::FLOAT;
 	} else if (std::is_same<T, double>()) {
 		return PhysicalType::DOUBLE;
-	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>()) {
+	} else if (std::is_same<T, const char *>() || std::is_same<T, char *>() || std::is_same<T, string_t>()) {
 		return PhysicalType::VARCHAR;
 	} else if (std::is_same<T, interval_t>()) {
 		return PhysicalType::INTERVAL;
 	} else {
 		return PhysicalType::INVALID;
 	}
+}
+
+template<class T>
+bool TypeIsNumber() {
+	return std::is_integral<T>() || std::is_floating_point<T>() || std::is_same<T, hugeint_t>();
 }
 
 template <class T>

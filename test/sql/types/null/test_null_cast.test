@@ -1,0 +1,11 @@
+# name: test/sql/types/null/test_null_cast.test
+# description: Test casting of scalar NULLs
+# group: [null]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT NULL::BIGINT::VARCHAR::INT[]::ROW(i INTEGER, k INTEGER)::DECIMAL(4,0)
+----
+NULL

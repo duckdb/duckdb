@@ -156,6 +156,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	for (auto &column : base.columns) {
 		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.type));
 	}
+	this->allow_stream_result = false;
 	return result;
 }
 

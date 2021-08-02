@@ -1,0 +1,25 @@
+# name: test/sql/types/hugeint/test_hugeint_exponent.test
+# description: Test hugeint conversion
+# group: [hugeint]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select '170141183460469231731687303715884105700e0'::hugeint
+----
+170141183460469231731687303715884105700
+
+query I
+select '170141183460469231731687303715884105727e0'::hugeint
+----
+170141183460469231731687303715884105727
+
+statement error
+select '170141183460469231731687303715884105735e0'::hugeint
+
+statement error
+select '1.7e39'::hugeint
+
+statement error
+select '2e38'::hugeint

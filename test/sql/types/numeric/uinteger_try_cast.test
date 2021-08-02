@@ -1,0 +1,170 @@
+# name: test/sql/types/numeric/uinteger_try_cast.test
+# description: uinteger try cast
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# uinteger casts
+statement ok
+CREATE TABLE uintegers AS SELECT i::UINTEGER i FROM (VALUES (0), (4294967295)) tbl(i)
+
+statement error
+SELECT i::UTINYINT FROM uintegers ORDER BY i
+
+# unsigned
+query I
+SELECT TRY_CAST(i AS UTINYINT) FROM uintegers ORDER BY i
+----
+0
+NULL
+
+statement error
+SELECT i::USMALLINT FROM uintegers ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS USMALLINT) FROM uintegers ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT i::UBIGINT FROM uintegers ORDER BY i
+----
+0
+4294967295
+
+# signed
+statement error
+SELECT i::TINYINT FROM uintegers ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS TINYINT) FROM uintegers ORDER BY i
+----
+0
+NULL
+
+statement error
+SELECT i::SMALLINT FROM uintegers ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS SMALLINT) FROM uintegers ORDER BY i
+----
+0
+NULL
+
+statement error
+SELECT i::INTEGER FROM uintegers ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS INTEGER) FROM uintegers ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT i::BIGINT FROM uintegers ORDER BY i
+----
+0
+4294967295
+
+query I
+SELECT i::HUGEINT FROM uintegers ORDER BY i
+----
+0
+4294967295
+
+# -> float
+query I
+SELECT i::FLOAT FROM uintegers ORDER BY i
+----
+0
+4294967295
+
+query I
+SELECT i::DOUBLE FROM uintegers ORDER BY i
+----
+0
+4294967295
+
+# -> bool
+query I
+SELECT i::BOOL FROM uintegers ORDER BY i
+----
+False
+True
+
+# -> varchar
+query I
+SELECT i::VARCHAR FROM uintegers ORDER BY i
+----
+0
+4294967295
+
+# from string casts
+statement ok
+CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'), ('-1'), ('-0'), ('0'), ('4294967295'), ('10000000000')) tbl(s)
+
+statement error
+SELECT s::UINTEGER FROM strings
+
+query I
+SELECT TRY_CAST(s AS UINTEGER) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+0
+0
+4294967295
+NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::UINTEGER FROM uintegers ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,0)::UINTEGER FROM uintegers ORDER BY i
+
+query I
+SELECT i::DECIMAL(18,0)::UINTEGER FROM uintegers ORDER BY i
+----
+0
+4294967295
+
+query I
+SELECT i::DECIMAL(38,0)::UINTEGER FROM uintegers ORDER BY i
+----
+0
+4294967295
+
+statement error
+SELECT i::DECIMAL(18,9)::UINTEGER FROM uintegers ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,29)::UINTEGER FROM uintegers ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::UINTEGER FROM uintegers ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,0))::UINTEGER FROM uintegers ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,9))::UINTEGER FROM uintegers ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,29))::UINTEGER FROM uintegers ORDER BY i
+----
+0
+NULL

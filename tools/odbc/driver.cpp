@@ -145,20 +145,23 @@ SQLRETURN SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQLSMALLIN
 SQLRETURN SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLCHAR *sql_state,
                         SQLINTEGER *native_error_ptr, SQLCHAR *message_text, SQLSMALLINT buffer_length,
                         SQLSMALLINT *text_length_ptr) {
-
 	if (!handle) {
 		std::string msg_str("Handle is NULL.");
 		duckdb::OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
 		return SQL_INVALID_HANDLE;
 	}
-	if (rec_number < 0 || buffer_length < 0) {
+	if (rec_number <= 0 || buffer_length < 0) {
 		return SQL_ERROR;
 	}
-
+	if (message_text) {
+		*message_text = '\0';
+	}
+	if (text_length_ptr) {
+		*text_length_ptr = 0;
+	}
 	if (sql_state) {
 		*sql_state = '\0';
 	}
-
 	if (native_error_ptr) {
 		*native_error_ptr = 0; // we don't have error codes
 	}

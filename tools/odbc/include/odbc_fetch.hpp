@@ -9,7 +9,7 @@
 
 namespace duckdb {
 
-class OdbcHandleStmt;
+struct OdbcHandleStmt;
 
 enum class FetchBindingOrientation : uint8_t { COLUMN = 0, ROW = 1 };
 
