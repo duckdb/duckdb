@@ -22,6 +22,7 @@
 
 namespace duckdb {
 
+class ChunkCollection;
 class ClientContext;
 class DatabaseInstance;
 class DuckDB;
@@ -94,6 +95,8 @@ public:
 
 	//! Appends a DataChunk to the specified table
 	DUCKDB_API void Append(TableDescription &description, DataChunk &chunk);
+	//! Appends a ChunkCollection to the specified table
+	DUCKDB_API void Append(TableDescription &description, ChunkCollection &collection);
 
 	//! Returns a relation that produces a table from this connection
 	DUCKDB_API shared_ptr<Relation> Table(const string &tname);

@@ -825,7 +825,7 @@ unique_ptr<TableDescription> ClientContext::TableInfo(const string &schema_name,
 	return result;
 }
 
-void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
+void ClientContext::Append(TableDescription &description, ChunkCollection &collection) {
 	RunFunctionInTransaction([&]() {
 		auto &catalog = Catalog::GetCatalog(*this);
 		auto table_entry = catalog.GetEntry<TableCatalogEntry>(*this, description.schema, description.table);
@@ -838,7 +838,9 @@ void ClientContext::Append(TableDescription &description, DataChunk &chunk) {
 				throw Exception("Failed to append: table entry has different number of columns!");
 			}
 		}
-		table_entry->storage->Append(*table_entry, *this, chunk);
+		for(auto &chunk : collection.Chunks()) {
+			table_entry->storage->Append(*table_entry, *this, *chunk);
+		}
 	});
 }
 
