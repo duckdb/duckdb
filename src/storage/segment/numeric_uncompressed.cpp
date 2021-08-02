@@ -122,10 +122,9 @@ unique_ptr<SegmentScanState> NumericInitScan(ColumnSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 template<class T>
-void NumericScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void NumericScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
 	auto &scan_state = (NumericScanState &) *state.scan_state;
-	D_ASSERT(start <= segment.count);
-	D_ASSERT(start + scan_count <= segment.count);
+	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto data = scan_state.handle->node->buffer;
 	auto source_data = data + start * sizeof(T);
@@ -136,9 +135,9 @@ void NumericScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t st
 }
 
 template<class T>
-void NumericScan(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+void NumericScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	// FIXME: we should be able to do a zero-copy here
-	NumericScanPartial<T>(segment, state, start, scan_count, result, 0);
+	NumericScanPartial<T>(segment, state,  scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//

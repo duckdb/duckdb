@@ -64,8 +64,8 @@ typedef void (*compression_compress_finalize_t)(CompressionState& state);
 // Uncompress / Scan
 //===--------------------------------------------------------------------===//
 typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(ColumnSegment &segment);
-typedef void (*compression_scan_vector_t)(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result);
-typedef void (*compression_scan_partial_t)(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
+typedef void (*compression_scan_vector_t)(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
+typedef void (*compression_scan_partial_t)(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
 typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
 //===--------------------------------------------------------------------===//

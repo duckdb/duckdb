@@ -58,16 +58,14 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		state.initialized = true;
 	}
 	D_ASSERT(state.current->type == type);
-	idx_t row_index = state.row_index;
 	idx_t initial_remaining = remaining;
 	while (remaining > 0) {
-		D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
-		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - row_index);
-		idx_t start = row_index - state.current->start;
+		D_ASSERT(state.row_index >= state.current->start && state.row_index <= state.current->start + state.current->count);
+		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - state.row_index);
 		idx_t result_offset = initial_remaining - remaining;
-		state.current->Scan(state, start, scan_count, result, result_offset, scan_count == initial_remaining);
+		state.current->Scan(state, scan_count, result, result_offset, scan_count == initial_remaining);
 
-		row_index += scan_count;
+		state.row_index += scan_count;
 		remaining -= scan_count;
 		if (remaining > 0) {
 			if (!state.current->next) {
@@ -76,7 +74,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			state.current = (ColumnSegment *)state.current->next.get();
 			state.current->InitializeScan(state);
 			state.segment_checked = false;
-			D_ASSERT(row_index >= state.current->start && row_index <= state.current->start + state.current->count);
+			D_ASSERT(state.row_index >= state.current->start && state.row_index <= state.current->start + state.current->count);
 		}
 	}
 	return initial_remaining - remaining;
@@ -336,11 +334,11 @@ unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &ro
 }
 
 void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
-                                idx_t base_row_index, idx_t count, Vector &scan_vector) {
-	segment->Scan(state, base_row_index, count, scan_vector, 0, true);
+                                idx_t count, Vector &scan_vector) {
+	segment->Scan(state, count, scan_vector, 0, true);
 	if (updates) {
 		scan_vector.Normalify(count);
-		updates->FetchCommittedRange(segment->start - row_group_start + base_row_index, count, scan_vector);
+		updates->FetchCommittedRange(state.row_index - row_group_start, count, scan_vector);
 	}
 }
 

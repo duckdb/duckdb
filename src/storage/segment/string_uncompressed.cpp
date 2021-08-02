@@ -37,8 +37,8 @@ public:
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
-	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
-	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result);
+	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
+	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
 	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id);
 	static idx_t StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count);
@@ -122,9 +122,10 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSeg
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
 	auto &scan_state = (StringScanState &) *state.scan_state;
+	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle->node->buffer;
 	auto base_data = (int32_t *)scan_state.handle->node->buffer;
@@ -135,8 +136,8 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	}
 }
 
-void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
-	StringScanPartial(segment, state, start, scan_count, result, 0);
+void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	StringScanPartial(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//

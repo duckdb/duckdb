@@ -101,7 +101,7 @@ public:
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer);
 
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
-	                            idx_t base_row_index, idx_t count, Vector &scan_vector);
+	                            idx_t count, Vector &scan_vector);
 
 	virtual void DeserializeColumn(Deserializer &source);
 	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,

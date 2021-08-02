@@ -18,7 +18,7 @@ unique_ptr<SegmentScanState> ConstantInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
 	if (validity.has_null) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -27,7 +27,7 @@ void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state
 }
 
 template <class T>
-void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
 
 	auto data = FlatVector::GetData<T>(result);
@@ -59,12 +59,12 @@ void FillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t
 	}
 }
 
-void ConstantScanPartialValidity(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void ConstantScanPartialValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
 	FillFunctionValidity(segment, result, result_offset, scan_count);
 }
 
 template<class T>
-void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
 	FillFunction<T>(segment, result, result_offset, scan_count);
 }
 

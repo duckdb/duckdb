@@ -60,7 +60,7 @@ public:
 public:
 	void InitializeScan(ColumnScanState &state);
 	//! Scan one vector from this segment
-	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset,
+	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
 	          bool entire_vector);
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
@@ -89,6 +89,12 @@ public:
 		return offset;
 	}
 
+	idx_t GetRelativeIndex(idx_t row_index) {
+		D_ASSERT(row_index >= this->start);
+		D_ASSERT(row_index <= this->start + this->count);
+		return row_index - this->start;
+	}
+
 	CompressedSegmentState *GetSegmentState() {
 		return segment_state.get();
 	}
@@ -98,8 +104,8 @@ public:
 	              CompressionFunction *function, unique_ptr<BaseStatistics> statistics, block_id_t block_id, idx_t offset);
 
 private:
-	void Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result);
-	void ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset);
+	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);
+	void ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
 
 private:
 	//! The block id that this segment relates to (persistent segment only)

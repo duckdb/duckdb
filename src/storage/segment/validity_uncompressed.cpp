@@ -214,7 +214,9 @@ unique_ptr<SegmentScanState> ValidityInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
+void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
+	auto start = segment.GetRelativeIndex(state.row_index);
+
 	static_assert(sizeof(validity_t) == sizeof(uint64_t), "validity_t should be 64-bit");
 	auto &scan_state = (ValidityScanState &) *state.scan_state;
 
@@ -327,8 +329,10 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 #endif
 }
 
-void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
+void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	result.Normalify(scan_count);
+
+	auto start = segment.GetRelativeIndex(state.row_index);
 	if (start % ValidityMask::BITS_PER_VALUE == 0) {
 		auto &scan_state = (ValidityScanState &) *state.scan_state;
 
@@ -353,7 +357,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t start, i
 		}
 	} else {
 		// unaligned scan: fall back to scan_partial which does bitshift tricks
-		ValidityScanPartial(segment, state, start, scan_count, result, 0);
+		ValidityScanPartial(segment, state, scan_count, result, 0);
 	}
 }
 

@@ -67,27 +67,24 @@ void ColumnSegment::InitializeScan(ColumnScanState &state) {
 	state.scan_state = function->init_scan(*this);
 }
 
-void ColumnSegment::Scan(ColumnScanState &state, idx_t start_row, idx_t scan_count, Vector &result, idx_t result_offset,
+void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
                          bool entire_vector) {
-	D_ASSERT(start_row + scan_count <= this->count);
 	if (entire_vector) {
 		D_ASSERT(result_offset == 0);
-		Scan(state, start_row, scan_count, result);
+		Scan(state, scan_count, result);
 	} else {
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-		ScanPartial(state, start_row, scan_count, result, result_offset);
+		ScanPartial(state, scan_count, result, result_offset);
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 	}
 }
 
-void ColumnSegment::Scan(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result) {
-	function->scan_vector(*this, state, start, scan_count, result);
+void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result) {
+	function->scan_vector(*this, state, scan_count, result);
 }
 
-void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t start, idx_t scan_count, Vector &result, idx_t result_offset) {
-	D_ASSERT(start <= this->count);
-	D_ASSERT(start + scan_count <= this->count);
-	function->scan_partial(*this, state, start, scan_count, result, result_offset);
+void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
+	function->scan_partial(*this, state, scan_count, result, result_offset);
 }
 
 //===--------------------------------------------------------------------===//
