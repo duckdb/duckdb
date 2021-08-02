@@ -15,15 +15,6 @@ namespace duckdb {
 // This function is an implementation of the "period-crossing" date difference function from T-SQL
 // https://docs.microsoft.com/en-us/sql/t-sql/functions/datediff-transact-sql?view=sql-server-ver15
 struct DateDiff {
-	static constexpr const int32_t SECS_PER_WEEK = Interval::SECS_PER_DAY * Interval::DAYS_PER_WEEK;
-	static constexpr const int32_t SECS_PER_HOUR = Interval::SECS_PER_MINUTE * Interval::MINS_PER_HOUR;
-
-	static constexpr const int64_t NANOS_PER_MICRO = 1000;
-	static constexpr const int64_t NANOS_PER_MSEC = NANOS_PER_MICRO * Interval::MICROS_PER_MSEC;
-	static constexpr const int64_t MICROS_PER_SEC = Interval::MICROS_PER_MSEC * Interval::MSECS_PER_SEC;
-	static constexpr const int64_t MICROS_PER_MIN = MICROS_PER_SEC * Interval::SECS_PER_MINUTE;
-	static constexpr const int64_t MICROS_PER_HOUR = MICROS_PER_MIN * Interval::MINS_PER_HOUR;
-
 	struct YearOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
@@ -34,8 +25,12 @@ struct DateDiff {
 	struct MonthOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Date::ExtractYear(enddate) * 12 + Date::ExtractMonth(enddate) - 1) -
-			       (Date::ExtractYear(startdate) * 12 + Date::ExtractMonth(startdate) - 1);
+			int32_t start_year, start_month, start_day;
+			Date::Convert(startdate, start_year, start_month, start_day);
+			int32_t end_year, end_month, end_day;
+			Date::Convert(enddate, end_year, end_month, end_day);
+
+			return (end_year * 12 + end_month - 1) - (start_year * 12 + start_month - 1);
 		}
 	};
 
@@ -70,32 +65,36 @@ struct DateDiff {
 	struct QuarterOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Date::ExtractYear(enddate) * 12 + Date::ExtractMonth(enddate) - 1) / Interval::MONTHS_PER_QUARTER -
-			       (Date::ExtractYear(startdate) * 12 + Date::ExtractMonth(startdate) - 1) /
-			           Interval::MONTHS_PER_QUARTER;
+			int32_t start_year, start_month, start_day;
+			Date::Convert(startdate, start_year, start_month, start_day);
+			int32_t end_year, end_month, end_day;
+			Date::Convert(enddate, end_year, end_month, end_day);
+
+			return (end_year * 12 + end_month - 1) / Interval::MONTHS_PER_QUARTER -
+			       (start_year * 12 + start_month - 1) / Interval::MONTHS_PER_QUARTER;
 		}
 	};
 
 	struct WeekOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::Epoch(enddate) / SECS_PER_WEEK - Date::Epoch(startdate) / SECS_PER_WEEK;
+			return Date::Epoch(enddate) / Interval::SECS_PER_WEEK - Date::Epoch(startdate) / Interval::SECS_PER_WEEK;
 		}
 	};
 
 	struct MicrosecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::EpochNanoseconds(enddate) / NANOS_PER_MICRO -
-			       Date::EpochNanoseconds(startdate) / NANOS_PER_MICRO;
+			return Date::EpochNanoseconds(enddate) / Interval::NANOS_PER_MICRO -
+			       Date::EpochNanoseconds(startdate) / Interval::NANOS_PER_MICRO;
 		}
 	};
 
 	struct MillisecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::EpochNanoseconds(enddate) / NANOS_PER_MSEC -
-			       Date::EpochNanoseconds(startdate) / NANOS_PER_MSEC;
+			return Date::EpochNanoseconds(enddate) / Interval::NANOS_PER_MSEC -
+			       Date::EpochNanoseconds(startdate) / Interval::NANOS_PER_MSEC;
 		}
 	};
 
@@ -117,7 +116,7 @@ struct DateDiff {
 	struct HoursOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return Date::Epoch(enddate) / SECS_PER_HOUR - Date::Epoch(startdate) / SECS_PER_HOUR;
+			return Date::Epoch(enddate) / Interval::SECS_PER_HOUR - Date::Epoch(startdate) / Interval::SECS_PER_HOUR;
 		}
 	};
 };
@@ -191,7 +190,8 @@ int64_t DateDiff::MinutesOperator::Operation(timestamp_t startdate, timestamp_t 
 
 template <>
 int64_t DateDiff::HoursOperator::Operation(timestamp_t startdate, timestamp_t enddate) {
-	return Timestamp::GetEpochSeconds(enddate) / SECS_PER_HOUR - Timestamp::GetEpochSeconds(startdate) / SECS_PER_HOUR;
+	return Timestamp::GetEpochSeconds(enddate) / Interval::SECS_PER_HOUR -
+	       Timestamp::GetEpochSeconds(startdate) / Interval::SECS_PER_HOUR;
 }
 
 // TIME specialisations
@@ -247,17 +247,17 @@ int64_t DateDiff::MillisecondsOperator::Operation(dtime_t startdate, dtime_t end
 
 template <>
 int64_t DateDiff::SecondsOperator::Operation(dtime_t startdate, dtime_t enddate) {
-	return enddate.micros / MICROS_PER_SEC - startdate.micros / MICROS_PER_SEC;
+	return enddate.micros / Interval::MICROS_PER_SEC - startdate.micros / Interval::MICROS_PER_SEC;
 }
 
 template <>
 int64_t DateDiff::MinutesOperator::Operation(dtime_t startdate, dtime_t enddate) {
-	return enddate.micros / MICROS_PER_MIN - startdate.micros / MICROS_PER_MIN;
+	return enddate.micros / Interval::MICROS_PER_MINUTE - startdate.micros / Interval::MICROS_PER_MINUTE;
 }
 
 template <>
 int64_t DateDiff::HoursOperator::Operation(dtime_t startdate, dtime_t enddate) {
-	return enddate.micros / MICROS_PER_HOUR - startdate.micros / MICROS_PER_HOUR;
+	return enddate.micros / Interval::MICROS_PER_HOUR - startdate.micros / Interval::MICROS_PER_HOUR;
 }
 
 template <typename TA, typename TB, typename OP>
