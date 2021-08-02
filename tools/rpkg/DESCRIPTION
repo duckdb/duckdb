@@ -53,6 +53,7 @@ Suggests:
     arrow,
     callr,
     DBItest,
+    dplyr,
     dbplyr,
     nycflights13,
     testthat,
