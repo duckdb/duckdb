@@ -1355,8 +1355,15 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 				LoopDefinition def;
 				def.loop_iterator_name = sScript.tokens[1];
-				def.loop_start = std::stoi(sScript.tokens[2].c_str());
-				def.loop_end = std::stoi(sScript.tokens[3].c_str());
+				try{
+					def.loop_start = std::stoi(sScript.tokens[2].c_str());
+					def.loop_end = std::stoi(sScript.tokens[3].c_str());
+				} catch(...) {
+					fprintf(stderr,
+					        "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n",
+					        zScriptFile, sScript.startLine);
+					FAIL();
+				}
 				def.loop_idx = def.loop_start;
 				active_loops.push_back(def);
 			} else {
@@ -1376,6 +1383,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					auto token_name = StringUtil::Lower(sScript.tokens[i]);
 					StringUtil::Trim(token_name);
 					bool collection = false;
+					bool is_compression = token_name == "<compression>";
 					bool is_all = token_name == "<alltypes>";
 					bool is_numeric = is_all || token_name == "<numeric>";
 					bool is_integral = is_numeric || token_name == "<integral>";
@@ -1405,6 +1413,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 						def.tokens.push_back("bool");
 						def.tokens.push_back("interval");
 						def.tokens.push_back("varchar");
+						collection = true;
+					}
+					if (is_compression) {
+						def.tokens.push_back("none");
+						def.tokens.push_back("uncompressed");
+						def.tokens.push_back("rle");
 						collection = true;
 					}
 					if (!collection) {

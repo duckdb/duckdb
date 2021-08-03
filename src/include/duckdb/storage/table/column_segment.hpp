@@ -68,6 +68,9 @@ public:
 	static void FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
 	                            idx_t &approved_tuple_count, ValidityMask &mask);
 
+	//! Skip a scan forward to the row_index specified in the scan state
+	void Skip(ColumnScanState &state);
+
 	//! Initialize an append of this transient segment
 	void InitializeAppend(ColumnAppendState &state);
 	//! Appends a (part of) vector to the transient segment, returns the amount of entries successfully appended

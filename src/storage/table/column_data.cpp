@@ -42,12 +42,14 @@ idx_t ColumnData::GetMaxEntry() {
 void ColumnData::InitializeScan(ColumnScanState &state) {
 	state.current = (ColumnSegment *)data.GetRootSegment();
 	state.row_index = state.current ? state.current->start : 0;
+	state.internal_index = state.row_index;
 	state.initialized = false;
 }
 
 void ColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
 	state.current = (ColumnSegment *)data.GetSegment(row_idx);
 	state.row_index = row_idx;
+	state.internal_index = state.current->start;
 	state.initialized = false;
 }
 
@@ -56,6 +58,10 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		D_ASSERT(state.current);
 		state.current->InitializeScan(state);
 		state.initialized = true;
+	}
+	D_ASSERT(state.internal_index <= state.row_index);
+	if (state.internal_index < state.row_index) {
+		state.current->Skip(state);
 	}
 	D_ASSERT(state.current->type == type);
 	idx_t initial_remaining = remaining;
@@ -77,6 +83,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			D_ASSERT(state.row_index >= state.current->start && state.row_index <= state.current->start + state.current->count);
 		}
 	}
+	state.internal_index = state.row_index;
 	return initial_remaining - remaining;
 }
 
@@ -262,12 +269,15 @@ void ColumnData::RevertAppend(row_t start_row) {
 	transient.RevertAppend(start_row);
 }
 
+
+
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	D_ASSERT(row_id >= 0);
 	D_ASSERT(idx_t(row_id) >= start);
 	// perform the fetch within the segment
 	state.row_index = start + ((row_id - start) / STANDARD_VECTOR_SIZE * STANDARD_VECTOR_SIZE);
 	state.current = (ColumnSegment *)data.GetSegment(state.row_index);
+	state.internal_index = state.current->start;
 	return ScanVector(state, result, STANDARD_VECTOR_SIZE);
 }
 

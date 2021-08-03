@@ -17,6 +17,7 @@ struct UncompressedFunctions {
 	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointer &checkpointer, unique_ptr<AnalyzeState> state);
 	static void Compress(CompressionState& state_p, Vector &data, idx_t count);
 	static void FinalizeCompress(CompressionState& state_p);
+	static void EmptySkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {}
 };
 
 struct NumericUncompressed {

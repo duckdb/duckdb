@@ -456,6 +456,7 @@ CompressionFunction ValidityUncompressed::GetFunction(PhysicalType data_type) {
 		ValidityScan,
 		ValidityScanPartial,
 		ValidityFetchRow,
+		UncompressedFunctions::EmptySkip,
 		ValidityInitSegment,
 		ValidityAppend,
 		ValidityRevertAppend

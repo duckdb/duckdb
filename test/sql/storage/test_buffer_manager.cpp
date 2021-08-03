@@ -12,7 +12,8 @@ TEST_CASE("Test scanning a table and computing an aggregate over a table that ex
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
-	// set the maximum memory to 10MB
+	// set the maximum memory to 10MB and force uncompressed so we actually use the memory
+	config->force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
 	config->maximum_memory = 10000000;
 	config->maximum_threads = 1;
 
@@ -119,6 +120,7 @@ TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager 
 	auto config = GetTestConfig();
 
 	// maximum memory is 10MB
+	config->force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
 	config->maximum_memory = 10000000;
 	config->maximum_threads = 1;
 
@@ -170,6 +172,7 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=1"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA force_compression='uncompressed'"));
 
 	// initialize an in-memory database of size 10MB
 	uint64_t table_size = (1000 * 1000) / sizeof(int);

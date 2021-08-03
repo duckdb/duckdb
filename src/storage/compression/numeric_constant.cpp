@@ -5,6 +5,7 @@
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
 
 namespace duckdb {
 
@@ -98,6 +99,7 @@ CompressionFunction ConstantGetFunctionValidity(PhysicalType data_type) {
 		ConstantScanFunctionValidity,
 		ConstantScanPartialValidity,
 		ConstantFetchRowValidity,
+		UncompressedFunctions::EmptySkip,
 		nullptr,
 		nullptr,
 		nullptr
@@ -119,6 +121,7 @@ CompressionFunction ConstantGetFunction(PhysicalType data_type) {
 		ConstantScanFunction<T>,
 		ConstantScanPartial<T>,
 		ConstantFetchRow<T>,
+		UncompressedFunctions::EmptySkip,
 		nullptr,
 		nullptr,
 		nullptr

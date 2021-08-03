@@ -3,7 +3,9 @@ add_library_unity(
   OBJECT
   numeric_constant.cpp
   numeric_uncompressed.cpp
+  rle.cpp
   string_uncompressed.cpp
+  uncompressed.cpp
   validity_uncompressed.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_storage_segment>

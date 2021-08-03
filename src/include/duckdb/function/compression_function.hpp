@@ -67,6 +67,7 @@ typedef unique_ptr<SegmentScanState> (*compression_init_segment_scan_t)(ColumnSe
 typedef void (*compression_scan_vector_t)(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
 typedef void (*compression_scan_partial_t)(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
 typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+typedef void (*compression_skip_t)(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count);
 
 //===--------------------------------------------------------------------===//
 // Append (optional)
@@ -83,11 +84,11 @@ public:
 	                    compression_init_compression_t init_compression, compression_compress_data_t compress,
 	                    compression_compress_finalize_t compress_finalize, compression_init_segment_scan_t init_scan,
 	                    compression_scan_vector_t scan_vector, compression_scan_partial_t scan_partial,
-	                    compression_fetch_row_t fetch_row, compression_init_segment_t init_segment,
+	                    compression_fetch_row_t fetch_row, compression_skip_t skip, compression_init_segment_t init_segment,
 	                    compression_append_t append, compression_revert_append_t revert_append) :
 	type(type), data_type(data_type), init_analyze(init_analyze), analyze(analyze), final_analyze(final_analyze),
 	init_compression(init_compression), compress(compress), compress_finalize(compress_finalize), init_scan(init_scan),
-	scan_vector(scan_vector), scan_partial(scan_partial), fetch_row(fetch_row), init_segment(init_segment), append(append), revert_append(revert_append) {}
+	scan_vector(scan_vector), scan_partial(scan_partial), fetch_row(fetch_row), skip(skip), init_segment(init_segment), append(append), revert_append(revert_append) {}
 
 	//! Compression type
 	CompressionType type;
@@ -125,6 +126,8 @@ public:
 	//! fetch an individual row from the compressed vector
 	//! used for index lookups
 	compression_fetch_row_t fetch_row;
+	//! Skip forward in the compressed segment
+	compression_skip_t skip;
 
 	// Append functions
 	//! This only really needs to be defined for uncompressed segments

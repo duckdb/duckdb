@@ -25,7 +25,7 @@ template<class T>
 struct RLEState {
 	RLEState() : seen_count(0), last_value(NullValue<T>()), last_seen_count(0), dataptr(nullptr) {}
 
-	rle_count_t seen_count;
+	idx_t seen_count;
 	T last_value;
 	rle_count_t last_seen_count;
 	void *dataptr;
@@ -171,13 +171,15 @@ struct RLECompressState : public CompressionState {
 		current_segment->count += count;
 
 		if (entry_count == max_rle_count) {
-			throw InternalException("FIXME: overflow in RLE count");
+			// we have finished writing this segment: flush it and create a new segment
+			auto row_start = current_segment->start + current_segment->count;
+			FlushSegment();
+			CreateEmptySegment(row_start);
+			entry_count = 0;
 		}
 	}
 
 	void FlushSegment() {
-		state.template Flush<RLECompressState<T>::RLEWriter>();
-
 		handle.reset();
 
 		auto &state = checkpointer.GetCheckpointState();
@@ -185,6 +187,8 @@ struct RLECompressState : public CompressionState {
 	}
 
 	void Finalize() {
+		state.template Flush<RLECompressState<T>::RLEWriter>();
+
 		FlushSegment();
 		current_segment.reset();
 	}
@@ -244,6 +248,25 @@ unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 template<class T>
+void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+	auto &scan_state = (RLEScanState &) *state.scan_state;
+
+	auto data = scan_state.handle->node->buffer;
+	auto index_pointer = (rle_count_t *) (data + (scan_state.max_rle_count * sizeof(T)));
+
+	for(idx_t i = 0; i < skip_count; i++) {
+		// assign the current value
+		scan_state.position_in_entry++;
+		if (scan_state.position_in_entry >= index_pointer[scan_state.entry_pos]) {
+			// handled all entries in this RLE value
+			// move to the next entry
+			scan_state.entry_pos++;
+			scan_state.position_in_entry = 0;
+		}
+	}
+}
+
+template<class T>
 void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
 	auto &scan_state = (RLEScanState &) *state.scan_state;
 
@@ -298,6 +321,7 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 		RLEScan<T>,
 		RLEScanPartial<T>,
 		RLEFetchRow<T>,
+		RLESkip<T>,
 		nullptr,
 		nullptr,
 		nullptr

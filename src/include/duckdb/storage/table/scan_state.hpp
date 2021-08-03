@@ -42,6 +42,8 @@ struct ColumnScanState {
 	ColumnSegment *current;
 	//! The current row index of the scan
 	idx_t row_index;
+	//! The internal row index (i.e. the position of the SegmentScanState)
+	idx_t internal_index;
 	//! Segment scan state
 	unique_ptr<SegmentScanState> scan_state;
 	//! Child states of the vector

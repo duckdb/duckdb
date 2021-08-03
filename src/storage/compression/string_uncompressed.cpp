@@ -270,6 +270,7 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 		UncompressedStringStorage::StringScan,
 		UncompressedStringStorage::StringScanPartial,
 		UncompressedStringStorage::StringFetchRow,
+		UncompressedFunctions::EmptySkip,
 		UncompressedStringStorage::StringInitSegment,
 		UncompressedStringStorage::StringAppend,
 		nullptr

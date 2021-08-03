@@ -80,6 +80,11 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 	}
 }
 
+void ColumnSegment::Skip(ColumnScanState &state) {
+	function->skip(*this, state, state.row_index - state.internal_index);
+	state.internal_index = state.row_index;
+}
+
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result) {
 	function->scan_vector(*this, state, scan_count, result);
 }

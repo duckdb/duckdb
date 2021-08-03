@@ -230,6 +230,7 @@ CompressionFunction NumericGetFunction(PhysicalType data_type) {
 		NumericScan<T>,
 		NumericScanPartial<T>,
 		NumericFetchRow<T>,
+		UncompressedFunctions::EmptySkip,
 		nullptr,
 		NumericAppend<T>,
 		nullptr
