@@ -29,6 +29,12 @@ public:
 	bool can_destroy;
 	//! The internal id of the buffer
 	block_id_t id;
+
+public:
+	//! Read into the ManagedBuffer from the specified location.
+	void Read(FileHandle &handle, uint64_t location) override;
+	//! Write the contents of the ManagedBuffer to the specified location.
+	void Write(FileHandle &handle, uint64_t location) override;
 };
 
 } // namespace duckdb

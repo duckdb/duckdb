@@ -12,4 +12,12 @@ ManagedBuffer::ManagedBuffer(DatabaseInstance &db, idx_t size, bool can_destroy,
 	D_ASSERT(size >= Storage::BLOCK_SIZE);
 }
 
+void ManagedBuffer::Read(FileHandle &handle, uint64_t location) {
+	handle.Read(internal_buffer, internal_size, location);
+}
+
+void ManagedBuffer::Write(FileHandle &handle, uint64_t location) {
+	handle.Write(internal_buffer, internal_size, location);
+}
+
 } // namespace duckdb
