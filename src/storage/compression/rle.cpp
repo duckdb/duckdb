@@ -226,7 +226,32 @@ void RLEFinalizeCompress(CompressionState& state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+template<class T>
 struct RLEScanState : public SegmentScanState {
+	RLEScanState(ColumnSegment &segment) {
+		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+		handle = buffer_manager.Pin(segment.block);
+		entry_pos = 0;
+		position_in_entry = 0;
+		max_rle_count = RLECompressState<T>::MaxRLECount();
+	}
+
+	void Skip(idx_t skip_count) {
+		auto data = handle->node->buffer;
+		auto index_pointer = (rle_count_t *) (data + (max_rle_count * sizeof(T)));
+
+		for(idx_t i = 0; i < skip_count; i++) {
+			// assign the current value
+			position_in_entry++;
+			if (position_in_entry >= index_pointer[entry_pos]) {
+				// handled all entries in this RLE value
+				// move to the next entry
+				entry_pos++;
+				position_in_entry = 0;
+			}
+		}
+	}
+
 	unique_ptr<BufferHandle> handle;
 	idx_t entry_pos;
 	idx_t position_in_entry;
@@ -235,12 +260,7 @@ struct RLEScanState : public SegmentScanState {
 
 template<class T>
 unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
-	auto result = make_unique<RLEScanState>();
-	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	result->handle = buffer_manager.Pin(segment.block);
-	result->entry_pos = 0;
-	result->position_in_entry = 0;
-	result->max_rle_count = RLECompressState<T>::MaxRLECount();
+	auto result = make_unique<RLEScanState<T>>(segment);
 	return move(result);
 }
 
@@ -249,26 +269,13 @@ unique_ptr<SegmentScanState> RLEInitScan(ColumnSegment &segment) {
 //===--------------------------------------------------------------------===//
 template<class T>
 void RLESkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
-	auto &scan_state = (RLEScanState &) *state.scan_state;
-
-	auto data = scan_state.handle->node->buffer;
-	auto index_pointer = (rle_count_t *) (data + (scan_state.max_rle_count * sizeof(T)));
-
-	for(idx_t i = 0; i < skip_count; i++) {
-		// assign the current value
-		scan_state.position_in_entry++;
-		if (scan_state.position_in_entry >= index_pointer[scan_state.entry_pos]) {
-			// handled all entries in this RLE value
-			// move to the next entry
-			scan_state.entry_pos++;
-			scan_state.position_in_entry = 0;
-		}
-	}
+	auto &scan_state = (RLEScanState<T> &) *state.scan_state;
+	scan_state.Skip(skip_count);
 }
 
 template<class T>
 void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
-	auto &scan_state = (RLEScanState &) *state.scan_state;
+	auto &scan_state = (RLEScanState<T> &) *state.scan_state;
 
 	auto data = scan_state.handle->node->buffer;
 	auto data_pointer = (T *) data;
@@ -291,7 +298,7 @@ void RLEScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 
 template<class T>
 void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
-	// FIXME: dictionary vector
+	// FIXME: emit constant vector if repetition of single value is >= scan_count
 	RLEScanPartial<T>(segment, state, scan_count, result, 0);
 }
 
@@ -300,7 +307,13 @@ void RLEScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, V
 //===--------------------------------------------------------------------===//
 template<class T>
 void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	throw InternalException("FIXME RLE FETCH ROW");
+	RLEScanState<T> scan_state(segment);
+	scan_state.Skip(row_id);
+
+	auto data = scan_state.handle->node->buffer;
+	auto data_pointer = (T *) data;
+	auto result_data = FlatVector::GetData<T>(result);
+	result_data[result_idx] = data_pointer[scan_state.entry_pos];
 }
 
 //===--------------------------------------------------------------------===//
