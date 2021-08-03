@@ -8,21 +8,13 @@ load __TEST_DIR__/test_rle.db
 statement ok
 PRAGMA force_compression = 'rle'
 
-# simple RLE with few values
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
 
 statement ok
 INSERT INTO test VALUES (11, 22), (11, 22), (12, 21), (NULL, NULL)
 
-query II
-SELECT SUM(a), SUM(b) FROM test
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
 ----
-34	65
-
-restart
-
-query II
-SELECT SUM(a), SUM(b) FROM test
-----
-34	65
+RLE

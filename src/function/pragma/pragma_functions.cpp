@@ -258,20 +258,12 @@ static void PragmaForceCompression(ClientContext &context, const FunctionParamet
 	auto &config = DBConfig::GetConfig(context);
 	if (compression == "none") {
 		config.force_compression = CompressionType::COMPRESSION_INVALID;
-	} else if (compression == "uncompressed") {
-		config.force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
-	} else if (compression == "rle") {
-		config.force_compression = CompressionType::COMPRESSION_RLE;
-	} else if (compression == "dictionary") {
-		config.force_compression = CompressionType::COMPRESSION_DICTIONARY;
-	} else if (compression == "pfor") {
-		config.force_compression = CompressionType::COMPRESSION_PFOR_DELTA;
-	} else if (compression == "bitpacking") {
-		config.force_compression = CompressionType::COMPRESSION_BITPACKING;
-	} else if (compression == "fsst") {
-		config.force_compression = CompressionType::COMPRESSION_FSST;
 	} else {
-		throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, dictionary, pfor, bitpacking or fsst");
+		auto compression_type = CompressionTypeFromString(compression);
+		if (compression_type == CompressionType::COMPRESSION_INVALID) {
+			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, dictionary, pfor, bitpacking or fsst");
+		}
+		config.force_compression = compression_type;
 	}
 }
 

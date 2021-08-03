@@ -23,4 +23,7 @@ enum class CompressionType : uint8_t {
 	COMPRESSION_FSST = 7
 };
 
+CompressionType CompressionTypeFromString(const string &str);
+string CompressionTypeToString(CompressionType type);
+
 } // namespace duckdb

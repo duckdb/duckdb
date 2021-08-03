@@ -423,6 +423,8 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, v
 		column_info.push_back(Value::BIGINT(segment->start));
 		// count
 		column_info.push_back(Value::BIGINT(segment->count));
+		// compression
+		column_info.push_back(CompressionTypeToString(segment->function->type));
 		// stats
 		column_info.emplace_back(segment->stats.statistics ? segment->stats.statistics->ToString()
 		                                                   : string("No Stats"));
