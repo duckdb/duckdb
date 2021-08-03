@@ -75,48 +75,12 @@ SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
 	});
 }
 
-SQLRETURN duckdb::FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation) {
+SQLRETURN duckdb::FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
 	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
 		if (!stmt->open) {
 			return SQL_NO_DATA;
 		}
-		// if (!stmt->chunk || ((duckdb::idx_t)stmt->chunk_row) >= stmt->chunk->size() - 1) {
-		// 	try {
-		// 		if (fetch_orientation == SQL_FETCH_NEXT) {
-		// 			stmt->chunk = stmt->res->Fetch();
-		// 		}
-
-		// 		if(stmt->cursor_type == SQL_CURSOR_FORWARD_ONLY) {
-		// 			stmt->chunk = stmt->res->Fetch();
-		// 		} else if (stmt->cursor_type == SQL_CURSOR_STATIC) {
-		// 			if (fetch_orientation == SQL_FETCH_NEXT) {
-		// 				stmt->chunk = stmt->res->Fetch();
-		// 			} else if (fetch_orientation == SQL_FETCH_PRIOR) {
-
-		// 			}
-		// 		}
-		// 	} catch (duckdb::Exception &e) {
-		// 		// TODO this is quite dirty, we should have separate error holder
-		// 		stmt->res->error = e.what();
-		// 		stmt->res->success = false;
-		// 		stmt->open = false;
-		// 		stmt->error_messages.emplace_back(std::string(e.what()));
-		// 		return SQL_ERROR;
-		// 	}
-		// 	if (!stmt->chunk) {
-		// 		stmt->open = false;
-		// 		return SQL_NO_DATA;
-		// 	} else {
-		// 		// count rows processed
-		// 		if (stmt->res->type == duckdb::QueryResultType::MATERIALIZED_RESULT) {
-		// 			stmt->row_count += ((duckdb::MaterializedQueryResult *)stmt->res.get())->collection.Count();
-		// 		} else {
-		// 			stmt->row_count += stmt->chunk->size();
-		// 		}
-		// 	}
-		// 	stmt->chunk_row = -1;
-		// }
-		SQLRETURN ret = stmt->odbc_fetcher->Fetch(statement_handle, stmt, fetch_orientation);
+		SQLRETURN ret = stmt->odbc_fetcher->Fetch(statement_handle, stmt, fetch_orientation, fetch_offset);
 		if (!SQL_SUCCEEDED(ret)) {
 			return ret;
 		}
@@ -195,31 +159,41 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 
 		switch (target_type) {
 		case SQL_C_SSHORT:
-			return GetInternalValue<int16_t, SQLSMALLINT>(stmt, val, LogicalType::SMALLINT, target_value_ptr, str_len_or_ind_ptr);
+			return GetInternalValue<int16_t, SQLSMALLINT>(stmt, val, LogicalType::SMALLINT, target_value_ptr,
+			                                              str_len_or_ind_ptr);
 		case SQL_C_USHORT:
-			return GetInternalValue<uint16_t, SQLUSMALLINT>(stmt, val, LogicalType::USMALLINT, target_value_ptr, str_len_or_ind_ptr);
+			return GetInternalValue<uint16_t, SQLUSMALLINT>(stmt, val, LogicalType::USMALLINT, target_value_ptr,
+			                                                str_len_or_ind_ptr);
 		case SQL_C_LONG:
 		case SQL_C_SLONG:
-			return GetInternalValue<int32_t, SQLINTEGER>(stmt, val, LogicalType::INTEGER, target_value_ptr, str_len_or_ind_ptr);
+			return GetInternalValue<int32_t, SQLINTEGER>(stmt, val, LogicalType::INTEGER, target_value_ptr,
+			                                             str_len_or_ind_ptr);
 		case SQL_C_ULONG:
-			return GetInternalValue<uint32_t, SQLUINTEGER>(stmt, val, LogicalType::UINTEGER, target_value_ptr, str_len_or_ind_ptr);
+			return GetInternalValue<uint32_t, SQLUINTEGER>(stmt, val, LogicalType::UINTEGER, target_value_ptr,
+			                                               str_len_or_ind_ptr);
 		case SQL_C_FLOAT:
-			return GetInternalValue<float, SQLREAL>(stmt, val, LogicalType::FLOAT, target_value_ptr, str_len_or_ind_ptr);
+			return GetInternalValue<float, SQLREAL>(stmt, val, LogicalType::FLOAT, target_value_ptr,
+			                                        str_len_or_ind_ptr);
 		case SQL_C_DOUBLE:
-			return GetInternalValue<double, SQLFLOAT>(stmt, val, LogicalType::DOUBLE, target_value_ptr, str_len_or_ind_ptr);
+			return GetInternalValue<double, SQLFLOAT>(stmt, val, LogicalType::DOUBLE, target_value_ptr,
+			                                          str_len_or_ind_ptr);
 		case SQL_C_BIT: {
 			LogicalType char_type = LogicalType(LogicalTypeId::CHAR);
 			return GetInternalValue<SQLCHAR>(stmt, val, char_type, target_value_ptr, str_len_or_ind_ptr);
 		}
 		case SQL_C_STINYINT:
-			return GetInternalValue<int8_t, SQLSCHAR>(stmt, val, LogicalType::TINYINT, target_value_ptr, str_len_or_ind_ptr);
+			return GetInternalValue<int8_t, SQLSCHAR>(stmt, val, LogicalType::TINYINT, target_value_ptr,
+			                                          str_len_or_ind_ptr);
 		case SQL_C_UTINYINT:
-			return GetInternalValue<uint8_t, uint8_t>(stmt, val, LogicalType::UTINYINT, target_value_ptr, str_len_or_ind_ptr);
+			return GetInternalValue<uint8_t, uint8_t>(stmt, val, LogicalType::UTINYINT, target_value_ptr,
+			                                          str_len_or_ind_ptr);
 		case SQL_C_SBIGINT:
-			return GetInternalValue<int64_t, SQLBIGINT>(stmt, val, LogicalType::BIGINT, target_value_ptr, str_len_or_ind_ptr);
+			return GetInternalValue<int64_t, SQLBIGINT>(stmt, val, LogicalType::BIGINT, target_value_ptr,
+			                                            str_len_or_ind_ptr);
 		case SQL_C_UBIGINT:
 			// case SQL_C_BOOKMARK: // same ODBC type (\\TODO we don't support bookmark types)
-			return GetInternalValue<uint64_t, SQLUBIGINT>(stmt, val, LogicalType::UBIGINT, target_value_ptr, str_len_or_ind_ptr);
+			return GetInternalValue<uint64_t, SQLUBIGINT>(stmt, val, LogicalType::UBIGINT, target_value_ptr,
+			                                              str_len_or_ind_ptr);
 		case SQL_C_WCHAR: {
 			std::string str = val.GetValue<std::string>();
 			std::wstring w_str = std::wstring(str.begin(), str.end());
