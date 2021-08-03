@@ -11,6 +11,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/main/table_description.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 namespace duckdb {
 
@@ -21,12 +22,19 @@ class Connection;
 
 //! The Appender class can be used to append elements to a table.
 class Appender {
+	//! The amount of chunks that will be gathered in the chunk collection before flushing
+	static constexpr const idx_t FLUSH_COUNT = 100;
+
 	//! A reference to a database connection that created this appender
 	shared_ptr<ClientContext> context;
 	//! The table description (including column names)
 	unique_ptr<TableDescription> description;
+	//! The append types
+	vector<LogicalType> types;
+	//! The buffered data for the append
+	ChunkCollection collection;
 	//! Internal chunk used for appends
-	DataChunk chunk;
+	unique_ptr<DataChunk> chunk;
 	//! The current column to append to
 	idx_t column = 0;
 
@@ -62,16 +70,17 @@ public:
 	//! Flush the changes made by the appender and close it. The appender cannot be used after this point
 	DUCKDB_API void Close();
 
-	//! Obtain a reference to the internal vector that is used to append to the table
-	DUCKDB_API DataChunk &GetAppendChunk() {
-		return chunk;
+	DUCKDB_API vector<LogicalType> &GetTypes() {
+		return types;
 	}
-
 	DUCKDB_API idx_t CurrentColumn() {
 		return column;
 	}
 
 private:
+	void InitializeChunk();
+	void FlushChunk();
+
 	template <class T>
 	void AppendValueInternal(T value);
 	template <class SRC, class DST>
@@ -120,6 +129,8 @@ template <>
 void DUCKDB_API Appender::Append(timestamp_t value);
 template <>
 void DUCKDB_API Appender::Append(const char *value);
+template <>
+void DUCKDB_API Appender::Append(string_t value);
 template <>
 void DUCKDB_API Appender::Append(Value value);
 template <>

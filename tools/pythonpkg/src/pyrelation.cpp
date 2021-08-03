@@ -1,7 +1,7 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
-
+#include "duckdb/parser/qualified_name.hpp"
 namespace duckdb {
 
 void DuckDBPyRelation::Initialize(py::handle &m) {
@@ -251,7 +251,14 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
-	rel->Insert(table);
+	auto parsed_info = QualifiedName::Parse(table);
+	if (parsed_info.schema.empty()) {
+		//! No Schema Defined, we use default schema.
+		rel->Insert(table);
+	} else {
+		//! Schema defined, we try to insert into it.
+		rel->Insert(parsed_info.schema, parsed_info.name);
+	};
 }
 
 void DuckDBPyRelation::Insert(py::object params) {
