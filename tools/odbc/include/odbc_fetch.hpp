@@ -6,6 +6,7 @@
 #include <sql.h>
 #include <sqlext.h>
 #include <vector>
+#include <stack>
 
 namespace duckdb {
 
@@ -16,7 +17,7 @@ enum class FetchBindingOrientation : uint8_t { COLUMN = 0, ROW = 1 };
 class OdbcFetch {
 public:
 	FetchBindingOrientation bind_orientation;
-	SQLULEN rows_to_fetch;
+	SQLULEN rowset_size;
 	SQLPOINTER row_length;
 	SQLUSMALLINT *row_status_buff;
 
@@ -26,20 +27,29 @@ public:
 	SQLLEN row_count;
 
 private:
+	// main structure to hold the fetched chunks
 	std::vector<unique_ptr<DataChunk>> chunks;
+	// stack chunk's pointers to be used during fetch prior
+	std::stack<DataChunk *> stack_prior_chunks;
 	duckdb::DataChunk *current_chunk;
 	row_t chunk_row;
+	row_t prior_chunk_row;
+
+	// flag the end of the result set has reached
+	// it's important because ODBC can reuse the result set many times
+	bool resultset_end;
 
 public:
 	OdbcFetch()
-	    : bind_orientation(FetchBindingOrientation::COLUMN), rows_to_fetch(SINGLE_VALUE_FETCH),
-	      row_status_buff(nullptr), cursor_type(SQL_CURSOR_FORWARD_ONLY), row_count(0) {
+	    : bind_orientation(FetchBindingOrientation::COLUMN), rowset_size(SINGLE_VALUE_FETCH), row_status_buff(nullptr),
+	      cursor_type(SQL_CURSOR_FORWARD_ONLY), row_count(0), resultset_end(false) {
 	}
 	~OdbcFetch();
 
-	SQLRETURN Fetch(SQLHSTMT statement_handle, OdbcHandleStmt *stmt, SQLULEN fetch_orientation = SQL_FETCH_NEXT);
+	SQLRETURN Fetch(SQLHSTMT statement_handle, OdbcHandleStmt *stmt, SQLULEN fetch_orientation = SQL_FETCH_NEXT,
+	                SQLLEN fetch_offset = 0);
 
-	SQLRETURN FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *stmt);
+	SQLRETURN FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *stmt, SQLLEN fetch_offset);
 
 	SQLRETURN GetValue(SQLUSMALLINT col_idx, Value &value);
 
@@ -54,11 +64,21 @@ private:
 
 	SQLRETURN RowWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt);
 
-	inline bool NeedFetch() {
+	inline bool RequireFetch() {
 		return (chunks.empty() || (chunk_row >= ((duckdb::row_t)chunks.back()->size()) - 1));
 	}
 
+	void IncreaseRowCount();
+
+	SQLRETURN FetchNext(OdbcHandleStmt *stmt);
+
 	SQLRETURN SetCurrentChunk(OdbcHandleStmt *stmt);
+
+	SQLRETURN SetPriorCurrentChunk(OdbcHandleStmt *stmt);
+
+	SQLRETURN FetchFromBOF();
+
+	SQLRETURN SetAbsoluteCurrentChunk(OdbcHandleStmt *stmt, SQLLEN fetch_offset);
 };
 } // namespace duckdb
 
