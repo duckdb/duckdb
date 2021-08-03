@@ -106,20 +106,6 @@ struct SortingState {
 	unordered_map<idx_t, idx_t> sorting_to_blob_col;
 };
 
-struct MergePair {
-public:
-	explicit MergePair(idx_t pair_idx) : pair_idx(pair_idx), l_start(0), r_start(0) {
-	}
-
-	const idx_t pair_idx;
-	idx_t l_start;
-	idx_t r_start;
-
-	bool operator<(const MergePair &other) const {
-		return pair_idx < other.pair_idx;
-	}
-};
-
 class OrderGlobalState : public GlobalOperatorState {
 public:
 	OrderGlobalState(PhysicalOrder &order, RowLayout payload_layout)
@@ -152,7 +138,6 @@ public:
 	idx_t memory_per_thread;
 
 	//! Progress in merge path stage
-	std::priority_queue<MergePair> merge_pairs;
 	idx_t pair_idx;
 	idx_t l_start;
 	idx_t r_start;
