@@ -1,0 +1,30 @@
+# name: test/sql/storage/compression/rle/rle_large.test
+# description: Test large storage with RLE
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle.db
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+# simple RLE with few values
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM repeat(1, 1000);
+INSERT INTO test SELECT * FROM repeat(2, 1000);
+INSERT INTO test SELECT * FROM repeat(3, 1000);
+
+query IIII
+SELECT SUM(a), MIN(a), MAX(a), COUNT(*) FROM test
+----
+6000	1	3	3000
+
+restart
+
+query IIII
+SELECT SUM(a), MIN(a), MAX(a), COUNT(*) FROM test
+----
+6000	1	3	3000

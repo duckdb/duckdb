@@ -373,12 +373,13 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 		data_pointer.tuple_count = source.Read<idx_t>();
 		data_pointer.block_pointer.block_id = source.Read<block_id_t>();
 		data_pointer.block_pointer.offset = source.Read<uint32_t>();
+		data_pointer.compression_type = source.Read<CompressionType>();
 		data_pointer.statistics = BaseStatistics::Deserialize(source, type);
 
 		// create a persistent segment
 		auto segment = ColumnSegment::CreatePersistentSegment(GetDatabase(), data_pointer.block_pointer.block_id,
 		                                              data_pointer.block_pointer.offset, type, data_pointer.row_start,
-		                                              data_pointer.tuple_count, move(data_pointer.statistics));
+		                                              data_pointer.tuple_count, data_pointer.compression_type, move(data_pointer.statistics));
 		data.AppendSegment(move(segment));
 	}
 }

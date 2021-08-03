@@ -101,6 +101,8 @@ public:
 	bool initialize_default_database = true;
 	//! The set of disabled optimizers (default empty)
 	set<OptimizerType> disabled_optimizers;
+	//! Force a specific compression method to be used when checkpointing (if available)
+	CompressionType force_compression = CompressionType::COMPRESSION_INVALID;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

@@ -253,6 +253,28 @@ static void PragmaSetTempDirectory(ClientContext &context, const FunctionParamet
 	buffer_manager.SetTemporaryDirectory(parameters.values[0].ToString());
 }
 
+static void PragmaForceCompression(ClientContext &context, const FunctionParameters &parameters) {
+	auto compression = StringUtil::Lower(parameters.values[0].ToString());
+	auto &config = DBConfig::GetConfig(context);
+	if (compression == "none") {
+		config.force_compression = CompressionType::COMPRESSION_INVALID;
+	} else if (compression == "uncompressed") {
+		config.force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
+	} else if (compression == "rle") {
+		config.force_compression = CompressionType::COMPRESSION_RLE;
+	} else if (compression == "dictionary") {
+		config.force_compression = CompressionType::COMPRESSION_DICTIONARY;
+	} else if (compression == "pfor") {
+		config.force_compression = CompressionType::COMPRESSION_PFOR_DELTA;
+	} else if (compression == "bitpacking") {
+		config.force_compression = CompressionType::COMPRESSION_BITPACKING;
+	} else if (compression == "fsst") {
+		config.force_compression = CompressionType::COMPRESSION_FSST;
+	} else {
+		throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, dictionary, pfor, bitpacking or fsst");
+	}
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -327,6 +349,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	    PragmaFunction::PragmaAssignment("debug_checkpoint_abort", PragmaDebugCheckpointAbort, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaAssignment("temp_directory", PragmaSetTempDirectory, LogicalType::VARCHAR));
+
+	set.AddFunction(PragmaFunction::PragmaAssignment("force_compression", PragmaForceCompression, LogicalType::VARCHAR));
 }
 
 } // namespace duckdb

@@ -10,19 +10,20 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <cstring>
 
 namespace duckdb {
 
-unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, block_id_t block_id, idx_t offset, const LogicalType &type, idx_t start, idx_t count, unique_ptr<BaseStatistics> statistics) {
+unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, block_id_t block_id, idx_t offset, const LogicalType &type, idx_t start, idx_t count, CompressionType compression_type, unique_ptr<BaseStatistics> statistics) {
 	D_ASSERT(offset == 0);
 	auto &config = DBConfig::GetConfig(db);
 	CompressionFunction *function;
 	if (block_id == INVALID_BLOCK) {
 		function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, type.InternalType());
 	} else {
-		function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
+		function = config.GetCompressionFunction(compression_type, type.InternalType());
 	}
 	return make_unique<ColumnSegment>(db, type, ColumnSegmentType::PERSISTENT, start, count, function, move(statistics), block_id, offset);
 }

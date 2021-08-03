@@ -54,7 +54,7 @@ public:
 	//! The block that this segment relates to
 	shared_ptr<BlockHandle> block;
 
-	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, const LogicalType &type_p, idx_t start, idx_t count, unique_ptr<BaseStatistics> statistics);
+	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, const LogicalType &type_p, idx_t start, idx_t count, CompressionType compression_type, unique_ptr<BaseStatistics> statistics);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start);
 
 public:

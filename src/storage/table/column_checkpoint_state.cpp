@@ -63,6 +63,7 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment) {
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
+	data_pointer.compression_type = segment->function->type;
 	data_pointer.statistics = segment->stats.statistics->Copy();
 
 	// convert the segment into a persistent segment that points to this block
@@ -85,6 +86,7 @@ void ColumnCheckpointState::FlushToDisk() {
 		meta_writer.Write<idx_t>(data_pointer.tuple_count);
 		meta_writer.Write<block_id_t>(data_pointer.block_pointer.block_id);
 		meta_writer.Write<uint32_t>(data_pointer.block_pointer.offset);
+		meta_writer.Write<CompressionType>(data_pointer.compression_type);
 		data_pointer.statistics->Serialize(meta_writer);
 	}
 }
