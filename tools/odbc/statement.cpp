@@ -25,7 +25,7 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 				if (new_size < 1) {
 					return SQL_ERROR;
 				}
-				stmt->odbc_fetcher->rows_to_fetch = new_size;
+				stmt->odbc_fetcher->rowset_size = new_size;
 			}
 			return SQL_SUCCESS;
 		}
@@ -280,6 +280,7 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
+			stmt->open = false;
 			stmt->res.reset();
 			stmt->odbc_fetcher->ClearChunks();
 			// stmt->stmt.reset(); // the statment can be reuse in prepared statement
