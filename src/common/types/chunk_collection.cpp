@@ -120,6 +120,15 @@ void ChunkCollection::Append(DataChunk &new_chunk) {
 	}
 }
 
+void ChunkCollection::Append(unique_ptr<DataChunk> new_chunk) {
+	if (types.empty()) {
+		types = new_chunk->GetTypes();
+	}
+	D_ASSERT(types == new_chunk->GetTypes());
+	count += new_chunk->size();
+	chunks.push_back(move(new_chunk));
+}
+
 void ChunkCollection::Fuse(ChunkCollection &other) {
 	if (count == 0) {
 		Append(other);
