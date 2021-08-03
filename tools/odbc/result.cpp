@@ -18,7 +18,7 @@ SQLRETURN SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientatio
 	case SQL_FETCH_ABSOLUTE:
 	case SQL_FETCH_PRIOR:
 	case SQL_FETCH_NEXT:
-		// passing "fetch_offset - 1" because DuckDB rowset start from 0 instead of row 1
+		// passing "fetch_offset - 1", the DuckDB's internal row index starts in 0
 		return duckdb::FetchStmtResult(statement_handle, fetch_orientation, fetch_offset - 1);
 	default:
 		return SQL_ERROR;
