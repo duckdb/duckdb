@@ -114,7 +114,7 @@ FINISH_BENCHMARK(Append100KIntegersPREPAREDPrimary)
 		state->conn.Query(CREATE_STATEMENT);                                                                           \
 	}                                                                                                                  \
 	void RunBenchmark(DuckDBBenchmarkState *state) override {                                                          \
-		state->conn.Query("BEGIN QUERY");                                                                              \
+		state->conn.Query("BEGIN TRANSACTION");                                                                        \
 		Appender appender(state->conn, "integers");                                                                    \
 		for (int32_t i = 0; i < 100000; i++) {                                                                         \
 			appender.BeginRow();                                                                                       \

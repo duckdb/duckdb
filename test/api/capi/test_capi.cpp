@@ -760,7 +760,9 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_append_varchar_length(tappender, "hello world", 5);
 	REQUIRE(status == DuckDBSuccess);
 
-	status = duckdb_append_blob(tappender, "hello", 5);
+	auto str = strdup("hello world this is my long string");
+	status = duckdb_append_blob(tappender, str, strlen(str));
+	free(str);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_appender_end_row(tappender);
@@ -832,8 +834,8 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(result->Fetch<string>(10, 0) == "hello");
 
 	auto blob = duckdb_value_blob(&result->InternalResult(), 11, 0);
-	REQUIRE(blob.size == 5);
-	REQUIRE(memcmp(blob.data, "hello", 5) == 0);
+	REQUIRE(blob.size == 34);
+	REQUIRE(memcmp(blob.data, "hello world this is my long string", 34) == 0);
 	duckdb_free(blob.data);
 
 	REQUIRE(result->IsNull(0, 1));

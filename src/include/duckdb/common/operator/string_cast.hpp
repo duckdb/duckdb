@@ -52,6 +52,8 @@ duckdb::string_t StringCast::Operation(double input, Vector &result);
 template <>
 duckdb::string_t StringCast::Operation(interval_t input, Vector &result);
 template <>
+duckdb::string_t StringCast::Operation(duckdb::string_t input, Vector &result);
+template <>
 duckdb::string_t StringCast::Operation(date_t input, Vector &result);
 template <>
 duckdb::string_t StringCast::Operation(dtime_t input, Vector &result);

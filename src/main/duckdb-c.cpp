@@ -1122,14 +1122,14 @@ duckdb_state duckdb_append_null(duckdb_appender appender) {
 }
 
 duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val) {
-	return duckdb_append_internal<Value>(appender, Value(val));
+	return duckdb_append_internal<const char *>(appender, val);
 }
 
 duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length) {
-	return duckdb_append_internal<Value>(appender, Value(string(val, length)));
+	return duckdb_append_internal<string_t>(appender, string_t(val, length));
 }
 duckdb_state duckdb_append_blob(duckdb_appender appender, const void *data, idx_t length) {
-	return duckdb_append_internal<Value>(appender, Value::BLOB((const_data_ptr_t)data, length));
+	return duckdb_append_internal<string_t>(appender, string_t((const char *)data, length));
 }
 
 duckdb_state duckdb_appender_flush(duckdb_appender appender) {
