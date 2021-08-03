@@ -4,6 +4,7 @@ add_library_unity(
   age.cpp
   current.cpp
   epoch.cpp
+  date_diff.cpp
   date_trunc.cpp
   date_part.cpp
   strftime.cpp
