@@ -684,84 +684,14 @@ struct DatePartBinaryOperator {
 	}
 };
 
-template <typename TA, typename TR>
-static void DatePartUnaryExecutor(DatePartSpecifier type, Vector &left, Vector &result, idx_t count) {
-	switch (type) {
-	case DatePartSpecifier::YEAR:
-		UnaryExecutor::Execute<TA, TR, DatePart::YearOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::MONTH:
-		UnaryExecutor::Execute<TA, TR, DatePart::MonthOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::DAY:
-		UnaryExecutor::Execute<TA, TR, DatePart::DayOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::DOW:
-		UnaryExecutor::Execute<TA, TR, DatePart::DayOfWeekOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::ISODOW:
-		UnaryExecutor::Execute<TA, TR, DatePart::ISODayOfWeekOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::DOY:
-		UnaryExecutor::Execute<TA, TR, DatePart::DayOfYearOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::DECADE:
-		UnaryExecutor::Execute<TA, TR, DatePart::DecadeOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::CENTURY:
-		UnaryExecutor::Execute<TA, TR, DatePart::CenturyOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::MILLENNIUM:
-		UnaryExecutor::Execute<TA, TR, DatePart::MilleniumOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::QUARTER:
-		UnaryExecutor::Execute<TA, TR, DatePart::QuarterOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::WEEK:
-		UnaryExecutor::Execute<TA, TR, DatePart::WeekOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::EPOCH:
-		UnaryExecutor::Execute<TA, TR, DatePart::EpochOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::MICROSECONDS:
-		UnaryExecutor::Execute<TA, TR, DatePart::MicrosecondsOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::MILLISECONDS:
-		UnaryExecutor::Execute<TA, TR, DatePart::MillisecondsOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::SECOND:
-		UnaryExecutor::Execute<TA, TR, DatePart::SecondsOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::MINUTE:
-		UnaryExecutor::Execute<TA, TR, DatePart::MinutesOperator>(left, result, count);
-		break;
-	case DatePartSpecifier::HOUR:
-		UnaryExecutor::Execute<TA, TR, DatePart::HoursOperator>(left, result, count);
-		break;
-	default:
-		throw NotImplementedException("Specifier type not implemented for DATEPART");
-	}
-}
-
 template <typename T>
 static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 2);
 	auto &part_arg = args.data[0];
 	auto &date_arg = args.data[1];
 
-	if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		// Common case of constant part.
-		if (ConstantVector::IsNull(part_arg)) {
-			result.SetVectorType(VectorType::CONSTANT_VECTOR);
-			ConstantVector::SetNull(result, true);
-		} else {
-			const auto type = GetDatePartSpecifier(ConstantVector::GetData<string_t>(part_arg)->GetString());
-			DatePartUnaryExecutor<T, int64_t>(type, date_arg, result, args.size());
-		}
-	} else {
-		BinaryExecutor::ExecuteStandard<string_t, T, int64_t, DatePartBinaryOperator>(part_arg, date_arg, result,
-		                                                                              args.size());
-	}
+	BinaryExecutor::ExecuteStandard<string_t, T, int64_t, DatePartBinaryOperator>(part_arg, date_arg, result,
+	                                                                              args.size());
 }
 
 void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scalar_function_t date_func,

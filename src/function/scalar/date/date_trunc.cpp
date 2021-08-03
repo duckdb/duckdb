@@ -48,11 +48,10 @@ struct DateTrunc {
 	struct QuarterOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
-			date_t date = Timestamp::GetDate(input);
-
-			int32_t month = Date::ExtractMonth(date);
-			month = 1 + (((month - 1) / 3) * 3);
-			return Timestamp::FromDatetime(Date::FromDate(Date::ExtractYear(date), month, 1), dtime_t(0));
+			int32_t yyyy, mm, dd;
+			Date::Convert(Timestamp::GetDate(input), yyyy, mm, dd);
+			mm = 1 + (((mm - 1) / 3) * 3);
+			return Timestamp::FromDatetime(Date::FromDate(yyyy, mm, 1), dtime_t(0));
 		}
 	};
 
