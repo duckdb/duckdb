@@ -4,8 +4,7 @@ library("DBI")
 skip_on_os("windows")
 skip_if_not_installed("arrow", "4.0.1")
 # Skip if parquet is not a capabiltiy as an indicator that Arrow is fully installed.
-full_arrow <- "parquet" %in% names(arrow::arrow_info()$capabilities) && arrow::arrow_info()$capabilities["parquet"]
-skip_if_not(full_arrow, message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
+skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
 
 test_that("duckdb_fetch_arrow() test table over vector size", {
     con <- dbConnect(duckdb::duckdb())
