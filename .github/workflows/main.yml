@@ -840,6 +840,10 @@ jobs:
       with:
         fetch-depth: 0
 
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
     - name: Dependencies
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev
 
@@ -862,16 +866,25 @@ jobs:
 
     - name: Test psqlodbc
       run: |
-        echo -e "[ODBC]\nTrace = yes\nTraceFile = /tmp/odbctrace\n\n[DuckDB Driver]\nDriver = "`pwd`"/build/debug/tools/odbc/libduckdb_odbc.so" > odbcinst.ini
-        echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=:memory:\n" > odbc.ini
+        echo -e "[ODBC]\nTrace = yes\nTraceFile = /tmp/odbctrace\n\n[DuckDB Driver]\nDriver = "`pwd`"/build/debug/tools/odbc/libduckdb_odbc.so" > ~/.odbcinst.ini
+        echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=:memory:\n" > ~/.odbc.ini
         cd psqlodbc
-        export ODBCSYSINI=.. && export PSQLODBC_TEST_DSN="DuckDB"
+        export PSQLODBC_TEST_DSN="DuckDB"
         # creating contrib_regression database used by some tests
         (./build/debug/reset-db < sampletables.sql) || (cat /tmp/odbctrace; exit 1)
         # running supported tests
         (./build/debug/psql_odbc_test -f ../tools/odbc/supported_tests) || (cat /tmp/odbctrace; exit 1)
 
-
+    - name: Test isql
+      run: |
+        echo -e "[ODBC]\nTrace = yes\nTraceFile = /tmp/odbctrace\n\n[DuckDB Driver]\nDriver = "`pwd`"/build/debug/tools/odbc/libduckdb_odbc.so" > ~/.odbcinst.ini
+        echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=test.db\n" > ~/.odbc.ini
+        export ASAN_OPTIONS=verify_asan_link_order=0
+        python tools/odbc/test/isql-test.py isql
+        if [[ $? != 0 ]]; then exit 1; fi
+        # running isql with the option -e
+        rm test.db && python tools/odbc/test/isql-test.py isql -e
+        if [[ $? != 0 ]]; then exit 1; fi
 
   linux-python3:
     name: Python 3 Linux
@@ -922,7 +935,7 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'yum install -y openssl-devel && pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=0.24"  && pip install --prefer-binary "pyarrow>=5.0" || true)'
+      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=0.24"  && (pip install --prefer-binary "pyarrow>=5.0" || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       CIBW_ENVIRONMENT: 'BUILD_HTTPFS=1'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'

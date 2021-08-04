@@ -26,7 +26,7 @@ struct QualifiedName {
 		vector<string> entries;
 		string entry;
 	normal:
-		// quote
+		//! quote
 		for (; idx < input.size(); idx++) {
 			if (input[idx] == '"') {
 				idx++;
@@ -43,10 +43,10 @@ struct QualifiedName {
 		idx++;
 		goto normal;
 	quoted:
-		// look for another quote
+		//! look for another quote
 		for (; idx < input.size(); idx++) {
 			if (input[idx] == '"') {
-				// unquote
+				//! unquote
 				idx++;
 				goto normal;
 			}
@@ -54,7 +54,7 @@ struct QualifiedName {
 		}
 		throw ParserException("Unterminated quote in qualified name!");
 	end:
-		if (entries.size() == 0) {
+		if (entries.empty()) {
 			schema = INVALID_SCHEMA;
 			name = entry;
 		} else if (entries.size() == 1) {

@@ -6,9 +6,6 @@
 SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                          SQLINTEGER string_length) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		if (!value_ptr) {
-			return SQL_ERROR;
-		}
 		switch (attribute) {
 		case SQL_ATTR_PARAMSET_SIZE: {
 			/* auto size = Load<SQLLEN>((data_ptr_t) value_ptr);

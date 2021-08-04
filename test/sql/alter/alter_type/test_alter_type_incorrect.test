@@ -23,3 +23,6 @@ ALTER TABLE test ALTER i SET TYPE VARCHAR USING SUM(i)
 statement error
 ALTER TABLE test ALTER i SET TYPE VARCHAR USING row_id() OVER ()
 
+statement error
+ALTER TABLE test ALTER i SET TYPE VARCHAR USING othertable.j
+

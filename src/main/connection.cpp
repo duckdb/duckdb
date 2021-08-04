@@ -107,7 +107,13 @@ unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
-	context->Append(description, chunk);
+	ChunkCollection collection;
+	collection.Append(chunk);
+	Append(description, collection);
+}
+
+void Connection::Append(TableDescription &description, ChunkCollection &collection) {
+	context->Append(description, collection);
 }
 
 shared_ptr<Relation> Connection::Table(const string &table_name) {
