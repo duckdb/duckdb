@@ -35,12 +35,16 @@ public:
 	uint64_t size;
 
 public:
+	//! Read into the FileBuffer from the specified location.
+	void Read(FileHandle &handle, uint64_t location);
 	//! Read into the FileBuffer from the specified location. Automatically verifies the checksum, and throws an
 	//! exception if the checksum does not match correctly.
-	virtual void Read(FileHandle &handle, uint64_t location);
+	void ReadAndChecksum(FileHandle &handle, uint64_t location);
+	//! Write the contents of the FileBuffer to the specified location.
+	void Write(FileHandle &handle, uint64_t location);
 	//! Write the contents of the FileBuffer to the specified location. Automatically adds a checksum of the contents of
 	//! the filebuffer in front of the written data.
-	virtual void Write(FileHandle &handle, uint64_t location);
+	void ChecksumAndWrite(FileHandle &handle, uint64_t location);
 
 	void Clear();
 
