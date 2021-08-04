@@ -54,6 +54,9 @@
 using namespace duckdb;
 using namespace std;
 
+struct Command;
+struct LoopCommand;
+
 struct LoopDefinition {
 	string loop_iterator_name;
 	int loop_idx;
@@ -85,8 +88,11 @@ public:
 	bool output_result_mode = false;
 	bool debug_mode = false;
 	int hashThreshold = 0; /* Threshold for hashing res */
-	vector<LoopDefinition> active_loops;
+	vector<LoopCommand*> active_loops;
+	unique_ptr<Command> top_level_loop;
+	vector<LoopDefinition*> running_loops;
 	bool original_sqlite_test = false;
+
 
 	//! The map converting the labels to the hash values
 	unordered_map<string, string> hash_label_map;
@@ -95,6 +101,11 @@ public:
 	bool InLoop() {
 		return !active_loops.empty();
 	}
+	void ExecuteCommand(unique_ptr<Command> command);
+	void StartLoop(LoopDefinition loop);
+	void EndLoop();
+	static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
+	static string LoopReplacement(string text, const vector<LoopDefinition*> &loops);
 };
 
 /*
@@ -422,23 +433,6 @@ static bool result_is_hash(string result) {
 	return pos == result.size();
 }
 
-static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
-	return StringUtil::Replace(text, "${" + loop_iterator_name + "}", replacement);
-}
-
-static string LoopReplacement(string text, const vector<LoopDefinition> &loops) {
-	for (auto &active_loop : loops) {
-		if (active_loop.tokens.empty()) {
-			// regular loop
-			text = ReplaceLoopIterator(text, active_loop.loop_iterator_name, to_string(active_loop.loop_idx));
-		} else {
-			// foreach loop
-			text = ReplaceLoopIterator(text, active_loop.loop_iterator_name, active_loop.tokens[active_loop.loop_idx]);
-		}
-	}
-	return text;
-}
-
 static bool result_is_file(string result) {
 	return StringUtil::StartsWith(result, "<FILE>:");
 }
@@ -582,14 +576,17 @@ struct Command {
 		return connection->Query(sql_query);
 	}
 
-	virtual void Execute() = 0;
-	void ExecuteLoop() {
-		// store the original query
+	virtual void ExecuteInternal() = 0;
+	void Execute() {
+		if (runner.running_loops.empty()) {
+			ExecuteInternal();
+			return;
+		}
 		auto original_query = sql_query;
 		// perform the string replacement
-		sql_query = LoopReplacement(sql_query, runner.active_loops);
+		sql_query = SQLLogicTestRunner::LoopReplacement(sql_query, runner.running_loops);
 		// execute the iterated statement
-		Execute();
+		ExecuteInternal();
 		// now restore the original query
 		sql_query = original_query;
 	}
@@ -601,7 +598,7 @@ struct Statement : public Command {
 
 	bool expect_ok;
 
-	void Execute() override;
+	void ExecuteInternal() override;
 };
 
 enum class SortStyle : uint8_t { NO_SORT, ROW_SORT, VALUE_SORT };
@@ -616,7 +613,7 @@ struct Query : public Command {
 	bool query_has_label = false;
 	string query_label;
 
-	void Execute() override;
+	void ExecuteInternal() override;
 	void ColumnCountMismatch(MaterializedQueryResult &result, int expected_column_count, bool row_wise);
 	vector<string> LoadResultFromFile(string fname, vector<string> names);
 };
@@ -625,10 +622,71 @@ struct RestartCommand : public Command {
 	RestartCommand(SQLLogicTestRunner &runner) : Command(runner) {
 	}
 
-	void Execute() override;
+	void ExecuteInternal() override;
 };
 
-void Statement::Execute() {
+struct LoopCommand : public Command {
+	LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p) :
+	    Command(runner), definition(move(definition_p)) {
+	}
+
+	LoopDefinition definition;
+	vector<unique_ptr<Command>> loop_commands;
+
+	void ExecuteInternal();
+};
+
+
+void LoopCommand::ExecuteInternal() {
+	definition.loop_idx = definition.loop_start;
+	runner.running_loops.push_back(&definition);
+	bool finished = false;
+	while (!finished) {
+		// execute the current iteration of the loop
+		for (auto &statement : loop_commands) {
+			statement->Execute();
+		}
+		definition.loop_idx++;
+		if (definition.loop_idx >= definition.loop_end) {
+			// finished
+			break;
+		}
+	}
+	runner.running_loops.pop_back();
+}
+
+void SQLLogicTestRunner::ExecuteCommand(unique_ptr<Command> command) {
+	if (InLoop()) {
+		active_loops.back()->loop_commands.push_back(move(command));
+	} else {
+		command->Execute();
+	}
+}
+
+void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
+	auto loop = make_unique<LoopCommand>(*this, move(definition));
+	auto loop_ptr = loop.get();
+	if (InLoop()) {
+		// already in a loop: add it to the currently active loop
+		active_loops.back()->loop_commands.push_back(move(loop));
+	} else {
+		// not in a loop yet: new top-level loop
+		top_level_loop = move(loop);
+	}
+	active_loops.push_back(loop_ptr);
+
+}
+void SQLLogicTestRunner::EndLoop() {
+	// finish a loop: pop it from the active_loop queue
+	active_loops.pop_back();
+	if (active_loops.empty()) {
+		// not in a loop
+		top_level_loop->Execute();
+		top_level_loop.reset();
+	}
+}
+
+void Statement::ExecuteInternal() {
 	auto connection = CommandConnection();
 
 	if (runner.output_result_mode || runner.debug_mode) {
@@ -725,7 +783,7 @@ vector<string> Query::LoadResultFromFile(string fname, vector<string> names) {
 	return values;
 }
 
-void Query::Execute() {
+void Query::ExecuteInternal() {
 	auto connection = CommandConnection();
 
 	if (runner.output_result_mode || runner.debug_mode) {
@@ -826,7 +884,7 @@ void Query::Execute() {
 	char zHash[100]; /* Storage space for hash results */
 	vector<string> comparison_values;
 	if (values.size() == 1 && result_is_file(values[0])) {
-		comparison_values = LoadResultFromFile(LoopReplacement(values[0], runner.active_loops), result->names);
+		comparison_values = LoadResultFromFile(SQLLogicTestRunner::LoopReplacement(values[0], runner.running_loops), result->names);
 	} else {
 		comparison_values = values;
 	}
@@ -1020,7 +1078,7 @@ void Query::Execute() {
 	}
 }
 
-void RestartCommand::Execute() {
+void RestartCommand::ExecuteInternal() {
 	runner.LoadDatabase(runner.dbpath);
 }
 
@@ -1042,12 +1100,29 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	}
 }
 
+
+string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
+	return StringUtil::Replace(text, "${" + loop_iterator_name + "}", replacement);
+}
+
+string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinition*> &loops) {
+	for (auto &active_loop : loops) {
+		if (active_loop->tokens.empty()) {
+			// regular loop
+			text = ReplaceLoopIterator(text, active_loop->loop_iterator_name, to_string(active_loop->loop_idx));
+		} else {
+			// foreach loop
+			text = ReplaceLoopIterator(text, active_loop->loop_iterator_name, active_loop->tokens[active_loop->loop_idx]);
+		}
+	}
+	return text;
+}
+
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
 	FileSystem fs;
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
 	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", fs.GetWorkingDirectory());
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
-
 	return input;
 }
 
@@ -1077,8 +1152,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 	Script sScript;   /* Script parsing status */
 	FILE *in;         /* For reading script */
 	int bHt = 0;      /* True if -ht command-line option */
-	bool skip_execution = false;
-	vector<unique_ptr<Command>> loop_statements;
+	int skip_level = 0;
 
 	// for the original SQLite tests we convert floating point numbers to integers
 	// for our own tests this is undesirable since it hides certain errors
@@ -1198,14 +1272,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 
 			command->connection_name = sScript.tokens[2];
-			if (skip_execution) {
+			if (skip_level > 0) {
 				continue;
 			}
-			if (InLoop()) {
-				loop_statements.push_back(move(command));
-			} else {
-				command->Execute();
-			}
+			ExecuteCommand(move(command));
 		} else if (sScript.tokens[0] == "query") {
 			auto command = make_unique<Query>(*this);
 
@@ -1284,16 +1354,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			}
 			command->query_has_label = sScript.tokens[3][0];
 			command->query_label = sScript.tokens[3];
-			if (skip_execution) {
+			if (skip_level > 0) {
 				continue;
 			}
-			if (InLoop()) {
-				// in a loop: add to loop statements
-				loop_statements.push_back(move(command));
-			} else {
-				// execute the command and compare it against the results
-				command->Execute();
-			}
+			ExecuteCommand(move(command));
 		} else if (sScript.tokens[0] == "hash-threshold") {
 			/* Set the maximum number of result values that will be accepted
 			** for a query.  If the number of result values exceeds this
@@ -1328,23 +1392,17 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			} else if (sScript.tokens[1] == "debug") {
 				debug_mode = true;
 			} else if (sScript.tokens[1] == "skip") {
-				skip_execution = true;
+				skip_level++;
 			} else if (sScript.tokens[1] == "unskip") {
-				skip_execution = false;
+				skip_level--;
 			} else {
 				fprintf(stderr, "%s:%d: unrecognized mode: '%s'\n", zScriptFile, sScript.startLine,
 				        sScript.tokens[1].c_str());
 				FAIL();
 			}
 		} else if (sScript.tokens[0] == "loop" || sScript.tokens[0] == "foreach") {
-			if (skip_execution) {
+			if (skip_level > 0) {
 				continue;
-			}
-			if (!loop_statements.empty()) {
-				fprintf(stderr,
-				        "%s:%d: Test error: attempting to start a loop within a loop that already has elements!\n",
-				        zScriptFile, sScript.startLine);
-				FAIL();
 			}
 			if (sScript.tokens[0] == "loop") {
 				if (sScript.tokens[1].empty() || sScript.tokens[2].empty() || sScript.tokens[3].empty()) {
@@ -1365,7 +1423,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					FAIL();
 				}
 				def.loop_idx = def.loop_start;
-				active_loops.push_back(def);
+				StartLoop(def);
 			} else {
 				if (sScript.tokens[1].empty() || sScript.tokens[2].empty()) {
 					fprintf(stderr,
@@ -1428,53 +1486,13 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				def.loop_idx = 0;
 				def.loop_start = 0;
 				def.loop_end = def.tokens.size();
-				active_loops.push_back(def);
+				StartLoop(def);
 			}
 		} else if (sScript.tokens[0] == "endloop") {
-			if (skip_execution) {
+			if (skip_level > 0) {
 				continue;
 			}
-			if (!InLoop()) {
-				fprintf(stderr, "%s:%d: Test error: end loop without start loop!\n", zScriptFile, sScript.startLine);
-				FAIL();
-			}
-			if (loop_statements.size() == 0) {
-				fprintf(stderr, "%s:%d: Test error: empty loop!\n", zScriptFile, sScript.startLine);
-				FAIL();
-			}
-			for (auto &loop : active_loops) {
-				loop.loop_idx = loop.loop_start;
-			}
-			bool finished = false;
-			while (!finished) {
-				// execute the current iteration of the loop
-				for (auto &statement : loop_statements) {
-					statement->ExecuteLoop();
-				}
-				// move to the next iteration of the loops
-				idx_t active_loop_index = active_loops.size() - 1;
-				while (true) {
-					auto &current_loop = active_loops[active_loop_index];
-					// move to the next index of this loop
-					current_loop.loop_idx++;
-					if (current_loop.loop_idx >= current_loop.loop_end) {
-						// we have exhausted this loop: move to the next loop
-						if (active_loop_index == 0) {
-							// no next loop: we are done
-							finished = true;
-							break;
-						}
-						// nested loops: reset this loop and propagate to next loop
-						current_loop.loop_idx = current_loop.loop_start;
-						active_loop_index--;
-					} else {
-						// not done with this loop yet
-						break;
-					}
-				}
-			}
-			loop_statements.clear();
-			active_loops.clear();
+			EndLoop();
 		} else if (sScript.tokens[0] == "require") {
 			// require command
 			string param = StringUtil::Lower(sScript.tokens[1]);
@@ -1548,11 +1566,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			// restart the current database
 			// first clear all connections
 			auto command = make_unique<RestartCommand>(*this);
-			if (InLoop()) {
-				loop_statements.push_back(move(command));
-			} else {
-				command->Execute();
-			}
+			ExecuteCommand(move(command));
 		} else {
 			/* An unrecognized record type is an error */
 			fprintf(stderr, "%s:%d: unknown record type: '%s'\n", zScriptFile, sScript.startLine,
@@ -1560,7 +1574,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			FAIL();
 		}
 	}
-	if (!loop_statements.empty() || !active_loops.empty()) {
+	if (InLoop()) {
 		fprintf(stderr, "%s:%d: Missing endloop!\n", zScriptFile, sScript.startLine);
 		FAIL();
 	}

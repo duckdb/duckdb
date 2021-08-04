@@ -5,6 +5,11 @@
 # load the DB from disk
 load __TEST_DIR__/test_store_integers.db
 
+foreach compression <compression>
+
+statement ok
+PRAGMA force_compression='${compression}'
+
 # create a database and insert values
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
@@ -96,3 +101,11 @@ NULL	NULL
 12	21
 13	22
 14	23
+
+statement ok
+DROP TABLE test
+
+statement ok
+DROP TABLE test2
+
+endloop
