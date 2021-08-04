@@ -1,12 +1,14 @@
-#include "duckdb_python/array_wrapper.hpp"
 #include "duckdb_python/pyresult.hpp"
+
+#include "datetime.h" // from Python
+#include "duckdb/common/arrow.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/arrow.hpp"
+#include "duckdb_python/array_wrapper.hpp"
 
-#include "datetime.h" // from Python
+#include "duckdb/common/arrow_wrapper.hpp"
 
 namespace duckdb {
 
@@ -20,6 +22,7 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetch_df", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
 	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable)
+	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader)
 	    .def("fetch_arrow_chunk", &DuckDBPyResult::FetchArrowTableChunk)
 	    .def("arrow", &DuckDBPyResult::FetchArrowTable)
 	    .def("df", &DuckDBPyResult::FetchDF);
@@ -285,6 +288,19 @@ py::object DuckDBPyResult::FetchArrowTable(bool stream, idx_t num_of_vectors, bo
 		return from_batches_func(batches, schema_obj);
 	}
 	return std::move(batches);
+}
+
+py::object DuckDBPyResult::FetchRecordBatchReader() {
+	if (!result) {
+		throw std::runtime_error("There is no query result");
+	}
+	py::gil_scoped_acquire acquire;
+	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
+	//! We have to construct an Arrow Array Stream
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result));
+	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
+	return record_batch_reader;
 }
 
 py::object DuckDBPyResult::FetchArrowTableChunk(idx_t num_of_vectors, bool return_table) {
