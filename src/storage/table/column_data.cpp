@@ -6,6 +6,8 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/table/struct_column_data.hpp"
+#include "duckdb/storage/table/list_column_data.hpp"
+#include "duckdb/storage/table/standard_column_data.hpp"
 
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/function/compression_function.hpp"
@@ -435,7 +437,7 @@ void ColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, v
 		// count
 		column_info.push_back(Value::BIGINT(segment->count));
 		// compression
-		column_info.push_back(CompressionTypeToString(segment->function->type));
+		column_info.emplace_back(CompressionTypeToString(segment->function->type));
 		// stats
 		column_info.emplace_back(segment->stats.statistics ? segment->stats.statistics->ToString()
 		                                                   : string("No Stats"));

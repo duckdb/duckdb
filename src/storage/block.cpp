@@ -1,4 +1,5 @@
 #include "duckdb/storage/block.hpp"
+#include "duckdb/common/assert.hpp"
 
 namespace duckdb {
 

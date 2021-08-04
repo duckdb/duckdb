@@ -131,7 +131,7 @@ struct RLECompressState : public CompressionState {
 		return max_vector_count * STANDARD_VECTOR_SIZE;
 	}
 
-	RLECompressState(ColumnDataCheckpointer &checkpointer_p) : checkpointer(checkpointer_p) {
+	explicit RLECompressState(ColumnDataCheckpointer &checkpointer_p) : checkpointer(checkpointer_p) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 		auto &config = DBConfig::GetConfig(db);
@@ -233,7 +233,7 @@ void RLEFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 template <class T>
 struct RLEScanState : public SegmentScanState {
-	RLEScanState(ColumnSegment &segment) {
+	explicit RLEScanState(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 		entry_pos = 0;

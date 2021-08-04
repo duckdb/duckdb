@@ -42,7 +42,7 @@ idx_t NumericFinalAnalyze(AnalyzeState &state_p) {
 // Compress
 //===--------------------------------------------------------------------===//
 struct UncompressedCompressState : public CompressionState {
-	UncompressedCompressState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
+	explicit UncompressedCompressState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
 	}
 

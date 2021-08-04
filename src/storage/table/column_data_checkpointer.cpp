@@ -33,7 +33,7 @@ ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
 	return state;
 }
 
-void ColumnDataCheckpointer::ScanSegments(std::function<void(Vector &, idx_t)> callback) {
+void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx_t)> &callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
 	for (auto segment = (ColumnSegment *)owned_segment.get(); segment; segment = (ColumnSegment *)segment->next.get()) {
 		ColumnScanState scan_state;

@@ -49,10 +49,10 @@ static CompressionFunction *LoadCompressionFunction(CompressionFunctionSet &set,
 			auto entry = set.functions.find(type);
 			if (entry == set.functions.end()) {
 				map<PhysicalType, CompressionFunction> comp_map;
-				comp_map.insert(make_pair(data_type, move(function)));
+				comp_map.insert(make_pair(data_type, function));
 				set.functions.insert(make_pair(type, move(comp_map)));
 			} else {
-				entry->second.insert(make_pair(data_type, move(function)));
+				entry->second.insert(make_pair(data_type, function));
 			}
 			return FindCompressionFunction(set, type, data_type);
 		}
