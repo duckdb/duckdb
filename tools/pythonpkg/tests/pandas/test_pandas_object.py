@@ -1,5 +1,6 @@
 import pandas as pd
 import duckdb
+import sys
 
 class TestPandasObject(object):
     def test_object_to_string(self, duckdb_cursor):
