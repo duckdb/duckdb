@@ -17,7 +17,7 @@ using rle_count_t = uint16_t;
 //===--------------------------------------------------------------------===//
 struct EmptyRLEWriter {
 	template<class VALUE_TYPE>
-	static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr) {
+	static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr, bool is_null) {
 	}
 };
 
@@ -29,16 +29,18 @@ struct RLEState {
 	T last_value;
 	rle_count_t last_seen_count;
 	void *dataptr;
+	bool all_null = true;
 
 public:
 	template<class OP>
 	void Flush() {
-		OP::template Operation<T>(last_value, last_seen_count, dataptr);
+		OP::template Operation<T>(last_value, last_seen_count, dataptr, all_null);
 	}
 
 	template<class OP=EmptyRLEWriter>
 	void Update(T *data, ValidityMask &validity, idx_t idx) {
 		if (validity.RowIsValid(idx)) {
+			all_null = false;
 			if (seen_count == 0) {
 				// no value seen yet
 				// assign the current value, and set the seen_count to 1
@@ -114,9 +116,9 @@ template<class T>
 struct RLECompressState : public CompressionState {
 	struct RLEWriter {
 		template<class VALUE_TYPE>
-		static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr) {
+		static void Operation(VALUE_TYPE value, rle_count_t count, void *dataptr, bool is_null) {
 			auto state = (RLECompressState<T> *) dataptr;
-			state->WriteValue(value, count);
+			state->WriteValue(value, count, is_null);
 		}
 	};
 
@@ -157,7 +159,7 @@ struct RLECompressState : public CompressionState {
 		}
 	}
 
-	void WriteValue(T value, rle_count_t count) {
+	void WriteValue(T value, rle_count_t count, bool is_null) {
 		// write the RLE entry
 		auto handle_ptr = handle->Ptr();
 		auto data_pointer = (T *) handle_ptr;
@@ -167,7 +169,9 @@ struct RLECompressState : public CompressionState {
 		entry_count++;
 
 		// update meta data
-		NumericStatistics::Update<T>(current_segment->stats, value);
+		if (!is_null) {
+			NumericStatistics::Update<T>(current_segment->stats, value);
+		}
 		current_segment->count += count;
 
 		if (entry_count == max_rle_count) {

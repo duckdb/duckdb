@@ -28,6 +28,8 @@ idx_t StructColumnData::GetMaxEntry() {
 }
 
 void StructColumnData::InitializeScan(ColumnScanState &state) {
+	D_ASSERT(state.child_states.empty());
+
 	state.row_index = 0;
 	state.current = nullptr;
 
@@ -45,6 +47,8 @@ void StructColumnData::InitializeScan(ColumnScanState &state) {
 }
 
 void StructColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) {
+	D_ASSERT(state.child_states.empty());
+
 	state.row_index = row_idx;
 	state.current = nullptr;
 
@@ -270,6 +274,16 @@ void StructColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col_p
 		col_path.back() = i + 1;
 		sub_columns[i]->GetStorageInfo(row_group_index, col_path, result);
 	}
+}
+
+void StructColumnData::Verify(RowGroup &parent) {
+#ifdef DEBUG
+	ColumnData::Verify(parent);
+	validity.Verify(parent);
+	for(auto &sub_column : sub_columns) {
+		sub_column->Verify(parent);
+	}
+#endif
 }
 
 } // namespace duckdb

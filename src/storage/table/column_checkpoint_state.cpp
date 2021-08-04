@@ -72,7 +72,6 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment) {
 	// append the segment to the new segment tree
 	new_tree.AppendSegment(move(segment));
 	data_pointers.push_back(move(data_pointer));
-
 }
 
 void ColumnCheckpointState::FlushToDisk() {

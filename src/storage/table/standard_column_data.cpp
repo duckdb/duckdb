@@ -202,4 +202,11 @@ void StandardColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col
 	validity.GetStorageInfo(row_group_index, move(col_path), result);
 }
 
+void StandardColumnData::Verify(RowGroup &parent) {
+#ifdef DEBUG
+	ColumnData::Verify(parent);
+	validity.Verify(parent);
+#endif
+}
+
 } // namespace duckdb
