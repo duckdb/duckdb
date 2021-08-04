@@ -441,6 +441,8 @@ PRAGMA disable_force_external
 
 endloop
 
+endloop
+
 # test floating point types, internal and external
 statement ok
 PRAGMA force_external
