@@ -160,6 +160,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 			auto source_idx = offset + row;
 			py::str str_val;
 			PyObject *val = src_ptr[source_idx];
+#if PY_MAJOR_VERSION >= 3
 			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
 				py::handle object_handle = val;
 				if (val == Py_None) {
@@ -176,6 +177,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 				str_val = py::str(object_handle);
 				val = str_val.ptr();
 			}
+#endif
 
 #if PY_MAJOR_VERSION >= 3
 			// Python 3 string representation:
