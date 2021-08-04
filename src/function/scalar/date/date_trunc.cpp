@@ -120,6 +120,19 @@ struct DateTrunc {
 	struct MillisecondOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
+			int32_t hour, min, sec, micros;
+			date_t date;
+			dtime_t time;
+			Timestamp::Convert(input, date, time);
+			Time::Convert(time, hour, min, sec, micros);
+			micros -= micros % Interval::MICROS_PER_MSEC;
+			return Timestamp::FromDatetime(date, Time::FromTime(hour, min, sec, micros));
+		}
+	};
+
+	struct MicrosecondOperator {
+		template <class TA, class TR>
+		static inline TR Operation(TA input) {
 			return input;
 		}
 	};
@@ -186,6 +199,11 @@ timestamp_t DateTrunc::MillisecondOperator::Operation(date_t input) {
 	return DayOperator::Operation<date_t, timestamp_t>(input);
 }
 
+template <>
+timestamp_t DateTrunc::MicrosecondOperator::Operation(date_t input) {
+	return DayOperator::Operation<date_t, timestamp_t>(input);
+}
+
 template <class TA, class TR>
 static TR TruncateElement(DatePartSpecifier type, TA element) {
 	switch (type) {
@@ -202,6 +220,7 @@ static TR TruncateElement(DatePartSpecifier type, TA element) {
 	case DatePartSpecifier::MONTH:
 		return DateTrunc::MonthOperator::Operation<TA, TR>(element);
 	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::YEARWEEK:
 		return DateTrunc::WeekOperator::Operation<TA, TR>(element);
 	case DatePartSpecifier::DAY:
 	case DatePartSpecifier::DOW:
@@ -218,8 +237,7 @@ static TR TruncateElement(DatePartSpecifier type, TA element) {
 	case DatePartSpecifier::MILLISECONDS:
 		return DateTrunc::MillisecondOperator::Operation<TA, TR>(element);
 	case DatePartSpecifier::MICROSECONDS:
-		// Since microseconds are not stored truncating to microseconds does the same as to milliseconds.
-		return DateTrunc::MillisecondOperator::Operation<TA, TR>(element);
+		return DateTrunc::MicrosecondOperator::Operation<TA, TR>(element);
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATETRUNC");
 	}
@@ -254,6 +272,7 @@ static void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector 
 		UnaryExecutor::Execute<TA, TR, DateTrunc::MonthOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::YEARWEEK:
 		UnaryExecutor::Execute<TA, TR, DateTrunc::WeekOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::DAY:
@@ -273,8 +292,10 @@ static void DateTruncUnaryExecutor(DatePartSpecifier type, Vector &left, Vector 
 		UnaryExecutor::Execute<TA, TR, DateTrunc::SecondOperator>(left, result, count);
 		break;
 	case DatePartSpecifier::MILLISECONDS:
-	case DatePartSpecifier::MICROSECONDS:
 		UnaryExecutor::Execute<TA, TR, DateTrunc::MillisecondOperator>(left, result, count);
+		break;
+	case DatePartSpecifier::MICROSECONDS:
+		UnaryExecutor::Execute<TA, TR, DateTrunc::MicrosecondOperator>(left, result, count);
 		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented for DATETRUNC");

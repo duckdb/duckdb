@@ -52,6 +52,9 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 	} else if (specifier == "quarter" || specifier == "quarters") {
 		// quarter of the year (1-4)
 		result = DatePartSpecifier::QUARTER;
+	} else if (specifier == "yearweek") {
+		// Combined year and week YYYYWW
+		result = DatePartSpecifier::YEARWEEK;
 	} else {
 		return false;
 	}
@@ -660,6 +663,8 @@ static int64_t ExtractElement(DatePartSpecifier type, T element) {
 		return DatePart::DayOfYearOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::WEEK:
 		return DatePart::WeekOperator::template Operation<T, int64_t>(element);
+	case DatePartSpecifier::YEARWEEK:
+		return DatePart::YearWeekOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::EPOCH:
 		return DatePart::EpochOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MICROSECONDS:

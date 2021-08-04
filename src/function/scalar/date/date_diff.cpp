@@ -281,6 +281,7 @@ static int64_t DifferenceDates(DatePartSpecifier type, TA startdate, TB enddate)
 	case DatePartSpecifier::QUARTER:
 		return DateDiff::QuarterOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::YEARWEEK:
 		return DateDiff::WeekOperator::template Operation<TA, TB, TR>(startdate, enddate);
 	case DatePartSpecifier::MICROSECONDS:
 		return DateDiff::MicrosecondsOperator::template Operation<TA, TB, TR>(startdate, enddate);
@@ -333,6 +334,7 @@ static void DateDiffBinaryExecutor(DatePartSpecifier type, Vector &left, Vector 
 		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::QuarterOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::YEARWEEK:
 		BinaryExecutor::ExecuteStandard<TA, TB, TR, DateDiff::WeekOperator>(left, right, result, count);
 		break;
 	case DatePartSpecifier::MICROSECONDS:
