@@ -509,7 +509,6 @@ public:
 			radix_handle = buffer_manager.Pin(block.block);
 		}
 	}
-
 	//! Fill this sorted block by appending the blocks held by a vector of sorted blocks
 	void AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blocks) {
 		D_ASSERT(Count() == 0);
@@ -1386,6 +1385,7 @@ public:
 	void ExecuteTaskInternal() {
 		auto &left = *left_block;
 		auto &right = *right_block;
+#ifdef DEBUG
 		D_ASSERT(left.radix_sorting_data.size() == left.payload_data->data_blocks.size());
 		D_ASSERT(right.radix_sorting_data.size() == right.payload_data->data_blocks.size());
 		if (!state.payload_layout.AllConstant() && state.external) {
@@ -1400,6 +1400,7 @@ public:
 				D_ASSERT(right.blob_sorting_data->data_blocks.size() == right.blob_sorting_data->heap_blocks.size());
 			}
 		}
+#endif
 		// Set up the write block
 		// Each merge task produces a SortedBlock with exactly state.block_capacity rows or less
 		result->InitializeWrite();
