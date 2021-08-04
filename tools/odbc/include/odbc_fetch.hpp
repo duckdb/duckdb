@@ -22,6 +22,7 @@ public:
 	SQLUSMALLINT *row_status_buff;
 
 	const static SQLULEN SINGLE_VALUE_FETCH = 1;
+	const static SQLRETURN RETURN_FETCH_BEFORE_START = 999;
 
 	SQLULEN cursor_type;
 	SQLLEN row_count;
@@ -29,8 +30,8 @@ public:
 private:
 	// main structure to hold the fetched chunks
 	std::vector<unique_ptr<DataChunk>> chunks;
-	// stack chunk's pointers to be used during fetch prior
-	std::stack<DataChunk *> stack_prior_chunks;
+	// used by fetch prior
+	duckdb::idx_t current_chunk_idx;
 	duckdb::DataChunk *current_chunk;
 	row_t chunk_row;
 	row_t prior_chunk_row;
@@ -76,7 +77,7 @@ private:
 
 	SQLRETURN SetPriorCurrentChunk(OdbcHandleStmt *stmt);
 
-	SQLRETURN FetchFromBOF();
+	SQLRETURN BeforeStart();
 
 	SQLRETURN SetAbsoluteCurrentChunk(OdbcHandleStmt *stmt, SQLLEN fetch_offset);
 };
