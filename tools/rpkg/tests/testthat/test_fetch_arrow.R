@@ -178,3 +178,39 @@ test_that("duckdb_fetch_arrow() streaming test with record batch list ", {
     dbDisconnect(con, shutdown = T)
 })
 
+test_that("duckdb_fetch_arrow() record_batch_reader ", {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
+    con <- dbConnect(duckdb::duckdb())
+    dbExecute(con, paste0("CREATE table t as select range a from range(3000);"))
+    res <- dbSendQuery(con, "SELECT * FROM t", arrow=TRUE)
+    record_batch_reader <- duckdb::duckdb_fetch_record_batch(res)
+    cur_batch <- record_batch_reader$read_next_batch()
+    expect_equal(1024,cur_batch$num_rows)
+
+    cur_batch <- record_batch_reader$read_next_batch()
+    expect_equal(1024,cur_batch$num_rows)
+
+    cur_batch <- record_batch_reader$read_next_batch()
+    expect_equal(952,cur_batch$num_rows)
+
+    cur_batch <- record_batch_reader$read_next_batch()
+    expect_equal(NULL,cur_batch)
+    dbDisconnect(con, shutdown = T)
+})
+
+
+test_that("duckdb_fetch_arrow() record_batch_reader Read Table", {
+    skip_on_os("windows")
+    skip_if_not_installed("arrow", "4.0.1")
+    con <- dbConnect(duckdb::duckdb())
+    dbExecute(con, paste0("CREATE table t as select range a from range(3000);"))
+    res <- dbSendQuery(con, "SELECT * FROM t", arrow=TRUE)
+    record_batch_reader <- duckdb::duckdb_fetch_record_batch(res)
+    arrow_table <- record_batch_reader$read_table()
+    expect_equal(3000,arrow_table$num_rows)
+})
+
+
+
+

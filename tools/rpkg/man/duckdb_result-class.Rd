@@ -7,6 +7,7 @@
 \alias{show,duckdb_result-method}
 \alias{dbClearResult,duckdb_result-method}
 \alias{duckdb_fetch_arrow}
+\alias{duckdb_fetch_record_batch}
 \alias{dbFetch,duckdb_result-method}
 \alias{dbHasCompleted,duckdb_result-method}
 \alias{dbGetInfo,duckdb_result-method}
@@ -28,6 +29,8 @@ duckdb_fetch_arrow(
   vector_per_chunk = 1,
   return_table = FALSE
 )
+
+duckdb_fetch_record_batch(res)
 
 \S4method{dbFetch}{duckdb_result}(res, n = -1, ...)
 

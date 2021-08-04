@@ -8,6 +8,7 @@ static const R_CallMethodDef R_CallDef[] = {{"duckdb_startup_R", (DL_FUNC)RApi::
                                             {"duckdb_bind_R", (DL_FUNC)RApi::Bind, 2},
                                             {"duckdb_execute_R", (DL_FUNC)RApi::Execute, 2},
                                             {"duckdb_fetch_arrow_R", (DL_FUNC)RApi::DuckDBExecuteArrow, 3},
+                                            {"duckdb_fetch_record_batch_R", (DL_FUNC)RApi::DuckDBRecordBatchR, 0},
                                             {"duckdb_release_R", (DL_FUNC)RApi::Release, 1},
                                             {"duckdb_register_R", (DL_FUNC)RApi::RegisterDataFrame, 3},
                                             {"duckdb_unregister_R", (DL_FUNC)RApi::UnregisterDataFrame, 2},

@@ -107,6 +107,14 @@ duckdb_fetch_arrow <- function(res,stream=FALSE,vector_per_chunk=1,return_table=
   return (result)
 }
 
+#' @rdname duckdb_result-class
+#' @param res Query result to be converted to an Arrow Table
+#' @export
+duckdb_fetch_record_batch <- function(res) {
+  result <- .Call(duckdb_fetch_record_batch_R, res@query_result)
+  return (result)
+}
+
 
 
 #' @rdname duckdb_result-class

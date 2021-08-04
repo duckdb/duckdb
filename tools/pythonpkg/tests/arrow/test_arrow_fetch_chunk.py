@@ -93,6 +93,8 @@ class TestArrowFetchChunk(object):
             cur_chunk = query.fetch_arrow_chunk(-1,True)
 
     def test_fetch_record_batches(self,duckdb_cursor):
+        if not can_run:
+            return
         duckdb_cursor.execute("CREATE table t as select range a from range(3000);")
         query = duckdb_cursor.execute("SELECT a FROM t")
         
