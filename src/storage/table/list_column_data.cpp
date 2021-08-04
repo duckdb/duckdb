@@ -114,6 +114,9 @@ idx_t ListColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t co
 }
 
 void ListColumnData::Skip(ColumnScanState &state, idx_t count) {
+	// skip inside the validity segment
+	validity.Skip(state.child_states[0], count);
+
 	// we need to read the list entries/offsets to figure out how much to skip
 	// note that we only need to read the first and last entry
 	// however, let's just read all "count" entries for now
