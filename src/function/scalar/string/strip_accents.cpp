@@ -14,10 +14,9 @@ bool StripAccentsFun::IsAscii(const char *input, idx_t n) {
 	return true;
 }
 
-static void StripAccentsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.ColumnCount() == 1);
-
-	UnaryExecutor::Execute<string_t, string_t>(args.data[0], result, args.size(), [&](string_t input) {
+struct StripAccentsOperator {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		if (StripAccentsFun::IsAscii(input.GetDataUnsafe(), input.GetSize())) {
 			return input;
 		}
@@ -27,7 +26,13 @@ static void StripAccentsFunction(DataChunk &args, ExpressionState &state, Vector
 		auto result_str = StringVector::AddString(result, (const char *)stripped);
 		free(stripped);
 		return result_str;
-	});
+	}
+};
+
+static void StripAccentsFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 1);
+
+	UnaryExecutor::ExecuteString<string_t, string_t, StripAccentsOperator>(args.data[0], result, args.size());
 	StringVector::AddHeapReference(result, args.data[0]);
 }
 

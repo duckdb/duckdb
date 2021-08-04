@@ -123,6 +123,7 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 	auto &types = layout.GetTypes();
 
 	// Compute the entry size of the variable size columns
+	vector<unique_ptr<BufferHandle>> handles;
 	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
 	if (!layout.AllConstant()) {
 		idx_t entry_sizes[STANDARD_VECTOR_SIZE];
@@ -144,7 +145,7 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 				RowOperations::ComputeEntrySizes(vec, col, entry_sizes, vcount, count, sel);
 				break;
 			default:
-				throw Exception("Unsupported type for RowOperations::Scatter");
+				throw InternalException("Unsupported type for RowOperations::Scatter");
 			}
 		}
 

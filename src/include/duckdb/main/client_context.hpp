@@ -27,6 +27,7 @@
 namespace duckdb {
 class Appender;
 class Catalog;
+class ChunkCollection;
 class DatabaseInstance;
 class LogicalOperator;
 class PreparedStatementData;
@@ -124,7 +125,7 @@ public:
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
 	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
-	DUCKDB_API void Append(TableDescription &description, DataChunk &chunk);
+	DUCKDB_API void Append(TableDescription &description, ChunkCollection &collection);
 	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
 	//! list with the set of returned columns
 	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);

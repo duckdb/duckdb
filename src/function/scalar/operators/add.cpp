@@ -43,6 +43,20 @@ interval_t AddOperator::Operation(interval_t left, interval_t right) {
 }
 
 template <>
+date_t AddOperator::Operation(date_t left, int32_t right) {
+	int32_t result;
+	if (!TryAddOperator::Operation(left.days, right, result)) {
+		throw OutOfRangeException("Date out of range");
+	}
+	return date_t(result);
+}
+
+template <>
+date_t AddOperator::Operation(int32_t left, date_t right) {
+	return AddOperator::Operation<date_t, int32_t, date_t>(right, left);
+}
+
+template <>
 date_t AddOperator::Operation(date_t left, interval_t right) {
 	date_t result;
 	if (right.months != 0) {
@@ -64,10 +78,14 @@ date_t AddOperator::Operation(date_t left, interval_t right) {
 		result = left;
 	}
 	if (right.days != 0) {
-		result += right.days;
+		if (!TryAddOperator::Operation(result.days, right.days, result.days)) {
+			throw OutOfRangeException("Date out of range");
+		}
 	}
 	if (right.micros != 0) {
-		result += right.micros / Interval::MICROS_PER_DAY;
+		if (!TryAddOperator::Operation(result.days, int32_t(right.micros / Interval::MICROS_PER_DAY), result.days)) {
+			throw OutOfRangeException("Date out of range");
+		}
 	}
 	return result;
 }

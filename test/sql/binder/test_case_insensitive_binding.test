@@ -23,11 +23,10 @@ SELECT hello FROM test
 statement ok
 SELECT "HeLlO" FROM test
 
-# specifying a different, non-lower, case does fail!
-statement error
+statement ok
 SELECT "HELLO" FROM test
 
-statement error
+statement ok
 SELECT "HELLo" FROM test
 
 # verify that the column name of the original column is returned
@@ -57,10 +56,10 @@ SELECT test.hello FROM test
 statement ok
 SELECT test."HeLlO" FROM test
 
-statement error
+statement ok
 SELECT test."HELLO" FROM test
 
-statement error
+statement ok
 SELECT test."HELLo" FROM test
 
 statement ok
@@ -128,10 +127,10 @@ SELECT HeLlO FROM test1, test2
 statement error
 SELECT hello FROM test1, test2
 
-statement ok
+statement error
 SELECT "HeLlO" FROM test1, test2
 
-statement ok
+statement error
 SELECT "HELLO" FROM test1, test2
 
 statement error
@@ -147,10 +146,10 @@ SELECT test1.hello FROM test1, test2
 statement ok
 SELECT test1."HeLlO" FROM test1, test2
 
-statement error
+statement ok
 SELECT test1."HELLO" FROM test1, test2
 
-statement error
+statement ok
 SELECT test1."HELLo" FROM test1, test2
 
 statement ok
@@ -159,13 +158,13 @@ SELECT test2.HeLlO FROM test1, test2
 statement ok
 SELECT test2.hello FROM test1, test2
 
-statement error
+statement ok
 SELECT test2."HeLlO" FROM test1, test2
 
 statement ok
 SELECT test2."HELLO" FROM test1, test2
 
-statement error
+statement ok
 SELECT test2."HELLo" FROM test1, test2
 
 statement ok

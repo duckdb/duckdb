@@ -1,0 +1,169 @@
+# name: test/sql/types/numeric/utinyint_try_cast.test
+# description: utinyint try cast
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# tinyint casts
+statement ok
+CREATE TABLE utinyints AS SELECT i::UTINYINT i FROM (VALUES (0), (255)) tbl(i)
+
+query I
+SELECT i::USMALLINT FROM utinyints ORDER BY i
+----
+0
+255
+
+query I
+SELECT i::UINTEGER FROM utinyints ORDER BY i
+----
+0
+255
+
+query I
+SELECT i::UBIGINT FROM utinyints ORDER BY i
+----
+0
+255
+
+# -> signed
+statement error
+SELECT i::TINYINT FROM utinyints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS TINYINT) FROM utinyints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT i::SMALLINT FROM utinyints ORDER BY i
+----
+0
+255
+
+query I
+SELECT i::INTEGER FROM utinyints ORDER BY i
+----
+0
+255
+
+query I
+SELECT i::BIGINT FROM utinyints ORDER BY i
+----
+0
+255
+
+query I
+SELECT i::HUGEINT FROM utinyints ORDER BY i
+----
+0
+255
+
+# -> float
+query I
+SELECT i::FLOAT FROM utinyints ORDER BY i
+----
+0
+255
+
+query I
+SELECT i::DOUBLE FROM utinyints ORDER BY i
+----
+0
+255
+
+# -> bool
+query I
+SELECT i::BOOL FROM utinyints ORDER BY i
+----
+False
+True
+
+# -> varchar
+query I
+SELECT i::VARCHAR FROM utinyints ORDER BY i
+----
+0
+255
+
+# from string casts
+statement ok
+CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'), ('-1'), ('-0'), ('0'), ('255'), ('1000')) tbl(s)
+
+statement error
+SELECT s::UTINYINT FROM strings
+
+query I
+SELECT TRY_CAST(s AS UTINYINT) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+0
+0
+255
+NULL
+
+# -> decimal casts
+query I
+SELECT i::DECIMAL(3,0)::UTINYINT FROM utinyints ORDER BY i
+----
+0
+255
+
+query I
+SELECT i::DECIMAL(9,0)::UTINYINT FROM utinyints ORDER BY i
+----
+0
+255
+
+query I
+SELECT i::DECIMAL(18,0)::UTINYINT FROM utinyints ORDER BY i
+----
+0
+255
+
+query I
+SELECT i::DECIMAL(38,0)::UTINYINT FROM utinyints ORDER BY i
+----
+0
+255
+
+statement error
+SELECT i::DECIMAL(3,1)::UTINYINT FROM utinyints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,7)::UTINYINT FROM utinyints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,16)::UTINYINT FROM utinyints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,36)::UTINYINT FROM utinyints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,1))::UTINYINT FROM utinyints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,7))::UTINYINT FROM utinyints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,16))::UTINYINT FROM utinyints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,36))::UTINYINT FROM utinyints ORDER BY i
+----
+0
+NULL

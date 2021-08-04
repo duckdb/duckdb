@@ -1,0 +1,222 @@
+# name: test/sql/types/numeric/tinyint_try_cast.test
+# description: Tinyint try cast
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# tinyint casts
+statement ok
+CREATE TABLE tinyints AS SELECT i::TINYINT i FROM (VALUES (-128), (0), (127)) tbl(i)
+
+# tinyint -> unsigned
+statement error
+SELECT i::UTINYINT FROM tinyints
+
+statement error
+SELECT i::USMALLINT FROM tinyints
+
+statement error
+SELECT i::UINTEGER FROM tinyints
+
+statement error
+SELECT i::UBIGINT FROM tinyints
+
+query I
+SELECT i::UTINYINT::TINYINT FROM tinyints WHERE i>=0 ORDER BY i
+----
+0
+127
+
+query I
+SELECT i::USMALLINT::TINYINT FROM tinyints WHERE i>=0 ORDER BY i
+----
+0
+127
+
+query I
+SELECT i::UINTEGER::TINYINT FROM tinyints WHERE i>=0 ORDER BY i
+----
+0
+127
+
+query I
+SELECT i::UBIGINT::TINYINT FROM tinyints WHERE i>=0 ORDER BY i
+----
+0
+127
+
+query I
+SELECT TRY_CAST(i AS UTINYINT) FROM tinyints ORDER BY i
+----
+NULL
+0
+127
+
+query I
+SELECT TRY_CAST(i AS USMALLINT) FROM tinyints ORDER BY i
+----
+NULL
+0
+127
+
+query I
+SELECT TRY_CAST(i AS UINTEGER) FROM tinyints ORDER BY i
+----
+NULL
+0
+127
+
+query I
+SELECT TRY_CAST(i AS UBIGINT) FROM tinyints ORDER BY i
+----
+NULL
+0
+127
+
+# tinyint -> signed
+query I
+SELECT i::SMALLINT::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+query I
+SELECT i::INTEGER::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+query I
+SELECT i::BIGINT::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+query I
+SELECT i::HUGEINT::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+# tinyint -> float
+query I
+SELECT i::FLOAT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+query I
+SELECT i::DOUBLE FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+# tinyint -> bool
+query I
+SELECT i::BOOL FROM tinyints ORDER BY i
+----
+True
+False
+True
+
+# tinyint -> varchar
+query I
+SELECT i::VARCHAR::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+# from string casts
+statement ok
+CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'), ('-128'), ('0'), ('127'), ('1000')) tbl(s)
+
+statement error
+SELECT s::TINYINT FROM strings
+
+query I
+SELECT TRY_CAST(s AS TINYINT) FROM strings
+----
+NULL
+NULL
+NULL
+-128
+0
+127
+NULL
+
+# -> decimal casts
+query I
+SELECT i::DECIMAL(3,0)::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+query I
+SELECT i::DECIMAL(9,0)::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+query I
+SELECT i::DECIMAL(18,0)::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+query I
+SELECT i::DECIMAL(38,0)::TINYINT FROM tinyints ORDER BY i
+----
+-128
+0
+127
+
+statement error
+SELECT i::DECIMAL(3,1)::TINYINT FROM tinyints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,7)::TINYINT FROM tinyints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,16)::TINYINT FROM tinyints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,36)::TINYINT FROM tinyints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,1))::TINYINT FROM tinyints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,7))::TINYINT FROM tinyints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,16))::TINYINT FROM tinyints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,36))::TINYINT FROM tinyints ORDER BY i
+----
+NULL
+0
+NULL

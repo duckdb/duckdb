@@ -32,6 +32,7 @@ enum class DatePartSpecifier : uint8_t {
 	DOY
 };
 
-DatePartSpecifier GetDatePartSpecifier(string specifier);
+bool TryGetDatePartSpecifier(const string &specifier, DatePartSpecifier &result);
+DatePartSpecifier GetDatePartSpecifier(const string &specifier);
 
 } // namespace duckdb

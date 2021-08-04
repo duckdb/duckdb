@@ -1,4 +1,4 @@
-# name: test/sql/order/test_order_variable_size_payload.test
+# name: test/sql/order/test_order_variable_size_payload.test_coverage
 # description: Test ORDER BY keyword (variable size sorting/payload columns)
 # group: [order]
 
@@ -13,7 +13,7 @@ loop i 0 2
 
 # string that is longer than Storage::BLOCK_SIZE - this tests whether RowDataCollection dynamically increases block capacity
 statement ok
-select range % 2 i, string_agg('thisstringis200characterslong..........................................................................................................................................................................') s from range(100000) group by i order by i
+select range % 2 i, string_agg('thisstringis200characterslong..........................................................................................................................................................................') s from range(5000) group by i order by i
 
 # weird one from SQLancer
 statement ok
@@ -49,6 +49,16 @@ Production Supervisor - WC60	Campbell
 Shipping and Receiving Clerk	Berndt
 Shipping and Receiving Clerk	Kuppa
 Shipping and Receiving Supervisor	Ackerman
+
+query TT
+SELECT * FROM test0 ORDER BY job DESC, name DESC
+----
+Shipping and Receiving Supervisor	Ackerman
+Shipping and Receiving Clerk	Kuppa
+Shipping and Receiving Clerk	Berndt
+Production Supervisor - WC60	Campbell
+Production Supervisor - WC60	Brown
+Production Supervisor - WC40	Dsa
 
 statement ok
 CREATE TABLE test1 (s VARCHAR)

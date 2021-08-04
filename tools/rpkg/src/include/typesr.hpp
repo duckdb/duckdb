@@ -25,6 +25,8 @@ enum class RType {
 
 struct RApiTypes {
 	static RType DetectRType(SEXP v);
+	static Value SexpToValue(SEXP valsexp);
+	static SEXP ValueToSexp(Value &val);
 };
 
 struct RIntegralType {

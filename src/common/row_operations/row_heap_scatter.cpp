@@ -114,8 +114,10 @@ void RowOperations::ComputeEntrySizes(Vector &v, VectorData &vdata, idx_t entry_
 			ComputeListEntrySizes(v, vdata, entry_sizes, ser_count, sel, offset);
 			break;
 		default:
+			// LCOV_EXCL_START
 			throw NotImplementedException("Column with variable size type %s cannot be serialized to row-format",
 			                              v.GetType().ToString());
+			// LCOV_EXCL_STOP
 		}
 	}
 }
@@ -381,8 +383,10 @@ void RowOperations::HeapScatter(Vector &v, idx_t vcount, const SelectionVector &
 			HeapScatterListVector(v, vcount, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 			break;
 		default:
+			// LCOV_EXCL_START
 			throw NotImplementedException("Serialization of variable length vector with type %s",
 			                              v.GetType().ToString());
+			// LCOV_EXCL_STOP
 		}
 	}
 }
@@ -429,7 +433,7 @@ void RowOperations::HeapScatterVData(VectorData &vdata, PhysicalType type, const
 		TemplatedHeapScatter<interval_t>(vdata, sel, ser_count, col_idx, key_locations, validitymask_locations, offset);
 		break;
 	default:
-		throw NotImplementedException("FIXME: unimplemented serialize to of constant type column to row-format");
+		throw NotImplementedException("FIXME: Serialize to of constant type column to row-format");
 	}
 }
 

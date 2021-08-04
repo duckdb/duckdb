@@ -25,6 +25,10 @@ float AddOperator::Operation(float left, float right);
 template <>
 double AddOperator::Operation(double left, double right);
 template <>
+date_t AddOperator::Operation(date_t left, int32_t right);
+template <>
+date_t AddOperator::Operation(int32_t left, date_t right);
+template <>
 interval_t AddOperator::Operation(interval_t left, interval_t right);
 template <>
 date_t AddOperator::Operation(date_t left, interval_t right);

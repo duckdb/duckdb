@@ -26,23 +26,38 @@ Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<strin
 	TableCatalogEntry::AddLowerCaseAliases(name_map);
 }
 
-bool Binding::HasMatchingBinding(const string &column_name) {
+bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
 	auto entry = name_map.find(column_name);
-	return entry != name_map.end();
+	if (entry != name_map.end()) {
+		result = entry->second;
+		return true;
+	}
+	// no match found: try to lowercase the column name
+	entry = name_map.find(StringUtil::Lower(column_name));
+	if (entry != name_map.end()) {
+		result = entry->second;
+		return true;
+	}
+	return false;
+}
+
+bool Binding::HasMatchingBinding(const string &column_name) {
+	column_t result;
+	return TryGetBindingIndex(column_name, result);
 }
 
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
-	auto column_entry = name_map.find(colref.column_name);
-	if (column_entry == name_map.end()) {
+	column_t column_index;
+	if (!TryGetBindingIndex(colref.column_name, column_index)) {
 		return BindResult(StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias.c_str(),
 		                                     colref.column_name.c_str()));
 	}
 	ColumnBinding binding;
 	binding.table_index = index;
-	binding.column_index = column_entry->second;
-	LogicalType sql_type = types[column_entry->second];
+	binding.column_index = column_index;
+	LogicalType sql_type = types[column_index];
 	if (colref.alias.empty()) {
-		colref.alias = names[column_entry->second];
+		colref.alias = names[column_index];
 	}
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
@@ -58,22 +73,21 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 }
 
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
-	auto entry = name_map.find(colref.column_name);
-	if (entry == name_map.end()) {
+	column_t column_index;
+	if (!TryGetBindingIndex(colref.column_name, column_index)) {
 		return BindResult(StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", colref.table_name,
 		                                     colref.column_name));
 	}
-	auto col_index = entry->second;
 	// fetch the type of the column
 	LogicalType col_type;
-	if (entry->second == COLUMN_IDENTIFIER_ROW_ID) {
+	if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
 		// row id: BIGINT type
 		col_type = LogicalType::BIGINT;
 	} else {
 		// normal column: fetch type from base column
-		col_type = types[col_index];
+		col_type = types[column_index];
 		if (colref.alias.empty()) {
-			colref.alias = names[entry->second];
+			colref.alias = names[column_index];
 		}
 	}
 
@@ -83,14 +97,14 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 
 	binding.column_index = column_ids.size();
 	for (idx_t i = 0; i < column_ids.size(); i++) {
-		if (column_ids[i] == col_index) {
+		if (column_ids[i] == column_index) {
 			binding.column_index = i;
 			break;
 		}
 	}
 	if (binding.column_index == column_ids.size()) {
 		// column binding not found: add it to the list of bindings
-		column_ids.push_back(col_index);
+		column_ids.push_back(column_index);
 	}
 	binding.table_index = index;
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), col_type, binding, depth));
@@ -101,25 +115,25 @@ MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, 
 }
 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
-	auto entry = name_map.find(colref.column_name);
-	if (entry == name_map.end()) {
+	column_t column_index;
+	if (!TryGetBindingIndex(colref.column_name, column_index)) {
 		return BindResult(
 		    StringUtil::Format("Macro \"%s\" does not have a parameter named \"%s\"", macro_name, colref.column_name));
 	}
 	ColumnBinding binding;
 	binding.table_index = index;
-	binding.column_index = entry->second;
+	binding.column_index = column_index;
 
 	// we are binding a parameter to create the macro, no arguments are supplied
-	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), types[entry->second], binding, depth));
+	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), types[column_index], binding, depth));
 }
 
 unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colref) {
-	auto entry = name_map.find(colref.column_name);
-	if (entry == name_map.end()) {
+	column_t column_index;
+	if (!TryGetBindingIndex(colref.column_name, column_index)) {
 		throw BinderException("Macro \"%s\" does not have a parameter named \"%s\"", macro_name, colref.column_name);
 	}
-	auto arg = arguments[entry->second]->Copy();
+	auto arg = arguments[column_index]->Copy();
 	arg->alias = colref.alias;
 	return arg;
 }

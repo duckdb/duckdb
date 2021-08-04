@@ -149,9 +149,12 @@ public:
 
 	DUCKDB_API uintptr_t GetPointer() const;
 
-	//! Cast this value to another type
+	//! Cast this value to another type, throws exception if its not possible
 	DUCKDB_API Value CastAs(const LogicalType &target_type, bool strict = false) const;
-	//! Tries to cast value to another type, throws exception if its not possible
+	//! Tries to cast this value to another type, and stores the result in "new_value"
+	DUCKDB_API bool TryCastAs(const LogicalType &target_type, Value &new_value, string *error_message,
+	                          bool strict = false) const;
+	//! Tries to cast this value to another type, and stores the result in THIS value again
 	DUCKDB_API bool TryCastAs(const LogicalType &target_type, bool strict = false);
 
 	//! Serializes a Value to a stand-alone binary blob
@@ -205,7 +208,7 @@ public:
 		out << val.ToString();
 		return out;
 	}
-	void Print();
+	void Print() const;
 
 private:
 	//! The logical of the value
@@ -332,6 +335,8 @@ template <>
 DUCKDB_API dtime_t Value::GetValue() const;
 template <>
 DUCKDB_API timestamp_t Value::GetValue() const;
+template <>
+DUCKDB_API interval_t Value::GetValue() const;
 
 template <>
 DUCKDB_API int8_t &Value::GetValueUnsafe();

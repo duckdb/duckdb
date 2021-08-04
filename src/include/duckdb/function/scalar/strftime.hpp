@@ -107,16 +107,24 @@ public:
 		int32_t data[7];
 		string error_message;
 		idx_t error_position = INVALID_INDEX;
+
+		date_t ToDate();
+		timestamp_t ToTimestamp();
+		string FormatError(string_t input, const string &format_specifier);
 	};
 	//! The full format specifier, for error messages
 	string format_specifier;
 
 	bool Parse(string_t str, ParseResult &result);
+
+	bool TryParseDate(string_t str, date_t &result, string &error_message);
+	bool TryParseTimestamp(string_t str, timestamp_t &result, string &error_message);
+
 	date_t ParseDate(string_t str);
 	timestamp_t ParseTimestamp(string_t str);
 
 protected:
-	string FormatStrpTimeError(const string &input, idx_t position);
+	static string FormatStrpTimeError(const string &input, idx_t position);
 	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	int NumericSpecifierWidth(StrTimeSpecifier specifier);
 	int32_t TryParseCollection(const char *data, idx_t &pos, idx_t size, const string_t collection[],

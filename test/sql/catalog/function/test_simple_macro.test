@@ -28,6 +28,58 @@ SELECT one(NULL)
 statement ok
 DROP MACRO one;
 
+# HAVING in a macro
+statement ok
+CREATE MACRO having_macro(x) AS (SELECT * FROM integers GROUP BY a HAVING a = x)
+
+query T
+SELECT having_macro(1)
+----
+1
+
+query T
+SELECT having_macro(6)
+----
+NULL
+
+# UNION in a macro
+statement ok
+CREATE MACRO union_macro(x, y, z) AS (SELECT x IN (SELECT y UNION ALL SELECT z))
+
+query T
+SELECT union_macro(1, 2, 3)
+----
+false
+
+query T
+SELECT union_macro(1, 2, 1)
+----
+true
+
+query T
+SELECT union_macro(1, 1, 2)
+----
+true
+
+# expression list
+statement ok
+CREATE MACRO in_expression_list(x, y, z) AS (SELECT x IN (VALUES (y), (z)))
+
+query T
+SELECT in_expression_list(1, 2, 3)
+----
+false
+
+query T
+SELECT in_expression_list(1, 2, 1)
+----
+true
+
+query T
+SELECT in_expression_list(1, 1, 2)
+----
+true
+
 # FUNCTION alias
 statement ok
 CREATE FUNCTION two() AS (SELECT 2);

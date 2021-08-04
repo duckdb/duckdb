@@ -5,14 +5,33 @@
 statement ok
 PRAGMA force_parallelism
 
+# we run this with an uneven amount of threads to force the merge sort to have an odd amount of blocks to merge
 statement ok
-PRAGMA threads=4
+PRAGMA threads=3
 
-# first iteration runs externally, second runs normally
+# do one asc test to hit some coverage, the rest is desc
 statement ok
-PRAGMA force_external
+create table test as (select range i from range(100000) order by i desc);
 
-loop i 0 2
+# all fixed-size
+query T
+select * from test order by i asc;
+----
+100000 values hashing to 1933b84f18ddb7545c63962be5d10bb5
+
+statement ok
+drop table test
+
+# internal/external, different memory limits
+foreach pragma force_external disable_force_external
+
+foreach mem 50 500
+
+statement ok
+PRAGMA ${pragma}
+
+statement ok
+PRAGMA memory_limit='${mem}MB'
 
 statement ok
 create table test as (select range i from range(100000));
@@ -143,8 +162,5 @@ select * from test order by cast(i % 1000 + 1000000000000 as varchar), i % 100, 
 
 statement ok
 drop table test
-
-statement ok
-PRAGMA disable_force_external
 
 endloop

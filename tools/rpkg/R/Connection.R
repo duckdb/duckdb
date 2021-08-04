@@ -67,10 +67,11 @@ setMethod(
 #' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbSendQuery
 #' @inheritParams DBI::dbBind
+#' @param arrow Whether the query should be returned as an Arrow Table
 #' @export
 setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
-  function(conn, statement, params = NULL, ...) {
+  function(conn, statement, params = NULL, ..., arrow=FALSE) {
     if (conn@debug) {
       message("Q ", statement)
     }
@@ -79,7 +80,8 @@ setMethod(
 
     res <- duckdb_result(
       connection = conn,
-      stmt_lst = stmt_lst
+      stmt_lst = stmt_lst,
+      arrow = arrow
     )
     if (length(params) > 0) {
       dbBind(res, params)
@@ -207,7 +209,7 @@ setMethod(
     duckdb_register(conn, view_name, value)
     dbExecute(conn, sprintf("INSERT INTO %s SELECT * FROM %s", table_name, view_name))
 
-    on_connection_updated(conn, hint=paste0("Updated table'", table_name,"'"))
+    rs_on_connection_updated(conn, hint=paste0("Updated table'", table_name,"'"))
 
     invisible(TRUE)
   }
@@ -287,6 +289,7 @@ setMethod(
       conn,
       sqlInterpolate(conn, "DROP TABLE ?", dbQuoteIdentifier(conn, name))
     )
+    rs_on_connection_updated(conn, "Table removed")
     invisible(TRUE)
   }
 )
@@ -326,7 +329,6 @@ setMethod(
   "dbCommit", "duckdb_connection",
   function(conn, ...) {
     dbExecute(conn, SQL("COMMIT"))
-    on_connection_updated(conn, "Committing changes")
     invisible(TRUE)
   }
 )

@@ -59,7 +59,7 @@ public:
 	template <class SIGNED, class UNSIGNED>
 	static string_t FormatSigned(SIGNED value, Vector &vector) {
 		int sign = -(value < 0);
-		UNSIGNED unsigned_value = (value ^ sign) - sign;
+		UNSIGNED unsigned_value = UNSIGNED(value ^ sign) - sign;
 		int length = UnsignedLength<UNSIGNED>(unsigned_value) - sign;
 		string_t result = StringVector::EmptyString(vector, length);
 		auto dataptr = result.GetDataWriteable();
