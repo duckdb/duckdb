@@ -34,8 +34,4 @@ add_library(
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
 
-if(LINK_LIB_LIST)
-  target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} duckdb_static)
-else()
-  target_link_libraries(duckdb_odbc duckdb_static)
-endif()
+target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} duckdb_static)
