@@ -1,0 +1,13 @@
+# name: test/sql/pragma/test_force_compression.test
+# description: Test PRAGMA force_compression
+# group: [pragma]
+
+foreach compression none uncompressed rle dictionary pfor bitpacking fsst
+
+statement ok
+PRAGMA force_compression='${compression}'
+
+endloop
+
+statement error
+PRAGMA force_compression='unknown'

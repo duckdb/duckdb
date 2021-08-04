@@ -23,9 +23,9 @@ ColumnCheckpointState::~ColumnCheckpointState() {
 
 void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment) {
 	auto tuple_count = segment->count.load();
-	if (tuple_count == 0) {
+	if (tuple_count == 0) { // LCOV_EXCL_START
 		return;
-	}
+	} // LCOV_EXCL_STOP
 
 	// merge the segment stats into the global stats
 	global_stats->Merge(*segment->stats.statistics);

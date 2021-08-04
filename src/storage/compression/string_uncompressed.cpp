@@ -60,8 +60,6 @@ public:
 	                              int32_t &result_offset);
 	static string_t ReadString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset);
 	static string_t ReadString(data_ptr_t target, int32_t offset);
-	static void ReadString(ColumnSegment &segment, string_t *result_data, Vector &result, data_ptr_t baseptr,
-	                       int32_t *dict_offset, idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
@@ -349,10 +347,9 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 
 string_t UncompressedStringStorage::ReadString(ColumnSegment &segment, Vector &result, block_id_t block,
                                                int32_t offset) {
+	D_ASSERT(block != INVALID_BLOCK);
 	D_ASSERT(offset < Storage::BLOCK_SIZE);
-	if (block == INVALID_BLOCK) {
-		return string_t(nullptr, 0);
-	}
+
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto &state = (UncompressedStringSegmentState &)*segment.GetSegmentState();
 	if (block < MAXIMUM_BLOCK) {
@@ -409,12 +406,6 @@ string_t UncompressedStringStorage::ReadString(data_ptr_t target, int32_t offset
 	auto str_length = Load<uint32_t>(ptr);
 	auto str_ptr = (char *)(ptr + sizeof(uint32_t));
 	return string_t(str_ptr, str_length);
-}
-
-void UncompressedStringStorage::ReadString(ColumnSegment &segment, string_t *result_data, Vector &result,
-                                           data_ptr_t baseptr, int32_t *dict_offset, idx_t src_idx, idx_t res_idx,
-                                           idx_t &update_idx, size_t vector_index) {
-	result_data[res_idx] = FetchStringFromDict(segment, result, baseptr, dict_offset[src_idx]);
 }
 
 void UncompressedStringStorage::WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset) {

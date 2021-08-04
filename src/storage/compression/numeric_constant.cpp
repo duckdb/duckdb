@@ -129,10 +129,6 @@ CompressionFunction ConstantFun::GetFunction(PhysicalType data_type) {
 		return ConstantGetFunction<float>(data_type);
 	case PhysicalType::DOUBLE:
 		return ConstantGetFunction<double>(data_type);
-	case PhysicalType::INTERVAL:
-		return ConstantGetFunction<interval_t>(data_type);
-	case PhysicalType::LIST:
-		return ConstantGetFunction<list_entry_t>(data_type);
 	default:
 		throw InternalException("Unsupported type for ConstantUncompressed::GetFunction");
 	}
@@ -153,11 +149,9 @@ bool ConstantFun::TypeIsSupported(PhysicalType type) {
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-	case PhysicalType::INTERVAL:
-	case PhysicalType::LIST:
 		return true;
 	default:
-		return false;
+		throw InternalException("Unsupported type for constant function");
 	}
 }
 

@@ -4,6 +4,7 @@
 
 namespace duckdb {
 
+// LCOV_EXCL_START
 CompressionType CompressionTypeFromString(const string &str) {
 	auto compression = StringUtil::Lower(str);
 	if (compression == "uncompressed") {
@@ -43,5 +44,6 @@ string CompressionTypeToString(CompressionType type) {
 		throw InternalException("Unrecognized compression type!");
 	}
 }
+// LCOV_EXCL_STOP
 
 } // namespace duckdb
