@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/constant/constant_columns_updates.test
+# name: test/sql/storage/compression/constant/constant_columns_updates.test_coverage
 # description: Test storage of constant columns with updates
 # group: [constant]
 
