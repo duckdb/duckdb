@@ -590,6 +590,8 @@ PRAGMA disable_force_external
 
 endloop
 
+endloop
+
 # test bool
 statement ok
 CREATE TABLE test0 (i BOOL[])
