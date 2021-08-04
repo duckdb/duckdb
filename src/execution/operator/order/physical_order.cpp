@@ -139,6 +139,7 @@ public:
 
 	//! Progress in merge path stage
 	idx_t pair_idx;
+	idx_t num_pairs;
 	idx_t l_start;
 	idx_t r_start;
 };
@@ -1355,31 +1356,28 @@ public:
 			{
 				// Acquire global lock to compute next intersection
 				lock_guard<mutex> glock(state.lock);
-				if (state.pair_idx < state.sorted_blocks_temp.size()) {
-					ComputeWork();
-				} else {
-					break;
+				if (state.pair_idx == state.num_pairs) {
+					return;
 				}
+				ComputeWork();
 			}
 			ExecuteTaskInternal();
-			left_block = nullptr;
-			right_block = nullptr;
-			parent.finished_tasks++;
+			if (++parent.finished_tasks == parent.total_tasks) {
+				break;
+			}
 		}
 		lock_guard<mutex> glock(state.lock);
-		if (parent.finished_tasks == parent.total_tasks) {
-			state.sorted_blocks.clear();
-			if (state.odd_one_out) {
-				state.sorted_blocks.push_back(move(state.odd_one_out));
-				state.odd_one_out = nullptr;
-			}
-			for (auto &sorted_block_vector : state.sorted_blocks_temp) {
-				state.sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, state));
-				state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
-			}
-			state.sorted_blocks_temp.clear();
-			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
+		state.sorted_blocks.clear();
+		if (state.odd_one_out) {
+			state.sorted_blocks.push_back(move(state.odd_one_out));
+			state.odd_one_out = nullptr;
 		}
+		for (auto &sorted_block_vector : state.sorted_blocks_temp) {
+			state.sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, state));
+			state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
+		}
+		state.sorted_blocks_temp.clear();
+		PhysicalOrder::ScheduleMergeTasks(parent, context, state);
 	}
 
 	void ExecuteTaskInternal() {
@@ -2115,15 +2113,16 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 	}
 	// Init merge path path indices
 	state.pair_idx = 0;
+	state.num_pairs = num_blocks / 2;
 	state.l_start = 0;
 	state.r_start = 0;
 	// Compute how many tasks there will be
 	// Each merge task produces a SortedBlock with exactly state.block_capacity or less
 	idx_t num_tasks = 0;
 	const idx_t tuples_per_block = state.block_capacity;
-	for (idx_t block_idx = 0; block_idx < num_blocks; block_idx += 2) {
-		auto &left = *state.sorted_blocks[block_idx];
-		auto &right = *state.sorted_blocks[block_idx + 1];
+	for (idx_t pair_idx = 0; pair_idx < state.num_pairs; pair_idx++) {
+		auto &left = *state.sorted_blocks[pair_idx * 2];
+		auto &right = *state.sorted_blocks[pair_idx * 2 + 1];
 		const idx_t count = left.Count() + right.Count();
 		num_tasks += (count + tuples_per_block - 1) / tuples_per_block;
 		// Allocate room for merge results
