@@ -17,8 +17,7 @@ FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsi
 	Construct(bufsiz);
 }
 
-FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) :
-	allocator(source.allocator), type(type_p) {
+FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(source.allocator), type(type_p) {
 	// take over the structures of the source buffer
 	buffer = source.buffer;
 	size = source.size;

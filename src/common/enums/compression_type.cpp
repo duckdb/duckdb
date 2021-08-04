@@ -24,7 +24,7 @@ CompressionType CompressionTypeFromString(const string &str) {
 }
 
 string CompressionTypeToString(CompressionType type) {
-	switch(type) {
+	switch (type) {
 	case CompressionType::COMPRESSION_UNCOMPRESSED:
 		return "Uncompressed";
 	case CompressionType::COMPRESSION_CONSTANT:
@@ -42,7 +42,6 @@ string CompressionTypeToString(CompressionType type) {
 	default:
 		throw InternalException("Unrecognized compression type!");
 	}
-
 }
 
-}
+} // namespace duckdb

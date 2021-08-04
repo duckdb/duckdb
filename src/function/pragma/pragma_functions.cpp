@@ -261,7 +261,8 @@ static void PragmaForceCompression(ClientContext &context, const FunctionParamet
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
 		if (compression_type == CompressionType::COMPRESSION_INVALID) {
-			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, dictionary, pfor, bitpacking or fsst");
+			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, "
+			                      "dictionary, pfor, bitpacking or fsst");
 		}
 		config.force_compression = compression_type;
 	}
@@ -342,7 +343,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaAssignment("temp_directory", PragmaSetTempDirectory, LogicalType::VARCHAR));
 
-	set.AddFunction(PragmaFunction::PragmaAssignment("force_compression", PragmaForceCompression, LogicalType::VARCHAR));
+	set.AddFunction(
+	    PragmaFunction::PragmaAssignment("force_compression", PragmaForceCompression, LogicalType::VARCHAR));
 }
 
 } // namespace duckdb

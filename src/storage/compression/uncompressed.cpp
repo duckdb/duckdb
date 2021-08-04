@@ -4,7 +4,7 @@
 namespace duckdb {
 
 CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
-	switch(type) {
+	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
@@ -33,4 +33,4 @@ bool UncompressedFun::TypeIsSupported(PhysicalType type) {
 	return true;
 }
 
-}
+} // namespace duckdb

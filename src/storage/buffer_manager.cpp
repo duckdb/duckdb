@@ -173,7 +173,8 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 	return result;
 }
 
-shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_manager, block_id_t block_id, shared_ptr<BlockHandle> old_block) {
+shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_manager, block_id_t block_id,
+                                                           shared_ptr<BlockHandle> old_block) {
 	// pin the old block to ensure we have it loaded in memory
 	auto old_handle = Pin(old_block);
 	D_ASSERT(old_block->state == BlockState::BLOCK_LOADED);

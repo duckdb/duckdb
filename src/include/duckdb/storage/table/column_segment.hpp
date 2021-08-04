@@ -54,14 +54,16 @@ public:
 	//! The block that this segment relates to
 	shared_ptr<BlockHandle> block;
 
-	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset, const LogicalType &type_p, idx_t start, idx_t count, CompressionType compression_type, unique_ptr<BaseStatistics> statistics);
+	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, block_id_t id, idx_t offset,
+	                                                         const LogicalType &type_p, idx_t start, idx_t count,
+	                                                         CompressionType compression_type,
+	                                                         unique_ptr<BaseStatistics> statistics);
 	static unique_ptr<ColumnSegment> CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start);
 
 public:
 	void InitializeScan(ColumnScanState &state);
 	//! Scan one vector from this segment
-	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
-	          bool entire_vector);
+	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset, bool entire_vector);
 	//! Fetch a value of the specific row id and append it to the result
 	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
 
@@ -104,7 +106,8 @@ public:
 
 public:
 	ColumnSegment(DatabaseInstance &db, LogicalType type, ColumnSegmentType segment_type, idx_t start, idx_t count,
-	              CompressionFunction *function, unique_ptr<BaseStatistics> statistics, block_id_t block_id, idx_t offset);
+	              CompressionFunction *function, unique_ptr<BaseStatistics> statistics, block_id_t block_id,
+	              idx_t offset);
 
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);

@@ -88,11 +88,10 @@ public:
 	bool output_result_mode = false;
 	bool debug_mode = false;
 	int hashThreshold = 0; /* Threshold for hashing res */
-	vector<LoopCommand*> active_loops;
+	vector<LoopCommand *> active_loops;
 	unique_ptr<Command> top_level_loop;
-	vector<LoopDefinition*> running_loops;
+	vector<LoopDefinition *> running_loops;
 	bool original_sqlite_test = false;
-
 
 	//! The map converting the labels to the hash values
 	unordered_map<string, string> hash_label_map;
@@ -105,7 +104,7 @@ public:
 	void StartLoop(LoopDefinition loop);
 	void EndLoop();
 	static string ReplaceLoopIterator(string text, string loop_iterator_name, string replacement);
-	static string LoopReplacement(string text, const vector<LoopDefinition*> &loops);
+	static string LoopReplacement(string text, const vector<LoopDefinition *> &loops);
 };
 
 /*
@@ -626,8 +625,8 @@ struct RestartCommand : public Command {
 };
 
 struct LoopCommand : public Command {
-	LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p) :
-	    Command(runner), definition(move(definition_p)) {
+	LoopCommand(SQLLogicTestRunner &runner, LoopDefinition definition_p)
+	    : Command(runner), definition(move(definition_p)) {
 	}
 
 	LoopDefinition definition;
@@ -635,7 +634,6 @@ struct LoopCommand : public Command {
 
 	void ExecuteInternal();
 };
-
 
 void LoopCommand::ExecuteInternal() {
 	definition.loop_idx = definition.loop_start;
@@ -674,7 +672,6 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 		top_level_loop = move(loop);
 	}
 	active_loops.push_back(loop_ptr);
-
 }
 void SQLLogicTestRunner::EndLoop() {
 	// finish a loop: pop it from the active_loop queue
@@ -884,7 +881,8 @@ void Query::ExecuteInternal() {
 	char zHash[100]; /* Storage space for hash results */
 	vector<string> comparison_values;
 	if (values.size() == 1 && result_is_file(values[0])) {
-		comparison_values = LoadResultFromFile(SQLLogicTestRunner::LoopReplacement(values[0], runner.running_loops), result->names);
+		comparison_values =
+		    LoadResultFromFile(SQLLogicTestRunner::LoopReplacement(values[0], runner.running_loops), result->names);
 	} else {
 		comparison_values = values;
 	}
@@ -1100,19 +1098,19 @@ void SQLLogicTestRunner::LoadDatabase(string dbpath) {
 	}
 }
 
-
 string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
 	return StringUtil::Replace(text, "${" + loop_iterator_name + "}", replacement);
 }
 
-string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinition*> &loops) {
+string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinition *> &loops) {
 	for (auto &active_loop : loops) {
 		if (active_loop->tokens.empty()) {
 			// regular loop
 			text = ReplaceLoopIterator(text, active_loop->loop_iterator_name, to_string(active_loop->loop_idx));
 		} else {
 			// foreach loop
-			text = ReplaceLoopIterator(text, active_loop->loop_iterator_name, active_loop->tokens[active_loop->loop_idx]);
+			text =
+			    ReplaceLoopIterator(text, active_loop->loop_iterator_name, active_loop->tokens[active_loop->loop_idx]);
 		}
 	}
 	return text;
@@ -1413,10 +1411,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				}
 				LoopDefinition def;
 				def.loop_iterator_name = sScript.tokens[1];
-				try{
+				try {
 					def.loop_start = std::stoi(sScript.tokens[2].c_str());
 					def.loop_end = std::stoi(sScript.tokens[3].c_str());
-				} catch(...) {
+				} catch (...) {
 					fprintf(stderr,
 					        "%s:%d: Test error: expected loop [iterator_name] [start] [end] (e.g. loop i 1 300)!\n",
 					        zScriptFile, sScript.startLine);

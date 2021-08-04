@@ -60,23 +60,26 @@ void FillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t
 	}
 }
 
-void ConstantScanPartialValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
+void ConstantScanPartialValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                                 idx_t result_offset) {
 	FillFunctionValidity(segment, result, result_offset, scan_count);
 }
 
-template<class T>
-void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
+template <class T>
+void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                         idx_t result_offset) {
 	FillFunction<T>(segment, result, result_offset, scan_count);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void ConstantFetchRowValidity(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void ConstantFetchRowValidity(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                              idx_t result_idx) {
 	FillFunctionValidity(segment, result, result_idx, 1);
 }
 
-template<class T>
+template <class T>
 void ConstantFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
 	FillFunction<T>(segment, result, result_idx, 1);
 }
@@ -86,50 +89,21 @@ void ConstantFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 //===--------------------------------------------------------------------===//
 CompressionFunction ConstantGetFunctionValidity(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::BIT);
-	return CompressionFunction(
-		CompressionType::COMPRESSION_CONSTANT,
-		data_type,
-		nullptr,
-		nullptr,
-		nullptr,
-		nullptr,
-		nullptr,
-		nullptr,
-		ConstantInitScan,
-		ConstantScanFunctionValidity,
-		ConstantScanPartialValidity,
-		ConstantFetchRowValidity,
-		UncompressedFunctions::EmptySkip,
-		nullptr,
-		nullptr,
-		nullptr
-	);
+	return CompressionFunction(CompressionType::COMPRESSION_CONSTANT, data_type, nullptr, nullptr, nullptr, nullptr,
+	                           nullptr, nullptr, ConstantInitScan, ConstantScanFunctionValidity,
+	                           ConstantScanPartialValidity, ConstantFetchRowValidity, UncompressedFunctions::EmptySkip,
+	                           nullptr, nullptr, nullptr);
 }
 
-template<class T>
+template <class T>
 CompressionFunction ConstantGetFunction(PhysicalType data_type) {
-	return CompressionFunction(
-		CompressionType::COMPRESSION_CONSTANT,
-		data_type,
-		nullptr,
-		nullptr,
-		nullptr,
-		nullptr,
-		nullptr,
-		nullptr,
-		ConstantInitScan,
-		ConstantScanFunction<T>,
-		ConstantScanPartial<T>,
-		ConstantFetchRow<T>,
-		UncompressedFunctions::EmptySkip,
-		nullptr,
-		nullptr,
-		nullptr
-	);
+	return CompressionFunction(CompressionType::COMPRESSION_CONSTANT, data_type, nullptr, nullptr, nullptr, nullptr,
+	                           nullptr, nullptr, ConstantInitScan, ConstantScanFunction<T>, ConstantScanPartial<T>,
+	                           ConstantFetchRow<T>, UncompressedFunctions::EmptySkip, nullptr, nullptr, nullptr);
 }
 
 CompressionFunction ConstantFun::GetFunction(PhysicalType data_type) {
-	switch(data_type) {
+	switch (data_type) {
 	case PhysicalType::BIT:
 		return ConstantGetFunctionValidity(data_type);
 	case PhysicalType::BOOL:
@@ -165,7 +139,7 @@ CompressionFunction ConstantFun::GetFunction(PhysicalType data_type) {
 }
 
 bool ConstantFun::TypeIsSupported(PhysicalType type) {
-	switch(type) {
+	switch (type) {
 	case PhysicalType::BIT:
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:

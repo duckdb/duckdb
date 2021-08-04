@@ -37,13 +37,17 @@ public:
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
-	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
+	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
-	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+	                           idx_t result_idx);
 	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id);
-	static idx_t StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count);
+	static idx_t StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset,
+	                          idx_t count);
+
 public:
-	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value)  {
+	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
 		auto &sstats = (StringStatistics &)*stats.statistics;
 		sstats.Update(new_value);
 	}
@@ -52,16 +56,18 @@ public:
 	static idx_t GetDictionaryOffset(BufferHandle &handle);
 	static idx_t RemainingSpace(ColumnSegment &segment, BufferHandle &handle);
 	static void WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
-	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
+	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
+	                              int32_t &result_offset);
 	static string_t ReadString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset);
 	static string_t ReadString(data_ptr_t target, int32_t offset);
-	static void ReadString(ColumnSegment &segment, string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
-								idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index);
+	static void ReadString(ColumnSegment &segment, string_t *result_data, Vector &result, data_ptr_t baseptr,
+	                       int32_t *dict_offset, idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index);
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
 	static string_location_t FetchStringLocation(data_ptr_t baseptr, int32_t dict_offset);
-	static string_t FetchStringFromDict(ColumnSegment &segment, Vector &result, data_ptr_t baseptr, int32_t dict_offset);
+	static string_t FetchStringFromDict(ColumnSegment &segment, Vector &result, data_ptr_t baseptr,
+	                                    int32_t dict_offset);
 	static string_t FetchString(ColumnSegment &segment, Vector &result, data_ptr_t baseptr, string_location_t location);
 };
 
@@ -69,7 +75,8 @@ public:
 // Analyze
 //===--------------------------------------------------------------------===//
 struct StringAnalyzeState : public AnalyzeState {
-	StringAnalyzeState() : count(0), total_string_size(0), overflow_strings(0) {}
+	StringAnalyzeState() : count(0), total_string_size(0), overflow_strings(0) {
+	}
 
 	idx_t count;
 	idx_t total_string_size;
@@ -81,13 +88,13 @@ unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData
 }
 
 bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = (StringAnalyzeState &) state_p;
+	auto &state = (StringAnalyzeState &)state_p;
 	VectorData vdata;
 	input.Orrify(count, vdata);
 
 	state.count += count;
-	auto data = (string_t *) vdata.data;
-	for(idx_t i = 0; i < count; i++) {
+	auto data = (string_t *)vdata.data;
+	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		if (vdata.validity.RowIsValid(idx)) {
 			auto string_size = data[idx].GetSize();
@@ -101,7 +108,7 @@ bool UncompressedStringStorage::StringAnalyze(AnalyzeState &state_p, Vector &inp
 }
 
 idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
-	auto &state = (StringAnalyzeState &) state_p;
+	auto &state = (StringAnalyzeState &)state_p;
 	return state.count * sizeof(uint32_t) + state.total_string_size + state.overflow_strings * BIG_STRING_MARKER_SIZE;
 }
 
@@ -122,9 +129,10 @@ unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSeg
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
+void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+                                                  Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
-	auto &scan_state = (StringScanState &) *state.scan_state;
+	auto &scan_state = (StringScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle->node->buffer;
@@ -136,14 +144,16 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	}
 }
 
-void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void UncompressedStringStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+                                           Vector &result) {
 	StringScanPartial(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id,
+                                               Vector &result, idx_t result_idx) {
 	data_ptr_t baseptr;
 
 	// fetch a single row from the string segment
@@ -171,7 +181,8 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment, block_id_t block_id) {
+unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(ColumnSegment &segment,
+                                                                                block_id_t block_id) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	if (block_id == INVALID_BLOCK) {
 		auto handle = buffer_manager.Pin(segment.block);
@@ -180,7 +191,8 @@ unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(
 	return make_unique<UncompressedStringSegmentState>();
 }
 
-idx_t UncompressedStringStorage::StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
+idx_t UncompressedStringStorage::StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data,
+                                              idx_t offset, idx_t count) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 
@@ -257,24 +269,14 @@ idx_t UncompressedStringStorage::StringAppend(ColumnSegment &segment, SegmentSta
 //===--------------------------------------------------------------------===//
 CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::VARCHAR);
-	return CompressionFunction(
-		CompressionType::COMPRESSION_UNCOMPRESSED,
-		data_type,
-		UncompressedStringStorage::StringInitAnalyze,
-		UncompressedStringStorage::StringAnalyze,
-		UncompressedStringStorage::StringFinalAnalyze,
-		UncompressedFunctions::InitCompression,
-		UncompressedFunctions::Compress,
-		UncompressedFunctions::FinalizeCompress,
-		UncompressedStringStorage::StringInitScan,
-		UncompressedStringStorage::StringScan,
-		UncompressedStringStorage::StringScanPartial,
-		UncompressedStringStorage::StringFetchRow,
-		UncompressedFunctions::EmptySkip,
-		UncompressedStringStorage::StringInitSegment,
-		UncompressedStringStorage::StringAppend,
-		nullptr
-	);
+	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type,
+	                           UncompressedStringStorage::StringInitAnalyze, UncompressedStringStorage::StringAnalyze,
+	                           UncompressedStringStorage::StringFinalAnalyze, UncompressedFunctions::InitCompression,
+	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
+	                           UncompressedStringStorage::StringInitScan, UncompressedStringStorage::StringScan,
+	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
+	                           UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
+	                           UncompressedStringStorage::StringAppend, nullptr);
 }
 
 //===--------------------------------------------------------------------===//
@@ -294,8 +296,9 @@ idx_t UncompressedStringStorage::RemainingSpace(ColumnSegment &segment, BufferHa
 	return Storage::BLOCK_SIZE - used_space;
 }
 
-void UncompressedStringStorage::WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset) {
-	auto &state = (UncompressedStringSegmentState &) *segment.GetSegmentState();
+void UncompressedStringStorage::WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block,
+                                            int32_t &result_offset) {
+	auto &state = (UncompressedStringSegmentState &)*segment.GetSegmentState();
 	if (state.overflow_writer) {
 		// overflow writer is set: write string there
 		state.overflow_writer->WriteString(string, result_block, result_offset);
@@ -305,13 +308,14 @@ void UncompressedStringStorage::WriteString(ColumnSegment &segment, string_t str
 	}
 }
 
-void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset) {
+void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
+                                                  int32_t &result_offset) {
 	uint32_t total_length = string.GetSize() + sizeof(uint32_t);
 	shared_ptr<BlockHandle> block;
 	unique_ptr<BufferHandle> handle;
 
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto &state = (UncompressedStringSegmentState &) *segment.GetSegmentState();
+	auto &state = (UncompressedStringSegmentState &)*segment.GetSegmentState();
 	// check if the string fits in the current block
 	if (!state.head || state.head->offset + total_length >= state.head->size) {
 		// string does not fit, allocate space for it
@@ -343,13 +347,14 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 	state.head->offset += total_length;
 }
 
-string_t UncompressedStringStorage::ReadString(ColumnSegment &segment, Vector &result, block_id_t block, int32_t offset) {
+string_t UncompressedStringStorage::ReadString(ColumnSegment &segment, Vector &result, block_id_t block,
+                                               int32_t offset) {
 	D_ASSERT(offset < Storage::BLOCK_SIZE);
 	if (block == INVALID_BLOCK) {
 		return string_t(nullptr, 0);
 	}
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto &state = (UncompressedStringSegmentState &) *segment.GetSegmentState();
+	auto &state = (UncompressedStringSegmentState &)*segment.GetSegmentState();
 	if (block < MAXIMUM_BLOCK) {
 		// read the overflow string from disk
 		// pin the initial handle and read the length
@@ -406,8 +411,9 @@ string_t UncompressedStringStorage::ReadString(data_ptr_t target, int32_t offset
 	return string_t(str_ptr, str_length);
 }
 
-void UncompressedStringStorage::ReadString(ColumnSegment &segment, string_t *result_data, Vector &result, data_ptr_t baseptr, int32_t *dict_offset,
-                               idx_t src_idx, idx_t res_idx, idx_t &update_idx, size_t vector_index) {
+void UncompressedStringStorage::ReadString(ColumnSegment &segment, string_t *result_data, Vector &result,
+                                           data_ptr_t baseptr, int32_t *dict_offset, idx_t src_idx, idx_t res_idx,
+                                           idx_t &update_idx, size_t vector_index) {
 	result_data[res_idx] = FetchStringFromDict(segment, result, baseptr, dict_offset[src_idx]);
 }
 
@@ -446,14 +452,16 @@ string_location_t UncompressedStringStorage::FetchStringLocation(data_ptr_t base
 	return result;
 }
 
-string_t UncompressedStringStorage::FetchStringFromDict(ColumnSegment &segment, Vector &result, data_ptr_t baseptr, int32_t dict_offset) {
+string_t UncompressedStringStorage::FetchStringFromDict(ColumnSegment &segment, Vector &result, data_ptr_t baseptr,
+                                                        int32_t dict_offset) {
 	// fetch base data
 	D_ASSERT(dict_offset <= Storage::BLOCK_SIZE);
 	string_location_t location = FetchStringLocation(baseptr, dict_offset);
 	return FetchString(segment, result, baseptr, location);
 }
 
-string_t UncompressedStringStorage::FetchString(ColumnSegment &segment, Vector &result, data_ptr_t baseptr, string_location_t location) {
+string_t UncompressedStringStorage::FetchString(ColumnSegment &segment, Vector &result, data_ptr_t baseptr,
+                                                string_location_t location) {
 	if (location.block_id != INVALID_BLOCK) {
 		// big string marker: read from separate block
 		return ReadString(segment, result, location.block_id, location.offset);

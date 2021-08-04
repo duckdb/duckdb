@@ -4,9 +4,11 @@
 
 namespace duckdb {
 
-ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p, ColumnCheckpointState &state_p) :
-	col_data(col_data_p), row_group(row_group_p), state(state_p), is_validity(GetType().id() == LogicalTypeId::VALIDITY),
-	intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity) {
+ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p,
+                                               ColumnCheckpointState &state_p)
+    : col_data(col_data_p), row_group(row_group_p), state(state_p),
+      is_validity(GetType().id() == LogicalTypeId::VALIDITY),
+      intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity) {
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	compression_functions = config.GetCompressionFunctions(GetType().InternalType());
 }
@@ -33,7 +35,7 @@ ColumnCheckpointState &ColumnDataCheckpointer::GetCheckpointState() {
 
 void ColumnDataCheckpointer::ScanSegments(std::function<void(Vector &, idx_t)> callback) {
 	Vector scan_vector(intermediate.GetType(), nullptr);
-	for(auto segment = (ColumnSegment *) owned_segment.get(); segment; segment = (ColumnSegment *) segment->next.get()) {
+	for (auto segment = (ColumnSegment *)owned_segment.get(); segment; segment = (ColumnSegment *)segment->next.get()) {
 		ColumnScanState scan_state;
 		scan_state.current = segment;
 		segment->InitializeScan(scan_state);
@@ -58,7 +60,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 		// force_compression flag has been set
 		// check if this compression method is available
 		bool found = false;
-		for(idx_t i = 0; i < compression_functions.size(); i++) {
+		for (idx_t i = 0; i < compression_functions.size(); i++) {
 			if (compression_functions[i]->type == config.force_compression) {
 				found = true;
 				break;
@@ -67,7 +69,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 		if (found) {
 			// the force_compression method is available
 			// clear all other compression methods
-			for(idx_t i = 0; i < compression_functions.size(); i++) {
+			for (idx_t i = 0; i < compression_functions.size(); i++) {
 				if (compression_functions[i]->type != config.force_compression) {
 					compression_functions[i] = nullptr;
 				}
@@ -75,11 +77,10 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 		}
 	}
 
-
 	// set up the analyze states for each compression method
 	vector<unique_ptr<AnalyzeState>> analyze_states;
 	analyze_states.reserve(compression_functions.size());
-	for(idx_t i = 0; i < compression_functions.size(); i++) {
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
 		if (!compression_functions[i]) {
 			analyze_states.push_back(nullptr);
 			continue;
@@ -89,7 +90,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 
 	// scan over all the segments and run the analyze step
 	ScanSegments([&](Vector &scan_vector, idx_t count) {
-		for(idx_t i = 0; i < compression_functions.size(); i++) {
+		for (idx_t i = 0; i < compression_functions.size(); i++) {
 			if (!compression_functions[i]) {
 				continue;
 			}
@@ -108,7 +109,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 	unique_ptr<AnalyzeState> state;
 	compression_idx = INVALID_INDEX;
 	idx_t best_score = NumericLimits<idx_t>::Maximum();
-	for(idx_t i = 0; i < compression_functions.size(); i++) {
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
 		if (!compression_functions[i]) {
 			continue;
 		}
@@ -130,7 +131,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// if there are any persistent segments, we will mark their old block ids as modified
 	// since the segments will be rewritten their old on disk data is no longer required
 	auto &block_manager = BlockManager::GetBlockManager(GetDatabase());
-	for(auto segment = (ColumnSegment *) owned_segment.get(); segment; segment = (ColumnSegment *) segment->next.get()) {
+	for (auto segment = (ColumnSegment *)owned_segment.get(); segment; segment = (ColumnSegment *)segment->next.get()) {
 		if (segment->segment_type == ColumnSegmentType::PERSISTENT) {
 			// persistent segment has updates: mark it as modified and rewrite the block with the merged updates
 			auto block_id = segment->GetBlockId();
@@ -152,9 +153,8 @@ void ColumnDataCheckpointer::WriteToDisk() {
 	// now that we have analyzed the compression functions we can start writing to disk
 	auto best_function = compression_functions[compression_idx];
 	auto compress_state = best_function->init_compression(*this, move(analyze_state));
-	ScanSegments([&](Vector &scan_vector, idx_t count) {
-		best_function->compress(*compress_state, scan_vector, count);
-	});
+	ScanSegments(
+	    [&](Vector &scan_vector, idx_t count) { best_function->compress(*compress_state, scan_vector, count); });
 	best_function->compress_finalize(*compress_state);
 
 	// now we actually write the data to disk
@@ -162,7 +162,7 @@ void ColumnDataCheckpointer::WriteToDisk() {
 }
 
 bool ColumnDataCheckpointer::HasChanges() {
-	for(auto segment = (ColumnSegment *) owned_segment.get(); segment; segment = (ColumnSegment *) segment->next.get()) {
+	for (auto segment = (ColumnSegment *)owned_segment.get(); segment; segment = (ColumnSegment *)segment->next.get()) {
 		if (segment->segment_type == ColumnSegmentType::TRANSIENT) {
 			// transient segment: always need to write to disk
 			return true;
@@ -223,4 +223,4 @@ void ColumnDataCheckpointer::Checkpoint(unique_ptr<SegmentBase> segment) {
 	}
 }
 
-}
+} // namespace duckdb

@@ -66,7 +66,8 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 	D_ASSERT(state.current->type == type);
 	idx_t initial_remaining = remaining;
 	while (remaining > 0) {
-		D_ASSERT(state.row_index >= state.current->start && state.row_index <= state.current->start + state.current->count);
+		D_ASSERT(state.row_index >= state.current->start &&
+		         state.row_index <= state.current->start + state.current->count);
 		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - state.row_index);
 		idx_t result_offset = initial_remaining - remaining;
 		state.current->Scan(state, scan_count, result, result_offset, scan_count == initial_remaining);
@@ -80,7 +81,8 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 			state.current = (ColumnSegment *)state.current->next.get();
 			state.current->InitializeScan(state);
 			state.segment_checked = false;
-			D_ASSERT(state.row_index >= state.current->start && state.row_index <= state.current->start + state.current->count);
+			D_ASSERT(state.row_index >= state.current->start &&
+			         state.row_index <= state.current->start + state.current->count);
 		}
 	}
 	state.internal_index = state.row_index;
@@ -269,8 +271,6 @@ void ColumnData::RevertAppend(row_t start_row) {
 	transient.RevertAppend(start_row);
 }
 
-
-
 idx_t ColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result) {
 	D_ASSERT(row_id >= 0);
 	D_ASSERT(idx_t(row_id) >= start);
@@ -343,8 +343,8 @@ unique_ptr<ColumnCheckpointState> ColumnData::CreateCheckpointState(RowGroup &ro
 	return make_unique<ColumnCheckpointState>(row_group, *this, writer);
 }
 
-void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
-                                idx_t count, Vector &scan_vector) {
+void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
+                                Vector &scan_vector) {
 	segment->Scan(state, count, scan_vector, 0, true);
 	if (updates) {
 		scan_vector.Normalify(count);
@@ -387,9 +387,10 @@ void ColumnData::DeserializeColumn(Deserializer &source) {
 		data_pointer.statistics = BaseStatistics::Deserialize(source, type);
 
 		// create a persistent segment
-		auto segment = ColumnSegment::CreatePersistentSegment(GetDatabase(), data_pointer.block_pointer.block_id,
-		                                              data_pointer.block_pointer.offset, type, data_pointer.row_start,
-		                                              data_pointer.tuple_count, data_pointer.compression_type, move(data_pointer.statistics));
+		auto segment = ColumnSegment::CreatePersistentSegment(
+		    GetDatabase(), data_pointer.block_pointer.block_id, data_pointer.block_pointer.offset, type,
+		    data_pointer.row_start, data_pointer.tuple_count, data_pointer.compression_type,
+		    move(data_pointer.statistics));
 		data.AppendSegment(move(segment));
 	}
 }

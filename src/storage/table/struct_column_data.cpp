@@ -280,7 +280,7 @@ void StructColumnData::Verify(RowGroup &parent) {
 #ifdef DEBUG
 	ColumnData::Verify(parent);
 	validity.Verify(parent);
-	for(auto &sub_column : sub_columns) {
+	for (auto &sub_column : sub_columns) {
 		sub_column->Verify(parent);
 	}
 #endif

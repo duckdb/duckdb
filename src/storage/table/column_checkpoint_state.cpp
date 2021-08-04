@@ -50,7 +50,8 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment) {
 		offset_in_block = 0;
 
 		auto &config = DBConfig::GetConfig(db);
-		segment->function = config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
+		segment->function =
+		    config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
 	}
 
 	// construct the data pointer
@@ -90,4 +91,4 @@ void ColumnCheckpointState::FlushToDisk() {
 	}
 }
 
-}
+} // namespace duckdb

@@ -30,6 +30,7 @@ struct DataTableInfo;
 
 class ColumnData {
 	friend class ColumnDataCheckpointer;
+
 public:
 	ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent);
 	virtual ~ColumnData();
@@ -100,8 +101,8 @@ public:
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer);
 
-	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
-	                            idx_t count, Vector &scan_vector);
+	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
+	                            Vector &scan_vector);
 
 	virtual void DeserializeColumn(Deserializer &source);
 	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,

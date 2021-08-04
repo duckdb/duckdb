@@ -20,7 +20,8 @@ static DefaultCompressionMethod internal_compression_methods[] = {
     {CompressionType::COMPRESSION_RLE, RLEFun::GetFunction, RLEFun::TypeIsSupported},
     {CompressionType::COMPRESSION_INVALID, nullptr, nullptr}};
 
-static CompressionFunction *FindCompressionFunction(CompressionFunctionSet &set, CompressionType type, PhysicalType data_type) {
+static CompressionFunction *FindCompressionFunction(CompressionFunctionSet &set, CompressionType type,
+                                                    PhysicalType data_type) {
 	auto &functions = set.functions;
 	auto comp_entry = functions.find(type);
 	if (comp_entry != functions.end()) {
@@ -33,8 +34,9 @@ static CompressionFunction *FindCompressionFunction(CompressionFunctionSet &set,
 	return nullptr;
 }
 
-static CompressionFunction *LoadCompressionFunction(CompressionFunctionSet &set, CompressionType type, PhysicalType data_type) {
-	for(idx_t index = 0; internal_compression_methods[index].get_function; index++) {
+static CompressionFunction *LoadCompressionFunction(CompressionFunctionSet &set, CompressionType type,
+                                                    PhysicalType data_type) {
+	for (idx_t index = 0; internal_compression_methods[index].get_function; index++) {
 		const auto &method = internal_compression_methods[index];
 		if (method.type == type) {
 			// found the correct compression type
@@ -58,7 +60,8 @@ static CompressionFunction *LoadCompressionFunction(CompressionFunctionSet &set,
 	throw InternalException("Unsupported compression function type");
 }
 
-static void TryLoadCompression(DBConfig &config, vector<CompressionFunction*> &result, CompressionType type, PhysicalType data_type) {
+static void TryLoadCompression(DBConfig &config, vector<CompressionFunction *> &result, CompressionType type,
+                               PhysicalType data_type) {
 	auto function = config.GetCompressionFunction(type, data_type);
 	if (!function) {
 		return;
@@ -66,8 +69,8 @@ static void TryLoadCompression(DBConfig &config, vector<CompressionFunction*> &r
 	result.push_back(function);
 }
 
-vector<CompressionFunction*> DBConfig::GetCompressionFunctions(PhysicalType data_type) {
-	vector<CompressionFunction*> result;
+vector<CompressionFunction *> DBConfig::GetCompressionFunctions(PhysicalType data_type) {
+	vector<CompressionFunction *> result;
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_UNCOMPRESSED, data_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_RLE, data_type);
 	return result;
@@ -83,4 +86,4 @@ CompressionFunction *DBConfig::GetCompressionFunction(CompressionType type, Phys
 	return LoadCompressionFunction(*compression_functions, type, data_type);
 }
 
-}
+} // namespace duckdb

@@ -16,7 +16,10 @@
 
 namespace duckdb {
 
-unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, block_id_t block_id, idx_t offset, const LogicalType &type, idx_t start, idx_t count, CompressionType compression_type, unique_ptr<BaseStatistics> statistics) {
+unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstance &db, block_id_t block_id,
+                                                                 idx_t offset, const LogicalType &type, idx_t start,
+                                                                 idx_t count, CompressionType compression_type,
+                                                                 unique_ptr<BaseStatistics> statistics) {
 	D_ASSERT(offset == 0);
 	auto &config = DBConfig::GetConfig(db);
 	CompressionFunction *function;
@@ -25,20 +28,24 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 	} else {
 		function = config.GetCompressionFunction(compression_type, type.InternalType());
 	}
-	return make_unique<ColumnSegment>(db, type, ColumnSegmentType::PERSISTENT, start, count, function, move(statistics), block_id, offset);
+	return make_unique<ColumnSegment>(db, type, ColumnSegmentType::PERSISTENT, start, count, function, move(statistics),
+	                                  block_id, offset);
 }
 
-unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type, idx_t start) {
+unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, const LogicalType &type,
+                                                                idx_t start) {
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
-	return make_unique<ColumnSegment>(db, type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr, INVALID_BLOCK, idx_t(-1));
+	return make_unique<ColumnSegment>(db, type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
+	                                  INVALID_BLOCK, idx_t(-1));
 }
 
 ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSegmentType segment_type, idx_t start,
                              idx_t count, CompressionFunction *function_p, unique_ptr<BaseStatistics> statistics,
-							 block_id_t block_id_p, idx_t offset_p)
+                             block_id_t block_id_p, idx_t offset_p)
     : SegmentBase(start, count), db(db), type(move(type_p)), type_size(GetTypeIdSize(type.InternalType())),
-      segment_type(segment_type), function(function_p), stats(type, move(statistics)), block_id(block_id_p), offset(offset_p) {
+      segment_type(segment_type), function(function_p), stats(type, move(statistics)), block_id(block_id_p),
+      offset(offset_p) {
 	D_ASSERT(function);
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id == INVALID_BLOCK) {
@@ -253,7 +260,7 @@ static idx_t TemplatedNullSelection(SelectionVector &sel, idx_t approved_tuple_c
 }
 
 void ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
-                                          idx_t &approved_tuple_count, ValidityMask &mask) {
+                                    idx_t &approved_tuple_count, ValidityMask &mask) {
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = (ConjunctionAndFilter &)filter;
@@ -385,6 +392,5 @@ void ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const 
 		throw InternalException("FIXME: unsupported type for filter selection");
 	}
 }
-
 
 } // namespace duckdb

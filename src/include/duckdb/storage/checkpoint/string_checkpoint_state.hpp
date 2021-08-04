@@ -54,4 +54,4 @@ struct UncompressedStringSegmentState : public CompressedSegmentState {
 	unordered_map<block_id_t, StringBlock *> overflow_blocks;
 };
 
-}
+} // namespace duckdb

@@ -40,8 +40,7 @@ private:
 	bool is_validity;
 	Vector intermediate;
 	unique_ptr<SegmentBase> owned_segment;
-	vector<CompressionFunction*> compression_functions;
+	vector<CompressionFunction *> compression_functions;
 };
 
-}
-
+} // namespace duckdb

@@ -42,7 +42,8 @@ public:
 	shared_ptr<BlockHandle> RegisterMemory(idx_t alloc_size, bool can_destroy);
 
 	//! Convert an existing in-memory buffer into a persistent disk-backed block
-	shared_ptr<BlockHandle> ConvertToPersistent(BlockManager &block_manager, block_id_t block_id, shared_ptr<BlockHandle> old_block);
+	shared_ptr<BlockHandle> ConvertToPersistent(BlockManager &block_manager, block_id_t block_id,
+	                                            shared_ptr<BlockHandle> old_block);
 
 	//! Allocate an in-memory buffer with a single pin.
 	//! The allocated memory is released when the buffer handle is destroyed.

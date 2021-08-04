@@ -143,7 +143,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 				//! We have filters to apply here
 				auto &mask = FlatVector::Validity(result.data[i]);
 				ColumnSegment::FilterSelection(sel, result.data[i], *column_filters->second, approved_tuple_count,
-				                                     mask);
+				                               mask);
 				count = approved_tuple_count;
 			}
 		}

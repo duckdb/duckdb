@@ -1,6 +1,6 @@
 # name: test/sql/storage/compression/rle/rle_index_fetch.test
 # description: Fetch from RLE column with index
-# group: [storage]
+# group: [rle]
 
 # load the DB from disk
 load __TEST_DIR__/test_rle.db

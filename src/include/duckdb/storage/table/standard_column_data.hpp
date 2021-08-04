@@ -48,14 +48,15 @@ public:
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer) override;
-	void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
-	                    idx_t count, Vector &scan_vector) override;
+	void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
+	                    Vector &scan_vector) override;
 
 	void DeserializeColumn(Deserializer &source) override;
 
 	void GetStorageInfo(idx_t row_group_index, vector<idx_t> col_path, vector<vector<Value>> &result) override;
 
 	void Verify(RowGroup &parent) override;
+
 private:
 	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 	void TemplatedScan(Transaction *transaction, ColumnScanState &state, Vector &result);
