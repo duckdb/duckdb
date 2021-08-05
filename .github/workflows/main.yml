@@ -1239,11 +1239,14 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Setup
+    - name: Setup Node
       uses: actions/setup-node@v2
       with:
         node-version: ${{ matrix.node }}
 
+    - name: Node Version
+      run: ./scripts/node_version.sh
+    
     - name: Node
       run: ./scripts/node_build_win.sh
 
