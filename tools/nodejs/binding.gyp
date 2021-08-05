@@ -3,12 +3,12 @@
         {
             "target_name": "<(module_name)",
             "sources": [
-            "src/duckdb_node.cpp",
-            "src/database.cpp",
-            "src/connection.cpp",
-            "src/statement.cpp",
-            "src/utils.cpp",
-             "src/duckdb.cpp" # comment this out to build against existing lib
+                "src/duckdb_node.cpp",
+                "src/database.cpp",
+                "src/connection.cpp",
+                "src/statement.cpp",
+                "src/utils.cpp",
+                "src/duckdb.cpp" # comment this out to build against existing lib
             ],
             "include_dirs": [
                 "<!@(node -p \"require('node-addon-api').include\")"
@@ -67,16 +67,16 @@
 #               ]
         },
         {
-      "target_name": "action_after_build",
-      "type": "none",
-        "dependencies": [
-          "<!(node -p \"require('node-addon-api').gyp\")"
-        ],
-      "copies": [
-          {
-            "files": [ "<(PRODUCT_DIR)/<(module_name).node" ],
-            "destination": "<(module_path)"
-          }
+            "target_name": "action_after_build",
+            "type": "none",
+            "dependencies": [
+                "<(module_name)"
+            ],
+            "copies": [
+            {
+                "files": [ "<(PRODUCT_DIR)/<(module_name).node" ],
+                "destination": "<(module_path)"
+            }
       ]
     }
     ]
