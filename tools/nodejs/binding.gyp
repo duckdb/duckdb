@@ -46,7 +46,6 @@
                 "VCCLCompilerTool": {
                     "ExceptionHandling": 1,
                     "AdditionalOptions": [
-                        "/MP",
                         "/bigobj"
                     ]
                 }
