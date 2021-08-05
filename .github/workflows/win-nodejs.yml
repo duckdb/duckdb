@@ -34,3 +34,9 @@ jobs:
 
     - name: Node
       run: ./scripts/node_build_win.sh
+
+    - name: Archive
+      uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-node-win32-x64
+        path: tools/nodejs/build/stage/*.gz
