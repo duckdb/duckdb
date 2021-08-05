@@ -19,11 +19,6 @@ INSERT INTO test SELECT {'a': i} s FROM repeat(4, 1000) tbl(i);
 INSERT INTO test SELECT {'a': i} s FROM repeat(5, 1000) tbl(i);
 INSERT INTO test SELECT {'a': i} s FROM repeat(6, 1000) tbl(i);
 
-query I
-SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
-----
-RLE
-
 query IIII
 SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
 ----
