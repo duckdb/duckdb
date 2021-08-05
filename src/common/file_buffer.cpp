@@ -92,8 +92,12 @@ void FileBuffer::Resize(uint64_t bufsiz) {
 }
 
 void FileBuffer::Read(FileHandle &handle, uint64_t location) {
-	// read the buffer from disk
 	handle.Read(internal_buffer, internal_size, location);
+}
+
+void FileBuffer::ReadAndChecksum(FileHandle &handle, uint64_t location) {
+	// read the buffer from disk
+	Read(handle, location);
 	// compute the checksum
 	auto stored_checksum = Load<uint64_t>(internal_buffer);
 	uint64_t computed_checksum = Checksum(buffer, size);
@@ -105,11 +109,15 @@ void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 }
 
 void FileBuffer::Write(FileHandle &handle, uint64_t location) {
-	// compute the checksum and write it to the start of the buffer
+	handle.Write(internal_buffer, internal_size, location);
+}
+
+void FileBuffer::ChecksumAndWrite(FileHandle &handle, uint64_t location) {
+	// compute the checksum and write it to the start of the buffer (if not temp buffer)
 	uint64_t checksum = Checksum(buffer, size);
 	Store<uint64_t>(checksum, internal_buffer);
 	// now write the buffer
-	handle.Write(internal_buffer, internal_size, location);
+	Write(handle, location);
 }
 
 void FileBuffer::Clear() {
