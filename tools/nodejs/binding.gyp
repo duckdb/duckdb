@@ -76,11 +76,11 @@
                 "<(module_name)"
             ],
             "copies": [
-            {
-                "files": [ "<(PRODUCT_DIR)/<(module_name).node" ],
-                "destination": "<(module_path)"
-            }
-      ]
-    }
+                {
+                    "files": [ "<(PRODUCT_DIR)/<(module_name).node" ],
+                    "destination": "<(module_path)"
+                }
+            ]
+        }
     ]
 }
