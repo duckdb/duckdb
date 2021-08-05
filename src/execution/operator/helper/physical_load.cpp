@@ -14,6 +14,10 @@
 #define RTLD_LAZY  0
 #define RTLD_LOCAL 0
 
+#undef CreateDirectory
+#undef MoveFile
+#undef RemoveDirectory
+
 #endif
 
 namespace duckdb {
