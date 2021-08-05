@@ -6,16 +6,6 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 
-#include "duckdb/storage/numeric_segment.hpp"
-#include "duckdb/storage/string_segment.hpp"
-#include "duckdb/storage/table/validity_segment.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/storage/table/persistent_segment.hpp"
-#include "duckdb/storage/table/transient_segment.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/storage/table/column_data.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-
 namespace duckdb {
 
 TableDataWriter::TableDataWriter(DatabaseInstance &, TableCatalogEntry &table, MetaBlockWriter &meta_writer)

@@ -5,6 +5,12 @@
 # load the DB from disk
 load __TEST_DIR__/struct_storage_test.db
 
+
+foreach compression <compression>
+
+statement ok
+PRAGMA force_compression='${compression}'
+
 statement ok
 CREATE TABLE a AS SELECT {
 	'r1': {
@@ -29,6 +35,9 @@ SELECT c['r1']['a'] from a
 hello
 
 restart
+
+statement ok
+PRAGMA force_compression='${compression}'
 
 query I
 SELECT * FROM a
@@ -65,6 +74,9 @@ SELECT c['r1']['a'] from a
 blabla
 
 restart
+
+statement ok
+PRAGMA force_compression='${compression}'
 
 query I
 SELECT * FROM a
@@ -142,6 +154,9 @@ NULL
 
 restart
 
+statement ok
+PRAGMA force_compression='${compression}'
+
 query I
 SELECT * FROM a
 ----
@@ -155,3 +170,8 @@ NULL
 query II
 select column_path, stats from pragma_storage_info('a') where  stats LIKE '%[Min: -2147483648, Max: -2147483648]%'
 ----
+
+statement ok
+DROP TABLE a
+
+endloop

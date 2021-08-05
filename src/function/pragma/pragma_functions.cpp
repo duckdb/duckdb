@@ -253,6 +253,21 @@ static void PragmaSetTempDirectory(ClientContext &context, const FunctionParamet
 	buffer_manager.SetTemporaryDirectory(parameters.values[0].ToString());
 }
 
+static void PragmaForceCompression(ClientContext &context, const FunctionParameters &parameters) {
+	auto compression = StringUtil::Lower(parameters.values[0].ToString());
+	auto &config = DBConfig::GetConfig(context);
+	if (compression == "none") {
+		config.force_compression = CompressionType::COMPRESSION_INVALID;
+	} else {
+		auto compression_type = CompressionTypeFromString(compression);
+		if (compression_type == CompressionType::COMPRESSION_INVALID) {
+			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, "
+			                      "dictionary, pfor, bitpacking or fsst");
+		}
+		config.force_compression = compression_type;
+	}
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -327,6 +342,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	    PragmaFunction::PragmaAssignment("debug_checkpoint_abort", PragmaDebugCheckpointAbort, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaAssignment("temp_directory", PragmaSetTempDirectory, LogicalType::VARCHAR));
+
+	set.AddFunction(
+	    PragmaFunction::PragmaAssignment("force_compression", PragmaForceCompression, LogicalType::VARCHAR));
 }
 
 } // namespace duckdb

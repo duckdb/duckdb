@@ -164,3 +164,5 @@ statement ok
 drop table test
 
 endloop
+
+endloop

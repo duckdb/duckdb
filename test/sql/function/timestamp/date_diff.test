@@ -230,6 +230,8 @@ NULL
 
 endloop
 
+endloop
+
 foreach tbl date1 datetime1 time1
 
 query I

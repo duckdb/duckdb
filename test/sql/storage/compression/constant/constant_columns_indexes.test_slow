@@ -1,6 +1,6 @@
-# name: test/sql/storage/constant_columns_indexes.test_slow
+# name: test/sql/storage/compression/constant/constant_columns_indexes.test_slow
 # description: Test storage of constant columns with indexes
-# group: [storage]
+# group: [constant]
 
 # load the DB from disk
 load __TEST_DIR__/constant_columns.db

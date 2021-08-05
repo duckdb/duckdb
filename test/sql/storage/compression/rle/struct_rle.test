@@ -1,0 +1,32 @@
+# name: test/sql/storage/compression/rle/struct_rle.test
+# description: Test storage with RLE inside structs
+# group: [rle]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle.db
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+CREATE TABLE test (s ROW(a INTEGER));
+
+statement ok
+INSERT INTO test SELECT {'a': i} s FROM repeat(1, 1000) tbl(i);
+INSERT INTO test SELECT {'a': i} s FROM repeat(2, 1000) tbl(i);
+INSERT INTO test SELECT {'a': i} s FROM repeat(3, 1000) tbl(i);
+INSERT INTO test SELECT {'a': i} s FROM repeat(4, 1000) tbl(i);
+INSERT INTO test SELECT {'a': i} s FROM repeat(5, 1000) tbl(i);
+INSERT INTO test SELECT {'a': i} s FROM repeat(6, 1000) tbl(i);
+
+query IIII
+SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+----
+21000	1	6	6000
+
+restart
+
+query IIII
+SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+----
+21000	1	6	6000
