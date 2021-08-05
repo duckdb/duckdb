@@ -33,7 +33,7 @@ jobs:
 
       - name: Before Install
         run: |
-          pip install --prefer-binary "pandas>=0.24" "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)
+          pip install --prefer-binary "pandas>=0.24" "requests>=2.26" pytest && (pip install --prefer-binary "pyarrow>=5.0" || true)
           sudo apt-get install g++
 
       - name: Coverage Reset
