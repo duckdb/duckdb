@@ -114,7 +114,7 @@ public:
 	}
 
 	//! The lock for updating the order global state
-	std::mutex lock;
+	mutex lock;
 	//! Constants concerning sorting and payload data
 	const SortingState sorting_state;
 	const RowLayout payload_layout;
@@ -301,7 +301,7 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 	}
 
 	SortLocalState(context.client, lstate, gstate);
-	lock_guard<mutex> append_lock(gstate.lock);
+	lock_guard<mutex> append_guard(gstate.lock);
 	for (auto &cb : lstate.sorted_blocks) {
 		gstate.sorted_blocks.push_back(move(cb));
 	}
@@ -1354,30 +1354,37 @@ public:
 	void Execute() override {
 		while (true) {
 			{
-				// Acquire global lock to compute next intersection
-				lock_guard<mutex> glock(state.lock);
+				lock_guard<mutex> pair_guard(state.lock);
 				if (state.pair_idx == state.num_pairs) {
-					return;
+					break;
 				}
 				ComputeWork();
 			}
 			ExecuteTaskInternal();
-			if (++parent.finished_tasks == parent.total_tasks) {
-				break;
+		}
+		// Move sorted_blocks_temp to sorted_blocks
+		lock_guard<mutex> state_guard(state.lock);
+		parent.finished_tasks++;
+		if (parent.finished_tasks == parent.total_tasks) {
+			state.sorted_blocks.clear();
+			if (state.odd_one_out) {
+				state.sorted_blocks.push_back(move(state.odd_one_out));
+				state.odd_one_out = nullptr;
 			}
+			for (auto &sorted_block_vector : state.sorted_blocks_temp) {
+				state.sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, state));
+				state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
+			}
+			state.sorted_blocks_temp.clear();
+			// Only one block left: Done!
+			if (state.sorted_blocks.size() == 1) {
+				state.sorted_blocks[0]->radix_sorting_data.clear();
+				state.sorted_blocks[0]->blob_sorting_data = nullptr;
+				parent.Finish();
+				return;
+			}
+			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
 		}
-		lock_guard<mutex> glock(state.lock);
-		state.sorted_blocks.clear();
-		if (state.odd_one_out) {
-			state.sorted_blocks.push_back(move(state.odd_one_out));
-			state.odd_one_out = nullptr;
-		}
-		for (auto &sorted_block_vector : state.sorted_blocks_temp) {
-			state.sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, state));
-			state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
-		}
-		state.sorted_blocks_temp.clear();
-		PhysicalOrder::ScheduleMergeTasks(parent, context, state);
 	}
 
 	void ExecuteTaskInternal() {
@@ -2096,42 +2103,24 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state) {
 	D_ASSERT(state.sorted_blocks_temp.empty());
-	if (state.sorted_blocks.size() == 1) {
-		for (auto &sb : state.sorted_blocks) {
-			sb->radix_sorting_data.clear();
-			sb->blob_sorting_data = nullptr;
-		}
-		pipeline.Finish();
-		return;
-	}
 	// Uneven number of blocks - keep one on the side
-	auto num_blocks = state.sorted_blocks.size();
-	if (num_blocks % 2 == 1) {
+	if (state.sorted_blocks.size() % 2 == 1) {
 		state.odd_one_out = move(state.sorted_blocks.back());
 		state.sorted_blocks.pop_back();
-		num_blocks--;
 	}
 	// Init merge path path indices
 	state.pair_idx = 0;
-	state.num_pairs = num_blocks / 2;
+	state.num_pairs = state.sorted_blocks.size() / 2;
 	state.l_start = 0;
 	state.r_start = 0;
-	// Compute how many tasks there will be
-	// Each merge task produces a SortedBlock with exactly state.block_capacity or less
-	idx_t num_tasks = 0;
-	const idx_t tuples_per_block = state.block_capacity;
+	// Allocate room for merge results
 	for (idx_t pair_idx = 0; pair_idx < state.num_pairs; pair_idx++) {
-		auto &left = *state.sorted_blocks[pair_idx * 2];
-		auto &right = *state.sorted_blocks[pair_idx * 2 + 1];
-		const idx_t count = left.Count() + right.Count();
-		num_tasks += (count + tuples_per_block - 1) / tuples_per_block;
-		// Allocate room for merge results
 		state.sorted_blocks_temp.emplace_back();
 	}
-	pipeline.total_tasks += num_tasks;
 	// Schedule tasks equal to the number of threads, which will each finish multiple tasks
 	auto &ts = TaskScheduler::GetScheduler(context);
 	idx_t num_threads = ts.NumberOfThreads();
+	pipeline.total_tasks += num_threads;
 	for (idx_t tnum = 0; tnum < num_threads; tnum++) {
 		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state);
 		ts.ScheduleTask(pipeline.token, move(new_task));
