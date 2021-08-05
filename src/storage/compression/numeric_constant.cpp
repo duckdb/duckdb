@@ -39,7 +39,7 @@ void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t 
 //===--------------------------------------------------------------------===//
 // Scan Partial
 //===--------------------------------------------------------------------===//
-void FillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
+void ConstantFillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	auto &validity = (ValidityStatistics &)*segment.stats.statistics;
 	if (validity.has_null) {
 		auto &mask = FlatVector::Validity(result);
@@ -50,7 +50,7 @@ void FillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_id
 }
 
 template <class T>
-void FillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
+void ConstantFillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
 
 	auto data = FlatVector::GetData<T>(result);
@@ -62,13 +62,13 @@ void FillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t
 
 void ConstantScanPartialValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                  idx_t result_offset) {
-	FillFunctionValidity(segment, result, result_offset, scan_count);
+	ConstantFillFunctionValidity(segment, result, result_offset, scan_count);
 }
 
 template <class T>
 void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                          idx_t result_offset) {
-	FillFunction<T>(segment, result, result_offset, scan_count);
+	ConstantFillFunction<T>(segment, result, result_offset, scan_count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -76,12 +76,12 @@ void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 //===--------------------------------------------------------------------===//
 void ConstantFetchRowValidity(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                               idx_t result_idx) {
-	FillFunctionValidity(segment, result, result_idx, 1);
+	ConstantFillFunctionValidity(segment, result, result_idx, 1);
 }
 
 template <class T>
 void ConstantFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
-	FillFunction<T>(segment, result, result_idx, 1);
+	ConstantFillFunction<T>(segment, result, result_idx, 1);
 }
 
 //===--------------------------------------------------------------------===//

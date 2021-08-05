@@ -14,6 +14,11 @@ CREATE TABLE test (id INTEGER, l INTEGER[]);
 statement ok
 INSERT INTO test SELECT i, case when (i/1000)%2=0 then [1, 1, 1] else [2, 2] end FROM range(200000) tbl(i)
 
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+----
+RLE
+
 # full unnest
 query II
 SELECT COUNT(*), SUM(i) FROM (SELECT UNNEST(l) FROM test) tbl(i)

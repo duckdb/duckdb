@@ -46,14 +46,7 @@ static CompressionFunction *LoadCompressionFunction(CompressionFunctionSet &set,
 			}
 			// the type is supported: create the function and insert it into the set
 			auto function = method.get_function(data_type);
-			auto entry = set.functions.find(type);
-			if (entry == set.functions.end()) {
-				map<PhysicalType, CompressionFunction> comp_map;
-				comp_map.insert(make_pair(data_type, function));
-				set.functions.insert(make_pair(type, move(comp_map)));
-			} else {
-				entry->second.insert(make_pair(data_type, function));
-			}
+			set.functions[type].insert(make_pair(data_type, function));
 			return FindCompressionFunction(set, type, data_type);
 		}
 	}

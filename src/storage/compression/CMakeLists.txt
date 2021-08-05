@@ -2,7 +2,7 @@ add_library_unity(
   duckdb_storage_segment
   OBJECT
   numeric_constant.cpp
-  numeric_uncompressed.cpp
+  fixed_size_uncompressed.cpp
   rle.cpp
   string_uncompressed.cpp
   uncompressed.cpp

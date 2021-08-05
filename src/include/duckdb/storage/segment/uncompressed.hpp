@@ -22,7 +22,7 @@ struct UncompressedFunctions {
 	}
 };
 
-struct NumericUncompressed {
+struct FixedSizeUncompressed {
 	static CompressionFunction GetFunction(PhysicalType data_type);
 };
 

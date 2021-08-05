@@ -20,6 +20,11 @@ INSERT INTO test SELECT * FROM repeat(4, 1000);
 INSERT INTO test SELECT * FROM repeat(5, 1000);
 INSERT INTO test SELECT * FROM repeat(6, 1000);
 
+query I
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+----
+RLE
+
 query IIII
 SELECT SUM(a), MIN(a), MAX(a), COUNT(*) FROM test
 ----

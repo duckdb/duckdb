@@ -19,7 +19,7 @@ CompressionFunction UncompressedFun::GetFunction(PhysicalType type) {
 	case PhysicalType::DOUBLE:
 	case PhysicalType::LIST:
 	case PhysicalType::INTERVAL:
-		return NumericUncompressed::GetFunction(type);
+		return FixedSizeUncompressed::GetFunction(type);
 	case PhysicalType::BIT:
 		return ValidityUncompressed::GetFunction(type);
 	case PhysicalType::VARCHAR:

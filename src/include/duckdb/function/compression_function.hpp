@@ -84,7 +84,6 @@ typedef idx_t (*compression_append_t)(ColumnSegment &segment, SegmentStatistics 
                                       idx_t count);
 typedef void (*compression_revert_append_t)(ColumnSegment &segment, idx_t start_row);
 
-//! The type used for initializing hashed aggregate function states
 class CompressionFunction {
 public:
 	CompressionFunction(CompressionType type, PhysicalType data_type, compression_init_analyze_t init_analyze,

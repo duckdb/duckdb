@@ -15,26 +15,26 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
-struct NumericAnalyzeState : public AnalyzeState {
-	NumericAnalyzeState() : count(0) {
+struct FixedSizeAnalyzeState : public AnalyzeState {
+	FixedSizeAnalyzeState() : count(0) {
 	}
 
 	idx_t count;
 };
 
-unique_ptr<AnalyzeState> NumericInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<NumericAnalyzeState>();
+unique_ptr<AnalyzeState> FixedSizeInitAnalyze(ColumnData &col_data, PhysicalType type) {
+	return make_unique<FixedSizeAnalyzeState>();
 }
 
-bool NumericAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = (NumericAnalyzeState &)state_p;
+bool FixedSizeAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
+	auto &state = (FixedSizeAnalyzeState &)state_p;
 	state.count += count;
 	return true;
 }
 
 template <class T>
-idx_t NumericFinalAnalyze(AnalyzeState &state_p) {
-	auto &state = (NumericAnalyzeState &)state_p;
+idx_t FixedSizeFinalAnalyze(AnalyzeState &state_p) {
+	auto &state = (FixedSizeAnalyzeState &)state_p;
 	return sizeof(T) * state.count;
 }
 
@@ -108,12 +108,12 @@ void UncompressedFunctions::FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-struct NumericScanState : public SegmentScanState {
+struct FixedSizeScanState : public SegmentScanState {
 	unique_ptr<BufferHandle> handle;
 };
 
-unique_ptr<SegmentScanState> NumericInitScan(ColumnSegment &segment) {
-	auto result = make_unique<NumericScanState>();
+unique_ptr<SegmentScanState> FixedSizeInitScan(ColumnSegment &segment) {
+	auto result = make_unique<FixedSizeScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	result->handle = buffer_manager.Pin(segment.block);
 	return move(result);
@@ -123,9 +123,9 @@ unique_ptr<SegmentScanState> NumericInitScan(ColumnSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 template <class T>
-void NumericScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                        idx_t result_offset) {
-	auto &scan_state = (NumericScanState &)*state.scan_state;
+void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+                          idx_t result_offset) {
+	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto data = scan_state.handle->node->buffer;
@@ -137,16 +137,17 @@ void NumericScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 }
 
 template <class T>
-void NumericScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void FixedSizeScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	// FIXME: we should be able to do a zero-copy here
-	NumericScanPartial<T>(segment, state, scan_count, result, 0);
+	FixedSizeScanPartial<T>(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
 template <class T>
-void NumericFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                       idx_t result_idx) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 
@@ -201,7 +202,7 @@ void AppendLoop<list_entry_t>(SegmentStatistics &stats, data_ptr_t target, idx_t
 }
 
 template <class T>
-idx_t NumericAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
+idx_t FixedSizeAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 
@@ -218,45 +219,45 @@ idx_t NumericAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData
 // Get Function
 //===--------------------------------------------------------------------===//
 template <class T>
-CompressionFunction NumericGetFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, NumericInitAnalyze, NumericAnalyze,
-	                           NumericFinalAnalyze<T>, UncompressedFunctions::InitCompression,
+CompressionFunction FixedSizeGetFunction(PhysicalType data_type) {
+	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, FixedSizeInitAnalyze,
+	                           FixedSizeAnalyze, FixedSizeFinalAnalyze<T>, UncompressedFunctions::InitCompression,
 	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
-	                           NumericInitScan, NumericScan<T>, NumericScanPartial<T>, NumericFetchRow<T>,
-	                           UncompressedFunctions::EmptySkip, nullptr, NumericAppend<T>, nullptr);
+	                           FixedSizeInitScan, FixedSizeScan<T>, FixedSizeScanPartial<T>, FixedSizeFetchRow<T>,
+	                           UncompressedFunctions::EmptySkip, nullptr, FixedSizeAppend<T>, nullptr);
 }
 
-CompressionFunction NumericUncompressed::GetFunction(PhysicalType data_type) {
+CompressionFunction FixedSizeUncompressed::GetFunction(PhysicalType data_type) {
 	switch (data_type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return NumericGetFunction<int8_t>(data_type);
+		return FixedSizeGetFunction<int8_t>(data_type);
 	case PhysicalType::INT16:
-		return NumericGetFunction<int16_t>(data_type);
+		return FixedSizeGetFunction<int16_t>(data_type);
 	case PhysicalType::INT32:
-		return NumericGetFunction<int32_t>(data_type);
+		return FixedSizeGetFunction<int32_t>(data_type);
 	case PhysicalType::INT64:
-		return NumericGetFunction<int64_t>(data_type);
+		return FixedSizeGetFunction<int64_t>(data_type);
 	case PhysicalType::UINT8:
-		return NumericGetFunction<uint8_t>(data_type);
+		return FixedSizeGetFunction<uint8_t>(data_type);
 	case PhysicalType::UINT16:
-		return NumericGetFunction<uint16_t>(data_type);
+		return FixedSizeGetFunction<uint16_t>(data_type);
 	case PhysicalType::UINT32:
-		return NumericGetFunction<uint32_t>(data_type);
+		return FixedSizeGetFunction<uint32_t>(data_type);
 	case PhysicalType::UINT64:
-		return NumericGetFunction<uint64_t>(data_type);
+		return FixedSizeGetFunction<uint64_t>(data_type);
 	case PhysicalType::INT128:
-		return NumericGetFunction<hugeint_t>(data_type);
+		return FixedSizeGetFunction<hugeint_t>(data_type);
 	case PhysicalType::FLOAT:
-		return NumericGetFunction<float>(data_type);
+		return FixedSizeGetFunction<float>(data_type);
 	case PhysicalType::DOUBLE:
-		return NumericGetFunction<double>(data_type);
+		return FixedSizeGetFunction<double>(data_type);
 	case PhysicalType::INTERVAL:
-		return NumericGetFunction<interval_t>(data_type);
+		return FixedSizeGetFunction<interval_t>(data_type);
 	case PhysicalType::LIST:
-		return NumericGetFunction<list_entry_t>(data_type);
+		return FixedSizeGetFunction<list_entry_t>(data_type);
 	default:
-		throw InternalException("Unsupported type for NumericUncompressed::GetFunction");
+		throw InternalException("Unsupported type for FixedSizeUncompressed::GetFunction");
 	}
 }
 

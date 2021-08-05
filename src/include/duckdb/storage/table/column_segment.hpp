@@ -73,11 +73,11 @@ public:
 	//! Skip a scan forward to the row_index specified in the scan state
 	void Skip(ColumnScanState &state);
 
-	//! Initialize an append of this transient segment
+	//! Initialize an append of this segment. Appends are only supported on transient segments.
 	void InitializeAppend(ColumnAppendState &state);
-	//! Appends a (part of) vector to the transient segment, returns the amount of entries successfully appended
+	//! Appends a (part of) vector to the segment, returns the amount of entries successfully appended
 	idx_t Append(ColumnAppendState &state, VectorData &data, idx_t offset, idx_t count);
-	//! Revert an append made to this transient segment
+	//! Revert an append made to this segment
 	void RevertAppend(idx_t start_row);
 
 	//! Convert a transient in-memory segment into a persistent segment blocked by an on-disk block.

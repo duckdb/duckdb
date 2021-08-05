@@ -53,6 +53,11 @@ SELECT COUNT(*), COUNT(i), SUM(i) FROM nulls
 statement ok
 INSERT INTO nulls VALUES (1), (1), (1), (2), (2), (2)
 
+query I
+SELECT compression FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+----
+RLE
+
 query III
 SELECT COUNT(*), COUNT(i), SUM(i) FROM nulls
 ----
