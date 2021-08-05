@@ -17,22 +17,19 @@ jobs:
     runs-on: windows-latest
     # needs: linux-debug
 
+    strategy:
+      matrix:
+        node: [ '10', '12', '14', '15' ]
+
     steps:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
 
     - name: Setup
-      run: ./scripts/node_version.sh
+      uses: actions/setup-node@v2
+      with:
+        node-version: ${{ matrix.node }}
 
-    - name: Node 10
-      run: ./scripts/node_build.sh 10
-
-    - name: Node 12
-      run: ./scripts/node_build.sh 12
-
-    - name: Node 14
-      run: ./scripts/node_build.sh 14
-
-    - name: Node 15
-      run: ./scripts/node_build.sh 15
+    - name: Node
+      run: ./scripts/node_build_win.sh
