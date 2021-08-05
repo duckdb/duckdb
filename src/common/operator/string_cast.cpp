@@ -146,4 +146,9 @@ duckdb::string_t StringCast::Operation(timestamp_t input, Vector &vector) {
 	return result;
 }
 
+template <>
+duckdb::string_t StringCast::Operation(duckdb::string_t input, Vector &result) {
+	return StringVector::AddStringOrBlob(result, input);
+}
+
 } // namespace duckdb
