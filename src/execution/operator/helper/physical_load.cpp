@@ -6,6 +6,9 @@
 #ifndef _WIN32
 #include <dlfcn.h>
 #else
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 
 #define RTLD_LAZY  0

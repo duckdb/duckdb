@@ -56,15 +56,15 @@
                         ]
                     },
                 ],  # OS=="win"
-            ],  # conditions# uncomment this to build against existing lib
-#             "libraries": [
-#               "/Users/hannes/source/duckdb/build/release/src/libduckdb_static.a",
-#               "/Users/hannes/source/duckdb/build/release/third_party/fmt/libfmt.a",
-#               "/Users/hannes/source/duckdb/build/release/third_party/libpg_query/libpg_query.a",
-#               "/Users/hannes/source/duckdb/build/release/third_party/utf8proc/libutf8proc.a",
-#               "/Users/hannes/source/duckdb/build/release/third_party/re2/libduckdb_re2.a"
-#
-#               ]
+            ],  # conditions
+            # uncomment this to build against existing lib
+            # "libraries": [
+            #     "/Users/hannes/source/duckdb/build/release/src/libduckdb_static.a",
+            #     "/Users/hannes/source/duckdb/build/release/third_party/fmt/libfmt.a",
+            #     "/Users/hannes/source/duckdb/build/release/third_party/libpg_query/libpg_query.a",
+            #     "/Users/hannes/source/duckdb/build/release/third_party/utf8proc/libutf8proc.a",
+            #     "/Users/hannes/source/duckdb/build/release/third_party/re2/libduckdb_re2.a"
+            # ]
         },
         {
             "target_name": "action_after_build",
