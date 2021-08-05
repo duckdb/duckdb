@@ -14,8 +14,9 @@
                 "<!@(node -p \"require('node-addon-api').include\")"
             ],
             'defines': [
-            'NAPI_DISABLE_CPP_EXCEPTIONS=1',
-            "NAPI_VERSION=5"],
+                'NAPI_DISABLE_CPP_EXCEPTIONS=1',
+                "NAPI_VERSION=5"
+            ],
             "cflags_cc": [
                 "-frtti",
                 "-fexceptions"
@@ -46,7 +47,16 @@
                     "ExceptionHandling": 1
                 }
             },
-# uncomment this to build against existing lib
+            "conditions": [
+                [
+                    'OS=="win"',
+                    {
+                        "defines": [
+                            "DUCKDB_BUILD_LIBRARY"
+                        ]
+                    },
+                ],  # OS=="win"
+            ],  # conditions# uncomment this to build against existing lib
 #             "libraries": [
 #               "/Users/hannes/source/duckdb/build/release/src/libduckdb_static.a",
 #               "/Users/hannes/source/duckdb/build/release/third_party/fmt/libfmt.a",
