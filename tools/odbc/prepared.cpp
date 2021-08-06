@@ -37,7 +37,7 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 		// it would appear that the parameter_type does not matter that much
 		// we cast it anyway and if the cast fails we will hear about it during execution
 		duckdb::Value res;
-		duckdb::const_data_ptr_t dataptr =  (duckdb::const_data_ptr_t)parameter_value_ptr;
+		duckdb::const_data_ptr_t dataptr = (duckdb::const_data_ptr_t)parameter_value_ptr;
 
 		switch (value_type) {
 		case SQL_C_CHAR:
