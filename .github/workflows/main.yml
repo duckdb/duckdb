@@ -663,7 +663,7 @@ jobs:
       - name: Generate Coverage
         run: |
           lcov --config-file .github/workflows/lcovrc --directory . --base-directory . --no-external --capture --output-file coverage.info
-          lcov --config-file .github/workflows/lcovrc --remove coverage.info '/usr*' '*/cl.hpp' '*/tools/jdbc/*' '*/tools/nodejs/*' '*/tools/odbc/*' '*/tools/rest/*' '*/tools/rpkg/*' '*/tools/shell/*' '*/tools/sqlite3_api_wrapper/*' '*/benchmark/*' '*/examples/*' '*/third_party/*' '*/test/*' src/function/table/arrow.cpp tools/pythonpkg/src/arrow_array_stream.cpp tools/pythonpkg/src/include/duckdb_python/arrow_array_stream.hpp src/common/arrow_wrapper.cpp -o lcov.info
+          lcov --config-file .github/workflows/lcovrc --remove coverage.info $(< .github/workflows/lcov_exclude) -o lcov.info
 
       - name: CodeCov Upload
         uses: codecov/codecov-action@v1
