@@ -1154,3 +1154,22 @@ TEST_CASE("Test C API config", "[capi]") {
 	duckdb_destroy_config(nullptr);
 	duckdb_destroy_config(nullptr);
 }
+
+TEST_CASE("Issue #2058: Cleanup after execution of invalid SQL statement causes segmentation fault", "[capi]") {
+    duckdb_database db;
+    duckdb_connection con;
+    duckdb_result result;
+    duckdb_result result_count;
+
+    REQUIRE(duckdb_open(NULL, &db) != DuckDBError);
+    REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+
+    REQUIRE(duckdb_query(con, "CREATE TABLE integers(i INTEGER, j INTEGER);", NULL) != DuckDBError);
+    REQUIRE((duckdb_query(con, "SELECT count(*) FROM integers;", &result_count) != DuckDBError));
+
+    duckdb_destroy_result(&result_count);
+
+    REQUIRE(duckdb_query(con, "non valid SQL", &result) == DuckDBError);
+
+    duckdb_destroy_result(&result); // segmentation failure happens here
+}

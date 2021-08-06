@@ -26,7 +26,7 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 		// no result to write to, only return the status
 		return result->success ? DuckDBSuccess : DuckDBError;
 	}
-	out->error_message = nullptr;
+	memset(out, 0, sizeof(duckdb_result));
 	if (!result->success) {
 		// write the error message
 		out->error_message = strdup(result->error.c_str());
