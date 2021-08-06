@@ -103,7 +103,7 @@ struct OdbcHandleDbc : public OdbcHandle {
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
 	bool autocommit;
-	// a list of reference to open statements handled by this connection
+	// reference to an open statement handled by this connection
 	OdbcHandleStmt *stmt_handle;
 };
 
