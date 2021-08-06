@@ -68,6 +68,9 @@ private:
 	uint64_t malloced_size;
 
 protected:
+	uint64_t GetMallocedSize() {
+		return malloced_size;
+	}
 	//! Sets malloced_size given the requested buffer size
 	void SetMallocedSize(uint64_t &bufsiz);
 	//! Constructs the Filebuffer object
