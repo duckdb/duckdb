@@ -4,6 +4,9 @@
 using duckdb::Connection;
 using duckdb::Appender;
 using duckdb::string_t;
+using duckdb::date_t;
+using duckdb::dtime_t;
+using duckdb::timestamp_t;
 
 duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                     duckdb_appender *out_appender) {
@@ -112,6 +115,18 @@ duckdb_state duckdb_append_float(duckdb_appender appender, float value) {
 
 duckdb_state duckdb_append_double(duckdb_appender appender, double value) {
 	return duckdb_append_internal<double>(appender, value);
+}
+
+duckdb_state duckdb_append_date(duckdb_appender appender, duckdb_date value) {
+	return duckdb_append_internal<date_t>(appender, date_t(value.days));
+}
+
+duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value) {
+	return duckdb_append_internal<dtime_t>(appender, dtime_t(value.micros));
+}
+
+duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value) {
+	return duckdb_append_internal<timestamp_t>(appender, timestamp_t(value.micros));
 }
 
 duckdb_state duckdb_append_null(duckdb_appender appender) {

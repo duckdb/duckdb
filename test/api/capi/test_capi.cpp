@@ -148,6 +148,24 @@ string CAPIResult::Fetch(idx_t col, idx_t row) {
 	return strval;
 }
 
+template <>
+duckdb_date_struct CAPIResult::Fetch(idx_t col, idx_t row) {
+	auto value = duckdb_value_date(&result, col, row);
+	return duckdb_from_date(value);
+}
+
+template <>
+duckdb_time_struct CAPIResult::Fetch(idx_t col, idx_t row) {
+	auto value = duckdb_value_time(&result, col, row);
+	return duckdb_from_time(value);
+}
+
+template <>
+duckdb_timestamp_struct CAPIResult::Fetch(idx_t col, idx_t row) {
+	auto value = duckdb_value_timestamp(&result, col, row);
+	return duckdb_from_timestamp(value);
+}
+
 class CAPITester {
 public:
 	CAPITester() : database(nullptr), connection(nullptr) {
@@ -565,6 +583,45 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
+	duckdb_date_struct date_struct;
+	date_struct.year = 1992;
+	date_struct.month = 9;
+	date_struct.day = 3;
+
+	duckdb_bind_date(stmt, 1, duckdb_to_date(date_struct));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "1992-09-03");
+	duckdb_free(value);
+	duckdb_destroy_result(&res);
+
+	duckdb_time_struct time_struct;
+	time_struct.hour = 12;
+	time_struct.min = 22;
+	time_struct.sec = 33;
+	time_struct.micros = 123400;
+
+	duckdb_bind_time(stmt, 1, duckdb_to_time(time_struct));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "12:22:33.1234");
+	duckdb_free(value);
+	duckdb_destroy_result(&res);
+
+	duckdb_timestamp_struct ts;
+	ts.date = date_struct;
+	ts.time = time_struct;
+
+	duckdb_bind_timestamp(stmt, 1, duckdb_to_timestamp(ts));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "1992-09-03 12:22:33.1234");
+	duckdb_free(value);
+	duckdb_destroy_result(&res);
+
 	duckdb_destroy_prepare(&stmt);
 
 	status = duckdb_query(tester.connection, "CREATE TABLE a (i INTEGER)", NULL);
@@ -718,7 +775,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 
 	// many types
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE many_types(bool boolean, t TINYINT, s SMALLINT, b BIGINT, ut UTINYINT, "
-	                             "us USMALLINT, ui UINTEGER, ub UBIGINT, uf REAL, ud DOUBLE, txt VARCHAR, blb BLOB)"));
+	                             "us USMALLINT, ui UINTEGER, ub UBIGINT, uf REAL, ud DOUBLE, txt VARCHAR, blb BLOB, dt DATE, tm TIME, ts TIMESTAMP)"));
 	duckdb_appender tappender;
 
 	status = duckdb_appender_create(tester.connection, nullptr, "many_types", &tappender);
@@ -760,15 +817,48 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_append_varchar_length(tappender, "hello world", 5);
 	REQUIRE(status == DuckDBSuccess);
 
+	duckdb_date_struct date_struct;
+	date_struct.year = 1992;
+	date_struct.month = 9;
+	date_struct.day = 3;
+
 	auto str = strdup("hello world this is my long string");
 	status = duckdb_append_blob(tappender, str, strlen(str));
 	free(str);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_date(tappender, duckdb_to_date(date_struct));
+	REQUIRE(status == DuckDBSuccess);
+
+	duckdb_time_struct time_struct;
+	time_struct.hour = 12;
+	time_struct.min = 22;
+	time_struct.sec = 33;
+	time_struct.micros = 1234;
+
+	status = duckdb_append_time(tappender, duckdb_to_time(time_struct));
+	REQUIRE(status == DuckDBSuccess);
+
+	duckdb_timestamp_struct ts;
+	ts.date = date_struct;
+	ts.time = time_struct;
+
+	status = duckdb_append_timestamp(tappender, duckdb_to_timestamp(ts));
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_appender_end_row(tappender);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_appender_begin_row(tappender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_null(tappender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_null(tappender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_null(tappender);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_append_null(tappender);
@@ -838,6 +928,26 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(memcmp(blob.data, "hello world this is my long string", 34) == 0);
 	duckdb_free(blob.data);
 
+	auto date = result->Fetch<duckdb_date_struct>(12, 0);
+	REQUIRE(date.year == 1992);
+	REQUIRE(date.month == 9);
+	REQUIRE(date.day == 3);
+
+	auto time = result->Fetch<duckdb_time_struct>(13, 0);
+	REQUIRE(time.hour == 12);
+	REQUIRE(time.min == 22);
+	REQUIRE(time.sec == 33);
+	REQUIRE(time.micros == 1234);
+
+	auto timestamp = result->Fetch<duckdb_timestamp_struct>(14, 0);
+	REQUIRE(timestamp.date.year == 1992);
+	REQUIRE(timestamp.date.month == 9);
+	REQUIRE(timestamp.date.day == 3);
+	REQUIRE(timestamp.time.hour == 12);
+	REQUIRE(timestamp.time.min == 22);
+	REQUIRE(timestamp.time.sec == 33);
+	REQUIRE(timestamp.time.micros == 1234);
+
 	REQUIRE(result->IsNull(0, 1));
 	REQUIRE(result->IsNull(1, 1));
 	REQUIRE(result->IsNull(2, 1));
@@ -850,6 +960,9 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(result->IsNull(9, 1));
 	REQUIRE(result->IsNull(10, 1));
 	REQUIRE(result->IsNull(11, 1));
+	REQUIRE(result->IsNull(12, 1));
+	REQUIRE(result->IsNull(13, 1));
+	REQUIRE(result->IsNull(14, 1));
 }
 
 TEST_CASE("Test arrow in C API", "[capi]") {

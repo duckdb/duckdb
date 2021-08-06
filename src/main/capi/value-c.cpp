@@ -203,6 +203,39 @@ double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row) {
 	}
 }
 
+duckdb_date duckdb_value_date(duckdb_result *result, idx_t col, idx_t row) {
+	Value val = GetCValue(result, col, row);
+	duckdb_date date;
+	if (val.is_null) {
+		date.days = 0;
+	} else {
+		date.days = val.GetValue<date_t>().days;
+	}
+	return date;
+}
+
+duckdb_time duckdb_value_time(duckdb_result *result, idx_t col, idx_t row) {
+	Value val = GetCValue(result, col, row);
+	duckdb_time time;
+	if (val.is_null) {
+		time.micros = 0;
+	} else {
+		time.micros = val.GetValue<dtime_t>().micros;
+	}
+	return time;
+}
+
+duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t col, idx_t row) {
+	Value val = GetCValue(result, col, row);
+	duckdb_timestamp ts;
+	if (val.is_null) {
+		ts.micros = 0;
+	} else {
+		ts.micros = val.GetValue<timestamp_t>().value;
+	}
+	return ts;
+}
+
 char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row) {
 	Value val = GetCValue(result, col, row);
 	return strdup(val.ToString().c_str());

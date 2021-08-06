@@ -1,9 +1,13 @@
 #include "duckdb/main/capi_internal.hpp"
+#include "duckdb/common/assert.hpp"
 
 using duckdb::Connection;
 using duckdb::MaterializedQueryResult;
 using duckdb::PreparedStatementWrapper;
 using duckdb::Value;
+using duckdb::date_t;
+using duckdb::dtime_t;
+using duckdb::timestamp_t;
 
 duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                             duckdb_prepared_statement *out_prepared_statement) {
@@ -91,6 +95,18 @@ duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx
 
 duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val) {
 	return duckdb_bind_value(prepared_statement, param_idx, Value(val));
+}
+
+duckdb_state duckdb_bind_date(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_date val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::DATE(date_t(val.days)));
+}
+
+duckdb_state duckdb_bind_time(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_time val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::TIME(dtime_t(val.micros)));
+}
+
+duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_timestamp val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::TIMESTAMP(timestamp_t(val.micros)));
 }
 
 duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val) {

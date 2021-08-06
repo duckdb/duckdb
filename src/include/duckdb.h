@@ -228,6 +228,11 @@ DUCKDB_API uint32_t duckdb_value_uint32(duckdb_result *result, idx_t col, idx_t 
 //! Converts the specified value to an uint64_t. Returns 0 on failure or NULL.
 DUCKDB_API uint64_t duckdb_value_uint64(duckdb_result *result, idx_t col, idx_t row);
 
+//! Converts the specified value to a float. Returns 0.0 on failure or NULL.
+DUCKDB_API float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row);
+//! Converts the specified value to a double. Returns 0.0 on failure or NULL.
+DUCKDB_API double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row);
+
 //! Converts the specified value to an uint16_t. Returns 0 on failure or NULL.
 DUCKDB_API duckdb_date duckdb_value_date(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to an duckdb_time. Returns 0 on failure or NULL.
@@ -235,10 +240,6 @@ DUCKDB_API duckdb_time duckdb_value_time(duckdb_result *result, idx_t col, idx_t
 //! Converts the specified value to an duckdb_timestamp. Returns 0 on failure or NULL.
 DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t col, idx_t row);
 
-//! Converts the specified value to a float. Returns 0.0 on failure or NULL.
-DUCKDB_API float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row);
-//! Converts the specified value to a double. Returns 0.0 on failure or NULL.
-DUCKDB_API double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with
 //! duckdb_free.
 DUCKDB_API char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row);
@@ -289,12 +290,13 @@ DUCKDB_API duckdb_state duckdb_bind_uint16(duckdb_prepared_statement prepared_st
 DUCKDB_API duckdb_state duckdb_bind_uint32(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint32_t val);
 DUCKDB_API duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint64_t val);
 
+DUCKDB_API duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val);
+DUCKDB_API duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val);
+
 DUCKDB_API duckdb_state duckdb_bind_date(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_date val);
 DUCKDB_API duckdb_state duckdb_bind_time(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_time val);
 DUCKDB_API duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_timestamp val);
 
-DUCKDB_API duckdb_state duckdb_bind_float(duckdb_prepared_statement prepared_statement, idx_t param_idx, float val);
-DUCKDB_API duckdb_state duckdb_bind_double(duckdb_prepared_statement prepared_statement, idx_t param_idx, double val);
 DUCKDB_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             const char *val);
 DUCKDB_API duckdb_state duckdb_bind_varchar_length(duckdb_prepared_statement prepared_statement, idx_t param_idx,
@@ -335,12 +337,12 @@ DUCKDB_API duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t 
 DUCKDB_API duckdb_state duckdb_append_uint32(duckdb_appender appender, uint32_t value);
 DUCKDB_API duckdb_state duckdb_append_uint64(duckdb_appender appender, uint64_t value);
 
+DUCKDB_API duckdb_state duckdb_append_float(duckdb_appender appender, float value);
+DUCKDB_API duckdb_state duckdb_append_double(duckdb_appender appender, double value);
+
 DUCKDB_API duckdb_state duckdb_append_date(duckdb_appender appender, duckdb_date value);
 DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
 DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
-
-DUCKDB_API duckdb_state duckdb_append_float(duckdb_appender appender, float value);
-DUCKDB_API duckdb_state duckdb_append_double(duckdb_appender appender, double value);
 
 DUCKDB_API duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val);
 DUCKDB_API duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length);
