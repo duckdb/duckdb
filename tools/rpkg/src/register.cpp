@@ -6,8 +6,10 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 
+#ifndef _WIN32
 #define CSTACK_DEFNS
 #include "Rinterface.h"
+#endif
 
 using namespace duckdb;
 
@@ -90,8 +92,10 @@ public:
 			export_call = r.Protect(
 			    Rf_lang5(export_fun, factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp));
 		}
-		//! Otherwise, if different threads call R methods we get a stack error
+//! Otherwise, if different threads call R methods we get a stack error
+#ifndef _WIN32
 		R_CStackLimit = (uintptr_t)-1;
+#endif
 		RApi::REvalThrows(export_call);
 		return res;
 	}
