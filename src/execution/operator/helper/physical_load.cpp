@@ -1,23 +1,14 @@
 #include "duckdb/execution/operator/helper/physical_load.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/windows.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #ifndef _WIN32
 #include <dlfcn.h>
 #else
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-
 #define RTLD_LAZY  0
 #define RTLD_LOCAL 0
-
-#undef CreateDirectory
-#undef MoveFile
-#undef RemoveDirectory
-
 #endif
 
 namespace duckdb {
