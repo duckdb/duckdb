@@ -1,15 +1,26 @@
 #include "duckdb_odbc.hpp"
 #include "odbc_fetch.hpp"
 
-// duckdb::OdbcHandle::~OdbcHandle() = default;
+using duckdb::OdbcHandleStmt;
 
-duckdb::OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
+OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
     : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
 	D_ASSERT(dbc_p);
 	D_ASSERT(dbc_p->conn);
 
 	odbc_fetcher = make_unique<OdbcFetch>();
+	dbc->stmt_handle = this;
 }
 
-duckdb::OdbcHandleStmt::~OdbcHandleStmt() {
+OdbcHandleStmt::~OdbcHandleStmt() {
+}
+
+SQLRETURN OdbcHandleStmt::MaterializeResult() {
+	if (!stmt) {
+		return SQL_SUCCESS;
+	}
+	if (!res) {
+		return SQL_SUCCESS;
+	}
+	return odbc_fetcher->Materialize(this);
 }

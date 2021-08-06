@@ -21,6 +21,31 @@ void OdbcFetch::IncreaseRowCount() {
 	}
 }
 
+SQLRETURN OdbcFetch::Materialize(OdbcHandleStmt *stmt) {
+	// preserve states before materialization
+	auto before_cur_chunk = current_chunk;
+	auto before_cur_chunk_idx = current_chunk_idx;
+	auto before_chunk_row = chunk_row;
+	auto before_prior_chunk_row = prior_chunk_row;
+
+	SQLRETURN ret;
+	do {
+		ret = FetchNext(stmt);
+	} while (SQL_SUCCEEDED(ret));
+
+	// restore states
+	current_chunk = before_cur_chunk;
+	current_chunk_idx = before_cur_chunk_idx;
+	chunk_row = before_chunk_row;
+	prior_chunk_row = before_prior_chunk_row;
+
+	if (ret == SQL_NO_DATA || ret == SQL_SUCCESS) {
+		return SQL_SUCCESS;
+	}
+
+	return ret;
+}
+
 SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 	// case hasn't reached the end of query result, then try to fetch
 	if (!resultset_end) {
@@ -165,6 +190,14 @@ SQLRETURN OdbcFetch::SetAbsoluteCurrentChunk(OdbcHandleStmt *stmt, SQLLEN fetch_
 	return SQL_ERROR;
 }
 
+SQLRETURN OdbcFetch::SetFirstCurrentChunk(OdbcHandleStmt *stmt) {
+	BeforeStart();
+	if (!current_chunk) {
+		return FetchNext(stmt);
+	}
+	return SQL_SUCCESS;
+}
+
 SQLRETURN OdbcFetch::FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *stmt, SQLLEN fetch_offset) {
 	if (cursor_type == SQL_CURSOR_FORWARD_ONLY && fetch_orientation != SQL_FETCH_NEXT) {
 		stmt->error_messages.emplace_back("Incorrect fetch orientation for cursor type: SQL_CURSOR_FORWARD_ONLY.");
@@ -186,6 +219,8 @@ SQLRETURN OdbcFetch::FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *s
 		return SetPriorCurrentChunk(stmt);
 	case SQL_FETCH_ABSOLUTE:
 		return SetAbsoluteCurrentChunk(stmt, fetch_offset);
+	case SQL_FETCH_FIRST:
+		return SetFirstCurrentChunk(stmt);
 	default:
 		return SQL_SUCCESS;
 	}
