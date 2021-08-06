@@ -1,11 +1,11 @@
 #include "duckdb/main/capi_internal.hpp"
 #include "duckdb/main/appender.hpp"
 
-using duckdb::Connection;
 using duckdb::Appender;
-using duckdb::string_t;
+using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::string_t;
 using duckdb::timestamp_t;
 
 duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,

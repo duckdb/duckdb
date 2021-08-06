@@ -1,9 +1,9 @@
 #include "duckdb/main/capi_internal.hpp"
 
-using duckdb::DuckDB;
 using duckdb::Connection;
 using duckdb::DatabaseData;
 using duckdb::DBConfig;
+using duckdb::DuckDB;
 
 duckdb_state duckdb_open_ext(const char *path, duckdb_database *out, duckdb_config config, char **error) {
 	auto wrapper = new DatabaseData();

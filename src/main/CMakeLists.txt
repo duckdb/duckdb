@@ -7,7 +7,9 @@ if(FORCE_QUERY_LOG)
   add_definitions(-DDUCKDB_FORCE_QUERY_LOG="\""${FORCE_QUERY_LOG}"\"")
 endif()
 
-add_library_unity(duckdb_main OBJECT
+add_library_unity(
+  duckdb_main
+  OBJECT
   appender.cpp
   client_context.cpp
   config.cpp

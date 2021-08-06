@@ -99,7 +99,7 @@ idx_t GetCTypeSize(duckdb_type type) {
 	}
 }
 
-}
+} // namespace duckdb
 
 void *duckdb_malloc(size_t size) {
 	return malloc(size);

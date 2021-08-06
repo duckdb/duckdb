@@ -3,17 +3,17 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
-using duckdb::Value;
+using duckdb::const_data_ptr_t;
 using duckdb::Date;
-using duckdb::Time;
-using duckdb::Timestamp;
 using duckdb::date_t;
 using duckdb::dtime_t;
-using duckdb::timestamp_t;
-using duckdb::interval_t;
 using duckdb::hugeint_t;
-using duckdb::const_data_ptr_t;
+using duckdb::interval_t;
 using duckdb::string;
+using duckdb::Time;
+using duckdb::Timestamp;
+using duckdb::timestamp_t;
+using duckdb::Value;
 
 template <class T>
 T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {

@@ -1,12 +1,12 @@
 #include "duckdb/main/capi_internal.hpp"
 
+using duckdb::ArrowResultWrapper;
 using duckdb::Connection;
 using duckdb::DataChunk;
 using duckdb::LogicalType;
-using duckdb::QueryResult;
 using duckdb::MaterializedQueryResult;
-using duckdb::ArrowResultWrapper;
 using duckdb::PreparedStatementWrapper;
+using duckdb::QueryResult;
 using duckdb::QueryResultType;
 
 duckdb_state duckdb_query_arrow(duckdb_connection connection, const char *query, duckdb_arrow *out_result) {

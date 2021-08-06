@@ -775,7 +775,8 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 
 	// many types
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE many_types(bool boolean, t TINYINT, s SMALLINT, b BIGINT, ut UTINYINT, "
-	                             "us USMALLINT, ui UINTEGER, ub UBIGINT, uf REAL, ud DOUBLE, txt VARCHAR, blb BLOB, dt DATE, tm TIME, ts TIMESTAMP)"));
+	                             "us USMALLINT, ui UINTEGER, ub UBIGINT, uf REAL, ud DOUBLE, txt VARCHAR, blb BLOB, dt "
+	                             "DATE, tm TIME, ts TIMESTAMP)"));
 	duckdb_appender tappender;
 
 	status = duckdb_appender_create(tester.connection, nullptr, "many_types", &tappender);
@@ -1156,20 +1157,20 @@ TEST_CASE("Test C API config", "[capi]") {
 }
 
 TEST_CASE("Issue #2058: Cleanup after execution of invalid SQL statement causes segmentation fault", "[capi]") {
-    duckdb_database db;
-    duckdb_connection con;
-    duckdb_result result;
-    duckdb_result result_count;
+	duckdb_database db;
+	duckdb_connection con;
+	duckdb_result result;
+	duckdb_result result_count;
 
-    REQUIRE(duckdb_open(NULL, &db) != DuckDBError);
-    REQUIRE(duckdb_connect(db, &con) != DuckDBError);
+	REQUIRE(duckdb_open(NULL, &db) != DuckDBError);
+	REQUIRE(duckdb_connect(db, &con) != DuckDBError);
 
-    REQUIRE(duckdb_query(con, "CREATE TABLE integers(i INTEGER, j INTEGER);", NULL) != DuckDBError);
-    REQUIRE((duckdb_query(con, "SELECT count(*) FROM integers;", &result_count) != DuckDBError));
+	REQUIRE(duckdb_query(con, "CREATE TABLE integers(i INTEGER, j INTEGER);", NULL) != DuckDBError);
+	REQUIRE((duckdb_query(con, "SELECT count(*) FROM integers;", &result_count) != DuckDBError));
 
-    duckdb_destroy_result(&result_count);
+	duckdb_destroy_result(&result_count);
 
-    REQUIRE(duckdb_query(con, "non valid SQL", &result) == DuckDBError);
+	REQUIRE(duckdb_query(con, "non valid SQL", &result) == DuckDBError);
 
-    duckdb_destroy_result(&result); // segmentation failure happens here
+	duckdb_destroy_result(&result); // segmentation failure happens here
 }

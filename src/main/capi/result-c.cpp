@@ -218,4 +218,4 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 	return DuckDBSuccess;
 }
 
-}
+} // namespace duckdb
