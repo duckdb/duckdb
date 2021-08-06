@@ -341,12 +341,12 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	result = tester.Query("SELECT * FROM dates ORDER BY d");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->IsNull(0, 0));
-	duckdb_date date = result->Fetch<duckdb_date>(0, 1);
+	duckdb_date_struct date = duckdb_from_date(result->Fetch<duckdb_date>(0, 1));
 	REQUIRE(date.year == 1992);
 	REQUIRE(date.month == 9);
 	REQUIRE(date.day == 20);
 	REQUIRE(result->Fetch<string>(0, 1) == Value::DATE(1992, 9, 20).ToString());
-	date = result->Fetch<duckdb_date>(0, 2);
+	date = duckdb_from_date(result->Fetch<duckdb_date>(0, 2));
 	REQUIRE(date.year == 30000);
 	REQUIRE(date.month == 9);
 	REQUIRE(date.day == 20);
@@ -366,7 +366,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(result->IsNull(2, 0));
 	REQUIRE(result->IsNull(3, 0));
 	for (idx_t i = 0; i < 4; i++) {
-		duckdb_timestamp stamp = result->Fetch<duckdb_timestamp>(i, 1);
+		duckdb_timestamp_struct stamp = duckdb_from_timestamp(result->Fetch<duckdb_timestamp>(i, 1));
 		REQUIRE(stamp.date.year == 1992);
 		REQUIRE(stamp.date.month == 9);
 		REQUIRE(stamp.date.day == 20);
@@ -386,13 +386,13 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	result = tester.Query("SELECT * FROM times ORDER BY d");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->IsNull(0, 0));
-	duckdb_time time_val = result->Fetch<duckdb_time>(0, 1);
+	duckdb_time_struct time_val = duckdb_from_time(result->Fetch<duckdb_time>(0, 1));
 	REQUIRE(time_val.hour == 2);
 	REQUIRE(time_val.min == 30);
 	REQUIRE(time_val.sec == 1);
 	REQUIRE(time_val.micros == 0);
 	REQUIRE(result->Fetch<string>(0, 1) == Value::TIME(2, 30, 1, 0).ToString());
-	time_val = result->Fetch<duckdb_time>(0, 2);
+	time_val = duckdb_from_time(result->Fetch<duckdb_time>(0, 2));
 	REQUIRE(time_val.hour == 12);
 	REQUIRE(time_val.min == 0);
 	REQUIRE(time_val.sec == 30);
