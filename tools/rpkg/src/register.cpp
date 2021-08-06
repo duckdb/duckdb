@@ -6,6 +6,9 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 
+#define CSTACK_DEFNS
+#include "Rinterface.h"
+
 using namespace duckdb;
 
 SEXP RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
@@ -87,6 +90,8 @@ public:
 			export_call = r.Protect(
 			    Rf_lang5(export_fun, factory->arrow_scannable, stream_ptr_sexp, projection_sexp, filters_sexp));
 		}
+		//! Otherwise, if different threads call R methods we get a stack error
+		R_CStackLimit = (uintptr_t)-1;
 		RApi::REvalThrows(export_call);
 		return res;
 	}
