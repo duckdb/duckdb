@@ -659,6 +659,19 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
+	duckdb_interval interval;
+	interval.months = 3;
+	interval.days = 0;
+	interval.micros = 0;
+
+	duckdb_bind_interval(stmt, 1, interval);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	value = duckdb_value_varchar(&res, 0, 0);
+	REQUIRE(string(value) == "3 months");
+	duckdb_free(value);
+	duckdb_destroy_result(&res);
+
 	duckdb_destroy_prepare(&stmt);
 
 	status = duckdb_query(tester.connection, "CREATE TABLE a (i INTEGER)", NULL);

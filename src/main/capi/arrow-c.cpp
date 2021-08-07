@@ -32,9 +32,9 @@ duckdb_state duckdb_query_arrow_array(duckdb_arrow result, duckdb_arrow_array *o
 	}
 	auto wrapper = (ArrowResultWrapper *)result;
 	auto success = wrapper->result->TryFetch(wrapper->current_chunk, wrapper->result->error);
-	if (!success) {
+	if (!success) { // LCOV_EXCL_START
 		return DuckDBError;
-	}
+	} // LCOV_EXCL_STOP
 	if (!wrapper->current_chunk || wrapper->current_chunk->size() == 0) {
 		return DuckDBSuccess;
 	}
