@@ -86,9 +86,9 @@ duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 	if (!appender) {
 		return DuckDBError;
 	}
-	auto *appender_instance = (Appender *)appender;
+	auto *appender_instance = (AppenderWrapper *)appender;
 	try {
-		appender_instance->Append<T>(value);
+		appender_instance->appender->Append<T>(value);
 	} catch (...) {
 		return DuckDBError;
 	}
