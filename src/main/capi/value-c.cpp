@@ -14,6 +14,7 @@ using duckdb::Time;
 using duckdb::Timestamp;
 using duckdb::timestamp_t;
 using duckdb::Value;
+using duckdb::LogicalType;
 
 template <class T>
 T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
