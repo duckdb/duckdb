@@ -630,6 +630,11 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 
 	status = duckdb_appender_create(tester.connection, nullptr, "nonexistant-table", &appender);
 	REQUIRE(status == DuckDBError);
+	REQUIRE(appender != nullptr);
+	auto msg = duckdb_appender_error(appender);
+	REQUIRE(msg != nullptr);
+	duckdb_free((void *)msg);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
 
 	status = duckdb_appender_create(tester.connection, nullptr, "test", nullptr);
 	REQUIRE(status == DuckDBError);
@@ -659,6 +664,36 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_appender_flush(appender);
 	REQUIRE(status == DuckDBSuccess);
 
+	status = duckdb_appender_begin_row(appender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_int32(appender, 42);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_double(appender, 4.2);
+	REQUIRE(status == DuckDBSuccess);
+
+	// not enough cols here
+	status = duckdb_appender_end_row(appender);
+	REQUIRE(status == DuckDBError);
+	auto err_msg = duckdb_appender_error(appender);
+	REQUIRE(err_msg != nullptr);
+	duckdb_free((void *)err_msg);
+
+	status = duckdb_append_varchar(appender, "Hello, World");
+	REQUIRE(status == DuckDBSuccess);
+
+	// out of cols here
+	status = duckdb_append_int32(appender, 42);
+	REQUIRE(status == DuckDBError);
+
+	err_msg = duckdb_appender_error(appender);
+	REQUIRE(err_msg != nullptr);
+	duckdb_free((void *)err_msg);
+
+	status = duckdb_appender_end_row(appender);
+	REQUIRE(status == DuckDBSuccess);
+
 	// we can flush again why not
 	status = duckdb_appender_flush(appender);
 	REQUIRE(status == DuckDBSuccess);
@@ -679,6 +714,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 
 	status = duckdb_appender_close(appender);
 	REQUIRE(status == DuckDBError);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
 
 	status = duckdb_appender_flush(appender);
 	REQUIRE(status == DuckDBError);
