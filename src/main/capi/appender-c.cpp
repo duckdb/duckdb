@@ -1,7 +1,7 @@
 #include "duckdb/main/capi_internal.hpp"
-#include "duckdb/main/appender.hpp"
 
 using duckdb::Appender;
+using duckdb::AppenderWrapper;
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
@@ -15,15 +15,20 @@ duckdb_state duckdb_appender_create(duckdb_connection connection, const char *sc
 	if (!connection || !table || !out_appender) {
 		return DuckDBError;
 	}
-	if (!schema) {
+	if (schema == nullptr) {
 		schema = DEFAULT_SCHEMA;
 	}
+	auto wrapper = new AppenderWrapper();
+	*out_appender = (duckdb_appender)wrapper;
 	try {
-		auto *appender = new Appender(*conn, schema, table);
-		*out_appender = appender;
-	} catch (...) {
+		wrapper->appender = duckdb::make_unique<Appender>(*conn, schema, table);
+	} catch (std::exception &ex) {
+		wrapper->error = ex.what();
 		return DuckDBError;
-	}
+	} catch (...) { // LCOV_EXCL_START
+		wrapper->error = "Unknown create appender error";
+		return DuckDBError;
+	} // LCOV_EXCL_STOP
 	return DuckDBSuccess;
 }
 
@@ -31,8 +36,10 @@ duckdb_state duckdb_appender_destroy(duckdb_appender *appender) {
 	if (!appender || !*appender) {
 		return DuckDBError;
 	}
-	auto *appender_instance = *((Appender **)appender);
-	delete appender_instance;
+	auto wrapper = (AppenderWrapper *)*appender;
+	if (wrapper) {
+		delete wrapper;
+	}
 	*appender = nullptr;
 	return DuckDBSuccess;
 }
@@ -42,13 +49,28 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 	if (!appender) {
 		return DuckDBError;
 	}
-	auto *appender_instance = (Appender *)appender;
+	auto wrapper = (AppenderWrapper *)appender;
 	try {
-		function(*appender_instance);
-	} catch (...) {
+		function(*wrapper->appender);
+	} catch (std::exception &ex) {
+		wrapper->error = ex.what();
 		return DuckDBError;
-	}
+	} catch (...) { // LCOV_EXCL_START
+		wrapper->error = "Unknown error";
+		return DuckDBError;
+	} // LCOV_EXCL_STOP
 	return DuckDBSuccess;
+}
+
+const char *duckdb_appender_error(duckdb_appender appender) {
+	if (!appender) {
+		return nullptr;
+	}
+	auto wrapper = (AppenderWrapper *)appender;
+	if (wrapper->error.empty()) {
+		return nullptr;
+	}
+	return strdup(wrapper->error.c_str());
 }
 
 duckdb_state duckdb_appender_begin_row(duckdb_appender appender) {

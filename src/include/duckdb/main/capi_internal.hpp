@@ -11,6 +11,7 @@
 #include "duckdb.h"
 #include "duckdb.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/main/appender.hpp"
 #include <cstring>
 #include <cassert>
 
@@ -38,6 +39,11 @@ struct PreparedStatementWrapper {
 struct ArrowResultWrapper {
 	unique_ptr<MaterializedQueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
+};
+
+struct AppenderWrapper {
+	unique_ptr<Appender> appender;
+	string error;
 };
 
 duckdb_type ConvertCPPTypeToC(LogicalType type);
