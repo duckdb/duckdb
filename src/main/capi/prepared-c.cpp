@@ -6,8 +6,8 @@ using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::MaterializedQueryResult;
-using duckdb::QueryResultType;
 using duckdb::PreparedStatementWrapper;
+using duckdb::QueryResultType;
 using duckdb::timestamp_t;
 using duckdb::Value;
 

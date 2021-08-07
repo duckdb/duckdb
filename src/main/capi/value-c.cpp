@@ -9,12 +9,12 @@ using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
+using duckdb::LogicalType;
 using duckdb::string;
 using duckdb::Time;
 using duckdb::Timestamp;
 using duckdb::timestamp_t;
 using duckdb::Value;
-using duckdb::LogicalType;
 
 template <class T>
 T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
