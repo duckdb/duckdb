@@ -1007,6 +1007,17 @@ void duckdb_free(void *ptr) {
 	free(ptr);
 }
 
+namespace duckdb {
+struct AppenderWrapper {
+	AppenderWrapper() : appender(nullptr) {
+	}
+	~AppenderWrapper() {
+	}
+	unique_ptr<Appender> appender;
+	string error;
+};
+} // namespace duckdb
+
 duckdb_state duckdb_appender_create(duckdb_connection connection, const char *schema, const char *table,
                                     duckdb_appender *out_appender) {
 	Connection *conn = (Connection *)connection;
@@ -1015,13 +1026,17 @@ duckdb_state duckdb_appender_create(duckdb_connection connection, const char *sc
 		return DuckDBError;
 	}
 	if (schema == nullptr) {
-
 		schema = DEFAULT_SCHEMA;
 	}
+	auto wrapper = new AppenderWrapper();
+	*out_appender = (duckdb_appender)wrapper;
 	try {
-		auto *appender = new Appender(*conn, schema, table);
-		*out_appender = appender;
+		wrapper->appender = make_unique<Appender>(*conn, schema, table);
+	} catch (std::exception &ex) {
+		wrapper->error = ex.what();
+		return DuckDBError;
 	} catch (...) {
+		wrapper->error = "Unknown create appender error";
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
@@ -1031,8 +1046,10 @@ duckdb_state duckdb_appender_destroy(duckdb_appender *appender) {
 	if (!appender || !*appender) {
 		return DuckDBError;
 	}
-	auto *appender_instance = *((Appender **)appender);
-	delete appender_instance;
+	auto wrapper = (AppenderWrapper *)*appender;
+	if (wrapper) {
+		delete wrapper;
+	}
 	*appender = nullptr;
 	return DuckDBSuccess;
 }
@@ -1042,25 +1059,25 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 	if (!appender) {
 		return DuckDBError;
 	}
-	auto *appender_instance = (Appender *)appender;
+	auto wrapper = (AppenderWrapper *)appender;
 	try {
-		function(*appender_instance);
+		function(wrapper->appender.get());
 	} catch (std::exception &ex) {
-		appender_instance->error = ex.what();
+		wrapper->error = ex.what();
 		return DuckDBError;
 	} catch (...) {
-		appender_instance->error = "Unknown error";
+		wrapper->error = "Unknown error";
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
 }
 
 duckdb_state duckdb_appender_begin_row(duckdb_appender appender) {
-	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.BeginRow(); });
+	return duckdb_appender_run_function(appender, [&](Appender *appender) { appender->BeginRow(); });
 }
 
 duckdb_state duckdb_appender_end_row(duckdb_appender appender) {
-	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.EndRow(); });
+	return duckdb_appender_run_function(appender, [&](Appender *appender) { appender->EndRow(); });
 }
 
 template <class T>
@@ -1068,14 +1085,14 @@ duckdb_state duckdb_append_internal(duckdb_appender appender, T value) {
 	if (!appender) {
 		return DuckDBError;
 	}
-	auto *appender_instance = (Appender *)appender;
+	auto wrapper = (AppenderWrapper *)appender;
 	try {
-		appender_instance->Append<T>(value);
+		wrapper->appender->Append<T>(value);
 	} catch (std::exception &ex) {
-		appender_instance->error = ex.what();
+		wrapper->error = ex.what();
 		return DuckDBError;
 	} catch (...) {
-		appender_instance->error = "Unknown error";
+		wrapper->error = "Unknown error";
 		return DuckDBError;
 	}
 	return DuckDBSuccess;
@@ -1144,14 +1161,17 @@ const char *duckdb_appender_error(duckdb_appender appender) {
 	if (!appender) {
 		return nullptr;
 	}
-	auto *appender_instance = (Appender *)appender;
-	return strdup(appender_instance->error.c_str());
+	auto wrapper = (AppenderWrapper *)appender;
+	if (wrapper->error.empty()) {
+		return nullptr;
+	}
+	return strdup(wrapper->error.c_str());
 }
 
 duckdb_state duckdb_appender_flush(duckdb_appender appender) {
-	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.Flush(); });
+	return duckdb_appender_run_function(appender, [&](Appender *appender) { appender->Flush(); });
 }
 
 duckdb_state duckdb_appender_close(duckdb_appender appender) {
-	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.Close(); });
+	return duckdb_appender_run_function(appender, [&](Appender *appender) { appender->Close(); });
 }
