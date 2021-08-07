@@ -1,5 +1,6 @@
 #include "duckdb/main/capi_internal.hpp"
 #include "duckdb/common/assert.hpp"
+#include "duckdb/main/query_result.hpp"
 
 using duckdb::Connection;
 using duckdb::date_t;
