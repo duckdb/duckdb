@@ -203,6 +203,11 @@ void Appender::Append(timestamp_t value) {
 }
 
 template <>
+void Appender::Append(interval_t value) {
+	AppendValueInternal<interval_t>(value);
+}
+
+template <>
 void Appender::Append(Value value) { // NOLINT: template shtuff
 	if (column >= chunk->ColumnCount()) {
 		throw InvalidInputException("Too many appends for chunk!");

@@ -239,6 +239,8 @@ DUCKDB_API duckdb_date duckdb_value_date(duckdb_result *result, idx_t col, idx_t
 DUCKDB_API duckdb_time duckdb_value_time(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to an duckdb_timestamp. Returns 0 on failure or NULL.
 DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t col, idx_t row);
+//! Converts the specified value to an duckdb_interval. Returns 0 on failure or NULL.
+DUCKDB_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
 
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with
 //! duckdb_free.
@@ -299,6 +301,8 @@ DUCKDB_API duckdb_state duckdb_bind_time(duckdb_prepared_statement prepared_stat
                                          duckdb_time val);
 DUCKDB_API duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                               duckdb_timestamp val);
+DUCKDB_API duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, idx_t param_idx,
+                                             duckdb_interval val);
 
 DUCKDB_API duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                             const char *val);
@@ -346,6 +350,7 @@ DUCKDB_API duckdb_state duckdb_append_double(duckdb_appender appender, double va
 DUCKDB_API duckdb_state duckdb_append_date(duckdb_appender appender, duckdb_date value);
 DUCKDB_API duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value);
 DUCKDB_API duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value);
+DUCKDB_API duckdb_state duckdb_append_interval(duckdb_appender appender, duckdb_interval value);
 
 DUCKDB_API duckdb_state duckdb_append_varchar(duckdb_appender appender, const char *val);
 DUCKDB_API duckdb_state duckdb_append_varchar_length(duckdb_appender appender, const char *val, idx_t length);

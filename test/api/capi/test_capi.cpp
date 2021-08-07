@@ -135,6 +135,11 @@ duckdb_timestamp CAPIResult::Fetch(idx_t col, idx_t row) {
 }
 
 template <>
+duckdb_interval CAPIResult::Fetch(idx_t col, idx_t row) {
+	return duckdb_value_interval(&result, col, row);
+}
+
+template <>
 duckdb_blob CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto data = (duckdb_blob *)result.columns[col].data;
 	return data[row];
@@ -220,6 +225,9 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
 	REQUIRE(!result->IsNull(0, 0));
+	// out of range fetch
+	REQUIRE(result->Fetch<int64_t>(1, 0) == 0);
+	REQUIRE(result->Fetch<int64_t>(0, 1) == 0);
 
 	// select scalar NULL
 	result = tester.Query("SELECT NULL");
@@ -467,6 +475,7 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	REQUIRE(stmt == nullptr);
 
 	REQUIRE(duckdb_prepare(tester.connection, "SELECT * from INVALID_TABLE", &stmt) == DuckDBError);
+	REQUIRE(duckdb_prepare_error(nullptr) == nullptr);
 	REQUIRE(stmt != nullptr);
 	auto err_msg = duckdb_prepare_error(stmt);
 	REQUIRE(err_msg != nullptr);
@@ -484,6 +493,10 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	REQUIRE(err_msg != nullptr);
 	duckdb_free((void *)err_msg);
 	duckdb_destroy_arrow(&out_arrow);
+
+	// various edge cases/nullptrs
+	REQUIRE(duckdb_query_arrow_schema(out_arrow, nullptr) == DuckDBSuccess);
+	REQUIRE(duckdb_query_arrow_array(out_arrow, nullptr) == DuckDBSuccess);
 }
 
 TEST_CASE("Test prepared statements in C API", "[capi]") {
@@ -532,6 +545,30 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 64);
+	duckdb_destroy_result(&res);
+
+	duckdb_bind_uint8(stmt, 1, 8);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_value_uint8(&res, 0, 0) == 8);
+	duckdb_destroy_result(&res);
+
+	duckdb_bind_uint16(stmt, 1, 8);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_value_uint16(&res, 0, 0) == 8);
+	duckdb_destroy_result(&res);
+
+	duckdb_bind_uint32(stmt, 1, 8);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_value_uint32(&res, 0, 0) == 8);
+	duckdb_destroy_result(&res);
+
+	duckdb_bind_uint64(stmt, 1, 8);
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_value_uint64(&res, 0, 0) == 8);
 	duckdb_destroy_result(&res);
 
 	duckdb_bind_float(stmt, 1, 42.0);
@@ -631,6 +668,8 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != nullptr);
 	idx_t nparams;
+	REQUIRE(duckdb_nparams(nullptr, &nparams) == DuckDBError);
+	REQUIRE(duckdb_nparams(stmt, nullptr) == DuckDBError);
 	REQUIRE(duckdb_nparams(stmt, &nparams) == DuckDBSuccess);
 	REQUIRE(nparams == 1);
 
@@ -813,7 +852,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	// many types
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE many_types(bool boolean, t TINYINT, s SMALLINT, b BIGINT, ut UTINYINT, "
 	                             "us USMALLINT, ui UINTEGER, ub UBIGINT, uf REAL, ud DOUBLE, txt VARCHAR, blb BLOB, dt "
-	                             "DATE, tm TIME, ts TIMESTAMP)"));
+	                             "DATE, tm TIME, ts TIMESTAMP, ival INTERVAL)"));
 	duckdb_appender tappender;
 
 	status = duckdb_appender_create(tester.connection, nullptr, "many_types", &tappender);
@@ -849,7 +888,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_append_float(tappender, 0.5f);
 	REQUIRE(status == DuckDBSuccess);
 
-	status = duckdb_append_null(tappender);
+	status = duckdb_append_double(tappender, 0.5);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_append_varchar_length(tappender, "hello world", 5);
@@ -884,10 +923,21 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_append_timestamp(tappender, duckdb_to_timestamp(ts));
 	REQUIRE(status == DuckDBSuccess);
 
+	duckdb_interval interval;
+	interval.months = 3;
+	interval.days = 0;
+	interval.micros = 0;
+
+	status = duckdb_append_interval(tappender, interval);
+	REQUIRE(status == DuckDBSuccess);
+
 	status = duckdb_appender_end_row(tappender);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_appender_begin_row(tappender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_null(tappender);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_append_null(tappender);
@@ -958,7 +1008,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(result->Fetch<uint32_t>(6, 0) == 1);
 	REQUIRE(result->Fetch<uint64_t>(7, 0) == 1);
 	REQUIRE(result->Fetch<float>(8, 0) == 0.5f);
-	REQUIRE(result->IsNull(9, 0));
+	REQUIRE(result->Fetch<double>(9, 0) == 0.5);
 	REQUIRE(result->Fetch<string>(10, 0) == "hello");
 
 	auto blob = duckdb_value_blob(&result->InternalResult(), 11, 0);
@@ -986,6 +1036,11 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(timestamp.time.sec == 33);
 	REQUIRE(timestamp.time.micros == 1234);
 
+	interval = result->Fetch<duckdb_interval>(15, 0);
+	REQUIRE(interval.months == 3);
+	REQUIRE(interval.days == 0);
+	REQUIRE(interval.micros == 0);
+
 	REQUIRE(result->IsNull(0, 1));
 	REQUIRE(result->IsNull(1, 1));
 	REQUIRE(result->IsNull(2, 1));
@@ -1001,6 +1056,35 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(result->IsNull(12, 1));
 	REQUIRE(result->IsNull(13, 1));
 	REQUIRE(result->IsNull(14, 1));
+	REQUIRE(result->IsNull(15, 1));
+
+	REQUIRE(result->Fetch<bool>(0, 1) == false);
+	REQUIRE(result->Fetch<int8_t>(1, 1) == 0);
+	REQUIRE(result->Fetch<int16_t>(2, 1) == 0);
+	REQUIRE(result->Fetch<int64_t>(3, 1) == 0);
+	REQUIRE(result->Fetch<uint8_t>(4, 1) == 0);
+	REQUIRE(result->Fetch<uint16_t>(5, 1) == 0);
+	REQUIRE(result->Fetch<uint32_t>(6, 1) == 0);
+	REQUIRE(result->Fetch<uint64_t>(7, 1) == 0);
+	REQUIRE(result->Fetch<float>(8, 1) == 0);
+	REQUIRE(result->Fetch<double>(9, 1) == 0);
+	REQUIRE(result->Fetch<string>(10, 1) == "NULL");
+
+	blob = duckdb_value_blob(&result->InternalResult(), 11, 1);
+	REQUIRE(blob.size == 0);
+
+	date = result->Fetch<duckdb_date_struct>(12, 1);
+	REQUIRE(date.year == 1970);
+
+	time = result->Fetch<duckdb_time_struct>(13, 1);
+	REQUIRE(time.hour == 0);
+
+	timestamp = result->Fetch<duckdb_timestamp_struct>(14, 1);
+	REQUIRE(timestamp.date.year == 1970);
+	REQUIRE(timestamp.time.hour == 0);
+
+	interval = result->Fetch<duckdb_interval>(15, 1);
+	REQUIRE(interval.months == 0);
 }
 
 TEST_CASE("Test arrow in C API", "[capi]") {
@@ -1096,6 +1180,7 @@ TEST_CASE("Test arrow in C API", "[capi]") {
 		REQUIRE(duckdb_prepare(tester.connection, "SELECT CAST($1 AS BIGINT)", &stmt) == DuckDBSuccess);
 		REQUIRE(stmt != nullptr);
 		REQUIRE(duckdb_bind_int64(stmt, 1, 42) == DuckDBSuccess);
+		REQUIRE(duckdb_execute_prepared_arrow(stmt, nullptr) == DuckDBError);
 		REQUIRE(duckdb_execute_prepared_arrow(stmt, &arrow_result) == DuckDBSuccess);
 
 		ArrowSchema *arrow_schema = new ArrowSchema();
@@ -1168,6 +1253,8 @@ TEST_CASE("Test C API config", "[capi]") {
 	duckdb_destroy_config(&config);
 	duckdb_destroy_config(&config);
 
+	REQUIRE(duckdb_connect(db, nullptr) == DuckDBError);
+	REQUIRE(duckdb_connect(nullptr, &con) == DuckDBError);
 	REQUIRE(duckdb_connect(db, &con) == DuckDBSuccess);
 
 	// we can query

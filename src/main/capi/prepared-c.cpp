@@ -13,7 +13,7 @@ using duckdb::Value;
 
 duckdb_state duckdb_prepare(duckdb_connection connection, const char *query,
                             duckdb_prepared_statement *out_prepared_statement) {
-	if (!connection || !query) {
+	if (!connection || !query || !out_prepared_statement) {
 		return DuckDBError;
 	}
 	auto wrapper = new PreparedStatementWrapper();
@@ -33,7 +33,7 @@ const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement) {
 
 duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t *nparams_out) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
-	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success || !nparams_out) {
 		return DuckDBError;
 	}
 	*nparams_out = wrapper->statement->n_param;
@@ -110,6 +110,10 @@ duckdb_state duckdb_bind_time(duckdb_prepared_statement prepared_statement, idx_
 duckdb_state duckdb_bind_timestamp(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                    duckdb_timestamp val) {
 	return duckdb_bind_value(prepared_statement, param_idx, Value::TIMESTAMP(timestamp_t(val.micros)));
+}
+
+duckdb_state duckdb_bind_interval(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_interval val) {
+	return duckdb_bind_value(prepared_statement, param_idx, Value::INTERVAL(val.months, val.days, val.micros));
 }
 
 duckdb_state duckdb_bind_varchar(duckdb_prepared_statement prepared_statement, idx_t param_idx, const char *val) {

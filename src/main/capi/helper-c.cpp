@@ -46,10 +46,10 @@ duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
 		return DUCKDB_TYPE_BLOB;
 	case LogicalTypeId::INTERVAL:
 		return DUCKDB_TYPE_INTERVAL;
-	default:
+	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
-	}
+	} // LCOV_EXCL_STOP
 }
 idx_t GetCTypeSize(duckdb_type type) {
 	switch (type) {
@@ -92,11 +92,11 @@ idx_t GetCTypeSize(duckdb_type type) {
 		return sizeof(duckdb_blob);
 	case DUCKDB_TYPE_INTERVAL:
 		return sizeof(duckdb_interval);
-	default:
+	default: // LCOV_EXCL_START
 		// unsupported type
 		D_ASSERT(0);
 		return sizeof(const char *);
-	}
+	} // LCOV_EXCL_STOP
 }
 
 } // namespace duckdb

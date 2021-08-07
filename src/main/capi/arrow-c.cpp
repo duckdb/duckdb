@@ -80,7 +80,7 @@ void duckdb_destroy_arrow(duckdb_arrow *result) {
 
 duckdb_state duckdb_execute_prepared_arrow(duckdb_prepared_statement prepared_statement, duckdb_arrow *out_result) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
-	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success || !out_result) {
 		return DuckDBError;
 	}
 	auto arrow_wrapper = new ArrowResultWrapper();

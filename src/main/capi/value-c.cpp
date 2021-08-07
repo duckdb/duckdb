@@ -91,11 +91,11 @@ static Value GetCValue(duckdb_result *result, idx_t col, idx_t row) {
 		auto blob = UnsafeFetch<duckdb_blob>(result, col, row);
 		return Value::BLOB((const_data_ptr_t)blob.data, blob.size);
 	}
-	default:
+	default: // LCOV_EXCL_START
 		// invalid type for C to C++ conversion
 		D_ASSERT(0);
 		return Value();
-	}
+	} // LCOV_EXCL_STOP
 }
 
 const char *duckdb_column_name(duckdb_result *result, idx_t col) {
@@ -235,6 +235,22 @@ duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t col, idx_t 
 		ts.micros = val.GetValue<timestamp_t>().value;
 	}
 	return ts;
+}
+
+duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row) {
+	Value val = GetCValue(result, col, row);
+	duckdb_interval interval;
+	if (val.is_null) {
+		interval.months = 0;
+		interval.days = 0;
+		interval.micros = 0;
+	} else {
+		auto dinterval = val.GetValue<interval_t>();
+		interval.months = dinterval.months;
+		interval.days = dinterval.days;
+		interval.micros = dinterval.micros;
+	}
+	return interval;
 }
 
 char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row) {

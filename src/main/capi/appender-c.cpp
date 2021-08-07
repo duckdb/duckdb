@@ -5,6 +5,7 @@ using duckdb::AppenderWrapper;
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::interval_t;
 using duckdb::string_t;
 using duckdb::timestamp_t;
 
@@ -149,6 +150,14 @@ duckdb_state duckdb_append_time(duckdb_appender appender, duckdb_time value) {
 
 duckdb_state duckdb_append_timestamp(duckdb_appender appender, duckdb_timestamp value) {
 	return duckdb_append_internal<timestamp_t>(appender, timestamp_t(value.micros));
+}
+
+duckdb_state duckdb_append_interval(duckdb_appender appender, duckdb_interval value) {
+	interval_t interval;
+	interval.months = value.months;
+	interval.days = value.days;
+	interval.micros = value.micros;
+	return duckdb_append_internal<interval_t>(appender, interval);
 }
 
 duckdb_state duckdb_append_null(duckdb_appender appender) {

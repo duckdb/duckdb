@@ -209,11 +209,11 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 			}
 			break;
 		}
-		default:
+		default: // LCOV_EXCL_START
 			// unsupported type for C API
 			D_ASSERT(0);
 			return DuckDBError;
-		}
+		} // LCOV_EXCL_STOP
 	}
 	return DuckDBSuccess;
 }

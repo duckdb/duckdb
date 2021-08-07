@@ -32,7 +32,7 @@ duckdb_state duckdb_open(const char *path, duckdb_database *out) {
 }
 
 void duckdb_close(duckdb_database *database) {
-	if (*database) {
+	if (database && *database) {
 		auto wrapper = (DatabaseData *)*database;
 		delete wrapper;
 		*database = nullptr;
@@ -40,19 +40,22 @@ void duckdb_close(duckdb_database *database) {
 }
 
 duckdb_state duckdb_connect(duckdb_database database, duckdb_connection *out) {
+	if (!database || !out) {
+		return DuckDBError;
+	}
 	auto wrapper = (DatabaseData *)database;
 	Connection *connection;
 	try {
 		connection = new Connection(*wrapper->database);
-	} catch (...) {
+	} catch (...) { // LCOV_EXCL_START
 		return DuckDBError;
-	}
+	} // LCOV_EXCL_STOP
 	*out = (duckdb_connection)connection;
 	return DuckDBSuccess;
 }
 
 void duckdb_disconnect(duckdb_connection *connection) {
-	if (*connection) {
+	if (connection && *connection) {
 		Connection *conn = (Connection *)*connection;
 		delete conn;
 		*connection = nullptr;
