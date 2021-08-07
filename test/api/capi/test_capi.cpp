@@ -1210,4 +1210,7 @@ TEST_CASE("Issue #2058: Cleanup after execution of invalid SQL statement causes 
 	REQUIRE(duckdb_query(con, "non valid SQL", &result) == DuckDBError);
 
 	duckdb_destroy_result(&result); // segmentation failure happens here
+
+	duckdb_disconnect(&con);
+	duckdb_close(&db);
 }
