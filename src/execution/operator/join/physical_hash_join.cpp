@@ -225,8 +225,8 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 #if STANDARD_VECTOR_SIZE >= 128
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
-				chunk.Reference(state->cached_chunk);
-				state->cached_chunk.Reset();
+				chunk.Move(state->cached_chunk);
+				state->cached_chunk.Initialize(types);
 			} else
 #endif
 			    if (IsRightOuterJoin(join_type)) {
@@ -241,8 +241,8 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 				state->cached_chunk.Append(chunk);
 				if (state->cached_chunk.size() >= (STANDARD_VECTOR_SIZE - 64)) {
 					// chunk cache full: return it
-					chunk.Reference(state->cached_chunk);
-					state->cached_chunk.Reset();
+					chunk.Move(state->cached_chunk);
+					state->cached_chunk.Initialize(types);
 					return;
 				} else {
 					// chunk cache not full: probe again
