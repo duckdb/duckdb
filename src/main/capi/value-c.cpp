@@ -207,9 +207,8 @@ static RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row
 	default: // LCOV_EXCL_START
 		// invalid type for C to C++ conversion
 		D_ASSERT(0);
-		break;
+		return FetchDefaultValue::Operation<RESULT_TYPE>();
 	} // LCOV_EXCL_STOP
-	return FetchDefaultValue::Operation<RESULT_TYPE>();
 }
 
 //===--------------------------------------------------------------------===//

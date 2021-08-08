@@ -656,6 +656,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	auto value = duckdb_value_varchar(&res, 0, 0);
 	REQUIRE(string(value) == "hello");
+	REQUIRE(duckdb_value_int8(&res, 0, 0) == 0);
 	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
@@ -664,6 +665,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	value = duckdb_value_varchar(&res, 0, 0);
 	REQUIRE(string(value) == "hello\\x00world");
+	REQUIRE(duckdb_value_int8(&res, 0, 0) == 0);
 	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
