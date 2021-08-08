@@ -11,6 +11,7 @@ using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
+using duckdb::string_t;
 using duckdb::LogicalType;
 using duckdb::string;
 using duckdb::Time;
@@ -18,6 +19,8 @@ using duckdb::Timestamp;
 using duckdb::timestamp_t;
 using duckdb::Value;
 using duckdb::Vector;
+
+namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // Unsafe Fetch (for internal use only)
@@ -124,6 +127,15 @@ bool FromCBlobCastWrapper::Operation(duckdb_blob input, char *&result) {
 	string_t input_str((const char *)input.data, input.size);
 	return ToCStringCastWrapper<duckdb::CastFromBlob>::template Operation<string_t, char *>(input_str, result);
 }
+
+}
+
+using duckdb::UnsafeFetch;
+using duckdb::FetchDefaultValue;
+using duckdb::FromCStringCastWrapper;
+using duckdb::ToCStringCastWrapper;
+using duckdb::FromCBlobCastWrapper;
+using duckdb::FromCBlobCastWrapper;
 
 //===--------------------------------------------------------------------===//
 // Templated Casts

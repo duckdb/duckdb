@@ -585,6 +585,12 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 64);
 	duckdb_destroy_result(&res);
 
+	duckdb_bind_hugeint(stmt, 1, duckdb_double_to_hugeint(64));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_hugeint_to_double(duckdb_value_hugeint(&res, 0, 0)) == 64.0);
+	duckdb_destroy_result(&res);
+
 	duckdb_bind_uint8(stmt, 1, 8);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
