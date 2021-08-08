@@ -56,14 +56,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_FLOAT,
 	// double
 	DUCKDB_TYPE_DOUBLE,
-	// duckdb_timestamp (us)
+	// duckdb_timestamp
 	DUCKDB_TYPE_TIMESTAMP,
-	// duckdb_timestamp (s)
-	DUCKDB_TYPE_TIMESTAMP_S,
-	// duckdb_timestamp (ns)
-	DUCKDB_TYPE_TIMESTAMP_NS,
-	// duckdb_timestamp (ms)
-	DUCKDB_TYPE_TIMESTAMP_MS,
 	// duckdb_date
 	DUCKDB_TYPE_DATE,
 	// duckdb_time
@@ -179,9 +173,31 @@ DUCKDB_API duckdb_state duckdb_query(duckdb_connection connection, const char *q
 //! Destroys the specified result
 DUCKDB_API void duckdb_destroy_result(duckdb_result *result);
 
+//===--------------------------------------------------------------------===//
+// Result Helpers
+//===--------------------------------------------------------------------===//
 //! Returns the column name of the specified column. The result does not need to be freed;
 //! the column names will automatically be destroyed when the result is destroyed.
 DUCKDB_API const char *duckdb_column_name(duckdb_result *result, idx_t col);
+//! Returns the column type of the specified column.
+DUCKDB_API duckdb_type duckdb_column_type(duckdb_result *result, idx_t col);
+//! Returns the number of columns in the result.
+DUCKDB_API idx_t duckdb_column_count(duckdb_result *result);
+//! Returns the number of rows in the result.
+DUCKDB_API idx_t duckdb_row_count(duckdb_result *result);
+//! Returns the number of rows changed in the result (relevant for INSERT/UPDATE/DELETE queries)
+DUCKDB_API idx_t duckdb_rows_changed(duckdb_result *result);
+
+//! Returns the data of a specific column of a result in columnar format.
+//! The type of the data depends on the corresponding duckdb_type (as provided in duckdb_column_type).
+//! For the exact type in which the data should be accessed, see the comments in DUCKDB_TYPE.
+//! e.g. for a column of type DUCKDB_TYPE_INTEGER, you can access rows like so:
+//! int32_t *data = (int32_t *) duckdb_column_data(&result, 0);
+//! printf("Data for row %d: %d\n", row, data[row]);
+DUCKDB_API void *duckdb_column_data(duckdb_result *result, idx_t col);
+//! Returns the nullmask of a specific column of a result in columnar format.
+//! The nullmask can be accessed as a boolean array.
+DUCKDB_API bool *duckdb_nullmask_data(duckdb_result *result, idx_t col);
 
 //===--------------------------------------------------------------------===//
 // Configuration
@@ -205,8 +221,10 @@ DUCKDB_API void duckdb_destroy_config(duckdb_config *config);
 //===--------------------------------------------------------------------===//
 
 // Safe fetch functions
-// These functions will perform conversions if necessary. On failure (e.g. if conversion cannot be performed) a special
-// value is returned.
+// These functions will perform conversions if necessary.
+// On failure (e.g. if conversion cannot be performed or if the value is NULL) a default value is returned.
+// Note that these functions are slow since they perform bounds checking and conversion
+// For fast access of values prefer using duckdb_column_data and duckdb_nullmask_data
 
 //! Converts the specified value to a bool. Returns false on failure or NULL.
 DUCKDB_API bool duckdb_value_boolean(duckdb_result *result, idx_t col, idx_t row);
@@ -233,13 +251,13 @@ DUCKDB_API float duckdb_value_float(duckdb_result *result, idx_t col, idx_t row)
 //! Converts the specified value to a double. Returns 0.0 on failure or NULL.
 DUCKDB_API double duckdb_value_double(duckdb_result *result, idx_t col, idx_t row);
 
-//! Converts the specified value to an uint16_t. Returns 0 on failure or NULL.
+//! Converts the specified value to a duckdb_date. Returns 0 on failure or NULL.
 DUCKDB_API duckdb_date duckdb_value_date(duckdb_result *result, idx_t col, idx_t row);
-//! Converts the specified value to an duckdb_time. Returns 0 on failure or NULL.
+//! Converts the specified value to a duckdb_time. Returns 0 on failure or NULL.
 DUCKDB_API duckdb_time duckdb_value_time(duckdb_result *result, idx_t col, idx_t row);
-//! Converts the specified value to an duckdb_timestamp. Returns 0 on failure or NULL.
+//! Converts the specified value to a duckdb_timestamp. Returns 0 on failure or NULL.
 DUCKDB_API duckdb_timestamp duckdb_value_timestamp(duckdb_result *result, idx_t col, idx_t row);
-//! Converts the specified value to an duckdb_interval. Returns 0 on failure or NULL.
+//! Converts the specified value to a duckdb_interval. Returns 0 on failure or NULL.
 DUCKDB_API duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t row);
 
 //! Converts the specified value to a string. Returns nullptr on failure or NULL. The result must be freed with
@@ -267,8 +285,14 @@ DUCKDB_API duckdb_date duckdb_to_date(duckdb_date_struct date);
 DUCKDB_API duckdb_time_struct duckdb_from_time(duckdb_time time);
 DUCKDB_API duckdb_time duckdb_to_time(duckdb_time_struct time);
 
-DUCKDB_API duckdb_timestamp_struct duckdb_from_timestamp(duckdb_timestamp time);
-DUCKDB_API duckdb_timestamp duckdb_to_timestamp(duckdb_timestamp_struct time);
+DUCKDB_API duckdb_timestamp_struct duckdb_from_timestamp(duckdb_timestamp ts);
+DUCKDB_API duckdb_timestamp duckdb_to_timestamp(duckdb_timestamp_struct ts);
+
+//===--------------------------------------------------------------------===//
+// Hugeint Helpers
+//===--------------------------------------------------------------------===//
+DUCKDB_API double duckdb_hugeint_to_double(duckdb_hugeint val);
+DUCKDB_API duckdb_hugeint duckdb_double_to_hugeint(double val);
 
 //===--------------------------------------------------------------------===//
 // Prepared Statements
@@ -286,6 +310,7 @@ DUCKDB_API duckdb_state duckdb_bind_int8(duckdb_prepared_statement prepared_stat
 DUCKDB_API duckdb_state duckdb_bind_int16(duckdb_prepared_statement prepared_statement, idx_t param_idx, int16_t val);
 DUCKDB_API duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_statement, idx_t param_idx, int32_t val);
 DUCKDB_API duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, idx_t param_idx, int64_t val);
+DUCKDB_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_hugeint val);
 
 DUCKDB_API duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint8_t val);
 DUCKDB_API duckdb_state duckdb_bind_uint16(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint16_t val);
@@ -338,6 +363,7 @@ DUCKDB_API duckdb_state duckdb_append_int8(duckdb_appender appender, int8_t valu
 DUCKDB_API duckdb_state duckdb_append_int16(duckdb_appender appender, int16_t value);
 DUCKDB_API duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value);
 DUCKDB_API duckdb_state duckdb_append_int64(duckdb_appender appender, int64_t value);
+DUCKDB_API duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_hugeint value);
 
 DUCKDB_API duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value);
 DUCKDB_API duckdb_state duckdb_append_uint16(duckdb_appender appender, uint16_t value);

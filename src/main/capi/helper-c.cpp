@@ -29,13 +29,10 @@ duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
 	case LogicalTypeId::DOUBLE:
 		return DUCKDB_TYPE_DOUBLE;
 	case LogicalTypeId::TIMESTAMP:
-		return DUCKDB_TYPE_TIMESTAMP;
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return DUCKDB_TYPE_TIMESTAMP_S;
 	case LogicalTypeId::TIMESTAMP_MS:
-		return DUCKDB_TYPE_TIMESTAMP_MS;
 	case LogicalTypeId::TIMESTAMP_NS:
-		return DUCKDB_TYPE_TIMESTAMP_NS;
+		return DUCKDB_TYPE_TIMESTAMP;
 	case LogicalTypeId::DATE:
 		return DUCKDB_TYPE_DATE;
 	case LogicalTypeId::TIME:
@@ -82,9 +79,6 @@ idx_t GetCTypeSize(duckdb_type type) {
 	case DUCKDB_TYPE_TIME:
 		return sizeof(duckdb_time);
 	case DUCKDB_TYPE_TIMESTAMP:
-	case DUCKDB_TYPE_TIMESTAMP_NS:
-	case DUCKDB_TYPE_TIMESTAMP_MS:
-	case DUCKDB_TYPE_TIMESTAMP_S:
 		return sizeof(duckdb_timestamp);
 	case DUCKDB_TYPE_VARCHAR:
 		return sizeof(const char *);

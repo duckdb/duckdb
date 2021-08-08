@@ -148,7 +148,7 @@ duckdb_blob CAPIResult::Fetch(idx_t col, idx_t row) {
 template <>
 string CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto value = duckdb_value_varchar(&result, col, row);
-	string strval = string(value);
+	string strval = value ? string(value) : string();
 	free((void *)value);
 	return strval;
 }
@@ -451,7 +451,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(!result->Fetch<bool>(0, 0));
 	REQUIRE(!result->Fetch<bool>(0, 1));
 	REQUIRE(result->Fetch<bool>(0, 2));
-	REQUIRE(result->Fetch<string>(0, 2) == Value::BOOLEAN(true).ToString());
+	REQUIRE(result->Fetch<string>(0, 2) == "true");
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {
@@ -1081,7 +1081,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(result->Fetch<uint64_t>(7, 1) == 0);
 	REQUIRE(result->Fetch<float>(8, 1) == 0);
 	REQUIRE(result->Fetch<double>(9, 1) == 0);
-	REQUIRE(result->Fetch<string>(10, 1) == "NULL");
+	REQUIRE(result->Fetch<string>(10, 1) == "");
 
 	blob = duckdb_value_blob(&result->InternalResult(), 11, 1);
 	REQUIRE(blob.size == 0);
