@@ -7,6 +7,7 @@ add_library_unity(
   datetime-c.cpp
   duckdb-c.cpp
   helper-c.cpp
+  hugeint-c.cpp
   prepared-c.cpp
   result-c.cpp
   value-c.cpp)

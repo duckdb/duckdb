@@ -16,16 +16,25 @@ public:
 		success = (duckdb_query(connection, query.c_str(), &result) == DuckDBSuccess);
 	}
 
+	duckdb_type ColumnType(idx_t col) {
+		return duckdb_column_type(&result, col);
+	}
+
+	template <class T>
+	T *ColumnData(idx_t col) {
+		return (T *)duckdb_column_data(&result, col);
+	}
+
 	idx_t ColumnCount() {
-		return result.column_count;
+		return duckdb_column_count(&result);
 	}
 
 	idx_t row_count() {
-		return result.row_count;
+		return duckdb_row_count(&result);
 	}
 
 	idx_t rows_changed() {
-		return result.rows_changed;
+		return duckdb_rows_changed(&result);
 	}
 
 	template <class T>
@@ -34,7 +43,8 @@ public:
 	}
 
 	bool IsNull(idx_t col, idx_t row) {
-		return result.columns[col].nullmask[row];
+		auto nullmask_ptr = duckdb_nullmask_data(&result, col);
+		return nullmask_ptr[row];
 	}
 
 	string ColumnName(idx_t col) {
@@ -148,7 +158,7 @@ duckdb_blob CAPIResult::Fetch(idx_t col, idx_t row) {
 template <>
 string CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto value = duckdb_value_varchar(&result, col, row);
-	string strval = string(value);
+	string strval = value ? string(value) : string();
 	free((void *)value);
 	return strval;
 }
@@ -169,6 +179,11 @@ template <>
 duckdb_timestamp_struct CAPIResult::Fetch(idx_t col, idx_t row) {
 	auto value = duckdb_value_timestamp(&result, col, row);
 	return duckdb_from_timestamp(value);
+}
+
+template <>
+duckdb_hugeint CAPIResult::Fetch(idx_t col, idx_t row) {
+	return duckdb_value_hugeint(&result, col, row);
 }
 
 class CAPITester {
@@ -221,6 +236,8 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	// select scalar value
 	result = tester.Query("SELECT CAST(42 AS BIGINT)");
 	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->ColumnType(0) == DUCKDB_TYPE_BIGINT);
+	REQUIRE(result->ColumnData<int64_t>(0)[0] == 42);
 	REQUIRE(result->ColumnCount() == 1);
 	REQUIRE(result->row_count() == 1);
 	REQUIRE(result->Fetch<int64_t>(0, 0) == 42);
@@ -294,6 +311,14 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	result = tester.Query("UPDATE test SET a = 1 WHERE b=22");
 	REQUIRE_NO_FAIL(*result);
 	REQUIRE(result->rows_changed() == 2);
+
+	// several error conditions
+	REQUIRE(duckdb_column_type(nullptr, 0) == DUCKDB_TYPE_INVALID);
+	REQUIRE(duckdb_column_count(nullptr) == 0);
+	REQUIRE(duckdb_row_count(nullptr) == 0);
+	REQUIRE(duckdb_rows_changed(nullptr) == 0);
+	REQUIRE(duckdb_nullmask_data(nullptr, 0) == nullptr);
+	REQUIRE(duckdb_column_data(nullptr, 0) == nullptr);
 }
 
 TEST_CASE("Test different types of C API", "[capi]") {
@@ -304,7 +329,8 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	// integer columns
-	vector<string> types = {"TINYINT", "SMALLINT", "INTEGER", "BIGINT"};
+	vector<string> types = {"TINYINT",  "SMALLINT",  "INTEGER",  "BIGINT", "HUGEINT",
+	                        "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT"};
 	for (auto &type : types) {
 		// create the table and insert values
 		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
@@ -318,6 +344,12 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE(result->Fetch<int16_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int32_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<uint8_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<uint16_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<uint32_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<uint64_t>(0, 0) == 0);
+		REQUIRE(duckdb_hugeint_to_double(result->Fetch<duckdb_hugeint>(0, 0)) == 0);
+		REQUIRE(result->Fetch<string>(0, 0) == "");
 		REQUIRE(ApproxEqual(result->Fetch<float>(0, 0), 0.0f));
 		REQUIRE(ApproxEqual(result->Fetch<double>(0, 0), 0.0));
 
@@ -326,6 +358,11 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE(result->Fetch<int16_t>(0, 1) == 1);
 		REQUIRE(result->Fetch<int32_t>(0, 1) == 1);
 		REQUIRE(result->Fetch<int64_t>(0, 1) == 1);
+		REQUIRE(result->Fetch<uint8_t>(0, 1) == 1);
+		REQUIRE(result->Fetch<uint16_t>(0, 1) == 1);
+		REQUIRE(result->Fetch<uint32_t>(0, 1) == 1);
+		REQUIRE(result->Fetch<uint64_t>(0, 1) == 1);
+		REQUIRE(duckdb_hugeint_to_double(result->Fetch<duckdb_hugeint>(0, 1)) == 1);
 		REQUIRE(ApproxEqual(result->Fetch<float>(0, 1), 1.0f));
 		REQUIRE(ApproxEqual(result->Fetch<double>(0, 1), 1.0));
 		REQUIRE(result->Fetch<string>(0, 1) == "1");
@@ -347,6 +384,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE(result->Fetch<int16_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int32_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<string>(0, 0) == "");
 		REQUIRE(ApproxEqual(result->Fetch<float>(0, 0), 0.0f));
 		REQUIRE(ApproxEqual(result->Fetch<double>(0, 0), 0.0));
 
@@ -451,7 +489,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(!result->Fetch<bool>(0, 0));
 	REQUIRE(!result->Fetch<bool>(0, 1));
 	REQUIRE(result->Fetch<bool>(0, 2));
-	REQUIRE(result->Fetch<string>(0, 2) == Value::BOOLEAN(true).ToString());
+	REQUIRE(result->Fetch<string>(0, 2) == "true");
 }
 
 TEST_CASE("Test errors in C API", "[capi]") {
@@ -547,6 +585,12 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 64);
 	duckdb_destroy_result(&res);
 
+	duckdb_bind_hugeint(stmt, 1, duckdb_double_to_hugeint(64));
+	status = duckdb_execute_prepared(stmt, &res);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_hugeint_to_double(duckdb_value_hugeint(&res, 0, 0)) == 64.0);
+	duckdb_destroy_result(&res);
+
 	duckdb_bind_uint8(stmt, 1, 8);
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
@@ -583,6 +627,9 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 43);
 	duckdb_destroy_result(&res);
 
+	REQUIRE(duckdb_bind_float(stmt, 1, NAN) == DuckDBError);
+	REQUIRE(duckdb_bind_double(stmt, 1, NAN) == DuckDBError);
+
 	duckdb_bind_varchar(stmt, 1, "44");
 	status = duckdb_execute_prepared(stmt, &res);
 	REQUIRE(status == DuckDBSuccess);
@@ -609,6 +656,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	auto value = duckdb_value_varchar(&res, 0, 0);
 	REQUIRE(string(value) == "hello");
+	REQUIRE(duckdb_value_int8(&res, 0, 0) == 0);
 	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
@@ -617,6 +665,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	value = duckdb_value_varchar(&res, 0, 0);
 	REQUIRE(string(value) == "hello\\x00world");
+	REQUIRE(duckdb_value_int8(&res, 0, 0) == 0);
 	duckdb_free(value);
 	duckdb_destroy_result(&res);
 
@@ -865,7 +914,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	// many types
 	REQUIRE_NO_FAIL(tester.Query("CREATE TABLE many_types(bool boolean, t TINYINT, s SMALLINT, b BIGINT, ut UTINYINT, "
 	                             "us USMALLINT, ui UINTEGER, ub UBIGINT, uf REAL, ud DOUBLE, txt VARCHAR, blb BLOB, dt "
-	                             "DATE, tm TIME, ts TIMESTAMP, ival INTERVAL)"));
+	                             "DATE, tm TIME, ts TIMESTAMP, ival INTERVAL, h HUGEINT)"));
 	duckdb_appender tappender;
 
 	status = duckdb_appender_create(tester.connection, nullptr, "many_types", &tappender);
@@ -944,10 +993,16 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_append_interval(tappender, interval);
 	REQUIRE(status == DuckDBSuccess);
 
+	status = duckdb_append_hugeint(tappender, duckdb_double_to_hugeint(27));
+	REQUIRE(status == DuckDBSuccess);
+
 	status = duckdb_appender_end_row(tappender);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_appender_begin_row(tappender);
+	REQUIRE(status == DuckDBSuccess);
+
+	status = duckdb_append_null(tappender);
 	REQUIRE(status == DuckDBSuccess);
 
 	status = duckdb_append_null(tappender);
@@ -1054,6 +1109,9 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(interval.days == 0);
 	REQUIRE(interval.micros == 0);
 
+	auto hugeint = result->Fetch<duckdb_hugeint>(16, 0);
+	REQUIRE(duckdb_hugeint_to_double(hugeint) == 27);
+
 	REQUIRE(result->IsNull(0, 1));
 	REQUIRE(result->IsNull(1, 1));
 	REQUIRE(result->IsNull(2, 1));
@@ -1070,6 +1128,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(result->IsNull(13, 1));
 	REQUIRE(result->IsNull(14, 1));
 	REQUIRE(result->IsNull(15, 1));
+	REQUIRE(result->IsNull(16, 1));
 
 	REQUIRE(result->Fetch<bool>(0, 1) == false);
 	REQUIRE(result->Fetch<int8_t>(1, 1) == 0);
@@ -1081,7 +1140,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(result->Fetch<uint64_t>(7, 1) == 0);
 	REQUIRE(result->Fetch<float>(8, 1) == 0);
 	REQUIRE(result->Fetch<double>(9, 1) == 0);
-	REQUIRE(result->Fetch<string>(10, 1) == "NULL");
+	REQUIRE(result->Fetch<string>(10, 1) == "");
 
 	blob = duckdb_value_blob(&result->InternalResult(), 11, 1);
 	REQUIRE(blob.size == 0);
@@ -1098,6 +1157,18 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 
 	interval = result->Fetch<duckdb_interval>(15, 1);
 	REQUIRE(interval.months == 0);
+
+	hugeint = result->Fetch<duckdb_hugeint>(16, 1);
+	REQUIRE(duckdb_hugeint_to_double(hugeint) == 0);
+
+	// double out of range for hugeint
+	hugeint = duckdb_double_to_hugeint(1e300);
+	REQUIRE(hugeint.lower == 0);
+	REQUIRE(hugeint.upper == 0);
+
+	hugeint = duckdb_double_to_hugeint(NAN);
+	REQUIRE(hugeint.lower == 0);
+	REQUIRE(hugeint.upper == 0);
 }
 
 TEST_CASE("Test arrow in C API", "[capi]") {

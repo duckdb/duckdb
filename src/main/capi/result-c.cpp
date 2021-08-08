@@ -44,7 +44,7 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 			out->rows_changed = row_changes.GetValue<int64_t>();
 		}
 	}
-	out->columns = (duckdb_column *)malloc(sizeof(duckdb_column) * out->column_count);
+	out->columns = (duckdb_column *)duckdb_malloc(sizeof(duckdb_column) * out->column_count);
 	if (!out->columns) { // LCOV_EXCL_START
 		// malloc failure
 		return DuckDBError;
@@ -55,16 +55,12 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 	for (idx_t i = 0; i < out->column_count; i++) {
 		out->columns[i].type = ConvertCPPTypeToC(result->types[i]);
 		out->columns[i].name = strdup(result->names[i].c_str());
-		out->columns[i].nullmask = (bool *)malloc(sizeof(bool) * out->row_count);
-		out->columns[i].data = malloc(GetCTypeSize(out->columns[i].type) * out->row_count);
+		out->columns[i].nullmask = (bool *)duckdb_malloc(sizeof(bool) * out->row_count);
+		out->columns[i].data = duckdb_malloc(GetCTypeSize(out->columns[i].type) * out->row_count);
 		if (!out->columns[i].nullmask || !out->columns[i].name || !out->columns[i].data) { // LCOV_EXCL_START
 			// malloc failure
 			return DuckDBError;
 		} // LCOV_EXCL_STOP
-		// memset data to 0 for VARCHAR columns for safe deletion later
-		if (result->types[i].InternalType() == PhysicalType::VARCHAR) {
-			memset(out->columns[i].data, 0, GetCTypeSize(out->columns[i].type) * out->row_count);
-		}
 	}
 	// now write the data
 	for (idx_t col = 0; col < out->column_count; col++) {
@@ -126,11 +122,13 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
-						target[row] = (char *)malloc(source[k].GetSize() + 1);
+						target[row] = (char *)duckdb_malloc(source[k].GetSize() + 1);
 						assert(target[row]);
 						memcpy((void *)target[row], source[k].GetDataUnsafe(), source[k].GetSize());
 						auto write_arr = (char *)target[row];
 						write_arr[source[k].GetSize()] = '\0';
+					} else {
+						target[row] = nullptr;
 					}
 					row++;
 				}
@@ -144,10 +142,13 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 				auto source = FlatVector::GetData<string_t>(chunk->data[col]);
 				for (idx_t k = 0; k < chunk->size(); k++) {
 					if (!FlatVector::IsNull(chunk->data[col], k)) {
-						target[row].data = (char *)malloc(source[k].GetSize());
+						target[row].data = (char *)duckdb_malloc(source[k].GetSize());
 						target[row].size = source[k].GetSize();
 						assert(target[row].data);
 						memcpy((void *)target[row].data, source[k].GetDataUnsafe(), source[k].GetSize());
+					} else {
+						target[row].data = nullptr;
+						target[row].size = 0;
 					}
 					row++;
 				}
@@ -219,3 +220,94 @@ duckdb_state duckdb_translate_result(MaterializedQueryResult *result, duckdb_res
 }
 
 } // namespace duckdb
+
+static void duckdb_destroy_column(duckdb_column column, idx_t count) {
+	if (column.data) {
+		if (column.type == DUCKDB_TYPE_VARCHAR) {
+			// varchar, delete individual strings
+			auto data = (char **)column.data;
+			for (idx_t i = 0; i < count; i++) {
+				if (data[i]) {
+					duckdb_free(data[i]);
+				}
+			}
+		} else if (column.type == DUCKDB_TYPE_BLOB) {
+			// blob, delete individual blobs
+			auto data = (duckdb_blob *)column.data;
+			for (idx_t i = 0; i < count; i++) {
+				if (data[i].data) {
+					duckdb_free((void *)data[i].data);
+				}
+			}
+		}
+		duckdb_free(column.data);
+	}
+	if (column.nullmask) {
+		duckdb_free(column.nullmask);
+	}
+	if (column.name) {
+		duckdb_free(column.name);
+	}
+}
+
+void duckdb_destroy_result(duckdb_result *result) {
+	if (result->error_message) {
+		duckdb_free(result->error_message);
+	}
+	if (result->columns) {
+		for (idx_t i = 0; i < result->column_count; i++) {
+			duckdb_destroy_column(result->columns[i], result->row_count);
+		}
+		duckdb_free(result->columns);
+	}
+	memset(result, 0, sizeof(duckdb_result));
+}
+
+const char *duckdb_column_name(duckdb_result *result, idx_t col) {
+	if (!result || col >= result->column_count) {
+		return nullptr;
+	}
+	return result->columns[col].name;
+}
+
+duckdb_type duckdb_column_type(duckdb_result *result, idx_t col) {
+	if (!result || col >= result->column_count) {
+		return DUCKDB_TYPE_INVALID;
+	}
+	return result->columns[col].type;
+}
+
+idx_t duckdb_column_count(duckdb_result *result) {
+	if (!result) {
+		return 0;
+	}
+	return result->column_count;
+}
+
+idx_t duckdb_row_count(duckdb_result *result) {
+	if (!result) {
+		return 0;
+	}
+	return result->row_count;
+}
+
+idx_t duckdb_rows_changed(duckdb_result *result) {
+	if (!result) {
+		return 0;
+	}
+	return result->rows_changed;
+}
+
+void *duckdb_column_data(duckdb_result *result, idx_t col) {
+	if (!result || col >= result->column_count) {
+		return nullptr;
+	}
+	return result->columns[col].data;
+}
+
+bool *duckdb_nullmask_data(duckdb_result *result, idx_t col) {
+	if (!result || col >= result->column_count) {
+		return nullptr;
+	}
+	return result->columns[col].nullmask;
+}

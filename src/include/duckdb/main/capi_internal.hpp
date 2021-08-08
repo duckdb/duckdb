@@ -21,10 +21,6 @@
 #endif
 #endif
 
-#ifdef GetCValue
-#undef GetCValue
-#endif
-
 namespace duckdb {
 
 struct DatabaseData {
