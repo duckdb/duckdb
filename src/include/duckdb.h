@@ -298,7 +298,9 @@ DUCKDB_API duckdb_timestamp duckdb_to_timestamp(duckdb_timestamp_struct ts);
 //===--------------------------------------------------------------------===//
 // Hugeint Helpers
 //===--------------------------------------------------------------------===//
+//! Convert a hugeint to a double
 DUCKDB_API double duckdb_hugeint_to_double(duckdb_hugeint val);
+//! Convert a double to a hugeint. If the conversion fails because the double value is too big the result will be 0.
 DUCKDB_API duckdb_hugeint duckdb_double_to_hugeint(double val);
 
 //===--------------------------------------------------------------------===//

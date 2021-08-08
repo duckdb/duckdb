@@ -329,7 +329,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	// integer columns
-	vector<string> types = {"TINYINT", "SMALLINT", "INTEGER", "BIGINT"};
+	vector<string> types = {"TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT", "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT"};
 	for (auto &type : types) {
 		// create the table and insert values
 		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));
@@ -343,6 +343,12 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE(result->Fetch<int16_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int32_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<uint8_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<uint16_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<uint32_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<uint64_t>(0, 0) == 0);
+		REQUIRE(duckdb_hugeint_to_double(result->Fetch<duckdb_hugeint>(0, 0)) == 0);
+		REQUIRE(result->Fetch<string>(0, 0) == "");
 		REQUIRE(ApproxEqual(result->Fetch<float>(0, 0), 0.0f));
 		REQUIRE(ApproxEqual(result->Fetch<double>(0, 0), 0.0));
 
@@ -351,6 +357,11 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE(result->Fetch<int16_t>(0, 1) == 1);
 		REQUIRE(result->Fetch<int32_t>(0, 1) == 1);
 		REQUIRE(result->Fetch<int64_t>(0, 1) == 1);
+		REQUIRE(result->Fetch<uint8_t>(0, 1) == 1);
+		REQUIRE(result->Fetch<uint16_t>(0, 1) == 1);
+		REQUIRE(result->Fetch<uint32_t>(0, 1) == 1);
+		REQUIRE(result->Fetch<uint64_t>(0, 1) == 1);
+		REQUIRE(duckdb_hugeint_to_double(result->Fetch<duckdb_hugeint>(0, 1)) == 1);
 		REQUIRE(ApproxEqual(result->Fetch<float>(0, 1), 1.0f));
 		REQUIRE(ApproxEqual(result->Fetch<double>(0, 1), 1.0));
 		REQUIRE(result->Fetch<string>(0, 1) == "1");
@@ -372,6 +383,7 @@ TEST_CASE("Test different types of C API", "[capi]") {
 		REQUIRE(result->Fetch<int16_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int32_t>(0, 0) == 0);
 		REQUIRE(result->Fetch<int64_t>(0, 0) == 0);
+		REQUIRE(result->Fetch<string>(0, 0) == "");
 		REQUIRE(ApproxEqual(result->Fetch<float>(0, 0), 0.0f));
 		REQUIRE(ApproxEqual(result->Fetch<double>(0, 0), 0.0));
 
@@ -607,6 +619,9 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(duckdb_value_int64(&res, 0, 0) == 43);
 	duckdb_destroy_result(&res);
+
+	REQUIRE(duckdb_bind_float(stmt, 1, NAN) == DuckDBError);
+	REQUIRE(duckdb_bind_double(stmt, 1, NAN) == DuckDBError);
 
 	duckdb_bind_varchar(stmt, 1, "44");
 	status = duckdb_execute_prepared(stmt, &res);
@@ -1139,6 +1154,10 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 
 	// double out of range for hugeint
 	hugeint = duckdb_double_to_hugeint(1e300);
+	REQUIRE(hugeint.lower == 0);
+	REQUIRE(hugeint.upper == 0);
+
+	hugeint = duckdb_double_to_hugeint(NAN);
 	REQUIRE(hugeint.lower == 0);
 	REQUIRE(hugeint.upper == 0);
 }
