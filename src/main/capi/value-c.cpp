@@ -11,9 +11,9 @@ using duckdb::date_t;
 using duckdb::dtime_t;
 using duckdb::hugeint_t;
 using duckdb::interval_t;
-using duckdb::string_t;
 using duckdb::LogicalType;
 using duckdb::string;
+using duckdb::string_t;
 using duckdb::Time;
 using duckdb::Timestamp;
 using duckdb::timestamp_t;
@@ -128,14 +128,13 @@ bool FromCBlobCastWrapper::Operation(duckdb_blob input, char *&result) {
 	return ToCStringCastWrapper<duckdb::CastFromBlob>::template Operation<string_t, char *>(input_str, result);
 }
 
-}
+} // namespace duckdb
 
-using duckdb::UnsafeFetch;
 using duckdb::FetchDefaultValue;
+using duckdb::FromCBlobCastWrapper;
 using duckdb::FromCStringCastWrapper;
 using duckdb::ToCStringCastWrapper;
-using duckdb::FromCBlobCastWrapper;
-using duckdb::FromCBlobCastWrapper;
+using duckdb::UnsafeFetch;
 
 //===--------------------------------------------------------------------===//
 // Templated Casts
