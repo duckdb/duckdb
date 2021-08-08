@@ -5,6 +5,7 @@
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::hugeint_t;
 using duckdb::MaterializedQueryResult;
 using duckdb::PreparedStatementWrapper;
 using duckdb::QueryResultType;
@@ -73,6 +74,13 @@ duckdb_state duckdb_bind_int32(duckdb_prepared_statement prepared_statement, idx
 
 duckdb_state duckdb_bind_int64(duckdb_prepared_statement prepared_statement, idx_t param_idx, int64_t val) {
 	return duckdb_bind_value(prepared_statement, param_idx, Value::BIGINT(val));
+}
+
+duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_hugeint val) {
+	hugeint_t internal;
+	internal.lower = val.lower;
+	internal.upper = val.upper;
+	return duckdb_bind_value(prepared_statement, param_idx, Value::HUGEINT(internal));
 }
 
 duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint8_t val) {

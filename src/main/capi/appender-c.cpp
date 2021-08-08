@@ -5,6 +5,7 @@ using duckdb::AppenderWrapper;
 using duckdb::Connection;
 using duckdb::date_t;
 using duckdb::dtime_t;
+using duckdb::hugeint_t;
 using duckdb::interval_t;
 using duckdb::string_t;
 using duckdb::timestamp_t;
@@ -114,6 +115,13 @@ duckdb_state duckdb_append_int32(duckdb_appender appender, int32_t value) {
 
 duckdb_state duckdb_append_int64(duckdb_appender appender, int64_t value) {
 	return duckdb_append_internal<int64_t>(appender, value);
+}
+
+duckdb_state duckdb_append_hugeint(duckdb_appender appender, duckdb_hugeint value) {
+	hugeint_t internal;
+	internal.lower = value.lower;
+	internal.upper = value.upper;
+	return duckdb_append_internal<hugeint_t>(appender, internal);
 }
 
 duckdb_state duckdb_append_uint8(duckdb_appender appender, uint8_t value) {

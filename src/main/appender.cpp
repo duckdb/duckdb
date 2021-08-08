@@ -96,6 +96,9 @@ void Appender::AppendValueInternal(T input) {
 	case PhysicalType::INT64:
 		AppendValueInternal<T, int64_t>(col, input);
 		break;
+	case PhysicalType::INT128:
+		AppendValueInternal<T, hugeint_t>(col, input);
+		break;
 	case PhysicalType::FLOAT:
 		AppendValueInternal<T, float>(col, input);
 		break;
@@ -135,6 +138,11 @@ void Appender::Append(int32_t value) {
 template <>
 void Appender::Append(int64_t value) {
 	AppendValueInternal<int64_t>(value);
+}
+
+template <>
+void Appender::Append(hugeint_t value) {
+	AppendValueInternal<hugeint_t>(value);
 }
 
 template <>

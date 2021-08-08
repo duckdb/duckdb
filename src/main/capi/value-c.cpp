@@ -223,6 +223,14 @@ int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row) {
 	return GetInternalCValue<int64_t>(result, col, row);
 }
 
+duckdb_hugeint duckdb_value_hugeint(duckdb_result *result, idx_t col, idx_t row) {
+	duckdb_hugeint result_value;
+	auto internal_value = GetInternalCValue<hugeint_t>(result, col, row);
+	result_value.lower = internal_value.lower;
+	result_value.upper = internal_value.upper;
+	return result_value;
+}
+
 uint8_t duckdb_value_uint8(duckdb_result *result, idx_t col, idx_t row) {
 	return GetInternalCValue<uint8_t>(result, col, row);
 }

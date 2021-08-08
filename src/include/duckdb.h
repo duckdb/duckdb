@@ -114,6 +114,9 @@ typedef struct {
 	int64_t micros;
 } duckdb_interval;
 
+//! Hugeints are composed in a (lower, upper) component
+//! The value of the hugeint is upper * 2^64 + lower
+//! For easy usage, the functions duckdb_hugeint_to_double/duckdb_double_to_hugeint are recommended
 typedef struct {
 	uint64_t lower;
 	int64_t upper;
@@ -129,6 +132,7 @@ typedef struct {
 	bool *nullmask;
 	duckdb_type type;
 	char *name;
+	void *internal_data;
 } duckdb_column;
 
 typedef struct {
@@ -137,6 +141,7 @@ typedef struct {
 	idx_t rows_changed;
 	duckdb_column *columns;
 	char *error_message;
+	void *internal_data;
 } duckdb_result;
 
 typedef void *duckdb_database;
@@ -236,6 +241,8 @@ DUCKDB_API int16_t duckdb_value_int16(duckdb_result *result, idx_t col, idx_t ro
 DUCKDB_API int32_t duckdb_value_int32(duckdb_result *result, idx_t col, idx_t row);
 //! Converts the specified value to an int64_t. Returns 0 on failure or NULL.
 DUCKDB_API int64_t duckdb_value_int64(duckdb_result *result, idx_t col, idx_t row);
+//! Converts the specified value to an duckdb_hugeint. Returns 0 on failure or NULL.
+DUCKDB_API duckdb_hugeint duckdb_value_hugeint(duckdb_result *result, idx_t col, idx_t row);
 
 //! Converts the specified value to an uint8_t. Returns 0 on failure or NULL.
 DUCKDB_API uint8_t duckdb_value_uint8(duckdb_result *result, idx_t col, idx_t row);
