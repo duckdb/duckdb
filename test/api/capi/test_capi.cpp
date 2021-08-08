@@ -20,9 +20,9 @@ public:
 		return duckdb_column_type(&result, col);
 	}
 
-	template<class T>
+	template <class T>
 	T *ColumnData(idx_t col) {
-		return (T *) duckdb_column_data(&result, col);
+		return (T *)duckdb_column_data(&result, col);
 	}
 
 	idx_t ColumnCount() {

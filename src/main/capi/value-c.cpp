@@ -32,7 +32,7 @@ T UnsafeFetch(duckdb_result *result, idx_t col, idx_t row) {
 // Fetch Default Value
 //===--------------------------------------------------------------------===//
 struct FetchDefaultValue {
-	template<class T>
+	template <class T>
 	static T Operation() {
 		return 0;
 	}
@@ -69,7 +69,7 @@ interval_t FetchDefaultValue::Operation() {
 }
 
 template <>
-char * FetchDefaultValue::Operation() {
+char *FetchDefaultValue::Operation() {
 	return nullptr;
 }
 
@@ -84,25 +84,25 @@ duckdb_blob FetchDefaultValue::Operation() {
 //===--------------------------------------------------------------------===//
 // String Casts
 //===--------------------------------------------------------------------===//
-template<class OP>
+template <class OP>
 struct FromCStringCastWrapper {
-	template<class SOURCE_TYPE, class RESULT_TYPE>
+	template <class SOURCE_TYPE, class RESULT_TYPE>
 	static bool Operation(SOURCE_TYPE input_str, RESULT_TYPE &result) {
 		string_t input(input_str);
 		return OP::template Operation<string_t, RESULT_TYPE>(input, result);
 	}
 };
 
-template<class OP>
+template <class OP>
 struct ToCStringCastWrapper {
-	template<class SOURCE_TYPE, class RESULT_TYPE>
+	template <class SOURCE_TYPE, class RESULT_TYPE>
 	static bool Operation(SOURCE_TYPE input, RESULT_TYPE &result) {
 		Vector result_vector(LogicalType::VARCHAR, nullptr);
 		auto result_string = OP::template Operation<SOURCE_TYPE>(input, result_vector);
 		auto result_size = result_string.GetSize();
 		auto result_data = result_string.GetDataUnsafe();
 
-		result = (char *) duckdb_malloc(result_size + 1);
+		result = (char *)duckdb_malloc(result_size + 1);
 		memcpy(result, result_data, result_size);
 		result[result_size] = '\0';
 		return true;
@@ -113,22 +113,22 @@ struct ToCStringCastWrapper {
 // Blob Casts
 //===--------------------------------------------------------------------===//
 struct FromCBlobCastWrapper {
-	template<class SOURCE_TYPE, class RESULT_TYPE>
+	template <class SOURCE_TYPE, class RESULT_TYPE>
 	static bool Operation(SOURCE_TYPE input_str, RESULT_TYPE &result) {
 		return false;
 	}
 };
 
-template<>
+template <>
 bool FromCBlobCastWrapper::Operation(duckdb_blob input, char *&result) {
-	string_t input_str((const char *) input.data, input.size);
+	string_t input_str((const char *)input.data, input.size);
 	return ToCStringCastWrapper<duckdb::CastFromBlob>::template Operation<string_t, char *>(input_str, result);
 }
 
 //===--------------------------------------------------------------------===//
 // Templated Casts
 //===--------------------------------------------------------------------===//
-template<class SOURCE_TYPE, class RESULT_TYPE, class OP>
+template <class SOURCE_TYPE, class RESULT_TYPE, class OP>
 RESULT_TYPE TryCastCInternal(duckdb_result *result, idx_t col, idx_t row) {
 	RESULT_TYPE result_value;
 	if (!OP::template Operation<SOURCE_TYPE, RESULT_TYPE>(UnsafeFetch<SOURCE_TYPE>(result, col, row), result_value)) {
@@ -150,7 +150,7 @@ static bool CanFetchValue(duckdb_result *result, idx_t col, idx_t row) {
 	return true;
 }
 
-template<class RESULT_TYPE, class OP=duckdb::TryCast>
+template <class RESULT_TYPE, class OP = duckdb::TryCast>
 static RESULT_TYPE GetInternalCValue(duckdb_result *result, idx_t col, idx_t row) {
 	if (!CanFetchValue(result, col, row)) {
 		return FetchDefaultValue::Operation<RESULT_TYPE>();
@@ -277,13 +277,13 @@ duckdb_interval duckdb_value_interval(duckdb_result *result, idx_t col, idx_t ro
 	duckdb_interval result_value;
 	auto ival = GetInternalCValue<interval_t>(result, col, row);
 	result_value.months = ival.months;
-	result_value.days   = ival.days;
+	result_value.days = ival.days;
 	result_value.micros = ival.micros;
 	return result_value;
 }
 
 char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row) {
-	return GetInternalCValue<char*, ToCStringCastWrapper<duckdb::StringCast>>(result, col, row);
+	return GetInternalCValue<char *, ToCStringCastWrapper<duckdb::StringCast>>(result, col, row);
 }
 
 duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
