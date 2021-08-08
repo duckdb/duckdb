@@ -329,7 +329,8 @@ TEST_CASE("Test different types of C API", "[capi]") {
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	// integer columns
-	vector<string> types = {"TINYINT", "SMALLINT", "INTEGER", "BIGINT", "HUGEINT", "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT"};
+	vector<string> types = {"TINYINT",  "SMALLINT",  "INTEGER",  "BIGINT", "HUGEINT",
+	                        "UTINYINT", "USMALLINT", "UINTEGER", "UBIGINT"};
 	for (auto &type : types) {
 		// create the table and insert values
 		REQUIRE_NO_FAIL(tester.Query("BEGIN TRANSACTION"));

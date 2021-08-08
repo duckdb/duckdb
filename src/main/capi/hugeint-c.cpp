@@ -1,9 +1,9 @@
 #include "duckdb/main/capi_internal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 
-using duckdb::Value;
 using duckdb::Hugeint;
 using duckdb::hugeint_t;
+using duckdb::Value;
 
 double duckdb_hugeint_to_double(duckdb_hugeint val) {
 	hugeint_t internal;
