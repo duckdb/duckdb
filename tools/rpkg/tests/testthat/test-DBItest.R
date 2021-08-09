@@ -55,6 +55,6 @@ DBItest::test_all(c(
   "append_roundtrip_timestamp",
   "append_table_row_names_.*",
   "remove_table_missing_succeed",
-  "column_info_closed",
-  "column_info_consistent"
+
+  "column_info_consistent" # won't fix: https://github.com/r-dbi/DBItest/issues/181
 ))
