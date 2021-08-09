@@ -115,6 +115,9 @@ SQLRETURN SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT comp
 					return SQL_ERROR;
 				}
 			}
+			if (dbc->conn->IsAutoCommit()) {
+				return SQL_SUCCESS;
+			}
 			dbc->conn->Commit();
 			return SQL_SUCCESS;
 		case SQL_ROLLBACK:

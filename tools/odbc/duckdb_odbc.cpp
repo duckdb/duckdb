@@ -16,10 +16,10 @@ OdbcHandleStmt::~OdbcHandleStmt() {
 }
 
 SQLRETURN OdbcHandleStmt::MaterializeResult() {
-	if (!stmt) {
+	if (!stmt || !stmt->success) {
 		return SQL_SUCCESS;
 	}
-	if (!res) {
+	if (!res || !res->success) {
 		return SQL_SUCCESS;
 	}
 	return odbc_fetcher->Materialize(this);
