@@ -28,10 +28,6 @@ static string UnimplementedCastMessage(const LogicalType &source_type, const Log
 	return StringUtil::Format("Unimplemented type for cast (%s -> %s)", source_type.ToString(), target_type.ToString());
 }
 
-static NotImplementedException UnimplementedCast(const LogicalType &source_type, const LogicalType &target_type) {
-	return NotImplementedException(UnimplementedCastMessage(source_type, target_type));
-}
-
 // NULL cast only works if all values in source are NULL, otherwise an unimplemented cast exception is thrown
 static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, string *error_message) {
 	bool success = true;

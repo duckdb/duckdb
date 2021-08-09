@@ -547,7 +547,7 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 	case LogicalTypeId::LIST:
 		return ListCastSwitch(source, result, count, error_message);
 	default:
-		throw UnimplementedCast(source.GetType(), result.GetType());
+		return TryVectorNullCast(source, result, count, error_message);
 	}
 	return true;
 }
