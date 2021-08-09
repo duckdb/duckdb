@@ -37,19 +37,19 @@ class TestPandasTypes(object):
         assert df_out['object'][2] == df_in['object'][2]
         assert numpy.isnan(df_out['object'][3])
 
-    def test_pandas_interval(self, duckdb_cursor):
-        if pd. __version__ < '1.2.4':
-            return
+    # def test_pandas_interval(self, duckdb_cursor):
+    #     if pd. __version__ < '1.2.4':
+    #         return
             
-        data = numpy.array([2069211000000000,numpy.datetime64("NaT")])
-        df_in = pd.DataFrame({
-        'object': pd.Series(data, dtype='timedelta64[ns]'),
-        })
+    #     data = numpy.array([2069211000000000,numpy.datetime64("NaT")])
+    #     df_in = pd.DataFrame({
+    #     'object': pd.Series(data, dtype='timedelta64[ns]'),
+    #     })
 
-        df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
+    #     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
         
-        assert df_out['object'][0] == df_in['object'][0]
-        assert  pd.isnull(df_out['object'][1])
+    #     assert df_out['object'][0] == df_in['object'][0]
+    #     assert  pd.isnull(df_out['object'][1])
 
     def test_pandas_encoded_utf8(self, duckdb_cursor):
         if sys.version_info.major < 3:
