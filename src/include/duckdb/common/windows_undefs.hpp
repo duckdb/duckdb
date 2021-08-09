@@ -22,10 +22,6 @@
 #undef ERROR
 #endif
 
-#ifdef GetCValue
-#undef GetCValue
-#endif
-
 #ifdef small
 #undef small
 #endif

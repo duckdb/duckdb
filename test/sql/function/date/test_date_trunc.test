@@ -15,7 +15,20 @@ statement ok
 INSERT INTO dates VALUES ('1992-12-02', 'year'), ('1993-03-03', 'month'), ('1994-05-05', 'day');
 
 statement ok
-INSERT INTO timestamps VALUES ('1992-02-02 02:02:03', 'millennium'), ('1992-02-02 02:02:03', 'century'), ('1992-02-02 02:02:03', 'decade'), ('1992-02-02 02:02:03', 'year'), ('1992-02-02 02:02:03', 'quarter'), ('1992-02-02 02:02:03', 'month'), ('1992-02-02 02:02:03', 'week'), ('1992-02-02 02:02:03', 'day'), ('1992-02-02 02:02:03', 'hour'), ('1992-02-02 02:02:03', 'minute'), ('1992-02-02 02:02:03', 'second'), ('1992-02-02 02:02:03', 'milliseconds'), ('1992-02-02 02:02:03', 'microseconds');
+INSERT INTO timestamps VALUES
+	('1992-02-02 02:02:03', 'millennium'),
+	('1992-02-02 02:02:03', 'century'),
+	('1992-02-02 02:02:03', 'decade'),
+	('1992-02-02 02:02:03', 'year'),
+	('1992-02-02 02:02:03', 'quarter'),
+	('1992-02-02 02:02:03', 'month'),
+	('1992-02-02 02:02:03', 'week'),
+	('1992-02-02 02:02:03', 'day'),
+	('1992-02-02 02:02:03', 'hour'),
+	('1992-02-02 02:02:03', 'minute'),
+	('1992-02-02 02:02:03', 'second'),
+	('1992-02-02 02:02:03', 'milliseconds'),
+	('1992-02-02 02:02:03', 'microseconds');
 
 # test date_trunc with different combinations of constant/non-constant columns on both dates and timestamps
 query T
@@ -126,6 +139,16 @@ SELECT date_trunc('week', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT
 ----
 2018-12-31 00:00:00
 
+query T
+SELECT date_trunc('yearweek', TIMESTAMP '2020-01-01 04:03:02') FROM timestamps LIMIT 1;
+----
+2019-12-30 00:00:00
+
+query T
+SELECT date_trunc('yearweek', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+----
+2018-12-31 00:00:00
+
 # Test quarter operator more thoroughly
 query T
 SELECT date_trunc('quarter', TIMESTAMP '2020-12-02 04:03:02') FROM timestamps LIMIT 1;
@@ -137,7 +160,53 @@ SELECT date_trunc('quarter', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LI
 ----
 2019-01-01 00:00:00
 
+query T
+SELECT date_trunc('millennium', TIMESTAMP '1996-01-06 04:03:02') FROM timestamps LIMIT 1;
+----
+1000-01-01 00:00:00
+
+query T
+SELECT date_trunc('century', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+----
+2000-01-01 00:00:00
+
+query T
+SELECT date_trunc('decade', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+----
+2010-01-01 00:00:00
+
+query T
+SELECT date_trunc('year', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+----
+2019-01-01 00:00:00
+
+query T
+SELECT date_trunc('day', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+----
+2019-01-06 00:00:00
+
+query T
+SELECT date_trunc('hour', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+----
+2019-01-06 04:00:00
+
+query T
+SELECT date_trunc('milliseconds', TIMESTAMP '2019-01-06 04:03:02.123456') FROM timestamps LIMIT 1;
+----
+2019-01-06 04:03:02.123
+
+query T
+SELECT date_trunc('microseconds', TIMESTAMP '2019-01-06 04:03:02.123456');
+----
+2019-01-06 04:03:02.123456
+
+# Synonym for second
+query T
+SELECT date_trunc('epoch', TIMESTAMP '2019-01-06 04:03:02.5') FROM timestamps LIMIT 1;
+----
+2019-01-06 04:03:02
+
 # Unknown specifier should fail
 statement error
-SELECT date_trunc('epoch', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
+SELECT date_trunc('duck', TIMESTAMP '2019-01-06 04:03:02') FROM timestamps LIMIT 1;
 

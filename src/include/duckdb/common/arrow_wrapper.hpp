@@ -9,6 +9,8 @@
 #pragma once
 #include "duckdb/common/arrow.hpp"
 #include "duckdb/common/helper.hpp"
+
+#include "duckdb/main/query_result.hpp"
 //! Here we have the internal duckdb classes that interact with Arrow's Internal Header (i.e., duckdb/commons/arrow.hpp)
 namespace duckdb {
 class ArrowSchemaWrapper {
@@ -45,6 +47,20 @@ public:
 	ArrowArrayStreamWrapper() {
 		arrow_array_stream.release = nullptr;
 	}
+};
+
+class ResultArrowArrayStreamWrapper {
+public:
+	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result);
+	ArrowArrayStream stream;
+	unique_ptr<QueryResult> result;
+	std::string last_error;
+
+private:
+	static int MyStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);
+	static int MyStreamGetNext(struct ArrowArrayStream *stream, struct ArrowArray *out);
+	static void MyStreamRelease(struct ArrowArrayStream *stream);
+	static const char *MyStreamGetLastError(struct ArrowArrayStream *stream);
 };
 
 } // namespace duckdb

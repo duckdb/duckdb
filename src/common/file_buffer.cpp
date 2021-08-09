@@ -17,6 +17,27 @@ FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t bufsi
 	Construct(bufsiz);
 }
 
+FileBuffer::FileBuffer(FileBuffer &source, FileBufferType type_p) : allocator(source.allocator), type(type_p) {
+	// take over the structures of the source buffer
+	buffer = source.buffer;
+	size = source.size;
+	internal_buffer = source.internal_buffer;
+	internal_size = source.internal_size;
+	malloced_buffer = source.malloced_buffer;
+	malloced_size = source.malloced_size;
+
+	source.buffer = nullptr;
+	source.size = 0;
+	source.internal_buffer = nullptr;
+	source.internal_size = 0;
+	source.malloced_buffer = nullptr;
+	source.malloced_size = 0;
+}
+
+FileBuffer::~FileBuffer() {
+	allocator.FreeData(malloced_buffer, malloced_size);
+}
+
 void FileBuffer::SetMallocedSize(uint64_t &bufsiz) {
 	// make room for the block header (if this is not the db file header)
 	if (type == FileBufferType::MANAGED_BUFFER && bufsiz != Storage::FILE_HEADER_SIZE) {
@@ -70,13 +91,13 @@ void FileBuffer::Resize(uint64_t bufsiz) {
 	Construct(bufsiz);
 }
 
-FileBuffer::~FileBuffer() {
-	allocator.FreeData(malloced_buffer, malloced_size);
+void FileBuffer::Read(FileHandle &handle, uint64_t location) {
+	handle.Read(internal_buffer, internal_size, location);
 }
 
-void FileBuffer::Read(FileHandle &handle, uint64_t location) {
+void FileBuffer::ReadAndChecksum(FileHandle &handle, uint64_t location) {
 	// read the buffer from disk
-	handle.Read(internal_buffer, internal_size, location);
+	Read(handle, location);
 	// compute the checksum
 	auto stored_checksum = Load<uint64_t>(internal_buffer);
 	uint64_t computed_checksum = Checksum(buffer, size);
@@ -88,11 +109,15 @@ void FileBuffer::Read(FileHandle &handle, uint64_t location) {
 }
 
 void FileBuffer::Write(FileHandle &handle, uint64_t location) {
-	// compute the checksum and write it to the start of the buffer
+	handle.Write(internal_buffer, internal_size, location);
+}
+
+void FileBuffer::ChecksumAndWrite(FileHandle &handle, uint64_t location) {
+	// compute the checksum and write it to the start of the buffer (if not temp buffer)
 	uint64_t checksum = Checksum(buffer, size);
 	Store<uint64_t>(checksum, internal_buffer);
 	// now write the buffer
-	handle.Write(internal_buffer, internal_size, location);
+	Write(handle, location);
 }
 
 void FileBuffer::Clear() {

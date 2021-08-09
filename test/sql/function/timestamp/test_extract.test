@@ -37,6 +37,12 @@ SELECT EXTRACT(week FROM i) FROM timestamps
 NULL
 
 query I
+SELECT EXTRACT(yearweek FROM i) FROM timestamps
+----
+199332
+NULL
+
+query I
 SELECT EXTRACT(quarter FROM i) FROM timestamps
 ----
 3
