@@ -33,11 +33,21 @@ SQLRETURN OdbcFetch::Materialize(OdbcHandleStmt *stmt) {
 		ret = FetchNext(stmt);
 	} while (SQL_SUCCEEDED(ret));
 
+	D_ASSERT(resultset_end);
+
 	// restore states
-	current_chunk = before_cur_chunk;
-	current_chunk_idx = before_cur_chunk_idx;
-	chunk_row = before_chunk_row;
-	prior_chunk_row = before_prior_chunk_row;
+	if (before_cur_chunk) {
+		current_chunk = before_cur_chunk;
+		current_chunk_idx = before_cur_chunk_idx;
+		chunk_row = before_chunk_row;
+		prior_chunk_row = before_prior_chunk_row;
+	} else {
+		if (!chunks.empty()) {
+			current_chunk = chunks.front().get();
+		}
+		current_chunk_idx = 0;
+		chunk_row = prior_chunk_row = -1;
+	}
 
 	if (ret == SQL_NO_DATA || ret == SQL_SUCCESS) {
 		return SQL_SUCCESS;
