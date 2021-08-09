@@ -38,6 +38,9 @@ class TestPandasTypes(object):
         assert numpy.isnan(df_out['object'][3])
 
     def test_pandas_interval(self, duckdb_cursor):
+        if pd. __version__ < '1.2.4':
+            return
+            
         data = numpy.array([2069211000000000,numpy.datetime64("NaT")])
         df_in = pd.DataFrame({
         'object': pd.Series(data, dtype='timedelta64[ns]'),
