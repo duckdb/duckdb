@@ -11,10 +11,6 @@
 */examples/*
 */third_party/*
 */test/*
-*/src/function/table/arrow.cpp
-*/tools/pythonpkg/src/arrow_array_stream.cpp
-*/tools/pythonpkg/src/include/duckdb_python/arrow_array_stream.hpp
-*/src/common/arrow_wrapper.cpp
 */extension/fts/*
 */extension/icu/*
 */extension/tpcds/*
