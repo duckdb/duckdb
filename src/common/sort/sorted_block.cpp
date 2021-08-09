@@ -1,6 +1,7 @@
 #include "duckdb/common/sort/sorted_block.hpp"
 
 #include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
 
 #include <numeric>
@@ -48,9 +49,6 @@ void SortedData::Advance(const bool &adv) {
 		entry_idx = 0;
 		if (block_idx < data_blocks.size()) {
 			Pin();
-		} else {
-			ResetIndices(block_idx, entry_idx);
-			return;
 		}
 	}
 }

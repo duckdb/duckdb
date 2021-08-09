@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-inline bool Comparators::TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout) {
+bool Comparators::TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout) {
 	// Check if the blob is NULL
 	ValidityBytes row_mask(row_ptr);
 	idx_t entry_idx;
@@ -25,9 +25,8 @@ inline bool Comparators::TieIsBreakable(const idx_t &col_idx, const data_ptr_t r
 	return true;
 }
 
-inline int Comparators::CompareTuple(const SortedBlock &left, const SortedBlock &right, const data_ptr_t &l_ptr,
-                                     const data_ptr_t &r_ptr, const SortLayout &sort_layout,
-                                     const bool &external_sort) {
+int Comparators::CompareTuple(const SortedBlock &left, const SortedBlock &right, const data_ptr_t &l_ptr,
+                              const data_ptr_t &r_ptr, const SortLayout &sort_layout, const bool &external_sort) {
 	// Compare the sorting columns one by one
 	int comp_res = 0;
 	data_ptr_t l_ptr_offset = l_ptr;
@@ -47,7 +46,7 @@ inline int Comparators::CompareTuple(const SortedBlock &left, const SortedBlock 
 	return comp_res;
 }
 
-inline int Comparators::CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, const LogicalType &type) {
+int Comparators::CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, const LogicalType &type) {
 	switch (type.InternalType()) {
 	case PhysicalType::VARCHAR:
 		return TemplatedCompareVal<string_t>(l_ptr, r_ptr);
@@ -62,8 +61,8 @@ inline int Comparators::CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_pt
 	}
 }
 
-inline int Comparators::BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData &right,
-                                     const SortLayout &sort_layout, const bool &external) {
+int Comparators::BreakBlobTie(const idx_t &tie_col, const SortedData &left, const SortedData &right,
+                              const SortLayout &sort_layout, const bool &external) {
 	const idx_t &col_idx = sort_layout.sorting_to_blob_col.at(tie_col);
 	data_ptr_t l_data_ptr = left.DataPtr();
 	data_ptr_t r_data_ptr = right.DataPtr();
@@ -98,7 +97,7 @@ inline int Comparators::BreakBlobTie(const idx_t &tie_col, const SortedData &lef
 }
 
 template <class T>
-inline int Comparators::TemplatedCompareVal(const data_ptr_t &left_ptr, const data_ptr_t &right_ptr) {
+int Comparators::TemplatedCompareVal(const data_ptr_t &left_ptr, const data_ptr_t &right_ptr) {
 	const auto left_val = Load<T>(left_ptr);
 	const auto right_val = Load<T>(right_ptr);
 	if (Equals::Operation<T>(left_val, right_val)) {
@@ -149,14 +148,14 @@ int Comparators::CompareValAndAdvance(data_ptr_t &l_ptr, data_ptr_t &r_ptr, cons
 }
 
 template <class T>
-inline int Comparators::TemplatedCompareAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr) {
+int Comparators::TemplatedCompareAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr) {
 	auto result = TemplatedCompareVal<T>(left_ptr, right_ptr);
 	left_ptr += sizeof(T);
 	right_ptr += sizeof(T);
 	return result;
 }
 
-inline int Comparators::CompareStringAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr) {
+int Comparators::CompareStringAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr) {
 	// Construct the string_t
 	uint32_t left_string_size = Load<uint32_t>(left_ptr);
 	uint32_t right_string_size = Load<uint32_t>(right_ptr);
@@ -170,8 +169,8 @@ inline int Comparators::CompareStringAndAdvance(data_ptr_t &left_ptr, data_ptr_t
 	return TemplatedCompareVal<string_t>((data_ptr_t)&left_val, (data_ptr_t)&right_val);
 }
 
-inline int Comparators::CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr,
-                                                const child_list_t<LogicalType> &types) {
+int Comparators::CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr,
+                                         const child_list_t<LogicalType> &types) {
 	idx_t count = types.size();
 	// Load validity masks
 	ValidityBytes left_validity(left_ptr);
@@ -207,7 +206,7 @@ inline int Comparators::CompareStructAndAdvance(data_ptr_t &left_ptr, data_ptr_t
 	return comp_res;
 }
 
-inline int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const LogicalType &type) {
+int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right_ptr, const LogicalType &type) {
 	// Load list lengths
 	auto left_len = Load<idx_t>(left_ptr);
 	auto right_len = Load<idx_t>(right_ptr);
@@ -317,9 +316,9 @@ inline int Comparators::CompareListAndAdvance(data_ptr_t &left_ptr, data_ptr_t &
 }
 
 template <class T>
-inline int Comparators::TemplatedCompareListLoop(data_ptr_t &left_ptr, data_ptr_t &right_ptr,
-                                                 const ValidityBytes &left_validity,
-                                                 const ValidityBytes &right_validity, const idx_t &count) {
+int Comparators::TemplatedCompareListLoop(data_ptr_t &left_ptr, data_ptr_t &right_ptr,
+                                          const ValidityBytes &left_validity, const ValidityBytes &right_validity,
+                                          const idx_t &count) {
 	int comp_res = 0;
 	bool left_valid;
 	bool right_valid;
@@ -344,15 +343,14 @@ inline int Comparators::TemplatedCompareListLoop(data_ptr_t &left_ptr, data_ptr_
 	return comp_res;
 }
 
-inline void Comparators::UnswizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr,
-                                              const LogicalType &type) {
+void Comparators::UnswizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data_ptr += sizeof(uint32_t) + string_t::PREFIX_LENGTH;
 	}
 	Store<data_ptr_t>(heap_ptr + Load<idx_t>(data_ptr), data_ptr);
 }
 
-inline void Comparators::SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
+void Comparators::SwizzleSingleValue(data_ptr_t data_ptr, const data_ptr_t &heap_ptr, const LogicalType &type) {
 	if (type.InternalType() == PhysicalType::VARCHAR) {
 		data_ptr += sizeof(uint32_t) + string_t::PREFIX_LENGTH;
 	}

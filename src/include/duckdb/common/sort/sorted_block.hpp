@@ -25,11 +25,11 @@ public:
 	//! Pin the current block so it can be read
 	void Pin();
 	//! Pointer to the row that is currently being read from
-	inline data_ptr_t DataPtr() const;
+	data_ptr_t DataPtr() const;
 	//! Pointer to the heap row that corresponds to the current row
-	inline data_ptr_t HeapPtr() const;
+	data_ptr_t HeapPtr() const;
 	//! Advance one row
-	inline void Advance(const bool &adv);
+	void Advance(const bool &adv);
 	//! Initialize new block to write to
 	void CreateBlock();
 	//! Reset read indices to the given indices
