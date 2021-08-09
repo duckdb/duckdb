@@ -187,3 +187,17 @@ SELECT {'x': NULL} UNION ALL SELECT {'x': True}
 ----
 {'x': NULL}
 {'x': True}
+
+# ctes
+query I
+WITH cte AS (SELECT NULL)
+SELECT * FROM cte
+----
+NULL
+
+query I
+WITH cte AS (SELECT NULL)
+SELECT * FROM cte UNION ALL SELECT CAST(1 AS BOOLEAN)
+----
+NULL
+True
