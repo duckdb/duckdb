@@ -1,11 +1,8 @@
 #include "duckdb/common/sort/comparators.hpp"
 
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/sort/sorted_block.hpp"
 
 namespace duckdb {
-
-using ValidityBytes = RowLayout::ValidityBytes;
 
 inline bool Comparators::TieIsBreakable(const idx_t &col_idx, const data_ptr_t row_ptr, const RowLayout &row_layout) {
 	// Check if the blob is NULL

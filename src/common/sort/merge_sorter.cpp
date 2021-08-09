@@ -1,6 +1,5 @@
 #include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/sort/sorted_block.hpp"
 
 namespace duckdb {
 
@@ -8,7 +7,7 @@ MergeSorter::MergeSorter(GlobalSortState &state, BufferManager &buffer_manager)
     : state(state), buffer_manager(buffer_manager), sort_layout(state.sort_layout) {
 }
 
-void MergeSorter::Iterate() {
+void MergeSorter::PerformInMergeRound() {
 	while (true) {
 		{
 			lock_guard<mutex> pair_guard(state.lock);

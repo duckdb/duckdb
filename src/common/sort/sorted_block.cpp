@@ -2,7 +2,6 @@
 
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/types/row_layout.hpp"
 
 #include <numeric>
 
@@ -139,7 +138,7 @@ SortedBlock::SortedBlock(BufferManager &buffer_manager, GlobalSortState &state)
 	blob_sorting_data = make_unique<SortedData>(sort_layout.blob_layout, buffer_manager, state);
 	payload_data = make_unique<SortedData>(payload_layout, buffer_manager, state);
 }
-//! Number of rows that this object holds
+
 idx_t SortedBlock::Count() const {
 	idx_t count = std::accumulate(radix_sorting_data.begin(), radix_sorting_data.end(), 0,
 	                              [](idx_t a, const RowDataBlock &b) { return a + b.count; });
@@ -149,7 +148,7 @@ idx_t SortedBlock::Count() const {
 	D_ASSERT(count == payload_data->Count());
 	return count;
 }
-//! The remaining number of rows to be read from this object
+
 idx_t SortedBlock::Remaining() const {
 	idx_t remaining = 0;
 	if (block_idx < radix_sorting_data.size()) {
@@ -160,7 +159,7 @@ idx_t SortedBlock::Remaining() const {
 	}
 	return remaining;
 }
-//! Initialize this block to write data to
+
 void SortedBlock::InitializeWrite() {
 	CreateBlock();
 	if (!sort_layout.all_constant) {
@@ -168,13 +167,13 @@ void SortedBlock::InitializeWrite() {
 	}
 	payload_data->CreateBlock();
 }
-//! Init new block to write to
+
 void SortedBlock::CreateBlock() {
 	auto capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + sort_layout.entry_size - 1) / sort_layout.entry_size,
 	                         state.block_capacity);
 	radix_sorting_data.emplace_back(buffer_manager, capacity, sort_layout.entry_size);
 }
-//! Pins radix block with given index
+
 void SortedBlock::PinRadix(idx_t pin_block_idx) {
 	D_ASSERT(pin_block_idx < radix_sorting_data.size());
 	auto &block = radix_sorting_data[pin_block_idx];
@@ -182,7 +181,7 @@ void SortedBlock::PinRadix(idx_t pin_block_idx) {
 		radix_handle = buffer_manager.Pin(block.block);
 	}
 }
-//! Fill this sorted block by appending the blocks held by a vector of sorted blocks
+
 void SortedBlock::AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blocks) {
 	D_ASSERT(Count() == 0);
 	for (auto &sb : sorted_blocks) {
@@ -291,50 +290,62 @@ idx_t SortedBlock::SizeInBytes() const {
 	return bytes;
 }
 
-void SortedData::Scan(DataChunk &chunk, GlobalSortState &global_sort_state, Vector &addresses,
-                      const idx_t &scan_count) {
+SortedDataScanner::SortedDataScanner(SortedData &sorted_data, GlobalSortState &global_sort_state)
+    : sorted_data(sorted_data), total_count(sorted_data.Count()), global_sort_state(global_sort_state),
+      total_scanned(0) {
+}
+
+void SortedDataScanner::Scan(DataChunk &chunk) {
+	auto count = MinValue((idx_t)STANDARD_VECTOR_SIZE, total_count - total_scanned);
+	if (count == 0) {
+		D_ASSERT(sorted_data.block_idx == sorted_data.data_blocks.size());
+		return;
+	}
 	// Eagerly delete references to blocks that we've passed
-	for (idx_t i = 0; i < block_idx; i++) {
-		data_blocks[block_idx].block = nullptr;
-		if (!layout.AllConstant() && global_sort_state.external) {
-			heap_blocks[i].block = nullptr;
+	for (idx_t i = 0; i < sorted_data.block_idx; i++) {
+		sorted_data.data_blocks[i].block = nullptr;
+		if (!sorted_data.layout.AllConstant() && global_sort_state.external) {
+			sorted_data.heap_blocks[i].block = nullptr;
 		}
 	}
-	const idx_t &row_width = layout.GetRowWidth();
+	const idx_t &row_width = sorted_data.layout.GetRowWidth();
 	// Set up a batch of pointers to scan data from
-	idx_t count = 0;
+	idx_t scanned = 0;
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
-	while (count < scan_count) {
-		Pin();
-		auto &data_block = data_blocks[block_idx];
-		idx_t next = MinValue(data_block.count - entry_idx, scan_count - count);
-		const data_ptr_t payload_dataptr = data_handle->Ptr() + entry_idx * row_width;
+	while (scanned < count) {
+		sorted_data.Pin();
+		auto &data_block = sorted_data.data_blocks[sorted_data.block_idx];
+		idx_t next = MinValue(data_block.count - sorted_data.entry_idx, count - scanned);
+		const data_ptr_t data_ptr = sorted_data.data_handle->Ptr() + sorted_data.entry_idx * row_width;
 		// Set up the next pointers
-		data_ptr_t row_ptr = payload_dataptr;
+		data_ptr_t row_ptr = data_ptr;
 		for (idx_t i = 0; i < next; i++) {
-			data_pointers[count + i] = row_ptr;
+			data_pointers[scanned + i] = row_ptr;
 			row_ptr += row_width;
 		}
 		// Unswizzle the offsets back to pointers (if needed)
-		if (!layout.AllConstant() && global_sort_state.external) {
-			RowOperations::UnswizzleHeapPointer(layout, payload_dataptr, heap_handle->Ptr(), next);
-			RowOperations::UnswizzleColumns(layout, payload_dataptr, next);
+		if (!sorted_data.layout.AllConstant() && global_sort_state.external) {
+			RowOperations::UnswizzleHeapPointer(sorted_data.layout, data_ptr, sorted_data.heap_handle->Ptr(), next);
+			RowOperations::UnswizzleColumns(sorted_data.layout, data_ptr, next);
 		}
 		// Update state indices
-		entry_idx += next;
-		if (entry_idx == data_block.count) {
-			block_idx++;
-			entry_idx = 0;
+		sorted_data.entry_idx += next;
+		if (sorted_data.entry_idx == data_block.count) {
+			sorted_data.block_idx++;
+			sorted_data.entry_idx = 0;
 		}
-		count += next;
+		scanned += next;
 	}
-	D_ASSERT(count == scan_count);
+	D_ASSERT(scanned == count);
 	// Deserialize the payload data
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
-		const auto col_offset = layout.GetOffsets()[col_idx];
+	for (idx_t col_idx = 0; col_idx < sorted_data.layout.ColumnCount(); col_idx++) {
+		const auto col_offset = sorted_data.layout.GetOffsets()[col_idx];
 		RowOperations::Gather(addresses, FlatVector::INCREMENTAL_SELECTION_VECTOR, chunk.data[col_idx],
-		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, scan_count, col_offset, col_idx);
+		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, count, col_offset, col_idx);
 	}
+	chunk.SetCardinality(count);
+	chunk.Verify();
+	total_scanned += scanned;
 }
 
 } // namespace duckdb

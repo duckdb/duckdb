@@ -16,6 +16,7 @@ namespace duckdb {
 struct SortLayout;
 struct SortedBlock;
 struct SortedData;
+
 using ValidityBytes = RowLayout::ValidityBytes;
 
 class Comparators {
@@ -25,7 +26,7 @@ public:
 	//! Compares the tuples that a being read from in the 'left' and 'right blocks during merge sort
 	//! (only in case we cannot simply 'memcmp' - if there are blob columns)
 	static inline int CompareTuple(const SortedBlock &left, const SortedBlock &right, const data_ptr_t &l_ptr,
-	                        const data_ptr_t &r_ptr, const SortLayout &sort_layout, const bool &external_sort);
+	                               const data_ptr_t &r_ptr, const SortLayout &sort_layout, const bool &external_sort);
 	//! Compare two blob values
 	static inline int CompareVal(const data_ptr_t l_ptr, const data_ptr_t r_ptr, const LogicalType &type);
 

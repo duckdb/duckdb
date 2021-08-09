@@ -5,10 +5,9 @@
 //
 //
 //===----------------------------------------------------------------------===//
-#include "duckdb/common/types/row_layout.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-
 #pragma once
+
+#include "duckdb/common/types/row_layout.hpp"
 
 namespace duckdb {
 
@@ -40,8 +39,6 @@ public:
 	                                   idx_t end_entry_index);
 	//! Unswizzles all
 	void Unswizzle();
-	//! Scans the SortedBlock into a DataChunk
-	void Scan(DataChunk &chunk, GlobalSortState &global_sort_state, Vector &addresses, const idx_t &scan_count);
 
 public:
 	//! Layout of this data
@@ -116,6 +113,26 @@ private:
 	GlobalSortState &state;
 	const SortLayout &sort_layout;
 	const RowLayout &payload_layout;
+};
+
+struct SortedDataScanner {
+public:
+	SortedDataScanner(SortedData &sorted_data, GlobalSortState &global_sort_state);
+
+	//! Scans the next data chunk from the sorted data
+	void Scan(DataChunk &chunk);
+
+private:
+	//! The sorted data being scanned
+	SortedData &sorted_data;
+	//! The total count of sorted_data
+	const idx_t total_count;
+	//! The global sort state
+	GlobalSortState &global_sort_state;
+	//! Addresses used to gather from the sorted data
+	Vector addresses = Vector(LogicalType::POINTER);
+	//! The number of rows scanned so far
+	idx_t total_scanned;
 };
 
 } // namespace duckdb

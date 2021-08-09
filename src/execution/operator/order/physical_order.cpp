@@ -1,14 +1,12 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/sort/sorted_block.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_context.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
-
-using ValidityBytes = RowLayout::ValidityBytes;
 
 PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders,
                              vector<unique_ptr<BaseStatistics>> statistics, idx_t estimated_cardinality)
@@ -90,51 +88,40 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 	lstate.executor.Execute(input, sort);
 
 	// Sink the data into the local sort state
-	lstate.local_sort_state.SinkChunk(lstate.sort, input);
+	local_sort_state.SinkChunk(lstate.sort, input);
 
 	// When sorting data reaches a certain size, we sort it
 	if (local_sort_state.SizeInBytes() >= gstate.memory_per_thread) {
-		SortLocalState(context.client, lstate, gstate);
+		local_sort_state.Sort(global_sort_state);
 	}
 }
 
 void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
-
-	auto &global_sort_state = gstate.global_sort_state;
-	auto &local_sort_state = lstate.local_sort_state;
-
-	if (!local_sort_state.radix_sorting_data) {
-		return;
-	}
-
-	// Sort accumulated data
-	local_sort_state.Sort(global_sort_state);
-
-	lock_guard<mutex> append_guard(global_sort_state.lock);
-	for (auto &cb : local_sort_state.sorted_blocks) {
-		global_sort_state.sorted_blocks.push_back(move(cb));
-	}
+	gstate.global_sort_state.AddLocalState(lstate.local_sort_state);
 }
 
 class PhysicalOrderMergeTask : public Task {
 public:
 	PhysicalOrderMergeTask(Pipeline &parent, ClientContext &context, OrderGlobalState &state)
-	    : parent(parent), context(context), state(state),
-	      merge_sorter(state.global_sort_state, BufferManager::GetBufferManager(context)) {
+	    : parent(parent), context(context), state(state) {
 	}
 
 	void Execute() override {
-		merge_sorter.Iterate();
+		// Initialize merge sorted and iterate until done
+		MergeSorter merge_sorter(state.global_sort_state, BufferManager::GetBufferManager(context));
+		merge_sorter.PerformInMergeRound();
+		// Finish task and act if all tasks are finished
 		lock_guard<mutex> state_guard(state.global_sort_state.lock);
 		parent.finished_tasks++;
 		if (parent.finished_tasks == parent.total_tasks) {
-			state.global_sort_state.CompleteRound();
-			// Only one block left: Done!
+			state.global_sort_state.CompleteMergeRound();
 			if (state.global_sort_state.sorted_blocks.size() == 1) {
+				// Only one block left: Done!
 				parent.Finish();
 			} else {
+				// Schedule the next round
 				PhysicalOrder::ScheduleMergeTasks(parent, context, state);
 			}
 		}
@@ -144,22 +131,22 @@ private:
 	Pipeline &parent;
 	ClientContext &context;
 	OrderGlobalState &state;
-	MergeSorter merge_sorter;
 };
 
 bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
 	this->sink_state = move(state_p);
 	auto &state = (OrderGlobalState &)*this->sink_state;
-
 	auto &global_sort_state = state.global_sort_state;
+
 	if (global_sort_state.sorted_blocks.empty()) {
+		// Empty input!
 		return true;
 	}
 
 	// Prepare for merge sort phase
-	global_sort_state.PrepareForMerge();
+	global_sort_state.PrepareMergePhase();
 
-	// Start the merge or finish if a merge is not necessary
+	// Start the merge phase or finish if a merge is not necessary
 	if (global_sort_state.sorted_blocks.size() > 1) {
 		// More than one block - merge
 		PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
@@ -171,8 +158,8 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state) {
 	// Initialize global sort state for a round of merging
-	state.global_sort_state.InitMergeRound();
-	// Schedule tasks equal to the number of threads, which will each finish multiple tasks
+	state.global_sort_state.InitializeMergeRound();
+	// Schedule tasks equal to the number of threads, which will each merge multiple partitions
 	auto &ts = TaskScheduler::GetScheduler(context);
 	idx_t num_threads = ts.NumberOfThreads();
 	pipeline.total_tasks += num_threads;
@@ -187,14 +174,12 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 //===--------------------------------------------------------------------===//
 class PhysicalOrderOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), global_entry_idx(0) {
+	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child) {
 	}
 
-	SortedData *payload_data;
-	Vector addresses = Vector(LogicalType::POINTER);
-
-	idx_t global_entry_idx;
+public:
+	//! Payload scanner
+	unique_ptr<SortedDataScanner> scanner = nullptr;
 };
 
 unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
@@ -204,18 +189,20 @@ unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
 void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
                                      PhysicalOperatorState *state_p) const {
 	auto &state = *reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
-	auto &gstate = (OrderGlobalState &)*this->sink_state;
-	auto &global_sort_state = gstate.global_sort_state;
 
-	if (global_sort_state.sorted_blocks.empty() || state.global_entry_idx == global_sort_state.total_count) {
-		return;
+	if (!state.scanner) {
+		// Initialize scanner (if not yet initialized)
+		auto &gstate = (OrderGlobalState &)*this->sink_state;
+		auto &global_sort_state = gstate.global_sort_state;
+		if (global_sort_state.sorted_blocks.empty()) {
+			return;
+		}
+		state.scanner =
+		    make_unique<SortedDataScanner>(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	}
 
-	auto next = MinValue((idx_t)STANDARD_VECTOR_SIZE, global_sort_state.total_count - state.global_entry_idx);
-	auto &payload_data = *global_sort_state.sorted_blocks[0]->payload_data;
-	payload_data.Scan(chunk, global_sort_state, state.addresses, next);
-	chunk.SetCardinality(next);
-	chunk.Verify();
+	// Scan the next data chunk
+	state.scanner->Scan(chunk);
 }
 
 string PhysicalOrder::ParamsToString() const {

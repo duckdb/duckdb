@@ -10,10 +10,12 @@
 
 #include "duckdb/common/sort/sorted_block.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/types/row_layout.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 
 namespace duckdb {
+
+class RowLayout;
+struct LocalSortState;
 
 struct SortLayout {
 public:
@@ -43,12 +45,14 @@ public:
 	GlobalSortState(BufferManager &buffer_manager, vector<BoundOrderByNode> &orders,
 	                vector<unique_ptr<BaseStatistics>> &statistics, RowLayout &payload_layout);
 
+	//! Add local state sorted data to this global state
+	void AddLocalState(LocalSortState &local_sort_state);
 	//! Prepares the GlobalSortState for the merge sort phase (after completing radix sort phase)
-	void PrepareForMerge();
+	void PrepareMergePhase();
 	//! Initializes the global sort state for another round of merging
-	void InitMergeRound();
+	void InitializeMergeRound();
 	//! Completes the cascaded merge sort round
-	void CompleteRound();
+	void CompleteMergeRound();
 
 public:
 	//! The lock for updating the order global state
@@ -56,7 +60,7 @@ public:
 	//! The buffer manager
 	BufferManager &buffer_manager;
 
-	//! Constants concerning sorting and payload data
+	//! Sorting and payload layouts
 	const SortLayout sort_layout;
 	const RowLayout payload_layout;
 
@@ -64,15 +68,13 @@ public:
 	vector<unique_ptr<SortedBlock>> sorted_blocks;
 	vector<vector<unique_ptr<SortedBlock>>> sorted_blocks_temp;
 	unique_ptr<SortedBlock> odd_one_out = nullptr;
+
 	//! Pinned heap data (if sorting in memory)
 	vector<RowDataBlock> heap_blocks;
 	vector<unique_ptr<BufferHandle>> pinned_blocks;
 
-	//! Total row count
-	idx_t total_count;
 	//! Capacity (number of rows) used to initialize blocks
 	idx_t block_capacity;
-
 	//! Whether we are doing an external sort
 	bool external;
 
@@ -97,11 +99,14 @@ public:
 	void Sort(GlobalSortState &global_sort_state);
 
 private:
+	//! Concatenate the blocks held by a RowDataCollection into a single block
 	RowDataBlock ConcatenateBlocks(RowDataCollection &row_data);
-	void ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap, GlobalSortState &gstate);
-	void ReOrder(SortedBlock &sb, GlobalSortState &gstate);
-	//! Sorts the data in a SortedBlock (static method, single-threaded radix-sort)
+	//! Sorts the data in the newly created SortedBlock
 	void SortInMemory();
+	//! Re-order the local state after sorting
+	void ReOrder(GlobalSortState &gstate);
+	//! Re-order a SortedData object after sorting
+	void ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap, GlobalSortState &gstate);
 
 public:
 	//! Whether this local state has been initialized
@@ -123,7 +128,7 @@ public:
 	vector<unique_ptr<SortedBlock>> sorted_blocks;
 
 private:
-	//! Constant buffers allocated for vector serialization
+	//! Selection vector and addresses for scattering the data to rows
 	const SelectionVector &sel_ptr = FlatVector::INCREMENTAL_SELECTION_VECTOR;
 	Vector addresses = Vector(LogicalType::POINTER);
 };
@@ -132,13 +137,13 @@ struct MergeSorter {
 public:
 	MergeSorter(GlobalSortState &state, BufferManager &buffer_manager);
 
-	//! Iterates over the current cascaded merge sort round
-	void Iterate();
+	//! Finds and merges partitions until the current cascaded merge round is finished
+	void PerformInMergeRound();
 
 private:
-	//! Sets the left and right block that will be merged next
+	//! Computes the left and right block that will be merged next (Merge Path partition)
 	void GetNextPartition();
-	//! Finds the next partition using Merge path
+	//! Finds the boundary of the next partition using binary search
 	void GetIntersection(SortedBlock &l, SortedBlock &r, const idx_t diagonal, idx_t &l_idx, idx_t &r_idx);
 	//! Compare values within SortedBlocks using a global index
 	int CompareUsingGlobalIndex(SortedBlock &l, SortedBlock &r, const idx_t l_idx, const idx_t r_idx);

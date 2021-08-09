@@ -76,6 +76,7 @@ static idx_t EntriesPerBlock(idx_t width) {
 void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManager &buffer_manager_p) {
 	sort_layout = &global_sort_state.sort_layout;
 	payload_layout = &global_sort_state.payload_layout;
+	buffer_manager = &buffer_manager_p;
 	// Radix sorting data
 	radix_sorting_data = make_unique<RowDataCollection>(*buffer_manager, EntriesPerBlock(sort_layout->entry_size),
 	                                                    sort_layout->entry_size);
@@ -142,35 +143,32 @@ idx_t LocalSortState::SizeInBytes() const {
 	return size_in_bytes;
 }
 
-//! Appends and sorts the data accumulated in a local sink state
 void LocalSortState::Sort(GlobalSortState &global_sort_state) {
 	D_ASSERT(radix_sorting_data->count == payload_data->count);
 	if (radix_sorting_data->count == 0) {
 		return;
 	}
 	// Move all data to a single SortedBlock
-	auto sb = make_unique<SortedBlock>(*buffer_manager, global_sort_state);
+	sorted_blocks.emplace_back(make_unique<SortedBlock>(*buffer_manager, global_sort_state));
+	auto &sb = *sorted_blocks.back();
 	// Fixed-size sorting data
 	auto sorting_block = ConcatenateBlocks(*radix_sorting_data);
-	sb->radix_sorting_data.push_back(move(sorting_block));
+	sb.radix_sorting_data.push_back(move(sorting_block));
 	// Variable-size sorting data
 	if (!sort_layout->all_constant) {
 		auto &blob_data = *blob_sorting_data;
 		auto new_block = ConcatenateBlocks(blob_data);
-		sb->blob_sorting_data->data_blocks.push_back(move(new_block));
+		sb.blob_sorting_data->data_blocks.push_back(move(new_block));
 	}
 	// Payload data
 	auto payload_block = ConcatenateBlocks(*payload_data);
-	sb->payload_data->data_blocks.push_back(move(payload_block));
+	sb.payload_data->data_blocks.push_back(move(payload_block));
 	// Now perform the actual sort
 	SortInMemory();
 	// Re-order before the merge sort
-	ReOrder(*sb, global_sort_state);
-	// Add the sorted block to the local state
-	sorted_blocks.push_back(move(sb));
+	ReOrder(global_sort_state);
 }
 
-//! Concatenates the blocks in a RowDataCollection into a single block
 RowDataBlock LocalSortState::ConcatenateBlocks(RowDataCollection &row_data) {
 	// Create block with the correct capacity
 	const idx_t &entry_size = row_data.entry_size;
@@ -190,7 +188,6 @@ RowDataBlock LocalSortState::ConcatenateBlocks(RowDataCollection &row_data) {
 	return new_block;
 }
 
-//! Reorders SortedData according to the sorted key columns
 void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap, GlobalSortState &gstate) {
 	auto &unordered_data_block = sd.data_blocks.back();
 	const idx_t &count = unordered_data_block.count;
@@ -246,8 +243,8 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	}
 }
 
-//! Use the ordered sorting data to re-order the rest of the data
-void LocalSortState::ReOrder(SortedBlock &sb, GlobalSortState &gstate) {
+void LocalSortState::ReOrder(GlobalSortState &gstate) {
+	auto &sb = *sorted_blocks.back();
 	auto sorting_handle = buffer_manager->Pin(sb.radix_sorting_data.back().block);
 	const data_ptr_t sorting_ptr = sorting_handle->Ptr() + gstate.sort_layout.comparison_size;
 	// Re-order variable size sorting columns
@@ -261,14 +258,25 @@ void LocalSortState::ReOrder(SortedBlock &sb, GlobalSortState &gstate) {
 GlobalSortState::GlobalSortState(BufferManager &buffer_manager, vector<BoundOrderByNode> &orders,
                                  vector<unique_ptr<BaseStatistics>> &statistics, RowLayout &payload_layout)
     : buffer_manager(buffer_manager), sort_layout(SortLayout(orders, statistics)), payload_layout(payload_layout),
-      total_count(0), block_capacity(0), external(false) {
+      block_capacity(0), external(false) {
 }
 
-void GlobalSortState::PrepareForMerge() {
-	// Set total count
-	for (auto &sb : sorted_blocks) {
-		total_count += sb->radix_sorting_data.back().count;
+void GlobalSortState::AddLocalState(LocalSortState &local_sort_state) {
+	if (!local_sort_state.radix_sorting_data) {
+		return;
 	}
+
+	// Sort accumulated data
+	local_sort_state.Sort(*this);
+
+	// Append local state sorted data to this global state
+	lock_guard<mutex> append_guard(lock);
+	for (auto &sb : local_sort_state.sorted_blocks) {
+		sorted_blocks.push_back(move(sb));
+	}
+}
+
+void GlobalSortState::PrepareMergePhase() {
 	// Determine if we need to use do an external sort
 	idx_t total_heap_size =
 	    std::accumulate(sorted_blocks.begin(), sorted_blocks.end(), (idx_t)0,
@@ -301,7 +309,7 @@ void GlobalSortState::PrepareForMerge() {
 	}
 }
 
-void GlobalSortState::InitMergeRound() {
+void GlobalSortState::InitializeMergeRound() {
 	D_ASSERT(sorted_blocks_temp.empty());
 	// Uneven number of blocks - keep one on the side
 	if (sorted_blocks.size() % 2 == 1) {
@@ -319,7 +327,7 @@ void GlobalSortState::InitMergeRound() {
 	}
 }
 
-void GlobalSortState::CompleteRound() {
+void GlobalSortState::CompleteMergeRound() {
 	sorted_blocks.clear();
 	if (odd_one_out) {
 		sorted_blocks.push_back(move(odd_one_out));

@@ -1,6 +1,5 @@
 #include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/sort/sorted_block.hpp"
 
 namespace duckdb {
 
