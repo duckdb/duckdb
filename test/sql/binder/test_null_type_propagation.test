@@ -178,9 +178,9 @@ SELECT [NULL] UNION ALL SELECT [True]
 
 # nulls in structs
 query I
-SELECT [NULL]
+SELECT {'x': NULL}
 ----
-[NULL]
+{'x': NULL}
 
 query I
 SELECT {'x': NULL} UNION ALL SELECT {'x': True}
