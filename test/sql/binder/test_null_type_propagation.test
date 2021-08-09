@@ -1,0 +1,189 @@
+# name: test/sql/binder/test_null_type_propagation.test
+# description: Test binding of NULL type
+# group: [binder]
+
+statement ok
+PRAGMA enable_verification
+
+# regular binding
+query I
+SELECT NULL
+----
+NULL
+
+# union
+query I
+SELECT NULL UNION ALL SELECT CAST(1 AS BOOLEAN)
+----
+NULL
+True
+
+query I
+SELECT NULL UNION ALL SELECT NULL
+----
+NULL
+NULL
+
+# mutliple unions
+query I
+SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT NULL UNION ALL SELECT CAST(1 AS BOOLEAN)
+----
+NULL
+NULL
+NULL
+NULL
+True
+
+# scalar subquery
+query I
+SELECT (SELECT NULL) UNION ALL SELECT CAST(1 AS BOOLEAN)
+----
+NULL
+True
+
+# table subquery
+query I
+SELECT * FROM (SELECT NULL) tbl(i) UNION ALL SELECT CAST(1 AS BOOLEAN)
+----
+NULL
+True
+
+query I
+SELECT * FROM (SELECT (SELECT NULL) UNION ALL SELECT CAST(1 AS BOOLEAN)) tbl(i)
+----
+NULL
+True
+
+query I
+SELECT * FROM (SELECT NULL) tbl(i) UNION ALL SELECT NULL
+----
+NULL
+NULL
+
+# bool_and
+query I
+SELECT bool_and(i) FROM (SELECT * FROM (SELECT NULL) tbl(i) UNION ALL SELECT CAST(1 as BOOLEAN)) tbl(i)
+----
+True
+
+# this wouldn't work if we would upcast to integer
+statement error
+SELECT bool_and(i) FROM (SELECT * FROM (SELECT NULL::INTEGER) tbl(i) UNION ALL SELECT CAST(1 as BOOLEAN)) tbl(i)
+
+# cross product
+query II
+SELECT * FROM (SELECT NULL) tbl(i), (SELECT NULL) tbl2(j)
+----
+NULL	NULL
+
+query II
+SELECT bool_and(i), bool_and(j) FROM (SELECT NULL) tbl(i), (SELECT NULL) tbl2(j)
+----
+NULL	NULL
+
+# Issue #1049: Should a UNION with untyped NULL preserve the type?
+query III
+SELECT NULL as a, NULL as b, 1 as id UNION SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 2 as id
+----
+NULL	NULL	1
+True	False	2
+
+query III
+SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 1 as id UNION SELECT NULL as a, NULL as b, 2 as id
+----
+True	False	1
+NULL	NULL	2
+
+# old behavior: cast NULL to integer explicitly
+query III
+SELECT NULL::INTEGER as a, NULL::INTEGER as b, 1 as id UNION SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 2 as id
+----
+NULL	NULL	1
+1	0	2
+
+query III
+SELECT CAST(1 AS BOOLEAN) as a, CAST(0 AS BOOLEAN) as b, 1 as id UNION SELECT NULL::INTEGER as a, NULL::INTEGER as b, 2 as id
+----
+1	0	1
+NULL	NULL	2
+
+# NULL is auto-cast to integer for storage purposes
+statement ok
+CREATE TABLE tbl AS SELECT NULL UNION ALL SELECT NULL
+
+query I
+SELECT * FROM tbl
+----
+NULL
+NULL
+
+query I
+SELECT typeof(#1) FROM tbl LIMIT 1
+----
+INTEGER
+
+# views preserve NULLs
+statement ok
+CREATE VIEW v1 AS SELECT NULL
+
+query I
+SELECT * FROM v1
+----
+NULL
+
+query I
+SELECT * FROM v1 UNION ALL SELECT CAST(1 AS BOOLEAN)
+----
+NULL
+True
+
+query I
+SELECT typeof(#1) FROM v1
+----
+NULL
+
+# also with unions
+statement ok
+CREATE VIEW v2 AS SELECT NULL UNION ALL SELECT NULL
+
+query I
+SELECT * FROM v2
+----
+NULL
+NULL
+
+query I
+SELECT * FROM v2 UNION ALL SELECT CAST(1 AS BOOLEAN)
+----
+NULL
+NULL
+True
+
+query I
+SELECT typeof(#1) FROM v2 LIMIT 1
+----
+NULL
+
+# nulls in lists
+query I
+SELECT [NULL]
+----
+[NULL]
+
+query I
+SELECT [NULL] UNION ALL SELECT [True]
+----
+[NULL]
+[True]
+
+# nulls in structs
+query I
+SELECT [NULL]
+----
+[NULL]
+
+query I
+SELECT {'x': NULL} UNION ALL SELECT {'x': True}
+----
+{'x': NULL}
+{'x': True}
