@@ -1,9 +1,9 @@
 #include "altrepstring.hpp"
+#include "duckdb/common/arrow.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "rapi.hpp"
 #include "typesr.hpp"
-
-#include "duckdb/common/arrow.hpp"
+#include "duckdb/common/arrow_wrapper.hpp"
 
 using namespace duckdb;
 
@@ -449,14 +449,51 @@ struct AppendableRList {
 	RProtector r;
 };
 
-// Turn a DuckDB materialized result set into an Arrow Table
-SEXP duckdb_execute_arrow(QueryResult *result) {
+struct RQueryResult {
+	unique_ptr<QueryResult> result;
+};
+
+bool FetchArrowChunk(QueryResult *result, AppendableRList &batches_list, ArrowArray &arrow_data,
+                     ArrowSchema &arrow_schema, SEXP &batch_import_from_c, SEXP &arrow_namespace) {
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto stream_result = (StreamQueryResult *)result;
+		if (!stream_result->is_open) {
+			return false;
+		}
+	}
+	unique_ptr<DataChunk> data_chunk = result->Fetch();
+	if (!data_chunk || data_chunk->size() == 0) {
+		return false;
+	}
+	result->ToArrowSchema(&arrow_schema);
+	data_chunk->ToArrowArray(&arrow_data);
+	batches_list.PrepAppend();
+	batches_list.Append(RApi::REvalRerror(batch_import_from_c, arrow_namespace));
+	return true;
+}
+
+// Turn a DuckDB result set into an Arrow Table
+SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
+                              SEXP return_tablesexp) {
 	RProtector r;
+	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
+	auto result = query_result_holder->result.get();
 	// somewhat dark magic below
 	SEXP arrow_name_sexp = r.Protect(RApi::StringsToSexp({"arrow"}));
 	SEXP arrow_namespace_call = r.Protect(Rf_lang2(Rf_install("getNamespace"), arrow_name_sexp));
 	SEXP arrow_namespace = r.Protect(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
-
+	bool stream = LOGICAL_POINTER(streamsexp)[0] != 0;
+	int num_of_vectors = NUMERIC_POINTER(vector_per_chunksexp)[0];
+	bool return_table = LOGICAL_POINTER(return_tablesexp)[0] != 0;
+	if (TYPEOF(streamsexp) != LGLSXP || LENGTH(streamsexp) != 1) {
+		Rf_error("stream parameter needs to be single-value logical");
+	}
+	if (TYPEOF(return_tablesexp) != LGLSXP || LENGTH(return_tablesexp) != 1) {
+		Rf_error("return_table parameter needs to be single-value logical");
+	}
+	if (TYPEOF(vector_per_chunksexp) != REALSXP || LENGTH(vector_per_chunksexp) != 1) {
+		Rf_error("vector_per_chunks parameter needs to be single-value numeric");
+	}
 	// export schema setup
 	ArrowSchema arrow_schema;
 	auto schema_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_schema))));
@@ -467,17 +504,17 @@ SEXP duckdb_execute_arrow(QueryResult *result) {
 	auto data_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_data))));
 	auto batch_import_from_c = r.Protect(Rf_lang3(Rf_install("ImportRecordBatch"), data_ptr_sexp, schema_ptr_sexp));
 	// create data batches
-	unique_ptr<DataChunk> data_chunk;
 	AppendableRList batches_list;
-	while (true) {
-		data_chunk = result->Fetch();
-		if (!data_chunk || data_chunk->size() == 0) {
-			break;
+	if (stream) {
+		for (idx_t i = 0; i < num_of_vectors; i++) {
+			if (!FetchArrowChunk(result, batches_list, arrow_data, arrow_schema, batch_import_from_c,
+			                     arrow_namespace)) {
+				break;
+			}
 		}
-		result->ToArrowSchema(&arrow_schema);
-		data_chunk->ToArrowArray(&arrow_data);
-		batches_list.PrepAppend();
-		batches_list.Append(RApi::REvalRerror(batch_import_from_c, arrow_namespace));
+	} else {
+		while (FetchArrowChunk(result, batches_list, arrow_data, arrow_schema, batch_import_from_c, arrow_namespace)) {
+		}
 	}
 
 	SET_LENGTH(batches_list.the_list, batches_list.size);
@@ -486,9 +523,37 @@ SEXP duckdb_execute_arrow(QueryResult *result) {
 	SEXP schema_arrow_obj = r.Protect(RApi::REvalRerror(schema_import_from_c, arrow_namespace));
 
 	// create arrow::Table
-	auto from_record_batches =
-	    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_list.the_list, schema_arrow_obj));
-	return RApi::REvalRerror(from_record_batches, arrow_namespace);
+	if (return_table) {
+		auto from_record_batches =
+		    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_list.the_list, schema_arrow_obj));
+		return RApi::REvalRerror(from_record_batches, arrow_namespace);
+	}
+	return batches_list.the_list;
+}
+
+// Turn a DuckDB result set into an RecordBatchReader
+SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp) {
+	RProtector r;
+	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
+	// somewhat dark magic below
+	SEXP arrow_name_sexp = r.Protect(RApi::StringsToSexp({"arrow"}));
+	SEXP arrow_namespace_call = r.Protect(Rf_lang2(Rf_install("getNamespace"), arrow_name_sexp));
+	SEXP arrow_namespace = r.Protect(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
+
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(query_result_holder->result));
+	auto stream_ptr_sexp =
+	    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
+	auto record_batch_reader = r.Protect(Rf_lang2(Rf_install("ImportRecordBatchReader"), stream_ptr_sexp));
+	return RApi::REvalRerror(record_batch_reader, arrow_namespace);
+}
+
+static SEXP DuckDBFinalizeQueryR(SEXP query_resultsexp) {
+	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
+	if (query_resultsexp) {
+		R_ClearExternalPtr(query_resultsexp);
+		delete query_result_holder;
+	}
+	return R_NilValue;
 }
 
 SEXP RApi::Execute(SEXP stmtsexp, SEXP arrowsexp) {
@@ -510,8 +575,12 @@ SEXP RApi::Execute(SEXP stmtsexp, SEXP arrowsexp) {
 	}
 
 	if (arrow_fetch) {
-
-		return duckdb_execute_arrow(generic_result.get());
+		RProtector r;
+		auto query_result = new RQueryResult();
+		query_result->result = move(generic_result);
+		SEXP query_resultexp = r.Protect(R_MakeExternalPtr(query_result, R_NilValue, R_NilValue));
+		R_RegisterCFinalizer(query_resultexp, (void (*)(SEXP))DuckDBFinalizeQueryR);
+		return query_resultexp;
 	} else {
 		D_ASSERT(generic_result->type == QueryResultType::MATERIALIZED_RESULT);
 		MaterializedQueryResult *result = (MaterializedQueryResult *)generic_result.get();

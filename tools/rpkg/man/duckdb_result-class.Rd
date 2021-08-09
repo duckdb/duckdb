@@ -7,6 +7,7 @@
 \alias{show,duckdb_result-method}
 \alias{dbClearResult,duckdb_result-method}
 \alias{duckdb_fetch_arrow}
+\alias{duckdb_fetch_record_batch}
 \alias{dbFetch,duckdb_result-method}
 \alias{dbHasCompleted,duckdb_result-method}
 \alias{dbGetInfo,duckdb_result-method}
@@ -22,7 +23,14 @@
 
 \S4method{dbClearResult}{duckdb_result}(res, ...)
 
-duckdb_fetch_arrow(res)
+duckdb_fetch_arrow(
+  res,
+  stream = FALSE,
+  vector_per_chunk = 1,
+  return_table = FALSE
+)
+
+duckdb_fetch_record_batch(res)
 
 \S4method{dbFetch}{duckdb_result}(res, n = -1, ...)
 
@@ -48,6 +56,12 @@ duckdb_fetch_arrow(res)
 \item{res}{Query result to be converted to an Arrow Table}
 
 \item{...}{Other arguments passed on to methods.}
+
+\item{stream}{If we are streaming the query result or returning it all at once}
+
+\item{vector_per_chunk}{If streaming, how many vectors per chunk we should emit}
+
+\item{return_table}{If we return results as a list of RecordBatches or an Arrow Table}
 
 \item{n}{maximum number of records to retrieve per fetch. Use \code{n = -1}
 or \code{n = Inf}

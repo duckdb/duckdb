@@ -1,6 +1,9 @@
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/assert.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
+
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/exception.hpp"
+
+#include "duckdb/main/stream_query_result.hpp"
 namespace duckdb {
 
 ArrowSchemaWrapper::~ArrowSchemaWrapper() {
@@ -63,5 +66,81 @@ unique_ptr<ArrowArrayWrapper> ArrowArrayStreamWrapper::GetNextChunk() {
 const char *ArrowArrayStreamWrapper::GetError() { // LCOV_EXCL_START
 	return arrow_array_stream.get_last_error(&arrow_array_stream);
 } // LCOV_EXCL_STOP
+
+int ResultArrowArrayStreamWrapper::MyStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out) {
+	if (!stream->release) {
+		return -1;
+	}
+	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	auto &result = *my_stream->result;
+	if (!result.success) {
+		my_stream->last_error = "Query Failed";
+		return -1;
+	}
+	if (result.type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = (StreamQueryResult &)result;
+		if (!stream_result.is_open) {
+			my_stream->last_error = "Query Stream is closed";
+			return -1;
+		}
+	}
+	result.ToArrowSchema(out);
+	return 0;
+}
+
+int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stream, struct ArrowArray *out) {
+	if (!stream->release) {
+		return -1;
+	}
+	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	auto &result = *my_stream->result;
+	if (!result.success) {
+		my_stream->last_error = "Query Failed";
+		return -1;
+	}
+	if (result.type == QueryResultType::STREAM_RESULT) {
+		auto &stream_result = (StreamQueryResult &)result;
+		if (!stream_result.is_open) {
+			my_stream->last_error = "Query Stream is closed";
+			return -1;
+		}
+	}
+	auto data_chunk = result.Fetch();
+	if (!data_chunk) {
+		//! Nothing to output
+		out->release = nullptr;
+		return 0;
+	}
+	data_chunk->ToArrowArray(out);
+	return 0;
+}
+
+void ResultArrowArrayStreamWrapper::MyStreamRelease(struct ArrowArrayStream *stream) {
+	if (!stream->release) {
+		return;
+	}
+	stream->release = nullptr;
+	delete (ResultArrowArrayStreamWrapper *)stream->private_data;
+}
+
+const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArrayStream *stream) {
+	if (!stream->release) {
+		return "stream was released";
+	}
+	D_ASSERT(stream->private_data);
+	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
+	return my_stream->last_error.c_str();
+}
+ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p)
+    : result(move(result_p)) {
+	//! We first initialize the private data of the stream
+	stream.private_data = this;
+
+	//! We initialize the stream functions
+	stream.get_schema = ResultArrowArrayStreamWrapper::MyStreamGetSchema;
+	stream.get_next = ResultArrowArrayStreamWrapper::MyStreamGetNext;
+	stream.release = ResultArrowArrayStreamWrapper::MyStreamRelease;
+	stream.get_last_error = ResultArrowArrayStreamWrapper::MyStreamGetLastError;
+}
 
 } // namespace duckdb
