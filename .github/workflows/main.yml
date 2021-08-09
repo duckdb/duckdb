@@ -638,7 +638,7 @@ jobs:
 
       - name: Before Install
         run: |
-          pip install --prefer-binary "pandas>=0.24" "requests>=2.26" "pyarrow>=5.0" pytest
+          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow>=5.0" pytest
           sudo apt-get install g++
 
       - name: Coverage Reset
@@ -894,9 +894,9 @@ jobs:
 
     env:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=1.2.4" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=1.2.4" && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests && python -m pytest {project}/tests_slow'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
@@ -934,9 +934,9 @@ jobs:
 #
 #    env:
 #      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-#      CIBW_BEFORE_BUILD: 'yum install -y openssl-devel && pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+#      CIBW_BEFORE_BUILD: 'yum install -y openssl-devel && pip install --prefer-binary "pandas>=1.2.4" "pytest>=4.3"'
 #      CIBW_TEST_REQUIRES: 'pytest'
-#      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=0.24"  && (pip install --prefer-binary "pyarrow>=5.0" || true)'
+#      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=1.2.4"  && (pip install --prefer-binary "pyarrow>=5.0" || true)'
 #      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
 #      CIBW_ENVIRONMENT: 'BUILD_HTTPFS=1'
 #      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
@@ -968,9 +968,9 @@ jobs:
 #
 #    env:
 #      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-#      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+#      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=1.2.4" "pytest>=4.3"'
 #      CIBW_TEST_REQUIRES: 'pytest'
-#      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
+#      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
 #      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
 #      CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
 #      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
@@ -1008,9 +1008,9 @@ jobs:
 #
 #    env:
 #      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-#      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+#      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=1.2.4" "pytest>=4.3"'
 #      CIBW_TEST_REQUIRES: 'pytest'
-#      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" '
+#      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=1.2.4" '
 #      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
 #      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
 #      TWINE_USERNAME: 'hfmuehleisen'
