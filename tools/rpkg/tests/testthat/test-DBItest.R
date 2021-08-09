@@ -11,10 +11,9 @@ DBItest::test_all(c(
 
   if (packageVersion("DBItest") < "1.7.0.9004") "roundtrip_timestamp", # broken test
 
-  "send_query_params", # type of ? issue
-  "get_query_params", # type of ? issue
-
-  "bind_return_value", # multiple bind parameters
+  "send_query_params", # multiple bind parameters
+  "get_query_params",
+  "bind_return_value",
   "bind_too_many",
   "bind_not_enough",
   "bind_multi_row_unequal_length",
@@ -28,7 +27,7 @@ DBItest::test_all(c(
   "bind_.*",
 
 
-  "data_logical", # casting NULL issue
+  "data_logical", # https://github.com/duckdb/duckdb/issues/1049
 
   "roundtrip_field_types", # strange
   "data_64_bit_numeric_warning", # not now
