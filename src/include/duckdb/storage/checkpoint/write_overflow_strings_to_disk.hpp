@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/storage/string_segment.hpp"
+#include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
 
 namespace duckdb {
 

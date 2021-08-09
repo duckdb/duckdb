@@ -110,6 +110,8 @@ void DUCKDB_API Appender::Append(int32_t value);
 template <>
 void DUCKDB_API Appender::Append(int64_t value);
 template <>
+void DUCKDB_API Appender::Append(hugeint_t value);
+template <>
 void DUCKDB_API Appender::Append(uint8_t value);
 template <>
 void DUCKDB_API Appender::Append(uint16_t value);
@@ -127,6 +129,8 @@ template <>
 void DUCKDB_API Appender::Append(dtime_t value);
 template <>
 void DUCKDB_API Appender::Append(timestamp_t value);
+template <>
+void DUCKDB_API Appender::Append(interval_t value);
 template <>
 void DUCKDB_API Appender::Append(const char *value);
 template <>

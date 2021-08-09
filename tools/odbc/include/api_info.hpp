@@ -35,6 +35,8 @@ public:
 
 	static SQLRETURN CheckDataType(SQLSMALLINT data_type);
 
+	static SQLLEN PointerSizeOf(SQLSMALLINT sql_type);
+
 }; // end ApiInfo struct
 
 } // namespace duckdb

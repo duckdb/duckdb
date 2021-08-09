@@ -101,7 +101,7 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 
 		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 		// now write the header to the file
-		header_buffer.Write(*handle, 0);
+		header_buffer.ChecksumAndWrite(*handle, 0);
 		header_buffer.Clear();
 
 		// write the database headers
@@ -114,14 +114,14 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 		h1.free_list = INVALID_BLOCK;
 		h1.block_count = 0;
 		SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
-		header_buffer.Write(*handle, Storage::FILE_HEADER_SIZE);
+		header_buffer.ChecksumAndWrite(*handle, Storage::FILE_HEADER_SIZE);
 		// header 2
 		h2.iteration = 0;
 		h2.meta_block = INVALID_BLOCK;
 		h2.free_list = INVALID_BLOCK;
 		h2.block_count = 0;
 		SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
-		header_buffer.Write(*handle, Storage::FILE_HEADER_SIZE * 2);
+		header_buffer.ChecksumAndWrite(*handle, Storage::FILE_HEADER_SIZE * 2);
 		// ensure that writing to disk is completed before returning
 		handle->Sync();
 		// we start with h2 as active_header, this way our initial write will be in h1
@@ -130,7 +130,7 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 		max_block = 0;
 	} else {
 		// otherwise, we check the metadata of the file
-		header_buffer.Read(*handle, 0);
+		header_buffer.ReadAndChecksum(*handle, 0);
 		MainHeader header = DeserializeHeaderStructure<MainHeader>(header_buffer.buffer);
 		// check the version number
 		if (header.version_number != VERSION_NUMBER) {
@@ -148,9 +148,9 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 
 		// read the database headers from disk
 		DatabaseHeader h1, h2;
-		header_buffer.Read(*handle, Storage::FILE_HEADER_SIZE);
+		header_buffer.ReadAndChecksum(*handle, Storage::FILE_HEADER_SIZE);
 		h1 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
-		header_buffer.Read(*handle, Storage::FILE_HEADER_SIZE * 2);
+		header_buffer.ReadAndChecksum(*handle, Storage::FILE_HEADER_SIZE * 2);
 		h2 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
 		// check the header with the highest iteration count
 		if (h1.iteration > h2.iteration) {
@@ -226,12 +226,12 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock() {
 void SingleFileBlockManager::Read(Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
-	block.Read(*handle, BLOCK_START + block.id * Storage::BLOCK_ALLOC_SIZE);
+	block.ReadAndChecksum(*handle, BLOCK_START + block.id * Storage::BLOCK_ALLOC_SIZE);
 }
 
 void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
-	buffer.Write(*handle, BLOCK_START + block_id * Storage::BLOCK_ALLOC_SIZE);
+	buffer.ChecksumAndWrite(*handle, BLOCK_START + block_id * Storage::BLOCK_ALLOC_SIZE);
 }
 
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
@@ -274,7 +274,8 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	Store<DatabaseHeader>(header, header_buffer.buffer);
 	// now write the header to the file, active_header determines whether we write to h1 or h2
 	// note that if active_header is h1 we write to h2, and vice versa
-	header_buffer.Write(*handle, active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);
+	header_buffer.ChecksumAndWrite(*handle,
+	                               active_header == 1 ? Storage::FILE_HEADER_SIZE : Storage::FILE_HEADER_SIZE * 2);
 	// switch active header to the other header
 	active_header = 1 - active_header;
 	//! Ensure the header write ends up on disk

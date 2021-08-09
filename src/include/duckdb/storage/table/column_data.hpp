@@ -11,7 +11,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
-#include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
@@ -21,15 +20,17 @@
 
 namespace duckdb {
 class ColumnData;
+class ColumnSegment;
 class DatabaseInstance;
 class RowGroup;
 class TableDataWriter;
-class PersistentSegment;
 class Transaction;
 
 struct DataTableInfo;
 
 class ColumnData {
+	friend class ColumnDataCheckpointer;
+
 public:
 	ColumnData(DataTableInfo &info, idx_t column_index, idx_t start_row, LogicalType type, ColumnData *parent);
 	virtual ~ColumnData();
@@ -100,8 +101,8 @@ public:
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer);
 
-	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
-	                            idx_t base_row_index, idx_t count, Vector &scan_vector);
+	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
+	                            Vector &scan_vector);
 
 	virtual void DeserializeColumn(Deserializer &source);
 	static shared_ptr<ColumnData> Deserialize(DataTableInfo &info, idx_t column_index, idx_t start_row,

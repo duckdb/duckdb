@@ -4,7 +4,7 @@
 // duckdb::OdbcHandle::~OdbcHandle() = default;
 
 duckdb::OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
-    : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr), row_count(0) {
+    : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
 	D_ASSERT(dbc_p);
 	D_ASSERT(dbc_p->conn);
 

@@ -3,6 +3,7 @@ bindcol-test
 boolsaschar-test
 colattribute-test
 connect-test
+declare-fetch-block-test
 numeric-test
 quotes-test
 result-conversions-test

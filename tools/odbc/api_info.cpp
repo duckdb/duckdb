@@ -198,3 +198,59 @@ SQLRETURN ApiInfo::CheckDataType(SQLSMALLINT data_type) {
 	}
 	return SQL_ERROR;
 }
+
+/**
+ * It receives the SQL_C type
+ * Returns the size of bytes to increment by a pointer
+ * Returns "-1" for variable-length type, e.g., string
+ */
+SQLLEN ApiInfo::PointerSizeOf(SQLSMALLINT sql_type) {
+	switch (sql_type) {
+	case SQL_C_SSHORT:
+		return sizeof(int16_t);
+	case SQL_C_USHORT:
+		return sizeof(uint16_t);
+	case SQL_C_LONG:
+	case SQL_C_SLONG:
+		return sizeof(int32_t);
+	case SQL_C_ULONG:
+		return sizeof(uint32_t);
+	case SQL_C_FLOAT:
+		return sizeof(float);
+	case SQL_C_DOUBLE:
+		return sizeof(double);
+	case SQL_C_STINYINT:
+		return sizeof(int8_t);
+	case SQL_C_UTINYINT:
+		return sizeof(uint8_t);
+	case SQL_C_SBIGINT:
+		return sizeof(int64_t);
+	case SQL_C_UBIGINT:
+		return sizeof(uint64_t);
+	case SQL_C_NUMERIC:
+	case SQL_C_TYPE_DATE:
+	case SQL_C_TYPE_TIME:
+	case SQL_C_TYPE_TIMESTAMP:
+	case SQL_C_INTERVAL_YEAR:
+	case SQL_C_INTERVAL_MONTH:
+	case SQL_C_INTERVAL_DAY:
+	case SQL_C_INTERVAL_HOUR:
+	case SQL_C_INTERVAL_MINUTE:
+	case SQL_C_INTERVAL_SECOND:
+	case SQL_C_INTERVAL_YEAR_TO_MONTH:
+	case SQL_C_INTERVAL_DAY_TO_HOUR:
+	case SQL_C_INTERVAL_DAY_TO_MINUTE:
+	case SQL_C_INTERVAL_DAY_TO_SECOND:
+	case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+	case SQL_C_INTERVAL_HOUR_TO_SECOND:
+	case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+		return sizeof(uint64_t);
+	case SQL_C_BIT:
+		return sizeof(char);
+	case SQL_C_WCHAR:
+	case SQL_C_BINARY:
+	case SQL_C_CHAR:
+	default:
+		return -1;
+	}
+}

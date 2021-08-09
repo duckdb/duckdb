@@ -173,6 +173,37 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 	return result;
 }
 
+shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_manager, block_id_t block_id,
+                                                           shared_ptr<BlockHandle> old_block) {
+	// pin the old block to ensure we have it loaded in memory
+	auto old_handle = Pin(old_block);
+	D_ASSERT(old_block->state == BlockState::BLOCK_LOADED);
+	D_ASSERT(old_block->buffer);
+
+	// register a block with the new block id
+	auto new_block = RegisterBlock(block_id);
+	D_ASSERT(new_block->state == BlockState::BLOCK_UNLOADED);
+	D_ASSERT(new_block->readers == 0);
+
+	// move the data from the old block into data for the new block
+	new_block->state = BlockState::BLOCK_LOADED;
+	new_block->buffer = make_unique<Block>(*old_block->buffer, block_id);
+
+	// clear the old buffer and unload it
+	old_handle.reset();
+	old_block->buffer.reset();
+	old_block->state = BlockState::BLOCK_UNLOADED;
+	old_block->memory_usage = 0;
+	old_block.reset();
+
+	// persist the new block to disk
+	block_manager.Write(*new_block->buffer, block_id);
+
+	AddToEvictionQueue(new_block);
+
+	return new_block;
+}
+
 shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can_destroy) {
 	auto alloc_size = block_size + Storage::BLOCK_HEADER_SIZE;
 	// first evict blocks until we have enough memory to store this buffer
@@ -248,14 +279,19 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 	return handle->Load(handle);
 }
 
+void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
+	D_ASSERT(handle->readers == 0);
+	handle->eviction_timestamp++;
+	queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
+	// FIXME: do some house-keeping to prevent the queue from being flooded with many old blocks
+}
+
 void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 	lock_guard<mutex> lock(handle->lock);
 	D_ASSERT(handle->readers > 0);
 	handle->readers--;
 	if (handle->readers == 0) {
-		handle->eviction_timestamp++;
-		queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
-		// FIXME: do some house-keeping to prevent the queue from being flooded with many old blocks
+		AddToEvictionQueue(handle);
 	}
 }
 

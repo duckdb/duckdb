@@ -114,7 +114,7 @@ public:
 	}
 
 	//! The lock for updating the order global state
-	std::mutex lock;
+	mutex lock;
 	//! Constants concerning sorting and payload data
 	const SortingState sorting_state;
 	const RowLayout payload_layout;
@@ -139,6 +139,7 @@ public:
 
 	//! Progress in merge path stage
 	idx_t pair_idx;
+	idx_t num_pairs;
 	idx_t l_start;
 	idx_t r_start;
 };
@@ -300,7 +301,7 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 	}
 
 	SortLocalState(context.client, lstate, gstate);
-	lock_guard<mutex> append_lock(gstate.lock);
+	lock_guard<mutex> append_guard(gstate.lock);
 	for (auto &cb : lstate.sorted_blocks) {
 		gstate.sorted_blocks.push_back(move(cb));
 	}
@@ -322,7 +323,7 @@ public:
 		}
 		return count;
 	}
-	//! Pin the current block such that it can be read
+	//! Pin the current block so it can be read
 	void Pin() {
 		PinData();
 		if (!layout.AllConstant() && state.external) {
@@ -351,7 +352,7 @@ public:
 			if (block_idx < data_blocks.size()) {
 				Pin();
 			} else {
-				UnpinAndReset(block_idx, entry_idx);
+				ResetIndices(block_idx, entry_idx);
 				return;
 			}
 		}
@@ -366,12 +367,8 @@ public:
 			D_ASSERT(data_blocks.size() == heap_blocks.size());
 		}
 	}
-	//! Unpin blocks and reset read indices to the given indices
-	void UnpinAndReset(idx_t block_idx_to, idx_t entry_idx_to) {
-		data_handle = nullptr;
-		heap_handle = nullptr;
-		data_ptr = nullptr;
-		heap_ptr = nullptr;
+	//! Reset read indices to the given indices
+	void ResetIndices(idx_t block_idx_to, idx_t entry_idx_to) {
 		block_idx = block_idx_to;
 		entry_idx = entry_idx_to;
 	}
@@ -384,6 +381,13 @@ public:
 			result->data_blocks.push_back(data_blocks[i]);
 			if (!layout.AllConstant() && state.external) {
 				result->heap_blocks.push_back(heap_blocks[i]);
+			}
+		}
+		// All of the blocks that come before block with idx = start_block_idx can be reset (other references exist)
+		for (idx_t i = 0; i < start_block_index; i++) {
+			data_blocks[i].block = nullptr;
+			if (!layout.AllConstant() && state.external) {
+				heap_blocks[i].block = nullptr;
 			}
 		}
 		// Use start and end entry indices to set the boundaries
@@ -418,6 +422,9 @@ public:
 	//! Data and heap blocks
 	vector<RowDataBlock> data_blocks;
 	vector<RowDataBlock> heap_blocks;
+	//! Buffer handles to the data being currently read
+	unique_ptr<BufferHandle> data_handle;
+	unique_ptr<BufferHandle> heap_handle;
 	//! Read indices
 	idx_t block_idx;
 	idx_t entry_idx;
@@ -426,13 +433,19 @@ private:
 	//! Pin fixed-size row data
 	void PinData() {
 		D_ASSERT(block_idx < data_blocks.size());
-		data_handle = buffer_manager.Pin(data_blocks[block_idx].block);
+		auto &block = data_blocks[block_idx];
+		if (!data_handle || data_handle->handle->BlockId() != block.block->BlockId()) {
+			data_handle = buffer_manager.Pin(data_blocks[block_idx].block);
+		}
 		data_ptr = data_handle->Ptr();
 	}
 	//! Pin the accompanying heap data (if any)
 	void PinHeap() {
 		D_ASSERT(!layout.AllConstant() && state.external);
-		heap_handle = buffer_manager.Pin(heap_blocks[block_idx].block);
+		auto &block = heap_blocks[block_idx];
+		if (!heap_handle || heap_handle->handle->BlockId() != block.block->BlockId()) {
+			heap_handle = buffer_manager.Pin(heap_blocks[block_idx].block);
+		}
 		heap_ptr = heap_handle->Ptr();
 	}
 
@@ -440,9 +453,6 @@ private:
 	BufferManager &buffer_manager;
 	//! The global state
 	OrderGlobalState &state;
-	//! Buffer handles to the data being currently read
-	unique_ptr<BufferHandle> data_handle;
-	unique_ptr<BufferHandle> heap_handle;
 	//! Pointers into the buffers being currently read
 	data_ptr_t data_ptr;
 	data_ptr_t heap_ptr;
@@ -491,6 +501,14 @@ public:
 		auto capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + sorting_state.entry_size - 1) / sorting_state.entry_size,
 		                         state.block_capacity);
 		radix_sorting_data.emplace_back(buffer_manager, capacity, sorting_state.entry_size);
+	}
+	//! Pins radix block with given index
+	void PinRadix(idx_t pin_block_idx) {
+		D_ASSERT(pin_block_idx < radix_sorting_data.size());
+		auto &block = radix_sorting_data[pin_block_idx];
+		if (!radix_handle || radix_handle->handle->BlockId() != block.block->BlockId()) {
+			radix_handle = buffer_manager.Pin(block.block);
+		}
 	}
 	//! Fill this sorted block by appending the blocks held by a vector of sorted blocks
 	void AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blocks) {
@@ -551,6 +569,10 @@ public:
 		for (idx_t i = start_block_index; i <= end_block_index; i++) {
 			result->radix_sorting_data.push_back(radix_sorting_data[i]);
 		}
+		// Reset all blocks that come before block with idx = start_block_idx (slice holds new reference)
+		for (idx_t i = 0; i < start_block_index; i++) {
+			radix_sorting_data[i].block = nullptr;
+		}
 		// Use start and end entry indices to set the boundaries
 		result->entry_idx = start_entry_index;
 		D_ASSERT(end_entry_index <= result->radix_sorting_data.back().count);
@@ -602,6 +624,7 @@ public:
 public:
 	//! Radix/memcmp sortable data
 	vector<RowDataBlock> radix_sorting_data;
+	unique_ptr<BufferHandle> radix_handle;
 	idx_t block_idx;
 	idx_t entry_idx;
 	//! Variable sized sorting data
@@ -1329,9 +1352,45 @@ public:
 	}
 
 	void Execute() override {
-		ComputeWork();
+		while (true) {
+			{
+				lock_guard<mutex> pair_guard(state.lock);
+				if (state.pair_idx == state.num_pairs) {
+					break;
+				}
+				ComputeWork();
+			}
+			ExecuteTaskInternal();
+		}
+		// Move sorted_blocks_temp to sorted_blocks
+		lock_guard<mutex> state_guard(state.lock);
+		parent.finished_tasks++;
+		if (parent.finished_tasks == parent.total_tasks) {
+			state.sorted_blocks.clear();
+			if (state.odd_one_out) {
+				state.sorted_blocks.push_back(move(state.odd_one_out));
+				state.odd_one_out = nullptr;
+			}
+			for (auto &sorted_block_vector : state.sorted_blocks_temp) {
+				state.sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, state));
+				state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
+			}
+			state.sorted_blocks_temp.clear();
+			// Only one block left: Done!
+			if (state.sorted_blocks.size() == 1) {
+				state.sorted_blocks[0]->radix_sorting_data.clear();
+				state.sorted_blocks[0]->blob_sorting_data = nullptr;
+				parent.Finish();
+				return;
+			}
+			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
+		}
+	}
+
+	void ExecuteTaskInternal() {
 		auto &left = *left_block;
 		auto &right = *right_block;
+#ifdef DEBUG
 		D_ASSERT(left.radix_sorting_data.size() == left.payload_data->data_blocks.size());
 		D_ASSERT(right.radix_sorting_data.size() == right.payload_data->data_blocks.size());
 		if (!state.payload_layout.AllConstant() && state.external) {
@@ -1346,6 +1405,7 @@ public:
 				D_ASSERT(right.blob_sorting_data->data_blocks.size() == right.blob_sorting_data->heap_blocks.size());
 			}
 		}
+#endif
 		// Set up the write block
 		// Each merge task produces a SortedBlock with exactly state.block_capacity rows or less
 		result->InitializeWrite();
@@ -1389,27 +1449,10 @@ public:
 #ifdef DEBUG
 		D_ASSERT(result->Count() == l_count + r_count);
 #endif
-		lock_guard<mutex> glock(state.lock);
-		parent.finished_tasks++;
-		if (parent.finished_tasks == parent.total_tasks) {
-			state.sorted_blocks.clear();
-			if (state.odd_one_out) {
-				state.sorted_blocks.push_back(move(state.odd_one_out));
-				state.odd_one_out = nullptr;
-			}
-			for (auto &sorted_block_vector : state.sorted_blocks_temp) {
-				state.sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, state));
-				state.sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
-			}
-			state.sorted_blocks_temp.clear();
-			PhysicalOrder::ScheduleMergeTasks(parent, context, state);
-		}
 	}
 
 	//! Sets the left and right block that this task will merge
 	void ComputeWork() {
-		// Acquire global lock to compute next intersection
-		lock_guard<mutex> glock(state.lock);
 		// Create result block
 		state.sorted_blocks_temp[state.pair_idx].push_back(make_unique<SortedBlock>(buffer_manager, state));
 		result = state.sorted_blocks_temp[state.pair_idx].back().get();
@@ -1429,8 +1472,8 @@ public:
 			D_ASSERT(intersection == l_end + r_end);
 			// Unpin after finding the intersection
 			if (!sorting_state.blob_layout.AllConstant()) {
-				left.blob_sorting_data->UnpinAndReset(0, 0);
-				right.blob_sorting_data->UnpinAndReset(0, 0);
+				left.blob_sorting_data->ResetIndices(0, 0);
+				right.blob_sorting_data->ResetIndices(0, 0);
 			}
 		} else {
 			l_end = l_count;
@@ -1443,6 +1486,10 @@ public:
 		state.l_start = l_end;
 		state.r_start = r_end;
 		if (state.l_start == l_count && state.r_start == r_count) {
+			// Delete references to previous pair
+			state.sorted_blocks[state.pair_idx * 2] = nullptr;
+			state.sorted_blocks[state.pair_idx * 2 + 1] = nullptr;
+			// Advance pair
 			state.pair_idx++;
 			state.l_start = 0;
 			state.r_start = 0;
@@ -1470,10 +1517,10 @@ public:
 		idx_t r_entry_idx;
 		r.GlobalToLocalIndex(r_idx, r_block_idx, r_entry_idx);
 
-		auto l_block_handle = buffer_manager.Pin(l.radix_sorting_data[l_block_idx].block);
-		auto r_block_handle = buffer_manager.Pin(r.radix_sorting_data[r_block_idx].block);
-		data_ptr_t l_ptr = l_block_handle->Ptr() + l_entry_idx * sorting_state.entry_size;
-		data_ptr_t r_ptr = r_block_handle->Ptr() + r_entry_idx * sorting_state.entry_size;
+		l.PinRadix(l_block_idx);
+		r.PinRadix(r_block_idx);
+		data_ptr_t l_ptr = l.radix_handle->Ptr() + l_entry_idx * sorting_state.entry_size;
+		data_ptr_t r_ptr = r.radix_handle->Ptr() + r_entry_idx * sorting_state.entry_size;
 
 		int comp_res;
 		if (sorting_state.all_constant) {
@@ -1578,9 +1625,7 @@ public:
 		idx_t r_block_idx = right.block_idx;
 		idx_t l_entry_idx = left.entry_idx;
 		idx_t r_entry_idx = right.entry_idx;
-		// Data handles and pointers for both sides
-		unique_ptr<BufferHandle> l_radix_handle;
-		unique_ptr<BufferHandle> r_radix_handle;
+		// Data pointers for both sides
 		data_ptr_t l_radix_ptr;
 		data_ptr_t r_radix_ptr;
 		// Compute the merge of the next 'count' tuples
@@ -1613,12 +1658,12 @@ public:
 			}
 			// Pin the radix sorting data
 			if (!l_done) {
-				l_radix_handle = buffer_manager.Pin(left.radix_sorting_data[l_block_idx].block);
-				l_radix_ptr = l_radix_handle->Ptr() + l_entry_idx * sorting_state.entry_size;
+				left.PinRadix(l_block_idx);
+				l_radix_ptr = left.radix_handle->Ptr() + l_entry_idx * sorting_state.entry_size;
 			}
 			if (!r_done) {
-				r_radix_handle = buffer_manager.Pin(right.radix_sorting_data[r_block_idx].block);
-				r_radix_ptr = r_radix_handle->Ptr() + r_entry_idx * sorting_state.entry_size;
+				right.PinRadix(r_block_idx);
+				r_radix_ptr = right.radix_handle->Ptr() + r_entry_idx * sorting_state.entry_size;
 			}
 			const idx_t &l_count = !l_done ? left.radix_sorting_data[l_block_idx].count : 0;
 			const idx_t &r_count = !r_done ? right.radix_sorting_data[r_block_idx].count : 0;
@@ -1665,8 +1710,8 @@ public:
 		}
 		// Reset block indices before the actual merge
 		if (!sorting_state.all_constant) {
-			left.blob_sorting_data->UnpinAndReset(left.block_idx, left.entry_idx);
-			right.blob_sorting_data->UnpinAndReset(right.block_idx, right.entry_idx);
+			left.blob_sorting_data->ResetIndices(left.block_idx, left.entry_idx);
+			right.blob_sorting_data->ResetIndices(right.block_idx, right.entry_idx);
 		}
 	}
 
@@ -1677,8 +1722,6 @@ public:
 		RowDataBlock *l_block;
 		RowDataBlock *r_block;
 
-		unique_ptr<BufferHandle> l_block_handle;
-		unique_ptr<BufferHandle> r_block_handle;
 		data_ptr_t l_ptr;
 		data_ptr_t r_ptr;
 
@@ -1691,11 +1734,17 @@ public:
 			// Move to the next block (if needed)
 			if (left.block_idx < left.radix_sorting_data.size() &&
 			    left.entry_idx == left.radix_sorting_data[left.block_idx].count) {
+				// Delete reference to previous block
+				left.radix_sorting_data[left.block_idx].block = nullptr;
+				// Advance block
 				left.block_idx++;
 				left.entry_idx = 0;
 			}
 			if (right.block_idx < right.radix_sorting_data.size() &&
 			    right.entry_idx == right.radix_sorting_data[right.block_idx].count) {
+				// Delete reference to previous block
+				right.radix_sorting_data[right.block_idx].block = nullptr;
+				// Advance block
 				right.block_idx++;
 				right.entry_idx = 0;
 			}
@@ -1704,13 +1753,13 @@ public:
 			// Pin the radix sortable blocks
 			if (!l_done) {
 				l_block = &left.radix_sorting_data[left.block_idx];
-				l_block_handle = buffer_manager.Pin(l_block->block);
-				l_ptr = l_block_handle->Ptr() + left.entry_idx * sorting_state.entry_size;
+				left.PinRadix(left.block_idx);
+				l_ptr = left.radix_handle->Ptr() + left.entry_idx * sorting_state.entry_size;
 			}
 			if (!r_done) {
 				r_block = &right.radix_sorting_data[right.block_idx];
-				r_block_handle = buffer_manager.Pin(r_block->block);
-				r_ptr = r_block_handle->Ptr() + right.entry_idx * sorting_state.entry_size;
+				right.PinRadix(right.block_idx);
+				r_ptr = right.radix_handle->Ptr() + right.entry_idx * sorting_state.entry_size;
 			}
 			const idx_t &l_count = !l_done ? l_block->count : 0;
 			const idx_t &r_count = !r_done ? r_block->count : 0;
@@ -1739,13 +1788,9 @@ public:
 		const idx_t heap_pointer_offset = layout.GetHeapPointerOffset();
 
 		// Left and right row data to merge
-		unique_ptr<BufferHandle> l_data_block_handle;
-		unique_ptr<BufferHandle> r_data_block_handle;
 		data_ptr_t l_ptr;
 		data_ptr_t r_ptr;
 		// Accompanying left and right heap data (if needed)
-		unique_ptr<BufferHandle> l_heap_handle;
-		unique_ptr<BufferHandle> r_heap_handle;
 		data_ptr_t l_heap_ptr;
 		data_ptr_t r_heap_ptr;
 
@@ -1768,11 +1813,23 @@ public:
 			// Move to new data blocks (if needed)
 			if (l_data.block_idx < l_data.data_blocks.size() &&
 			    l_data.entry_idx == l_data.data_blocks[l_data.block_idx].count) {
+				// Delete reference to previous block
+				l_data.data_blocks[l_data.block_idx].block = nullptr;
+				if (!layout.AllConstant() && state.external) {
+					l_data.heap_blocks[l_data.block_idx].block = nullptr;
+				}
+				// Advance block
 				l_data.block_idx++;
 				l_data.entry_idx = 0;
 			}
 			if (r_data.block_idx < r_data.data_blocks.size() &&
 			    r_data.entry_idx == r_data.data_blocks[r_data.block_idx].count) {
+				// Delete reference to previous block
+				r_data.data_blocks[r_data.block_idx].block = nullptr;
+				if (!layout.AllConstant() && state.external) {
+					r_data.heap_blocks[r_data.block_idx].block = nullptr;
+				}
+				// Advance block
 				r_data.block_idx++;
 				r_data.entry_idx = 0;
 			}
@@ -1780,12 +1837,12 @@ public:
 			const bool r_done = r_data.block_idx == r_data.data_blocks.size();
 			// Pin the row data blocks
 			if (!l_done) {
-				l_data_block_handle = buffer_manager.Pin(l_data.data_blocks[l_data.block_idx].block);
-				l_ptr = l_data_block_handle->Ptr() + l_data.entry_idx * row_width;
+				l_data.Pin();
+				l_ptr = l_data.data_handle->Ptr() + l_data.entry_idx * row_width;
 			}
 			if (!r_done) {
-				r_data_block_handle = buffer_manager.Pin(r_data.data_blocks[r_data.block_idx].block);
-				r_ptr = r_data_block_handle->Ptr() + r_data.entry_idx * row_width;
+				r_data.Pin();
+				r_ptr = r_data.data_handle->Ptr() + r_data.entry_idx * row_width;
 			}
 			const idx_t &l_count = !l_done ? l_data.data_blocks[l_data.block_idx].count : 0;
 			const idx_t &r_count = !r_done ? r_data.data_blocks[r_data.block_idx].count : 0;
@@ -1808,17 +1865,15 @@ public:
 			} else {
 				// External sorting with variable size data. Pin the heap blocks too
 				if (!l_done) {
-					l_heap_handle = buffer_manager.Pin(l_data.heap_blocks[l_data.block_idx].block);
-					l_heap_ptr = l_heap_handle->Ptr() + Load<idx_t>(l_ptr + heap_pointer_offset);
-					D_ASSERT(l_heap_ptr - l_heap_handle->Ptr() >= 0);
-					D_ASSERT((idx_t)(l_heap_ptr - l_heap_handle->Ptr()) <
+					l_heap_ptr = l_data.heap_handle->Ptr() + Load<idx_t>(l_ptr + heap_pointer_offset);
+					D_ASSERT(l_heap_ptr - l_data.heap_handle->Ptr() >= 0);
+					D_ASSERT((idx_t)(l_heap_ptr - l_data.heap_handle->Ptr()) <
 					         l_data.heap_blocks[l_data.block_idx].byte_offset);
 				}
 				if (!r_done) {
-					r_heap_handle = buffer_manager.Pin(r_data.heap_blocks[r_data.block_idx].block);
-					r_heap_ptr = r_heap_handle->Ptr() + Load<idx_t>(r_ptr + heap_pointer_offset);
-					D_ASSERT(r_heap_ptr - r_heap_handle->Ptr() >= 0);
-					D_ASSERT((idx_t)(r_heap_ptr - r_heap_handle->Ptr()) <
+					r_heap_ptr = r_data.heap_handle->Ptr() + Load<idx_t>(r_ptr + heap_pointer_offset);
+					D_ASSERT(r_heap_ptr - r_data.heap_handle->Ptr() >= 0);
+					D_ASSERT((idx_t)(r_heap_ptr - r_data.heap_handle->Ptr()) <
 					         r_data.heap_blocks[r_data.block_idx].byte_offset);
 				}
 				// Both the row and heap data need to be dealt with
@@ -1848,9 +1903,9 @@ public:
 						entry_size =
 						    l_smaller * Load<idx_t>(l_heap_ptr_copy) + r_smaller * Load<idx_t>(r_heap_ptr_copy);
 						D_ASSERT(entry_size >= sizeof(idx_t));
-						D_ASSERT(l_heap_ptr_copy - l_heap_handle->Ptr() + l_smaller * entry_size <=
+						D_ASSERT(l_heap_ptr_copy - l_data.heap_handle->Ptr() + l_smaller * entry_size <=
 						         l_data.heap_blocks[l_data.block_idx].byte_offset);
-						D_ASSERT(r_heap_ptr_copy - r_heap_handle->Ptr() + r_smaller * entry_size <=
+						D_ASSERT(r_heap_ptr_copy - r_data.heap_handle->Ptr() + r_smaller * entry_size <=
 						         r_data.heap_blocks[r_data.block_idx].byte_offset);
 						l_heap_ptr_copy += l_smaller * entry_size;
 						r_heap_ptr_copy += r_smaller * entry_size;
@@ -2017,9 +2072,16 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 	}
 	// Use the data that we have to determine which block size to use during the merge
 	state.block_capacity = state.sorted_blocks[0]->Count();
-	for (auto &sb : state.sorted_blocks) {
-		if (sb->SizeInBytes() >= state.memory_per_thread) {
-			state.block_capacity = MinValue(state.block_capacity, sb->Count());
+	if (total_heap_size > 0) {
+		// If we have variable size data we need to be conservative, as there might be skew
+		for (auto &sb : state.sorted_blocks) {
+			if (sb->SizeInBytes() >= state.memory_per_thread) {
+				state.block_capacity = MinValue(state.block_capacity, sb->Count());
+			}
+		}
+	} else {
+		for (auto &sb : state.sorted_blocks) {
+			state.block_capacity = MaxValue(state.block_capacity, sb->Count());
 		}
 	}
 	// Unswizzle and pin heap blocks if we can fit everything in memory
@@ -2041,44 +2103,27 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state) {
 	D_ASSERT(state.sorted_blocks_temp.empty());
-	if (state.sorted_blocks.size() == 1) {
-		for (auto &sb : state.sorted_blocks) {
-			sb->radix_sorting_data.clear();
-			if (!state.sorting_state.all_constant) {
-				sb->blob_sorting_data.reset();
-			}
-		}
-		pipeline.Finish();
-		return;
-	}
-	// Uneven amount of blocks - keep one on the side
-	auto num_blocks = state.sorted_blocks.size();
-	if (num_blocks % 2 == 1) {
+	// Uneven number of blocks - keep one on the side
+	if (state.sorted_blocks.size() % 2 == 1) {
 		state.odd_one_out = move(state.sorted_blocks.back());
 		state.sorted_blocks.pop_back();
-		num_blocks--;
 	}
 	// Init merge path path indices
 	state.pair_idx = 0;
+	state.num_pairs = state.sorted_blocks.size() / 2;
 	state.l_start = 0;
 	state.r_start = 0;
-	// Compute how many tasks there will be
-	// Each merge task produces a SortedBlock exactly state.block_capacity or less
-	idx_t num_tasks = 0;
-	const idx_t tuples_per_block = state.block_capacity;
-	for (idx_t block_idx = 0; block_idx < num_blocks; block_idx += 2) {
-		auto &left = *state.sorted_blocks[block_idx];
-		auto &right = *state.sorted_blocks[block_idx + 1];
-		const idx_t count = left.Count() + right.Count();
-		num_tasks += (count + tuples_per_block - 1) / tuples_per_block;
-		// Allocate room for merge results
+	// Allocate room for merge results
+	for (idx_t pair_idx = 0; pair_idx < state.num_pairs; pair_idx++) {
 		state.sorted_blocks_temp.emplace_back();
 	}
-	// Schedule the tasks
-	pipeline.total_tasks += num_tasks;
-	for (idx_t tnum = 0; tnum < num_tasks; tnum++) {
+	// Schedule tasks equal to the number of threads, which will each finish multiple tasks
+	auto &ts = TaskScheduler::GetScheduler(context);
+	idx_t num_threads = ts.NumberOfThreads();
+	pipeline.total_tasks += num_threads;
+	for (idx_t tnum = 0; tnum < num_threads; tnum++) {
 		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state);
-		TaskScheduler::GetScheduler(context).ScheduleTask(pipeline.token, move(new_task));
+		ts.ScheduleTask(pipeline.token, move(new_task));
 	}
 }
 
@@ -2110,6 +2155,13 @@ static void Scan(ClientContext &context, DataChunk &chunk, PhysicalOrderOperator
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	auto &payload_data = *state.payload_data;
 	const auto &layout = gstate.payload_layout;
+	// Eagerly delete references to blocks that we've passed
+	for (idx_t block_idx = 0; block_idx < state.block_idx; block_idx++) {
+		payload_data.data_blocks[block_idx].block = nullptr;
+		if (!layout.AllConstant() && gstate.external) {
+			payload_data.heap_blocks[block_idx].block = nullptr;
+		}
+	}
 	const idx_t &row_width = layout.GetRowWidth();
 	vector<unique_ptr<BufferHandle>> handles;
 	// Set up a batch of pointers to scan data from

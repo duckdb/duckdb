@@ -20,6 +20,9 @@ SELECT cast('3 doopiedoos' as interval)
 statement error
 SELECT cast('3 years 2 doy' as interval)
 
+statement error
+SELECT cast('3 yearweek' as interval)
+
 query I
 SELECT cast(NULL as interval)
 ----

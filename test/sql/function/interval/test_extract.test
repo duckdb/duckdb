@@ -87,6 +87,9 @@ SELECT EXTRACT(dayofyear FROM i) FROM intervals
 statement error
 SELECT EXTRACT(week FROM i) FROM intervals
 
+statement error
+SELECT EXTRACT(yearweek FROM i) FROM intervals
+
 query I
 SELECT EXTRACT(epoch FROM i) FROM intervals
 ----

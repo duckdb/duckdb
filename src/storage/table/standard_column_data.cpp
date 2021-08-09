@@ -2,8 +2,6 @@
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
 #include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/table/persistent_segment.hpp"
-#include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/table_filter.hpp"
 
@@ -58,7 +56,6 @@ idx_t StandardColumnData::Scan(Transaction &transaction, idx_t vector_index, Col
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	auto scan_count = ColumnData::Scan(transaction, vector_index, state, result);
 	validity.Scan(transaction, vector_index, state.child_states[0], result);
-	state.NextVector();
 	return scan_count;
 }
 
@@ -67,14 +64,12 @@ idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &sta
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
 	auto scan_count = ColumnData::ScanCommitted(vector_index, state, result, allow_updates);
 	validity.ScanCommitted(vector_index, state.child_states[0], result, allow_updates);
-	state.NextVector();
 	return scan_count;
 }
 
 idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
 	auto scan_count = ColumnData::ScanCount(state, result, count);
 	validity.ScanCount(state.child_states[0], result, count);
-	state.Next(count);
 	return scan_count;
 }
 
@@ -189,10 +184,10 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 }
 
 void StandardColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start,
-                                        idx_t base_row_index, idx_t count, Vector &scan_vector) {
-	ColumnData::CheckpointScan(segment, state, row_group_start, base_row_index, count, scan_vector);
+                                        idx_t count, Vector &scan_vector) {
+	ColumnData::CheckpointScan(segment, state, row_group_start, count, scan_vector);
 
-	idx_t offset_in_row_group = segment->start - row_group_start + base_row_index;
+	idx_t offset_in_row_group = state.row_index - row_group_start;
 	validity.ScanCommittedRange(row_group_start, offset_in_row_group, count, scan_vector);
 }
 
@@ -205,6 +200,13 @@ void StandardColumnData::GetStorageInfo(idx_t row_group_index, vector<idx_t> col
 	ColumnData::GetStorageInfo(row_group_index, col_path, result);
 	col_path.push_back(0);
 	validity.GetStorageInfo(row_group_index, move(col_path), result);
+}
+
+void StandardColumnData::Verify(RowGroup &parent) {
+#ifdef DEBUG
+	ColumnData::Verify(parent);
+	validity.Verify(parent);
+#endif
 }
 
 } // namespace duckdb
