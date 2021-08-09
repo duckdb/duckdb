@@ -29,15 +29,14 @@ DBItest::test_all(c(
 
   "data_logical", # https://github.com/duckdb/duckdb/issues/1049
 
-  "roundtrip_field_types", # strange
-  "data_64_bit_numeric_warning", # not now
-  "data_64_bit_lossless", # not now,
+  "data_64_bit_numeric_warning", # 64 bit, not now
+  "data_64_bit_lossless",
   "roundtrip_64_bit_character",
-
-  # new tests skipped after DBI upgrade
   "connect_bigint_integer",
   "connect_bigint_character",
   "connect_bigint_integer64",
+
+  # new tests skipped after DBI upgrade
   "append_roundtrip_keywords",
   "append_roundtrip_quotes",
   "append_roundtrip_integer",

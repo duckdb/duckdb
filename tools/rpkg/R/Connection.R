@@ -133,16 +133,15 @@ setMethod(
       stop("Setting both overwrite and append makes no sense")
     }
 
-    # oof
-    if (!is.null(field.types) &&
-      (
-        !is.character(field.types) ||
-          any(is.na(names(field.types))) ||
-          length(unique(names(field.types))) != length(names(field.types)) ||
-          append
-      )) {
-      stop("invalid field.types argument")
+    if (!is.null(field.types)) {
+      if (!(is.character(field.types) && !is.null(names(field.types)) && !anyDuplicated(names(field.types)))) {
+        stop("`field.types` must be a named character vector with unique names, or NULL")
+      }
     }
+    if (append && !is.null(field.types)) {
+      stop("Cannot specify `field.types` with `append = TRUE`")
+    }
+
     value <- as.data.frame(value)
     if (!is.data.frame(value)) {
       stop("need a data frame as parameter")
@@ -176,12 +175,7 @@ setMethod(
         vapply(value, dbDataType, dbObj = conn, FUN.VALUE = "character")
 
       if (!is.null(field.types)) {
-        mapped_column_types <- field.types[names(value)]
-        if (any(is.na(mapped_column_types)) ||
-          length(mapped_column_types) != length(names(value))) {
-          stop("Column name/type mismatch")
-        }
-        column_types <- mapped_column_types
+        column_types[names(field.types)] <- field.types
       }
 
       temp_str <- ""
