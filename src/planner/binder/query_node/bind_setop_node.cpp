@@ -69,9 +69,11 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	result->setop_index = GenerateTableIndex();
 
 	result->left_binder = Binder::CreateBinder(context, this);
+	result->left_binder->can_contain_nulls = true;
 	result->left = result->left_binder->BindNode(*statement.left);
 
 	result->right_binder = Binder::CreateBinder(context, this);
+	result->right_binder->can_contain_nulls = true;
 	result->right = result->right_binder->BindNode(*statement.right);
 
 	if (!statement.modifiers.empty()) {
@@ -104,6 +106,11 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SetOperationNode &statement) {
 	// figure out the types of the setop result by picking the max of both
 	for (idx_t i = 0; i < result->left->types.size(); i++) {
 		auto result_type = LogicalType::MaxLogicalType(result->left->types[i], result->right->types[i]);
+		if (!can_contain_nulls) {
+			if (ExpressionBinder::ContainsNullType(result_type)) {
+				result_type = ExpressionBinder::ExchangeNullType(result_type);
+			}
+		}
 		result->types.push_back(result_type);
 	}
 
