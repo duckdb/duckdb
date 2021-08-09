@@ -44,8 +44,4 @@ static bool TryVectorNullCast(Vector &source, Vector &result, idx_t count, strin
 	return success;
 }
 
-static void VectorNullCast(Vector &source, Vector &result, idx_t count) {
-	TryVectorNullCast(source, result, count, nullptr);
-}
-
 } // namespace duckdb
