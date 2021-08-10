@@ -187,23 +187,34 @@ setMethod(
       )))
     }
 
+    dbAppendTable(conn, name, value)
+  }
+)
+
+#' @rdname duckdb_connection-class
+#' @inheritParams DBI::dbAppendTable
+#' @export
+setMethod(
+  "dbAppendTable", "duckdb_connection",
+  function(conn, name, value, ..., row.names = NULL) {
     if (length(value[[1]])) {
+      table_name <- dbQuoteIdentifier(conn, name)
       classes <- unlist(lapply(value, function(v) {
         class(v)[[1]]
       }))
-      for (c in names(classes[classes == "character"])) {
+      for (c in which(classes == "character")) {
         value[[c]] <- enc2utf8(value[[c]])
       }
-      for (c in names(classes[classes == "factor"])) {
+      for (c in which(classes == "factor")) {
         levels(value[[c]]) <- enc2utf8(levels(value[[c]]))
       }
-    }
-    view_name <- sprintf("_duckdb_append_view_%s", duckdb_random_string())
-    on.exit(duckdb_unregister(conn, view_name))
-    duckdb_register(conn, view_name, value)
-    dbExecute(conn, sprintf("INSERT INTO %s SELECT * FROM %s", table_name, view_name))
+      view_name <- sprintf("_duckdb_append_view_%s", duckdb_random_string())
+      on.exit(duckdb_unregister(conn, view_name))
+      duckdb_register(conn, view_name, value)
+      dbExecute(conn, sprintf("INSERT INTO %s SELECT * FROM %s", table_name, view_name))
 
-    rs_on_connection_updated(conn, hint=paste0("Updated table'", table_name,"'"))
+      rs_on_connection_updated(conn, hint=paste0("Updated table'", table_name,"'"))
+    }
 
     invisible(TRUE)
   }
