@@ -88,7 +88,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 	lstate.executor.Execute(input, sort);
 
 	// Sink the data into the local sort state
-	local_sort_state.SinkChunk(lstate.sort, input);
+	local_sort_state.SinkChunk(sort, input);
 
 	// When sorting data reaches a certain size, we sort it
 	if (local_sort_state.SizeInBytes() >= gstate.memory_per_thread) {
@@ -110,14 +110,15 @@ public:
 
 	void Execute() override {
 		// Initialize merge sorted and iterate until done
-		MergeSorter merge_sorter(state.global_sort_state, BufferManager::GetBufferManager(context));
+		auto &global_sort_state = state.global_sort_state;
+		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));
 		merge_sorter.PerformInMergeRound();
 		// Finish task and act if all tasks are finished
-		lock_guard<mutex> state_guard(state.global_sort_state.lock);
+		lock_guard<mutex> state_guard(global_sort_state.lock);
 		parent.finished_tasks++;
 		if (parent.finished_tasks == parent.total_tasks) {
-			state.global_sort_state.CompleteMergeRound();
-			if (state.global_sort_state.sorted_blocks.size() == 1) {
+			global_sort_state.CompleteMergeRound();
+			if (global_sort_state.sorted_blocks.size() == 1) {
 				// Only one block left: Done!
 				parent.Finish();
 			} else {
@@ -148,7 +149,6 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 	// Start the merge phase or finish if a merge is not necessary
 	if (global_sort_state.sorted_blocks.size() > 1) {
-		// More than one block - merge
 		PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
 		return false;
 	} else {
