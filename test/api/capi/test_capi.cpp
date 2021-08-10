@@ -738,8 +738,9 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	REQUIRE(duckdb_nparams(nullptr) == 0);
 	REQUIRE(duckdb_nparams(stmt) == 1);
 	REQUIRE(duckdb_param_type(nullptr, 0) == DUCKDB_TYPE_INVALID);
-	REQUIRE(duckdb_param_type(stmt, 0) == DUCKDB_TYPE_INTEGER);
-	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_INVALID);
+	REQUIRE(duckdb_param_type(stmt, 0) == DUCKDB_TYPE_INVALID);
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_INTEGER);
+	REQUIRE(duckdb_param_type(stmt, 2) == DUCKDB_TYPE_INVALID);
 
 	for (int32_t i = 1; i <= 1000; i++) {
 		duckdb_bind_int32(stmt, 1, i);
@@ -885,9 +886,6 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_appender_flush(appender);
 	REQUIRE(status == DuckDBError);
 
-	status = duckdb_appender_begin_row(appender);
-	REQUIRE(status == DuckDBError);
-
 	status = duckdb_appender_end_row(appender);
 	REQUIRE(status == DuckDBError);
 
@@ -901,9 +899,6 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBError);
 
 	status = duckdb_appender_flush(nullptr);
-	REQUIRE(status == DuckDBError);
-
-	status = duckdb_appender_begin_row(nullptr);
 	REQUIRE(status == DuckDBError);
 
 	status = duckdb_appender_end_row(nullptr);

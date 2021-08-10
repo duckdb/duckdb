@@ -53,6 +53,9 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 		return DuckDBError;
 	}
 	auto wrapper = (AppenderWrapper *)appender;
+	if (!wrapper->appender) {
+		return DuckDBError;
+	}
 	try {
 		function(*wrapper->appender);
 	} catch (std::exception &ex) {
