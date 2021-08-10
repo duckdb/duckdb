@@ -188,6 +188,7 @@ setMethod(
     }
 
     dbAppendTable(conn, name, value)
+    invisible(TRUE)
   }
 )
 
@@ -197,7 +198,7 @@ setMethod(
 setMethod(
   "dbAppendTable", "duckdb_connection",
   function(conn, name, value, ..., row.names = NULL) {
-    if (length(value[[1]])) {
+    if (nrow(value)) {
       table_name <- dbQuoteIdentifier(conn, name)
       classes <- unlist(lapply(value, function(v) {
         class(v)[[1]]
@@ -216,7 +217,7 @@ setMethod(
       rs_on_connection_updated(conn, hint=paste0("Updated table'", table_name,"'"))
     }
 
-    invisible(TRUE)
+    invisible(nrow(value))
   }
 )
 

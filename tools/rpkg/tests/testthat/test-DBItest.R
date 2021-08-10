@@ -37,7 +37,6 @@ DBItest::test_all(c(
   "append_roundtrip_64_bit_character",
   "append_roundtrip_64_bit_roundtrip",
 
-  "append_table_return",
   "append_table_append_incompatible",
   "append_roundtrip_factor",
   "append_table_row_names_non_null",
