@@ -162,9 +162,6 @@ setMethod(
           "Set `append = TRUE` if you would like to add the new data to the existing table."
         )
       }
-      if (append && any(names(value) != dbListFields(conn, name))) {
-        stop("Column name mismatch for append")
-      }
     }
     table_name <- dbQuoteIdentifier(conn, name)
 
@@ -197,6 +194,10 @@ setMethod(
 setMethod(
   "dbAppendTable", "duckdb_connection",
   function(conn, name, value, ..., row.names = NULL) {
+    if (!identical(names(value), dbListFields(conn, name))) {
+      stop("Column name mismatch for append")
+    }
+
     if (nrow(value)) {
       table_name <- dbQuoteIdentifier(conn, name)
       classes <- unlist(lapply(value, function(v) {
