@@ -22,7 +22,8 @@
 #include "dbgen/config.h"
 
 #include <stdlib.h>
-#if (defined(_POSIX_) || !defined(WIN32)) /* Change for Windows NT */
+#ifndef WIN32
+ /* Change for Windows NT */
 #include <unistd.h>
 #endif /* WIN32 */
 #include <ctype.h>

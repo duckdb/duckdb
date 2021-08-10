@@ -74,7 +74,6 @@ py::object GetScalar(Value &constant) {
 	case LogicalTypeId::INTEGER:
 		scalar_value = dataset_scalar(constant.GetValue<int32_t>());
 		return scalar_value;
-	case LogicalTypeId::TIME:
 	case LogicalTypeId::BIGINT:
 		scalar_value = dataset_scalar(constant.GetValue<int64_t>());
 		return scalar_value;
@@ -86,6 +85,11 @@ py::object GetScalar(Value &constant) {
 	case LogicalTypeId::DATE: {
 		py::object date_type = py::module_::import("pyarrow").attr("date32");
 		scalar_value = dataset_scalar(scalar(constant.GetValue<int32_t>(), date_type()));
+		return scalar_value;
+	}
+	case LogicalTypeId::TIME: {
+		py::object date_type = py::module_::import("pyarrow").attr("time64");
+		scalar_value = dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
 		return scalar_value;
 	}
 	case LogicalTypeId::TIMESTAMP: {
