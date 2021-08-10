@@ -4,6 +4,7 @@ import sys
 import pytest
 try:
     import pyarrow as pa
+    import pyarrow.dataset as ds
     can_run = True
 except:
     can_run = False
@@ -220,4 +221,10 @@ class TestArrowFilterPushdown(object):
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("CREATE TABLE test (a  INTEGER, b INTEGER, c INTEGER)")
         duckdb_conn.execute("INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
-        assert duckdb_conn.execute("SELECT * FROM  test VALUES where a =1").fetchall() == [(1, 1, 1)]
+        duck_tbl = duckdb_conn.table("test")
+        arrow_table = duck_tbl.arrow()
+        duckdb_conn.register_arrow("testarrowtable",arrow_table)
+        assert duckdb_conn.execute("SELECT * FROM  testarrowtable VALUES where a =1").fetchall() == [(1, 1, 1)]
+        arrow_dataset = ds.dataset(arrow_table)
+        duckdb_conn.register_arrow("testarrowdataset",arrow_dataset)
+        assert duckdb_conn.execute("SELECT * FROM  testarrowdataset VALUES where a =1").fetchall() == [(1, 1, 1)]

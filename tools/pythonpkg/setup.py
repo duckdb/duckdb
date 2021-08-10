@@ -78,7 +78,7 @@ if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
 if platform.system() == 'Windows':
-    toolchain_args.extend(['-DDUCKDB_BUILD_LIBRARY'])
+    toolchain_args.extend(['-DDUCKDB_BUILD_LIBRARY','-DWIN32'])
 
 for ext in extensions:
     toolchain_args.extend(['-DBUILD_{}_EXTENSION'.format(ext.upper())])
