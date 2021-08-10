@@ -109,6 +109,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// for the view and for the current query
 		bool inherit_ctes = false;
 		auto view_binder = Binder::CreateBinder(context, this, inherit_ctes);
+		view_binder->can_contain_nulls = true;
 		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry->query->Copy()));
 		subquery.alias = ref.alias.empty() ? ref.table_name : ref.alias;
 		subquery.column_name_alias =

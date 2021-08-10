@@ -75,6 +75,9 @@ public:
 	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
 
+	static bool ContainsNullType(const LogicalType &type);
+	static LogicalType ExchangeNullType(const LogicalType &type);
+
 protected:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
 	                                  bool root_expression = false);
