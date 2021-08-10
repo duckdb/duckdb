@@ -198,17 +198,18 @@ setMethod(
       stop("Column name mismatch for append")
     }
 
+    is_factor <- vapply(value, is.factor, logical(1))
+
     if (nrow(value)) {
+      is_character <- vapply(value, is.character, logical(1))
+      value[is_character] <- lapply(value[is_character], enc2utf8)
+      value[is_factor] <- lapply(value[is_factor], function(x) {
+        levels(x) <- enc2utf8(levels(x))
+        x
+      })
+
       table_name <- dbQuoteIdentifier(conn, name)
-      classes <- unlist(lapply(value, function(v) {
-        class(v)[[1]]
-      }))
-      for (c in which(classes == "character")) {
-        value[[c]] <- enc2utf8(value[[c]])
-      }
-      for (c in which(classes == "factor")) {
-        levels(value[[c]]) <- enc2utf8(levels(value[[c]]))
-      }
+
       view_name <- sprintf("_duckdb_append_view_%s", duckdb_random_string())
       on.exit(duckdb_unregister(conn, view_name))
       duckdb_register(conn, view_name, value)
