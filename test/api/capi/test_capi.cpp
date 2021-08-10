@@ -14,6 +14,9 @@ public:
 	}
 	void Query(duckdb_connection connection, string query) {
 		success = (duckdb_query(connection, query.c_str(), &result) == DuckDBSuccess);
+		if (!success) {
+			REQUIRE(ErrorMessage() != nullptr);
+		}
 	}
 
 	duckdb_type ColumnType(idx_t col) {
@@ -1085,6 +1088,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(blob.size == 34);
 	REQUIRE(memcmp(blob.data, "hello world this is my long string", 34) == 0);
 	duckdb_free(blob.data);
+	REQUIRE(duckdb_value_int32(&result->InternalResult(), 11, 0) == 0);
 
 	auto date = result->Fetch<duckdb_date_struct>(12, 0);
 	REQUIRE(date.year == 1992);
@@ -1559,6 +1563,10 @@ TEST_CASE("Test C API examples from the website", "[capi]") {
 		REQUIRE(duckdb_value_int32(&result, 0, 1) == 2);
 		REQUIRE(string(duckdb_value_varchar_internal(&result, 1, 0)) == "Mark");
 		REQUIRE(string(duckdb_value_varchar_internal(&result, 1, 1)) == "Hannes");
+
+		// error conditions: we cannot
+		REQUIRE(duckdb_value_varchar_internal(&result, 0, 0) == nullptr);
+		REQUIRE(duckdb_value_varchar_internal(nullptr, 0, 0) == nullptr);
 
 		duckdb_destroy_result(&result);
 
