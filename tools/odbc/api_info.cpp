@@ -256,7 +256,7 @@ SQLLEN ApiInfo::PointerSizeOf(SQLSMALLINT sql_type) {
 }
 
 //! https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size?view=sql-server-ver15
-SQLRETURN ApiInfo::GetColumnSize(duckdb::LogicalType logical_type, SQLULEN *col_size_ptr) {
+SQLRETURN ApiInfo::GetColumnSize(const duckdb::LogicalType &logical_type, SQLULEN *col_size_ptr) {
 	auto sql_type = FindRelatedSQLType(logical_type.id());
 	switch (sql_type) {
 	case SQL_DECIMAL:

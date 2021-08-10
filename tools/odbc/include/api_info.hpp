@@ -37,7 +37,7 @@ public:
 
 	static SQLLEN PointerSizeOf(SQLSMALLINT sql_type);
 
-	static SQLRETURN GetColumnSize(duckdb::LogicalType logical_type, SQLULEN *col_size_ptr);
+	static SQLRETURN GetColumnSize(const duckdb::LogicalType &logical_type, SQLULEN *col_size_ptr);
 
 }; // end ApiInfo struct
 
