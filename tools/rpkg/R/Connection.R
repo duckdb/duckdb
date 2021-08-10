@@ -150,6 +150,12 @@ setMethod(
     # use Kirill's magic, convert rownames to additional column
     value <- sqlRownamesToColumn(value, row.names)
 
+    is_factor <- vapply(value, is.factor, logical(1))
+    value[is_factor] <- lapply(value[is_factor], function(x) {
+      levels(x) <- enc2utf8(levels(x))
+      as.character(x)
+    })
+
     if (dbExistsTable(conn, name)) {
       if (overwrite) {
         dbRemoveTable(conn, name)
@@ -199,13 +205,16 @@ setMethod(
     }
 
     is_factor <- vapply(value, is.factor, logical(1))
+    if (any(is_factor)) {
+      warning("Factors converted to character")
+    }
 
     if (nrow(value)) {
       is_character <- vapply(value, is.character, logical(1))
       value[is_character] <- lapply(value[is_character], enc2utf8)
       value[is_factor] <- lapply(value[is_factor], function(x) {
         levels(x) <- enc2utf8(levels(x))
-        x
+        as.character(x)
       })
 
       table_name <- dbQuoteIdentifier(conn, name)
