@@ -158,9 +158,8 @@ setMethod(
         stop(
           "Table ",
           name,
-          " already exists. Set overwrite=TRUE if you want
-                  to remove the existing table. Set append=TRUE if you would like to add the new data to the
-                  existing table."
+          " already exists. Set `overwrite = TRUE` if you want to remove the existing table. ",
+          "Set `append = TRUE` if you would like to add the new data to the existing table."
         )
       }
       if (append && any(names(value) != dbListFields(conn, name))) {
