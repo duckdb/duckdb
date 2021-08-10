@@ -45,6 +45,7 @@ public:
 	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id);
 	static idx_t StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset,
 	                          idx_t count);
+	static idx_t FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats);
 
 public:
 	static inline void UpdateStringStats(SegmentStatistics &stats, const string_t &new_value) {
@@ -262,6 +263,12 @@ idx_t UncompressedStringStorage::StringAppend(ColumnSegment &segment, SegmentSta
 	return count;
 }
 
+idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
+	// FIXME: partial blocks with strings not yet supported
+	return Storage::BLOCK_SIZE;
+}
+
+
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
@@ -274,7 +281,7 @@ CompressionFunction StringUncompressed::GetFunction(PhysicalType data_type) {
 	                           UncompressedStringStorage::StringInitScan, UncompressedStringStorage::StringScan,
 	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
 	                           UncompressedFunctions::EmptySkip, UncompressedStringStorage::StringInitSegment,
-	                           UncompressedStringStorage::StringAppend, nullptr);
+	                           UncompressedStringStorage::StringAppend, UncompressedStringStorage::FinalizeAppend);
 }
 
 //===--------------------------------------------------------------------===//
