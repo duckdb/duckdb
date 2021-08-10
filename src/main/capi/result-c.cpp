@@ -311,3 +311,10 @@ bool *duckdb_nullmask_data(duckdb_result *result, idx_t col) {
 	}
 	return result->columns[col].nullmask;
 }
+
+char *duckdb_result_error(duckdb_result *result) {
+	if (!result) {
+		return nullptr;
+	}
+	return result->error_message;
+}
