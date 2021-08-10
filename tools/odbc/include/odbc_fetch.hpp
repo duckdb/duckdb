@@ -47,6 +47,10 @@ public:
 	}
 	~OdbcFetch();
 
+	inline void AssertCurrentChunk() {
+		D_ASSERT(chunk_row <= ((row_t)current_chunk->size()));
+	}
+
 	SQLRETURN Fetch(SQLHSTMT statement_handle, OdbcHandleStmt *stmt, SQLULEN fetch_orientation = SQL_FETCH_NEXT,
 	                SQLLEN fetch_offset = 0);
 
@@ -56,9 +60,7 @@ public:
 
 	void ClearChunks();
 
-	inline void AssertCurrentChunk() {
-		D_ASSERT(chunk_row <= ((row_t)current_chunk->size()));
-	}
+	SQLRETURN Materialize(OdbcHandleStmt *stmt);
 
 private:
 	SQLRETURN ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt);
@@ -80,6 +82,8 @@ private:
 	SQLRETURN BeforeStart();
 
 	SQLRETURN SetAbsoluteCurrentChunk(OdbcHandleStmt *stmt, SQLLEN fetch_offset);
+
+	SQLRETURN SetFirstCurrentChunk(OdbcHandleStmt *stmt);
 };
 } // namespace duckdb
 
