@@ -11,7 +11,7 @@ from setuptools import setup, Extension
 extensions = ['parquet', 'icu', 'fts','tpch', 'tpcds', 'visualizer']
 
 if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts']
+    extensions = ['parquet', 'icu', 'fts','tpch']
 
 
 def parallel_cpp_compile(self, sources, output_dir=None, macros=None, include_dirs=None, debug=0,

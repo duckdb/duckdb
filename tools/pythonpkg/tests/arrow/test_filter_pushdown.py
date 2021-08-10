@@ -1,6 +1,7 @@
 import duckdb
 import os
 import sys
+import pytest
 try:
     import pyarrow as pa
     can_run = True
@@ -49,14 +50,17 @@ class TestArrowFilterPushdown(object):
             numeric_operators(data_type)
 
 # ArrowNotImplementedError: Function equal has no kernel matching input types (array[decimal128(4, 1)], scalar[decimal128(4, 1)])
-    # def test_filter_pushdown_hugeint(self,duckdb_cursor):
-    #     numeric_operators('HUGEINT')
+# These tests will break whenever arrow implements them
+    def test_filter_pushdown_hugeint(self,duckdb_cursor):
+        with pytest.raises(Exception):
+            numeric_operators('HUGEINT')
 
-    # def test_filter_pushdown_decimal(self,duckdb_cursor):
-    #     numeric_types = ['DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)'],'DECIMAL(30,12)']
+    def test_filter_pushdown_decimal(self,duckdb_cursor):
+        numeric_types = ['DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)','DECIMAL(30,12)']
 
-    #     for data_type in numeric_types:
-    #         numeric_operators(data_type)
+        for data_type in numeric_types:
+            with pytest.raises(Exception):
+                numeric_operators(data_type)
 
     def test_filter_pushdown_varchar(self,duckdb_cursor):
         if not can_run:
@@ -209,3 +213,11 @@ class TestArrowFilterPushdown(object):
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a ='2010-01-01' and b = '2000-10-01' and c = '2010-01-01'").fetchone()[0] == 1
         # Try Or
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '2010-01-01' or b ='2000-01-01'").fetchone()[0] == 2
+
+    def test_filter_pushdown_no_projection(self,duckdb_cursor):
+        if not can_run:
+            return
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.execute("CREATE TABLE test (a  INTEGER, b INTEGER, c INTEGER)")
+        duckdb_conn.execute("INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
+        assert duckdb_conn.execute("SELECT * FROM  test VALUES where a =1").fetchall() == [(1, 1, 1)]
