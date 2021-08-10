@@ -94,9 +94,14 @@ private:
 
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
+	//! Asserts that current_memory is equal to the sum of loaded blocks (used for verification)
+	void VerifyCurrentMemory();
+
 private:
 	//! The database instance
 	DatabaseInstance &db;
+	//! The lock for changing the memory limit
+	mutex limit_lock;
 	//! The current amount of memory that is occupied by the buffer manager (in bytes)
 	atomic<idx_t> current_memory;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
@@ -108,12 +113,21 @@ private:
 	//! Handle for the temporary directory
 	unique_ptr<TemporaryDirectoryHandle> temp_directory_handle;
 	//! The lock for the set of blocks
-	mutex manager_lock;
+	mutex blocks_lock;
 	//! A mapping of block id -> BlockHandle
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
 	//! Eviction queue
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
+
+#ifdef DEBUG
+	//! Lock for reading/writing current_memory (used for verification)
+	mutex current_memory_lock;
+	//! Lock for reading/writing the temp_blocks map (used for verification)
+	mutex temp_blocks_lock;
+	//! A mapping of temp block id -> BlockHandle (used for verification)
+	unordered_map<block_id_t, BlockHandle *> temp_blocks;
+#endif
 };
 } // namespace duckdb
