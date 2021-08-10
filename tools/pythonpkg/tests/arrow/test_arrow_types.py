@@ -9,6 +9,8 @@ except:
 class TestArrowTypes(object):
    
     def test_null_type(self, duckdb_cursor):
+        if not can_run:
+            return
         schema = pa.schema([("data", pa.null())])
         inputs = [pa.array([None,None,None], type=pa.null())]
         arrow_table = pa.Table.from_arrays(inputs, schema=schema)
