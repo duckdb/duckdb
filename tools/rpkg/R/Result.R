@@ -288,7 +288,7 @@ setMethod(
     res@env$rows_fetched <- 0
     res@env$resultset <- data.frame()
 
-    invisible(.Call(duckdb_bind_R, res@stmt_lst$ref, params))
+    .Call(duckdb_bind_R, res@stmt_lst$ref, params)
     duckdb_execute(res)
   }
 )
