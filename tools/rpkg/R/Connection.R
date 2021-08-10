@@ -200,6 +200,10 @@ setMethod(
 setMethod(
   "dbAppendTable", "duckdb_connection",
   function(conn, name, value, ..., row.names = NULL) {
+    if (!is.null(row.names)) {
+      stop("Can't pass `row.names` to `dbAppendTable()`")
+    }
+
     if (!identical(names(value), dbListFields(conn, name))) {
       stop("Column name mismatch for append")
     }

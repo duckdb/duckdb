@@ -37,7 +37,5 @@ DBItest::test_all(c(
   "append_roundtrip_64_bit_character",
   "append_roundtrip_64_bit_roundtrip",
 
-  "append_table_row_names_non_null",
-
   "column_info_consistent" # won't fix: https://github.com/r-dbi/DBItest/issues/181
 ))
