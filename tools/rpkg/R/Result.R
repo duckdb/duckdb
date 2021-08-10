@@ -290,6 +290,7 @@ setMethod(
 
     .Call(duckdb_bind_R, res@stmt_lst$ref, params)
     duckdb_execute(res)
+    invisible(res)
   }
 )
 
