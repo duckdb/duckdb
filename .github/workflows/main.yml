@@ -1002,45 +1002,45 @@ jobs:
 #          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
 #        fi
 #
-#  win-python3:
-#    name: Python 3 Windows
-#    runs-on: windows-latest
-#    needs: linux-debug
-#
-#    env:
-#      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-#      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-#      CIBW_TEST_REQUIRES: 'pytest'
-#      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" '
-#      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-#      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-#      TWINE_USERNAME: 'hfmuehleisen'
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#      with:
-#        fetch-depth: 0
-#
-#    - uses: actions/setup-python@v2
-#      with:
-#        python-version: '3.7'
-#
-#    - name: Install
-#      run: pip install cibuildwheel twine
-#
-#    - name: Build
-#      run: |
-#        cd tools/pythonpkg
-#        python setup.py sdist
-#        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-#        cibuildwheel --output-dir wheelhouse duckdb_tarball
-#
-#    - name: Deploy
-#      run: |
-#        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
-#          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-#        fi
-#
+  win-python3:
+    name: Python 3 Windows
+    runs-on: windows-latest
+    needs: linux-debug
+
+    env:
+      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+      CIBW_TEST_REQUIRES: 'pytest'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+      TWINE_USERNAME: 'hfmuehleisen'
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: pip install cibuildwheel twine
+
+    - name: Build
+      run: |
+        cd tools/pythonpkg
+        python setup.py sdist
+        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+        cibuildwheel --output-dir wheelhouse duckdb_tarball
+
+    - name: Deploy
+      run: |
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+        fi
+
 #
 #  rstats-linux:
 #    name: R Package Linux
