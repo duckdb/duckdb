@@ -229,7 +229,7 @@ SQLRETURN SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, 
 			*data_type_ptr = duckdb::ApiInfo::FindRelatedSQLType(col_type.id());
 		}
 		if (column_size_ptr) {
-			auto ret = duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], (SQLLEN *)column_size_ptr);
+			auto ret = duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], column_size_ptr);
 			if (ret == SQL_ERROR) {
 				*column_size_ptr = 0;
 			}

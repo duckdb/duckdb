@@ -165,7 +165,7 @@ SQLRETURN SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLI
 
 SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLUSMALLINT field_identifier,
                           SQLPOINTER character_attribute_ptr, SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr,
-                          *numeric_attribute_ptr) {
+                          SQLLEN *numeric_attribute_ptr) {
 
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (column_number < 1 || column_number > stmt->stmt->GetTypes().size()) {
@@ -212,7 +212,8 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 			return SQL_SUCCESS;
 		}
 		case SQL_DESC_DISPLAY_SIZE: {
-			auto ret = duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], numeric_attribute_ptr);
+			auto ret =
+			    duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], (SQLULEN *)numeric_attribute_ptr);
 			if (ret == SQL_ERROR) {
 				stmt->error_messages.emplace_back("Unsupported type for display size.");
 				return SQL_ERROR;
