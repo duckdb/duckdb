@@ -27,8 +27,6 @@ DBItest::test_all(c(
   "bind_.*",
 
 
-  "data_logical", # https://github.com/duckdb/duckdb/issues/1049
-
   "data_64_bit_numeric_warning", # 64 bit, not now
   "data_64_bit_lossless",
   "roundtrip_64_bit_character",
