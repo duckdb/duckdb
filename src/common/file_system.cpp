@@ -6,6 +6,7 @@
 #include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/windows.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -22,19 +23,12 @@
 #include <unistd.h>
 #else
 #include <string>
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
 
 #ifdef __MINGW32__
 // need to manually define this for mingw
 extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG);
 #endif
 
-#undef CreateDirectory
-#undef MoveFile
-#undef RemoveDirectory
 #undef FILE_CREATE // woo mingw
 #endif
 
