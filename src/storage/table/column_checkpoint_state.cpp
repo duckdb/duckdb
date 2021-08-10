@@ -21,7 +21,8 @@ ColumnCheckpointState::ColumnCheckpointState(RowGroup &row_group, ColumnData &co
 ColumnCheckpointState::~ColumnCheckpointState() {
 }
 
-void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment) {
+void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size) {
+	D_ASSERT(segment_size <= Storage::BLOCK_SIZE);
 	auto tuple_count = segment->count.load();
 	if (tuple_count == 0) { // LCOV_EXCL_START
 		return;
@@ -32,23 +33,43 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment) {
 
 	// get the buffer of the segment and pin it
 	auto &db = column_data.GetDatabase();
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto &block_manager = BlockManager::GetBlockManager(db);
+	auto &checkpoint_manager = writer.GetCheckpointManager();
 
 	bool block_is_constant = segment->stats.statistics->IsConstant();
 
-	block_id_t block_id;
-	uint32_t offset_in_block;
+	block_id_t block_id = INVALID_BLOCK;
+	uint32_t offset_in_block = 0;
+	bool need_to_write = true;
+	PartialBlock *partial_block = nullptr;
+	unique_ptr<PartialBlock> owned_partial_block;
 	if (!block_is_constant) {
 		// non-constant block
-		// get a free block id to write to
-		block_id = block_manager.GetFreeBlockId();
-		offset_in_block = 0;
+		// if the block is less than 80% full, we consider it a "partial block"
+		// which means we will try to fit it with other blocks
+		if (segment_size <= CheckpointManager::PARTIAL_BLOCK_THRESHOLD) {
+			// the block is a partial block
+			// check if there is a partial block available we can write to
+			if (checkpoint_manager.GetPartialBlock(segment.get(), segment_size, block_id, offset_in_block, partial_block, owned_partial_block)) {
+				//! there is! increase the reference count of this block
+				block_manager.IncreaseBlockReferenceCount(block_id);
+			} else {
+				// there isn't: generate a new block for this segment
+				block_id = block_manager.GetFreeBlockId();
+				offset_in_block = 0;
+				need_to_write = false;
+				// now register this block as a partial block
+				checkpoint_manager.RegisterPartialBlock(segment.get(), segment_size, block_id);
+			}
+		} else {
+			// full block: get a free block to write to
+			block_id = block_manager.GetFreeBlockId();
+			offset_in_block = 0;
+		}
 	} else {
 		// constant block: no need to write anything to disk besides the stats
 		// set up the compression function to constant
-		block_id = INVALID_BLOCK;
-		offset_in_block = 0;
-
 		auto &config = DBConfig::GetConfig(db);
 		segment->function =
 		    config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
@@ -67,8 +88,23 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment) {
 	data_pointer.compression_type = segment->function->type;
 	data_pointer.statistics = segment->stats.statistics->Copy();
 
-	// convert the segment into a persistent segment that points to this block
-	segment->ConvertToPersistent(block_id, offset_in_block);
+	if (need_to_write) {
+		if (partial_block) {
+			// pin the current block
+			auto old_handle = buffer_manager.Pin(segment->block);
+			// pin the new block
+			auto new_handle = buffer_manager.Pin(partial_block->block);
+			// memcpy the contents of the old block to the new block
+			memcpy(new_handle->Ptr() + offset_in_block, old_handle->Ptr(), segment_size);
+		} else {
+			// convert the segment into a persistent segment that points to this block
+			segment->ConvertToPersistent(block_id);
+		}
+	}
+	if (owned_partial_block) {
+		// the partial block has become full: write it to disk
+		owned_partial_block->FlushToDisk(db);
+	}
 
 	// append the segment to the new segment tree
 	new_tree.AppendSegment(move(segment));

@@ -20,7 +20,6 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
                                                                  idx_t offset, const LogicalType &type, idx_t start,
                                                                  idx_t count, CompressionType compression_type,
                                                                  unique_ptr<BaseStatistics> statistics) {
-	D_ASSERT(offset == 0);
 	auto &config = DBConfig::GetConfig(db);
 	CompressionFunction *function;
 	if (block_id == INVALID_BLOCK) {
@@ -37,7 +36,7 @@ unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 	return make_unique<ColumnSegment>(db, type, ColumnSegmentType::TRANSIENT, start, 0, function, nullptr,
-	                                  INVALID_BLOCK, idx_t(-1));
+	                                  INVALID_BLOCK, 0);
 }
 
 ColumnSegment::ColumnSegment(DatabaseInstance &db, LogicalType type_p, ColumnSegmentType segment_type, idx_t start,
@@ -122,6 +121,14 @@ idx_t ColumnSegment::Append(ColumnAppendState &state, VectorData &append_data, i
 	return function->append(*this, stats, append_data, offset, count);
 }
 
+idx_t ColumnSegment::FinalizeAppend() {
+	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
+	if (!function->finalize_append) {
+		throw InternalException("Attempting to call FinalizeAppend on a compressed segment without a finalize_append method");
+	}
+	return function->finalize_append(*this, stats);
+}
+
 void ColumnSegment::RevertAppend(idx_t start_row) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (function->revert_append) {
@@ -133,11 +140,11 @@ void ColumnSegment::RevertAppend(idx_t start_row) {
 //===--------------------------------------------------------------------===//
 // Convert To Persistent
 //===--------------------------------------------------------------------===//
-void ColumnSegment::ConvertToPersistent(block_id_t block_id_p, idx_t offset_p) {
+void ColumnSegment::ConvertToPersistent(block_id_t block_id_p) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	segment_type = ColumnSegmentType::PERSISTENT;
 	block_id = block_id_p;
-	offset = offset_p;
+	offset = 0;
 
 	if (block_id == INVALID_BLOCK) {
 		// constant block: reset the block buffer
@@ -157,6 +164,20 @@ void ColumnSegment::ConvertToPersistent(block_id_t block_id_p, idx_t offset_p) {
 		segment_state = function->init_segment(*this, block_id);
 	}
 }
+
+void ColumnSegment::ConvertToPersistent(shared_ptr<BlockHandle> block_p, block_id_t block_id_p, uint32_t offset_p) {
+	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
+	segment_type = ColumnSegmentType::PERSISTENT;
+	block_id = block_id_p;
+	offset = offset_p;
+	block = move(block_p);
+
+	segment_state.reset();
+	if (function->init_segment) {
+		segment_state = function->init_segment(*this, block_id);
+	}
+}
+
 
 //===--------------------------------------------------------------------===//
 // Filter Selection

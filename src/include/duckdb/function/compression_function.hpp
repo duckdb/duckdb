@@ -82,6 +82,7 @@ typedef void (*compression_skip_t)(ColumnSegment &segment, ColumnScanState &stat
 typedef unique_ptr<CompressedSegmentState> (*compression_init_segment_t)(ColumnSegment &segment, block_id_t block_id);
 typedef idx_t (*compression_append_t)(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset,
                                       idx_t count);
+typedef idx_t (*compression_finalize_append_t)(ColumnSegment &segment, SegmentStatistics &stats);
 typedef void (*compression_revert_append_t)(ColumnSegment &segment, idx_t start_row);
 
 class CompressionFunction {
@@ -92,12 +93,13 @@ public:
 	                    compression_compress_finalize_t compress_finalize, compression_init_segment_scan_t init_scan,
 	                    compression_scan_vector_t scan_vector, compression_scan_partial_t scan_partial,
 	                    compression_fetch_row_t fetch_row, compression_skip_t skip,
-	                    compression_init_segment_t init_segment, compression_append_t append,
-	                    compression_revert_append_t revert_append)
+	                    compression_init_segment_t init_segment = nullptr, compression_append_t append = nullptr,
+						compression_finalize_append_t finalize_append = nullptr,
+	                    compression_revert_append_t revert_append = nullptr)
 	    : type(type), data_type(data_type), init_analyze(init_analyze), analyze(analyze), final_analyze(final_analyze),
 	      init_compression(init_compression), compress(compress), compress_finalize(compress_finalize),
 	      init_scan(init_scan), scan_vector(scan_vector), scan_partial(scan_partial), fetch_row(fetch_row), skip(skip),
-	      init_segment(init_segment), append(append), revert_append(revert_append) {
+	      init_segment(init_segment), append(append), finalize_append(finalize_append), revert_append(revert_append) {
 	}
 
 	//! Compression type
@@ -146,6 +148,8 @@ public:
 	compression_init_segment_t init_segment;
 	//! Append to the compressed segment (optional)
 	compression_append_t append;
+	//! Finalize an append to the segment
+	compression_finalize_append_t finalize_append;
 	//! Revert append (optional)
 	compression_revert_append_t revert_append;
 };

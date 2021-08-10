@@ -35,6 +35,9 @@ public:
 	//! assumed to be rewritten)
 	virtual void MarkBlockAsModified(block_id_t block_id) {
 	}
+	//! Increase the reference count of a block. The block should hold at least one reference before this method is called.
+	virtual void IncreaseBlockReferenceCount(block_id_t block_id) {
+	}
 	//! Get the first meta block id
 	virtual block_id_t GetMetaBlock() = 0;
 	//! Read the content of the block from disk

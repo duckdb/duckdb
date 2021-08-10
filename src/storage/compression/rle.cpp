@@ -188,7 +188,7 @@ struct RLECompressState : public CompressionState {
 		handle.reset();
 
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(move(current_segment));
+		state.FlushSegment(move(current_segment), Storage::BLOCK_SIZE);
 	}
 
 	void Finalize() {
@@ -329,8 +329,7 @@ template <class T>
 CompressionFunction GetRLEFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_RLE, data_type, RLEInitAnalyze<T>, RLEAnalyze<T>,
 	                           RLEFinalAnalyze<T>, RLEInitCompression<T>, RLECompress<T>, RLEFinalizeCompress<T>,
-	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>, nullptr,
-	                           nullptr, nullptr);
+	                           RLEInitScan<T>, RLEScan<T>, RLEScanPartial<T>, RLEFetchRow<T>, RLESkip<T>);
 }
 
 CompressionFunction RLEFun::GetFunction(PhysicalType type) {

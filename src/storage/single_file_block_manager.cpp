@@ -187,6 +187,13 @@ void SingleFileBlockManager::LoadFreeList() {
 	for (idx_t i = 0; i < free_list_count; i++) {
 		free_list.insert(reader.Read<block_id_t>());
 	}
+	auto multi_use_blocks_count = reader.Read<uint64_t>();
+	multi_use_blocks.clear();
+	for (idx_t i = 0; i < multi_use_blocks_count; i++) {
+		auto block_id = reader.Read<block_id_t>();
+		auto usage_count = reader.Read<uint32_t>();
+		multi_use_blocks[block_id] = usage_count;
+	}
 }
 
 void SingleFileBlockManager::StartCheckpoint() {
@@ -212,7 +219,30 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 
 void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	D_ASSERT(block_id >= 0);
+
+	// check if the block is a multi-use block
+	auto entry = multi_use_blocks.find(block_id);
+	if (entry != multi_use_blocks.end()) {
+		// it is! reduce the reference count of the block
+		entry->second--;
+		// check the reference count: is the block still a multi-use block?
+		if (entry->second <= 1) {
+			// no longer a multi-use block!
+			multi_use_blocks.erase(entry);
+		}
+		return;
+	}
 	modified_blocks.insert(block_id);
+}
+
+void SingleFileBlockManager::IncreaseBlockReferenceCount(block_id_t block_id) {
+	D_ASSERT(free_list.find(block_id) == free_list.end());
+	auto entry = multi_use_blocks.find(block_id);
+	if (entry != multi_use_blocks.end()) {
+		entry->second++;
+	} else {
+		multi_use_blocks[block_id] = 2;
+	}
 }
 
 block_id_t SingleFileBlockManager::GetMetaBlock() {
@@ -246,18 +276,25 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	modified_blocks.clear();
 
-	if (!free_list.empty()) {
+	if (!free_list.empty() || !multi_use_blocks.empty()) {
 		// there are blocks in the free list
 		// write them to the file
 		MetaBlockWriter writer(db);
-		free_list.erase(writer.block->id);
 
 		header.free_list = writer.block->id;
 		modified_blocks.insert(writer.block->id);
 
+		// FIXME: how do we handle the scenario where this takes up multiple blocks?
+		// figure out how many blocks to use for free_list + multi_use_blocks list and allocate before-hand?
+
 		writer.Write<uint64_t>(free_list.size());
 		for (auto &block_id : free_list) {
 			writer.Write<block_id_t>(block_id);
+		}
+		writer.Write<uint64_t>(multi_use_blocks.size());
+		for(auto &entry : multi_use_blocks) {
+			writer.Write<block_id_t>(entry.first);
+			writer.Write<uint32_t>(entry.second);
 		}
 		writer.Flush();
 	} else {
