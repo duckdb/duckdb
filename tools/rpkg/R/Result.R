@@ -42,19 +42,20 @@ duckdb_result <- function(connection, stmt_lst, arrow) {
 }
 
 duckdb_execute <- function(res) {
-  if (res@arrow){
-    query <- .Call(duckdb_execute_R, res@stmt_lst$ref, res@arrow)
-    return (query)
-  }
-  res@env$resultset <- .Call(duckdb_execute_R, res@stmt_lst$ref, res@arrow)
+  out <- .Call(duckdb_execute_R, res@stmt_lst$ref, res@arrow)
+
   if (!res@arrow) {
-      attr(res@env$resultset, "row.names") <-
-        c(NA_integer_, as.integer(-1 * length(res@env$resultset[[1]])))
-      class(res@env$resultset) <- "data.frame"
+    attr(out, "row.names") <- c(NA_integer_, -length(out[[1]]))
+    class(out) <- "data.frame"
+
+    if (res@stmt_lst$type != "SELECT") {
+      res@env$rows_affected <- as.numeric(out[[1]][1])
+    }
+
+    res@env$resultset <- out
   }
-  if (res@stmt_lst$type != "SELECT") {
-    res@env$rows_affected <- as.numeric(res@env$resultset[[1]][1])
-  }
+
+  out
 }
 
 
