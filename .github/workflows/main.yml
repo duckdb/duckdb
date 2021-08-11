@@ -1226,6 +1226,31 @@ jobs:
     - name: Node 15
       run: ./scripts/node_build.sh 15
 
+  win-nodejs:
+    name: node.js Windows
+    runs-on: windows-latest
+    needs: linux-debug
+
+    strategy:
+      matrix:
+        node: [ '10', '12', '14', '15' ]
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node
+      uses: actions/setup-node@v2
+      with:
+        node-version: ${{ matrix.node }}
+
+    - name: Node Version
+      run: ./scripts/node_version.sh
+    
+    - name: Node
+      run: ./scripts/node_build_win.sh
+
   linux-wasm-release:
     name: WebAssembly Release
     runs-on: ubuntu-20.04

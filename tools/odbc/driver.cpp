@@ -49,6 +49,9 @@ SQLRETURN SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	}
 	case SQL_HANDLE_STMT: {
 		auto *hdl = (duckdb::OdbcHandleStmt *)handle;
+		if (hdl == hdl->dbc->stmt_handle) {
+			hdl->dbc->stmt_handle = nullptr;
+		}
 		delete hdl;
 		return SQL_SUCCESS;
 	}
