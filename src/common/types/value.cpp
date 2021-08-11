@@ -448,7 +448,9 @@ Value Value::MAP(Value key, Value value) {
 }
 
 Value Value::LIST(vector<Value> values) {
-	D_ASSERT(!values.empty());
+	if (values.empty()) {
+		throw InternalException("Value::LIST requires a non-empty list of values. Use Value::EMPTY_LIST instead.");
+	}
 #ifdef DEBUG
 	for (idx_t i = 1; i < values.size(); i++) {
 		D_ASSERT(values[i].type() == values[0].type());
@@ -457,6 +459,13 @@ Value Value::LIST(vector<Value> values) {
 	Value result;
 	result.type_ = LogicalType::LIST(values[0].type());
 	result.list_value = move(values);
+	result.is_null = false;
+	return result;
+}
+
+Value Value::EMPTY_LIST(LogicalType child_type) {
+	Value result;
+	result.type_ = LogicalType::LIST(move(child_type));
 	result.is_null = false;
 	return result;
 }
