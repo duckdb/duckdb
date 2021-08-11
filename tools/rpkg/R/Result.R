@@ -312,7 +312,7 @@ setMethod(
       stop("`params` must not be named")
     }
     out <- .Call(duckdb_bind_R, res@stmt_lst$ref, params, res@arrow)
-    if (res@arrow) {
+    if (length(out) == 1) {
       out <- out[[1]]
     } else {
       out <- do.call(rbind, lapply(out, list_to_df))
