@@ -6,14 +6,21 @@
 namespace duckdb {
 
 template <class T>
-void ScanPandasColumn(py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
+void ScanPandasColumn(py::array &numpy_col, idx_t stride, idx_t offset, Vector &out, idx_t count) {
 	auto src_ptr = (T *)numpy_col.data();
-	FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
+	if (stride == sizeof(T)) {
+		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
+	} else {
+		auto tgt_ptr = (T *)FlatVector::GetData(out);
+		for (idx_t i = 0; i < count; i++) {
+			tgt_ptr[i] = src_ptr[stride / sizeof(T) * (i + offset)];
+		}
+	}
 }
 
 template <class T>
 void ScanPandasNumeric(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
-	ScanPandasColumn<T>(bind_data.numpy_col, count, offset, out);
+	ScanPandasColumn<T>(bind_data.numpy_col, bind_data.numpy_stride, offset, out, count);
 	auto &result_mask = FlatVector::Validity(out);
 	if (bind_data.mask) {
 		auto mask = (bool *)bind_data.mask->numpy_array.data();
@@ -78,7 +85,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
                                      Vector &out) {
 	switch (bind_data.pandas_type) {
 	case PandasType::BOOLEAN:
-		ScanPandasColumn<bool>(numpy_col, count, offset, out);
+		ScanPandasColumn<bool>(numpy_col, count, offset, out, count);
 		break;
 	case PandasType::UTINYINT:
 		ScanPandasNumeric<uint8_t>(bind_data, count, offset, out);
@@ -309,7 +316,6 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
 		LogicalType duckdb_col_type;
 		PandasColumnBindData bind_data;
-
 		auto col_type = string(py::str(df_types[col_idx]));
 		if (col_type == "Int8" || col_type == "Int16" || col_type == "Int32" || col_type == "Int64") {
 			// numeric object
@@ -337,6 +343,9 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 				ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
 			}
 		}
+		D_ASSERT(py::hasattr(bind_data.numpy_col, "strides"));
+		bind_data.numpy_stride = bind_data.numpy_col.attr("strides").attr("__getitem__")(0).cast<idx_t>();
+
 		names.emplace_back(py::str(df_columns[col_idx]));
 		return_types.push_back(duckdb_col_type);
 		bind_columns.push_back(move(bind_data));
