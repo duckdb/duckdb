@@ -137,7 +137,7 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 	return retlist;
 }
 
-SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp) {
+SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_bind_R: Need external pointer parameter");
 	}
@@ -166,7 +166,8 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp) {
 		auto val = RApiTypes::SexpToValue(valsexp);
 		stmtholder->parameters[param_idx] = val;
 	}
-	return R_NilValue;
+
+	return RApi::Execute(stmtsexp, arrowsexp);
 }
 
 static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {

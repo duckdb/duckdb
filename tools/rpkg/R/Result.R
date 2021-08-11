@@ -43,7 +43,10 @@ duckdb_result <- function(connection, stmt_lst, arrow) {
 
 duckdb_execute <- function(res) {
   out <- .Call(duckdb_execute_R, res@stmt_lst$ref, res@arrow)
+  duckdb_post_execute(res, out)
+}
 
+duckdb_post_execute <- function(res, out) {
   if (!res@arrow) {
     attr(out, "row.names") <- c(NA_integer_, -length(out[[1]]))
     class(out) <- "data.frame"
@@ -303,8 +306,8 @@ setMethod(
     if (!is.null(names(params))) {
       stop("`params` must not be named")
     }
-    .Call(duckdb_bind_R, res@stmt_lst$ref, params)
-    duckdb_execute(res)
+    out <- .Call(duckdb_bind_R, res@stmt_lst$ref, params, res@arrow)
+    duckdb_post_execute(res, out)
     invisible(res)
   }
 )
