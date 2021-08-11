@@ -279,23 +279,3 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
 	}
 }
-
-TEST_CASE("Test many temporary table creations/deletions", "[storage][.]") {
-	auto storage_database = TestCreatePath("storage_test");
-	auto config = GetTestConfig();
-	// make sure the database does not exist
-	DeleteDatabase(storage_database);
-	DuckDB db(storage_database, config.get());
-
-	Connection con(db);
-	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit='1GB';"));
-	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4;"));
-
-	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
-
-	for (idx_t i = 0; i < 1000; i++) {
-		REQUIRE_NO_FAIL(con.Query("CREATE TEMPORARY TABLE test AS SELECT 1 AS i;"));
-		REQUIRE_NO_FAIL(con.Query("DROP TABLE test;"));
-		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
-	}
-}

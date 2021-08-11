@@ -110,12 +110,18 @@ struct BufferEvictionNode {
 	weak_ptr<BlockHandle> handle;
 	idx_t timestamp;
 
-	bool CanUnload(BlockHandle &handle) {
-		if (timestamp != handle.eviction_timestamp) {
-			// handle was used in between
-			return false;
+	shared_ptr<BlockHandle> TryGetBlockHandle() {
+		auto handle_p = handle.lock();
+		if (!handle_p) {
+			// BlockHandle has been destroyed
+			return nullptr;
 		}
-		return handle.CanUnload();
+		if (timestamp != handle_p->eviction_timestamp) {
+			// handle was used in between
+			return nullptr;
+		}
+		// this is the latest node in the queue with this handle
+		return handle_p;
 	}
 };
 
@@ -316,7 +322,24 @@ void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;
 	queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
-	// FIXME: do some house-keeping to prevent the queue from being flooded with many old blocks
+	PurgeQueue();
+}
+
+void BufferManager::PurgeQueue() {
+	// purges up to 1024 nodes
+	unique_ptr<BufferEvictionNode> node;
+	for (idx_t i = 0; i < 1024; i++) {
+		if (!queue->q.try_dequeue(node)) {
+			break;
+		}
+		auto handle = node->TryGetBlockHandle();
+		if (!handle) {
+			continue;
+		} else {
+			queue->q.enqueue(move(node));
+			break;
+		}
+	}
 }
 
 void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
@@ -340,18 +363,15 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 			current_memory -= extra_memory;
 			return false;
 		}
-		// get a reference to the underlying block pointer
-		auto handle = node->handle.lock();
+		// try to get a reference to the underlying block pointer
+		auto handle = node->TryGetBlockHandle();
 		if (!handle) {
-			continue;
-		}
-		if (!node->CanUnload(*handle)) {
-			// early out: we already know that we cannot unload this node
+			// we did not get a reference: the node was redundant
 			continue;
 		}
 		// we might be able to free this block: grab the mutex and check if we can free it
 		lock_guard<mutex> lock(handle->lock);
-		if (!node->CanUnload(*handle)) {
+		if (!handle->CanUnload()) {
 			// something changed in the mean-time, bail out
 			continue;
 		}
@@ -370,12 +390,18 @@ void BufferManager::VerifyCurrentMemory() {
 		auto &block = *map_entry.second.lock();
 		if (block.state == BlockState::BLOCK_LOADED) {
 			summed_memory += block.memory_usage;
+			D_ASSERT(block.buffer);
+		} else {
+			D_ASSERT(!block.buffer);
 		}
 	}
 	for (auto &map_entry : temp_blocks) {
 		auto &block = *map_entry.second;
 		if (block.state == BlockState::BLOCK_LOADED) {
 			summed_memory += block.memory_usage;
+			D_ASSERT(block.buffer);
+		} else {
+			D_ASSERT(!block.buffer);
 		}
 	}
 	D_ASSERT(summed_memory == current_memory);
