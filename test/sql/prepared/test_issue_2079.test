@@ -28,3 +28,29 @@ query I
 EXECUTE v3(2.0)
 ----
 True
+
+statement ok
+PREPARE v4 AS SELECT 2.0 IN (1.0, 1.5, ?)
+
+query I
+EXECUTE v4(2.0)
+----
+True
+
+query I
+EXECUTE v4(2.5)
+----
+False
+
+statement ok
+PREPARE v5 AS SELECT ? IN (1.0, 1.5, 2.0)
+
+query I
+EXECUTE v5(2.0)
+----
+True
+
+query I
+EXECUTE v5(2.5)
+----
+False

@@ -4,6 +4,7 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -48,6 +49,7 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 		if (name_collision_set.find(child->alias) != name_collision_set.end()) {
 			throw BinderException("Duplicate struct entry name \"%s\"", child->alias);
 		}
+		ExpressionBinder::ResolveParameterType(arguments[i]);
 		name_collision_set.insert(child->alias);
 		struct_children.push_back(make_pair(child->alias, arguments[i]->return_type));
 	}

@@ -23,6 +23,8 @@ static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression 
 	for (idx_t i = 1; i < children.size(); i++) {
 		max_type = LogicalType::MaxLogicalType(max_type, children[i]->expr->return_type);
 	}
+	ExpressionBinder::ResolveParameterType(max_type);
+
 	// cast all children to the same type
 	for (idx_t i = 0; i < children.size(); i++) {
 		children[i]->expr = BoundCastExpression::AddCastToType(move(children[i]->expr), max_type);
@@ -36,6 +38,7 @@ static LogicalType ResolveOperatorType(OperatorExpression &op, vector<BoundExpre
 	case ExpressionType::OPERATOR_IS_NULL:
 	case ExpressionType::OPERATOR_IS_NOT_NULL:
 		// IS (NOT) NULL always returns a boolean, and does not cast its children
+		ExpressionBinder::ResolveParameterType(children[0]->expr);
 		return LogicalType::BOOLEAN;
 	case ExpressionType::COMPARE_IN:
 	case ExpressionType::COMPARE_NOT_IN:
