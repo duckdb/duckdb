@@ -45,7 +45,7 @@
 
 \S4method{dbListFields}{duckdb_connection,character}(conn, name, ...)
 
-\S4method{dbRemoveTable}{duckdb_connection,character}(conn, name, ...)
+\S4method{dbRemoveTable}{duckdb_connection,character}(conn, name, ..., fail_if_missing = TRUE)
 
 \S4method{dbGetInfo}{duckdb_connection}(dbObj, ...)
 
