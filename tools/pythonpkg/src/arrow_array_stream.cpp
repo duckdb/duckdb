@@ -12,19 +12,16 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
     TableFilterCollection *filters) {
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
-	if (!factory->arrow_table) {
-		//! This should never happen
-		throw InternalException("Arrow Factory has no arrow object.");
-	}
-	py::handle table(factory->arrow_table);
+	D_ASSERT(factory->arrow_object);
+	py::handle arrow_obj_handle(factory->arrow_object);
 	py::object scanner;
 	py::object arrow_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_dataset");
-	auto py_object_type = string(py::str(table.get_type().attr("__name__")));
+	auto py_object_type = string(py::str(arrow_obj_handle.get_type().attr("__name__")));
 	py::list projection_list = py::cast(project_columns.second);
 	bool has_filter = filters && filters->table_filters && !filters->table_filters->filters.empty();
 	if (py_object_type == "Table") {
 		auto arrow_dataset = py::module_::import("pyarrow.dataset").attr("dataset");
-		auto dataset = arrow_dataset(table);
+		auto dataset = arrow_dataset(arrow_obj_handle);
 		if (project_columns.second.empty()) {
 			//! This is only called at the binder to get the schema
 			scanner = arrow_scanner(dataset);
@@ -40,13 +37,14 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	} else {
 		if (project_columns.second.empty()) {
 			//! This is only called at the binder to get the schema
-			scanner = arrow_scanner(table);
+			scanner = arrow_scanner(arrow_obj_handle);
 		} else {
 			if (has_filter) {
 				auto filter = TransformFilter(*filters, project_columns.first);
-				scanner = arrow_scanner(table, py::arg("columns") = projection_list, py::arg("filter") = filter);
+				scanner =
+				    arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
 			} else {
-				scanner = arrow_scanner(table, py::arg("columns") = projection_list);
+				scanner = arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
 			}
 		}
 	}
@@ -77,11 +75,6 @@ py::object GetScalar(Value &constant) {
 	case LogicalTypeId::BIGINT:
 		scalar_value = dataset_scalar(constant.GetValue<int64_t>());
 		return scalar_value;
-	case LogicalTypeId::HUGEINT: {
-		py::object date_type = py::module_::import("pyarrow").attr("decimal128");
-		scalar_value = dataset_scalar(scalar(constant.GetValue<hugeint_t>(), date_type(38)));
-		return scalar_value;
-	}
 	case LogicalTypeId::DATE: {
 		py::object date_type = py::module_::import("pyarrow").attr("date32");
 		scalar_value = dataset_scalar(scalar(constant.GetValue<int32_t>(), date_type()));
