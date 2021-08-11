@@ -17,7 +17,7 @@ DBItest::test_all(c(
   "bind_factor.*",
   "bind_date_integer.*",
   "bind_timestamp.*",
-  "bind_time.*",
+  "bind_time_.*",
 
 
   "data_64_bit_numeric_warning", # 64 bit, not now
