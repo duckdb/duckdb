@@ -162,7 +162,7 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 		if (Rf_length(valsexp) != 1) {
 			Rf_error("duckdb_bind_R: bind parameter values need to have length 1");
 		}
-		auto val = RApiTypes::SexpToValue(valsexp);
+		auto val = RApiTypes::SexpToValue(valsexp, 0);
 		stmtholder->parameters[param_idx] = val;
 	}
 
