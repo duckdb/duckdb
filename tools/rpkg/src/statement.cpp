@@ -157,6 +157,12 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 		Rf_error("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
 	}
 
+	if (TYPEOF(arrowsexp) != LGLSXP) {
+		Rf_error("duckdb_bind_R: Need logical for third parameter");
+	}
+
+	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
+
 	R_len_t n_rows = Rf_length(VECTOR_ELT(paramsexp, 0));
 
 	for (idx_t param_idx = 1; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
@@ -166,22 +172,24 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 		}
 	}
 
-	if (n_rows != 1) {
-		Rf_error("duckdb_bind_R: bind parameter values need to have length one");
-	}
-
-	for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
-		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
-		auto val = RApiTypes::SexpToValue(valsexp, 0);
-		stmtholder->parameters[param_idx] = val;
+	if (n_rows != 1 && arrow_fetch) {
+		Rf_error("duckdb_bind_R: bind parameter values need to have length one for arrow queries");
 	}
 
 	RProtector r;
 	auto out = r.Protect(NEW_LIST(n_rows));
 
-	// No protection, assigned immediately
-	auto exec_result = RApi::Execute(stmtsexp, arrowsexp);
-	SET_VECTOR_ELT(out, 0, exec_result);
+	for (idx_t row_idx = 0; row_idx < n_rows; ++row_idx) {
+		for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
+			SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
+			auto val = RApiTypes::SexpToValue(valsexp, row_idx);
+			stmtholder->parameters[param_idx] = val;
+		}
+
+		// No protection, assigned immediately
+		auto exec_result = RApi::Execute(stmtsexp, arrowsexp);
+		SET_VECTOR_ELT(out, row_idx, exec_result);
+	}
 
 	return out;
 }

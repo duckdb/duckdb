@@ -48,8 +48,7 @@ duckdb_execute <- function(res) {
 
 duckdb_post_execute <- function(res, out) {
   if (!res@arrow) {
-    attr(out, "row.names") <- c(NA_integer_, -length(out[[1]]))
-    class(out) <- "data.frame"
+    out <- list_to_df(out)
 
     if (res@stmt_lst$type != "SELECT") {
       res@env$rows_affected <- as.numeric(out[[1]][1])
@@ -59,6 +58,12 @@ duckdb_post_execute <- function(res, out) {
   }
 
   out
+}
+
+list_to_df <- function(x) {
+  attr(x, "row.names") <- c(NA_integer_, -length(x[[1]]))
+  class(x) <- "data.frame"
+  x
 }
 
 
@@ -307,7 +312,12 @@ setMethod(
       stop("`params` must not be named")
     }
     out <- .Call(duckdb_bind_R, res@stmt_lst$ref, params, res@arrow)
-    duckdb_post_execute(res, out[[1]])
+    if (res@arrow) {
+      out <- out[[1]]
+    } else {
+      out <- do.call(rbind, lapply(out, list_to_df))
+    }
+    duckdb_post_execute(res, out)
     invisible(res)
   }
 )
