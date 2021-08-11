@@ -106,18 +106,15 @@ test_that("various error cases for dbBind()", {
 
   expect_error(dbBind(q, list()))
   expect_error(dbBind(q, list(1, 2)))
+  expect_error(dbBind(q, list("asdf")))
   expect_error(dbBind(q, list("asdf", "asdf")))
 
   expect_error(dbBind(q))
 
-  expect_error(dbBind(q, 1))
-  expect_error(dbBind(q, 1, 2))
   expect_error(dbBind(q, "asdf"))
-  expect_error(dbBind(q, "asdf", "asdf"))
 
   dbClearResult(q)
 
-  expect_error(dbGetQuery(con, "SELECT CAST (? AS INTEGER)", 1, 2))
   expect_error(dbGetQuery(con, "SELECT CAST (? AS INTEGER)", "asdf"))
   expect_error(dbGetQuery(con, "SELECT CAST (? AS INTEGER)", "asdf", "asdf"))
   expect_error(dbGetQuery(con, "SELECT CAST (? AS INTEGER)"))

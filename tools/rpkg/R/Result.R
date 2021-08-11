@@ -128,6 +128,10 @@ setMethod(
     if (!res@env$open) {
       stop("result set was closed")
     }
+    if (is.null(res@env$resultset)) {
+      stop("Need to call `dbBind()` before `dbFetch()`")
+    }
+
     if (length(n) != 1) {
       stop("need exactly one value in n")
     }
@@ -196,10 +200,14 @@ setMethod(
     if (!res@env$open) {
       stop("result has already been cleared")
     }
-    if (res@stmt_lst$type != "SELECT") {
-      return(TRUE)
+
+    if (is.null(res@env$resultset)) {
+      FALSE
+    } else if (res@stmt_lst$type == "SELECT") {
+      res@env$rows_fetched == nrow(res@env$resultset)
+    } else {
+      TRUE
     }
-    return(res@env$rows_fetched == nrow(res@env$resultset))
   }
 )
 
@@ -272,6 +280,9 @@ setMethod(
     if (!res@env$open) {
       stop("result has already been cleared")
     }
+    if (is.null(res@env$resultset)) {
+      return(NA_integer_)
+    }
     return(res@env$rows_affected)
   }
 )
@@ -288,7 +299,7 @@ setMethod(
     res@env$rows_fetched <- 0
     res@env$resultset <- data.frame()
 
-    .Call(duckdb_bind_R, res@stmt_lst$ref, params)
+    .Call(duckdb_bind_R, res@stmt_lst$ref, as.list(params))
     duckdb_execute(res)
     invisible(res)
   }

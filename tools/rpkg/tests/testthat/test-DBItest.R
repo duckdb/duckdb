@@ -13,18 +13,21 @@ DBItest::test_all(c(
 
   "send_query_params", # multiple bind parameters
   "get_query_params",
-  "bind_return_value",
-  "bind_too_many",
-  "bind_not_enough",
-  "bind_multi_row_unequal_length",
   "bind_unnamed_param_named_placeholders",
   "bind_multi_row",
   "bind_multi_row_zero_length",
   "bind_multi_row_statement",
-  "bind_repeated",
   "bind_integer",
-  "bind_repeated_untouched",
-  "bind_.*",
+  "bind_logical",
+  "bind_numeric",
+  "bind_character",
+  "bind_factor",
+  "bind_date",
+  "bind_date_integer",
+  "bind_timestamp",
+  "bind_timestamp_lt",
+  "bind_time_seconds",
+  "bind_time_hours",
 
 
   "data_64_bit_numeric_warning", # 64 bit, not now
