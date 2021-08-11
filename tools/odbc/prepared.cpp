@@ -213,21 +213,26 @@ SQLRETURN SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, 
 		if (column_number > stmt->stmt->ColumnCount()) {
 			return SQL_ERROR;
 		}
+
+		duckdb::idx_t col_idx = column_number - 1;
+
 		if (column_name && buffer_length > 0) {
-			auto out_len =
-			    snprintf((char *)column_name, buffer_length, "%s", stmt->stmt->GetNames()[column_number - 1].c_str());
+			auto out_len = snprintf((char *)column_name, buffer_length, "%s", stmt->stmt->GetNames()[col_idx].c_str());
 			if (name_length_ptr) {
 				*name_length_ptr = out_len;
 			}
 		}
 
-		LogicalType col_type = stmt->stmt->GetTypes()[column_number - 1];
+		LogicalType col_type = stmt->stmt->GetTypes()[col_idx];
 
 		if (data_type_ptr) {
 			*data_type_ptr = duckdb::ApiInfo::FindRelatedSQLType(col_type.id());
 		}
 		if (column_size_ptr) {
-			*column_size_ptr = 0;
+			auto ret = duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], column_size_ptr);
+			if (ret == SQL_ERROR) {
+				*column_size_ptr = 0;
+			}
 		}
 		if (decimal_digits_ptr) {
 			*decimal_digits_ptr = 0;
