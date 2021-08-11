@@ -176,7 +176,14 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 		stmtholder->parameters[param_idx] = val;
 	}
 
-	return RApi::Execute(stmtsexp, arrowsexp);
+	RProtector r;
+	auto out = r.Protect(NEW_LIST(n_rows));
+
+	// No protection, assigned immediately
+	auto exec_result = RApi::Execute(stmtsexp, arrowsexp);
+	SET_VECTOR_ELT(out, 0, exec_result);
+
+	return out;
 }
 
 static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {

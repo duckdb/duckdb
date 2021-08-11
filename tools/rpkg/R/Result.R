@@ -307,7 +307,7 @@ setMethod(
       stop("`params` must not be named")
     }
     out <- .Call(duckdb_bind_R, res@stmt_lst$ref, params, res@arrow)
-    duckdb_post_execute(res, out)
+    duckdb_post_execute(res, out[[1]])
     invisible(res)
   }
 )
