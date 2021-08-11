@@ -1286,3 +1286,26 @@ jobs:
         name: duckdb-wasm32-nothreads
         path: |
           duckdb-wasm32-nothreads.zip
+
+  docs:
+    name: Website Docs
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Clone Website
+      run: git clone https://github.com/duckdb/duckdb-web
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
+    - name: Package
+      run: |
+        cd duckdb-web
+        python3 scripts/generate_docs.py ..

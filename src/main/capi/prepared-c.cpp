@@ -1,6 +1,7 @@
 #include "duckdb/main/capi_internal.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/main/prepared_statement_data.hpp"
 
 using duckdb::Connection;
 using duckdb::date_t;
@@ -29,16 +30,27 @@ const char *duckdb_prepare_error(duckdb_prepared_statement prepared_statement) {
 	if (!wrapper || !wrapper->statement || wrapper->statement->success) {
 		return nullptr;
 	}
-	return strdup(wrapper->statement->error.c_str());
+	return wrapper->statement->error.c_str();
 }
 
-duckdb_state duckdb_nparams(duckdb_prepared_statement prepared_statement, idx_t *nparams_out) {
+idx_t duckdb_nparams(duckdb_prepared_statement prepared_statement) {
 	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
-	if (!wrapper || !wrapper->statement || !wrapper->statement->success || !nparams_out) {
-		return DuckDBError;
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
+		return 0;
 	}
-	*nparams_out = wrapper->statement->n_param;
-	return DuckDBSuccess;
+	return wrapper->statement->n_param;
+}
+
+duckdb_type duckdb_param_type(duckdb_prepared_statement prepared_statement, idx_t param_idx) {
+	auto wrapper = (PreparedStatementWrapper *)prepared_statement;
+	if (!wrapper || !wrapper->statement || !wrapper->statement->success) {
+		return DUCKDB_TYPE_INVALID;
+	}
+	auto entry = wrapper->statement->data->value_map.find(param_idx);
+	if (entry == wrapper->statement->data->value_map.end()) {
+		return DUCKDB_TYPE_INVALID;
+	}
+	return ConvertCPPTypeToC(entry->second[0]->type());
 }
 
 static duckdb_state duckdb_bind_value(duckdb_prepared_statement prepared_statement, idx_t param_idx, Value val) {
