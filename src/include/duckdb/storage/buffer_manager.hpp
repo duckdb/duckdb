@@ -121,13 +121,11 @@ private:
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
 
-#ifdef DEBUG
-	//! Lock for reading/writing current_memory (used for verification)
+	//! Lock for current_memory (used for verification)
 	mutex current_memory_lock;
-	//! Lock for reading/writing the temp_blocks map (used for verification)
+	//! Lock for the set of the temp_blocks (used for verification)
 	mutex temp_blocks_lock;
 	//! A mapping of temp block id -> BlockHandle (used for verification)
 	unordered_map<block_id_t, BlockHandle *> temp_blocks;
-#endif
 };
 } // namespace duckdb
