@@ -251,7 +251,8 @@ struct RLEScanState : public SegmentScanState {
 		handle = buffer_manager.Pin(segment.block);
 		entry_pos = 0;
 		position_in_entry = 0;
-		rle_count_offset = Load<uint32_t>(handle->node->buffer);
+		rle_count_offset = Load<uint32_t>(handle->node->buffer + segment.GetBlockOffset());
+		D_ASSERT(rle_count_offset <= Storage::BLOCK_SIZE);
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
