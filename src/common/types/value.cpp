@@ -449,7 +449,7 @@ Value Value::MAP(Value key, Value value) {
 
 Value Value::LIST(vector<Value> values) {
 	if (values.empty()) {
-		throw InternalException("Value::LIST requires a non-empty list of values. Use Value::EMPTY_LIST instead.");
+		throw InternalException("Value::LIST requires a non-empty list of values. Use Value::EMPTYLIST instead.");
 	}
 #ifdef DEBUG
 	for (idx_t i = 1; i < values.size(); i++) {
@@ -463,7 +463,7 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
-Value Value::EMPTY_LIST(LogicalType child_type) {
+Value Value::EMPTYLIST(LogicalType child_type) {
 	Value result;
 	result.type_ = LogicalType::LIST(move(child_type));
 	result.is_null = false;

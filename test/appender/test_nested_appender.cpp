@@ -18,7 +18,7 @@ TEST_CASE("Test appender with lists", "[appender]") {
 	Appender appender(con, "lists");
 
 	auto list_value = Value::LIST({Value::INTEGER(3)});
-	auto empty_list_value = Value::EMPTY_LIST(LogicalType::INTEGER);
+	auto empty_list_value = Value::EMPTYLIST(LogicalType::INTEGER);
 
 	appender.AppendRow(list_value);
 	appender.AppendRow(empty_list_value);
@@ -42,7 +42,7 @@ TEST_CASE("Test appender with nested lists", "[appender]") {
 
 	auto list_value =
 	    Value::LIST({Value::LIST({Value::INTEGER(1)}), Value::LIST({Value::INTEGER(2), Value::INTEGER(3)})});
-	auto empty_list_value = Value::EMPTY_LIST(LogicalType::LIST(LogicalType::INTEGER));
+	auto empty_list_value = Value::EMPTYLIST(LogicalType::LIST(LogicalType::INTEGER));
 	auto null_list_value = Value(LogicalType::LIST(LogicalType::LIST(LogicalType::INTEGER)));
 	appender.AppendRow(list_value);
 	appender.AppendRow(empty_list_value);

@@ -114,7 +114,7 @@ public:
 	//! Create a list value with the given entries
 	DUCKDB_API static Value LIST(vector<Value> values);
 	//! Create an empty list with the specified type
-	DUCKDB_API static Value EMPTY_LIST(LogicalType child_type);
+	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
 	//! Creat a map value from a (key, value) pair
 	DUCKDB_API static Value MAP(Value key, Value value);
 
