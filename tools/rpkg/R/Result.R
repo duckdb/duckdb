@@ -51,7 +51,7 @@ duckdb_post_execute <- function(res, out) {
     out <- list_to_df(out)
 
     if (res@stmt_lst$type != "SELECT") {
-      res@env$rows_affected <- as.numeric(out[[1]][1])
+      res@env$rows_affected <- sum(as.numeric(out[[1]]))
     }
 
     res@env$resultset <- out

@@ -11,7 +11,6 @@ DBItest::test_all(c(
 
   if (packageVersion("DBItest") < "1.7.0.9004") "roundtrip_timestamp", # broken test
 
-  "bind_multi_row_statement",
   "bind_multi_row_zero_length", # https://github.com/duckdb/duckdb/issues/2125
   "bind_integer",
   "bind_logical",
