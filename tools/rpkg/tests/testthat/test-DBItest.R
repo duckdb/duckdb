@@ -13,7 +13,6 @@ DBItest::test_all(c(
 
   "send_query_params", # multiple bind parameters
   "get_query_params",
-  "bind_unnamed_param_named_placeholders",
   "bind_multi_row",
   "bind_multi_row_zero_length",
   "bind_multi_row_statement",
