@@ -1,10 +1,6 @@
 #include "duckdb/common/types/row_data_collection.hpp"
 
-#include "duckdb/common/types/chunk_collection.hpp"
-
 namespace duckdb {
-
-using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
 RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size,
                                      bool keep_pinned)

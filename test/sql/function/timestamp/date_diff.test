@@ -18,7 +18,7 @@ SELECT DATEDIFF(${datepart}, startdate, enddate) FROM date1
 
 endloop
 
-foreach datepart 'decade' 'century' 'millennium' 'week'
+foreach datepart 'decade' 'century' 'millennium' 'week' 'yearweek'
 
 query I
 SELECT DATEDIFF(${datepart}, startdate, enddate) FROM date1
@@ -53,7 +53,7 @@ SELECT DATEDIFF('microsecond', startdate, enddate) FROM date1
 86400000000
 
 # Negation
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week'
+foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek'
 
 query I
 SELECT DATEDIFF(${datepart}, startdate, enddate) + DATEDIFF(${datepart}, enddate, startdate) FROM date1
@@ -107,7 +107,7 @@ SELECT DATEDIFF(${datepart}, startdate, enddate) FROM datetime1
 
 endloop
 
-foreach datepart 'decade' 'century' 'millennium' 'week'
+foreach datepart 'decade' 'century' 'millennium' 'week' 'yearweek'
 
 query I
 SELECT DATEDIFF(${datepart}, startdate, enddate) FROM datetime1
@@ -117,7 +117,7 @@ SELECT DATEDIFF(${datepart}, startdate, enddate) FROM datetime1
 endloop
 
 # Negation
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week'
+foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek'
 
 query I
 SELECT DATEDIFF(${datepart}, startdate, enddate) + DATEDIFF(${datepart}, enddate, startdate) FROM datetime1
@@ -148,7 +148,7 @@ statement ok
 CREATE TABLE time1 AS
 SELECT '23:59:59.9999999'::TIME AS enddate, '00:00:00.0000000'::TIME AS startdate;
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'decade' 'century' 'millennium' 'week'
+foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'decade' 'century' 'millennium' 'week' 'yearweek'
 
 statement error
 SELECT DATEDIFF(${datepart}, startdate, enddate) FROM time1
@@ -209,7 +209,7 @@ endloop
 # NULLs
 #
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week'
+foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek'
 
 foreach tbl date1 datetime1 time1
 
@@ -227,6 +227,8 @@ query I
 SELECT DATEDIFF(${datepart}, startdate, NULL) FROM ${tbl}
 ----
 NULL
+
+endloop
 
 endloop
 
@@ -293,7 +295,7 @@ CREATE TABLE parts (datepart VARCHAR);
 statement ok
 INSERT into parts VALUES(NULL);
 
-foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week'
+foreach datepart 'year' 'quarter' 'month' 'day' 'dayofyear' 'hour' 'minute' 'second' 'millisecond' 'microsecond' 'decade' 'century' 'millennium' 'week' 'yearweek'
 
 statement ok
 INSERT into parts VALUES(${datepart});
@@ -319,6 +321,7 @@ decade	0
 century	0
 millennium	0
 week	0
+yearweek	0
 
 statement ok
 INSERT into parts VALUES('duck');

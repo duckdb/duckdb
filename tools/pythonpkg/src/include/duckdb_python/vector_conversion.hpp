@@ -28,7 +28,8 @@ enum class PandasType : uint8_t {
 	DOUBLE,
 	TIMESTAMP,
 	INTERVAL,
-	VARCHAR
+	VARCHAR,
+	OBJECT
 };
 
 struct NumPyArrayWrapper {

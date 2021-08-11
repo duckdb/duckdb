@@ -11,7 +11,6 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/storage/table/transient_segment.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_writer.hpp"

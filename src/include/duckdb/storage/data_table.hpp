@@ -14,7 +14,6 @@
 #include "duckdb/storage/table_statistics.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-#include "duckdb/storage/table/persistent_segment.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group.hpp"

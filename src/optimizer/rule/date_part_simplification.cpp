@@ -57,6 +57,9 @@ unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, ve
 	case DatePartSpecifier::WEEK:
 		new_function_name = "week";
 		break;
+	case DatePartSpecifier::YEARWEEK:
+		new_function_name = "yearweek";
+		break;
 	case DatePartSpecifier::DOW:
 		new_function_name = "dayofweek";
 		break;

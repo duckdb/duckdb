@@ -5,6 +5,17 @@ if(NOT ODBC_FOUND)
   message(FATAL_ERROR No ODBC found)
 endif()
 
+set(LINK_LIB_LIST "")
+
+if(ODBC_FOUND)
+  find_library(ODBCINST_LIB NAMES odbcinst libodbcinst)
+  if(ODBCINST_LIB)
+    list(APPEND LINK_LIB_LIST ${ODBCINST_LIB})
+    add_definitions(-DODBC_LINK_ODBCINST)
+    message(STATUS "Found ODBCINST_LIB: " ${ODBCINST_LIB})
+  endif()
+endif()
+
 add_definitions(-DNO_FRAMEWORKS)
 include_directories(${ODBC_INCLUDE_DIRS} include)
 
@@ -23,4 +34,4 @@ add_library(
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
 
-target_link_libraries(duckdb_odbc duckdb_static)
+target_link_libraries(duckdb_odbc ${LINK_LIB_LIST} duckdb_static)

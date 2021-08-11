@@ -198,3 +198,105 @@ SQLRETURN ApiInfo::CheckDataType(SQLSMALLINT data_type) {
 	}
 	return SQL_ERROR;
 }
+
+/**
+ * It receives the SQL_C type
+ * Returns the size of bytes to increment by a pointer
+ * Returns "-1" for variable-length type, e.g., string
+ */
+SQLLEN ApiInfo::PointerSizeOf(SQLSMALLINT sql_type) {
+	switch (sql_type) {
+	case SQL_C_SSHORT:
+		return sizeof(int16_t);
+	case SQL_C_USHORT:
+		return sizeof(uint16_t);
+	case SQL_C_LONG:
+	case SQL_C_SLONG:
+		return sizeof(int32_t);
+	case SQL_C_ULONG:
+		return sizeof(uint32_t);
+	case SQL_C_FLOAT:
+		return sizeof(float);
+	case SQL_C_DOUBLE:
+		return sizeof(double);
+	case SQL_C_STINYINT:
+		return sizeof(int8_t);
+	case SQL_C_UTINYINT:
+		return sizeof(uint8_t);
+	case SQL_C_SBIGINT:
+		return sizeof(int64_t);
+	case SQL_C_UBIGINT:
+		return sizeof(uint64_t);
+	case SQL_C_NUMERIC:
+	case SQL_C_TYPE_DATE:
+	case SQL_C_TYPE_TIME:
+	case SQL_C_TYPE_TIMESTAMP:
+	case SQL_C_INTERVAL_YEAR:
+	case SQL_C_INTERVAL_MONTH:
+	case SQL_C_INTERVAL_DAY:
+	case SQL_C_INTERVAL_HOUR:
+	case SQL_C_INTERVAL_MINUTE:
+	case SQL_C_INTERVAL_SECOND:
+	case SQL_C_INTERVAL_YEAR_TO_MONTH:
+	case SQL_C_INTERVAL_DAY_TO_HOUR:
+	case SQL_C_INTERVAL_DAY_TO_MINUTE:
+	case SQL_C_INTERVAL_DAY_TO_SECOND:
+	case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+	case SQL_C_INTERVAL_HOUR_TO_SECOND:
+	case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+		return sizeof(uint64_t);
+	case SQL_C_BIT:
+		return sizeof(char);
+	case SQL_C_WCHAR:
+	case SQL_C_BINARY:
+	case SQL_C_CHAR:
+	default:
+		return -1;
+	}
+}
+
+//! https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size?view=sql-server-ver15
+SQLRETURN ApiInfo::GetColumnSize(const duckdb::LogicalType &logical_type, SQLULEN *col_size_ptr) {
+	auto sql_type = FindRelatedSQLType(logical_type.id());
+	switch (sql_type) {
+	case SQL_DECIMAL:
+	case SQL_NUMERIC:
+		*col_size_ptr = duckdb::DecimalType::GetWidth(logical_type) + duckdb::DecimalType::GetScale(logical_type);
+		return SQL_SUCCESS;
+	case SQL_BIT:
+		*col_size_ptr = 1;
+		return SQL_SUCCESS;
+	case SQL_TINYINT:
+		*col_size_ptr = 6;
+		return SQL_SUCCESS;
+	case SQL_INTEGER:
+		*col_size_ptr = 11;
+		return SQL_SUCCESS;
+	case SQL_BIGINT:
+		*col_size_ptr = 20;
+		return SQL_SUCCESS;
+	case SQL_REAL:
+		*col_size_ptr = 14;
+		return SQL_SUCCESS;
+	case SQL_FLOAT:
+	case SQL_DOUBLE:
+		*col_size_ptr = 24;
+		return SQL_SUCCESS;
+	case SQL_TYPE_DATE:
+		*col_size_ptr = 10;
+		return SQL_SUCCESS;
+	case SQL_TYPE_TIME:
+		*col_size_ptr = 9;
+		return SQL_SUCCESS;
+	case SQL_TYPE_TIMESTAMP:
+		*col_size_ptr = 20;
+		return SQL_SUCCESS;
+	case SQL_VARCHAR:
+	case SQL_VARBINARY:
+		// we don't know the number of characters
+		*col_size_ptr = 0;
+		return SQL_SUCCESS;
+	default:
+		return SQL_ERROR;
+	}
+}

@@ -7,6 +7,7 @@ add_library_unity(
   duckdb_function
   OBJECT
   cast_rules.cpp
+  compression_config.cpp
   function.cpp
   pragma_function.cpp
   macro_function.cpp

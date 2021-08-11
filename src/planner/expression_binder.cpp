@@ -113,7 +113,7 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 	                                      [&](Expression &child) { ExtractCorrelatedExpressions(binder, child); });
 }
 
-static bool ContainsNullType(const LogicalType &type) {
+bool ExpressionBinder::ContainsNullType(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP: {
@@ -134,7 +134,7 @@ static bool ContainsNullType(const LogicalType &type) {
 	}
 }
 
-static LogicalType ExchangeNullType(const LogicalType &type) {
+LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP: {
@@ -177,9 +177,11 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 	} else {
 		// SQL NULL type is only used internally in the binder
 		// cast to INTEGER if we encounter it outside of the binder
-		if (ContainsNullType(result->return_type)) {
-			auto result_type = ExchangeNullType(result->return_type);
-			result = BoundCastExpression::AddCastToType(move(result), result_type);
+		if (!binder.can_contain_nulls) {
+			if (ContainsNullType(result->return_type)) {
+				auto result_type = ExchangeNullType(result->return_type);
+				result = BoundCastExpression::AddCastToType(move(result), result_type);
+			}
 		}
 	}
 	if (result_type) {

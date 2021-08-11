@@ -12,6 +12,7 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			 return (size == 1) ? SQL_SUCCESS : SQL_ERROR;
 			 */
 			// this should be 1
+			stmt->paramset_size = (SQLULEN)value_ptr;
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_QUERY_TIMEOUT: {
@@ -25,7 +26,7 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 				if (new_size < 1) {
 					return SQL_ERROR;
 				}
-				stmt->odbc_fetcher->rows_to_fetch = new_size;
+				stmt->odbc_fetcher->rowset_size = new_size;
 			}
 			return SQL_SUCCESS;
 		}
@@ -37,7 +38,7 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			if (value_ptr && (SQLULEN)value_ptr != SQL_BIND_BY_COLUMN) {
 				//! it's a row-wise binding orientation (SQLFetch should support it)
 				stmt->odbc_fetcher->row_length = (SQLULEN *)value_ptr;
-				stmt->odbc_fetcher->orientation = duckdb::FetchOrientation::ROW;
+				stmt->odbc_fetcher->bind_orientation = duckdb::FetchBindingOrientation::ROW;
 			}
 			return SQL_SUCCESS;
 		}
@@ -45,6 +46,13 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			stmt->odbc_fetcher->row_status_buff = (SQLUSMALLINT *)value_ptr;
 			return SQL_SUCCESS;
 		}
+		case SQL_ATTR_CURSOR_TYPE: {
+			stmt->odbc_fetcher->cursor_type = (SQLULEN)value_ptr;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_CONCURRENCY:
+			// needs to be implemented
+			return SQL_SUCCESS;
 		default:
 			stmt->error_messages.emplace_back("Unsupported attribute type.");
 			return SQL_ERROR;
@@ -203,50 +211,10 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 
 			return SQL_SUCCESS;
 		}
-		// https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size?view=sql-server-ver15
 		case SQL_DESC_DISPLAY_SIZE: {
-			auto logical_type = stmt->stmt->GetTypes()[col_idx];
-			auto sql_type = duckdb::ApiInfo::FindRelatedSQLType(logical_type.id());
-			switch (sql_type) {
-			case SQL_DECIMAL:
-			case SQL_NUMERIC:
-				*numeric_attribute_ptr =
-				    duckdb::DecimalType::GetWidth(logical_type) + duckdb::DecimalType::GetScale(logical_type);
-				return SQL_SUCCESS;
-			case SQL_BIT:
-				*numeric_attribute_ptr = 1;
-				return SQL_SUCCESS;
-			case SQL_TINYINT:
-				*numeric_attribute_ptr = 6;
-				return SQL_SUCCESS;
-			case SQL_INTEGER:
-				*numeric_attribute_ptr = 11;
-				return SQL_SUCCESS;
-			case SQL_BIGINT:
-				*numeric_attribute_ptr = 20;
-				return SQL_SUCCESS;
-			case SQL_REAL:
-				*numeric_attribute_ptr = 14;
-				return SQL_SUCCESS;
-			case SQL_FLOAT:
-			case SQL_DOUBLE:
-				*numeric_attribute_ptr = 24;
-				return SQL_SUCCESS;
-			case SQL_TYPE_DATE:
-				*numeric_attribute_ptr = 10;
-				return SQL_SUCCESS;
-			case SQL_TYPE_TIME:
-				*numeric_attribute_ptr = 9;
-				return SQL_SUCCESS;
-			case SQL_TYPE_TIMESTAMP:
-				*numeric_attribute_ptr = 20;
-				return SQL_SUCCESS;
-			case SQL_VARCHAR:
-			case SQL_VARBINARY:
-				// we don't know the number of characters
-				*numeric_attribute_ptr = 0;
-				return SQL_SUCCESS;
-			default:
+			auto ret =
+			    duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], (SQLULEN *)numeric_attribute_ptr);
+			if (ret == SQL_ERROR) {
 				stmt->error_messages.emplace_back("Unsupported type for display size.");
 				return SQL_ERROR;
 			}
@@ -273,8 +241,9 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
+			stmt->open = false;
 			stmt->res.reset();
-			stmt->chunk.reset();
+			stmt->odbc_fetcher->ClearChunks();
 			// stmt->stmt.reset(); // the statment can be reuse in prepared statement
 			stmt->bound_cols.clear();
 			stmt->params.clear();

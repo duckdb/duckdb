@@ -62,6 +62,8 @@ SQLRETURN SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *column_count_
 SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
                      SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr);
 
+SQLRETURN SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN target_typestr_len_or_ind_ptr);
+
 // diagnostics
 SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
                           SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
@@ -91,6 +93,8 @@ struct OdbcHandleEnv : public OdbcHandle {
 	unique_ptr<DuckDB> db;
 };
 
+struct OdbcHandleStmt;
+
 struct OdbcHandleDbc : public OdbcHandle {
 	explicit OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
 		D_ASSERT(env_p);
@@ -99,6 +103,8 @@ struct OdbcHandleDbc : public OdbcHandle {
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
 	bool autocommit;
+	// reference to an open statement handled by this connection
+	OdbcHandleStmt *stmt_handle;
 };
 
 struct OdbcBoundCol {
@@ -117,23 +123,21 @@ struct OdbcBoundCol {
 struct OdbcHandleStmt : public OdbcHandle {
 	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p);
 	~OdbcHandleStmt();
+	SQLRETURN MaterializeResult();
 
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
 	unique_ptr<QueryResult> res;
-	unique_ptr<DataChunk> chunk;
 	vector<Value> params;
+	SQLULEN paramset_size;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
-	row_t chunk_row;
 	SQLULEN *rows_fetched_ptr;
 
 	// appending all statement error messages into it
 	vector<std::string> error_messages;
 
 	unique_ptr<OdbcFetch> odbc_fetcher;
-
-	SQLLEN row_count;
 };
 
 struct OdbcUtils {

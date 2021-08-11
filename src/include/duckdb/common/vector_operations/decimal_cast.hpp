@@ -342,8 +342,7 @@ static bool DecimalCastSwitch(Vector &source, Vector &result, idx_t count, strin
 		return true;
 	}
 	default:
-		VectorNullCast(source, result, count);
-		return true;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
 }
 

@@ -29,7 +29,8 @@ enum class DatePartSpecifier : uint8_t {
 	ISODOW,
 	WEEK,
 	QUARTER,
-	DOY
+	DOY,
+	YEARWEEK
 };
 
 bool TryGetDatePartSpecifier(const string &specifier, DatePartSpecifier &result);

@@ -3,6 +3,9 @@ bindcol-test
 boolsaschar-test
 colattribute-test
 connect-test
+cte-test
+cursor-commit-test
+declare-fetch-block-test
 numeric-test
 quotes-test
 result-conversions-test

@@ -6,6 +6,7 @@ namespace duckdb {
 
 unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, CommonTableExpressionInfo *cte) {
 	auto binder = Binder::CreateBinder(context, this);
+	binder->can_contain_nulls = true;
 	if (cte) {
 		binder->bound_ctes.insert(cte);
 	}
