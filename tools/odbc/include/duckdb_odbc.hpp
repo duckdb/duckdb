@@ -129,6 +129,7 @@ struct OdbcHandleStmt : public OdbcHandle {
 	unique_ptr<PreparedStatement> stmt;
 	unique_ptr<QueryResult> res;
 	vector<Value> params;
+	SQLULEN paramset_size;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN *rows_fetched_ptr;
