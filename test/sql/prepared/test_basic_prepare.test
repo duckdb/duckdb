@@ -58,13 +58,13 @@ PREPARE s1 AS SELECT NOT($1), 10+$2, $3+20, 4 IN (2, 3, $4), $5 IN (2, 3, 4)
 statement ok
 EXECUTE s1(1, 2, 3, 4, 2)
 
-# cannot resolve these types
-statement error
+# these types default to varchar
+statement ok
 PREPARE s1 AS SELECT $1
 
-statement error
-PREPARE s1 AS SELECT (SELECT $1)
+statement ok
+PREPARE s2 AS SELECT (SELECT $1)
 
-statement error
-PREPARE s1 AS SELECT $1=$2
+statement ok
+PREPARE s3 AS SELECT $1=$2
 

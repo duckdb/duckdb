@@ -77,6 +77,11 @@ public:
 
 	static bool ContainsNullType(const LogicalType &type);
 	static LogicalType ExchangeNullType(const LogicalType &type);
+	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
+	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
+
+	static void ResolveParameterType(LogicalType &type);
+	static void ResolveParameterType(unique_ptr<Expression> &expr);
 
 protected:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,

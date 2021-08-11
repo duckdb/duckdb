@@ -68,9 +68,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	auto bound_node = move(bound_subquery->bound_node);
 	LogicalType return_type =
 	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : LogicalType(LogicalTypeId::BOOLEAN);
-	if (return_type.id() == LogicalTypeId::UNKNOWN) {
-		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
-	}
+	D_ASSERT(return_type.id() != LogicalTypeId::UNKNOWN);
 
 	auto result = make_unique<BoundSubqueryExpression>(return_type);
 	if (expr.subquery_type == SubqueryType::ANY) {
