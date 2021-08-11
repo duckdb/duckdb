@@ -82,53 +82,59 @@ struct DateSub {
 		}
 	};
 
-
 	struct DayOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) / Interval::NANOS_PER_DAY;
+			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
+			       Interval::NANOS_PER_DAY;
 		}
 	};
 
 	struct WeekOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) / Interval::NANOS_PER_WEEK;
+			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
+			       Interval::NANOS_PER_WEEK;
 		}
 	};
 
 	struct MicrosecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) / Interval::NANOS_PER_MICRO;
+			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
+			       Interval::NANOS_PER_MICRO;
 		}
 	};
 
 	struct MillisecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) / Interval::NANOS_PER_MSEC;
+			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
+			       Interval::NANOS_PER_MSEC;
 		}
 	};
 
 	struct SecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) / Interval::NANOS_PER_SEC;
+			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
+			       Interval::NANOS_PER_SEC;
 		}
 	};
 
 	struct MinutesOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) / Interval::NANOS_PER_MINUTE;
+			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
+			       Interval::NANOS_PER_MINUTE;
 		}
 	};
 
 	struct HoursOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-		return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) / Interval::NANOS_PER_HOUR;
+			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
+			       Interval::NANOS_PER_HOUR;
 		}
 	};
 };
@@ -137,92 +143,92 @@ struct DateSub {
 template <>
 int64_t DateSub::YearOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return YearOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return YearOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                  Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::MonthOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return MonthOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return MonthOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                   Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::DayOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return DayOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return DayOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                 Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::DecadeOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return DecadeOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return DecadeOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                    Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::CenturyOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return CenturyOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return CenturyOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                     Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::MilleniumOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return MilleniumOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return MilleniumOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                       Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::QuarterOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return QuarterOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return QuarterOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                     Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::WeekOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return WeekOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return WeekOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                  Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::MicrosecondsOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return MicrosecondsOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return MicrosecondsOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                          Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::MillisecondsOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return MillisecondsOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return MillisecondsOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                          Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::SecondsOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return SecondsOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return SecondsOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                     Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::MinutesOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return MinutesOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return MinutesOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                     Timestamp::FromDatetime(enddate, t0));
 }
 
 template <>
 int64_t DateSub::HoursOperator::Operation(date_t startdate, date_t enddate) {
 	dtime_t t0(0);
-	return HoursOperator::Operation<timestamp_t, timestamp_t, int64_t>(
-		Timestamp::FromDatetime(startdate, t0), Timestamp::FromDatetime(enddate, t0));
+	return HoursOperator::Operation<timestamp_t, timestamp_t, int64_t>(Timestamp::FromDatetime(startdate, t0),
+	                                                                   Timestamp::FromDatetime(enddate, t0));
 }
 
 // TIME specialisations
@@ -414,11 +420,11 @@ static void DateSubFunction(DataChunk &args, ExpressionState &state, Vector &res
 void DateSubFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet date_sub("date_sub");
 	date_sub.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE, LogicalType::DATE},
-	                                     LogicalType::BIGINT, DateSubFunction<date_t>));
+	                                    LogicalType::BIGINT, DateSubFunction<date_t>));
 	date_sub.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP},
-	                                     LogicalType::BIGINT, DateSubFunction<timestamp_t>));
+	                                    LogicalType::BIGINT, DateSubFunction<timestamp_t>));
 	date_sub.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME, LogicalType::TIME},
-	                                     LogicalType::BIGINT, DateSubFunction<dtime_t>));
+	                                    LogicalType::BIGINT, DateSubFunction<dtime_t>));
 	set.AddFunction(date_sub);
 
 	date_sub.name = "datesub";
