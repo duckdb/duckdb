@@ -151,7 +151,6 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 
 	if (stmtholder->stmt->n_param == 0) {
 		Rf_error("duckdb_bind_R: dbBind called but query takes no parameters");
-		return R_NilValue;
 	}
 
 	if (TYPEOF(paramsexp) != VECSXP || (idx_t)Rf_length(paramsexp) != stmtholder->stmt->n_param) {
