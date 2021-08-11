@@ -157,11 +157,21 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 		Rf_error("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
 	}
 
+	R_len_t n_rows = Rf_length(VECTOR_ELT(paramsexp, 0));
+
+	for (idx_t param_idx = 1; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
+		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
+		if (Rf_length(valsexp) != n_rows) {
+			Rf_error("duckdb_bind_R: bind parameter values need to have the same length");
+		}
+	}
+
+	if (n_rows != 1) {
+		Rf_error("duckdb_bind_R: bind parameter values need to have length one");
+	}
+
 	for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
 		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
-		if (Rf_length(valsexp) != 1) {
-			Rf_error("duckdb_bind_R: bind parameter values need to have length 1");
-		}
 		auto val = RApiTypes::SexpToValue(valsexp, 0);
 		stmtholder->parameters[param_idx] = val;
 	}
