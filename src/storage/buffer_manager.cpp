@@ -424,6 +424,7 @@ void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 		blocks.erase(block_id);
 	}
 }
+
 void BufferManager::SetLimit(idx_t limit) {
 	lock_guard<mutex> l_lock(limit_lock);
 #ifdef DEBUG
