@@ -64,6 +64,10 @@ SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLS
 
 SQLRETURN SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN target_typestr_len_or_ind_ptr);
 
+SQLRETURN SQLCancel(SQLHSTMT statement_handle);
+
+SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_ptr);
+
 // diagnostics
 SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
                           SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
@@ -107,11 +111,25 @@ struct OdbcHandleDbc : public OdbcHandle {
 	OdbcHandleStmt *stmt_handle;
 };
 
+inline bool IsSQLVarcharType(SQLSMALLINT type) {
+	if (type == SQL_CHAR || type == SQL_VARCHAR || type == SQL_WVARCHAR) {
+		return true;
+	}
+	return false;
+}
+
 struct OdbcBoundCol {
 	OdbcBoundCol() : type(SQL_UNKNOWN_TYPE), ptr(nullptr), len(0), strlen_or_ind(nullptr) {};
 
 	bool IsBound() {
 		return ptr != nullptr;
+	}
+
+	bool IsVarcharBound() {
+		if (IsSQLVarcharType(type)) {
+			return strlen_or_ind != nullptr;
+		}
+		return false;
 	}
 
 	SQLSMALLINT type;
