@@ -10,6 +10,7 @@
 
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -26,7 +27,7 @@ public:
 		case 3:
 			return CreateTernaryFunction<TR, Args...>(name, udf_func);
 		default:
-			throw std::runtime_error("UDF function only supported until ternary!");
+			throw InternalException("UDF function only supported until ternary!");
 		}
 	}
 
@@ -34,13 +35,12 @@ public:
 	static scalar_function_t CreateScalarFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                              TR (*udf_func)(Args...)) {
 		if (!TypesMatch<TR>(ret_type)) {
-			throw std::runtime_error("Return type doesn't match with the first template type.");
+			throw InternalException("Return type doesn't match with the first template type.");
 		}
 
 		const std::size_t num_template_types = sizeof...(Args);
 		if (num_template_types != args.size()) {
-			throw std::runtime_error(
-			    "The number of templated types should be the same quantity of the LogicalType arguments.");
+			throw InternalException("The number of templated types should match the number of LogicalType arguments.");
 		}
 
 		switch (num_template_types) {
@@ -51,7 +51,7 @@ public:
 		case 3:
 			return CreateTernaryFunction<TR, Args...>(name, args, ret_type, udf_func);
 		default:
-			throw std::runtime_error("UDF function only supported until ternary!");
+			throw InternalException("UDF function only supported until ternary!");
 		}
 	}
 
@@ -84,11 +84,11 @@ public:
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
 	static AggregateFunction CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_type) {
 		if (!TypesMatch<TR>(ret_type)) {
-			throw std::runtime_error("The return argument don't match!");
+			throw InternalException("The return argument don't match!");
 		}
 
 		if (!TypesMatch<TA>(input_type)) {
-			throw std::runtime_error("The input argument don't match!");
+			throw InternalException("The input argument don't match!");
 		}
 
 		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_type);
@@ -98,15 +98,15 @@ public:
 	static AggregateFunction CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_typeA,
 	                                                 LogicalType input_typeB) {
 		if (!TypesMatch<TR>(ret_type)) {
-			throw std::runtime_error("The return argument don't match!");
+			throw InternalException("The return argument don't match!");
 		}
 
 		if (!TypesMatch<TA>(input_typeA)) {
-			throw std::runtime_error("The first input argument don't match!");
+			throw InternalException("The first input argument don't match!");
 		}
 
 		if (!TypesMatch<TB>(input_typeB)) {
-			throw std::runtime_error("The second input argument don't match!");
+			throw InternalException("The second input argument don't match!");
 		}
 
 		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
@@ -168,17 +168,17 @@ private:
 
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateUnaryFunction(const string &name, TR (*udf_func)(Args...)) {
-		throw std::runtime_error("Incorrect number of arguments for unary function");
+		throw InternalException("Incorrect number of arguments for unary function");
 	}
 
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateBinaryFunction(const string &name, TR (*udf_func)(Args...)) {
-		throw std::runtime_error("Incorrect number of arguments for binary function");
+		throw InternalException("Incorrect number of arguments for binary function");
 	}
 
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateTernaryFunction(const string &name, TR (*udf_func)(Args...)) {
-		throw std::runtime_error("Incorrect number of arguments for ternary function");
+		throw InternalException("Incorrect number of arguments for ternary function");
 	}
 
 	template <typename T>
@@ -201,7 +201,7 @@ private:
 			return LogicalType(LogicalTypeId::VARCHAR);
 		} else {
 			// unrecognized type
-			throw std::runtime_error("Unrecognized type!");
+			throw InternalException("Unrecognized type!");
 		}
 	}
 
@@ -222,17 +222,17 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateUnaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                             TR (*udf_func)(Args...)) {
-		throw std::runtime_error("Incorrect number of arguments for unary function");
+		throw InternalException("Incorrect number of arguments for unary function");
 	}
 
 	template <typename TR, typename TA>
 	static scalar_function_t CreateUnaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                             TR (*udf_func)(TA)) {
 		if (args.size() != 1) {
-			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 1!");
+			throw InternalException("The number of LogicalType arguments (\"args\") should be 1!");
 		}
 		if (!TypesMatch<TA>(args[0])) {
-			throw std::runtime_error("The first arguments don't match!");
+			throw InternalException("The first arguments don't match!");
 		}
 
 		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
@@ -245,20 +245,20 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateBinaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                              TR (*udf_func)(Args...)) {
-		throw std::runtime_error("Incorrect number of arguments for binary function");
+		throw InternalException("Incorrect number of arguments for binary function");
 	}
 
 	template <typename TR, typename TA, typename TB>
 	static scalar_function_t CreateBinaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                              TR (*udf_func)(TA, TB)) {
 		if (args.size() != 2) {
-			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 2!");
+			throw InternalException("The number of LogicalType arguments (\"args\") should be 2!");
 		}
 		if (!TypesMatch<TA>(args[0])) {
-			throw std::runtime_error("The first arguments don't match!");
+			throw InternalException("The first arguments don't match!");
 		}
 		if (!TypesMatch<TB>(args[1])) {
-			throw std::runtime_error("The second arguments don't match!");
+			throw InternalException("The second arguments don't match!");
 		}
 
 		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) {
@@ -270,23 +270,23 @@ private:
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateTernaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                               TR (*udf_func)(Args...)) {
-		throw std::runtime_error("Incorrect number of arguments for ternary function");
+		throw InternalException("Incorrect number of arguments for ternary function");
 	}
 
 	template <typename TR, typename TA, typename TB, typename TC>
 	static scalar_function_t CreateTernaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                               TR (*udf_func)(TA, TB, TC)) {
 		if (args.size() != 3) {
-			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 3!");
+			throw InternalException("The number of LogicalType arguments (\"args\") should be 3!");
 		}
 		if (!TypesMatch<TA>(args[0])) {
-			throw std::runtime_error("The first arguments don't match!");
+			throw InternalException("The first arguments don't match!");
 		}
 		if (!TypesMatch<TB>(args[1])) {
-			throw std::runtime_error("The second arguments don't match!");
+			throw InternalException("The second arguments don't match!");
 		}
 		if (!TypesMatch<TC>(args[2])) {
-			throw std::runtime_error("The second arguments don't match!");
+			throw InternalException("The second arguments don't match!");
 		}
 
 		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
@@ -327,7 +327,7 @@ private:
 		case LogicalTypeId::BLOB:
 			return std::is_same<T, string_t>();
 		default:
-			throw std::runtime_error("Type is not supported!");
+			throw InternalException("Type is not supported!");
 		}
 	}
 
