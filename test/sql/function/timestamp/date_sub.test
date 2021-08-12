@@ -2,6 +2,9 @@
 # description: Test the DATESUB function
 # group: [timestamp]
 
+statement ok
+PRAGMA enable_verification
+
 #
 # DATE
 #

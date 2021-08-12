@@ -85,56 +85,55 @@ struct DateSub {
 	struct DayOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
-			       Interval::NANOS_PER_DAY;
+			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
+			       Interval::MICROS_PER_DAY;
 		}
 	};
 
 	struct WeekOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
-			       Interval::NANOS_PER_WEEK;
+			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
+			       Interval::MICROS_PER_WEEK;
 		}
 	};
 
 	struct MicrosecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
-			       Interval::NANOS_PER_MICRO;
+			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate));
 		}
 	};
 
 	struct MillisecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
-			       Interval::NANOS_PER_MSEC;
+			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
+			       Interval::MICROS_PER_MSEC;
 		}
 	};
 
 	struct SecondsOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
-			       Interval::NANOS_PER_SEC;
+			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
+			       Interval::MICROS_PER_SEC;
 		}
 	};
 
 	struct MinutesOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
-			       Interval::NANOS_PER_MINUTE;
+			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
+			       Interval::MICROS_PER_MINUTE;
 		}
 	};
 
 	struct HoursOperator {
 		template <class TA, class TB, class TR>
 		static inline TR Operation(TA startdate, TB enddate) {
-			return (Timestamp::GetEpochNanoSeconds(enddate) - Timestamp::GetEpochNanoSeconds(startdate)) /
-			       Interval::NANOS_PER_HOUR;
+			return (Timestamp::GetEpochMicroSeconds(enddate) - Timestamp::GetEpochMicroSeconds(startdate)) /
+			       Interval::MICROS_PER_HOUR;
 		}
 	};
 };
@@ -298,7 +297,7 @@ int64_t DateSub::HoursOperator::Operation(dtime_t startdate, dtime_t enddate) {
 }
 
 template <typename TA, typename TB, typename TR>
-static int64_t SuberenceDates(DatePartSpecifier type, TA startdate, TB enddate) {
+static int64_t SubtractDateParts(DatePartSpecifier type, TA startdate, TB enddate) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
 		return DateSub::YearOperator::template Operation<TA, TB, TR>(startdate, enddate);
@@ -339,7 +338,7 @@ static int64_t SuberenceDates(DatePartSpecifier type, TA startdate, TB enddate) 
 struct DateSubTernaryOperator {
 	template <typename TS, typename TA, typename TB, typename TR>
 	static inline TR Operation(TS part, TA startdate, TB enddate) {
-		return SuberenceDates<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
+		return SubtractDateParts<TA, TB, TR>(GetDatePartSpecifier(part.GetString()), startdate, enddate);
 	}
 };
 
