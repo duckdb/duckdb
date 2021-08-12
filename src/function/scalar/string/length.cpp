@@ -65,18 +65,19 @@ static unique_ptr<BaseStatistics> LengthPropagateStats(ClientContext &context, B
 }
 
 static unique_ptr<FunctionData> ListLengthBind(ClientContext &context, ScalarFunction &bound_function,
-                                                vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 	bound_function.arguments[0] = arguments[0]->return_type;
 	return nullptr;
 }
 
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunction array_length_unary = ScalarFunction({LogicalTypeId::LIST}, LogicalType::BIGINT,
-	                               ScalarFunction::UnaryFunction<list_entry_t, int64_t, ArrayLengthOperator>, false, ListLengthBind);
+	ScalarFunction array_length_unary = ScalarFunction(
+	    {LogicalTypeId::LIST}, LogicalType::BIGINT,
+	    ScalarFunction::UnaryFunction<list_entry_t, int64_t, ArrayLengthOperator>, false, ListLengthBind);
 	ScalarFunctionSet length("length");
 	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
-	                               ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, false,
-	                               nullptr, nullptr, LengthPropagateStats));
+	                                  ScalarFunction::UnaryFunction<string_t, int64_t, StringLengthOperator>, false,
+	                                  nullptr, nullptr, LengthPropagateStats));
 	length.AddFunction(array_length_unary);
 	set.AddFunction(length);
 	length.name = "len";
@@ -84,8 +85,10 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunctionSet array_length("array_length");
 	array_length.AddFunction(array_length_unary);
-	array_length.AddFunction(ScalarFunction({LogicalTypeId::LIST, LogicalType::BIGINT}, LogicalType::BIGINT,
-	                               ScalarFunction::BinaryFunction<list_entry_t, int64_t, int64_t, ArrayLengthBinaryOperator>, false, ListLengthBind));
+	array_length.AddFunction(
+	    ScalarFunction({LogicalTypeId::LIST, LogicalType::BIGINT}, LogicalType::BIGINT,
+	                   ScalarFunction::BinaryFunction<list_entry_t, int64_t, int64_t, ArrayLengthBinaryOperator>, false,
+	                   ListLengthBind));
 	set.AddFunction(array_length);
 
 	set.AddFunction(ScalarFunction("strlen", {LogicalType::VARCHAR}, LogicalType::BIGINT,

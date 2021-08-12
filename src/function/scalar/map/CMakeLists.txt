@@ -1,4 +1,5 @@
-add_library_unity(duckdb_func_map_nested OBJECT map.cpp map_extract.cpp cardinality.cpp)
+add_library_unity(duckdb_func_map_nested OBJECT map.cpp map_extract.cpp
+                  cardinality.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_map_nested>
