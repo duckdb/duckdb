@@ -100,7 +100,7 @@ dtime_t RTimeDaysType::Convert(double val) {
 }
 
 dtime_t RTimeWeeksType::Convert(double val) {
-	return dtime_t(int64_t(val * Interval::MICROS_PER_DAY * 7));
+	return dtime_t(int64_t(val * (Interval::MICROS_PER_DAY * Interval::DAYS_PER_WEEK)));
 }
 
 bool RIntegerType::IsNull(int val) {
