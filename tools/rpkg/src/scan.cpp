@@ -104,6 +104,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 			duckdb_col_type = LogicalType::TIME;
 			break;
 		case RType::DATE:
+		case RType::DATE_INTEGER:
 			duckdb_col_type = LogicalType::DATE;
 			break;
 		default:
@@ -193,6 +194,11 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 		case RType::DATE: {
 			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 			AppendColumnSegment<double, date_t, RDateType>(data_ptr, v, this_count);
+			break;
+		}
+		case RType::DATE_INTEGER: {
+			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			AppendColumnSegment<int, date_t, RDateType>(data_ptr, v, this_count);
 			break;
 		}
 		default:

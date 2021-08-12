@@ -14,7 +14,6 @@ DBItest::test_all(c(
   "bind_multi_row_zero_length", # https://github.com/duckdb/duckdb/issues/2125
   "bind_character.*",
   "bind_factor.*",
-  "bind_date_integer.*",
   "bind_timestamp.*",
   "bind_time_.*",
 

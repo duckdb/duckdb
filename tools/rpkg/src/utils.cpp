@@ -121,6 +121,12 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		val.is_null = RDateType::IsNull(d_val);
 		break;
 	}
+	case RType::DATE_INTEGER: {
+		auto d_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::DATE(RDateType::Convert(d_val));
+		val.is_null = RIntegerType::IsNull(d_val);
+		break;
+	}
 	case RType::TIME_SECONDS: {
 		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
 		val = Value::TIME(RTimeSecondsType::Convert(ts_val));

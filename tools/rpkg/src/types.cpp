@@ -13,6 +13,8 @@ RType RApiTypes::DetectRType(SEXP v) {
 		return RType::TIMESTAMP;
 	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "Date")) {
 		return RType::DATE;
+	} else if (TYPEOF(v) == INTSXP && Rf_inherits(v, "Date")) {
+		return RType::DATE_INTEGER;
 	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "difftime")) {
 		SEXP units = Rf_getAttrib(v, Rf_install("units"));
 		if (TYPEOF(units) != STRSXP) {
