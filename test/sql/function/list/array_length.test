@@ -30,3 +30,22 @@ SELECT array_length(ARRAY[1, 2, 3], 2)
 
 statement error
 SELECT array_length(ARRAY[1, 2, 3], 0)
+
+query I
+SELECT len([1]) FROM range(3)
+----
+1
+1
+1
+
+statement ok
+CREATE TABLE lists AS SELECT * FROM (VALUES ([1, 2]), ([NULL]), (NULL), ([]), ([3, 4, 5, 6, 7])) tbl(l)
+
+query I
+SELECT len(l) FROM lists
+----
+2
+1
+NULL
+0
+5

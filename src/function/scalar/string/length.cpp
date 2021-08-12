@@ -27,7 +27,7 @@ struct ArrayLengthBinaryOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA input, TB dimension) {
 		if (dimension != 1) {
-			throw NotImplementedException("array_length for other dimensions not implemented");
+			throw NotImplementedException("array_length for dimensions other than 1 not implemented");
 		}
 		return input.length;
 	}

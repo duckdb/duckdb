@@ -22,7 +22,7 @@ public:
 			args.data[2].Orrify(args.size(), vdata[2]);
 			break;
 		default:
-			throw InternalException("Unsupported amount of parameters for range");
+			throw InternalException("Unsupported number of parameters for range");
 		}
 	}
 
@@ -106,10 +106,19 @@ static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	RangeInfoStruct info(args);
+	idx_t args_size = 1;
+	auto result_type = VectorType::CONSTANT_VECTOR;
+	for (idx_t i = 0; i < args.ColumnCount(); i++) {
+		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			args_size = args.size();
+			result_type = VectorType::FLAT_VECTOR;
+			break;
+		}
+	}
 	auto list_data = FlatVector::GetData<list_entry_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
 	int64_t total_size = 0;
-	for (idx_t i = 0; i < args.size(); i++) {
+	for (idx_t i = 0; i < args_size; i++) {
 		if (!info.RowIsValid(i)) {
 			result_validity.SetInvalid(i);
 			list_data[i].offset = total_size;
@@ -125,7 +134,7 @@ static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	ListVector::Reserve(result, total_size);
 	auto range_data = FlatVector::GetData<int64_t>(ListVector::GetEntry(result));
 	idx_t total_idx = 0;
-	for (idx_t i = 0; i < args.size(); i++) {
+	for (idx_t i = 0; i < args_size; i++) {
 		int64_t start_value = info.StartListValue(i);
 		int64_t increment = info.ListIncrementValue(i);
 
@@ -137,13 +146,8 @@ static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &r
 	}
 
 	ListVector::SetListSize(result, total_size);
-	result.SetVectorType(VectorType::CONSTANT_VECTOR);
-	for (idx_t i = 0; i < args.ColumnCount(); i++) {
-		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-			break;
-		}
-	}
+	result.SetVectorType(result_type);
+
 	result.Verify(args.size());
 }
 

@@ -5,8 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-mode skip
-
 # range with a single parameter
 query I
 SELECT range(3)
@@ -127,8 +125,6 @@ SELECT range(0, i) FROM range(5) tbl(i)
 [0, 1]
 [0, 1, 2]
 [0, 1, 2, 3]
-
-mode unskip
 
 # range with 3 parameters
 query I
