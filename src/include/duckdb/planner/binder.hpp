@@ -151,6 +151,8 @@ private:
 	bool plan_subquery = true;
 	//! Whether CTEs should reference the parent binder (if it exists)
 	bool inherit_ctes = true;
+	//! Whether or not the binder can contain NULLs as the root of expressions
+	bool can_contain_nulls = false;
 	//! The root statement of the query that is currently being parsed
 	SQLStatement *root_statement = nullptr;
 

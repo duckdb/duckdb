@@ -161,17 +161,11 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 		return ToDecimalCast<SRC>(source, result, count, error_message);
 	case LogicalTypeId::VARCHAR: {
 		VectorStringCast<SRC, duckdb::StringCast>(source, result, count);
-		break;
-	}
-	case LogicalTypeId::LIST: {
-		VectorNullCast(source, result, count);
-		break;
+		return true;
 	}
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
-	return true;
 }
 
 static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, bool strict,
@@ -216,10 +210,8 @@ static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t 
 	case LogicalTypeId::DECIMAL:
 		return ToDecimalCast<string_t>(source, result, count, error_message);
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
-	return true;
 }
 
 static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool strict, string *error_message) {
@@ -259,31 +251,28 @@ static bool DateCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	case LogicalTypeId::VARCHAR:
 		// date to varchar
 		VectorStringCast<date_t, duckdb::StringCast>(source, result, count);
-		break;
+		return true;
 	case LogicalTypeId::TIMESTAMP:
 		// date to timestamp
 		return VectorTryCastLoop<date_t, timestamp_t, duckdb::TryCast>(source, result, count, error_message);
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
-	return true;
 }
 
-static void TimeCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool TimeCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
 		// time to varchar
 		VectorStringCast<dtime_t, duckdb::StringCast>(source, result, count);
-		break;
+		return true;
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
 }
 
-static void TimestampCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool TimestampCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
@@ -311,12 +300,12 @@ static void TimestampCastSwitch(Vector &source, Vector &result, idx_t count) {
 		UnaryExecutor::Execute<timestamp_t, timestamp_t, duckdb::CastTimestampUsToSec>(source, result, count);
 		break;
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
+	return true;
 }
 
-static void TimestampNsCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool TimestampNsCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
@@ -328,12 +317,12 @@ static void TimestampNsCastSwitch(Vector &source, Vector &result, idx_t count) {
 		UnaryExecutor::Execute<timestamp_t, timestamp_t, duckdb::CastTimestampNsToUs>(source, result, count);
 		break;
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
+	return true;
 }
 
-static void TimestampMsCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool TimestampMsCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
@@ -345,12 +334,12 @@ static void TimestampMsCastSwitch(Vector &source, Vector &result, idx_t count) {
 		UnaryExecutor::Execute<timestamp_t, timestamp_t, duckdb::CastTimestampMsToUs>(source, result, count);
 		break;
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
+	return true;
 }
 
-static void TimestampSecCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool TimestampSecCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
@@ -362,12 +351,12 @@ static void TimestampSecCastSwitch(Vector &source, Vector &result, idx_t count) 
 		UnaryExecutor::Execute<timestamp_t, timestamp_t, duckdb::CastTimestampSecToUs>(source, result, count);
 		break;
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
+	return true;
 }
 
-static void IntervalCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool IntervalCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
@@ -375,12 +364,12 @@ static void IntervalCastSwitch(Vector &source, Vector &result, idx_t count) {
 		VectorStringCast<interval_t, duckdb::StringCast>(source, result, count);
 		break;
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
+	return true;
 }
 
-static void BlobCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool BlobCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
@@ -388,12 +377,12 @@ static void BlobCastSwitch(Vector &source, Vector &result, idx_t count) {
 		VectorStringCast<string_t, duckdb::CastFromBlob>(source, result, count);
 		break;
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
+	return true;
 }
 
-static void ValueStringCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool ValueStringCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::VARCHAR:
 		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -406,14 +395,13 @@ static void ValueStringCastSwitch(Vector &source, Vector &result, idx_t count) {
 			auto str_val = src_val.ToString();
 			result.SetValue(i, Value(str_val));
 		}
-		break;
+		return true;
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
 }
 
-static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool ListCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::LIST: {
 		// only handle constant and flat vectors here for now
@@ -444,15 +432,14 @@ static void ListCastSwitch(Vector &source, Vector &result, idx_t count) {
 		VectorOperations::Cast(source_cc, append_vector, source_size);
 		ListVector::SetListSize(result, source_size);
 		D_ASSERT(ListVector::GetListSize(result) == source_size);
-		break;
+		return true;
 	}
 	default:
-		ValueStringCastSwitch(source, result, count);
-		break;
+		return ValueStringCastSwitch(source, result, count, error_message);
 	}
 }
 
-static void StructCastSwitch(Vector &source, Vector &result, idx_t count) {
+static bool StructCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
 	switch (result.GetType().id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP: {
@@ -481,8 +468,7 @@ static void StructCastSwitch(Vector &source, Vector &result, idx_t count) {
 			source.Normalify(count);
 			FlatVector::Validity(result) = FlatVector::Validity(source);
 		}
-
-		break;
+		return true;
 	}
 	case LogicalTypeId::VARCHAR:
 		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -495,11 +481,9 @@ static void StructCastSwitch(Vector &source, Vector &result, idx_t count) {
 			auto str_val = src_val.ToString();
 			result.SetValue(i, Value(str_val));
 		}
-		break;
-
+		return true;
 	default:
-		VectorNullCast(source, result, count);
-		break;
+		return TryVectorNullCast(source, result, count, error_message);
 	}
 }
 
@@ -536,28 +520,21 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 	case LogicalTypeId::DATE:
 		return DateCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::TIME:
-		TimeCastSwitch(source, result, count);
-		break;
+		return TimeCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::TIMESTAMP:
-		TimestampCastSwitch(source, result, count);
-		break;
+		return TimestampCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::TIMESTAMP_NS:
-		TimestampNsCastSwitch(source, result, count);
-		break;
+		return TimestampNsCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::TIMESTAMP_MS:
-		TimestampMsCastSwitch(source, result, count);
-		break;
+		return TimestampMsCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		TimestampSecCastSwitch(source, result, count);
-		break;
+		return TimestampSecCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::INTERVAL:
-		IntervalCastSwitch(source, result, count);
-		break;
+		return IntervalCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::VARCHAR:
 		return StringCastSwitch(source, result, count, strict, error_message);
 	case LogicalTypeId::BLOB:
-		BlobCastSwitch(source, result, count);
-		break;
+		return BlobCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::SQLNULL: {
 		// cast a NULL to another type, just copy the properties and change the type
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -566,13 +543,11 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 	}
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
-		StructCastSwitch(source, result, count);
-		break;
+		return StructCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::LIST:
-		ListCastSwitch(source, result, count);
-		break;
+		return ListCastSwitch(source, result, count, error_message);
 	default:
-		throw UnimplementedCast(source.GetType(), result.GetType());
+		return TryVectorNullCast(source, result, count, error_message);
 	}
 	return true;
 }

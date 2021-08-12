@@ -863,8 +863,8 @@ jobs:
 #    - name: Build
 #      run: DISABLE_SANITIZER=1 make debug
 #
-#    # - name: Test nanodbc
-#    #   run: NANODBC_TEST_CONNSTR_ODBC="DRIVER=./build/debug/tools/odbc/libduckdb_odbc.so" ./nanodbc/build/test/odbc_tests test_simple
+#    - name: Test nanodbc
+#      run: NANODBC_TEST_CONNSTR_ODBC="DRIVER=./build/debug/tools/odbc/libduckdb_odbc.so" ./nanodbc/build/test/odbc_tests test_simple
 #
 #    - name: Test psqlodbc
 #      run: |
@@ -887,7 +887,7 @@ jobs:
 #        # running isql with the option -e
 #        rm test.db && python tools/odbc/test/isql-test.py isql -e
 #        if [[ $? != 0 ]]; then exit 1; fi
-#
+
   linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
@@ -1041,224 +1041,272 @@ jobs:
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
         fi
 
-#
-#  rstats-linux:
-#    name: R Package Linux
-#    runs-on: ubuntu-20.04
-#    needs: linux-debug
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#      with:
-#        fetch-depth: 0
-#
-#    - uses: actions/setup-python@v2
-#      with:
-#        python-version: '3.7'
-#
-#    - uses: r-lib/actions/setup-r@v1
-#      with:
-#        r-version: 'devel'
-#
-#    - name: Install
-#      run: |
-#        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev
-#        mkdir -p $HOME/.R
-#        R -f tools/rpkg/dependencies.R
-#
-#    - name: Build
-#      run: |
-#        cd tools/rpkg
-#        ./configure
-#        R CMD build .
-#        R CMD INSTALL duckdb_*.tar.gz
-#        (cd tests && R -f testthat.R)
-#        R CMD check --as-cran -o /tmp duckdb_*.tar.gz
-#        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
-#
-#    - name: Deploy
-#      run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
-#
-#
-#  rstats-windows:
-#    name: R Package Windows
-#    runs-on: windows-latest
-#    needs: linux-debug
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#      with:
-#        fetch-depth: 0
-#
-#    - uses: actions/setup-python@v2
-#      with:
-#        python-version: '3.7'
-#
-#    - uses: r-lib/actions/setup-r@v1
-#      with:
-#        r-version: 'devel'
-#
-#    - name: Install
-#      run: |
-#        R -f tools/rpkg/dependencies.R
-#
-#    - name: Build
-#      run: |
-#        cd tools/rpkg
-#        ./configure
-#        R CMD build .
-#        R CMD INSTALL duckdb_*.tar.gz
-#        (cd tests && R -f testthat.R)
-#        R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
-#        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
-#
-#
-#  linux-tarball-v2:
-#    name: Python 2 Tarball
-#    runs-on: ubuntu-20.04
-#    needs: linux-debug
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#      with:
-#        fetch-depth: 0
-#
-#    - uses: actions/setup-python@v2
-#      with:
-#        python-version: '2.7'
-#
-#    - name: Install
-#      run: |
-#        pip install setuptools-scm==5.0.2
-#        pip install numpy pytest pandas
-#
-#    - name: Build
-#      run: |
-#        python --version
-#        git archive --format zip --output test-tarball.zip HEAD
-#        mkdir duckdb-test-tarball
-#        mv test-tarball.zip duckdb-test-tarball
-#        cd duckdb-test-tarball
-#        unzip test-tarball.zip
-#        cd tools/pythonpkg
-#        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-#        python setup.py install --user
-#        (cd tests/ && python -m pytest)
-#
-#  linux-tarball:
-#    name: Python 3 Tarball
-#    runs-on: ubuntu-20.04
-#    needs: linux-debug
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#      with:
-#        fetch-depth: 0
-#
-#    - uses: actions/setup-python@v2
-#      with:
-#        python-version: '3.7'
-#
-#    - name: Install
-#      run: pip install numpy pytest pandas
-#
-#    - name: Build
-#      run: |
-#        python --version
-#        git archive --format zip --output test-tarball.zip HEAD
-#        mkdir duckdb-test-tarball
-#        mv test-tarball.zip duckdb-test-tarball
-#        cd duckdb-test-tarball
-#        unzip test-tarball.zip
-#        cd tools/pythonpkg
-#        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-#        python setup.py install --user
-#        (cd tests/ && python -m pytest)
-#
-#  linux-nodejs:
-#    name: node.js Linux
-#    runs-on: ubuntu-20.04
-#    needs: linux-debug
-#
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#      with:
-#        fetch-depth: 0
-#
-#    - name: Setup
-#      run: ./scripts/node_version.sh upload
-#
-#    - name: Node 10
-#      run: ./scripts/node_build.sh 10
-#
-#    - name: Node 12
-#      run: ./scripts/node_build.sh 12
-#
-#    - name: Node 14
-#      run: ./scripts/node_build.sh 14
-#
-#    - name: Node 15
-#      run: ./scripts/node_build.sh 15
-#
-#
-#  osx-nodejs:
-#    name: node.js OSX
-#    runs-on: macos-latest
-#    needs: linux-debug
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#      with:
-#        fetch-depth: 0
-#
-#    - name: Setup
-#      run: ./scripts/node_version.sh
-#
-#    - name: Node 10
-#      run: ./scripts/node_build.sh 10
-#
-#    - name: Node 12
-#      run: ./scripts/node_build.sh 12
-#
-#    - name: Node 14
-#      run: ./scripts/node_build.sh 14
-#
-#    - name: Node 15
-#      run: ./scripts/node_build.sh 15
-#
-#  linux-wasm-release:
-#    name: WebAssembly Release
-#    runs-on: ubuntu-20.04
-#    needs: linux-debug
-#
-#    steps:
-#    - uses: actions/checkout@v2
-#      with:
-#        fetch-depth: 0
-#
-#    - name: Build Amalgamation
-#      run: python scripts/amalgamation.py
-#
-#    - name: Setup
-#      run: ./scripts/wasm_configure.sh
-#
-#    - name: Build Library Module
-#      run: ./scripts/wasm_build_lib.sh Release
-#
-#    - name: Build Test Module
-#      run: ./scripts/wasm_build_test.sh Release
-#
-#    - name: Test WASM Module
-#      run: node ./test/wasm/hello_wasm_test.js
-#
-#    - name: Package
-#      run: |
-#        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
-#        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
-#
-#    - uses: actions/upload-artifact@v2
-#      with:
-#        name: duckdb-wasm32-nothreads
-#        path: |
-#          duckdb-wasm32-nothreads.zip
+
+  rstats-linux:
+    name: R Package Linux
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - uses: r-lib/actions/setup-r@v1
+      with:
+        r-version: 'devel'
+
+    - name: Install
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev
+        mkdir -p $HOME/.R
+        R -f tools/rpkg/dependencies.R
+
+    - name: Build
+      run: |
+        cd tools/rpkg
+        ./configure
+        R CMD build .
+        R CMD INSTALL duckdb_*.tar.gz
+        (cd tests && R -f testthat.R)
+        R CMD check --as-cran -o /tmp duckdb_*.tar.gz
+        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+
+    - name: Deploy
+      run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
+
+
+  rstats-windows:
+    name: R Package Windows
+    runs-on: windows-latest
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - uses: r-lib/actions/setup-r@v1
+      with:
+        r-version: 'devel'
+
+    - name: Install
+      run: |
+        R -f tools/rpkg/dependencies.R
+
+    - name: Build
+      run: |
+        cd tools/rpkg
+        ./configure
+        R CMD build .
+        R CMD INSTALL duckdb_*.tar.gz
+        (cd tests && R -f testthat.R)
+        R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
+        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+
+
+  linux-tarball-v2:
+    name: Python 2 Tarball
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '2.7'
+
+    - name: Install
+      run: |
+        pip install setuptools-scm==5.0.2
+        pip install numpy pytest pandas
+
+    - name: Build
+      run: |
+        python --version
+        git archive --format zip --output test-tarball.zip HEAD
+        mkdir duckdb-test-tarball
+        mv test-tarball.zip duckdb-test-tarball
+        cd duckdb-test-tarball
+        unzip test-tarball.zip
+        cd tools/pythonpkg
+        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+        python setup.py install --user
+        (cd tests/ && python -m pytest)
+
+  linux-tarball:
+    name: Python 3 Tarball
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: pip install numpy pytest pandas
+
+    - name: Build
+      run: |
+        python --version
+        git archive --format zip --output test-tarball.zip HEAD
+        mkdir duckdb-test-tarball
+        mv test-tarball.zip duckdb-test-tarball
+        cd duckdb-test-tarball
+        unzip test-tarball.zip
+        cd tools/pythonpkg
+        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+        python setup.py install --user
+        (cd tests/ && python -m pytest)
+
+  linux-nodejs:
+    name: node.js Linux
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup
+      run: ./scripts/node_version.sh upload
+
+    - name: Node 10
+      run: ./scripts/node_build.sh 10
+
+    - name: Node 12
+      run: ./scripts/node_build.sh 12
+
+    - name: Node 14
+      run: ./scripts/node_build.sh 14
+
+    - name: Node 15
+      run: ./scripts/node_build.sh 15
+
+
+  osx-nodejs:
+    name: node.js OSX
+    runs-on: macos-latest
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup
+      run: ./scripts/node_version.sh
+
+    - name: Node 10
+      run: ./scripts/node_build.sh 10
+
+    - name: Node 12
+      run: ./scripts/node_build.sh 12
+
+    - name: Node 14
+      run: ./scripts/node_build.sh 14
+
+    - name: Node 15
+      run: ./scripts/node_build.sh 15
+
+  win-nodejs:
+    name: node.js Windows
+    runs-on: windows-latest
+    needs: linux-debug
+
+    strategy:
+      matrix:
+        node: [ '10', '12', '14', '15' ]
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node
+      uses: actions/setup-node@v2
+      with:
+        node-version: ${{ matrix.node }}
+
+    - name: Node Version
+      run: ./scripts/node_version.sh
+
+    - name: Node
+      run: ./scripts/node_build_win.sh
+
+  linux-wasm-release:
+    name: WebAssembly Release
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Build Amalgamation
+      run: python scripts/amalgamation.py
+
+    - name: Setup
+      run: ./scripts/wasm_configure.sh
+
+    - name: Build Library Module
+      run: ./scripts/wasm_build_lib.sh Release
+
+    - name: Build Test Module
+      run: ./scripts/wasm_build_test.sh Release
+
+    - name: Test WASM Module
+      run: node ./test/wasm/hello_wasm_test.js
+
+    - name: Package
+      run: |
+        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
+        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-wasm32-nothreads
+        path: |
+          duckdb-wasm32-nothreads.zip
+
+  docs:
+    name: Website Docs
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Clone Website
+      run: git clone https://github.com/duckdb/duckdb-web
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
+    - name: Package
+      run: |
+        cd duckdb-web
+        python3 scripts/generate_docs.py ..

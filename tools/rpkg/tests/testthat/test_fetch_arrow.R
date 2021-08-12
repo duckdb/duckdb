@@ -1,11 +1,12 @@
 library("testthat")
 library("DBI")
 
+skip_on_os("windows")
+skip_if_not_installed("arrow", "4.0.1")
+# Skip if parquet is not a capabiltiy as an indicator that Arrow is fully installed.
+skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
 
 test_that("duckdb_fetch_arrow() test table over vector size", {
-    skip_on_os("windows")
-    skip_if_not_installed("arrow", "4.0.1")
-
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE table test as select range a from range(10000);"))
     dbExecute(con, "INSERT INTO  test VALUES(NULL);") 
@@ -19,9 +20,6 @@ test_that("duckdb_fetch_arrow() test table over vector size", {
 })
 
 test_that("duckdb_fetch_arrow() empty table", {
-    skip_on_os("windows")
-    skip_if_not_installed("arrow", "4.0.1")
-
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  INTEGER)"))
 
@@ -35,9 +33,6 @@ test_that("duckdb_fetch_arrow() empty table", {
 })
 
 test_that("duckdb_fetch_arrow() table with only nulls", {
-    skip_on_os("windows")
-    skip_if_not_installed("arrow", "4.0.1")
-
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  INTEGER)"))
 
@@ -52,9 +47,6 @@ test_that("duckdb_fetch_arrow() table with only nulls", {
 })
 
 test_that("duckdb_fetch_arrow() table with prepared statement", {
-    skip_on_os("windows")
-    skip_if_not_installed("arrow", "4.0.1")
-
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  INTEGER)"))
     dbExecute(con, paste0("PREPARE s1 AS INSERT INTO test VALUES ($1), ($2 / 2)"))
@@ -210,7 +202,3 @@ test_that("duckdb_fetch_arrow() record_batch_reader Read Table", {
     arrow_table <- record_batch_reader$read_table()
     expect_equal(3000,arrow_table$num_rows)
 })
-
-
-
-

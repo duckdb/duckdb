@@ -12,6 +12,7 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			 return (size == 1) ? SQL_SUCCESS : SQL_ERROR;
 			 */
 			// this should be 1
+			stmt->paramset_size = (SQLULEN)value_ptr;
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_QUERY_TIMEOUT: {
@@ -210,50 +211,10 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 
 			return SQL_SUCCESS;
 		}
-		// https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size?view=sql-server-ver15
 		case SQL_DESC_DISPLAY_SIZE: {
-			auto logical_type = stmt->stmt->GetTypes()[col_idx];
-			auto sql_type = duckdb::ApiInfo::FindRelatedSQLType(logical_type.id());
-			switch (sql_type) {
-			case SQL_DECIMAL:
-			case SQL_NUMERIC:
-				*numeric_attribute_ptr =
-				    duckdb::DecimalType::GetWidth(logical_type) + duckdb::DecimalType::GetScale(logical_type);
-				return SQL_SUCCESS;
-			case SQL_BIT:
-				*numeric_attribute_ptr = 1;
-				return SQL_SUCCESS;
-			case SQL_TINYINT:
-				*numeric_attribute_ptr = 6;
-				return SQL_SUCCESS;
-			case SQL_INTEGER:
-				*numeric_attribute_ptr = 11;
-				return SQL_SUCCESS;
-			case SQL_BIGINT:
-				*numeric_attribute_ptr = 20;
-				return SQL_SUCCESS;
-			case SQL_REAL:
-				*numeric_attribute_ptr = 14;
-				return SQL_SUCCESS;
-			case SQL_FLOAT:
-			case SQL_DOUBLE:
-				*numeric_attribute_ptr = 24;
-				return SQL_SUCCESS;
-			case SQL_TYPE_DATE:
-				*numeric_attribute_ptr = 10;
-				return SQL_SUCCESS;
-			case SQL_TYPE_TIME:
-				*numeric_attribute_ptr = 9;
-				return SQL_SUCCESS;
-			case SQL_TYPE_TIMESTAMP:
-				*numeric_attribute_ptr = 20;
-				return SQL_SUCCESS;
-			case SQL_VARCHAR:
-			case SQL_VARBINARY:
-				// we don't know the number of characters
-				*numeric_attribute_ptr = 0;
-				return SQL_SUCCESS;
-			default:
+			auto ret =
+			    duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], (SQLULEN *)numeric_attribute_ptr);
+			if (ret == SQL_ERROR) {
 				stmt->error_messages.emplace_back("Unsupported type for display size.");
 				return SQL_ERROR;
 			}

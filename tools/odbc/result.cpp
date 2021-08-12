@@ -15,6 +15,7 @@ SQLRETURN SQLFetch(SQLHSTMT statement_handle) {
 
 SQLRETURN SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
 	switch (fetch_orientation) {
+	case SQL_FETCH_FIRST:
 	case SQL_FETCH_ABSOLUTE:
 	case SQL_FETCH_PRIOR:
 	case SQL_FETCH_NEXT:

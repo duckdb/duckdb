@@ -93,6 +93,8 @@ struct OdbcHandleEnv : public OdbcHandle {
 	unique_ptr<DuckDB> db;
 };
 
+struct OdbcHandleStmt;
+
 struct OdbcHandleDbc : public OdbcHandle {
 	explicit OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
 		D_ASSERT(env_p);
@@ -101,6 +103,8 @@ struct OdbcHandleDbc : public OdbcHandle {
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
 	bool autocommit;
+	// reference to an open statement handled by this connection
+	OdbcHandleStmt *stmt_handle;
 };
 
 struct OdbcBoundCol {
@@ -119,11 +123,13 @@ struct OdbcBoundCol {
 struct OdbcHandleStmt : public OdbcHandle {
 	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p);
 	~OdbcHandleStmt();
+	SQLRETURN MaterializeResult();
 
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
 	unique_ptr<QueryResult> res;
 	vector<Value> params;
+	SQLULEN paramset_size;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN *rows_fetched_ptr;

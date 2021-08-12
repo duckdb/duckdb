@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-duckdb_type ConvertCPPTypeToC(LogicalType sql_type) {
+duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 	switch (sql_type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return DUCKDB_TYPE_BOOLEAN;

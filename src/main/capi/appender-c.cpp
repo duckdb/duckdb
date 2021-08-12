@@ -38,6 +38,7 @@ duckdb_state duckdb_appender_destroy(duckdb_appender *appender) {
 	if (!appender || !*appender) {
 		return DuckDBError;
 	}
+	duckdb_appender_close(*appender);
 	auto wrapper = (AppenderWrapper *)*appender;
 	if (wrapper) {
 		delete wrapper;
@@ -52,6 +53,9 @@ duckdb_state duckdb_appender_run_function(duckdb_appender appender, FUN &&functi
 		return DuckDBError;
 	}
 	auto wrapper = (AppenderWrapper *)appender;
+	if (!wrapper->appender) {
+		return DuckDBError;
+	}
 	try {
 		function(*wrapper->appender);
 	} catch (std::exception &ex) {
@@ -76,7 +80,7 @@ const char *duckdb_appender_error(duckdb_appender appender) {
 }
 
 duckdb_state duckdb_appender_begin_row(duckdb_appender appender) {
-	return duckdb_appender_run_function(appender, [&](Appender &appender) { appender.BeginRow(); });
+	return DuckDBSuccess;
 }
 
 duckdb_state duckdb_appender_end_row(duckdb_appender appender) {

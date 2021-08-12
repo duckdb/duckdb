@@ -51,6 +51,8 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	// bind the view as if it were a query so we can catch errors
 	// note that we bind the original, and replace the original with a copy
 	// this is because the original has
+	this->can_contain_nulls = true;
+
 	auto copy = base.query->Copy();
 	auto query_node = Bind(*base.query);
 	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(move(copy));
@@ -123,7 +125,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		auto &base = (CreateViewInfo &)*stmt.info;
 		// bind the schema
 		auto schema = BindSchema(*stmt.info);
-
 		BindCreateViewInfo(base);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_VIEW, move(stmt.info), schema);
 		break;
