@@ -83,8 +83,12 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	}
 	case RType::NUMERIC: {
 		auto dbl_val = NUMERIC_POINTER(valsexp)[idx];
-		val = Value::DOUBLE(dbl_val);
-		val.is_null = RDoubleType::IsNull(dbl_val);
+		bool is_null = RDoubleType::IsNull(dbl_val);
+		if (is_null) {
+			val = Value(LogicalType::DOUBLE);
+		} else {
+			val = Value::DOUBLE(dbl_val);
+		}
 		break;
 	}
 	case RType::STRING: {
