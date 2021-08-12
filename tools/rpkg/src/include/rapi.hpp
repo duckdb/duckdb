@@ -70,11 +70,27 @@ struct DataFrameScanFunction : public TableFunction {
 };
 
 struct RStrings {
-	SEXP secs;
+	SEXP secs; // Rf_mkChar
 	SEXP mins;
 	SEXP hours;
 	SEXP days;
 	SEXP weeks;
+	SEXP POSIXct;
+	SEXP POSIXt;
+	SEXP UTC_str; // Rf_mkString
+	SEXP Date_str;
+	SEXP difftime_str;
+	SEXP arrow_str; // StringsToSexp
+	SEXP POSIXct_POSIXt_str;
+	SEXP str_ref_type_names_rtypes_n_param_str; // StringsToSexp
+	SEXP _registered_df__sym; // Rf_install
+	SEXP _registered_arrow__sym;
+	SEXP tzone_sym;
+	SEXP units_sym;
+	SEXP getNamespace_sym;
+	SEXP ImportSchema_sym;
+	SEXP ImportRecordBatch_sym;
+	SEXP ImportRecordBatchReader_sym;
 
 	static const RStrings &get() {
 		// On demand
