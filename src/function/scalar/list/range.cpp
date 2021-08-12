@@ -1,0 +1,167 @@
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/common/types/vector.hpp"
+
+namespace duckdb {
+
+class RangeInfoStruct {
+public:
+	explicit RangeInfoStruct(DataChunk &args_p) :
+		args(args_p) {
+		switch(args.ColumnCount()) {
+		case 1:
+			args.data[0].Orrify(args.size(), vdata[0]);
+			break;
+		case 2:
+			args.data[0].Orrify(args.size(), vdata[0]);
+			args.data[1].Orrify(args.size(), vdata[1]);
+			break;
+		case 3:
+			args.data[0].Orrify(args.size(), vdata[0]);
+			args.data[1].Orrify(args.size(), vdata[1]);
+			args.data[2].Orrify(args.size(), vdata[2]);
+			break;
+		default:
+			throw InternalException("Unsupported amount of parameters for range");
+		}
+	}
+
+	bool RowIsValid(idx_t row_idx) {
+		for(idx_t i = 0; i < args.ColumnCount(); i++) {
+			auto idx = vdata[i].sel->get_index(row_idx);
+			if (!vdata[i].validity.RowIsValid(idx)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	int64_t StartListValue(idx_t row_idx) {
+		if (args.ColumnCount() == 1) {
+			return 0;
+		} else {
+			auto data = (int64_t *) vdata[0].data;
+			auto idx = vdata[0].sel->get_index(row_idx);
+			return data[idx];
+		}
+	}
+
+	int64_t EndListValue(idx_t row_idx) {
+		idx_t vdata_idx = args.ColumnCount() == 1 ? 0 : 1;
+		auto data = (int64_t *) vdata[vdata_idx].data;
+		auto idx = vdata[vdata_idx].sel->get_index(row_idx);
+		return data[idx];
+	}
+
+	int64_t ListIncrementValue(idx_t row_idx) {
+		if (args.ColumnCount() < 3) {
+			return 1;
+		} else {
+			auto data = (int64_t *) vdata[2].data;
+			auto idx = vdata[2].sel->get_index(row_idx);
+			return data[idx];
+		}
+	}
+
+	void GetListValues(idx_t row_idx, int64_t &start_value, int64_t &end_value, int64_t &increment_value) {
+		start_value = StartListValue(row_idx);
+		end_value = EndListValue(row_idx);
+		increment_value = ListIncrementValue(row_idx);
+	}
+
+	uint64_t ListLength(idx_t row_idx, bool inclusive_bound) {
+		int64_t start_value;
+		int64_t end_value;
+		int64_t increment_value;
+		GetListValues(row_idx, start_value, end_value, increment_value);
+		if (increment_value == 0) {
+			return 0;
+		}
+		if (start_value > end_value && increment_value > 0) {
+			return 0;
+		}
+		if (start_value < end_value && increment_value < 0) {
+			return 0;
+		}
+		int64_t total_diff = AbsValue(end_value - start_value);
+		int64_t increment = AbsValue(increment_value);
+		int64_t total_values = total_diff / increment;
+		if (total_diff % increment == 0) {
+			if (inclusive_bound) {
+				total_values++;
+			}
+		} else {
+			total_values++;
+		}
+		return total_values;
+	}
+
+private:
+	DataChunk &args;
+	VectorData vdata[3];
+};
+
+
+template<bool INCLUSIVE_BOUND>
+static void ListRangeFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
+
+	RangeInfoStruct info(args);
+	auto list_data = FlatVector::GetData<list_entry_t>(result);
+	auto &result_validity = FlatVector::Validity(result);
+	int64_t total_size = 0;
+	for(idx_t i = 0; i < args.size(); i++) {
+		if (!info.RowIsValid(i)) {
+			result_validity.SetInvalid(i);
+			list_data[i].offset = total_size;
+			list_data[i].length = 0;
+		} else {
+			list_data[i].offset = total_size;
+			list_data[i].length = info.ListLength(i, INCLUSIVE_BOUND);
+			total_size += list_data[i].length;
+		}
+	}
+
+	// now construct the child vector of the list
+	ListVector::Reserve(result, total_size);
+	auto range_data = FlatVector::GetData<int64_t>(ListVector::GetEntry(result));
+	idx_t total_idx = 0;
+	for(idx_t i = 0; i < args.size(); i++) {
+		int64_t start_value = info.StartListValue(i);
+		int64_t increment = info.ListIncrementValue(i);
+
+		int64_t range_value = start_value;
+		for(idx_t range_idx = 0; range_idx < list_data[i].length; range_idx++) {
+			range_data[total_idx++] = range_value;
+			range_value += increment;
+		}
+	}
+
+	ListVector::SetListSize(result, total_size);
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	for(idx_t i = 0; i < args.ColumnCount(); i++) {
+		if (args.data[i].GetVectorType() != VectorType::CONSTANT_VECTOR) {
+			result.SetVectorType(VectorType::FLAT_VECTOR);
+			break;
+		}
+	}
+	result.Verify(args.size());
+}
+
+void ListRangeFun::RegisterFunction(BuiltinFunctions &set) {
+	// the arguments and return types are actually set in the binder function
+	ScalarFunctionSet range_set("range");
+	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<false>));
+	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<false>));
+	range_set.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<false>));
+	set.AddFunction(range_set);
+
+	ScalarFunctionSet generate_series("generate_series");
+	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<true>));
+	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<true>));
+	generate_series.AddFunction(ScalarFunction({LogicalType::BIGINT, LogicalType::BIGINT, LogicalType::BIGINT}, LogicalType::LIST(LogicalType::BIGINT), ListRangeFunction<true>));
+	set.AddFunction(generate_series);
+}
+
+} // namespace duckdb
