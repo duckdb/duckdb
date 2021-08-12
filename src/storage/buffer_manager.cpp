@@ -321,15 +321,13 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;
-	if (++queue_add_counter % QUEUE_PURGE_UNIT == 0) {
-		PurgeQueue();
-	}
+	PurgeQueue();
 	queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
 }
 
 void BufferManager::PurgeQueue() {
 	unique_ptr<BufferEvictionNode> node;
-	for (idx_t i = 0; i < QUEUE_PURGE_UNIT; i++) {
+	while (true) {
 		if (!queue->q.try_dequeue(node)) {
 			break;
 		}
