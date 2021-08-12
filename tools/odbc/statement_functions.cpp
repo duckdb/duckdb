@@ -1,6 +1,7 @@
 #include "statement_functions.hpp"
 #include "odbc_interval.hpp"
 #include "odbc_fetch.hpp"
+#include "parameter_wrapper.hpp"
 
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -48,7 +49,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 			stmt->error_messages.emplace_back(stmt->stmt->error);
 			return SQL_ERROR;
 		}
-		stmt->params.resize(stmt->stmt->n_param);
+		stmt->param_wrapper->param_descriptors.resize(stmt->stmt->n_param);
 		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
 		return SQL_SUCCESS;
 	});
@@ -65,7 +66,9 @@ SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
 		if (stmt->rows_fetched_ptr) {
 			*stmt->rows_fetched_ptr = 0;
 		}
-		stmt->res = stmt->stmt->Execute(stmt->params);
+		std::vector<Value> values;
+		stmt->param_wrapper->GetValues(values, 0);
+		stmt->res = stmt->stmt->Execute(values);
 		if (!stmt->res->success) {
 			stmt->error_messages.emplace_back(stmt->res->error);
 			return SQL_ERROR;
@@ -139,11 +142,21 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 	}
 }
 
+SQLRETURN SetStringValueLength(std::string val_str, SQLLEN *str_len_or_ind_ptr) {
+	if (str_len_or_ind_ptr) {
+		// it fills the required lenght from string value
+		*str_len_or_ind_ptr = val_str.size();
+		return SQL_SUCCESS;
+	}
+	// there is no length pointer
+	return SQL_ERROR;
+}
+
 SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
 	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		if (!target_value_ptr) {
+		if (!target_value_ptr && !IsSQLVarcharType(target_type)) {
 			return SQL_ERROR;
 		}
 
@@ -196,6 +209,10 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			                                              str_len_or_ind_ptr);
 		case SQL_C_WCHAR: {
 			std::string str = val.GetValue<std::string>();
+			if (!target_value_ptr) {
+				return SetStringValueLength(str, str_len_or_ind_ptr);
+			}
+
 			std::wstring w_str = std::wstring(str.begin(), str.end());
 			auto out_len = swprintf((wchar_t *)target_value_ptr, buffer_length, L"%ls", w_str.c_str());
 
@@ -216,7 +233,12 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			return SQL_SUCCESS;
 		}
 		case SQL_C_CHAR: {
-			auto out_len = snprintf((char *)target_value_ptr, buffer_length, "%s", val.GetValue<string>().c_str());
+			std::string val_str = val.GetValue<std::string>();
+			if (!target_value_ptr) {
+				return SetStringValueLength(val_str, str_len_or_ind_ptr);
+			}
+
+			auto out_len = snprintf((char *)target_value_ptr, buffer_length, "%s", val_str.c_str());
 
 			if (str_len_or_ind_ptr) {
 				*str_len_or_ind_ptr = out_len;
