@@ -320,8 +320,21 @@ void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> 
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
 		target_type.Verify();
-		if (target_type.id() != LogicalTypeId::ANY && children[i]->return_type != target_type) {
-			// type of child does not match type of function argument: add a cast
+		// check if the type of child matches the type of function argument
+		// if not we need to add a cast
+		bool require_cast = children[i]->return_type != target_type;
+		// except for one special case: if the function accepts ANY argument
+		// in that case we don't add a cast
+		if (target_type.id() == LogicalTypeId::ANY) {
+			if (children[i]->return_type.id() == LogicalTypeId::UNKNOWN) {
+				// UNLESS the child is a prepared statement parameter
+				// in that case we default the prepared statement parameter to VARCHAR
+				target_type = LogicalType::VARCHAR;
+			} else {
+				require_cast = false;
+			}
+		}
+		if (require_cast) {
 			children[i] = BoundCastExpression::AddCastToType(move(children[i]), target_type);
 		}
 	}

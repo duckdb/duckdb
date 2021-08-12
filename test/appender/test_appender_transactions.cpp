@@ -17,7 +17,6 @@ TEST_CASE("Test the way appenders interact with transactions", "[appender]") {
 	// begin a transaction manually
 	REQUIRE_NO_FAIL(con.Query("BEGIN TRANSACTION"));
 
-	return;
 	// append a value to the table
 	Appender appender(con, "integers");
 
@@ -33,4 +32,8 @@ TEST_CASE("Test the way appenders interact with transactions", "[appender]") {
 
 	// rolling back cancels the transaction
 	REQUIRE_NO_FAIL(con.Query("ROLLBACK"));
+
+	// now the values are gone
+	result = con.Query("SELECT * FROM integers");
+	REQUIRE(CHECK_COLUMN(result, 0, {}));
 }
