@@ -159,8 +159,8 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 }
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
-    : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)), temporary_id(MAXIMUM_BLOCK),
-      queue(make_unique<EvictionQueue>()), queue_add_counter(0) {
+    : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
+      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK) {
 }
 
 BufferManager::~BufferManager() {
