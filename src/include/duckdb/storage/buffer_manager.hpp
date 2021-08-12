@@ -118,10 +118,14 @@ private:
 	mutex blocks_lock;
 	//! A mapping of block id -> BlockHandle
 	unordered_map<block_id_t, weak_ptr<BlockHandle>> blocks;
-	//! Eviction queue
-	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
+	//! Eviction queue
+	unique_ptr<EvictionQueue> queue;
+	//! Eviction queue add counter
+	atomic<idx_t> queue_add_counter;
+	//! Every time we add this many nodes to the queue, we try to purge this many as well
+	static constexpr idx_t QUEUE_PURGE_UNIT = 100;
 
 	//! Lock for current_memory (used for verification)
 	mutex current_memory_lock;

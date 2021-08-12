@@ -160,7 +160,7 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
-      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK) {
+      queue(make_unique<EvictionQueue>()), queue_add_counter(0), temporary_id(MAXIMUM_BLOCK) {
 }
 
 BufferManager::~BufferManager() {
@@ -321,14 +321,15 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;
-	PurgeQueue();
+	if (++queue_add_counter % QUEUE_PURGE_UNIT == 0) {
+		PurgeQueue();
+	}
 	queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
 }
 
 void BufferManager::PurgeQueue() {
-	// purges up to 1024 nodes
 	unique_ptr<BufferEvictionNode> node;
-	for (idx_t i = 0; i < 1024; i++) {
+	for (idx_t i = 0; i < QUEUE_PURGE_UNIT; i++) {
 		if (!queue->q.try_dequeue(node)) {
 			break;
 		}
