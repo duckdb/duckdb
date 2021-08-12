@@ -1175,138 +1175,138 @@ jobs:
         python setup.py install --user
         (cd tests/ && python -m pytest)
 
-  linux-nodejs:
-    name: node.js Linux
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Setup
-      run: ./scripts/node_version.sh upload
-
-    - name: Node 10
-      run: ./scripts/node_build.sh 10
-
-    - name: Node 12
-      run: ./scripts/node_build.sh 12
-
-    - name: Node 14
-      run: ./scripts/node_build.sh 14
-
-    - name: Node 15
-      run: ./scripts/node_build.sh 15
-
-
-  osx-nodejs:
-    name: node.js OSX
-    runs-on: macos-latest
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Setup
-      run: ./scripts/node_version.sh
-
-    - name: Node 10
-      run: ./scripts/node_build.sh 10
-
-    - name: Node 12
-      run: ./scripts/node_build.sh 12
-
-    - name: Node 14
-      run: ./scripts/node_build.sh 14
-
-    - name: Node 15
-      run: ./scripts/node_build.sh 15
-
-  win-nodejs:
-    name: node.js Windows
-    runs-on: windows-latest
-    needs: linux-debug
-
-    strategy:
-      matrix:
-        node: [ '10', '12', '14', '15' ]
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Setup Node
-      uses: actions/setup-node@v2
-      with:
-        node-version: ${{ matrix.node }}
-
-    - name: Node Version
-      run: ./scripts/node_version.sh
-
-    - name: Node
-      run: ./scripts/node_build_win.sh
-
-  linux-wasm-release:
-    name: WebAssembly Release
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Build Amalgamation
-      run: python scripts/amalgamation.py
-
-    - name: Setup
-      run: ./scripts/wasm_configure.sh
-
-    - name: Build Library Module
-      run: ./scripts/wasm_build_lib.sh Release
-
-    - name: Build Test Module
-      run: ./scripts/wasm_build_test.sh Release
-
-    - name: Test WASM Module
-      run: node ./test/wasm/hello_wasm_test.js
-
-    - name: Package
-      run: |
-        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
-        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-wasm32-nothreads
-        path: |
-          duckdb-wasm32-nothreads.zip
-
-  docs:
-    name: Website Docs
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Clone Website
-      run: git clone https://github.com/duckdb/duckdb-web
-
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.9'
-
-    - name: Package
-      run: |
-        cd duckdb-web
-        python3 scripts/generate_docs.py ..
+#  linux-nodejs:
+#    name: node.js Linux
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Setup
+#      run: ./scripts/node_version.sh upload
+#
+#    - name: Node 10
+#      run: ./scripts/node_build.sh 10
+#
+#    - name: Node 12
+#      run: ./scripts/node_build.sh 12
+#
+#    - name: Node 14
+#      run: ./scripts/node_build.sh 14
+#
+#    - name: Node 15
+#      run: ./scripts/node_build.sh 15
+#
+#
+#  osx-nodejs:
+#    name: node.js OSX
+#    runs-on: macos-latest
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Setup
+#      run: ./scripts/node_version.sh
+#
+#    - name: Node 10
+#      run: ./scripts/node_build.sh 10
+#
+#    - name: Node 12
+#      run: ./scripts/node_build.sh 12
+#
+#    - name: Node 14
+#      run: ./scripts/node_build.sh 14
+#
+#    - name: Node 15
+#      run: ./scripts/node_build.sh 15
+#
+#  win-nodejs:
+#    name: node.js Windows
+#    runs-on: windows-latest
+#    needs: linux-debug
+#
+#    strategy:
+#      matrix:
+#        node: [ '10', '12', '14', '15' ]
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Setup Node
+#      uses: actions/setup-node@v2
+#      with:
+#        node-version: ${{ matrix.node }}
+#
+#    - name: Node Version
+#      run: ./scripts/node_version.sh
+#
+#    - name: Node
+#      run: ./scripts/node_build_win.sh
+#
+#  linux-wasm-release:
+#    name: WebAssembly Release
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Build Amalgamation
+#      run: python scripts/amalgamation.py
+#
+#    - name: Setup
+#      run: ./scripts/wasm_configure.sh
+#
+#    - name: Build Library Module
+#      run: ./scripts/wasm_build_lib.sh Release
+#
+#    - name: Build Test Module
+#      run: ./scripts/wasm_build_test.sh Release
+#
+#    - name: Test WASM Module
+#      run: node ./test/wasm/hello_wasm_test.js
+#
+#    - name: Package
+#      run: |
+#        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
+#        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
+#
+#    - uses: actions/upload-artifact@v2
+#      with:
+#        name: duckdb-wasm32-nothreads
+#        path: |
+#          duckdb-wasm32-nothreads.zip
+#
+#  docs:
+#    name: Website Docs
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Clone Website
+#      run: git clone https://github.com/duckdb/duckdb-web
+#
+#    - name: Set up Python 3.9
+#      uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.9'
+#
+#    - name: Package
+#      run: |
+#        cd duckdb-web
+#        python3 scripts/generate_docs.py ..
