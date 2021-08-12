@@ -1,13 +1,15 @@
 #include "duckdb_odbc.hpp"
 #include "odbc_fetch.hpp"
+#include "parameter_wrapper.hpp"
 
 using duckdb::OdbcHandleStmt;
 
 OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
-    : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), paramset_size(1), rows_fetched_ptr(nullptr) {
+    : OdbcHandle(OdbcHandleType::STMT), dbc(dbc_p), rows_fetched_ptr(nullptr) {
 	D_ASSERT(dbc_p);
 	D_ASSERT(dbc_p->conn);
 
+	param_wrapper = make_unique<ParameterWrapper>();
 	odbc_fetcher = make_unique<OdbcFetch>();
 	dbc->stmt_handle = this;
 }

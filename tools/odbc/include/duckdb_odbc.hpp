@@ -85,6 +85,7 @@ SQLRETURN SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type);
 namespace duckdb {
 
 class OdbcFetch;
+class ParameterWrapper;
 
 enum OdbcHandleType { ENV, DBC, STMT };
 struct OdbcHandle {
@@ -146,8 +147,7 @@ struct OdbcHandleStmt : public OdbcHandle {
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
 	unique_ptr<QueryResult> res;
-	vector<Value> params;
-	SQLULEN paramset_size;
+	unique_ptr<ParameterWrapper> param_wrapper;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN *rows_fetched_ptr;

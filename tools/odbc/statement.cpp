@@ -2,6 +2,7 @@
 #include "api_info.hpp"
 #include "odbc_fetch.hpp"
 #include "statement_functions.hpp"
+#include "parameter_wrapper.hpp"
 
 SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                          SQLINTEGER string_length) {
@@ -11,10 +12,16 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			/* auto size = Load<SQLLEN>((data_ptr_t) value_ptr);
 			 return (size == 1) ? SQL_SUCCESS : SQL_ERROR;
 			 */
-			// this should be 1
-			stmt->paramset_size = (SQLULEN)value_ptr;
+			// this should be 1?
+			stmt->param_wrapper->paramset_size = (SQLULEN)value_ptr;
 			return SQL_SUCCESS;
 		}
+		case SQL_ATTR_PARAMS_PROCESSED_PTR:
+			stmt->param_wrapper->param_processed_ptr = (SQLULEN *)value_ptr;
+			return SQL_SUCCESS;
+		case SQL_ATTR_PARAM_STATUS_PTR:
+			stmt->param_wrapper->param_status_ptr = (SQLUSMALLINT *)value_ptr;
+			return SQL_SUCCESS;
 		case SQL_ATTR_QUERY_TIMEOUT: {
 			// this should be 0
 			return SQL_SUCCESS;
@@ -237,7 +244,7 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_RESET_PARAMS) {
-			stmt->params.clear();
+			stmt->param_wrapper->param_descriptors.clear();
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
@@ -246,7 +253,7 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			stmt->odbc_fetcher->ClearChunks();
 			// stmt->stmt.reset(); // the statment can be reuse in prepared statement
 			stmt->bound_cols.clear();
-			stmt->params.clear();
+			// stmt->params.clear(); //  the parameter values can be reused after
 			stmt->error_messages.clear();
 			return SQL_SUCCESS;
 		}

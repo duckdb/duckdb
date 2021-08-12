@@ -1,6 +1,7 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
 #include "api_info.hpp"
+#include "parameter_wrapper.hpp"
 
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -34,46 +35,66 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 			return SQL_ERROR;
 		}
 
+		if (parameter_number > stmt->param_wrapper->param_descriptors.size()) {
+			// need to resize because SQLFreeStmt might clear it before
+			stmt->param_wrapper->param_descriptors.resize(parameter_number);
+		}
+		idx_t param_idx = parameter_number - 1;
+		stmt->param_wrapper->param_descriptors[param_idx].io_type = input_output_type;
+		stmt->param_wrapper->param_descriptors[param_idx].idx = param_idx;
+		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.value_type = value_type;
+		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.param_value_ptr = parameter_value_ptr;
+		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.buffer_len = buffer_length;
+		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.str_len_or_ind_ptr = str_len_or_ind_ptr;
+
+		stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.param_type = parameter_type;
+    	stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.col_size = column_size;
+    	stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.dec_digits = decimal_digits;
+
+		if (parameter_value_ptr == nullptr || *str_len_or_ind_ptr == SQL_NULL_DATA) {
+			Value val_null(nullptr);
+			stmt->param_wrapper->SetValue(val_null, param_idx);
+			return SQL_SUCCESS;
+		}
+
 		// it would appear that the parameter_type does not matter that much
 		// we cast it anyway and if the cast fails we will hear about it during execution
 		duckdb::Value res;
 		duckdb::const_data_ptr_t dataptr = (duckdb::const_data_ptr_t)parameter_value_ptr;
 
-		switch (value_type) {
-		case SQL_C_CHAR:
+		switch (parameter_type) {
+		case SQL_CHAR:
+		case SQL_VARCHAR:
 			res = Value(duckdb::OdbcUtils::ReadString(parameter_value_ptr, buffer_length));
 			break;
-		case SQL_C_TINYINT:
-		case SQL_C_STINYINT:
-			res = Value::TINYINT(Load<int8_t>(dataptr));
+		case SQL_TINYINT:
+			res = Value::TINYINT(Load<int8_t>(dataptr)); // default int8_t
+			if(value_type == SQL_C_UTINYINT) {
+				res = Value::TINYINT(Load<uint8_t>(dataptr));
+			}
 			break;
-		case SQL_C_UTINYINT:
-			res = Value::TINYINT(Load<uint8_t>(dataptr));
-			break;
-		case SQL_C_SHORT:
-		case SQL_C_SSHORT:
+		case SQL_SMALLINT:
 			res = Value::SMALLINT(Load<int16_t>(dataptr));
+			if (value_type == SQL_C_USHORT) {
+				res = Value::USMALLINT(Load<uint16_t>(dataptr));
+			}
 			break;
-		case SQL_C_USHORT:
-			res = Value::USMALLINT(Load<uint16_t>(dataptr));
-			break;
-		case SQL_C_SLONG:
-		case SQL_C_LONG:
+		case SQL_INTEGER:
 			res = Value::INTEGER(Load<int32_t>(dataptr));
+			if (value_type == SQL_C_ULONG) {
+				res = Value::UINTEGER(Load<uint32_t>(dataptr));
+			}
 			break;
-		case SQL_C_ULONG:
-			res = Value::UINTEGER(Load<uint32_t>(dataptr));
-			break;
-		case SQL_C_SBIGINT:
+		case SQL_BIGINT:
 			res = Value::BIGINT(Load<int64_t>(dataptr));
+			if (value_type == SQL_C_UBIGINT) {
+				res = Value::UBIGINT(Load<uint64_t>(dataptr));
+			}
 			break;
-		case SQL_C_UBIGINT:
-			res = Value::UBIGINT(Load<uint64_t>(dataptr));
-			break;
-		case SQL_C_FLOAT:
+		case SQL_FLOAT:
 			res = Value::FLOAT(Load<float>(dataptr));
 			break;
-		case SQL_C_DOUBLE:
+		case SQL_DOUBLE:
 			res = Value::DOUBLE(Load<double>(dataptr));
 			break;
 		case SQL_NUMERIC: {
@@ -94,7 +115,7 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 			}
 			break;
 		}
-		case SQL_C_BINARY: {
+		case SQL_BINARY: {
 		}
 		// TODO more types
 		default:
@@ -102,11 +123,7 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 			return SQL_ERROR;
 		}
 
-		if (parameter_number > stmt->params.size()) {
-			// need to resize because SQLFreeStmt might clear it before
-			stmt->params.resize(parameter_number);
-		}
-		stmt->params[parameter_number - 1] = res;
+		stmt->param_wrapper->SetValue(res, param_idx);
 		return SQL_SUCCESS;
 	});
 }
