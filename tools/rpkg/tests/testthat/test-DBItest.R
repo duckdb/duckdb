@@ -11,10 +11,9 @@ DBItest::test_all(c(
 
   if (packageVersion("DBItest") < "1.7.0.9004") "roundtrip_timestamp", # broken test
 
-  "send_query_params", # type of ? issue
-  "get_query_params", # type of ? issue
-
-  "bind_return_value", # multiple bind parameters
+  "send_query_params", # multiple bind parameters
+  "get_query_params",
+  "bind_return_value",
   "bind_too_many",
   "bind_not_enough",
   "bind_multi_row_unequal_length",
@@ -28,17 +27,14 @@ DBItest::test_all(c(
   "bind_.*",
 
 
-  "data_logical", # casting NULL issue
-
-  "roundtrip_field_types", # strange
-  "data_64_bit_numeric_warning", # not now
-  "data_64_bit_lossless", # not now,
+  "data_64_bit_numeric_warning", # 64 bit, not now
+  "data_64_bit_lossless",
   "roundtrip_64_bit_character",
-
-  # new tests skipped after DBI upgrade
   "connect_bigint_integer",
   "connect_bigint_character",
   "connect_bigint_integer64",
+
+  # new tests skipped after DBI upgrade
   "append_roundtrip_keywords",
   "append_roundtrip_quotes",
   "append_roundtrip_integer",
@@ -56,7 +52,6 @@ DBItest::test_all(c(
   "append_roundtrip_time",
   "append_roundtrip_timestamp",
   "append_table_row_names_.*",
-  "remove_table_missing_succeed",
-  "column_info_closed",
-  "column_info_consistent"
+
+  "column_info_consistent" # won't fix: https://github.com/r-dbi/DBItest/issues/181
 ))
