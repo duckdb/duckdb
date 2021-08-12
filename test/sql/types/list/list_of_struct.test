@@ -38,7 +38,6 @@ SELECT UNNEST(l) FROM a
 {'a': 3, 'b': hello}
 NULL
 {'a': NULL, 'b': thisisalongstring}
-NULL
 {'a': 17, 'b': world}
 
 # list of nested structs with lists
@@ -104,7 +103,6 @@ NULL
 {'a': {'a1': [NULL, 4, 5], 'a2': NULL}, 'b': thisisalongstring}
 {'a': {'a1': NULL, 'a2': 22}, 'b': NULL}
 {'a': NULL, 'b': aaaaaaaaaaaaaaaaaaaaaaaa}
-NULL
 {'a': {'a1': [6, 7, 8, 9], 'a2': 17}, 'b': world1}
 NULL
 {'a': {'a1': [10, 11, 12], 'a2': 22}, 'b': world2}
@@ -117,7 +115,6 @@ NULL
 {'a1': [NULL, 4, 5], 'a2': NULL}
 {'a1': NULL, 'a2': 22}
 NULL
-NULL
 {'a1': [6, 7, 8, 9], 'a2': 17}
 NULL
 {'a1': [10, 11, 12], 'a2': 22}
@@ -128,7 +125,6 @@ SELECT UNNEST(l)['a']['a1'] FROM b;
 [1, 2, 3]
 NULL
 [NULL, 4, 5]
-NULL
 NULL
 NULL
 [6, 7, 8, 9]
