@@ -11,10 +11,9 @@ DBItest::test_all(c(
 
   if (packageVersion("DBItest") < "1.7.0.9004") "roundtrip_timestamp", # broken test
 
-  "bind_multi_row_zero_length", # https://github.com/duckdb/duckdb/issues/2125
-  "bind_character.*",
+  "bind_character.*", # Waiting for https://github.com/duckdb/duckdb/pull/2134
   "bind_factor.*",
-  "bind_timestamp.*",
+  "bind_timestamp.*",  # https://github.com/duckdb/duckdb/issues/2138
 
 
   "data_64_bit_numeric_warning", # 64 bit, not now

@@ -61,6 +61,9 @@ duckdb_post_execute <- function(res, out) {
 }
 
 list_to_df <- function(x) {
+  if (is.data.frame(x)) {
+    return(x)
+  }
   attr(x, "row.names") <- c(NA_integer_, -length(x[[1]]))
   class(x) <- "data.frame"
   x
@@ -314,6 +317,8 @@ setMethod(
     out <- .Call(duckdb_bind_R, res@stmt_lst$ref, params, res@arrow)
     if (length(out) == 1) {
       out <- out[[1]]
+    } else if (length(out) == 0) {
+      out <- data.frame()
     } else {
       out <- do.call(rbind, lapply(out, list_to_df))
     }
