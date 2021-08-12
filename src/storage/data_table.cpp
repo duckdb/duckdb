@@ -35,9 +35,9 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 			row_groups->AppendSegment(move(new_row_group));
 		}
 		column_stats = move(data->column_stats);
-		if (column_stats.size() != types.size()) {
+		if (column_stats.size() != types.size()) { // LCOV_EXCL_START
 			throw IOException("Table statistics column count is not aligned with table column count. Corrupt file?");
-		}
+		} // LCOV_EXCL_STOP
 	}
 	if (column_stats.empty()) {
 		D_ASSERT(total_rows == 0);
@@ -391,9 +391,9 @@ static void VerifyCheckConstraint(TableCatalogEntry &table, Expression &expr, Da
 		executor.ExecuteExpression(chunk, result);
 	} catch (std::exception &ex) {
 		throw ConstraintException("CHECK constraint failed: %s (Error: %s)", table.name, ex.what());
-	} catch (...) {
+	} catch (...) { // LCOV_EXCL_START
 		throw ConstraintException("CHECK constraint failed: %s (Unknown Error)", table.name);
-	}
+	} // LCOV_EXCL_STOP
 	VectorData vdata;
 	result.Orrify(chunk.size(), vdata);
 
@@ -440,7 +440,7 @@ void DataTable::Append(TableCatalogEntry &table, ClientContext &context, DataChu
 		return;
 	}
 	if (chunk.ColumnCount() != table.columns.size()) {
-		throw CatalogException("Mismatch in column count for append");
+		throw InternalException("Mismatch in column count for append");
 	}
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
