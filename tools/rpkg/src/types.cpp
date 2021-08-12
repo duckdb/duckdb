@@ -34,6 +34,25 @@ RType RApiTypes::DetectRType(SEXP v) {
 		} else {
 			return RType::UNKNOWN;
 		}
+	} else if (TYPEOF(v) == INTSXP && Rf_inherits(v, "difftime")) {
+		SEXP units = Rf_getAttrib(v, Rf_install("units"));
+		if (TYPEOF(units) != STRSXP) {
+			return RType::UNKNOWN;
+		}
+		SEXP units0 = STRING_ELT(units, 0);
+		if (units0 == RStrings::get().secs) {
+			return RType::TIME_SECONDS_INTEGER;
+		} else if (units0 == RStrings::get().mins) {
+			return RType::TIME_MINUTES_INTEGER;
+		} else if (units0 == RStrings::get().hours) {
+			return RType::TIME_HOURS_INTEGER;
+		} else if (units0 == RStrings::get().days) {
+			return RType::TIME_DAYS_INTEGER;
+		} else if (units0 == RStrings::get().weeks) {
+			return RType::TIME_WEEKS_INTEGER;
+		} else {
+			return RType::UNKNOWN;
+		}
 	} else if (Rf_isFactor(v) && TYPEOF(v) == INTSXP) {
 		return RType::FACTOR;
 	} else if (TYPEOF(v) == LGLSXP) {

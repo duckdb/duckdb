@@ -157,6 +157,36 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		val.is_null = RTimeWeeksType::IsNull(ts_val);
 		break;
 	}
+	case RType::TIME_SECONDS_INTEGER: {
+		auto ts_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::TIME(RTimeSecondsType::Convert(ts_val));
+		val.is_null = RIntegerType::IsNull(ts_val);
+		break;
+	}
+	case RType::TIME_MINUTES_INTEGER: {
+		auto ts_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::TIME(RTimeMinutesType::Convert(ts_val));
+		val.is_null = RIntegerType::IsNull(ts_val);
+		break;
+	}
+	case RType::TIME_HOURS_INTEGER: {
+		auto ts_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::TIME(RTimeHoursType::Convert(ts_val));
+		val.is_null = RIntegerType::IsNull(ts_val);
+		break;
+	}
+	case RType::TIME_DAYS_INTEGER: {
+		auto ts_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::TIME(RTimeDaysType::Convert(ts_val));
+		val.is_null = RIntegerType::IsNull(ts_val);
+		break;
+	}
+	case RType::TIME_WEEKS_INTEGER: {
+		auto ts_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::TIME(RTimeWeeksType::Convert(ts_val));
+		val.is_null = RIntegerType::IsNull(ts_val);
+		break;
+	}
 	default:
 		Rf_error("duckdb_sexp_to_value: Unsupported type");
 	}
