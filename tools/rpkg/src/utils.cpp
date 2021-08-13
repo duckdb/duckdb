@@ -198,6 +198,21 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		Rf_setAttrib(res, Rf_install("tzone"), r_ts.Protect(Rf_mkString("UTC")));
 		return res;
 	}
+	case LogicalTypeId::TIME: {
+		res = r.Protect(NEW_NUMERIC(1));
+		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
+		dest_ptr[0] = ((double)val.value_.time.micros) / 1000;
+		NUMERIC_POINTER(res)[0] = val.value_.time.micros;
+		// some dresssup for R
+		RProtector r_time;
+		SEXP cl = r_time.Protect(NEW_STRING(2));
+		SET_STRING_ELT(cl, 0, r_time.Protect(Rf_mkChar("hms")));
+		SET_STRING_ELT(cl, 1, r_time.Protect(Rf_mkChar("difftime")));
+		SET_CLASS(res, cl);
+		// hms difftime is always stored as "seconds"
+		Rf_setAttrib(res, Rf_install("units"), r_time.Protect(Rf_mkString("secs")));
+		return res;
+	}
 
 	case LogicalTypeId::DATE: {
 		res = r.Protect(NEW_NUMERIC(1));
