@@ -1,0 +1,14 @@
+# name: test/sql/prepared/test_prepare_error.test
+# description: Error in prepared statement
+# group: [prepared]
+
+statement ok
+PREPARE v1 AS SELECT ?::VARCHAR::INT
+
+statement error
+EXECUTE v1('hello')
+
+query I
+EXECUTE v1('3')
+----
+3
