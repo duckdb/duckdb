@@ -392,6 +392,9 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 					locked = false;
 				}
 			}
+			if (locked) {
+				memory_full_lock.unlock();
+			}
 		} else {
 			memory_full_lock.unlock();
 		}
