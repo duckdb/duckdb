@@ -1,0 +1,47 @@
+# name: test/sql/types/list/unnest_null_empty.test
+# description: Test unnest semantics with NULL and empty lists
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE people(id INTEGER, name VARCHAR, address VARCHAR[]);
+
+statement ok
+insert into people values (1, 'Zuckerberg', ARRAY['New York']);
+
+statement ok
+insert into people values (2, 'Bezos', ARRAY['Washington', 'Space']);
+
+statement ok
+insert into people values (3, 'Tim', NULL);
+
+statement ok
+insert into people values (4, 'Elvis', ARRAY[NULL, NULL, NULL]);
+
+statement ok
+insert into people values (5, 'Mark', ARRAY[]::VARCHAR[]);
+
+query II
+SELECT name, UNNEST(address) FROM people;
+----
+Zuckerberg	New York
+Bezos	Washington
+Bezos	Space
+Elvis	NULL
+Elvis	NULL
+Elvis	NULL
+
+# and with multiple unnests
+query III
+SELECT name, UNNEST(address), UNNEST([1]) FROM people;
+----
+Zuckerberg	New York	1
+Bezos	Washington	1
+Bezos	Space	NULL
+Tim	NULL	1
+Elvis	NULL	1
+Elvis	NULL	NULL
+Elvis	NULL	NULL
+Mark	NULL	1
