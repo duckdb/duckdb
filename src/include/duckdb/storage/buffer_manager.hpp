@@ -127,7 +127,7 @@ private:
 	//!
 	mutex unload_lock;
 	//! When we hit the memory limit we try to unload until current_memory/maximum_memory = unload_until
-	atomic<double_t> unload_until_fraction;
+	atomic<double> unload_until_fraction;
 
 	//! Lock for current_memory (used for verification)
 	mutex current_memory_lock;
