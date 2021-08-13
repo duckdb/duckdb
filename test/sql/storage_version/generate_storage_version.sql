@@ -80,7 +80,7 @@ SELECT
     repeat('a', 100000) a;
 COMMIT;
 
--- generate a bunch of shit in the WAL just to force a checkpoint
+-- generate a bunch of stuff in the WAL just to force a checkpoint
 -- FIXME: this really needs to be done better
 
 UPDATE

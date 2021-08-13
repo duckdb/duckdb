@@ -111,13 +111,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 	auto lowercase_name = StringUtil::Lower(function_name);
 
-	if (root->agg_order) {
-		throw ParserException("ORDER BY is not implemented for aggregates");
-	}
-
 	if (root->over) {
 		if (root->agg_distinct) {
 			throw ParserException("DISTINCT is not implemented for window functions!");
+		}
+
+		if (root->agg_order) {
+			throw ParserException("ORDER BY is not implemented for window functions!");
 		}
 
 		auto win_fun_type = WindowToExpressionType(lowercase_name);
@@ -200,6 +200,9 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		filter_expr = TransformExpression(root->agg_filter, depth + 1);
 	}
 
+	auto order_bys = make_unique<OrderModifier>();
+	TransformOrderBy(root->agg_order, order_bys->orders);
+
 	// star gets eaten in the parser
 	if (lowercase_name == "count" && children.empty()) {
 		lowercase_name = "count_star";
@@ -233,7 +236,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	}
 
 	auto function = make_unique<FunctionExpression>(schema, lowercase_name.c_str(), move(children), move(filter_expr),
-	                                                root->agg_distinct);
+	                                                move(order_bys), root->agg_distinct);
 	function->query_location = root->location;
 	return move(function);
 }
