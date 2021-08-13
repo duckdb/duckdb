@@ -5,8 +5,9 @@ add_library_unity(
   current.cpp
   epoch.cpp
   date_diff.cpp
-  date_trunc.cpp
   date_part.cpp
+  date_sub.cpp
+  date_trunc.cpp
   strftime.cpp
   to_interval.cpp)
 set(ALL_OBJECT_FILES
