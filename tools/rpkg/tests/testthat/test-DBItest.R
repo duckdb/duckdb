@@ -33,25 +33,9 @@ DBItest::test_all(c(
   "connect_bigint_integer",
   "connect_bigint_character",
   "connect_bigint_integer64",
-
-  # new tests skipped after DBI upgrade
-  "append_roundtrip_keywords",
-  "append_roundtrip_quotes",
-  "append_roundtrip_integer",
-  "append_roundtrip_numeric",
-  "append_roundtrip_logical",
-  "append_roundtrip_null",
   "append_roundtrip_64_bit_numeric",
   "append_roundtrip_64_bit_character",
   "append_roundtrip_64_bit_roundtrip",
-  "append_roundtrip_character",
-  "append_roundtrip_character_native",
-  "append_roundtrip_character_empty.*",
-  "append_roundtrip_factor",
-  "append_roundtrip_date",
-  "append_roundtrip_time",
-  "append_roundtrip_timestamp",
-  "append_table_row_names_.*",
 
   "column_info_consistent" # won't fix: https://github.com/r-dbi/DBItest/issues/181
 ))
