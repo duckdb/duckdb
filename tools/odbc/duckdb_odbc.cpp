@@ -9,7 +9,7 @@ OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
 	D_ASSERT(dbc_p);
 	D_ASSERT(dbc_p->conn);
 
-	param_wrapper = make_unique<ParameterWrapper>();
+	param_wrapper = make_unique<ParameterWrapper>(&error_messages);
 	odbc_fetcher = make_unique<OdbcFetch>();
 	dbc->stmt_handle = this;
 }
