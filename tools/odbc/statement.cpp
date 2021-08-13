@@ -244,7 +244,7 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_RESET_PARAMS) {
-			stmt->param_wrapper->param_descriptors.clear();
+			stmt->param_wrapper->Clear();
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
@@ -254,6 +254,7 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			// stmt->stmt.reset(); // the statment can be reuse in prepared statement
 			stmt->bound_cols.clear();
 			// stmt->params.clear(); //  the parameter values can be reused after
+			stmt->param_wrapper->ResetParamSetIndex();
 			stmt->error_messages.clear();
 			return SQL_SUCCESS;
 		}
