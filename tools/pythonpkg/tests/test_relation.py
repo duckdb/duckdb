@@ -42,6 +42,17 @@ class TestRelation(object):
         rel = get_relation(conn)
         assert rel.limit(2).execute().fetchall() == [(1, 'one'), (2, 'two')]
 
+    def test_intersect_operator(self,duckdb_cursor):
+        conn = duckdb.connect()
+        test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4]})
+        conn.register("test_df", test_df)
+        test_df_2 = pd.DataFrame.from_dict({"i":[3, 4, 5, 6]})
+        conn.register("test_df", test_df_2)
+        rel = conn.from_df(test_df)
+        rel_2 = conn.from_df(test_df_2)
+
+        assert rel.intersect(rel_2).execute().fetchall() == [ (3,), (4,)]
+
     def test_aggregate_operator(self, duckdb_cursor):
         conn = duckdb.connect()
         rel = get_relation(conn)
@@ -119,8 +130,8 @@ class TestRelation(object):
         rel = conn.table("test")
         assert rel.__getattr__('alias') == "test"
         assert rel.__getattr__('type') == "TABLE_RELATION"
-        rel.__getattr__('columns') == ['i']
-        rel.__getattr__('types') == ['INTEGER']
+        assert rel.__getattr__('columns') == ['i']
+        assert rel.__getattr__('types') == ['INTEGER']
 
     def test_query_fail(self,duckdb_cursor):
         conn = duckdb.connect()
@@ -135,3 +146,35 @@ class TestRelation(object):
         rel = conn.table("test")
         with pytest.raises(Exception):
             rel.execute("select j from test")
+
+    def test_df_proj(self,duckdb_cursor):
+        test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
+        rel = duckdb.project(test_df, 'i')
+        assert rel.execute().fetchall() == [(1,), (2,), (3,), (4,)]
+
+    def test_df_alias(self,duckdb_cursor):
+        test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
+        rel = duckdb.alias(test_df, 'dfzinho')
+        assert rel.__getattr__('alias') == "dfzinho"
+
+    def test_df_filter(self,duckdb_cursor):
+        test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
+        rel = duckdb.filter(test_df, 'i > 1')
+        assert rel.execute().fetchall() == [(2, 'two'), (3, 'three'), (4, 'four')]
+
+    def test_df_order_by(self,duckdb_cursor):
+        test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
+        rel = duckdb.order(test_df, 'j')
+        assert rel.execute().fetchall() == [(4, 'four'), (1, 'one'), (3, 'three'), (2, 'two')]
+
+    def test_df_distinct(self,duckdb_cursor):
+        test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
+        rel = duckdb.distinct(test_df)
+        assert rel.execute().fetchall() == [(1, 'one'), (2, 'two'), (3, 'three'),(4, 'four')]
+
+    def test_df_write_csv(self,duckdb_cursor):
+        test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
+        temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
+        duckdb.write_csv(test_df, temp_file_name)
+        csv_rel = duckdb.from_csv_auto(temp_file_name)
+        assert  csv_rel.execute().fetchall() == [(1, 'one'), (2, 'two'), (3, 'three'), (4, 'four')] 

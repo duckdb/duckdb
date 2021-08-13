@@ -361,7 +361,7 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
-	return result->FetchNumpy();
+	return result->FetchNumpyInternal();
 }
 py::object DuckDBPyConnection::FetchDF() {
 	if (!result) {
