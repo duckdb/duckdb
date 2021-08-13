@@ -35,7 +35,6 @@ SELECT UNNEST(i) FROM (VALUES ([[1, 2, 3], [4, 5]]), (NULL), ([[6, 7], NULL, [8,
 ----
 [1, 2, 3]
 [4, 5]
-NULL
 [6, 7]
 NULL
 [8, 9, NULL]
@@ -60,7 +59,6 @@ SELECT UNNEST(i) FROM (VALUES ([{'a': 10, 'b': 1}, {'a': 11, 'b': 2}]), (NULL), 
 ----
 {'a': 10, 'b': 1}
 {'a': 11, 'b': 2}
-NULL
 {'a': 12, 'b': 3}
 NULL
 {'a': NULL, 'b': NULL}
@@ -71,7 +69,6 @@ SELECT UNNEST(i) FROM (VALUES ([{'a': {'a1': 7, 'a2': NULL}, 'b': 1}, {'a': {'a1
 ----
 {'a': {'a1': 7, 'a2': NULL}, 'b': 1}
 {'a': {'a1': 9, 'a2': 10}, 'b': 2}
-NULL
 {'a': {'a1': 11, 'a2': 12}, 'b': 3}
 NULL
 {'a': NULL, 'b': NULL}
