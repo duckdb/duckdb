@@ -4,27 +4,14 @@
 #include "parameter_wrapper.hpp"
 
 #include "duckdb/main/prepared_statement_data.hpp"
-#include "duckdb/common/types/decimal.hpp"
 
 #include <string.h>
 
-using duckdb::Decimal;
 using duckdb::hugeint_t;
 using duckdb::idx_t;
 using duckdb::Load;
 using duckdb::LogicalType;
 using duckdb::Value;
-
-SQLRETURN ValidateNumeric(int precision, int scale) {
-	if (precision < 1 || precision > Decimal::MAX_WIDTH_DECIMAL || scale < 0 || scale > Decimal::MAX_WIDTH_DECIMAL ||
-	    scale > precision) {
-		// TODO we should use SQLGetDiagField to register the error message
-		std::string msg = "Numeric precision: " + std::to_string(precision) + " and scale: " + std::to_string(scale) +
-		                  " not supported.";
-		return SQL_ERROR;
-	}
-	return SQL_SUCCESS;
-}
 
 SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT input_output_type,
                            SQLSMALLINT value_type, SQLSMALLINT parameter_type, SQLULEN column_size,
@@ -46,84 +33,10 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.param_value_ptr = parameter_value_ptr;
 		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.buffer_len = buffer_length;
 		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.str_len_or_ind_ptr = str_len_or_ind_ptr;
-
 		stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.param_type = parameter_type;
-    	stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.col_size = column_size;
-    	stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.dec_digits = decimal_digits;
+		stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.col_size = column_size;
+		stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.dec_digits = decimal_digits;
 
-		if (parameter_value_ptr == nullptr || *str_len_or_ind_ptr == SQL_NULL_DATA) {
-			Value val_null(nullptr);
-			stmt->param_wrapper->SetValue(val_null, param_idx);
-			return SQL_SUCCESS;
-		}
-
-		// it would appear that the parameter_type does not matter that much
-		// we cast it anyway and if the cast fails we will hear about it during execution
-		duckdb::Value res;
-		duckdb::const_data_ptr_t dataptr = (duckdb::const_data_ptr_t)parameter_value_ptr;
-
-		switch (parameter_type) {
-		case SQL_CHAR:
-		case SQL_VARCHAR:
-			res = Value(duckdb::OdbcUtils::ReadString(parameter_value_ptr, buffer_length));
-			break;
-		case SQL_TINYINT:
-			res = Value::TINYINT(Load<int8_t>(dataptr)); // default int8_t
-			if(value_type == SQL_C_UTINYINT) {
-				res = Value::TINYINT(Load<uint8_t>(dataptr));
-			}
-			break;
-		case SQL_SMALLINT:
-			res = Value::SMALLINT(Load<int16_t>(dataptr));
-			if (value_type == SQL_C_USHORT) {
-				res = Value::USMALLINT(Load<uint16_t>(dataptr));
-			}
-			break;
-		case SQL_INTEGER:
-			res = Value::INTEGER(Load<int32_t>(dataptr));
-			if (value_type == SQL_C_ULONG) {
-				res = Value::UINTEGER(Load<uint32_t>(dataptr));
-			}
-			break;
-		case SQL_BIGINT:
-			res = Value::BIGINT(Load<int64_t>(dataptr));
-			if (value_type == SQL_C_UBIGINT) {
-				res = Value::UBIGINT(Load<uint64_t>(dataptr));
-			}
-			break;
-		case SQL_FLOAT:
-			res = Value::FLOAT(Load<float>(dataptr));
-			break;
-		case SQL_DOUBLE:
-			res = Value::DOUBLE(Load<double>(dataptr));
-			break;
-		case SQL_NUMERIC: {
-			auto numeric = (SQL_NUMERIC_STRUCT *)parameter_value_ptr;
-			dataptr = numeric->val;
-
-			auto precision = column_size;
-			if (ValidateNumeric(precision, decimal_digits) == SQL_ERROR) {
-				return SQL_ERROR;
-			}
-			if (column_size <= Decimal::MAX_WIDTH_INT64) {
-				res = Value::DECIMAL(Load<int64_t>(dataptr), precision, decimal_digits);
-			} else {
-				hugeint_t dec_value;
-				memcpy(&dec_value.lower, dataptr, sizeof(dec_value.lower));
-				memcpy(&dec_value.upper, dataptr + sizeof(dec_value.lower), sizeof(dec_value.upper));
-				res = Value::DECIMAL(dec_value, precision, decimal_digits);
-			}
-			break;
-		}
-		case SQL_BINARY: {
-		}
-		// TODO more types
-		default:
-			// TODO error message?
-			return SQL_ERROR;
-		}
-
-		stmt->param_wrapper->SetValue(res, param_idx);
 		return SQL_SUCCESS;
 	});
 }
