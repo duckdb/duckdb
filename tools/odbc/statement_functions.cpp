@@ -66,9 +66,14 @@ SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
 		if (stmt->rows_fetched_ptr) {
 			*stmt->rows_fetched_ptr = 0;
 		}
+
 		std::vector<Value> values;
-		stmt->param_wrapper->GetValues(values, 0);
-		stmt->res = stmt->stmt->Execute(values);
+		SQLRETURN ret_param;
+		do {
+			ret_param = stmt->param_wrapper->GetValues(values);
+			stmt->res = stmt->stmt->Execute(values);
+		} while (ret_param != SQL_NO_DATA); // Execute while there is a parameter set
+
 		if (!stmt->res->success) {
 			stmt->error_messages.emplace_back(stmt->res->error);
 			return SQL_ERROR;
@@ -142,7 +147,7 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 	}
 }
 
-SQLRETURN SetStringValueLength(std::string val_str, SQLLEN *str_len_or_ind_ptr) {
+SQLRETURN SetStringValueLength(const std::string &val_str, SQLLEN *str_len_or_ind_ptr) {
 	if (str_len_or_ind_ptr) {
 		// it fills the required lenght from string value
 		*str_len_or_ind_ptr = val_str.size();
