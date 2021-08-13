@@ -94,7 +94,7 @@ private:
 
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
-	void PurgeQueue();
+	void PurgeQueue(block_id_t block_id);
 
 	//! Asserts that current_memory is equal to the sum of loaded blocks (used for verification)
 	void VerifyCurrentMemory();
