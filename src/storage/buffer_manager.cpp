@@ -160,7 +160,7 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
-      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK) {
+      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK), unload_until_fraction(0.9) {
 }
 
 BufferManager::~BufferManager() {
@@ -355,29 +355,46 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 #ifdef DEBUG
 	VerifyCurrentMemory();
 #endif
-	unique_ptr<BufferEvictionNode> node;
 	current_memory += extra_memory;
-	while (current_memory > memory_limit) {
-		// get a block to unpin from the queue
-		if (!queue->q.try_dequeue(node)) {
-			current_memory -= extra_memory;
-			return false;
+	if (current_memory > memory_limit) {
+		memory_full_lock.lock();
+		bool locked = true;
+		// Check if memory is still full
+		if (current_memory > memory_limit) {
+			lock_guard<mutex> u_lock(unload_lock);
+			unique_ptr<BufferEvictionNode> node;
+			while (current_memory > unload_until_fraction * memory_limit) {
+				// get a block to unpin from the queue
+				if (!queue->q.try_dequeue(node)) {
+					current_memory -= extra_memory;
+					if (locked) {
+						memory_full_lock.unlock();
+					}
+					return false;
+				}
+				// try to get a reference to the underlying block pointer
+				auto handle = node->TryGetBlockHandle();
+				if (!handle) {
+					// we did not get a reference: the node was redundant
+					continue;
+				}
+				// we might be able to free this block: grab the mutex and check if we can free it
+				lock_guard<mutex> lock(handle->lock);
+				if (!handle->CanUnload()) {
+					// something changed in the mean-time, bail out
+					continue;
+				}
+				// hooray, we can unload the block
+				// release the memory and mark the block as unloaded
+				handle->Unload();
+				if (current_memory <= memory_limit && locked) {
+					memory_full_lock.unlock();
+					locked = false;
+				}
+			}
+		} else {
+			memory_full_lock.unlock();
 		}
-		// try to get a reference to the underlying block pointer
-		auto handle = node->TryGetBlockHandle();
-		if (!handle) {
-			// we did not get a reference: the node was redundant
-			continue;
-		}
-		// we might be able to free this block: grab the mutex and check if we can free it
-		lock_guard<mutex> lock(handle->lock);
-		if (!handle->CanUnload()) {
-			// something changed in the mean-time, bail out
-			continue;
-		}
-		// hooray, we can unload the block
-		// release the memory and mark the block as unloaded
-		handle->Unload();
 	}
 	return true;
 }
