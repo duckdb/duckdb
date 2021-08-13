@@ -12,13 +12,13 @@ export PSQLODBC_DIR=$(pwd)
 # creating contrib_regression database used by some tests
 ./build/debug/reset-db < sampletables.sql
 if [[ $? != 0 ]]; then
-#    cat /tmp/odbctrace
+    cat /tmp/odbctrace
     exit 1
 fi
 
 # running supported tests
 ./build/debug/psql_odbc_test -f ${BASE_DUCKDB_DIR}/tools/odbc/supported_tests
 if [[ $? != 0 ]]; then
-#    cat /tmp/odbctrace
+    cat /tmp/odbctrace
     exit 1
 fi

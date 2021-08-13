@@ -26,7 +26,6 @@ SUPPORTED_TESTS[14]=test_while_next_iteration
 for test in ${SUPPORTED_TESTS[@]}
 do
     echo "$test"
-#    ./nanodbc/build/VSCode/Debug/test/odbc_tests $test
     ./nanodbc/build/test/odbc_tests $test
     if [[ $? != 0 ]]; then
         exit 1
