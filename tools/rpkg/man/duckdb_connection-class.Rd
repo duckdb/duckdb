@@ -9,6 +9,7 @@
 \alias{dbSendQuery,duckdb_connection,character-method}
 \alias{dbDataType,duckdb_connection-method}
 \alias{dbWriteTable,duckdb_connection,character,data.frame-method}
+\alias{dbAppendTable,duckdb_connection-method}
 \alias{dbListTables,duckdb_connection-method}
 \alias{dbExistsTable,duckdb_connection,character-method}
 \alias{dbListFields,duckdb_connection,character-method}
@@ -38,6 +39,8 @@
   temporary = FALSE,
   ...
 )
+
+\S4method{dbAppendTable}{duckdb_connection}(conn, name, value, ..., row.names = NULL)
 
 \S4method{dbListTables}{duckdb_connection}(conn, ...)
 

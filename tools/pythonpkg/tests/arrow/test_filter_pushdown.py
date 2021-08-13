@@ -2,9 +2,13 @@ import duckdb
 import os
 import sys
 import pytest
+import tempfile
 try:
     import pyarrow as pa
+    import pyarrow.parquet as pq
     import pyarrow.dataset as ds
+    import numpy as np
+    import pandas as pd
     can_run = True
 except:
     can_run = False
@@ -215,6 +219,7 @@ class TestArrowFilterPushdown(object):
         # Try Or
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '2010-01-01' or b ='2000-01-01'").fetchone()[0] == 2
 
+        
     def test_filter_pushdown_no_projection(self,duckdb_cursor):
         if not can_run:
             return
@@ -228,3 +233,31 @@ class TestArrowFilterPushdown(object):
         arrow_dataset = ds.dataset(arrow_table)
         duckdb_conn.register_arrow("testarrowdataset",arrow_dataset)
         assert duckdb_conn.execute("SELECT * FROM  testarrowdataset VALUES where a =1").fetchall() == [(1, 1, 1)]
+
+    def test_filter_pushdown_2145(self,duckdb_cursor):
+        if not can_run:
+            return
+
+        date1 = pd.date_range("2018-01-01", "2018-12-31", freq="B")
+        df1 = pd.DataFrame(np.random.randn(date1.shape[0], 5), columns=list("ABCDE"))
+        df1["date"] = date1
+
+        date2 = pd.date_range("2019-01-01", "2019-12-31", freq="B")
+        df2 = pd.DataFrame(np.random.randn(date2.shape[0], 5), columns=list("ABCDE"))
+        df2["date"] = date2
+
+        pq.write_table(pa.table(df1), "data1.parquet")
+        pq.write_table(pa.table(df2), "data2.parquet")
+
+        table = pq.ParquetDataset(["data1.parquet", "data2.parquet"]).read()
+
+        con = duckdb.connect()
+        con.register_arrow("testarrow",table)
+
+        output_df = duckdb.arrow(table).filter("date > '2019-01-01'").df()
+        expected_df = duckdb.from_parquet("data*.parquet").filter("date > '2019-01-01'").df()
+        pd.testing.assert_frame_equal(expected_df, output_df)
+
+        os.remove("data1.parquet")
+        os.remove("data2.parquet")
+

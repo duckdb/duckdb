@@ -25,6 +25,10 @@ struct DatePartFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DateSubFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DateTruncFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
