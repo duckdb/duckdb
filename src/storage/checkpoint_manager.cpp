@@ -336,7 +336,7 @@ void CheckpointManager::RegisterPartialBlock(ColumnSegment *segment, idx_t segme
 	partial_segment.segment = segment;
 	partial_segment.offset_in_block = 0;
 	partial_block->segments.push_back(partial_segment);
-	auto space_left = Storage::BLOCK_SIZE - segment_size;
+	auto space_left = Storage::BLOCK_SIZE - AlignValue(segment_size);
 	partially_filled_blocks[space_left] = move(partial_block);
 }
 
