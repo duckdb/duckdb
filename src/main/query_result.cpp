@@ -28,7 +28,7 @@ unique_ptr<DataChunk> QueryResult::Fetch() {
 	return chunk;
 }
 
-bool QueryResult::Equals(QueryResult &other) {
+bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 	// first compare the success state of the results
 	if (success != other.success) {
 		return false;
@@ -72,7 +72,7 @@ bool QueryResult::Equals(QueryResult &other) {
 			}
 		}
 	}
-}
+} // LCOV_EXCL_STOP
 
 void QueryResult::Print() {
 	Printer::Print(ToString());
