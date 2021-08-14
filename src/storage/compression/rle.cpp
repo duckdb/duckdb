@@ -115,7 +115,7 @@ idx_t RLEFinalAnalyze(AnalyzeState &state) {
 // Compress
 //===--------------------------------------------------------------------===//
 struct RLEConstants {
-	static constexpr const idx_t RLE_HEADER_SIZE = sizeof(uint32_t);
+	static constexpr const idx_t RLE_HEADER_SIZE = sizeof(uint64_t);
 };
 
 template <class T>
@@ -197,7 +197,7 @@ struct RLECompressState : public CompressionState {
 		idx_t total_segment_size = minimal_rle_offset + counts_size;
 		memmove(handle->node->buffer + minimal_rle_offset, handle->node->buffer + original_rle_offset, counts_size);
 		// store the final RLE offset within the segment
-		Store<uint32_t>(minimal_rle_offset, handle->node->buffer);
+		Store<uint64_t>(minimal_rle_offset, handle->node->buffer);
 		handle.reset();
 
 		auto &state = checkpointer.GetCheckpointState();
@@ -251,7 +251,7 @@ struct RLEScanState : public SegmentScanState {
 		handle = buffer_manager.Pin(segment.block);
 		entry_pos = 0;
 		position_in_entry = 0;
-		rle_count_offset = Load<uint32_t>(handle->node->buffer + segment.GetBlockOffset());
+		rle_count_offset = Load<uint64_t>(handle->node->buffer + segment.GetBlockOffset());
 		D_ASSERT(rle_count_offset <= Storage::BLOCK_SIZE);
 	}
 
