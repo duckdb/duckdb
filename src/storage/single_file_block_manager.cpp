@@ -210,7 +210,7 @@ block_id_t SingleFileBlockManager::GetFreeBlockId() {
 		// take an entry from the free list
 		block = *free_list.begin();
 		// erase the entry from the free list again
-		free_list.erase(block);
+		free_list.erase(free_list.begin());
 	} else {
 		block = max_block++;
 	}
@@ -282,6 +282,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		MetaBlockWriter writer(db);
 
 		header.free_list = writer.block->id;
+		free_list.erase(writer.block->id);
 		modified_blocks.insert(writer.block->id);
 
 		// FIXME: how do we handle the scenario where this takes up multiple blocks?

@@ -12,6 +12,7 @@
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/block_manager.hpp"
+#include "duckdb/common/set.hpp"
 
 namespace duckdb {
 class DatabaseInstance;
@@ -24,7 +25,7 @@ public:
 
 	DatabaseInstance &db;
 	unique_ptr<Block> block;
-	vector<block_id_t> written_blocks;
+	set<block_id_t> written_blocks;
 	idx_t offset;
 
 public:
