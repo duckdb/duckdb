@@ -201,7 +201,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 				int64_t list_length;
 				// deal with NULL values
 				if (!vdata.validity.RowIsValid(current_idx)) {
-					list_length = 1;
+					list_length = 0;
 				} else {
 					auto list_data = (list_entry_t *)vdata.data;
 					auto list_entry = list_data[current_idx];
