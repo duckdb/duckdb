@@ -309,9 +309,10 @@ bool CheckpointManager::GetPartialBlock(ColumnSegment *segment, idx_t segment_si
 	partial_block->segments.push_back(partial_segment);
 
 	D_ASSERT(offset_in_block > 0);
+	D_ASSERT(ValueIsAligned(offset_in_block));
 
 	// check if the block is STILL partially filled after adding the segment_size
-	auto new_size = offset_in_block + segment_size;
+	auto new_size = AlignValue(offset_in_block + segment_size);
 	if (new_size <= CheckpointManager::PARTIAL_BLOCK_THRESHOLD) {
 		// the block is still partially filled: add it to the partially_filled_blocks list
 		auto new_space_left = Storage::BLOCK_SIZE - new_size;
