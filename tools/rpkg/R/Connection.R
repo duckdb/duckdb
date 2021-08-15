@@ -208,7 +208,7 @@ setMethod(
       stop("Column name mismatch for append")
     }
 
-    value <- encode_strings(value)
+    value <- encode_values(value)
 
     if (nrow(value)) {
       table_name <- dbQuoteIdentifier(conn, name)
@@ -225,18 +225,23 @@ setMethod(
   }
 )
 
-encode_strings <- function(value) {
+encode_values <- function(value) {
   is_factor <- vapply(value, is.factor, logical(1))
   if (any(is_factor)) {
     warning("Factors converted to character")
   }
 
-  is_character <- vapply(value, is.character, logical(1))
-  value[is_character] <- lapply(value[is_character], enc2utf8)
   value[is_factor] <- lapply(value[is_factor], function(x) {
     levels(x) <- enc2utf8(levels(x))
     as.character(x)
   })
+
+  is_character <- vapply(value, is.character, logical(1))
+  value[is_character] <- lapply(value[is_character], enc2utf8)
+
+  is_posixlt <- vapply(value, inherits, "POSIXlt", FUN.VALUE = logical(1))
+  value[is_posixlt] <- lapply(value[is_posixlt], as.POSIXct)
+
   value
 }
 
