@@ -41,14 +41,14 @@ RStrings::RStrings() {
 	// allocate strings once
 	RProtector r;
 
-	SEXP out = r.Protect(Rf_allocVector(STRSXP, 5));
-	SET_STRING_ELT(out, 0, secs = Rf_mkChar("secs"));
-	SET_STRING_ELT(out, 1, mins = Rf_mkChar("mins"));
-	SET_STRING_ELT(out, 2, hours = Rf_mkChar("hours"));
-	SET_STRING_ELT(out, 3, days = Rf_mkChar("days"));
-	SET_STRING_ELT(out, 4, weeks = Rf_mkChar("weeks"));
-	R_PreserveObject(out);
-	MARK_NOT_MUTABLE(out);
+	SEXP strings = r.Protect(Rf_allocVector(STRSXP, 5));
+	SET_STRING_ELT(strings, 0, secs = Rf_mkChar("secs"));
+	SET_STRING_ELT(strings, 1, mins = Rf_mkChar("mins"));
+	SET_STRING_ELT(strings, 2, hours = Rf_mkChar("hours"));
+	SET_STRING_ELT(strings, 3, days = Rf_mkChar("days"));
+	SET_STRING_ELT(strings, 4, weeks = Rf_mkChar("weeks"));
+	R_PreserveObject(strings);
+	MARK_NOT_MUTABLE(strings);
 }
 
 template <class SRC, class DST, class RTYPE>
