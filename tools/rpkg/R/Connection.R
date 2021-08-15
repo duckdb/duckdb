@@ -208,19 +208,9 @@ setMethod(
       stop("Column name mismatch for append")
     }
 
-    is_factor <- vapply(value, is.factor, logical(1))
-    if (any(is_factor)) {
-      warning("Factors converted to character")
-    }
+    value <- encode_strings(value)
 
     if (nrow(value)) {
-      is_character <- vapply(value, is.character, logical(1))
-      value[is_character] <- lapply(value[is_character], enc2utf8)
-      value[is_factor] <- lapply(value[is_factor], function(x) {
-        levels(x) <- enc2utf8(levels(x))
-        as.character(x)
-      })
-
       table_name <- dbQuoteIdentifier(conn, name)
 
       view_name <- sprintf("_duckdb_append_view_%s", duckdb_random_string())
@@ -234,6 +224,21 @@ setMethod(
     invisible(nrow(value))
   }
 )
+
+encode_strings <- function(value) {
+  is_factor <- vapply(value, is.factor, logical(1))
+  if (any(is_factor)) {
+    warning("Factors converted to character")
+  }
+
+  is_character <- vapply(value, is.character, logical(1))
+  value[is_character] <- lapply(value[is_character], enc2utf8)
+  value[is_factor] <- lapply(value[is_factor], function(x) {
+    levels(x) <- enc2utf8(levels(x))
+    as.character(x)
+  })
+  value
+}
 
 #' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbListTables

@@ -314,6 +314,9 @@ setMethod(
     if (!is.null(names(params))) {
       stop("`params` must not be named")
     }
+
+    params <- encode_strings(params)
+
     out <- .Call(duckdb_bind_R, res@stmt_lst$ref, params, res@arrow)
     if (length(out) == 1) {
       out <- out[[1]]

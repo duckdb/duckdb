@@ -44,7 +44,7 @@ test_that("dbBind() works as expected for all types", {
 
   test_convert(con, "TIMESTAMP", as.POSIXct("2019-11-26 21:11Z", "UTC"))
 
-  test_convert(con, "STRING", as.factor("Hello, World"))
+  expect_warning(test_convert(con, "STRING", as.factor("Hello, World")))
 
   dbDisconnect(con, shutdown = T)
 })
