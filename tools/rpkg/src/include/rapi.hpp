@@ -82,7 +82,7 @@ struct RStrings {
 	SEXP difftime_str;
 	SEXP arrow_str; // StringsToSexp
 	SEXP POSIXct_POSIXt_str;
-	SEXP str_ref_type_names_rtypes_n_param_str; // StringsToSexp
+	SEXP str_ref_type_names_rtypes_n_param_str;
 	SEXP _registered_df__sym; // Rf_install
 	SEXP _registered_arrow__sym;
 	SEXP tzone_sym;
