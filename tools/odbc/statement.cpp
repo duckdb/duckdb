@@ -218,7 +218,6 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 			memcpy(character_attribute_ptr, type_name.c_str(), out_len);
 			((char *)character_attribute_ptr)[out_len] = '\0';
 
-
 			if (string_length_ptr) {
 				*string_length_ptr = out_len;
 			}
