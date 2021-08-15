@@ -120,3 +120,17 @@ query R
 select round(stddev(val), 1) from stddev_test_alias
 ----
 478.800000
+
+query I
+select stddev(0) from range(10)
+----
+0
+
+statement error
+select stddev(a) from (values (1e301), (-1e301)) tbl(a)
+
+statement error
+select var_samp(a) from (values (1e301), (-1e301)) tbl(a)
+
+statement error
+select var_pop(a) from (values (1e301), (-1e301)) tbl(a)

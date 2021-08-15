@@ -476,7 +476,7 @@ static void MaterializeOverForWindow(BoundWindowExpression *wexpr, DataChunk &in
 		executor.AddExpression(*oexpr);
 	}
 
-	D_ASSERT(over_types.size() > 0);
+	D_ASSERT(!over_types.empty());
 
 	over_chunk.Initialize(over_types);
 	executor.Execute(input_chunk, over_chunk);
@@ -484,7 +484,48 @@ static void MaterializeOverForWindow(BoundWindowExpression *wexpr, DataChunk &in
 	over_chunk.Verify();
 }
 
+static inline bool BoundaryNeedsPeer(const WindowBoundary &boundary) {
+	switch (boundary) {
+	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::EXPR_PRECEDING_RANGE:
+	case WindowBoundary::EXPR_FOLLOWING_RANGE:
+		return true;
+	default:
+		return false;
+	}
+}
+
 struct WindowBoundariesState {
+
+	static inline bool IsScalar(const unique_ptr<Expression> &expr) {
+		return expr ? expr->IsScalar() : true;
+	}
+
+	explicit WindowBoundariesState(BoundWindowExpression *wexpr)
+	    : type(wexpr->type), start_boundary(wexpr->start), end_boundary(wexpr->end),
+	      partition_count(wexpr->partitions.size()), order_count(wexpr->orders.size()),
+	      range_sense(wexpr->orders.empty() ? OrderType::INVALID : wexpr->orders[0].type),
+	      scalar_start(IsScalar(wexpr->start_expr)), scalar_end(IsScalar(wexpr->end_expr)),
+	      has_preceding_range(wexpr->start == WindowBoundary::EXPR_PRECEDING_RANGE ||
+	                          wexpr->end == WindowBoundary::EXPR_PRECEDING_RANGE),
+	      has_following_range(wexpr->start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
+	                          wexpr->end == WindowBoundary::EXPR_FOLLOWING_RANGE),
+	      needs_peer(BoundaryNeedsPeer(wexpr->end) || wexpr->type == ExpressionType::WINDOW_CUME_DIST) {
+	}
+
+	// Cached lookups
+	const ExpressionType type;
+	const WindowBoundary start_boundary;
+	const WindowBoundary end_boundary;
+	const idx_t partition_count;
+	const idx_t order_count;
+	const OrderType range_sense;
+	const bool scalar_start;
+	const bool scalar_end;
+	const bool has_preceding_range;
+	const bool has_following_range;
+	const bool needs_peer;
+
 	idx_t partition_start = 0;
 	idx_t partition_end = 0;
 	idx_t peer_start = 0;
@@ -638,27 +679,15 @@ static idx_t FindOrderedRangeBound(ChunkCollection &over, const idx_t order_col,
 	}
 }
 
-static inline bool BoundaryNeedsPeer(const WindowBoundary &boundary) {
-	switch (boundary) {
-	case WindowBoundary::CURRENT_ROW_RANGE:
-	case WindowBoundary::EXPR_PRECEDING_RANGE:
-	case WindowBoundary::EXPR_FOLLOWING_RANGE:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t input_size, const idx_t row_idx,
+static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t input_size, const idx_t row_idx,
                                    ChunkCollection &over_collection, ChunkCollection &boundary_start_collection,
                                    ChunkCollection &boundary_end_collection, const BitArray<uint64_t> &partition_mask,
-                                   const BitArray<uint64_t> &order_mask, WindowBoundariesState &bounds) {
+                                   const BitArray<uint64_t> &order_mask) {
 
 	// RANGE sorting parameters
-	const auto order_col = wexpr->partitions.size();
-	const auto range_sense = wexpr->orders.empty() ? OrderType::INVALID : wexpr->orders[0].type;
+	const auto order_col = bounds.partition_count;
 
-	if (wexpr->partitions.size() + wexpr->orders.size() > 0) {
+	if (bounds.partition_count + bounds.order_count > 0) {
 
 		// determine partition and peer group boundaries to ultimately figure out window size
 		bounds.is_same_partition = !partition_mask[row_idx];
@@ -671,7 +700,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 
 			// find end of partition
 			bounds.partition_end = input_size;
-			if (!wexpr->partitions.empty()) {
+			if (bounds.partition_count) {
 				bounds.partition_end = FindNextStart(partition_mask, bounds.partition_start + 1, input_size);
 			}
 
@@ -680,16 +709,14 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 			bounds.valid_start = bounds.partition_start;
 			bounds.valid_end = bounds.partition_end;
 
-			if ((bounds.valid_start < bounds.valid_end) && (wexpr->start == WindowBoundary::EXPR_PRECEDING_RANGE ||
-			                                                wexpr->end == WindowBoundary::EXPR_PRECEDING_RANGE)) {
+			if ((bounds.valid_start < bounds.valid_end) && bounds.has_preceding_range) {
 				// Exclude any leading NULLs
 				if (CellIsNull(over_collection, order_col, bounds.valid_start)) {
 					bounds.valid_start = FindNextStart(order_mask, bounds.valid_start + 1, bounds.valid_end);
 				}
 			}
 
-			if ((bounds.valid_start < bounds.valid_end) && (wexpr->start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
-			                                                wexpr->end == WindowBoundary::EXPR_FOLLOWING_RANGE)) {
+			if ((bounds.valid_start < bounds.valid_end) && bounds.has_following_range) {
 				// Exclude any trailing NULLs
 				if (CellIsNull(over_collection, order_col, bounds.valid_end - 1)) {
 					bounds.valid_end = FindPrevStart(order_mask, bounds.valid_start, bounds.valid_end);
@@ -700,9 +727,9 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 			bounds.peer_start = row_idx;
 		}
 
-		if (BoundaryNeedsPeer(wexpr->end) || wexpr->type == ExpressionType::WINDOW_CUME_DIST) {
+		if (bounds.needs_peer) {
 			bounds.peer_end = bounds.partition_end;
-			if (!wexpr->orders.empty()) {
+			if (bounds.order_count) {
 				bounds.peer_end = FindNextStart(order_mask, bounds.peer_start + 1, bounds.partition_end);
 			}
 		}
@@ -718,7 +745,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 	bounds.window_start = -1;
 	bounds.window_end = -1;
 
-	switch (wexpr->start) {
+	switch (bounds.start_boundary) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		bounds.window_start = bounds.partition_start;
 		break;
@@ -729,32 +756,32 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		bounds.window_start = bounds.peer_start;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS: {
-		bounds.window_start = (int64_t)row_idx - GetCell<int64_t>(boundary_start_collection, 0,
-		                                                          wexpr->start_expr->IsScalar() ? 0 : row_idx);
+		bounds.window_start =
+		    (int64_t)row_idx - GetCell<int64_t>(boundary_start_collection, 0, bounds.scalar_start ? 0 : row_idx);
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_ROWS: {
 		bounds.window_start =
-		    row_idx + GetCell<int64_t>(boundary_start_collection, 0, wexpr->start_expr->IsScalar() ? 0 : row_idx);
+		    row_idx + GetCell<int64_t>(boundary_start_collection, 0, bounds.scalar_start ? 0 : row_idx);
 		break;
 	}
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
-		const auto expr_idx = wexpr->start_expr->IsScalar() ? 0 : row_idx;
+		const auto expr_idx = bounds.scalar_start ? 0 : row_idx;
 		if (CellIsNull(boundary_start_collection, 0, expr_idx)) {
 			bounds.window_start = bounds.peer_start;
 		} else {
 			bounds.window_start =
-			    FindOrderedRangeBound<true>(over_collection, order_col, range_sense, bounds.valid_start, row_idx,
+			    FindOrderedRangeBound<true>(over_collection, order_col, bounds.range_sense, bounds.valid_start, row_idx,
 			                                boundary_start_collection, expr_idx);
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
-		const auto expr_idx = wexpr->start_expr->IsScalar() ? 0 : row_idx;
+		const auto expr_idx = bounds.scalar_start ? 0 : row_idx;
 		if (CellIsNull(boundary_start_collection, 0, expr_idx)) {
 			bounds.window_start = bounds.peer_start;
 		} else {
-			bounds.window_start = FindOrderedRangeBound<true>(over_collection, order_col, range_sense, row_idx,
+			bounds.window_start = FindOrderedRangeBound<true>(over_collection, order_col, bounds.range_sense, row_idx,
 			                                                  bounds.valid_end, boundary_start_collection, expr_idx);
 		}
 		break;
@@ -763,7 +790,7 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		throw InternalException("Unsupported window start boundary");
 	}
 
-	switch (wexpr->end) {
+	switch (bounds.end_boundary) {
 	case WindowBoundary::CURRENT_ROW_ROWS:
 		bounds.window_end = row_idx + 1;
 		break;
@@ -774,30 +801,29 @@ static void UpdateWindowBoundaries(BoundWindowExpression *wexpr, const idx_t inp
 		bounds.window_end = bounds.partition_end;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_ROWS:
-		bounds.window_end = (int64_t)row_idx -
-		                    GetCell<int64_t>(boundary_end_collection, 0, wexpr->end_expr->IsScalar() ? 0 : row_idx) + 1;
+		bounds.window_end =
+		    (int64_t)row_idx - GetCell<int64_t>(boundary_end_collection, 0, bounds.scalar_end ? 0 : row_idx) + 1;
 		break;
 	case WindowBoundary::EXPR_FOLLOWING_ROWS:
-		bounds.window_end =
-		    row_idx + GetCell<int64_t>(boundary_end_collection, 0, wexpr->end_expr->IsScalar() ? 0 : row_idx) + 1;
+		bounds.window_end = row_idx + GetCell<int64_t>(boundary_end_collection, 0, bounds.scalar_end ? 0 : row_idx) + 1;
 		break;
 	case WindowBoundary::EXPR_PRECEDING_RANGE: {
-		const auto expr_idx = wexpr->end_expr->IsScalar() ? 0 : row_idx;
+		const auto expr_idx = bounds.scalar_end ? 0 : row_idx;
 		if (CellIsNull(boundary_end_collection, 0, expr_idx)) {
 			bounds.window_end = bounds.peer_end;
 		} else {
 			bounds.window_end =
-			    FindOrderedRangeBound<false>(over_collection, order_col, range_sense, bounds.valid_start, row_idx,
-			                                 boundary_end_collection, expr_idx);
+			    FindOrderedRangeBound<false>(over_collection, order_col, bounds.range_sense, bounds.valid_start,
+			                                 row_idx, boundary_end_collection, expr_idx);
 		}
 		break;
 	}
 	case WindowBoundary::EXPR_FOLLOWING_RANGE: {
-		const auto expr_idx = wexpr->end_expr->IsScalar() ? 0 : row_idx;
+		const auto expr_idx = bounds.scalar_end ? 0 : row_idx;
 		if (CellIsNull(boundary_end_collection, 0, expr_idx)) {
 			bounds.window_end = bounds.peer_end;
 		} else {
-			bounds.window_end = FindOrderedRangeBound<false>(over_collection, order_col, range_sense, row_idx,
+			bounds.window_end = FindOrderedRangeBound<false>(over_collection, order_col, bounds.range_sense, row_idx,
 			                                                 bounds.valid_end, boundary_end_collection, expr_idx);
 		}
 		break;
@@ -873,7 +899,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		                                              &payload_collection);
 	}
 
-	WindowBoundariesState bounds;
+	WindowBoundariesState bounds(wexpr);
 	uint64_t dense_rank = 1, rank_equal = 0, rank = 1;
 
 	// this is the main loop, go through all sorted rows and compute window function result
@@ -891,8 +917,8 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		auto &result = output_chunk.data[0];
 
 		// special case, OVER (), aggregate over everything
-		UpdateWindowBoundaries(wexpr, input.Count(), row_idx, over, boundary_start_collection, boundary_end_collection,
-		                       partition_mask, order_mask, bounds);
+		UpdateWindowBoundaries(bounds, input.Count(), row_idx, over, boundary_start_collection, boundary_end_collection,
+		                       partition_mask, order_mask);
 		if (WindowNeedsRank(wexpr)) {
 			if (!bounds.is_same_partition || row_idx == 0) { // special case for first row, need to init
 				dense_rank = 1;

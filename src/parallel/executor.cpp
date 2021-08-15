@@ -88,10 +88,10 @@ void Executor::Initialize(PhysicalOperator *plan) {
 
 	lock_guard<mutex> elock(executor_lock);
 	pipelines.clear();
-	if (!exceptions.empty()) {
+	if (!exceptions.empty()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
 		throw Exception(exceptions[0]);
-	}
+	} // LCOV_EXCL_STOP
 }
 
 void Executor::Reset() {
@@ -281,7 +281,7 @@ void Executor::Flush(ThreadContext &tcontext) {
 	context.profiler->Flush(tcontext.profiler);
 }
 
-bool Executor::GetPipelinesProgress(int &current_progress) {
+bool Executor::GetPipelinesProgress(int &current_progress) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
 	if (!pipelines.empty()) {
@@ -290,7 +290,7 @@ bool Executor::GetPipelinesProgress(int &current_progress) {
 		current_progress = -1;
 		return true;
 	}
-}
+} // LCOV_EXCL_STOP
 
 unique_ptr<DataChunk> Executor::FetchChunk() {
 	D_ASSERT(physical_plan);

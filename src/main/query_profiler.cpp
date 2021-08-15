@@ -241,10 +241,11 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			if (!info) {
 				continue;
 			}
-			if (int(entry->second->info.executors_info.size()) <= info->id) {
-				entry->second->info.executors_info.resize(info->id + 1);
+			auto info_id = info->id;
+			if (int(entry->second->info.executors_info.size()) <= info_id) {
+				entry->second->info.executors_info.resize(info_id + 1);
 			}
-			entry->second->info.executors_info[info->id] = move(info);
+			entry->second->info.executors_info[info_id] = move(info);
 		}
 	}
 }
