@@ -210,11 +210,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
 		dest_ptr[0] = (double)Timestamp::GetEpochSeconds(val.value_.timestamp);
 		// some dresssup for R
-		RProtector r_ts;
-		SEXP cl = r_ts.Protect(NEW_STRING(2));
-		SET_STRING_ELT(cl, 0, r_ts.Protect(Rf_mkChar("POSIXct")));
-		SET_STRING_ELT(cl, 1, r_ts.Protect(Rf_mkChar("POSIXt")));
-		SET_CLASS(res, cl);
+		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
 		Rf_setAttrib(res, RStrings::get().tzone_sym, RStrings::get().UTC_str);
 		return res;
 	}
