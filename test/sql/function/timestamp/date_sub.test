@@ -433,6 +433,13 @@ select DATESUB('microsecond', '12:00:00.000050'::TIME, '12:00:00'::TIME);
 ----
 -50
 
+foreach datepart year month day decade century millennium quarter week
+
+statement error
+select DATESUB('${datepart}', '12:00:00.000050'::TIME, '12:00:00'::TIME)
+
+endloop
+
 # Negation
 foreach datepart 'hour' 'minute' 'second' 'millisecond' 'microsecond'
 

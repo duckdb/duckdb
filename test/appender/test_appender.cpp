@@ -295,3 +295,20 @@ TEST_CASE("Test various appender types", "[appender]") {
 		REQUIRE_THROWS(appender.AppendRow(true, 1, 2, 3, 4, 5, 1));
 	}
 }
+
+TEST_CASE("Test alter table in the middle of append", "[appender]") {
+	unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	// create a table to append to
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER, j INTEGER)"));
+	{
+		// create the appender
+		Appender appender(con, "integers");
+		appender.AppendRow(1, 2);
+
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE integers DROP COLUMN i"));
+		REQUIRE_THROWS(appender.Close());
+	}
+}
