@@ -1,6 +1,7 @@
 #include "parameter_wrapper.hpp"
 #include "duckdb_odbc.hpp"
 #include "duckdb/common/types/decimal.hpp"
+#include "duckdb/common/string_util.hpp"
 
 using duckdb::Decimal;
 using duckdb::idx_t;
@@ -33,13 +34,9 @@ SQLRETURN ParameterWrapper::GetValues(std::vector<Value> &values) {
 			param_status_ptr[cur_paramset_idx] = ret;
 		}
 		if (ret != SQL_PARAM_SUCCESS) {
-			std::string error_msg;
-			error_msg.reserve(100);
-			auto len = snprintf((char *)error_msg.data(), 100,
-			                    "Error setting parameter value: ParameterSet '%ld', ParameterIndex '%ld'",
-			                    cur_paramset_idx, desc_idx);
-			error_msg.resize(len);
-			error_messages->emplace_back(error_msg);
+			auto msg = duckdb::StringUtil::Format(
+			    "Error setting parameter value: ParameterSet '%ld', ParameterIndex '%ld'", cur_paramset_idx, desc_idx);
+			error_messages->emplace_back(msg);
 			if (!param_status_ptr) {
 				return SQL_ERROR;
 			}
@@ -57,8 +54,7 @@ SQLRETURN ParameterDescriptor::ValidateNumeric(int precision, int scale) {
 	if (precision < 1 || precision > Decimal::MAX_WIDTH_DECIMAL || scale < 0 || scale > Decimal::MAX_WIDTH_DECIMAL ||
 	    scale > precision) {
 		// TODO we should use SQLGetDiagField to register the error message
-		std::string msg = "Numeric precision: " + std::to_string(precision) + " and scale: " + std::to_string(scale) +
-		                  " not supported.";
+		auto msg = StringUtil::Format("Numeric precision %d and scale %d not supported", precision, scale);
 		return SQL_ERROR;
 	}
 	return SQL_SUCCESS;
@@ -91,27 +87,31 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t val_idx) {
 		value = Value(duckdb::OdbcUtils::ReadString(app_param_desc.param_value_ptr, app_param_desc.buffer_len));
 		break;
 	case SQL_TINYINT:
-		value = Value::TINYINT(Load<int8_t>(dataptr)); // default int8_t
 		if (app_param_desc.value_type == SQL_C_UTINYINT) {
-			value = Value::TINYINT(Load<uint8_t>(dataptr));
+			value = Value::UTINYINT(Load<uint8_t>(dataptr));
+		} else {
+			value = Value::TINYINT(Load<int8_t>(dataptr));
 		}
 		break;
 	case SQL_SMALLINT:
-		value = Value::SMALLINT(Load<int16_t>(dataptr));
 		if (app_param_desc.value_type == SQL_C_USHORT) {
 			value = Value::USMALLINT(Load<uint16_t>(dataptr));
+		} else {
+			value = Value::SMALLINT(Load<int16_t>(dataptr));
 		}
 		break;
 	case SQL_INTEGER:
-		value = Value::INTEGER(Load<int32_t>(dataptr));
 		if (app_param_desc.value_type == SQL_C_ULONG) {
 			value = Value::UINTEGER(Load<uint32_t>(dataptr));
+		} else {
+			value = Value::INTEGER(Load<int32_t>(dataptr));
 		}
 		break;
 	case SQL_BIGINT:
-		value = Value::BIGINT(Load<int64_t>(dataptr));
 		if (app_param_desc.value_type == SQL_C_UBIGINT) {
 			value = Value::UBIGINT(Load<uint64_t>(dataptr));
+		} else {
+			value = Value::BIGINT(Load<int64_t>(dataptr));
 		}
 		break;
 	case SQL_FLOAT:
