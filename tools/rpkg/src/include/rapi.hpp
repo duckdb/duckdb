@@ -87,6 +87,7 @@ struct RStrings {
 	SEXP tzone_sym; // Rf_install
 	SEXP units_sym;
 	SEXP getNamespace_sym;
+	SEXP Table__from_record_batches_sym;
 	SEXP ImportSchema_sym;
 	SEXP ImportRecordBatch_sym;
 	SEXP ImportRecordBatchReader_sym;

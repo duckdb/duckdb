@@ -60,6 +60,15 @@ RStrings::RStrings() {
 	SET_VECTOR_ELT(chars, 6, str_ref_type_names_rtypes_n_param_str = RApi::StringsToSexp({"str", "ref", "type", "names", "rtypes", "n_param"}));
 	R_PreserveObject(chars);
 	MARK_NOT_MUTABLE(chars);
+
+	// Symbols don't need to be protected
+	tzone_sym = Rf_install("tzone");
+	units_sym = Rf_install("units");
+	getNamespace_sym = Rf_install("getNamespace");
+	ImportSchema_sym = Rf_install("ImportSchema");
+	ImportRecordBatch_sym = Rf_install("ImportRecordBatch");
+	ImportRecordBatchReader_sym = Rf_install("ImportRecordBatchReader");
+	Table__from_record_batches_sym = Rf_install("Table__from_record_batches");
 }
 
 template <class SRC, class DST, class RTYPE>
@@ -206,7 +215,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		SET_STRING_ELT(cl, 0, r_ts.Protect(Rf_mkChar("POSIXct")));
 		SET_STRING_ELT(cl, 1, r_ts.Protect(Rf_mkChar("POSIXt")));
 		SET_CLASS(res, cl);
-		Rf_setAttrib(res, Rf_install("tzone"), RStrings::get().UTC_str);
+		Rf_setAttrib(res, RStrings::get().tzone_sym, RStrings::get().UTC_str);
 		return res;
 	}
 

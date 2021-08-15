@@ -286,7 +286,7 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 
 				// some dresssup for R
 				SET_CLASS(dest, RStrings::get().POSIXct_POSIXt_str);
-				Rf_setAttrib(dest, Rf_install("tzone"), RStrings::get().UTC_str);
+				Rf_setAttrib(dest, RStrings::get().tzone_sym, RStrings::get().UTC_str);
 				break;
 			}
 			case LogicalTypeId::DATE: {
@@ -318,7 +318,7 @@ static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {
 
 				// some dresssup for R
 				SET_CLASS(dest, RStrings::get().difftime_str);
-				Rf_setAttrib(dest, Rf_install("units"), RStrings::get().secs_str);
+				Rf_setAttrib(dest, RStrings::get().units_sym, RStrings::get().secs_str);
 				break;
 			}
 			case LogicalTypeId::UINTEGER:
@@ -472,7 +472,7 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
 	auto result = query_result_holder->result.get();
 	// somewhat dark magic below
-	SEXP arrow_namespace_call = r.Protect(Rf_lang2(Rf_install("getNamespace"), RStrings::get().arrow_str));
+	SEXP arrow_namespace_call = r.Protect(Rf_lang2(RStrings::get().getNamespace_sym, RStrings::get().arrow_str));
 	SEXP arrow_namespace = r.Protect(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
 	bool stream = LOGICAL_POINTER(streamsexp)[0] != 0;
 	int num_of_vectors = NUMERIC_POINTER(vector_per_chunksexp)[0];
@@ -489,12 +489,12 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	// export schema setup
 	ArrowSchema arrow_schema;
 	auto schema_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_schema))));
-	auto schema_import_from_c = r.Protect(Rf_lang2(Rf_install("ImportSchema"), schema_ptr_sexp));
+	auto schema_import_from_c = r.Protect(Rf_lang2(RStrings::get().ImportSchema_sym, schema_ptr_sexp));
 
 	// export data setup
 	ArrowArray arrow_data;
 	auto data_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_data))));
-	auto batch_import_from_c = r.Protect(Rf_lang3(Rf_install("ImportRecordBatch"), data_ptr_sexp, schema_ptr_sexp));
+	auto batch_import_from_c = r.Protect(Rf_lang3(RStrings::get().ImportRecordBatch_sym, data_ptr_sexp, schema_ptr_sexp));
 	// create data batches
 	AppendableRList batches_list;
 	if (stream) {
@@ -517,7 +517,7 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	// create arrow::Table
 	if (return_table) {
 		auto from_record_batches =
-		    r.Protect(Rf_lang3(Rf_install("Table__from_record_batches"), batches_list.the_list, schema_arrow_obj));
+		    r.Protect(Rf_lang3(RStrings::get().Table__from_record_batches_sym, batches_list.the_list, schema_arrow_obj));
 		return RApi::REvalRerror(from_record_batches, arrow_namespace);
 	}
 	return batches_list.the_list;
@@ -528,13 +528,13 @@ SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp) {
 	RProtector r;
 	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
 	// somewhat dark magic below
-	SEXP arrow_namespace_call = r.Protect(Rf_lang2(Rf_install("getNamespace"), RStrings::get().arrow_str));
+	SEXP arrow_namespace_call = r.Protect(Rf_lang2(RStrings::get().getNamespace_sym, RStrings::get().arrow_str));
 	SEXP arrow_namespace = r.Protect(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
 
 	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(query_result_holder->result));
 	auto stream_ptr_sexp =
 	    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
-	auto record_batch_reader = r.Protect(Rf_lang2(Rf_install("ImportRecordBatchReader"), stream_ptr_sexp));
+	auto record_batch_reader = r.Protect(Rf_lang2(RStrings::get().ImportRecordBatchReader_sym, stream_ptr_sexp));
 	return RApi::REvalRerror(record_batch_reader, arrow_namespace);
 }
 
