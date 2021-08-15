@@ -316,7 +316,7 @@ bool CheckpointManager::GetPartialBlock(ColumnSegment *segment, idx_t segment_si
 	if (new_size <= CheckpointManager::PARTIAL_BLOCK_THRESHOLD) {
 		// the block is still partially filled: add it to the partially_filled_blocks list
 		auto new_space_left = Storage::BLOCK_SIZE - new_size;
-		partially_filled_blocks[new_space_left] = move(partial_block);
+		partially_filled_blocks.insert(make_pair(new_space_left, move(partial_block)));
 		// should not write the block yet: perhaps more columns will be added
 	} else {
 		// we are done with this block after the current write: write it to disk
@@ -337,7 +337,7 @@ void CheckpointManager::RegisterPartialBlock(ColumnSegment *segment, idx_t segme
 	partial_segment.offset_in_block = 0;
 	partial_block->segments.push_back(partial_segment);
 	auto space_left = Storage::BLOCK_SIZE - AlignValue(segment_size);
-	partially_filled_blocks[space_left] = move(partial_block);
+	partially_filled_blocks.insert(make_pair(space_left, move(partial_block)));
 }
 
 void CheckpointManager::FlushPartialSegments() {

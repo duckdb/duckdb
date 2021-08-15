@@ -87,7 +87,8 @@ private:
 
 private:
 	//! A map of (available space -> PartialBlock) for partially filled blocks
-	map<idx_t, unique_ptr<PartialBlock>> partially_filled_blocks;
+	//! This is a multimap because there might be outstanding partial blocks with the same amount of left-over space
+	multimap<idx_t, unique_ptr<PartialBlock>> partially_filled_blocks;
 };
 
 } // namespace duckdb
