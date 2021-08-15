@@ -233,9 +233,9 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			auto out_len = duckdb::MinValue(blob.size(), (size_t)buffer_length);
 			memcpy((char *)target_value_ptr, blob.c_str(), out_len);
 			// terminating null character
-			if (blob.size() < (size_t)buffer_length)
+			if (blob.size() < (size_t)buffer_length) {
 				((char *)target_value_ptr)[blob.size()] = '\0';
-			else {
+			} else {
 				((char *)target_value_ptr)[buffer_length - 1] = '\0';
 			}
 
@@ -253,9 +253,9 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			auto out_len = duckdb::MinValue(val_str.size(), (size_t)buffer_length);
 			memcpy((char *)target_value_ptr, val_str.c_str(), out_len);
 			// terminating null character
-			if (val_str.size() < (size_t)buffer_length)
+			if (val_str.size() < (size_t)buffer_length) {
 				((char *)target_value_ptr)[val_str.size()] = '\0';
-			else {
+			} else {
 				((char *)target_value_ptr)[buffer_length - 1] = '\0';
 			}
 
