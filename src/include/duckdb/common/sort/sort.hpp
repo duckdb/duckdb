@@ -75,6 +75,8 @@ public:
 
 	//! Capacity (number of rows) used to initialize blocks
 	idx_t block_capacity;
+	//! Number of rows that are merged at a time
+	idx_t rows_per_merge_partition;
 	//! Whether we are doing an external sort
 	bool external;
 

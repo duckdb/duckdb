@@ -40,7 +40,7 @@ void MergeSorter::MergePartition() {
 	}
 #endif
 	// Set up the write block
-	// Each merge task produces a SortedBlock with exactly state.block_capacity rows or less
+	// Each merge task produces a SortedBlock with exactly state.rows_per_merge_partition rows or less
 	result->InitializeWrite();
 	// Initialize arrays to store merge data
 	bool left_smaller[STANDARD_VECTOR_SIZE];
@@ -95,8 +95,8 @@ void MergeSorter::GetNextPartition() {
 	// Compute the work that this thread must do using Merge Path
 	idx_t l_end;
 	idx_t r_end;
-	if (state.l_start + state.r_start + state.block_capacity < l_count + r_count) {
-		const idx_t intersection = state.l_start + state.r_start + state.block_capacity;
+	if (state.l_start + state.r_start + state.rows_per_merge_partition < l_count + r_count) {
+		const idx_t intersection = state.l_start + state.r_start + state.rows_per_merge_partition;
 		GetIntersection(left, right, intersection, l_end, r_end);
 		D_ASSERT(l_end <= l_count);
 		D_ASSERT(r_end <= r_count);
@@ -389,6 +389,13 @@ void MergeSorter::MergeRadix(const idx_t &count, const bool left_smaller[]) {
 		}
 		const idx_t &l_count = !l_done ? l_block->count : 0;
 		const idx_t &r_count = !r_done ? r_block->count : 0;
+		// Create new result block (if needed)
+		if (result_block->count == state.block_capacity) {
+			result->CreateBlock();
+			result_block = &result->radix_sorting_data.back();
+			result_handle = buffer_manager.Pin(result_block->block);
+			result_ptr = result_handle->Ptr();
+		}
 		// Copy using computed merge
 		if (!l_done && !r_done) {
 			// Both sides have data - merge
@@ -469,6 +476,18 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 		}
 		const idx_t &l_count = !l_done ? l_data.data_blocks[l_data.block_idx].count : 0;
 		const idx_t &r_count = !r_done ? r_data.data_blocks[r_data.block_idx].count : 0;
+		// Create new result block (if needed)
+		if (result_data_block->count == state.block_capacity) {
+			result_data.CreateBlock();
+			result_data_block = &result_data.data_blocks.back();
+			result_data_handle = buffer_manager.Pin(result_data_block->block);
+			result_data_ptr = result_data_handle->Ptr();
+			if (!layout.AllConstant() && state.external) {
+				result_heap_block = &result_data.heap_blocks.back();
+				result_heap_handle = buffer_manager.Pin(result_heap_block->block);
+				result_heap_ptr = result_heap_handle->Ptr();
+			}
+		}
 		// Perform the merge
 		if (layout.AllConstant() || !state.external) {
 			// If all constant size, or if we are doing an in-memory sort, we do not need to touch the heap
@@ -576,7 +595,7 @@ void MergeSorter::MergeRows(data_ptr_t &l_ptr, idx_t &l_entry_idx, const idx_t &
                             idx_t &r_entry_idx, const idx_t &r_count, RowDataBlock *target_block,
                             data_ptr_t &target_ptr, const idx_t &entry_size, const bool left_smaller[], idx_t &copied,
                             const idx_t &count) {
-	const idx_t next = MinValue(count - copied, target_block->capacity - target_block->count);
+	const idx_t next = MinValue(count - copied, state.block_capacity - target_block->count);
 	idx_t i;
 	for (i = 0; i < next && l_entry_idx < l_count && r_entry_idx < r_count; i++) {
 		const bool &l_smaller = left_smaller[copied + i];
@@ -600,7 +619,7 @@ void MergeSorter::FlushRows(data_ptr_t &source_ptr, idx_t &source_entry_idx, con
                             RowDataBlock *target_block, data_ptr_t &target_ptr, const idx_t &entry_size, idx_t &copied,
                             const idx_t &count) {
 	// Compute how many entries we can fit
-	idx_t next = MinValue(count - copied, target_block->capacity - target_block->count);
+	idx_t next = MinValue(count - copied, state.block_capacity - target_block->count);
 	next = MinValue(next, source_count - source_entry_idx);
 	// Copy them all in a single memcpy
 	const idx_t copy_bytes = next * entry_size;
