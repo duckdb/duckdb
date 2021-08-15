@@ -13,8 +13,6 @@ DBItest::test_all(c(
 
   "bind_character.*", # Waiting for https://github.com/duckdb/duckdb/pull/2134
   "bind_factor.*",
-  "bind_timestamp.*",  # https://github.com/duckdb/duckdb/issues/2138
-
 
   "data_64_bit_numeric_warning", # 64 bit, not now
   "data_64_bit_lossless",
