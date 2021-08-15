@@ -147,7 +147,11 @@ SQLRETURN SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, 
 		duckdb::idx_t col_idx = column_number - 1;
 
 		if (column_name && buffer_length > 0) {
-			auto out_len = snprintf((char *)column_name, buffer_length, "%s", stmt->stmt->GetNames()[col_idx].c_str());
+			auto out_len = duckdb::MinValue(stmt->stmt->GetNames()[col_idx].size(), (size_t)buffer_length);
+			memcpy(column_name, stmt->stmt->GetNames()[col_idx].c_str(), out_len);
+			// terminating null character
+			column_name[out_len] = '\0';
+
 			if (name_length_ptr) {
 				*name_length_ptr = out_len;
 			}

@@ -230,7 +230,14 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_BINARY: {
 			// threating binary values as BLOB type
 			string blob = duckdb::Blob::ToBlob(duckdb::string_t(val.GetValue<string>().c_str()));
-			auto out_len = snprintf((char *)target_value_ptr, buffer_length, "%s", blob.c_str());
+			auto out_len = duckdb::MinValue(blob.size(), (size_t)buffer_length);
+			memcpy((char *)target_value_ptr, blob.c_str(), out_len);
+			// terminating null character
+			if (blob.size() < (size_t)buffer_length)
+				((char *)target_value_ptr)[blob.size()] = '\0';
+			else {
+				((char *)target_value_ptr)[buffer_length - 1] = '\0';
+			}
 
 			if (str_len_or_ind_ptr) {
 				*str_len_or_ind_ptr = out_len;
@@ -243,7 +250,14 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				return SetStringValueLength(val_str, str_len_or_ind_ptr);
 			}
 
-			auto out_len = snprintf((char *)target_value_ptr, buffer_length, "%s", val_str.c_str());
+			auto out_len = duckdb::MinValue(val_str.size(), (size_t)buffer_length);
+			memcpy((char *)target_value_ptr, val_str.c_str(), out_len);
+			// terminating null character
+			if (val_str.size() < (size_t)buffer_length)
+				((char *)target_value_ptr)[val_str.size()] = '\0';
+			else {
+				((char *)target_value_ptr)[buffer_length - 1] = '\0';
+			}
 
 			if (str_len_or_ind_ptr) {
 				*str_len_or_ind_ptr = out_len;

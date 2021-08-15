@@ -190,7 +190,10 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 			}
 
 			auto col_name = stmt->stmt->GetNames()[col_idx];
-			auto out_len = snprintf((char *)character_attribute_ptr, buffer_length, "%s", col_name.c_str());
+			auto out_len = duckdb::MinValue(col_name.size(), (size_t)buffer_length);
+			memcpy(character_attribute_ptr, col_name.c_str(), out_len);
+			((char *)character_attribute_ptr)[out_len] = '\0';
+
 			if (string_length_ptr) {
 				*string_length_ptr = out_len;
 			}
@@ -211,7 +214,11 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 
 			auto internal_type = stmt->stmt->GetTypes()[col_idx].InternalType();
 			std::string type_name = duckdb::TypeIdToString(internal_type);
-			auto out_len = snprintf((char *)character_attribute_ptr, buffer_length, "%s", type_name.c_str());
+			auto out_len = duckdb::MinValue(type_name.size(), (size_t)buffer_length);
+			memcpy(character_attribute_ptr, type_name.c_str(), out_len);
+			((char *)character_attribute_ptr)[out_len] = '\0';
+
+
 			if (string_length_ptr) {
 				*string_length_ptr = out_len;
 			}
