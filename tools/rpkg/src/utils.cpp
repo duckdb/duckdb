@@ -57,7 +57,9 @@ RStrings::RStrings() {
 	SET_VECTOR_ELT(chars, 3, secs_str = Rf_mkString("secs"));
 	SET_VECTOR_ELT(chars, 4, arrow_str = Rf_mkString("arrow"));
 	SET_VECTOR_ELT(chars, 5, POSIXct_POSIXt_str = RApi::StringsToSexp({"POSIXct", "POSIXt"}));
-	SET_VECTOR_ELT(chars, 6, str_ref_type_names_rtypes_n_param_str = RApi::StringsToSexp({"str", "ref", "type", "names", "rtypes", "n_param"}));
+	SET_VECTOR_ELT(chars, 6,
+	               str_ref_type_names_rtypes_n_param_str =
+	                   RApi::StringsToSexp({"str", "ref", "type", "names", "rtypes", "n_param"}));
 	R_PreserveObject(chars);
 	MARK_NOT_MUTABLE(chars);
 

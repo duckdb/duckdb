@@ -494,7 +494,8 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 	// export data setup
 	ArrowArray arrow_data;
 	auto data_ptr_sexp = r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&arrow_data))));
-	auto batch_import_from_c = r.Protect(Rf_lang3(RStrings::get().ImportRecordBatch_sym, data_ptr_sexp, schema_ptr_sexp));
+	auto batch_import_from_c =
+	    r.Protect(Rf_lang3(RStrings::get().ImportRecordBatch_sym, data_ptr_sexp, schema_ptr_sexp));
 	// create data batches
 	AppendableRList batches_list;
 	if (stream) {
@@ -516,8 +517,8 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 
 	// create arrow::Table
 	if (return_table) {
-		auto from_record_batches =
-		    r.Protect(Rf_lang3(RStrings::get().Table__from_record_batches_sym, batches_list.the_list, schema_arrow_obj));
+		auto from_record_batches = r.Protect(
+		    Rf_lang3(RStrings::get().Table__from_record_batches_sym, batches_list.the_list, schema_arrow_obj));
 		return RApi::REvalRerror(from_record_batches, arrow_namespace);
 	}
 	return batches_list.the_list;
