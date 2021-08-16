@@ -323,7 +323,6 @@ void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;
 	queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
-	PurgeQueue();
 }
 
 void BufferManager::PurgeQueue() {
@@ -352,6 +351,7 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 }
 
 bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
+	PurgeQueue();
 #ifdef DEBUG
 	VerifyCurrentMemory();
 #endif
