@@ -1,0 +1,15 @@
+# name: test/sql/storage/partial_blocks/partial_blocks_tpch.test_slow
+# description: Test partial blocks with TPC-H database
+# group: [storage]
+
+require tpch
+
+load __TEST_DIR__/tpch_many_columns.db
+
+statement ok
+call dbgen(sf=0.1);
+
+query I
+select count(*) from pragma_storage_info('lineitem') where block_id IS NULL;
+----
+0

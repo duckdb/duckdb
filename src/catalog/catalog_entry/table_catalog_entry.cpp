@@ -563,7 +563,7 @@ void TableCatalogEntry::CommitAlter(AlterInfo &info) {
 		if (columns[i].name == column_name) {
 			D_ASSERT(removed_index == INVALID_INDEX);
 			removed_index = i;
-			continue;
+			break;
 		}
 	}
 	D_ASSERT(removed_index != INVALID_INDEX);
