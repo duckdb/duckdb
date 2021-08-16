@@ -24,6 +24,7 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr
 }
 
 BlockHandle::~BlockHandle() {
+	lock_guard<mutex> handle_lock(lock);
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 #ifdef DEBUG
 	lock_guard<mutex> cm_lock(buffer_manager.current_memory_lock);
@@ -322,6 +323,7 @@ void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;
 	queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
+	PurgeQueue();
 }
 
 void BufferManager::PurgeQueue() {
@@ -334,7 +336,6 @@ void BufferManager::PurgeQueue() {
 		if (!handle) {
 			continue;
 		} else {
-			lock_guard<mutex> lock(handle->lock);
 			queue->q.enqueue(move(node));
 			break;
 		}
@@ -342,7 +343,6 @@ void BufferManager::PurgeQueue() {
 }
 
 void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
-	PurgeQueue();
 	lock_guard<mutex> lock(handle->lock);
 	D_ASSERT(handle->readers > 0);
 	handle->readers--;

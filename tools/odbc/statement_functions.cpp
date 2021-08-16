@@ -1,6 +1,7 @@
 #include "statement_functions.hpp"
 #include "odbc_interval.hpp"
 #include "odbc_fetch.hpp"
+#include "parameter_wrapper.hpp"
 
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -48,7 +49,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 			stmt->error_messages.emplace_back(stmt->stmt->error);
 			return SQL_ERROR;
 		}
-		stmt->params.resize(stmt->stmt->n_param);
+		stmt->param_wrapper->param_descriptors.resize(stmt->stmt->n_param);
 		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
 		return SQL_SUCCESS;
 	});
@@ -65,7 +66,14 @@ SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
 		if (stmt->rows_fetched_ptr) {
 			*stmt->rows_fetched_ptr = 0;
 		}
-		stmt->res = stmt->stmt->Execute(stmt->params);
+
+		std::vector<Value> values;
+		SQLRETURN ret_param;
+		do {
+			ret_param = stmt->param_wrapper->GetValues(values);
+			stmt->res = stmt->stmt->Execute(values);
+		} while (ret_param != SQL_NO_DATA); // Execute while there is a parameter set
+
 		if (!stmt->res->success) {
 			stmt->error_messages.emplace_back(stmt->res->error);
 			return SQL_ERROR;
@@ -139,11 +147,21 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 	}
 }
 
+SQLRETURN SetStringValueLength(const std::string &val_str, SQLLEN *str_len_or_ind_ptr) {
+	if (str_len_or_ind_ptr) {
+		// it fills the required lenght from string value
+		*str_len_or_ind_ptr = val_str.size();
+		return SQL_SUCCESS;
+	}
+	// there is no length pointer
+	return SQL_ERROR;
+}
+
 SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
 	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		if (!target_value_ptr) {
+		if (!target_value_ptr && !IsSQLVarcharType(target_type)) {
 			return SQL_ERROR;
 		}
 
@@ -196,6 +214,10 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			                                              str_len_or_ind_ptr);
 		case SQL_C_WCHAR: {
 			std::string str = val.GetValue<std::string>();
+			if (!target_value_ptr) {
+				return SetStringValueLength(str, str_len_or_ind_ptr);
+			}
+
 			std::wstring w_str = std::wstring(str.begin(), str.end());
 			auto out_len = swprintf((wchar_t *)target_value_ptr, buffer_length, L"%ls", w_str.c_str());
 
@@ -208,7 +230,14 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_BINARY: {
 			// threating binary values as BLOB type
 			string blob = duckdb::Blob::ToBlob(duckdb::string_t(val.GetValue<string>().c_str()));
-			auto out_len = snprintf((char *)target_value_ptr, buffer_length, "%s", blob.c_str());
+			auto out_len = duckdb::MinValue(blob.size(), (size_t)buffer_length);
+			memcpy((char *)target_value_ptr, blob.c_str(), out_len);
+			// terminating null character
+			if (blob.size() < (size_t)buffer_length) {
+				((char *)target_value_ptr)[blob.size()] = '\0';
+			} else {
+				((char *)target_value_ptr)[buffer_length - 1] = '\0';
+			}
 
 			if (str_len_or_ind_ptr) {
 				*str_len_or_ind_ptr = out_len;
@@ -216,7 +245,19 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			return SQL_SUCCESS;
 		}
 		case SQL_C_CHAR: {
-			auto out_len = snprintf((char *)target_value_ptr, buffer_length, "%s", val.GetValue<string>().c_str());
+			std::string val_str = val.GetValue<std::string>();
+			if (!target_value_ptr) {
+				return SetStringValueLength(val_str, str_len_or_ind_ptr);
+			}
+
+			auto out_len = duckdb::MinValue(val_str.size(), (size_t)buffer_length);
+			memcpy((char *)target_value_ptr, val_str.c_str(), out_len);
+			// terminating null character
+			if (val_str.size() < (size_t)buffer_length) {
+				((char *)target_value_ptr)[val_str.size()] = '\0';
+			} else {
+				((char *)target_value_ptr)[buffer_length - 1] = '\0';
+			}
 
 			if (str_len_or_ind_ptr) {
 				*str_len_or_ind_ptr = out_len;
