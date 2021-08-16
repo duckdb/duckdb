@@ -1,3 +1,6 @@
+library("testthat")
+skip_on_cran()
+
 DBItest::test_all(c(
   "package_name", # wontfix
   "package_dependencies", # wontfix
