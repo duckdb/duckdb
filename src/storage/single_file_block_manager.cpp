@@ -267,7 +267,6 @@ void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	// set the iteration count
 	header.iteration = ++iteration_count;
-	header.block_count = max_block;
 
 	// now handle the free list
 	// add all modified blocks to the free list: they can now be written to again
@@ -302,6 +301,8 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		// no blocks in the free list
 		header.free_list = INVALID_BLOCK;
 	}
+	header.block_count = max_block;
+
 	if (!use_direct_io) {
 		// if we are not using Direct IO we need to fsync BEFORE we write the header to ensure that all the previous
 		// blocks are written as well
