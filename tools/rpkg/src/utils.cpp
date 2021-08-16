@@ -111,8 +111,12 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	}
 	case RType::TIMESTAMP: {
 		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
-		val = Value::TIMESTAMP(RTimestampType::Convert(ts_val));
-		val.is_null = RTimestampType::IsNull(ts_val);
+		bool is_null = RTimestampType::IsNull(ts_val);
+		if (!is_null) {
+			val = Value::TIMESTAMP(RTimestampType::Convert(ts_val));
+		} else {
+			val = Value(LogicalType::TIMESTAMP);
+		}
 		break;
 	}
 	case RType::DATE: {
