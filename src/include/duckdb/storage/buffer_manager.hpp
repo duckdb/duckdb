@@ -122,8 +122,6 @@ private:
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
-	//!
-	mutex unload_lock;
 
 	//! Lock for current_memory (used for verification)
 	mutex current_memory_lock;

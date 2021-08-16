@@ -356,7 +356,6 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	VerifyCurrentMemory();
 #endif
 	current_memory += extra_memory;
-	lock_guard<mutex> u_lock(unload_lock);
 	unique_ptr<BufferEvictionNode> node;
 	while (current_memory > memory_limit) {
 		// get a block to unpin from the queue
