@@ -1,6 +1,6 @@
-# name: test/sql/storage/partial_blocks/many_columns_structs.test
+# name: test/sql/storage/partial_blocks/many_columns_structs.test_coverage
 # description: Test storing many columns of structs
-# group: [storage]
+# group: [partial_blocks]
 
 load __TEST_DIR__/many_columns.db
 

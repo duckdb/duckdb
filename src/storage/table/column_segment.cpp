@@ -124,7 +124,8 @@ idx_t ColumnSegment::Append(ColumnAppendState &state, VectorData &append_data, i
 idx_t ColumnSegment::FinalizeAppend() {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (!function->finalize_append) {
-		throw InternalException("Attempting to call FinalizeAppend on a compressed segment without a finalize_append method");
+		throw InternalException(
+		    "Attempting to call FinalizeAppend on a compressed segment without a finalize_append method");
 	}
 	return function->finalize_append(*this, stats);
 }
@@ -177,7 +178,6 @@ void ColumnSegment::ConvertToPersistent(shared_ptr<BlockHandle> block_p, block_i
 		segment_state = function->init_segment(*this, block_id);
 	}
 }
-
 
 //===--------------------------------------------------------------------===//
 // Filter Selection

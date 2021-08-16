@@ -224,7 +224,7 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 
 	auto &result_mask = FlatVector::Validity(result);
 	auto buffer_ptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
-	auto input_data = (validity_t *) buffer_ptr;
+	auto input_data = (validity_t *)buffer_ptr;
 
 #ifdef DEBUG
 	// this method relies on all the bits we are going to write to being set to valid
@@ -344,7 +344,7 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 		// it is not required for correctness
 		auto &result_mask = FlatVector::Validity(result);
 		auto buffer_ptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
-		auto input_data = (validity_t *) buffer_ptr;
+		auto input_data = (validity_t *)buffer_ptr;
 		auto result_data = (validity_t *)result_mask.GetData();
 		idx_t start_offset = start / ValidityMask::BITS_PER_VALUE;
 		idx_t entry_scan_count = (scan_count + ValidityMask::BITS_PER_VALUE - 1) / ValidityMask::BITS_PER_VALUE;
@@ -452,11 +452,12 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
 //===--------------------------------------------------------------------===//
 CompressionFunction ValidityUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::BIT);
-	return CompressionFunction(
-	    CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze, ValidityAnalyze,
-	    ValidityFinalAnalyze, UncompressedFunctions::InitCompression, UncompressedFunctions::Compress,
-	    UncompressedFunctions::FinalizeCompress, ValidityInitScan, ValidityScan, ValidityScanPartial, ValidityFetchRow,
-	    UncompressedFunctions::EmptySkip, ValidityInitSegment, ValidityAppend, ValidityFinalizeAppend, ValidityRevertAppend);
+	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze,
+	                           ValidityAnalyze, ValidityFinalAnalyze, UncompressedFunctions::InitCompression,
+	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
+	                           ValidityInitScan, ValidityScan, ValidityScanPartial, ValidityFetchRow,
+	                           UncompressedFunctions::EmptySkip, ValidityInitSegment, ValidityAppend,
+	                           ValidityFinalizeAppend, ValidityRevertAppend);
 }
 
 } // namespace duckdb

@@ -292,7 +292,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 			writer.Write<block_id_t>(block_id);
 		}
 		writer.Write<uint64_t>(multi_use_blocks.size());
-		for(auto &entry : multi_use_blocks) {
+		for (auto &entry : multi_use_blocks) {
 			writer.Write<block_id_t>(entry.first);
 			writer.Write<uint32_t>(entry.second);
 		}

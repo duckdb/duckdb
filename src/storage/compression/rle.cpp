@@ -332,7 +332,7 @@ void RLEFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, 
 	scan_state.Skip(segment, row_id);
 
 	auto data = scan_state.handle->node->buffer + segment.GetBlockOffset();
-	auto data_pointer = (T *) (data + RLEConstants::RLE_HEADER_SIZE);
+	auto data_pointer = (T *)(data + RLEConstants::RLE_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<T>(result);
 	result_data[result_idx] = data_pointer[scan_state.entry_pos];
 }

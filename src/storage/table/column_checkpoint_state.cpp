@@ -51,7 +51,8 @@ void ColumnCheckpointState::FlushSegment(unique_ptr<ColumnSegment> segment, idx_
 		if (segment_size <= CheckpointManager::PARTIAL_BLOCK_THRESHOLD) {
 			// the block is a partial block
 			// check if there is a partial block available we can write to
-			if (checkpoint_manager.GetPartialBlock(segment.get(), segment_size, block_id, offset_in_block, partial_block, owned_partial_block)) {
+			if (checkpoint_manager.GetPartialBlock(segment.get(), segment_size, block_id, offset_in_block,
+			                                       partial_block, owned_partial_block)) {
 				//! there is! increase the reference count of this block
 				block_manager.IncreaseBlockReferenceCount(block_id);
 			} else {

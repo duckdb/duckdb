@@ -1,6 +1,6 @@
 # name: test/sql/storage/tpch/tpch_storage.test_slow
 # description: Test TPC-H SF1 queries on persistent storage
-# group: [storage]
+# group: [tpch]
 
 require tpch
 

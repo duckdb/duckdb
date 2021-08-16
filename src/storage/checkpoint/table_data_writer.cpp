@@ -8,7 +8,8 @@
 
 namespace duckdb {
 
-TableDataWriter::TableDataWriter(DatabaseInstance &, CheckpointManager &checkpoint_manager, TableCatalogEntry &table, MetaBlockWriter &meta_writer)
+TableDataWriter::TableDataWriter(DatabaseInstance &, CheckpointManager &checkpoint_manager, TableCatalogEntry &table,
+                                 MetaBlockWriter &meta_writer)
     : checkpoint_manager(checkpoint_manager), table(table), meta_writer(meta_writer) {
 }
 

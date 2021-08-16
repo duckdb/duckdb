@@ -44,6 +44,7 @@ struct PartialBlock {
 class CheckpointManager {
 public:
 	static constexpr const idx_t PARTIAL_BLOCK_THRESHOLD = Storage::BLOCK_SIZE / 5 * 4;
+
 public:
 	explicit CheckpointManager(DatabaseInstance &db);
 
@@ -64,7 +65,8 @@ public:
 	//! Try to obtain a partially filled block that can fit "segment_size" bytes
 	//! If successful, returns true and returns the block_id and offset_in_block to write to
 	//! Otherwise, returns false
-	bool GetPartialBlock(ColumnSegment *segment, idx_t segment_size, block_id_t &block_id, uint32_t &offset_in_block, PartialBlock *&partial_block_ptr, unique_ptr<PartialBlock> &owned_partial_block);
+	bool GetPartialBlock(ColumnSegment *segment, idx_t segment_size, block_id_t &block_id, uint32_t &offset_in_block,
+	                     PartialBlock *&partial_block_ptr, unique_ptr<PartialBlock> &owned_partial_block);
 
 	//! Register a partially filled block that is filled with "segment_size" entries
 	void RegisterPartialBlock(ColumnSegment *segment, idx_t segment_size, block_id_t block_id);

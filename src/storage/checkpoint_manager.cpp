@@ -292,7 +292,9 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 //===--------------------------------------------------------------------===//
 // Partial Blocks
 //===--------------------------------------------------------------------===//
-bool CheckpointManager::GetPartialBlock(ColumnSegment *segment, idx_t segment_size, block_id_t &block_id, uint32_t &offset_in_block, PartialBlock *&partial_block_ptr, unique_ptr<PartialBlock> &owned_partial_block) {
+bool CheckpointManager::GetPartialBlock(ColumnSegment *segment, idx_t segment_size, block_id_t &block_id,
+                                        uint32_t &offset_in_block, PartialBlock *&partial_block_ptr,
+                                        unique_ptr<PartialBlock> &owned_partial_block) {
 	auto entry = partially_filled_blocks.lower_bound(segment_size);
 	if (entry == partially_filled_blocks.end()) {
 		return false;
@@ -341,7 +343,7 @@ void CheckpointManager::RegisterPartialBlock(ColumnSegment *segment, idx_t segme
 }
 
 void CheckpointManager::FlushPartialSegments() {
-	for(auto &entry : partially_filled_blocks) {
+	for (auto &entry : partially_filled_blocks) {
 		entry.second->FlushToDisk(db);
 	}
 }
@@ -355,7 +357,7 @@ void PartialBlock::FlushToDisk(DatabaseInstance &db) {
 	block = buffer_manager.ConvertToPersistent(block_manager, block_id, move(block));
 
 	// now set this block as the block for all segments
-	for(auto &seg : segments) {
+	for (auto &seg : segments) {
 		seg.segment->ConvertToPersistent(block, block_id, seg.offset_in_block);
 	}
 }

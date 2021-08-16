@@ -1,6 +1,6 @@
-# name: test/sql/storage/partial_blocks/many_columns_alter_column.test
+# name: test/sql/storage/partial_blocks/many_columns_alter_type.test_coverage
 # description: Verify that altering columns with multi-use blocks does not leak memory
-# group: [storage]
+# group: [partial_blocks]
 
 load __TEST_DIR__/many_columns.db
 

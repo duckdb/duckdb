@@ -1,6 +1,6 @@
 # name: test/sql/storage/partial_blocks/many_columns_drop_table.test
 # description: Test dropping a table when we have many blocks
-# group: [storage]
+# group: [partial_blocks]
 
 load __TEST_DIR__/many_columns.db
 

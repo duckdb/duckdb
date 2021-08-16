@@ -1,6 +1,6 @@
-# name: test/sql/storage/partial_blocks/many_columns_storage.test
+# name: test/sql/storage/partial_blocks/many_columns_validity.test
 # description: Test storing many columns
-# group: [storage]
+# group: [partial_blocks]
 
 load __TEST_DIR__/many_columns.db
 

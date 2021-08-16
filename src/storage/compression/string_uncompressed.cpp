@@ -268,7 +268,6 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	return Storage::BLOCK_SIZE;
 }
 
-
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//

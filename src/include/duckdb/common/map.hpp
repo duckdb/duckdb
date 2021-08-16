@@ -13,4 +13,4 @@
 namespace duckdb {
 using std::map;
 using std::multimap;
-}
+} // namespace duckdb

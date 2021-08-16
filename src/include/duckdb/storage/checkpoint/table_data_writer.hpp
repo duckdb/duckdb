@@ -23,7 +23,8 @@ class TableDataWriter {
 	friend class ColumnData;
 
 public:
-	TableDataWriter(DatabaseInstance &db, CheckpointManager &checkpoint_manager, TableCatalogEntry &table, MetaBlockWriter &meta_writer);
+	TableDataWriter(DatabaseInstance &db, CheckpointManager &checkpoint_manager, TableCatalogEntry &table,
+	                MetaBlockWriter &meta_writer);
 	~TableDataWriter();
 
 	BlockPointer WriteTableData();
