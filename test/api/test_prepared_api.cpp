@@ -9,6 +9,9 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+	// prepare no statements
+	REQUIRE_FAIL(con.Prepare(""));
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (11), (12), (13)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR)"));

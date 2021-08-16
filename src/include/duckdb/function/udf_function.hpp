@@ -25,23 +25,23 @@ public:
 			return CreateBinaryFunction<TR, Args...>(name, udf_func);
 		case 3:
 			return CreateTernaryFunction<TR, Args...>(name, udf_func);
-		default:
+		default: // LCOV_EXCL_START
 			throw std::runtime_error("UDF function only supported until ternary!");
-		}
+		} // LCOV_EXCL_STOP
 	}
 
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateScalarFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                              TR (*udf_func)(Args...)) {
-		if (!TypesMatch<TR>(ret_type)) {
+		if (!TypesMatch<TR>(ret_type)) { // LCOV_EXCL_START
 			throw std::runtime_error("Return type doesn't match with the first template type.");
-		}
+		} // LCOV_EXCL_STOP
 
 		const std::size_t num_template_types = sizeof...(Args);
-		if (num_template_types != args.size()) {
+		if (num_template_types != args.size()) { // LCOV_EXCL_START
 			throw std::runtime_error(
 			    "The number of templated types should be the same quantity of the LogicalType arguments.");
-		}
+		} // LCOV_EXCL_STOP
 
 		switch (num_template_types) {
 		case 1:
@@ -50,9 +50,9 @@ public:
 			return CreateBinaryFunction<TR, Args...>(name, args, ret_type, udf_func);
 		case 3:
 			return CreateTernaryFunction<TR, Args...>(name, args, ret_type, udf_func);
-		default:
+		default: // LCOV_EXCL_START
 			throw std::runtime_error("UDF function only supported until ternary!");
-		}
+		} // LCOV_EXCL_STOP
 	}
 
 	template <typename TR, typename... Args>
@@ -83,13 +83,13 @@ public:
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
 	static AggregateFunction CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_type) {
-		if (!TypesMatch<TR>(ret_type)) {
+		if (!TypesMatch<TR>(ret_type)) { // LCOV_EXCL_START
 			throw std::runtime_error("The return argument don't match!");
-		}
+		} // LCOV_EXCL_STOP
 
-		if (!TypesMatch<TA>(input_type)) {
+		if (!TypesMatch<TA>(input_type)) { // LCOV_EXCL_START
 			throw std::runtime_error("The input argument don't match!");
-		}
+		} // LCOV_EXCL_STOP
 
 		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, ret_type, input_type);
 	}
@@ -97,7 +97,7 @@ public:
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
 	static AggregateFunction CreateAggregateFunction(const string &name, LogicalType ret_type, LogicalType input_typeA,
 	                                                 LogicalType input_typeB) {
-		if (!TypesMatch<TR>(ret_type)) {
+		if (!TypesMatch<TR>(ret_type)) { // LCOV_EXCL_START
 			throw std::runtime_error("The return argument don't match!");
 		}
 
@@ -107,7 +107,7 @@ public:
 
 		if (!TypesMatch<TB>(input_typeB)) {
 			throw std::runtime_error("The second input argument don't match!");
-		}
+		} // LCOV_EXCL_STOP
 
 		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name, ret_type, input_typeA, input_typeB);
 	}
@@ -167,19 +167,19 @@ private:
 	}
 
 	template <typename TR, typename... Args>
-	static scalar_function_t CreateUnaryFunction(const string &name, TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateUnaryFunction(const string &name, TR (*udf_func)(Args...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for unary function");
-	}
+	} // LCOV_EXCL_STOP
 
 	template <typename TR, typename... Args>
-	static scalar_function_t CreateBinaryFunction(const string &name, TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateBinaryFunction(const string &name, TR (*udf_func)(Args...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for binary function");
-	}
+	} // LCOV_EXCL_STOP
 
 	template <typename TR, typename... Args>
-	static scalar_function_t CreateTernaryFunction(const string &name, TR (*udf_func)(Args...)) {
+	static scalar_function_t CreateTernaryFunction(const string &name, TR (*udf_func)(Args...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for ternary function");
-	}
+	} // LCOV_EXCL_STOP
 
 	template <typename T>
 	static LogicalType GetArgumentType() {
@@ -199,10 +199,9 @@ private:
 			return LogicalType(LogicalTypeId::DOUBLE);
 		} else if (std::is_same<T, string_t>()) {
 			return LogicalType(LogicalTypeId::VARCHAR);
-		} else {
-			// unrecognized type
+		} else { // LCOV_EXCL_START
 			throw std::runtime_error("Unrecognized type!");
-		}
+		} // LCOV_EXCL_STOP
 	}
 
 	template <typename TA, typename TB, typename... Args>
@@ -221,19 +220,19 @@ private:
 
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateUnaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                             TR (*udf_func)(Args...)) {
+	                                             TR (*udf_func)(Args...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for unary function");
-	}
+	} // LCOV_EXCL_STOP
 
 	template <typename TR, typename TA>
 	static scalar_function_t CreateUnaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                             TR (*udf_func)(TA)) {
-		if (args.size() != 1) {
+		if (args.size() != 1) { // LCOV_EXCL_START
 			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 1!");
 		}
 		if (!TypesMatch<TA>(args[0])) {
 			throw std::runtime_error("The first arguments don't match!");
-		}
+		} // LCOV_EXCL_STOP
 
 		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
 			UnaryExecutor::GenericExecute<TA, TR, UnaryUDFExecutor>(input.data[0], result, input.size(),
@@ -244,14 +243,14 @@ private:
 
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateBinaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                              TR (*udf_func)(Args...)) {
+	                                              TR (*udf_func)(Args...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for binary function");
-	}
+	} // LCOV_EXCL_STOP
 
 	template <typename TR, typename TA, typename TB>
 	static scalar_function_t CreateBinaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                              TR (*udf_func)(TA, TB)) {
-		if (args.size() != 2) {
+		if (args.size() != 2) { // LCOV_EXCL_START
 			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 2!");
 		}
 		if (!TypesMatch<TA>(args[0])) {
@@ -259,7 +258,7 @@ private:
 		}
 		if (!TypesMatch<TB>(args[1])) {
 			throw std::runtime_error("The second arguments don't match!");
-		}
+		} // LCOV_EXCL_STOP
 
 		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) {
 			BinaryExecutor::Execute<TA, TB, TR>(input.data[0], input.data[1], result, input.size(), udf_func);
@@ -269,14 +268,14 @@ private:
 
 	template <typename TR, typename... Args>
 	static scalar_function_t CreateTernaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
-	                                               TR (*udf_func)(Args...)) {
+	                                               TR (*udf_func)(Args...)) { // LCOV_EXCL_START
 		throw std::runtime_error("Incorrect number of arguments for ternary function");
-	}
+	} // LCOV_EXCL_STOP
 
 	template <typename TR, typename TA, typename TB, typename TC>
 	static scalar_function_t CreateTernaryFunction(const string &name, vector<LogicalType> args, LogicalType ret_type,
 	                                               TR (*udf_func)(TA, TB, TC)) {
-		if (args.size() != 3) {
+		if (args.size() != 3) { // LCOV_EXCL_START
 			throw std::runtime_error("The number of LogicalType arguments (\"args\") should be 3!");
 		}
 		if (!TypesMatch<TA>(args[0])) {
@@ -287,7 +286,7 @@ private:
 		}
 		if (!TypesMatch<TC>(args[2])) {
 			throw std::runtime_error("The second arguments don't match!");
-		}
+		} // LCOV_EXCL_STOP
 
 		scalar_function_t udf_function = [=](DataChunk &input, ExpressionState &state, Vector &result) -> void {
 			TernaryExecutor::Execute<TA, TB, TC, TR>(input.data[0], input.data[1], input.data[2], result, input.size(),
@@ -326,9 +325,9 @@ private:
 		case LogicalTypeId::CHAR:
 		case LogicalTypeId::BLOB:
 			return std::is_same<T, string_t>();
-		default:
+		default: // LCOV_EXCL_START
 			throw std::runtime_error("Type is not supported!");
-		}
+		} // LCOV_EXCL_STOP
 	}
 
 private:

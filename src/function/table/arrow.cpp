@@ -1009,15 +1009,14 @@ void ArrowTableFunction::ArrowScanFunction(ClientContext &context, const Functio
 	auto &state = (ArrowScanState &)*operator_state;
 
 	//! have we run out of data on the current chunk? move to next one
-	if (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
+	while (state.chunk_offset >= (idx_t)state.chunk->arrow_array.length) {
 		state.chunk_offset = 0;
 		state.arrow_dictionary_vectors.clear();
 		state.chunk = state.stream->GetNextChunk();
-	}
-
-	//! have we run out of chunks? we are done
-	if (!state.chunk->arrow_array.release) {
-		return;
+		//! have we run out of chunks? we are done
+		if (!state.chunk->arrow_array.release) {
+			return;
+		}
 	}
 
 	int64_t output_size = MinValue<int64_t>(STANDARD_VECTOR_SIZE, state.chunk->arrow_array.length - state.chunk_offset);
