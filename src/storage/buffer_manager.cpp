@@ -348,11 +348,42 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	VerifyCurrentMemory();
 #endif
 	current_memory += extra_memory;
+	bool mf_locked = false;
+	if (current_memory > maximum_memory) {
+		mf_locked = memory_full_lock.try_lock();
+	} else {
+		return true;
+	}
+
+	if (!mf_locked) {
+		// memory is full, but we did not get the lock. wait until there's space
+		lock_guard<mutex> wait_until_space(memory_full_lock);
+		return true;
+	}
+
+	bool io_lock_acquired = false;
+	if (current_memory > 0.9 * maximum_memory) {
+		io_lock_acquired = io_lock.try_lock();
+	}
+
+	if (!io_lock_acquired) {
+		// memory is full, and we have the lock, but another thread is already writing
+		while (current_memory > maximum_memory) {
+			std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+		}
+		memory_full_lock.unlock();
+		return true;
+	}
+
 	unique_ptr<BufferEvictionNode> node;
-	while (current_memory > memory_limit) {
+	while (current_memory > 0.9 * maximum_memory) {
 		// get a block to unpin from the queue
 		if (!queue->q.try_dequeue(node)) {
 			current_memory -= extra_memory;
+			if (mf_locked) {
+				memory_full_lock.unlock();
+			}
+			io_lock.unlock();
 			return false;
 		}
 		// get a reference to the underlying block pointer
@@ -369,7 +400,12 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		// hooray, we can unload the block
 		// release the memory and mark the block as unloaded
 		handle->Unload();
+		if (mf_locked && current_memory <= maximum_memory) {
+			memory_full_lock.unlock();
+			mf_locked = false;
+		}
 	}
+	io_lock.unlock();
 	return true;
 }
 
