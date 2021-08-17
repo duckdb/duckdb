@@ -355,16 +355,14 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	VerifyCurrentMemory();
 #endif
 	current_memory += extra_memory;
-	if (current_memory <= memory_limit || writer_lock.try_lock()) {
-		// this thread cannot become the writer
-		if (current_memory < memory_limit) {
-			// memory is not full, yay!
-			return true;
-		} else {
-			// memory is full, wait until there is space
-			lock_guard<mutex> wait_until_space(memory_full_lock);
-			return true;
-		}
+	if (current_memory < memory_limit) {
+		return true;
+	}
+
+	if (!writer_lock.try_lock()) {
+		// memory is full, wait until there is space
+		lock_guard<mutex> wait_until_space(memory_full_lock);
+		return true;
 	}
 
 	// memory is full and this thread is the writer
@@ -430,7 +428,7 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		for (auto &h : handles_to_unload) {
 			h->lock.unlock();
 		}
-		if (current_memory <= memory_limit) {
+		if (mf_locked && current_memory <= memory_limit) {
 			memory_full_lock.unlock();
 			mf_locked = false;
 		}
