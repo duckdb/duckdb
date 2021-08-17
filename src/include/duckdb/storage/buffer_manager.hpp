@@ -81,6 +81,9 @@ private:
 	//! (i.e. not enough blocks could be evicted)
 	bool EvictBlocks(idx_t extra_memory, idx_t memory_limit);
 
+	//! Garbage collect eviction queue
+	void PurgeQueue();
+
 	//! Write a temporary buffer to disk
 	void WriteTemporaryBuffer(ManagedBuffer &buffer);
 	//! Read a temporary buffer from disk
@@ -93,8 +96,6 @@ private:
 	void RequireTemporaryDirectory();
 
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
-
-	void PurgeQueue();
 
 	//! Asserts that current_memory is equal to the sum of loaded blocks (used for verification)
 	void VerifyCurrentMemory();
