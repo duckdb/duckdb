@@ -348,43 +348,33 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	VerifyCurrentMemory();
 #endif
 	current_memory += extra_memory;
-	bool mf_locked = false;
-	if (current_memory > maximum_memory) {
-		mf_locked = memory_full_lock.try_lock();
-	} else {
-		return true;
-	}
-
-	if (!mf_locked) {
-		// memory is full, but we did not get the lock. wait until there's space
-		lock_guard<mutex> wait_until_space(memory_full_lock);
-		return true;
-	}
-
-	bool io_lock_acquired = false;
-	if (current_memory > 0.9 * maximum_memory) {
-		io_lock_acquired = io_lock.try_lock();
-	}
-
-	if (!io_lock_acquired) {
-		// memory is full, and we have the lock, but another thread is already writing
-		while (current_memory > maximum_memory) {
-			std::this_thread::sleep_for(std::chrono::nanoseconds(50000));
+	if (!(current_memory > 0.9 * maximum_memory && io_lock.try_lock())) {
+		// we did not get the IO lock
+		if (current_memory < maximum_memory) {
+			// memory is not full, yay!
+			return true;
+		} else {
+			// memory is full, wait until there is space
+			lock_guard<mutex> wait_until_space(memory_full_lock);
+			return true;
 		}
-		memory_full_lock.unlock();
-		return true;
 	}
 
+	// we got the IO lock, unload until we have some room
+	bool mf_locked = false;
 	unique_ptr<BufferEvictionNode> node;
 	while (current_memory > 0.9 * maximum_memory) {
+		// lock so the other threads have to wait until there is space
+		if (!mf_locked && current_memory > maximum_memory) {
+			memory_full_lock.lock();
+			mf_locked = true;
+		}
+
 		// get a block to unpin from the queue
 		if (!queue->q.try_dequeue(node)) {
+			// we cannot unload
 			current_memory -= extra_memory;
-			if (mf_locked) {
-				memory_full_lock.unlock();
-			}
-			io_lock.unlock();
-			return false;
+			break;
 		}
 		// get a reference to the underlying block pointer
 		auto handle = node->TryGetBlockHandle();
@@ -405,8 +395,16 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 			mf_locked = false;
 		}
 	}
+	// unlock io lock again
 	io_lock.unlock();
-	return true;
+	if (mf_locked) {
+		// we could not free up enough space
+		memory_full_lock.unlock();
+		return false;
+	} else {
+		// we freed up enough space!
+		return true;
+	}
 }
 
 void BufferManager::PurgeQueue() {
