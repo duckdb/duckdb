@@ -349,7 +349,7 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	VerifyCurrentMemory();
 #endif
 	current_memory += extra_memory;
-	if (!(current_memory > 0.9 * memory_limit && io_lock.try_lock())) {
+	if (!(current_memory > memory_limit && io_lock.try_lock())) {
 		// we did not get the IO lock
 		if (current_memory < memory_limit) {
 			// memory is not full, yay!
@@ -361,13 +361,15 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		}
 	}
 
+	memory_full_lock.lock();
+	bool mf_locked = true;
+
 	// we got the IO lock, unload until we have some room
 	vector<shared_ptr<BlockHandle>> handles_to_unload;
 	idx_t memory_to_free = 0;
 
-	bool mf_locked = false;
 	unique_ptr<BufferEvictionNode> node;
-	while (current_memory - memory_to_free > 0.9 * memory_limit) {
+	while (current_memory - memory_to_free > 0.8 * memory_limit) {
 		// lock so the other threads have to wait until there is space
 		if (!mf_locked && current_memory > memory_limit) {
 			memory_full_lock.lock();
