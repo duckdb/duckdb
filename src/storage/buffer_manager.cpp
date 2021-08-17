@@ -46,6 +46,12 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
 	auto &block_manager = BlockManager::GetBlockManager(handle->db);
+
+	if (!buffer_manager.io_lock.try_lock()) {
+		buffer_manager.io_lock.lock();
+	}
+	buffer_manager.io_lock.unlock();
+
 	if (handle->block_id < MAXIMUM_BLOCK) {
 		auto block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
 		block_manager.Read(*block);
@@ -349,8 +355,8 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	VerifyCurrentMemory();
 #endif
 	current_memory += extra_memory;
-	if (!(current_memory > memory_limit && io_lock.try_lock())) {
-		// we did not get the IO lock
+	if (current_memory <= memory_limit || writer_lock.try_lock()) {
+		// this thread cannot become the writer
 		if (current_memory < memory_limit) {
 			// memory is not full, yay!
 			return true;
@@ -361,10 +367,11 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		}
 	}
 
+	// memory is full and this thread is the writer
 	memory_full_lock.lock();
 	bool mf_locked = true;
 
-	// we got the IO lock, unload until we have some room
+	// unload until we have some room
 	vector<shared_ptr<BlockHandle>> handles_to_unload;
 	idx_t memory_to_free = 0;
 
@@ -400,6 +407,7 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		handles_to_unload.push_back(move(handle));
 		// if we can unload 5% of memory, do it
 		if (memory_to_free >= 0.05 * memory_limit) {
+			lock_guard<mutex> lock(io_lock);
 			for (auto &h : handles_to_unload) {
 				h->Unload();
 			}
@@ -414,18 +422,21 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		}
 	}
 	// unload remaining blocks
-	for (auto &h : handles_to_unload) {
-		h->Unload();
-	}
-	for (auto &h : handles_to_unload) {
-		h->lock.unlock();
-	}
-	if (current_memory <= memory_limit) {
-		memory_full_lock.unlock();
-		mf_locked = false;
+	{
+		lock_guard<mutex> lock(io_lock);
+		for (auto &h : handles_to_unload) {
+			h->Unload();
+		}
+		for (auto &h : handles_to_unload) {
+			h->lock.unlock();
+		}
+		if (current_memory <= memory_limit) {
+			memory_full_lock.unlock();
+			mf_locked = false;
+		}
 	}
 	// unlock io lock again
-	io_lock.unlock();
+	writer_lock.unlock();
 	if (mf_locked) {
 		// we could not free up enough space
 		memory_full_lock.unlock();
