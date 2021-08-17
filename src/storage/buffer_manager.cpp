@@ -420,6 +420,10 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	for (auto &h : handles_to_unload) {
 		h->lock.unlock();
 	}
+	if (current_memory <= memory_limit) {
+		memory_full_lock.unlock();
+		mf_locked = false;
+	}
 	// unlock io lock again
 	io_lock.unlock();
 	if (mf_locked) {
