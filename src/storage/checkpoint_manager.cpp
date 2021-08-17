@@ -328,7 +328,6 @@ bool CheckpointManager::GetPartialBlock(ColumnSegment *segment, idx_t segment_si
 }
 
 void CheckpointManager::RegisterPartialBlock(ColumnSegment *segment, idx_t segment_size, block_id_t block_id) {
-	D_ASSERT(segment_size >= 0);
 	D_ASSERT(segment_size <= CheckpointManager::PARTIAL_BLOCK_THRESHOLD);
 	auto partial_block = make_unique<PartialBlock>();
 	partial_block->block_id = block_id;
