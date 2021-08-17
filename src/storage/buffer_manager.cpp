@@ -46,6 +46,18 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
 	auto &block_manager = BlockManager::GetBlockManager(handle->db);
+
+	bool locked = false;
+	if (buffer_manager.io_locked) {
+		buffer_manager.io_lock.lock();
+		if (!buffer_manager.io_locked) {
+			buffer_manager.io_lock.unlock();
+			locked = false;
+		} else {
+			locked = true;
+		}
+	}
+
 	if (handle->block_id < MAXIMUM_BLOCK) {
 		auto block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
 		block_manager.Read(*block);
@@ -57,6 +69,11 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 			handle->buffer = buffer_manager.ReadTemporaryBuffer(handle->block_id);
 		}
 	}
+
+	if (locked) {
+		buffer_manager.io_lock.unlock();
+	}
+
 	handle->state = BlockState::BLOCK_LOADED;
 	return make_unique<BufferHandle>(handle, handle->buffer.get());
 }
@@ -517,11 +534,6 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	D_ASSERT(!temp_directory.empty());
 	D_ASSERT(temp_directory_handle.get());
-	bool locked = false;
-	if (io_locked) {
-		io_lock.lock();
-		locked = true;
-	}
 	idx_t block_size;
 	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);
@@ -532,10 +544,6 @@ unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	// now allocate a buffer of this size and read the data into that buffer
 	auto buffer = make_unique<ManagedBuffer>(db, block_size, false, id);
 	buffer->Read(*handle, sizeof(idx_t));
-
-	if (locked) {
-		io_lock.unlock();
-	}
 
 	handle.reset();
 	DeleteTemporaryFile(id);
