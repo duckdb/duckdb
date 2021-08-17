@@ -276,7 +276,8 @@ vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {
 		// there are blocks in the free list or multi_use_blocks
 		// figure out how many blocks we need to write these to the file
 		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
-		auto multi_use_blocks_size = sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
+		auto multi_use_blocks_size =
+		    sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
 		auto total_size = free_list_size + multi_use_blocks_size;
 		// because of potential alignment issues and needing to store a next pointer in a block we subtract
 		// a bit from the max block size
@@ -291,7 +292,7 @@ vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {
 
 		// reserve the blocks that we are going to write
 		// since these blocks are no longer free we cannot just include them in the free list!
-		for(idx_t i = 0; i < total_blocks; i++) {
+		for (idx_t i = 0; i < total_blocks; i++) {
 			auto block_id = GetFreeBlockId();
 			free_list_blocks.push_back(block_id);
 		}
@@ -302,8 +303,9 @@ vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {
 
 class FreeListBlockWriter : public MetaBlockWriter {
 public:
-	FreeListBlockWriter(DatabaseInstance &db_p, vector<block_id_t> &free_list_blocks_p) :
-		MetaBlockWriter(db_p, free_list_blocks_p[0]), free_list_blocks(free_list_blocks_p), index(1) {}
+	FreeListBlockWriter(DatabaseInstance &db_p, vector<block_id_t> &free_list_blocks_p)
+	    : MetaBlockWriter(db_p, free_list_blocks_p[0]), free_list_blocks(free_list_blocks_p), index(1) {
+	}
 
 	vector<block_id_t> &free_list_blocks;
 	idx_t index;
@@ -311,7 +313,8 @@ public:
 protected:
 	block_id_t GetNextBlockId() override {
 		if (index >= free_list_blocks.size()) {
-			throw InternalException("Free List Block Writer ran out of blocks, this means not enough blocks were allocated up front");
+			throw InternalException(
+			    "Free List Block Writer ran out of blocks, this means not enough blocks were allocated up front");
 		}
 		return free_list_blocks[index++];
 	}
@@ -340,7 +343,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 
 		D_ASSERT(writer.block->id == free_list_blocks[0]);
 		header.free_list = writer.block->id;
-		for(auto &block_id : free_list_blocks) {
+		for (auto &block_id : free_list_blocks) {
 			modified_blocks.insert(block_id);
 		}
 

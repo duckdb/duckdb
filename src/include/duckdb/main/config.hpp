@@ -27,12 +27,7 @@ class CompressionFunction;
 
 struct CompressionFunctionSet;
 
-enum class AccessMode : uint8_t {
-	UNDEFINED = 0,
-	AUTOMATIC = 1,
-	READ_ONLY = 2,
-	READ_WRITE = 3
-};
+enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
 
 enum class CheckpointAbort : uint8_t {
 	NO_ABORT = 0,

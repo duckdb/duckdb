@@ -65,6 +65,7 @@ private:
 
 	//! Return the blocks to which we will write the free list and modified blocks
 	vector<block_id_t> GetFreeListBlocks();
+
 private:
 	DatabaseInstance &db;
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)
