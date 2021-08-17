@@ -393,10 +393,25 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 			continue;
 		}
 		// hooray, we can unload the block
-		// release the memory and mark the block as unloaded
+		// add the block to the blocks that will be unloaded
 		memory_to_free += handle->memory_usage;
 		handles_to_unload.push_back(move(handle));
+		// if we can unload 5% of memory, do it
+		if (memory_to_free >= 0.05 * memory_limit) {
+			for (auto &h : handles_to_unload) {
+				h->Unload();
+			}
+			for (auto &h : handles_to_unload) {
+				h->lock.unlock();
+			}
+			handles_to_unload.clear();
+			if (mf_locked && current_memory <= memory_limit) {
+				memory_full_lock.unlock();
+				mf_locked = false;
+			}
+		}
 	}
+	// unload remaining blocks
 	for (auto &h : handles_to_unload) {
 		h->Unload();
 	}
