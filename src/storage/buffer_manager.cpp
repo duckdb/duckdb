@@ -367,7 +367,7 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 
 	bool mf_locked = false;
 	unique_ptr<BufferEvictionNode> node;
-	while (current_memory > 0.9 * memory_limit) {
+	while (current_memory - memory_to_free > 0.9 * memory_limit) {
 		// lock so the other threads have to wait until there is space
 		if (!mf_locked && current_memory > memory_limit) {
 			memory_full_lock.lock();
@@ -396,21 +396,11 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		// release the memory and mark the block as unloaded
 		memory_to_free += handle->memory_usage;
 		handles_to_unload.push_back(move(handle));
-
-		if (handles_to_unload.size() == 1024 || memory_to_free >= 0.05 * memory_limit) {
-			for (auto &h : handles_to_unload) {
-				h->Unload();
-				h->lock.unlock();
-			}
-			handles_to_unload.clear();
-			if (mf_locked && current_memory <= memory_limit) {
-				memory_full_lock.unlock();
-				mf_locked = false;
-			}
-		}
 	}
 	for (auto &h : handles_to_unload) {
 		h->Unload();
+	}
+	for (auto &h : handles_to_unload) {
 		h->lock.unlock();
 	}
 	// unlock io lock again
