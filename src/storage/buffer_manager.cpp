@@ -46,18 +46,6 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(handle->db);
 	auto &block_manager = BlockManager::GetBlockManager(handle->db);
-
-	bool locked = false;
-	if (buffer_manager.io_locked) {
-		buffer_manager.io_lock.lock();
-		if (!buffer_manager.io_locked) {
-			buffer_manager.io_lock.unlock();
-			locked = false;
-		} else {
-			locked = true;
-		}
-	}
-
 	if (handle->block_id < MAXIMUM_BLOCK) {
 		auto block = make_unique<Block>(Allocator::Get(handle->db), handle->block_id);
 		block_manager.Read(*block);
@@ -68,10 +56,6 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 		} else {
 			handle->buffer = buffer_manager.ReadTemporaryBuffer(handle->block_id);
 		}
-	}
-
-	if (locked) {
-		buffer_manager.io_lock.unlock();
 	}
 
 	handle->state = BlockState::BLOCK_LOADED;
@@ -185,7 +169,7 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
-      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK), io_locked(false) {
+      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK) {
 }
 
 BufferManager::~BufferManager() {
@@ -376,9 +360,11 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 			return true;
 		}
 	}
-	io_locked = true;
 
 	// we got the IO lock, unload until we have some room
+	vector<shared_ptr<BlockHandle>> handles_to_unload;
+	idx_t memory_to_free = 0;
+
 	bool mf_locked = false;
 	unique_ptr<BufferEvictionNode> node;
 	while (current_memory > 0.9 * memory_limit) {
@@ -400,22 +386,30 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 			continue;
 		}
 		// we might be able to free this block: grab the mutex and check if we can free it
-		lock_guard<mutex> lock(handle->lock);
+		handle->lock.lock();
 		if (!node->CanUnload(*handle)) {
 			// something changed in the mean-time, bail out
+			handle->lock.unlock();
 			continue;
 		}
 		// hooray, we can unload the block
 		// release the memory and mark the block as unloaded
-		handle->Unload();
-		if (mf_locked && current_memory <= memory_limit) {
-			memory_full_lock.unlock();
-			mf_locked = false;
+		memory_to_free += handle->memory_usage;
+		handles_to_unload.push_back(move(handle));
+
+		if (handles_to_unload.size() == 1024 || memory_to_free >= 0.05 * memory_limit) {
+			for (auto &h : handles_to_unload) {
+				h->Unload();
+				h->lock.unlock();
+			}
+			if (mf_locked && current_memory <= memory_limit) {
+				memory_full_lock.unlock();
+				mf_locked = false;
+			}
 		}
 	}
 	// unlock io lock again
 	io_lock.unlock();
-	io_locked = false;
 	if (mf_locked) {
 		// we could not free up enough space
 		memory_full_lock.unlock();
