@@ -124,6 +124,7 @@ private:
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
 
+	atomic<bool> io_locked;
 	mutex io_lock;
 	mutex memory_full_lock;
 
