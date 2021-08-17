@@ -116,7 +116,7 @@ void ColumnSegment::InitializeAppend(ColumnAppendState &state) {
 idx_t ColumnSegment::Append(ColumnAppendState &state, VectorData &append_data, idx_t offset, idx_t count) {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (!function->append) {
-		throw InternalException("Attempting to append to a compressed segment without append method");
+		throw InternalException("Attempting to append to a segment without append method");
 	}
 	return function->append(*this, stats, append_data, offset, count);
 }
@@ -124,8 +124,7 @@ idx_t ColumnSegment::Append(ColumnAppendState &state, VectorData &append_data, i
 idx_t ColumnSegment::FinalizeAppend() {
 	D_ASSERT(segment_type == ColumnSegmentType::TRANSIENT);
 	if (!function->finalize_append) {
-		throw InternalException(
-		    "Attempting to call FinalizeAppend on a compressed segment without a finalize_append method");
+		throw InternalException("Attempting to call FinalizeAppend on a segment without a finalize_append method");
 	}
 	return function->finalize_append(*this, stats);
 }

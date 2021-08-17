@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/storage/meta_block_reader.hpp"
 #include "duckdb/storage/meta_block_writer.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -253,6 +254,10 @@ unique_ptr<Block> SingleFileBlockManager::CreateBlock() {
 	return make_unique<Block>(Allocator::Get(db), GetFreeBlockId());
 }
 
+unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id) {
+	return make_unique<Block>(Allocator::Get(db), block_id);
+}
+
 void SingleFileBlockManager::Read(Block &block) {
 	D_ASSERT(block.id >= 0);
 	D_ASSERT(std::find(free_list.begin(), free_list.end(), block.id) == free_list.end());
@@ -264,9 +269,59 @@ void SingleFileBlockManager::Write(FileBuffer &buffer, block_id_t block_id) {
 	buffer.ChecksumAndWrite(*handle, BLOCK_START + block_id * Storage::BLOCK_ALLOC_SIZE);
 }
 
+vector<block_id_t> SingleFileBlockManager::GetFreeListBlocks() {
+	vector<block_id_t> free_list_blocks;
+
+	if (!free_list.empty() || !multi_use_blocks.empty() || !modified_blocks.empty()) {
+		// there are blocks in the free list or multi_use_blocks
+		// figure out how many blocks we need to write these to the file
+		auto free_list_size = sizeof(uint64_t) + sizeof(block_id_t) * (free_list.size() + modified_blocks.size());
+		auto multi_use_blocks_size = sizeof(uint64_t) + (sizeof(block_id_t) + sizeof(uint32_t)) * multi_use_blocks.size();
+		auto total_size = free_list_size + multi_use_blocks_size;
+		// because of potential alignment issues and needing to store a next pointer in a block we subtract
+		// a bit from the max block size
+		auto space_in_block = Storage::BLOCK_SIZE - 4 * sizeof(block_id_t);
+		auto total_blocks = (total_size + space_in_block - 1) / space_in_block;
+		auto &config = DBConfig::GetConfig(db);
+		if (config.debug_many_free_list_blocks) {
+			total_blocks++;
+		}
+		D_ASSERT(total_size > 0);
+		D_ASSERT(total_blocks > 0);
+
+		// reserve the blocks that we are going to write
+		// since these blocks are no longer free we cannot just include them in the free list!
+		for(idx_t i = 0; i < total_blocks; i++) {
+			auto block_id = GetFreeBlockId();
+			free_list_blocks.push_back(block_id);
+		}
+	}
+
+	return free_list_blocks;
+}
+
+class FreeListBlockWriter : public MetaBlockWriter {
+public:
+	FreeListBlockWriter(DatabaseInstance &db_p, vector<block_id_t> &free_list_blocks_p) :
+		MetaBlockWriter(db_p, free_list_blocks_p[0]), free_list_blocks(free_list_blocks_p), index(1) {}
+
+	vector<block_id_t> &free_list_blocks;
+	idx_t index;
+
+protected:
+	block_id_t GetNextBlockId() override {
+		if (index >= free_list_blocks.size()) {
+			throw InternalException("Free List Block Writer ran out of blocks, this means not enough blocks were allocated up front");
+		}
+		return free_list_blocks[index++];
+	}
+};
+
 void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	// set the iteration count
 	header.iteration = ++iteration_count;
+
+	vector<block_id_t> free_list_blocks = GetFreeListBlocks();
 
 	// now handle the free list
 	// add all modified blocks to the free list: they can now be written to again
@@ -275,17 +330,19 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	modified_blocks.clear();
 
-	if (!free_list.empty() || !multi_use_blocks.empty()) {
-		// there are blocks in the free list
-		// write them to the file
-		MetaBlockWriter writer(db);
+	if (!free_list_blocks.empty()) {
+		// there are blocks to write, either in the free_list or in the modified_blocks
+		// we write these blocks specifically to the free_list_blocks
+		// a normal MetaBlockWriter will fetch blocks to use from the free_list
+		// but since we are WRITING the free_list, this behavior is sub-optimal
 
+		FreeListBlockWriter writer(db, free_list_blocks);
+
+		D_ASSERT(writer.block->id == free_list_blocks[0]);
 		header.free_list = writer.block->id;
-		free_list.erase(writer.block->id);
-		modified_blocks.insert(writer.block->id);
-
-		// FIXME: how do we handle the scenario where this takes up multiple blocks?
-		// figure out how many blocks to use for free_list + multi_use_blocks list and allocate before-hand?
+		for(auto &block_id : free_list_blocks) {
+			modified_blocks.insert(block_id);
+		}
 
 		writer.Write<uint64_t>(free_list.size());
 		for (auto &block_id : free_list) {
@@ -302,6 +359,11 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 		header.free_list = INVALID_BLOCK;
 	}
 	header.block_count = max_block;
+
+	auto &config = DBConfig::GetConfig(db);
+	if (config.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
+		throw IOException("Checkpoint aborted after free list write because of PRAGMA checkpoint_abort flag");
+	}
 
 	if (!use_direct_io) {
 		// if we are not using Direct IO we need to fsync BEFORE we write the header to ensure that all the previous

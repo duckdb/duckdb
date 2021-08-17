@@ -27,8 +27,19 @@ class CompressionFunction;
 
 struct CompressionFunctionSet;
 
-enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
-enum class CheckpointAbort : uint8_t { NO_ABORT = 0, DEBUG_ABORT_BEFORE_TRUNCATE = 1, DEBUG_ABORT_BEFORE_HEADER = 2 };
+enum class AccessMode : uint8_t {
+	UNDEFINED = 0,
+	AUTOMATIC = 1,
+	READ_ONLY = 2,
+	READ_WRITE = 3
+};
+
+enum class CheckpointAbort : uint8_t {
+	NO_ABORT = 0,
+	DEBUG_ABORT_BEFORE_TRUNCATE = 1,
+	DEBUG_ABORT_BEFORE_HEADER = 2,
+	DEBUG_ABORT_AFTER_FREE_LIST_WRITE = 3
+};
 
 enum class ConfigurationOptionType : uint32_t {
 	INVALID = 0,
@@ -103,6 +114,8 @@ public:
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_INVALID;
+	//! Debug flag that adds additional (unnecessary) free_list blocks to the storage
+	bool debug_many_free_list_blocks = false;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

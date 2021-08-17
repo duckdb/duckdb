@@ -23,6 +23,9 @@ public:
 	unique_ptr<Block> CreateBlock() override {
 		throw InternalException("Cannot perform IO in in-memory database!");
 	}
+	unique_ptr<Block> CreateBlock(block_id_t block_id) override {
+		throw InternalException("Cannot perform IO in in-memory database!");
+	}
 	block_id_t GetFreeBlockId() override {
 		throw InternalException("Cannot perform IO in in-memory database!");
 	}

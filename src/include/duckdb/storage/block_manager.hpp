@@ -25,6 +25,7 @@ public:
 	virtual void StartCheckpoint() = 0;
 	//! Creates a new block inside the block manager
 	virtual unique_ptr<Block> CreateBlock() = 0;
+	virtual unique_ptr<Block> CreateBlock(block_id_t block_id) = 0;
 	//! Return the next free block id
 	virtual block_id_t GetFreeBlockId() = 0;
 	//! Returns whether or not a specified block is the root block

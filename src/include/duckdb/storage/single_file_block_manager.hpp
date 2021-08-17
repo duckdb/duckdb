@@ -30,6 +30,8 @@ public:
 	void StartCheckpoint() override;
 	//! Creates a new Block and returns a pointer
 	unique_ptr<Block> CreateBlock() override;
+	//! Creates a new Block using the specified block_id and returns a pointer
+	unique_ptr<Block> CreateBlock(block_id_t block_id) override;
 	//! Return the next free block id
 	block_id_t GetFreeBlockId() override;
 	//! Returns whether or not a specified block is the root block
@@ -61,6 +63,8 @@ public:
 private:
 	void Initialize(DatabaseHeader &header);
 
+	//! Return the blocks to which we will write the free list and modified blocks
+	vector<block_id_t> GetFreeListBlocks();
 private:
 	DatabaseInstance &db;
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)

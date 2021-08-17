@@ -295,8 +295,8 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	// compute the total size required to store this segment
 	auto offset_size = DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t);
 	auto total_size = offset_size + dict.size;
-	if (total_size >= idx_t(Storage::BLOCK_SIZE * 0.8)) {
-		// the block is basically full, don't bother moving anything around
+	if (total_size >= Storage::BLOCK_SIZE / 5 * 4) {
+		// the block is full enough, don't bother moving around the dictionary
 		return Storage::BLOCK_SIZE;
 	}
 	// the block has space left: figure out how much space we can save

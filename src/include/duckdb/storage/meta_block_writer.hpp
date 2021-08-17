@@ -20,7 +20,7 @@ class DatabaseInstance;
 //! This struct is responsible for writing metadata to disk
 class MetaBlockWriter : public Serializer {
 public:
-	explicit MetaBlockWriter(DatabaseInstance &db);
+	MetaBlockWriter(DatabaseInstance &db, block_id_t initial_block_id = INVALID_BLOCK);
 	~MetaBlockWriter() override;
 
 	DatabaseInstance &db;
@@ -33,6 +33,9 @@ public:
 	void Flush();
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override;
+
+protected:
+	virtual block_id_t GetNextBlockId();
 };
 
 } // namespace duckdb
