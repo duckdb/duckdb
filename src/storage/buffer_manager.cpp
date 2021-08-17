@@ -24,7 +24,6 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr
 }
 
 BlockHandle::~BlockHandle() {
-	lock_guard<mutex> handle_lock(lock);
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 #ifdef DEBUG
 	lock_guard<mutex> cm_lock(buffer_manager.current_memory_lock);
@@ -111,13 +110,21 @@ struct BufferEvictionNode {
 	weak_ptr<BlockHandle> handle;
 	idx_t timestamp;
 
+	bool CanUnload(BlockHandle &handle_p) {
+		if (timestamp != handle_p.eviction_timestamp) {
+			// handle was used in between
+			return false;
+		}
+		return handle_p.CanUnload();
+	}
+
 	shared_ptr<BlockHandle> TryGetBlockHandle() {
 		auto handle_p = handle.lock();
 		if (!handle_p) {
 			// BlockHandle has been destroyed
 			return nullptr;
 		}
-		if (timestamp != handle_p->eviction_timestamp) {
+		if (!CanUnload(*handle_p)) {
 			// handle was used in between
 			return nullptr;
 		}
@@ -323,22 +330,7 @@ void BufferManager::AddToEvictionQueue(shared_ptr<BlockHandle> &handle) {
 	D_ASSERT(handle->readers == 0);
 	handle->eviction_timestamp++;
 	queue->q.enqueue(make_unique<BufferEvictionNode>(weak_ptr<BlockHandle>(handle), handle->eviction_timestamp));
-}
-
-void BufferManager::PurgeQueue() {
-	unique_ptr<BufferEvictionNode> node;
-	while (true) {
-		if (!queue->q.try_dequeue(node)) {
-			break;
-		}
-		auto handle = node->TryGetBlockHandle();
-		if (!handle) {
-			continue;
-		} else {
-			queue->q.enqueue(move(node));
-			break;
-		}
-	}
+	// FIXME: do some house-keeping to prevent the queue from being flooded with many old blocks
 }
 
 void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
@@ -363,15 +355,14 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 			current_memory -= extra_memory;
 			return false;
 		}
-		// try to get a reference to the underlying block pointer
+		// get a reference to the underlying block pointer
 		auto handle = node->TryGetBlockHandle();
 		if (!handle) {
-			// we did not get a reference: the node was redundant
 			continue;
 		}
 		// we might be able to free this block: grab the mutex and check if we can free it
 		lock_guard<mutex> lock(handle->lock);
-		if (!handle->CanUnload()) {
+		if (!node->CanUnload(*handle)) {
 			// something changed in the mean-time, bail out
 			continue;
 		}
@@ -382,6 +373,22 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	return true;
 }
 
+void BufferManager::PurgeQueue() {
+	unique_ptr<BufferEvictionNode> node;
+	while (true) {
+		if (!queue->q.try_dequeue(node)) {
+			break;
+		}
+		auto handle = node->TryGetBlockHandle();
+		if (!handle) {
+			continue;
+		} else {
+			queue->q.enqueue(move(node));
+			break;
+		}
+	}
+}
+
 void BufferManager::VerifyCurrentMemory() {
 	lock_guard<mutex> b_lock(blocks_lock);
 	lock_guard<mutex> tb_lock(temp_blocks_lock);
@@ -390,18 +397,12 @@ void BufferManager::VerifyCurrentMemory() {
 		auto &block = *map_entry.second.lock();
 		if (block.state == BlockState::BLOCK_LOADED) {
 			summed_memory += block.memory_usage;
-			D_ASSERT(block.buffer);
-		} else {
-			D_ASSERT(!block.buffer);
 		}
 	}
 	for (auto &map_entry : temp_blocks) {
 		auto &block = *map_entry.second;
 		if (block.state == BlockState::BLOCK_LOADED) {
 			summed_memory += block.memory_usage;
-			D_ASSERT(block.buffer);
-		} else {
-			D_ASSERT(!block.buffer);
 		}
 	}
 	D_ASSERT(summed_memory == current_memory);
@@ -424,7 +425,6 @@ void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 		blocks.erase(block_id);
 	}
 }
-
 void BufferManager::SetLimit(idx_t limit) {
 	lock_guard<mutex> l_lock(limit_lock);
 #ifdef DEBUG
