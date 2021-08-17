@@ -168,7 +168,7 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
-      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK) {
+      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK), writers(0), max_writers(2) {
 }
 
 BufferManager::~BufferManager() {
@@ -348,9 +348,9 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	VerifyCurrentMemory();
 #endif
 	current_memory += extra_memory;
-	if (!(current_memory > 0.9 * maximum_memory && io_lock.try_lock())) {
+	if (!(current_memory > 0.8 * memory_limit && io_lock.try_lock())) {
 		// we did not get the IO lock
-		if (current_memory < maximum_memory) {
+		if (current_memory < memory_limit) {
 			// memory is not full, yay!
 			return true;
 		} else {
@@ -360,12 +360,18 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		}
 	}
 
+	bool io_locked = true;
+	if (++writers <= max_writers) {
+		io_lock.unlock();
+		io_locked = false;
+	}
+
 	// we got the IO lock, unload until we have some room
 	bool mf_locked = false;
 	unique_ptr<BufferEvictionNode> node;
-	while (current_memory > 0.9 * maximum_memory) {
+	while (current_memory > 0.8 * memory_limit) {
 		// lock so the other threads have to wait until there is space
-		if (!mf_locked && current_memory > maximum_memory) {
+		if (!mf_locked && current_memory > memory_limit) {
 			memory_full_lock.lock();
 			mf_locked = true;
 		}
@@ -390,13 +396,16 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		// hooray, we can unload the block
 		// release the memory and mark the block as unloaded
 		handle->Unload();
-		if (mf_locked && current_memory <= maximum_memory) {
+		if (mf_locked && current_memory <= memory_limit) {
 			memory_full_lock.unlock();
 			mf_locked = false;
 		}
 	}
 	// unlock io lock again
-	io_lock.unlock();
+	if (io_locked) {
+		io_lock.unlock();
+	}
+	writers--;
 	if (mf_locked) {
 		// we could not free up enough space
 		memory_full_lock.unlock();

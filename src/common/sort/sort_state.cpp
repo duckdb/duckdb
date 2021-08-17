@@ -260,7 +260,7 @@ GlobalSortState::GlobalSortState(BufferManager &buffer_manager, vector<BoundOrde
     : buffer_manager(buffer_manager), sort_layout(SortLayout(orders, statistics)), payload_layout(payload_layout),
       rows_per_merge_partition(0), external(false) {
 	idx_t thinnest_row = MinValue(sort_layout.entry_size, payload_layout.GetRowWidth());
-	block_capacity = ((idx_t)Storage::BLOCK_SIZE + thinnest_row - 1) / thinnest_row;
+	block_capacity = ((idx_t)(1 << 26) + thinnest_row - 1) / thinnest_row;
 }
 
 void GlobalSortState::AddLocalState(LocalSortState &local_sort_state) {
