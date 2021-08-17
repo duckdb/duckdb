@@ -62,7 +62,7 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 0	199999	200000
 
 query I
-select total_blocks < 10 from pragma_database_size();
+select total_blocks < 25 from pragma_database_size();
 ----
 true
 
