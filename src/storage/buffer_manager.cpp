@@ -168,7 +168,7 @@ void BufferManager::SetTemporaryDirectory(string new_dir) {
 
 BufferManager::BufferManager(DatabaseInstance &db, string tmp, idx_t maximum_memory)
     : db(db), current_memory(0), maximum_memory(maximum_memory), temp_directory(move(tmp)),
-      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK), writers(0), max_writers(2) {
+      queue(make_unique<EvictionQueue>()), temporary_id(MAXIMUM_BLOCK) {
 }
 
 BufferManager::~BufferManager() {
@@ -360,12 +360,6 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		}
 	}
 
-	bool io_locked = true;
-	if (++writers <= max_writers) {
-		io_lock.unlock();
-		io_locked = false;
-	}
-
 	// we got the IO lock, unload until we have some room
 	bool mf_locked = false;
 	unique_ptr<BufferEvictionNode> node;
@@ -402,10 +396,7 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 		}
 	}
 	// unlock io lock again
-	if (io_locked) {
-		io_lock.unlock();
-	}
-	writers--;
+	io_lock.unlock();
 	if (mf_locked) {
 		// we could not free up enough space
 		memory_full_lock.unlock();
@@ -524,6 +515,7 @@ void BufferManager::WriteTemporaryBuffer(ManagedBuffer &buffer) {
 unique_ptr<FileBuffer> BufferManager::ReadTemporaryBuffer(block_id_t id) {
 	D_ASSERT(!temp_directory.empty());
 	D_ASSERT(temp_directory_handle.get());
+	lock_guard<mutex> lock(io_lock);
 	idx_t block_size;
 	// open the temporary file and read the size
 	auto path = GetTemporaryPath(id);

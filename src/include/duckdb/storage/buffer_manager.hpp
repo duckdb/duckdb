@@ -125,8 +125,6 @@ private:
 	atomic<block_id_t> temporary_id;
 
 	mutex io_lock;
-	atomic<idx_t> writers;
-	atomic<idx_t> max_writers;
 	mutex memory_full_lock;
 
 	//! Lock for current_memory (used for verification)
