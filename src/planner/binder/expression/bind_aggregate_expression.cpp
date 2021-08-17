@@ -7,6 +7,7 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -82,8 +83,22 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	// found a matching function!
 	auto &bound_function = func->functions[best_function];
 
+	// Bind any sort columns, unless the aggregate is order-insensitive
+	auto order_bys = make_unique<BoundOrderModifier>();
+	if (bound_function.order_sensitive && !aggr.order_bys->orders.empty()) {
+		auto &config = DBConfig::GetConfig(context);
+		for (auto &order : aggr.order_bys->orders) {
+			aggregate_binder.BindChild(order.expression, 0, error);
+			auto &order_expr = (BoundExpression &)*order.expression;
+			const auto sense = (order.type == OrderType::ORDER_DEFAULT) ? config.default_order_type : order.type;
+			const auto null_order =
+			    (order.null_order == OrderByNullType::ORDER_DEFAULT) ? config.default_null_order : order.null_order;
+			order_bys->orders.emplace_back(BoundOrderByNode(sense, null_order, move(order_expr.expr)));
+		}
+	}
+
 	auto aggregate = AggregateFunction::BindAggregateFunction(context, bound_function, move(children),
-	                                                          move(bound_filter), aggr.distinct);
+	                                                          move(bound_filter), aggr.distinct, move(order_bys));
 
 	auto return_type = aggregate->return_type;
 

@@ -10,13 +10,13 @@ namespace duckdb {
 
 FunctionExpression::FunctionExpression(string schema, const string &function_name,
                                        vector<unique_ptr<ParsedExpression>> children_p,
-                                       unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys,
+                                       unique_ptr<ParsedExpression> filter, unique_ptr<OrderModifier> order_bys_p,
                                        bool distinct, bool is_operator)
     : ParsedExpression(ExpressionType::FUNCTION, ExpressionClass::FUNCTION), schema(std::move(schema)),
       function_name(StringUtil::Lower(function_name)), is_operator(is_operator), children(move(children_p)),
-      distinct(distinct), filter(move(filter)), order_bys(move(order_bys)) {
+      distinct(distinct), filter(move(filter)), order_bys(move(order_bys_p)) {
 	if (!order_bys) {
-		this->order_bys = make_unique<OrderModifier>();
+		order_bys = make_unique<OrderModifier>();
 	}
 }
 

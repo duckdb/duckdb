@@ -2,6 +2,9 @@
 # description: Test STRING_AGG operator
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
 # test incorrect usage of STRING_AGG function
 
 statement error
@@ -88,3 +91,58 @@ SELECT g, GROUP_CONCAT(x) FROM strings GROUP BY g ORDER BY g
 2	i,j
 3	p
 4	x,y,z
+
+#
+# Test ORDER BY
+#
+
+# Impervious to threading
+statement ok
+PRAGMA threads=4
+
+# Single group
+query TT
+SELECT STRING_AGG(x,',' ORDER BY x ASC), STRING_AGG(x,y ORDER BY x ASC) FROM strings
+----
+a,b,i,j,p,x,y,z
+a-b/i+j/p/x-y+z
+
+query TT
+SELECT STRING_AGG(x,',' ORDER BY x DESC), STRING_AGG(x,y ORDER BY x DESC) FROM strings
+----
+z,y,x,p,j,i,b,a
+z-y/x/p+j/i-b/a
+
+# Constant separator
+query II
+SELECT g, STRING_AGG(x, ',' ORDER BY x ASC) FROM strings GROUP BY g ORDER BY 1
+----
+1	a,b
+2	i,j
+3	p
+4	x,y,z
+
+query II
+SELECT g, STRING_AGG(x, ',' ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
+----
+1	b,a
+2	j,i
+3	p
+4	z,y,x
+
+# Variable separator
+query II
+SELECT g, STRING_AGG(x, y ORDER BY x ASC) FROM strings GROUP BY g ORDER BY 1
+----
+1	a-b
+2	i+j
+3	p
+4	x-y+z
+
+query II
+SELECT g, STRING_AGG(x, y ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
+----
+1	b/a
+2	j/i
+3	p
+4	z-y/x
