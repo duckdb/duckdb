@@ -2,8 +2,10 @@
 # description: Test STRING_AGG operator with many groups
 # group: [aggregates]
 
-# generate a table
+statement ok
+PRAGMA force_parallelism
 
+# generate a table
 statement ok
 CREATE TABLE strings AS SELECT g, 'hello' x FROM range(0, 10000, 1) t1(g);
 
@@ -24,3 +26,10 @@ query IT
 SELECT 1, STRING_AGG(x, ',' ORDER BY g DESC) FROM strings GROUP BY 1 ORDER BY 1
 ----
 2 values hashing to 3bd0d16b476d2ffe18a77ebe1098b89c
+
+query I
+SELECT STRING_AGG(s, ',' ORDER BY id DESC)
+FROM (SELECT i id, i::VARCHAR s FROM range(1000000) tbl(i)) t
+WHERE id%100000=0;
+----
+900000,800000,700000,600000,500000,400000,300000,200000,100000,0

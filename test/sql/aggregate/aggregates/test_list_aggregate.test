@@ -1,6 +1,6 @@
-# name: test/sql/aggregate/test_list_aggregate.test
+# name: test/sql/aggregate/aggregates/test_list_aggregate.test
 # description: Test aggregate list
-# group: [aggregate]
+# group: [aggregates]
 
 statement ok
 PRAGMA enable_verification

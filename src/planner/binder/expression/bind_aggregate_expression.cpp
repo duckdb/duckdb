@@ -26,6 +26,14 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	for (auto &child : aggr.children) {
 		aggregate_binder.BindChild(child, 0, error);
 	}
+
+	// Bind the ORDER BYs, if any
+	if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
+		for (auto &order : aggr.order_bys->orders) {
+			aggregate_binder.BindChild(order.expression, 0, error);
+		}
+	}
+
 	if (!error.empty()) {
 		// failed to bind child
 		if (aggregate_binder.BoundColumns()) {
@@ -49,6 +57,16 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 				}
 				auto &bound_expr = (BoundExpression &)*aggr.filter;
 				ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+			}
+			if (aggr.order_bys && !aggr.order_bys->orders.empty()) {
+				for (auto &order : aggr.order_bys->orders) {
+					bool success = aggregate_binder.BindCorrelatedColumns(order.expression);
+					if (!success) {
+						throw BinderException(error);
+					}
+					auto &bound_expr = (BoundExpression &)*order.expression;
+					ExtractCorrelatedExpressions(binder, *bound_expr.expr);
+				}
 			}
 		} else {
 			// we didn't bind columns, try again in children
@@ -88,7 +106,6 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 	if (bound_function.order_sensitive && !aggr.order_bys->orders.empty()) {
 		auto &config = DBConfig::GetConfig(context);
 		for (auto &order : aggr.order_bys->orders) {
-			aggregate_binder.BindChild(order.expression, 0, error);
 			auto &order_expr = (BoundExpression &)*order.expression;
 			const auto sense = (order.type == OrderType::ORDER_DEFAULT) ? config.default_order_type : order.type;
 			const auto null_order =
