@@ -344,6 +344,7 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 }
 
 bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
+	PurgeQueue();
 #ifdef DEBUG
 	VerifyCurrentMemory();
 #endif
