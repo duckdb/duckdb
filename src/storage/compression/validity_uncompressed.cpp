@@ -372,7 +372,8 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 	D_ASSERT(row_id >= 0 && row_id < row_t(segment.count));
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
-	ValidityMask mask((validity_t *)handle->node->buffer);
+	auto dataptr = handle->node->buffer + segment.GetBlockOffset();
+	ValidityMask mask((validity_t *)dataptr);
 	auto &result_mask = FlatVector::Validity(result);
 	if (!mask.RowIsValidUnsafe(row_id)) {
 		result_mask.SetInvalid(result_idx);
