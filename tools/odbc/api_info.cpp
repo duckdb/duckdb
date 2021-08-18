@@ -28,7 +28,8 @@ const std::vector<SQLUSMALLINT> ApiInfo::ALL_SUPPORTED_FUNCTIONS = {
     SQL_API_SQLDESCRIBEPARAM,  SQL_API_SQLDESCRIBECOL,  SQL_API_SQLCOLATTRIBUTES,  SQL_API_SQLFETCHSCROLL,
     SQL_API_SQLROWCOUNT,       SQL_API_SQLGETDIAGFIELD, SQL_API_SQLGETDIAGREC,     SQL_API_SQLGETFUNCTIONS,
     SQL_API_SQLBINDPARAMETER,  SQL_API_SQLGETDATA,      SQL_API_SQLFETCH,          SQL_API_SQLEXECUTE,
-    SQL_API_SQLNUMRESULTCOLS,  SQL_API_SQLGETTYPEINFO,  SQL_API_SQLBINDCOL};
+    SQL_API_SQLNUMRESULTCOLS,  SQL_API_SQLGETTYPEINFO,  SQL_API_SQLBINDCOL,        SQL_API_SQLCANCEL,
+    SQL_API_SQLNUMPARAMS};
 
 const std::vector<SQLUSMALLINT> ApiInfo::ODBC3_SUPPORTED_FUNCTIONS = {
     SQL_API_SQLALLOCHANDLE,    SQL_API_SQLFREEHANDLE,   SQL_API_SQLGETCONNECTATTR, SQL_API_SQLSETENVATTR,
@@ -38,7 +39,8 @@ const std::vector<SQLUSMALLINT> ApiInfo::ODBC3_SUPPORTED_FUNCTIONS = {
     SQL_API_SQLDESCRIBEPARAM,  SQL_API_SQLDESCRIBECOL,  SQL_API_SQLCOLATTRIBUTES,  SQL_API_SQLFETCHSCROLL,
     SQL_API_SQLROWCOUNT,       SQL_API_SQLGETDIAGFIELD, SQL_API_SQLGETDIAGREC,     SQL_API_SQLGETFUNCTIONS,
     SQL_API_SQLBINDPARAMETER,  SQL_API_SQLGETDATA,      SQL_API_SQLFETCH,          SQL_API_SQLEXECUTE,
-    SQL_API_SQLNUMRESULTCOLS,  SQL_API_SQLGETTYPEINFO,  SQL_API_SQLBINDCOL};
+    SQL_API_SQLNUMRESULTCOLS,  SQL_API_SQLGETTYPEINFO,  SQL_API_SQLBINDCOL,        SQL_API_SQLCANCEL,
+    SQL_API_SQLNUMPARAMS};
 
 const std::vector<SQLSMALLINT> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {SQL_CHAR,
                                                                     SQL_TINYINT,
@@ -116,6 +118,8 @@ SQLRETURN ApiInfo::GetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function
 	case SQL_API_SQLCOLATTRIBUTES:
 	case SQL_API_SQLNUMRESULTCOLS:
 	case SQL_API_SQLBINDCOL:
+	case SQL_API_SQLCANCEL:
+	case SQL_API_SQLNUMPARAMS:
 	// results
 	case SQL_API_SQLGETDATA:
 	case SQL_API_SQLFETCH:
@@ -252,5 +256,51 @@ SQLLEN ApiInfo::PointerSizeOf(SQLSMALLINT sql_type) {
 	case SQL_C_CHAR:
 	default:
 		return -1;
+	}
+}
+
+//! https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size?view=sql-server-ver15
+SQLRETURN ApiInfo::GetColumnSize(const duckdb::LogicalType &logical_type, SQLULEN *col_size_ptr) {
+	auto sql_type = FindRelatedSQLType(logical_type.id());
+	switch (sql_type) {
+	case SQL_DECIMAL:
+	case SQL_NUMERIC:
+		*col_size_ptr = duckdb::DecimalType::GetWidth(logical_type) + duckdb::DecimalType::GetScale(logical_type);
+		return SQL_SUCCESS;
+	case SQL_BIT:
+		*col_size_ptr = 1;
+		return SQL_SUCCESS;
+	case SQL_TINYINT:
+		*col_size_ptr = 6;
+		return SQL_SUCCESS;
+	case SQL_INTEGER:
+		*col_size_ptr = 11;
+		return SQL_SUCCESS;
+	case SQL_BIGINT:
+		*col_size_ptr = 20;
+		return SQL_SUCCESS;
+	case SQL_REAL:
+		*col_size_ptr = 14;
+		return SQL_SUCCESS;
+	case SQL_FLOAT:
+	case SQL_DOUBLE:
+		*col_size_ptr = 24;
+		return SQL_SUCCESS;
+	case SQL_TYPE_DATE:
+		*col_size_ptr = 10;
+		return SQL_SUCCESS;
+	case SQL_TYPE_TIME:
+		*col_size_ptr = 9;
+		return SQL_SUCCESS;
+	case SQL_TYPE_TIMESTAMP:
+		*col_size_ptr = 20;
+		return SQL_SUCCESS;
+	case SQL_VARCHAR:
+	case SQL_VARBINARY:
+		// we don't know the number of characters
+		*col_size_ptr = 0;
+		return SQL_SUCCESS;
+	default:
+		return SQL_ERROR;
 	}
 }

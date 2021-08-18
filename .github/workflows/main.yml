@@ -862,34 +862,21 @@ jobs:
     - name: Build
       run: DISABLE_SANITIZER=1 make debug
 
-    # - name: Test nanodbc
-    #   run: NANODBC_TEST_CONNSTR_ODBC="DRIVER=./build/debug/tools/odbc/libduckdb_odbc.so" ./nanodbc/build/test/odbc_tests test_simple
+    - name: Test nanodbc
+      run: ./tools/odbc/test/run_nanodbc_tests.sh
 
     - name: Test psqlodbc
-      run: |
-        echo -e "[ODBC]\nTrace = yes\nTraceFile = /tmp/odbctrace\n\n[DuckDB Driver]\nDriver = "`pwd`"/build/debug/tools/odbc/libduckdb_odbc.so" > ~/.odbcinst.ini
-        echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=:memory:\n" > ~/.odbc.ini
-        cd psqlodbc
-        export PSQLODBC_TEST_DSN="DuckDB"
-        # creating contrib_regression database used by some tests
-        (./build/debug/reset-db < sampletables.sql) || (cat /tmp/odbctrace; exit 1)
-        # running supported tests
-        (./build/debug/psql_odbc_test -f ../tools/odbc/supported_tests) || (cat /tmp/odbctrace; exit 1)
+      run: ./tools/odbc/test/run_psqlodbc_tests.sh
 
     - name: Test isql
-      run: |
-        echo -e "[ODBC]\nTrace = yes\nTraceFile = /tmp/odbctrace\n\n[DuckDB Driver]\nDriver = "`pwd`"/build/debug/tools/odbc/libduckdb_odbc.so" > ~/.odbcinst.ini
-        echo -e "[DuckDB]\nDriver = DuckDB Driver\nDatabase=test.db\n" > ~/.odbc.ini
-        export ASAN_OPTIONS=verify_asan_link_order=0
-        python tools/odbc/test/isql-test.py isql
-        if [[ $? != 0 ]]; then exit 1; fi
-        # running isql with the option -e
-        rm test.db && python tools/odbc/test/isql-test.py isql -e
-        if [[ $? != 0 ]]; then exit 1; fi
+      run: ./tools/odbc/test/run_isql_tests.sh
 
   linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
+    strategy:
+      matrix:
+        arch: [auto, aarch64]
     needs: linux-debug
 
     env:
@@ -910,6 +897,10 @@ jobs:
       with:
         python-version: '3.7'
 
+    - uses: docker/setup-qemu-action@v1
+      if: ${{ matrix.arch == 'aarch64' }}
+      name: Set up QEMU
+
     - name: Install
       run: pip install cibuildwheel twine
 
@@ -919,6 +910,11 @@ jobs:
         python setup.py sdist
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         cibuildwheel --output-dir wheelhouse duckdb_tarball
+
+    - name: Remove dist for aarch64
+      if: ${{ matrix.arch == 'aarch64' }}
+      run: |
+        cd tools/pythonpkg && rm dist/duckdb-*.tar.gz
 
     - name: Deploy
       run: |
@@ -1226,6 +1222,31 @@ jobs:
     - name: Node 15
       run: ./scripts/node_build.sh 15
 
+  win-nodejs:
+    name: node.js Windows
+    runs-on: windows-latest
+    needs: linux-debug
+
+    strategy:
+      matrix:
+        node: [ '10', '12', '14', '15' ]
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Setup Node
+      uses: actions/setup-node@v2
+      with:
+        node-version: ${{ matrix.node }}
+
+    - name: Node Version
+      run: ./scripts/node_version.sh
+    
+    - name: Node
+      run: ./scripts/node_build_win.sh
+
   linux-wasm-release:
     name: WebAssembly Release
     runs-on: ubuntu-20.04
@@ -1261,3 +1282,26 @@ jobs:
         name: duckdb-wasm32-nothreads
         path: |
           duckdb-wasm32-nothreads.zip
+
+  docs:
+    name: Website Docs
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Clone Website
+      run: git clone https://github.com/duckdb/duckdb-web
+
+    - name: Set up Python 3.9
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.9'
+
+    - name: Package
+      run: |
+        cd duckdb-web
+        python3 scripts/generate_docs.py ..

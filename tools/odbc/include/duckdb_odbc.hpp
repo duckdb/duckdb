@@ -64,6 +64,10 @@ SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLS
 
 SQLRETURN SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN target_typestr_len_or_ind_ptr);
 
+SQLRETURN SQLCancel(SQLHSTMT statement_handle);
+
+SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_ptr);
+
 // diagnostics
 SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
                           SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
@@ -81,6 +85,7 @@ SQLRETURN SQLGetTypeInfo(SQLHSTMT statement_handle, SQLSMALLINT data_type);
 namespace duckdb {
 
 class OdbcFetch;
+class ParameterWrapper;
 
 enum OdbcHandleType { ENV, DBC, STMT };
 struct OdbcHandle {
@@ -93,6 +98,8 @@ struct OdbcHandleEnv : public OdbcHandle {
 	unique_ptr<DuckDB> db;
 };
 
+struct OdbcHandleStmt;
+
 struct OdbcHandleDbc : public OdbcHandle {
 	explicit OdbcHandleDbc(OdbcHandleEnv *env_p) : OdbcHandle(OdbcHandleType::DBC), env(env_p), autocommit(true) {
 		D_ASSERT(env_p);
@@ -101,13 +108,29 @@ struct OdbcHandleDbc : public OdbcHandle {
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
 	bool autocommit;
+	// reference to an open statement handled by this connection
+	OdbcHandleStmt *stmt_handle;
 };
+
+inline bool IsSQLVarcharType(SQLSMALLINT type) {
+	if (type == SQL_CHAR || type == SQL_VARCHAR || type == SQL_WVARCHAR) {
+		return true;
+	}
+	return false;
+}
 
 struct OdbcBoundCol {
 	OdbcBoundCol() : type(SQL_UNKNOWN_TYPE), ptr(nullptr), len(0), strlen_or_ind(nullptr) {};
 
 	bool IsBound() {
 		return ptr != nullptr;
+	}
+
+	bool IsVarcharBound() {
+		if (IsSQLVarcharType(type)) {
+			return strlen_or_ind != nullptr;
+		}
+		return false;
 	}
 
 	SQLSMALLINT type;
@@ -119,11 +142,12 @@ struct OdbcBoundCol {
 struct OdbcHandleStmt : public OdbcHandle {
 	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p);
 	~OdbcHandleStmt();
+	SQLRETURN MaterializeResult();
 
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
 	unique_ptr<QueryResult> res;
-	vector<Value> params;
+	unique_ptr<ParameterWrapper> param_wrapper;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN *rows_fetched_ptr;

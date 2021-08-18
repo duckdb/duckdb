@@ -40,7 +40,7 @@ SELECT COUNT(*) FROM a
 query IIII
 SELECT COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT UNNEST(b) FROM a) tbl(i)
 ----
-30008	0	99999999	30007
+30007	0	99999999	30007
 
 # bigly list that spans multiple pages
 statement ok
@@ -49,7 +49,7 @@ INSERT INTO a SELECT LIST(i) FROM range(200000) tbl(i)
 query IIII
 SELECT COUNT(*), MIN(i), MAX(i), COUNT(i) FROM (SELECT UNNEST(b) FROM a) tbl(i)
 ----
-230008	0	99999999	230007
+230007	0	99999999	230007
 
 # several bigly lists with null values
 statement ok

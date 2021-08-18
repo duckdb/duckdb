@@ -2,6 +2,7 @@
 #include "api_info.hpp"
 #include "odbc_fetch.hpp"
 #include "statement_functions.hpp"
+#include "parameter_wrapper.hpp"
 
 SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                          SQLINTEGER string_length) {
@@ -11,9 +12,16 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			/* auto size = Load<SQLLEN>((data_ptr_t) value_ptr);
 			 return (size == 1) ? SQL_SUCCESS : SQL_ERROR;
 			 */
-			// this should be 1
+			// this should be 1?
+			stmt->param_wrapper->paramset_size = (SQLULEN)value_ptr;
 			return SQL_SUCCESS;
 		}
+		case SQL_ATTR_PARAMS_PROCESSED_PTR:
+			stmt->param_wrapper->param_processed_ptr = (SQLULEN *)value_ptr;
+			return SQL_SUCCESS;
+		case SQL_ATTR_PARAM_STATUS_PTR:
+			stmt->param_wrapper->param_status_ptr = (SQLUSMALLINT *)value_ptr;
+			return SQL_SUCCESS;
 		case SQL_ATTR_QUERY_TIMEOUT: {
 			// this should be 0
 			return SQL_SUCCESS;
@@ -182,7 +190,10 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 			}
 
 			auto col_name = stmt->stmt->GetNames()[col_idx];
-			auto out_len = snprintf((char *)character_attribute_ptr, buffer_length, "%s", col_name.c_str());
+			auto out_len = duckdb::MinValue(col_name.size(), (size_t)buffer_length);
+			memcpy(character_attribute_ptr, col_name.c_str(), out_len);
+			((char *)character_attribute_ptr)[out_len] = '\0';
+
 			if (string_length_ptr) {
 				*string_length_ptr = out_len;
 			}
@@ -203,57 +214,20 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 
 			auto internal_type = stmt->stmt->GetTypes()[col_idx].InternalType();
 			std::string type_name = duckdb::TypeIdToString(internal_type);
-			auto out_len = snprintf((char *)character_attribute_ptr, buffer_length, "%s", type_name.c_str());
+			auto out_len = duckdb::MinValue(type_name.size(), (size_t)buffer_length);
+			memcpy(character_attribute_ptr, type_name.c_str(), out_len);
+			((char *)character_attribute_ptr)[out_len] = '\0';
+
 			if (string_length_ptr) {
 				*string_length_ptr = out_len;
 			}
 
 			return SQL_SUCCESS;
 		}
-		// https://docs.microsoft.com/en-us/sql/odbc/reference/appendixes/display-size?view=sql-server-ver15
 		case SQL_DESC_DISPLAY_SIZE: {
-			auto logical_type = stmt->stmt->GetTypes()[col_idx];
-			auto sql_type = duckdb::ApiInfo::FindRelatedSQLType(logical_type.id());
-			switch (sql_type) {
-			case SQL_DECIMAL:
-			case SQL_NUMERIC:
-				*numeric_attribute_ptr =
-				    duckdb::DecimalType::GetWidth(logical_type) + duckdb::DecimalType::GetScale(logical_type);
-				return SQL_SUCCESS;
-			case SQL_BIT:
-				*numeric_attribute_ptr = 1;
-				return SQL_SUCCESS;
-			case SQL_TINYINT:
-				*numeric_attribute_ptr = 6;
-				return SQL_SUCCESS;
-			case SQL_INTEGER:
-				*numeric_attribute_ptr = 11;
-				return SQL_SUCCESS;
-			case SQL_BIGINT:
-				*numeric_attribute_ptr = 20;
-				return SQL_SUCCESS;
-			case SQL_REAL:
-				*numeric_attribute_ptr = 14;
-				return SQL_SUCCESS;
-			case SQL_FLOAT:
-			case SQL_DOUBLE:
-				*numeric_attribute_ptr = 24;
-				return SQL_SUCCESS;
-			case SQL_TYPE_DATE:
-				*numeric_attribute_ptr = 10;
-				return SQL_SUCCESS;
-			case SQL_TYPE_TIME:
-				*numeric_attribute_ptr = 9;
-				return SQL_SUCCESS;
-			case SQL_TYPE_TIMESTAMP:
-				*numeric_attribute_ptr = 20;
-				return SQL_SUCCESS;
-			case SQL_VARCHAR:
-			case SQL_VARBINARY:
-				// we don't know the number of characters
-				*numeric_attribute_ptr = 0;
-				return SQL_SUCCESS;
-			default:
+			auto ret =
+			    duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], (SQLULEN *)numeric_attribute_ptr);
+			if (ret == SQL_ERROR) {
 				stmt->error_messages.emplace_back("Unsupported type for display size.");
 				return SQL_ERROR;
 			}
@@ -276,7 +250,7 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_RESET_PARAMS) {
-			stmt->params.clear();
+			stmt->param_wrapper->Clear();
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
@@ -285,7 +259,8 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			stmt->odbc_fetcher->ClearChunks();
 			// stmt->stmt.reset(); // the statment can be reuse in prepared statement
 			stmt->bound_cols.clear();
-			stmt->params.clear();
+			// stmt->params.clear(); //  the parameter values can be reused after
+			stmt->param_wrapper->ResetParamSetIndex();
 			stmt->error_messages.clear();
 			return SQL_SUCCESS;
 		}

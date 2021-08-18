@@ -14,6 +14,9 @@ public:
 	}
 	void Query(duckdb_connection connection, string query) {
 		success = (duckdb_query(connection, query.c_str(), &result) == DuckDBSuccess);
+		if (!success) {
+			REQUIRE(ErrorMessage() != nullptr);
+		}
 	}
 
 	duckdb_type ColumnType(idx_t col) {
@@ -44,7 +47,12 @@ public:
 
 	bool IsNull(idx_t col, idx_t row) {
 		auto nullmask_ptr = duckdb_nullmask_data(&result, col);
+		REQUIRE(duckdb_value_is_null(&result, col, row) == nullmask_ptr[row]);
 		return nullmask_ptr[row];
+	}
+
+	char *ErrorMessage() {
+		return duckdb_result_error(&result);
 	}
 
 	string ColumnName(idx_t col) {
@@ -313,10 +321,12 @@ TEST_CASE("Basic test of C API", "[capi]") {
 	REQUIRE(result->rows_changed() == 2);
 
 	// several error conditions
+	REQUIRE(duckdb_value_is_null(nullptr, 0, 0) == false);
 	REQUIRE(duckdb_column_type(nullptr, 0) == DUCKDB_TYPE_INVALID);
 	REQUIRE(duckdb_column_count(nullptr) == 0);
 	REQUIRE(duckdb_row_count(nullptr) == 0);
 	REQUIRE(duckdb_rows_changed(nullptr) == 0);
+	REQUIRE(duckdb_result_error(nullptr) == nullptr);
 	REQUIRE(duckdb_nullmask_data(nullptr, 0) == nullptr);
 	REQUIRE(duckdb_column_data(nullptr, 0) == nullptr);
 }
@@ -517,7 +527,6 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	REQUIRE(stmt != nullptr);
 	auto err_msg = duckdb_prepare_error(stmt);
 	REQUIRE(err_msg != nullptr);
-	duckdb_free((void *)err_msg);
 	duckdb_destroy_prepare(&stmt);
 
 	REQUIRE(duckdb_bind_boolean(NULL, 0, true) == DuckDBError);
@@ -729,11 +738,12 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	status = duckdb_prepare(tester.connection, "INSERT INTO a VALUES (?)", &stmt);
 	REQUIRE(status == DuckDBSuccess);
 	REQUIRE(stmt != nullptr);
-	idx_t nparams;
-	REQUIRE(duckdb_nparams(nullptr, &nparams) == DuckDBError);
-	REQUIRE(duckdb_nparams(stmt, nullptr) == DuckDBError);
-	REQUIRE(duckdb_nparams(stmt, &nparams) == DuckDBSuccess);
-	REQUIRE(nparams == 1);
+	REQUIRE(duckdb_nparams(nullptr) == 0);
+	REQUIRE(duckdb_nparams(stmt) == 1);
+	REQUIRE(duckdb_param_type(nullptr, 0) == DUCKDB_TYPE_INVALID);
+	REQUIRE(duckdb_param_type(stmt, 0) == DUCKDB_TYPE_INVALID);
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_INTEGER);
+	REQUIRE(duckdb_param_type(stmt, 2) == DUCKDB_TYPE_INVALID);
 
 	for (int32_t i = 1; i <= 1000; i++) {
 		duckdb_bind_int32(stmt, 1, i);
@@ -793,6 +803,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(msg != nullptr);
 	duckdb_free((void *)msg);
 	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(nullptr) == DuckDBError);
 
 	status = duckdb_appender_create(tester.connection, nullptr, "test", nullptr);
 	REQUIRE(status == DuckDBError);
@@ -878,9 +889,6 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_appender_flush(appender);
 	REQUIRE(status == DuckDBError);
 
-	status = duckdb_appender_begin_row(appender);
-	REQUIRE(status == DuckDBError);
-
 	status = duckdb_appender_end_row(appender);
 	REQUIRE(status == DuckDBError);
 
@@ -894,9 +902,6 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(status == DuckDBError);
 
 	status = duckdb_appender_flush(nullptr);
-	REQUIRE(status == DuckDBError);
-
-	status = duckdb_appender_begin_row(nullptr);
 	REQUIRE(status == DuckDBError);
 
 	status = duckdb_appender_end_row(nullptr);
@@ -1083,6 +1088,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	REQUIRE(blob.size == 34);
 	REQUIRE(memcmp(blob.data, "hello world this is my long string", 34) == 0);
 	duckdb_free(blob.data);
+	REQUIRE(duckdb_value_int32(&result->InternalResult(), 11, 0) == 0);
 
 	auto date = result->Fetch<duckdb_date_struct>(12, 0);
 	REQUIRE(date.year == 1992);
@@ -1384,4 +1390,187 @@ TEST_CASE("Issue #2058: Cleanup after execution of invalid SQL statement causes 
 
 	duckdb_disconnect(&con);
 	duckdb_close(&db);
+}
+
+TEST_CASE("Test C API examples from the website", "[capi]") {
+	// NOTE: if any of these break and need to be changed, the website also needs to be updated!
+	SECTION("connect") {
+		duckdb_database db;
+		duckdb_connection con;
+
+		if (duckdb_open(NULL, &db) == DuckDBError) {
+			// handle error
+		}
+		if (duckdb_connect(db, &con) == DuckDBError) {
+			// handle error
+		}
+
+		// run queries...
+
+		// cleanup
+		duckdb_disconnect(&con);
+		duckdb_close(&db);
+	}
+	SECTION("config") {
+		duckdb_database db;
+		duckdb_config config;
+
+		// create the configuration object
+		if (duckdb_create_config(&config) == DuckDBError) {
+			REQUIRE(1 == 0);
+		}
+		// set some configuration options
+		duckdb_set_config(config, "access_mode", "READ_WRITE");
+		duckdb_set_config(config, "threads", "8");
+		duckdb_set_config(config, "max_memory", "8GB");
+		duckdb_set_config(config, "default_order", "DESC");
+
+		// open the database using the configuration
+		if (duckdb_open_ext(NULL, &db, config, NULL) == DuckDBError) {
+			REQUIRE(1 == 0);
+		}
+		// cleanup the configuration object
+		duckdb_destroy_config(&config);
+
+		// run queries...
+
+		// cleanup
+		duckdb_close(&db);
+	}
+	SECTION("query") {
+		duckdb_database db;
+		duckdb_connection con;
+		duckdb_state state;
+		duckdb_result result;
+
+		duckdb_open(NULL, &db);
+		duckdb_connect(db, &con);
+
+		// create a table
+		state = duckdb_query(con, "CREATE TABLE integers(i INTEGER, j INTEGER);", NULL);
+		if (state == DuckDBError) {
+			REQUIRE(1 == 0);
+		}
+		// insert three rows into the table
+		state = duckdb_query(con, "INSERT INTO integers VALUES (3, 4), (5, 6), (7, NULL);", NULL);
+		if (state == DuckDBError) {
+			REQUIRE(1 == 0);
+		}
+		// query rows again
+		state = duckdb_query(con, "SELECT * FROM integers", &result);
+		if (state == DuckDBError) {
+			REQUIRE(1 == 0);
+		}
+		// handle the result
+		idx_t row_count = duckdb_row_count(&result);
+		idx_t column_count = duckdb_column_count(&result);
+		for (idx_t row = 0; row < row_count; row++) {
+			for (idx_t col = 0; col < column_count; col++) {
+				// if (col > 0) printf(",");
+				auto str_val = duckdb_value_varchar(&result, col, row);
+				// printf("%s", str_val);
+				REQUIRE(1 == 1);
+				duckdb_free(str_val);
+			}
+			//	printf("\n");
+		}
+
+		int32_t *i_data = (int32_t *)duckdb_column_data(&result, 0);
+		int32_t *j_data = (int32_t *)duckdb_column_data(&result, 1);
+		bool *i_mask = duckdb_nullmask_data(&result, 0);
+		bool *j_mask = duckdb_nullmask_data(&result, 1);
+		for (idx_t row = 0; row < row_count; row++) {
+			if (i_mask[row]) {
+				// printf("NULL");
+			} else {
+				REQUIRE(i_data[row] > 0);
+				// printf("%d", i_data[row]);
+			}
+			// printf(",");
+			if (j_mask[row]) {
+				// printf("NULL");
+			} else {
+				REQUIRE(j_data[row] > 0);
+				// printf("%d", j_data[row]);
+			}
+			// printf("\n");
+		}
+
+		// destroy the result after we are done with it
+		duckdb_destroy_result(&result);
+		duckdb_disconnect(&con);
+		duckdb_close(&db);
+	}
+	SECTION("prepared") {
+		duckdb_database db;
+		duckdb_connection con;
+		duckdb_open(NULL, &db);
+		duckdb_connect(db, &con);
+		duckdb_query(con, "CREATE TABLE integers(i INTEGER, j INTEGER)", NULL);
+
+		duckdb_prepared_statement stmt;
+		duckdb_result result;
+		if (duckdb_prepare(con, "INSERT INTO integers VALUES ($1, $2)", &stmt) == DuckDBError) {
+			REQUIRE(1 == 0);
+		}
+
+		duckdb_bind_int32(stmt, 1, 42); // the parameter index starts counting at 1!
+		duckdb_bind_int32(stmt, 2, 43);
+		// NULL as second parameter means no result set is requested
+		duckdb_execute_prepared(stmt, NULL);
+		duckdb_destroy_prepare(&stmt);
+
+		// we can also query result sets using prepared statements
+		if (duckdb_prepare(con, "SELECT * FROM integers WHERE i = ?", &stmt) == DuckDBError) {
+			REQUIRE(1 == 0);
+		}
+		duckdb_bind_int32(stmt, 1, 42);
+		duckdb_execute_prepared(stmt, &result);
+
+		// do something with result
+
+		// clean up
+		duckdb_destroy_result(&result);
+		duckdb_destroy_prepare(&stmt);
+
+		duckdb_disconnect(&con);
+		duckdb_close(&db);
+	}
+	SECTION("appender") {
+		duckdb_database db;
+		duckdb_connection con;
+		duckdb_open(NULL, &db);
+		duckdb_connect(db, &con);
+		duckdb_query(con, "CREATE TABLE people(id INTEGER, name VARCHAR)", NULL);
+
+		duckdb_appender appender;
+		if (duckdb_appender_create(con, NULL, "people", &appender) == DuckDBError) {
+			REQUIRE(1 == 0);
+		}
+		duckdb_append_int32(appender, 1);
+		duckdb_append_varchar(appender, "Mark");
+		duckdb_appender_end_row(appender);
+
+		duckdb_append_int32(appender, 2);
+		duckdb_append_varchar(appender, "Hannes");
+		duckdb_appender_end_row(appender);
+
+		duckdb_appender_destroy(&appender);
+
+		duckdb_result result;
+		duckdb_query(con, "SELECT * FROM people", &result);
+		REQUIRE(duckdb_value_int32(&result, 0, 0) == 1);
+		REQUIRE(duckdb_value_int32(&result, 0, 1) == 2);
+		REQUIRE(string(duckdb_value_varchar_internal(&result, 1, 0)) == "Mark");
+		REQUIRE(string(duckdb_value_varchar_internal(&result, 1, 1)) == "Hannes");
+
+		// error conditions: we cannot
+		REQUIRE(duckdb_value_varchar_internal(&result, 0, 0) == nullptr);
+		REQUIRE(duckdb_value_varchar_internal(nullptr, 0, 0) == nullptr);
+
+		duckdb_destroy_result(&result);
+
+		duckdb_disconnect(&con);
+		duckdb_close(&db);
+	}
 }

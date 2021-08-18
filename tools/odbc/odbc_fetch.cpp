@@ -21,6 +21,41 @@ void OdbcFetch::IncreaseRowCount() {
 	}
 }
 
+SQLRETURN OdbcFetch::Materialize(OdbcHandleStmt *stmt) {
+	// preserve states before materialization
+	auto before_cur_chunk = current_chunk;
+	auto before_cur_chunk_idx = current_chunk_idx;
+	auto before_chunk_row = chunk_row;
+	auto before_prior_chunk_row = prior_chunk_row;
+
+	SQLRETURN ret;
+	do {
+		ret = FetchNext(stmt);
+	} while (SQL_SUCCEEDED(ret));
+
+	D_ASSERT(resultset_end);
+
+	// restore states
+	if (before_cur_chunk) {
+		current_chunk = before_cur_chunk;
+		current_chunk_idx = before_cur_chunk_idx;
+		chunk_row = before_chunk_row;
+		prior_chunk_row = before_prior_chunk_row;
+	} else {
+		if (!chunks.empty()) {
+			current_chunk = chunks.front().get();
+		}
+		current_chunk_idx = 0;
+		chunk_row = prior_chunk_row = -1;
+	}
+
+	if (ret == SQL_NO_DATA || ret == SQL_SUCCESS) {
+		return SQL_SUCCESS;
+	}
+
+	return ret;
+}
+
 SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 	// case hasn't reached the end of query result, then try to fetch
 	if (!resultset_end) {
@@ -165,6 +200,14 @@ SQLRETURN OdbcFetch::SetAbsoluteCurrentChunk(OdbcHandleStmt *stmt, SQLLEN fetch_
 	return SQL_ERROR;
 }
 
+SQLRETURN OdbcFetch::SetFirstCurrentChunk(OdbcHandleStmt *stmt) {
+	BeforeStart();
+	if (!current_chunk) {
+		return FetchNext(stmt);
+	}
+	return SQL_SUCCESS;
+}
+
 SQLRETURN OdbcFetch::FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *stmt, SQLLEN fetch_offset) {
 	if (cursor_type == SQL_CURSOR_FORWARD_ONLY && fetch_orientation != SQL_FETCH_NEXT) {
 		stmt->error_messages.emplace_back("Incorrect fetch orientation for cursor type: SQL_CURSOR_FORWARD_ONLY.");
@@ -186,6 +229,8 @@ SQLRETURN OdbcFetch::FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *s
 		return SetPriorCurrentChunk(stmt);
 	case SQL_FETCH_ABSOLUTE:
 		return SetAbsoluteCurrentChunk(stmt, fetch_offset);
+	case SQL_FETCH_FIRST:
+		return SetFirstCurrentChunk(stmt);
 	default:
 		return SQL_SUCCESS;
 	}
@@ -256,7 +301,8 @@ SQLRETURN OdbcFetch::ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt)
 		// TODO actually vectorize this
 		for (duckdb::idx_t col_idx = 0; col_idx < stmt->stmt->ColumnCount(); col_idx++) {
 			auto bound_col = stmt->bound_cols[col_idx];
-			if (!bound_col.IsBound()) {
+
+			if (!bound_col.IsBound() && !bound_col.IsVarcharBound()) {
 				continue;
 			}
 			auto target_val_addr = bound_col.ptr;

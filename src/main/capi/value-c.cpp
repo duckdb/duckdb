@@ -149,10 +149,7 @@ RESULT_TYPE TryCastCInternal(duckdb_result *result, idx_t col, idx_t row) {
 }
 
 static bool CanFetchValue(duckdb_result *result, idx_t col, idx_t row) {
-	if (col >= result->column_count) {
-		return false;
-	}
-	if (row >= result->row_count) {
+	if (!result || col >= result->column_count || row >= result->row_count) {
 		return false;
 	}
 	if (result->columns[col].nullmask[row]) {
@@ -296,6 +293,16 @@ char *duckdb_value_varchar(duckdb_result *result, idx_t col, idx_t row) {
 	return GetInternalCValue<char *, ToCStringCastWrapper<duckdb::StringCast>>(result, col, row);
 }
 
+char *duckdb_value_varchar_internal(duckdb_result *result, idx_t col, idx_t row) {
+	if (!CanFetchValue(result, col, row)) {
+		return nullptr;
+	}
+	if (duckdb_column_type(result, col) != DUCKDB_TYPE_VARCHAR) {
+		return nullptr;
+	}
+	return UnsafeFetch<char *>(result, col, row);
+}
+
 duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
 	if (CanFetchValue(result, col, row) && result->columns[col].type == DUCKDB_TYPE_BLOB) {
 		auto internal_result = UnsafeFetch<duckdb_blob>(result, col, row);
@@ -307,4 +314,11 @@ duckdb_blob duckdb_value_blob(duckdb_result *result, idx_t col, idx_t row) {
 		return result_blob;
 	}
 	return FetchDefaultValue::Operation<duckdb_blob>();
+}
+
+bool duckdb_value_is_null(duckdb_result *result, idx_t col, idx_t row) {
+	if (!result || col >= result->column_count || row >= result->row_count) {
+		return false;
+	}
+	return result->columns[col].nullmask[row];
 }

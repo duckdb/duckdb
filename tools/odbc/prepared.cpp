@@ -1,49 +1,17 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
 #include "api_info.hpp"
+#include "parameter_wrapper.hpp"
 
 #include "duckdb/main/prepared_statement_data.hpp"
-#include "duckdb/common/types/decimal.hpp"
 
-using duckdb::Decimal;
+#include <string.h>
+
 using duckdb::hugeint_t;
 using duckdb::idx_t;
 using duckdb::Load;
 using duckdb::LogicalType;
 using duckdb::Value;
-
-bool IsNumeric(SQLSMALLINT value_type) {
-	switch (value_type) {
-	case SQL_C_TINYINT:
-	case SQL_C_STINYINT:
-	case SQL_C_UTINYINT:
-	case SQL_C_SHORT:
-	case SQL_C_SSHORT:
-	case SQL_C_USHORT:
-	case SQL_C_SLONG:
-	case SQL_C_LONG:
-	case SQL_C_ULONG:
-	case SQL_C_SBIGINT:
-	case SQL_C_UBIGINT:
-	case SQL_C_FLOAT:
-	case SQL_C_DOUBLE:
-	case SQL_NUMERIC:
-		return true;
-	default:
-		return false;
-	}
-}
-
-SQLRETURN ValidateNumeric(int precision, int scale) {
-	if (precision < 1 || precision > Decimal::MAX_WIDTH_DECIMAL || scale < 0 || scale > Decimal::MAX_WIDTH_DECIMAL ||
-	    scale > precision) {
-		// TODO we should use SQLGetDiagField to register the error message
-		std::string msg = "Numeric precision: " + std::to_string(precision) + " and scale: " + std::to_string(scale) +
-		                  " not supported.";
-		return SQL_ERROR;
-	}
-	return SQL_SUCCESS;
-}
 
 SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT input_output_type,
                            SQLSMALLINT value_type, SQLSMALLINT parameter_type, SQLULEN column_size,
@@ -54,83 +22,21 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 			return SQL_ERROR;
 		}
 
-		// it would appear that the parameter_type does not matter that much
-		// we cast it anyway and if the cast fails we will hear about it during execution
-		duckdb::Value res;
-		duckdb::const_data_ptr_t dataptr;
-		// cast properly to numeric type
-		if (IsNumeric(value_type)) {
-			auto numeric = (SQL_NUMERIC_STRUCT *)parameter_value_ptr;
-			dataptr = numeric->val;
-		} else {
-			dataptr = (duckdb::const_data_ptr_t)parameter_value_ptr;
-		}
-
-		switch (value_type) {
-		case SQL_C_CHAR:
-			res = Value(duckdb::OdbcUtils::ReadString(parameter_value_ptr, buffer_length));
-			break;
-		case SQL_C_TINYINT:
-		case SQL_C_STINYINT:
-			res = Value::TINYINT(Load<int8_t>(dataptr));
-			break;
-		case SQL_C_UTINYINT:
-			res = Value::TINYINT(Load<uint8_t>(dataptr));
-			break;
-		case SQL_C_SHORT:
-		case SQL_C_SSHORT:
-			res = Value::SMALLINT(Load<int16_t>(dataptr));
-			break;
-		case SQL_C_USHORT:
-			res = Value::USMALLINT(Load<uint16_t>(dataptr));
-			break;
-		case SQL_C_SLONG:
-		case SQL_C_LONG:
-			res = Value::INTEGER(Load<int32_t>(dataptr));
-			break;
-		case SQL_C_ULONG:
-			res = Value::UINTEGER(Load<uint32_t>(dataptr));
-			break;
-		case SQL_C_SBIGINT:
-			res = Value::BIGINT(Load<int64_t>(dataptr));
-			break;
-		case SQL_C_UBIGINT:
-			res = Value::UBIGINT(Load<uint64_t>(dataptr));
-			break;
-		case SQL_C_FLOAT:
-			res = Value::FLOAT(Load<float>(dataptr));
-			break;
-		case SQL_C_DOUBLE:
-			res = Value::DOUBLE(Load<double>(dataptr));
-			break;
-		case SQL_NUMERIC: {
-			auto precision = column_size;
-			if (ValidateNumeric(precision, decimal_digits) == SQL_ERROR) {
-				return SQL_ERROR;
-			}
-			if (column_size <= Decimal::MAX_WIDTH_INT64) {
-				res = Value::DECIMAL(Load<int64_t>(dataptr), precision, decimal_digits);
-			} else {
-				hugeint_t dec_value;
-				memcpy(&dec_value.lower, dataptr, sizeof(dec_value.lower));
-				memcpy(&dec_value.upper, dataptr + sizeof(dec_value.lower), sizeof(dec_value.upper));
-				res = Value::DECIMAL(dec_value, precision, decimal_digits);
-			}
-			break;
-		}
-		case SQL_C_BINARY: {
-		}
-		// TODO more types
-		default:
-			// TODO error message?
-			return SQL_ERROR;
-		}
-
-		if (parameter_number > stmt->params.size()) {
+		if (parameter_number > stmt->param_wrapper->param_descriptors.size()) {
 			// need to resize because SQLFreeStmt might clear it before
-			stmt->params.resize(parameter_number);
+			stmt->param_wrapper->param_descriptors.resize(parameter_number);
 		}
-		stmt->params[parameter_number - 1] = res;
+		idx_t param_idx = parameter_number - 1;
+		stmt->param_wrapper->param_descriptors[param_idx].io_type = input_output_type;
+		stmt->param_wrapper->param_descriptors[param_idx].idx = param_idx;
+		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.value_type = value_type;
+		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.param_value_ptr = parameter_value_ptr;
+		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.buffer_len = buffer_length;
+		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.str_len_or_ind_ptr = str_len_or_ind_ptr;
+		stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.param_type = parameter_type;
+		stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.col_size = column_size;
+		stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.dec_digits = decimal_digits;
+
 		return SQL_SUCCESS;
 	});
 }
@@ -237,21 +143,30 @@ SQLRETURN SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, 
 		if (column_number > stmt->stmt->ColumnCount()) {
 			return SQL_ERROR;
 		}
+
+		duckdb::idx_t col_idx = column_number - 1;
+
 		if (column_name && buffer_length > 0) {
-			auto out_len =
-			    snprintf((char *)column_name, buffer_length, "%s", stmt->stmt->GetNames()[column_number - 1].c_str());
+			auto out_len = duckdb::MinValue(stmt->stmt->GetNames()[col_idx].size(), (size_t)buffer_length);
+			memcpy(column_name, stmt->stmt->GetNames()[col_idx].c_str(), out_len);
+			// terminating null character
+			column_name[out_len] = '\0';
+
 			if (name_length_ptr) {
 				*name_length_ptr = out_len;
 			}
 		}
 
-		LogicalType col_type = stmt->stmt->GetTypes()[column_number - 1];
+		LogicalType col_type = stmt->stmt->GetTypes()[col_idx];
 
 		if (data_type_ptr) {
 			*data_type_ptr = duckdb::ApiInfo::FindRelatedSQLType(col_type.id());
 		}
 		if (column_size_ptr) {
-			*column_size_ptr = 0;
+			auto ret = duckdb::ApiInfo::GetColumnSize(stmt->stmt->GetTypes()[col_idx], column_size_ptr);
+			if (ret == SQL_ERROR) {
+				*column_size_ptr = 0;
+			}
 		}
 		if (decimal_digits_ptr) {
 			*decimal_digits_ptr = 0;

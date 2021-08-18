@@ -25,6 +25,9 @@ BlockHandle::BlockHandle(DatabaseInstance &db, block_id_t block_id_p, unique_ptr
 
 BlockHandle::~BlockHandle() {
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
+#ifdef DEBUG
+	lock_guard<mutex> cm_lock(buffer_manager.current_memory_lock);
+#endif
 	// no references remain to this block: erase
 	if (state == BlockState::BLOCK_LOADED) {
 		// the block is still loaded in memory: erase it
@@ -59,6 +62,10 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 }
 
 void BlockHandle::Unload() {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+#ifdef DEBUG
+	lock_guard<mutex> tb_lock(buffer_manager.temp_blocks_lock);
+#endif
 	if (state == BlockState::BLOCK_UNLOADED) {
 		// already unloaded: nothing to do
 		return;
@@ -66,7 +73,6 @@ void BlockHandle::Unload() {
 	D_ASSERT(CanUnload());
 	D_ASSERT(memory_usage >= Storage::BLOCK_ALLOC_SIZE);
 
-	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	if (block_id >= MAXIMUM_BLOCK && !can_destroy) {
 		// temporary block that cannot be destroyed: write to temporary file
 		buffer_manager.WriteTemporaryBuffer((ManagedBuffer &)*buffer);
@@ -104,12 +110,26 @@ struct BufferEvictionNode {
 	weak_ptr<BlockHandle> handle;
 	idx_t timestamp;
 
-	bool CanUnload(BlockHandle &handle) {
-		if (timestamp != handle.eviction_timestamp) {
+	bool CanUnload(BlockHandle &handle_p) {
+		if (timestamp != handle_p.eviction_timestamp) {
 			// handle was used in between
 			return false;
 		}
-		return handle.CanUnload();
+		return handle_p.CanUnload();
+	}
+
+	shared_ptr<BlockHandle> TryGetBlockHandle() {
+		auto handle_p = handle.lock();
+		if (!handle_p) {
+			// BlockHandle has been destroyed
+			return nullptr;
+		}
+		if (!CanUnload(*handle_p)) {
+			// handle was used in between
+			return nullptr;
+		}
+		// this is the latest node in the queue with this handle
+		return handle_p;
 	}
 };
 
@@ -155,7 +175,7 @@ BufferManager::~BufferManager() {
 }
 
 shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
-	lock_guard<mutex> lock(manager_lock);
+	lock_guard<mutex> lock(blocks_lock);
 	// check if the block already exists
 	auto entry = blocks.find(block_id);
 	if (entry != blocks.end()) {
@@ -175,6 +195,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterBlock(block_id_t block_id) {
 
 shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_manager, block_id_t block_id,
                                                            shared_ptr<BlockHandle> old_block) {
+
 	// pin the old block to ensure we have it loaded in memory
 	auto old_handle = Pin(old_block);
 	D_ASSERT(old_block->state == BlockState::BLOCK_LOADED);
@@ -184,6 +205,10 @@ shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_m
 	auto new_block = RegisterBlock(block_id);
 	D_ASSERT(new_block->state == BlockState::BLOCK_UNLOADED);
 	D_ASSERT(new_block->readers == 0);
+
+#ifdef DEBUG
+	lock_guard<mutex> b_lock(blocks_lock);
+#endif
 
 	// move the data from the old block into data for the new block
 	new_block->state = BlockState::BLOCK_LOADED;
@@ -206,10 +231,17 @@ shared_ptr<BlockHandle> BufferManager::ConvertToPersistent(BlockManager &block_m
 
 shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can_destroy) {
 	auto alloc_size = block_size + Storage::BLOCK_HEADER_SIZE;
+#ifdef DEBUG
+	lock_guard<mutex> cm_lock(current_memory_lock);
+#endif
 	// first evict blocks until we have enough memory to store this buffer
 	if (!EvictBlocks(alloc_size, maximum_memory)) {
 		throw OutOfMemoryException("could not allocate block of %lld bytes", alloc_size);
 	}
+
+#ifdef DEBUG
+	lock_guard<mutex> tb_lock(temp_blocks_lock);
+#endif
 
 	// allocate the buffer
 	auto temp_id = ++temporary_id;
@@ -217,6 +249,9 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 
 	// create a new block pointer for this block
 	auto result = make_shared<BlockHandle>(db, temp_id, move(buffer), can_destroy, block_size);
+#ifdef DEBUG
+	temp_blocks[temp_id] = result.get();
+#endif
 	return result;
 }
 
@@ -226,6 +261,9 @@ unique_ptr<BufferHandle> BufferManager::Allocate(idx_t block_size) {
 }
 
 void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) {
+#ifdef DEBUG
+	lock_guard<mutex> cm_lock(current_memory_lock);
+#endif
 	D_ASSERT(block_size >= Storage::BLOCK_SIZE);
 	lock_guard<mutex> lock(handle->lock);
 	D_ASSERT(handle->state == BlockState::BLOCK_LOADED);
@@ -242,6 +280,9 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 		// no need to evict blocks
 		current_memory -= idx_t(-required_memory);
 	}
+#ifdef DEBUG
+	lock_guard<mutex> tb_lock(temp_blocks_lock);
+#endif
 	// resize and adjust current memory
 	handle->buffer->Resize(block_size);
 	handle->memory_usage = alloc_size;
@@ -260,6 +301,9 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		}
 		required_memory = handle->memory_usage;
 	}
+#ifdef DEBUG
+	lock_guard<mutex> cm_lock(current_memory_lock);
+#endif
 	// evict blocks until we have space for the current block
 	if (!EvictBlocks(required_memory, maximum_memory)) {
 		throw OutOfMemoryException("failed to pin block of size %lld", required_memory);
@@ -273,6 +317,9 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 		current_memory -= required_memory;
 		return handle->Load(handle);
 	}
+#ifdef DEBUG
+	lock_guard<mutex> tb_lock(temp_blocks_lock);
+#endif
 	// now we can actually load the current block
 	D_ASSERT(handle->readers == 0);
 	handle->readers = 1;
@@ -296,6 +343,10 @@ void BufferManager::Unpin(shared_ptr<BlockHandle> &handle) {
 }
 
 bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
+	PurgeQueue();
+#ifdef DEBUG
+	VerifyCurrentMemory();
+#endif
 	unique_ptr<BufferEvictionNode> node;
 	current_memory += extra_memory;
 	while (current_memory > memory_limit) {
@@ -305,12 +356,8 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 			return false;
 		}
 		// get a reference to the underlying block pointer
-		auto handle = node->handle.lock();
+		auto handle = node->TryGetBlockHandle();
 		if (!handle) {
-			continue;
-		}
-		if (!node->CanUnload(*handle)) {
-			// early out: we already know that we cannot unload this node
 			continue;
 		}
 		// we might be able to free this block: grab the mutex and check if we can free it
@@ -326,6 +373,41 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 	return true;
 }
 
+void BufferManager::PurgeQueue() {
+	unique_ptr<BufferEvictionNode> node;
+	while (true) {
+		if (!queue->q.try_dequeue(node)) {
+			break;
+		}
+		auto handle = node->TryGetBlockHandle();
+		if (!handle) {
+			continue;
+		} else {
+			queue->q.enqueue(move(node));
+			break;
+		}
+	}
+}
+
+void BufferManager::VerifyCurrentMemory() {
+	lock_guard<mutex> b_lock(blocks_lock);
+	lock_guard<mutex> tb_lock(temp_blocks_lock);
+	idx_t summed_memory = 0;
+	for (auto &map_entry : blocks) {
+		auto &block = *map_entry.second.lock();
+		if (block.state == BlockState::BLOCK_LOADED) {
+			summed_memory += block.memory_usage;
+		}
+	}
+	for (auto &map_entry : temp_blocks) {
+		auto &block = *map_entry.second;
+		if (block.state == BlockState::BLOCK_LOADED) {
+			summed_memory += block.memory_usage;
+		}
+	}
+	D_ASSERT(summed_memory == current_memory);
+}
+
 void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 	if (block_id >= MAXIMUM_BLOCK) {
 		// in-memory buffer: destroy the buffer
@@ -333,14 +415,21 @@ void BufferManager::UnregisterBlock(block_id_t block_id, bool can_destroy) {
 			// buffer could have been offloaded to disk: remove the file
 			DeleteTemporaryFile(block_id);
 		}
+#ifdef DEBUG
+		lock_guard<mutex> tb_lock(temp_blocks_lock);
+		temp_blocks.erase(block_id);
+#endif
 	} else {
-		lock_guard<mutex> lock(manager_lock);
+		lock_guard<mutex> lock(blocks_lock);
 		// on-disk block: erase from list of blocks in manager
 		blocks.erase(block_id);
 	}
 }
 void BufferManager::SetLimit(idx_t limit) {
-	lock_guard<mutex> buffer_lock(manager_lock);
+	lock_guard<mutex> l_lock(limit_lock);
+#ifdef DEBUG
+	lock_guard<mutex> cm_lock(current_memory_lock);
+#endif
 	// try to evict until the limit is reached
 	if (!EvictBlocks(0, limit)) {
 		throw OutOfMemoryException(

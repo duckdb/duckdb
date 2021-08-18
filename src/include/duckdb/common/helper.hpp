@@ -74,6 +74,11 @@ static inline bool ValueIsAligned(T n) {
 }
 
 template <typename T>
+T SignValue(T a) {
+	return a < 0 ? -1 : 1;
+}
+
+template <typename T>
 const T Load(const_data_ptr_t ptr) {
 	T ret;
 	memcpy(&ret, ptr, sizeof(ret));
