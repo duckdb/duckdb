@@ -83,7 +83,8 @@ int mk_w_call_center(void *info_arr, ds_key_t index) {
 
 	/* begin locals declarations */
 	date_t dTemp;
-	static int bInit = 0, nScale;
+	static int bInit = 0;
+	static double nScale;
 	struct CALL_CENTER_TBL *r, *rOldValues = &g_OldValues;
 
 	r = &g_w_call_center;
@@ -96,7 +97,7 @@ int mk_w_call_center(void *info_arr, ds_key_t index) {
 		jDateEnd = dttoj(&dTemp);
 		nDateRange = jDateEnd - jDateStart + 1;
 		nDaysPerRevision = nDateRange / pTdef->nParam + 1;
-		nScale = get_int("SCALE");
+		nScale = get_dbl("SCALE");
 
 		/* these fields need to be handled as part of SCD code or further
 		 * definition */
@@ -147,7 +148,7 @@ int mk_w_call_center(void *info_arr, ds_key_t index) {
 	pick_distribution(&r->cc_class, "call_center_class", 1, 1, CC_CLASS);
 	changeSCD(SCD_PTR, &r->cc_class, &rOldValues->cc_class, &nFieldChangeFlags, bFirstRecord);
 
-	genrand_integer(&r->cc_employees, DIST_UNIFORM, 1, CC_EMPLOYEE_MAX * nScale * nScale, 0, CC_EMPLOYEES);
+	genrand_integer(&r->cc_employees, DIST_UNIFORM, 1, nScale >= 1 ? int(CC_EMPLOYEE_MAX * nScale * nScale) : int(CC_EMPLOYEE_MAX), 0, CC_EMPLOYEES);
 	changeSCD(SCD_INT, &r->cc_employees, &rOldValues->cc_employees, &nFieldChangeFlags, bFirstRecord);
 
 	genrand_integer(&r->cc_sq_ft, DIST_UNIFORM, 100, 700, 0, CC_SQ_FT);

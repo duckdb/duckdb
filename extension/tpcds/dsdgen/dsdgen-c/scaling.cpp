@@ -231,18 +231,20 @@ ds_key_t getIDCount(int nTable) {
  */
 ds_key_t get_rowcount(int table) {
 
-	static int bScaleSet = 0, nScale;
+	static int bScaleSet = 0;
+	static double nScale;
 	int nTable, nMultiplier, i, nBadScale = 0, nRowcountOffset = 0;
 	tdef *pTdef;
 
 	if (!bScaleSet) {
-		nScale = get_int("SCALE");
+		nScale = get_dbl("SCALE");
 		if (nScale > 100000)
 			ReportErrorNoLine(QERR_BAD_SCALE, NULL, 1);
 
 		memset(arRowcount, 0, sizeof(long) * MAX_TABLE);
+		int iScale = nScale < 1 ? 1 : int(nScale);
 		for (nTable = CALL_CENTER; nTable <= MAX_TABLE; nTable++) {
-			switch (nScale) {
+			switch (iScale) {
 			case 100000:
 				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 9);
 				break;
@@ -296,10 +298,21 @@ ds_key_t get_rowcount(int table) {
 				pTdef = getSimpleTdefsByNumber(nTable);
 				nMultiplier = (pTdef->flags & FL_TYPE_2) ? 2 : 1;
 			}
-			for (i = 1; i <= dist_member(NULL, "rowcounts", nTable + 1, 2); i++)
+			for (i = 1; i <= dist_member(NULL, "rowcounts", nTable + 1, 2); i++) {
 				nMultiplier *= 10;
+			}
 			arRowcount[nTable].kBaseRowcount *= nMultiplier;
-
+			if (arRowcount[nTable].kBaseRowcount >= 0) {
+				if (nScale < 1) {
+					int mem = dist_member(NULL, "rowcounts", nTable + 1, 3);
+					if (!(mem == 1 && nMultiplier == 1)) {
+						arRowcount[nTable].kBaseRowcount = int(arRowcount[nTable].kBaseRowcount * nScale);
+					}
+					if (arRowcount[nTable].kBaseRowcount == 0) {
+						arRowcount[nTable].kBaseRowcount = 1;
+					}
+				}
+			}
 		} /* for each table */
 
 		//		if (nBadScale && !is_set("QUIET"))

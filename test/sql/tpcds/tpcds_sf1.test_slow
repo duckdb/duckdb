@@ -88,11 +88,10 @@ SELECT COUNT(*) FROM store
 ----
 12
 
-# TODO: this count is slightly off, why?
-#query T
-#SELECT COUNT(*) FROM store_returns
-#----
-#287514
+query T
+SELECT COUNT(*) FROM store_returns
+----
+287514
 
 query T
 SELECT COUNT(*) FROM store_sales
@@ -114,11 +113,10 @@ SELECT COUNT(*) FROM web_page
 ----
 60
 
-# TODO: this count is slightly off, why?
-#query T
-#SELECT COUNT(*) FROM web_returns
-#----
-#71763
+query T
+SELECT COUNT(*) FROM web_returns
+----
+71763
 
 query T
 SELECT COUNT(*) FROM web_sales

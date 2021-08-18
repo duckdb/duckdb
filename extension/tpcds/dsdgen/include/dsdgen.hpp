@@ -23,7 +23,7 @@ namespace tpcds {
 
 struct DSDGenWrapper {
 	//! Generate the TPC-DS data of the given scale factor
-	static void DSDGen(int scale, duckdb::ClientContext &context, std::string schema = DEFAULT_SCHEMA,
+	static void DSDGen(double scale, duckdb::ClientContext &context, std::string schema = DEFAULT_SCHEMA,
 	                   std::string suffix = "");
 
 	//! Gets the specified TPC-DS Query number as a string
