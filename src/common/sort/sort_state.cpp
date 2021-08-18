@@ -258,9 +258,7 @@ void LocalSortState::ReOrder(GlobalSortState &gstate) {
 GlobalSortState::GlobalSortState(BufferManager &buffer_manager, vector<BoundOrderByNode> &orders,
                                  vector<unique_ptr<BaseStatistics>> &statistics, RowLayout &payload_layout)
     : buffer_manager(buffer_manager), sort_layout(SortLayout(orders, statistics)), payload_layout(payload_layout),
-      rows_per_merge_partition(0), external(false) {
-	idx_t thinnest_row = MinValue(sort_layout.entry_size, payload_layout.GetRowWidth());
-	block_capacity = ((idx_t)(1 << 22) + thinnest_row - 1) / thinnest_row;
+      block_capacity(0), external(false) {
 }
 
 void GlobalSortState::AddLocalState(LocalSortState &local_sort_state) {
@@ -294,16 +292,14 @@ void GlobalSortState::PrepareMergePhase() {
 			idx_t size_in_bytes = sb->SizeInBytes();
 			if (size_in_bytes > max_block_size) {
 				max_block_size = size_in_bytes;
-				rows_per_merge_partition = sb->Count();
+				block_capacity = sb->Count();
 			}
 		}
 	} else {
 		for (auto &sb : sorted_blocks) {
-			rows_per_merge_partition = MaxValue(rows_per_merge_partition, sb->Count());
+			block_capacity = MaxValue(block_capacity, sb->Count());
 		}
 	}
-	// Determine block size (keep small for better concurrent I/O)
-	block_capacity = MinValue(rows_per_merge_partition, block_capacity);
 	// Unswizzle and pin heap blocks if we can fit everything in memory
 	if (!external) {
 		for (auto &sb : sorted_blocks) {
