@@ -128,7 +128,6 @@ SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLIN
 	}
 
 	// TODO make this a nice template? also going to use this for SQLColumns etc.
-
 	if (!SQL_SUCCEEDED(SQLPrepare(
 	        statement_handle,
 	        (SQLCHAR
@@ -265,5 +264,12 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		return SQL_ERROR;
+	});
+}
+
+SQLRETURN SQLMoreResults(SQLHSTMT statement_handle) {
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		// DuckDB actually supports multiple result sets, but for now we just pretend it doesn't
+		return SQL_NO_DATA;
 	});
 }

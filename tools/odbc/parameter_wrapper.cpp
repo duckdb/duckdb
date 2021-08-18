@@ -70,7 +70,8 @@ void ParameterDescriptor::SetValue(Value &value, idx_t val_idx) {
 }
 
 SQLRETURN ParameterDescriptor::SetValue(idx_t val_idx) {
-	if (app_param_desc.param_value_ptr == nullptr || app_param_desc.str_len_or_ind_ptr[val_idx] == SQL_NULL_DATA) {
+	if (app_param_desc.param_value_ptr == nullptr || app_param_desc.str_len_or_ind_ptr == nullptr ||
+	    app_param_desc.str_len_or_ind_ptr[val_idx] == SQL_NULL_DATA) {
 		Value val_null(nullptr);
 		SetValue(val_null, val_idx);
 		return SQL_SUCCESS;

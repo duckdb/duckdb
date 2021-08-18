@@ -68,6 +68,8 @@ SQLRETURN SQLCancel(SQLHSTMT statement_handle);
 
 SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_ptr);
 
+SQLRETURN SQLMoreResults(SQLHSTMT statement_handle);
+
 // diagnostics
 SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
                           SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
