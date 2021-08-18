@@ -126,3 +126,12 @@ query T
 SELECT COUNT(*) FROM web_site
 ----
 1
+
+loop i 1 2
+
+query I
+PRAGMA tpcds(1)
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/q00${i}.csv
+
+endloop

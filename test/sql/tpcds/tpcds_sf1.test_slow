@@ -91,7 +91,7 @@ SELECT COUNT(*) FROM store
 query T
 SELECT COUNT(*) FROM store_returns
 ----
-287514
+287867
 
 query T
 SELECT COUNT(*) FROM store_sales
@@ -116,7 +116,7 @@ SELECT COUNT(*) FROM web_page
 query T
 SELECT COUNT(*) FROM web_returns
 ----
-71763
+71654
 
 query T
 SELECT COUNT(*) FROM web_sales
