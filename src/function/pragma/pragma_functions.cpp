@@ -242,6 +242,8 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE;
 	} else if (checkpoint_abort == "before_header") {
 		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
+	} else if (checkpoint_abort == "after_free_list_write") {
+		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE;
 	} else {
 		throw ParserException(
 		    "Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header");
@@ -266,6 +268,11 @@ static void PragmaForceCompression(ClientContext &context, const FunctionParamet
 		}
 		config.force_compression = compression_type;
 	}
+}
+
+static void PragmaDebugManyFreeListBlocks(ClientContext &context, const FunctionParameters &parameters) {
+	auto &config = DBConfig::GetConfig(context);
+	config.debug_many_free_list_blocks = true;
 }
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
@@ -345,6 +352,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("force_compression", PragmaForceCompression, LogicalType::VARCHAR));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("debug_many_free_list_blocks", PragmaDebugManyFreeListBlocks));
 }
 
 } // namespace duckdb
