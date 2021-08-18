@@ -28,8 +28,6 @@ public:
 	SingleFileBlockManager(DatabaseInstance &db, string path, bool read_only, bool create_new, bool use_direct_io);
 
 	void StartCheckpoint() override;
-	//! Creates a new Block and returns a pointer
-	unique_ptr<Block> CreateBlock() override;
 	//! Creates a new Block using the specified block_id and returns a pointer
 	unique_ptr<Block> CreateBlock(block_id_t block_id) override;
 	//! Return the next free block id

@@ -250,10 +250,6 @@ block_id_t SingleFileBlockManager::GetMetaBlock() {
 	return meta_block;
 }
 
-unique_ptr<Block> SingleFileBlockManager::CreateBlock() {
-	return make_unique<Block>(Allocator::Get(db), GetFreeBlockId());
-}
-
 unique_ptr<Block> SingleFileBlockManager::CreateBlock(block_id_t block_id) {
 	return make_unique<Block>(Allocator::Get(db), block_id);
 }
