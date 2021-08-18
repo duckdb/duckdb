@@ -604,6 +604,18 @@ static void InitializeUpdateValidity(UpdateInfo *base_info, Vector &base_data, U
 	}
 }
 
+struct UpdateSelectElement {
+	template<class T>
+	static T Operation(UpdateSegment *segment, T element) {
+		return element;
+	}
+};
+
+template<>
+string_t UpdateSelectElement::Operation(UpdateSegment *segment, string_t element) {
+	return element.IsInlined() ? element : segment->GetStringHeap().AddString(element);
+}
+
 template <class T>
 static void InitializeUpdateData(UpdateInfo *base_info, Vector &base_data, UpdateInfo *update_info, Vector &update,
                                  const SelectionVector &sel) {
@@ -618,7 +630,7 @@ static void InitializeUpdateData(UpdateInfo *base_info, Vector &base_data, Updat
 	auto base_array_data = FlatVector::GetData<T>(base_data);
 	auto base_tuple_data = (T *)base_info->tuple_data;
 	for (idx_t i = 0; i < base_info->N; i++) {
-		base_tuple_data[i] = base_array_data[base_info->tuples[i]];
+		base_tuple_data[i] = UpdateSelectElement::Operation<T>(base_info->segment, base_array_data[base_info->tuples[i]]);
 	}
 }
 
@@ -774,7 +786,7 @@ static void MergeUpdateLoopInternal(UpdateInfo *base_info, V *base_table_data, U
 			result_values[result_offset] = base_info_data[base_info_offset];
 		} else {
 			// it is not! we have to move base_table_data[update_id] to update_info
-			result_values[result_offset] = OP::template Extract<T, V>(base_table_data, update_id);
+			result_values[result_offset] = UpdateSelectElement::Operation<T>(base_info->segment, OP::template Extract<T, V>(base_table_data, update_id));
 		}
 		result_ids[result_offset++] = update_id;
 	}
