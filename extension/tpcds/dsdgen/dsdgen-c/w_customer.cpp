@@ -136,7 +136,7 @@ int mk_w_customer(void *info_arr, ds_key_t index) {
 	append_varchar(info, r->c_salutation);
 	append_varchar(info, r->c_first_name);
 	append_varchar(info, r->c_last_name);
-	append_boolean(info, r->c_preferred_cust_flag);
+	append_varchar(info, r->c_preferred_cust_flag ? "Y" : "N");
 	append_integer(info, r->c_birth_day);
 	append_integer(info, r->c_birth_month);
 	append_integer(info, r->c_birth_year);

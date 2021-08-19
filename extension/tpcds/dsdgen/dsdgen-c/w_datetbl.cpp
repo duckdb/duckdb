@@ -156,18 +156,18 @@ int mk_w_date(void *info_arr, ds_key_t index) {
 	append_varchar(info, r->d_day_name);
 	sprintf(sQuarterName, "%4dQ%d", r->d_year, r->d_qoy);
 	append_varchar(info, sQuarterName);
-	append_boolean(info, r->d_holiday);
-	append_boolean(info, r->d_weekend);
-	append_boolean(info, r->d_following_holiday);
+	append_varchar(info, r->d_holiday ? "Y" : "N");
+	append_varchar(info, r->d_weekend ? "Y" : "N");
+	append_varchar(info, r->d_following_holiday ? "Y" : "N");
 	append_integer(info, r->d_first_dom);
 	append_integer(info, r->d_last_dom);
 	append_integer(info, r->d_same_day_ly);
 	append_integer(info, r->d_same_day_lq);
-	append_boolean(info, r->d_current_day);
-	append_boolean(info, r->d_current_week);
-	append_boolean(info, r->d_current_month);
-	append_boolean(info, r->d_current_quarter);
-	append_boolean(info, r->d_current_year);
+	append_varchar(info, r->d_current_day ? "Y" : "N");
+	append_varchar(info, r->d_current_week ? "Y" : "N");
+	append_varchar(info, r->d_current_month ? "Y" : "N");
+	append_varchar(info, r->d_current_quarter ? "Y" : "N");
+	append_varchar(info, r->d_current_year ? "Y" : "N");
 
 	append_row_end(info);
 

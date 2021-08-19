@@ -164,7 +164,7 @@ int mk_w_web_page(void *info_arr, ds_key_t index) {
 	append_date(info, r->wp_rec_end_date_id);
 	append_key(info, r->wp_creation_date_sk);
 	append_key(info, r->wp_access_date_sk);
-	append_boolean(info, r->wp_autogen_flag);
+	append_varchar(info, r->wp_autogen_flag ? "Y" : "N");
 	append_key(info, r->wp_customer_sk);
 	append_varchar(info, &r->wp_url[0]);
 	append_varchar(info, &r->wp_type[0]);

@@ -126,17 +126,17 @@ int mk_w_promotion(void *info_arr, ds_key_t index) {
 	append_decimal(info, &r->p_cost);
 	append_integer(info, r->p_response_target);
 	append_varchar(info, &r->p_promo_name[0]);
-	append_boolean(info, r->p_channel_dmail);
-	append_boolean(info, r->p_channel_email);
-	append_boolean(info, r->p_channel_catalog);
-	append_boolean(info, r->p_channel_tv);
-	append_boolean(info, r->p_channel_radio);
-	append_boolean(info, r->p_channel_press);
-	append_boolean(info, r->p_channel_event);
-	append_boolean(info, r->p_channel_demo);
+	append_varchar(info, r->p_channel_dmail ? "Y" : "N");
+	append_varchar(info, r->p_channel_email ? "Y" : "N");
+	append_varchar(info, r->p_channel_catalog ? "Y" : "N");
+	append_varchar(info, r->p_channel_tv ? "Y" : "N");
+	append_varchar(info, r->p_channel_radio ? "Y" : "N");
+	append_varchar(info, r->p_channel_press ? "Y" : "N");
+	append_varchar(info, r->p_channel_event ? "Y" : "N");
+	append_varchar(info, r->p_channel_demo ? "Y" : "N");
 	append_varchar(info, &r->p_channel_details[0]);
 	append_varchar(info, r->p_purpose);
-	append_boolean(info, r->p_discount_active);
+	append_varchar(info, r->p_discount_active ? "Y" : "N");
 
 	append_row_end(info);
 
