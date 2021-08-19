@@ -21,4 +21,5 @@ create table store_sales(
 	ss_coupon_amt decimal(7,2),
 	ss_net_paid decimal(7,2),
 	ss_net_paid_inc_tax decimal(7,2),
-	ss_net_profit decimal(7,2)  )
+	ss_net_profit decimal(7,2)
+);
