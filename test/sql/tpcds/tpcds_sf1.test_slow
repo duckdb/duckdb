@@ -7,6 +7,9 @@ require tpcds
 statement ok
 CALL dsdgen(sf=1)
 
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
 # check table counts
 query T
 SELECT COUNT(*) FROM call_center
@@ -129,7 +132,7 @@ SELECT COUNT(*) FROM web_site
 30
 
 # broken queries:
-# 17, 54, 67
+# 54, 67
 # too slow queries:
 # 64, 85
 
@@ -142,16 +145,7 @@ PRAGMA tpcds(${i})
 
 endloop
 
-loop i 10 17
-
-query I
-PRAGMA tpcds(${i})
-----
-<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
-
-endloop
-
-loop i 18 54
+loop i 10 54
 
 query I
 PRAGMA tpcds(${i})

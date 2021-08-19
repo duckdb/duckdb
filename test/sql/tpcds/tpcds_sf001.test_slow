@@ -133,7 +133,7 @@ SELECT COUNT(*) FROM web_site
 1
 
 # broken queries:
-# 17, 47, 57, 67, 89
+# 47, 57, 67, 89
 
 loop i 1 9
 
@@ -144,16 +144,7 @@ PRAGMA tpcds(${i})
 
 endloop
 
-loop i 10 17
-
-query I
-PRAGMA tpcds(${i})
-----
-<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
-
-endloop
-
-loop i 18 47
+loop i 10 47
 
 query I
 PRAGMA tpcds(${i})
