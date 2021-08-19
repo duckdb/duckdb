@@ -16,6 +16,6 @@ WHERE CASE
           ELSE NULL
       END > 0.1
 ORDER BY sum_sales - avg_monthly_sales,
-         s_store_name
+         s_store_name, 1, 2, 3, 5, 6, 7, 8
 LIMIT 100;
 

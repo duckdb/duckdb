@@ -67,6 +67,6 @@ WHERE d_year = 1999
           WHEN avg_monthly_sales > 0 THEN abs(sum_sales - avg_monthly_sales) / avg_monthly_sales
           ELSE NULL
       END > 0.1
-ORDER BY sum_sales - avg_monthly_sales
+ORDER BY sum_sales - avg_monthly_sales, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 LIMIT 100;
 
