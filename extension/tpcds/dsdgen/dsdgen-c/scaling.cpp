@@ -35,6 +35,7 @@
  */
 #include "config.h"
 #include "porting.h"
+#include "init.h"
 #include <stdio.h>
 #include <assert.h>
 #include <stdio.h>
@@ -231,12 +232,11 @@ ds_key_t getIDCount(int nTable) {
  */
 ds_key_t get_rowcount(int table) {
 
-	static int bScaleSet = 0;
 	static double nScale;
 	int nTable, nMultiplier, i, nBadScale = 0, nRowcountOffset = 0;
 	tdef *pTdef;
 
-	if (!bScaleSet) {
+	if (!InitConstants::get_rowcount_init) {
 		nScale = get_dbl("SCALE");
 		if (nScale > 100000)
 			ReportErrorNoLine(QERR_BAD_SCALE, NULL, 1);
@@ -318,7 +318,7 @@ ds_key_t get_rowcount(int table) {
 		//		if (nBadScale && !is_set("QUIET"))
 		//			ReportErrorNoLine(nBadScale, NULL, 0);
 
-		bScaleSet = 1;
+		InitConstants::get_rowcount_init = 1;
 	}
 
 	if (table == INVENTORY)
@@ -612,7 +612,6 @@ Date.julian); *pnOrderNumber += nRowcount; row_skip(nParent, nRowcount);
  * TODO: None
  */
 ds_key_t dateScaling(int nTable, ds_key_t jDate) {
-	static int bInit = 0;
 	static dist_t *pDist;
 	d_idx_t *pDistIndex;
 	date_t Date;
@@ -620,12 +619,12 @@ ds_key_t dateScaling(int nTable, ds_key_t jDate) {
 	ds_key_t kRowCount = -1;
 	tdef *pTdef = getSimpleTdefsByNumber(nTable);
 
-	if (!bInit) {
+	if (!InitConstants::dateScaling_init) {
 		pDistIndex = find_dist("calendar");
 		pDist = pDistIndex->dist;
 		if (!pDist)
 			ReportError(QERR_NO_MEMORY, "dateScaling()", 1);
-		bInit = 1;
+		InitConstants::dateScaling_init = 1;
 	}
 
 	jtodt(&Date, (int)jDate);

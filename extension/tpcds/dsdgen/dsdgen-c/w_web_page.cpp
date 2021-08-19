@@ -78,13 +78,12 @@ int mk_w_web_page(void *info_arr, ds_key_t index) {
 	/* begin locals declarations */
 	int32_t nTemp, nAccess;
 	char szTemp[16];
-	static int32_t bInit = 0;
 	struct W_WEB_PAGE_TBL *r, *rOldValues = &g_OldValues;
 	tdef *pT = getSimpleTdefsByNumber(WEB_PAGE);
 
 	r = &g_w_web_page;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_web_page_init) {
 		/* setup invariant values */
 		sprintf(szTemp, "%d-%d-%d", CURRENT_YEAR, CURRENT_MONTH, CURRENT_DAY);
 		strtodt(&dToday, szTemp);
@@ -93,7 +92,7 @@ int mk_w_web_page(void *info_arr, ds_key_t index) {
 		nConcurrent = (int)get_rowcount(CONCURRENT_WEB_SITES);
 		nRevisions = (int)get_rowcount(WEB_PAGE) / nConcurrent;
 
-		bInit = 1;
+		InitConstants::mk_w_web_page_init = 1;
 	}
 
 	nullSet(&pT->kNullBitMap, WP_NULLS);

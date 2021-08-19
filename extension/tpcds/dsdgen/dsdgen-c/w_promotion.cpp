@@ -67,7 +67,6 @@ struct W_PROMOTION_TBL g_w_promotion;
  * 20020829 jms RNG usage on P_CHANNEL_DETAILS may be too large
  */
 int mk_w_promotion(void *info_arr, ds_key_t index) {
-	static int bInit = 0;
 	struct W_PROMOTION_TBL *r;
 
 	/* begin locals declarations */
@@ -78,9 +77,9 @@ int mk_w_promotion(void *info_arr, ds_key_t index) {
 
 	r = &g_w_promotion;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_promotion_init) {
 		memset(&g_w_promotion, 0, sizeof(struct W_PROMOTION_TBL));
-		bInit = 1;
+		InitConstants::mk_w_promotion_init = 1;
 		strtodt(&start_date, DATE_MINIMUM);
 	}
 

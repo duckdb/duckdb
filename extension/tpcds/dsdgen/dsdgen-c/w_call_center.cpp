@@ -35,6 +35,7 @@
  */
 #include "w_call_center.h"
 
+#include "init.h"
 #include "append_info.h"
 #include "build_support.h"
 #include "columns.h"
@@ -83,13 +84,12 @@ int mk_w_call_center(void *info_arr, ds_key_t index) {
 
 	/* begin locals declarations */
 	date_t dTemp;
-	static int bInit = 0;
 	static double nScale;
 	struct CALL_CENTER_TBL *r, *rOldValues = &g_OldValues;
 
 	r = &g_w_call_center;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_call_center_init) {
 		/* begin locals allocation/initialization */
 		strtodt(&dTemp, DATA_START_DATE);
 		jDateStart = dttoj(&dTemp) - WEB_SITE;
@@ -107,7 +107,7 @@ int mk_w_call_center(void *info_arr, ds_key_t index) {
 
 		strtodec(&dMinTaxPercentage, MIN_CC_TAX_PERCENTAGE);
 		strtodec(&dMaxTaxPercentage, MAX_CC_TAX_PERCENTAGE);
-		bInit = 1;
+		InitConstants::mk_w_call_center_init = 1;
 	}
 
 	nullSet(&pTdef->kNullBitMap, CC_NULLS);

@@ -64,16 +64,15 @@ struct W_SHIP_MODE_TBL g_w_ship_mode;
  * TODO: None
  */
 int mk_w_ship_mode(void *info_arr, ds_key_t kIndex) {
-	static int bInit = 0;
 	struct W_SHIP_MODE_TBL *r;
 	ds_key_t nTemp;
 	tdef *pTdef = getSimpleTdefsByNumber(SHIP_MODE);
 
 	r = &g_w_ship_mode;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_ship_mode_init) {
 		memset(&g_w_ship_mode, 0, sizeof(struct W_SHIP_MODE_TBL));
-		bInit = 1;
+		InitConstants::mk_w_ship_mode_init = 1;
 	}
 
 	nullSet(&pTdef->kNullBitMap, SM_NULLS);
