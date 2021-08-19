@@ -4,6 +4,11 @@
 
 require tpcds
 
+# answers are generated from postgres
+# hence check with NULLS LAST flag
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
 statement ok
 CALL dsdgen(sf=0.01)
 
@@ -127,11 +132,68 @@ SELECT COUNT(*) FROM web_site
 ----
 1
 
-# loop i 1 2
+# broken queries:
+# 17, 47, 57, 67, 89
 
-# query I
-# PRAGMA tpcds(1)
-# ----
-# <FILE>:extension/tpcds/dsdgen/answers/sf1/q00${i}.csv
+loop i 1 9
 
-# endloop
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/0${i}.csv
+
+endloop
+
+loop i 10 17
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+
+endloop
+
+loop i 18 47
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+
+endloop
+
+loop i 48 57
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+
+endloop
+
+loop i 58 67
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+
+endloop
+
+loop i 68 89
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+
+endloop
+
+loop i 90 99
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+
+endloop

@@ -76,7 +76,7 @@ def create_tpcds_header(tpch_dir):
 
 #pragma once
 
-const int TPCDS_QUERIES_COUNT = 103;
+const int TPCDS_QUERIES_COUNT = 99;
 const int TPCDS_TABLE_COUNT = 24;
 """
 	# write the queries

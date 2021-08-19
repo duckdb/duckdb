@@ -1,4 +1,4 @@
-SELECT cast(amc AS decimal(15,4))/cast(pmc AS decimal(15,4)) am_pm_ratio
+SELECT case when pmc=0 then null else cast(amc AS decimal(15,4))/cast(pmc AS decimal(15,4)) end am_pm_ratio
 FROM
   (SELECT count(*) amc
    FROM web_sales,

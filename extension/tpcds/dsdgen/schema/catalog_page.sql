@@ -1,6 +1,6 @@
 create table catalog_page(
 	cp_catalog_page_sk integer not null,
-	cp_catalog_page_id char(16) not null,
+	cp_catalog_page_id varchar(16) not null,
 	cp_start_date_sk integer,
 	cp_end_date_sk integer,
 	cp_department varchar(50),

@@ -158,15 +158,15 @@ FROM
                        ORDER BY sumsales DESC) rk
    FROM results_rollup) dw2
 WHERE rk <= 100
-ORDER BY i_category ,
-         i_class ,
-         i_brand ,
-         i_product_name ,
-         d_year ,
-         d_qoy ,
-         d_moy ,
-         s_store_id ,
-         sumsales ,
+ORDER BY i_category,
+         i_class,
+         i_brand,
+         i_product_name,
+         d_year,
+         d_qoy,
+         d_moy,
+         s_store_id,
+         sumsales,
          rk
 LIMIT 100;
 
