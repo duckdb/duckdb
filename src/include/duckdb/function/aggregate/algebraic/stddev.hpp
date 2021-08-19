@@ -75,10 +75,10 @@ struct STDDevBaseOperation {
 struct VarSampOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
+		if (state->count <= 1) {
 			mask.SetInvalid(idx);
 		} else {
-			target[idx] = state->count > 1 ? (state->dsquared / (state->count - 1)) : 0;
+			target[idx] = state->dsquared / (state->count - 1);
 			if (!Value::DoubleIsValid(target[idx])) {
 				throw OutOfRangeException("VARSAMP is out of range!");
 			}
@@ -103,10 +103,10 @@ struct VarPopOperation : public STDDevBaseOperation {
 struct STDDevSampOperation : public STDDevBaseOperation {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
-		if (state->count == 0) {
+		if (state->count <= 1) {
 			mask.SetInvalid(idx);
 		} else {
-			target[idx] = state->count > 1 ? sqrt(state->dsquared / (state->count - 1)) : 0;
+			target[idx] = sqrt(state->dsquared / (state->count - 1));
 			if (!Value::DoubleIsValid(target[idx])) {
 				throw OutOfRangeException("STDDEV_SAMP is out of range!");
 			}

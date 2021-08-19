@@ -5,14 +5,13 @@
 #include "parallel.h"
 
 ds_key_t skipDays(int nTable, ds_key_t *pRemainder) {
-	static int bInit = 0;
 	static date_t BaseDate;
 	ds_key_t jDate;
 	ds_key_t kRowCount, kFirstRow, kDayCount, index = 1;
 
-	if (!bInit) {
+	if (!InitConstants::skipDays_init) {
 		strtodt(&BaseDate, DATA_START_DATE);
-		bInit = 1;
+		InitConstants::skipDays_init = 1;
 		*pRemainder = 0;
 	}
 

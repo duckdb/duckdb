@@ -74,7 +74,6 @@ int mk_w_catalog_returns(void *row, ds_key_t index) {
 	int nTemp;
 	struct W_CATALOG_RETURNS_TBL *r;
 	struct W_CATALOG_SALES_TBL *sale = &g_w_catalog_sales;
-	static int bInit = 0;
 	static int bStandAlone = 0;
 	tdef *pTdef = getSimpleTdefsByNumber(CATALOG_RETURNS);
 
@@ -83,8 +82,9 @@ int mk_w_catalog_returns(void *row, ds_key_t index) {
 	else
 		r = (W_CATALOG_RETURNS_TBL *)row;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_catalog_returns_init) {
 		strtodec(&dHundred, "100.00");
+		InitConstants::mk_w_catalog_returns_init = 1;
 	}
 
 	/* if we were not called from the parent table's mk_xxx routine, then

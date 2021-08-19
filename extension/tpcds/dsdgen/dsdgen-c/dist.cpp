@@ -114,7 +114,7 @@ int di_compare(const void *op1, const void *op2) {
  * TODO: None
  */
 d_idx_t *find_dist(char *name) {
-	static int index_loaded = 0, entry_count;
+	static int entry_count;
 	static d_idx_t *idx = NULL;
 	d_idx_t key, *id = NULL;
 	int i;
@@ -122,9 +122,9 @@ d_idx_t *find_dist(char *name) {
 	int32_t temp;
 
 	/* load the index if this is the first time through */
-	if (!index_loaded) {
+	if (!InitConstants::find_dist_init) {
 		/* make sure that this is read one thread at a time */
-		if (!index_loaded) /* make sure no one beat us to it */
+		if (!InitConstants::find_dist_init) /* make sure no one beat us to it */
 		{
 
 			/* open the dist file */
@@ -220,7 +220,7 @@ d_idx_t *find_dist(char *name) {
 				idx[i].dist = NULL;
 			}
 			qsort((void *)idx, entry_count, sizeof(d_idx_t), di_compare);
-			index_loaded = 1;
+			InitConstants::find_dist_init = 1;
 
 			/* make sure that this is read one thread at a time */
 			//			fclose(ifp);
@@ -601,7 +601,8 @@ int dist_weight(int *dest, char *d, int index, int wset) {
 	}
 
 	dist = d_idx->dist;
-
+	assert(index > 0);
+	assert(wset > 0);
 	res = dist->weight_sets[wset - 1][index - 1];
 	/* reverse the accumulation of weights */
 	if (index > 1)

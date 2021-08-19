@@ -72,7 +72,6 @@ int mk_w_web_returns(void *row, ds_key_t index) {
 
 	static decimal_t dMin, dMax;
 	static struct W_WEB_SALES_TBL *sale;
-	static int bInit = 0;
 	struct W_WEB_RETURNS_TBL *r;
 	tdef *pT = getSimpleTdefsByNumber(WEB_RETURNS);
 
@@ -81,10 +80,10 @@ int mk_w_web_returns(void *row, ds_key_t index) {
 	else
 		r = (W_WEB_RETURNS_TBL *)row;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_web_returns_init) {
 		strtodec(&dMin, "1.00");
 		strtodec(&dMax, "100000.00");
-		bInit = 1;
+		InitConstants::mk_w_web_returns_init = 1;
 	}
 
 	nullSet(&pT->kNullBitMap, WR_NULLS);
