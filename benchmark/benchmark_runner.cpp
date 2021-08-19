@@ -184,7 +184,8 @@ void print_help() {
 	fprintf(stderr, "Usage: benchmark_runner\n");
 	fprintf(stderr, "              --list         Show a list of all benchmarks\n");
 	fprintf(stderr, "              --profile      Prints the query profile information\n");
-	fprintf(stderr, "              --threads=n    Sets the amount of threads to use during execution (default: hardware concurrency)\n");
+	fprintf(stderr, "              --threads=n    Sets the amount of threads to use during execution (default: "
+	                "hardware concurrency)\n");
 	fprintf(stderr, "              --out=[file]   Move benchmark output to file\n");
 	fprintf(stderr, "              --log=[file]   Move log output to file\n");
 	fprintf(stderr, "              --info         Prints info about the benchmark\n");
