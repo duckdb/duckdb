@@ -601,7 +601,8 @@ int dist_weight(int *dest, char *d, int index, int wset) {
 	}
 
 	dist = d_idx->dist;
-
+	assert(index > 0);
+	assert(wset > 0);
 	res = dist->weight_sets[wset - 1][index - 1];
 	/* reverse the accumulation of weights */
 	if (index > 1)

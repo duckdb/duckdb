@@ -17,9 +17,8 @@ namespace tpcds {
 void InitializeDSDgen(double scale) {
 	InitConstants::Reset();
 	ResetCountCount();
-	char scale_str[12];
-	sprintf(scale_str, "%llf", scale);
-	set_str("SCALE", scale_str); // set SF, which also does a default init (e.g. random seed)
+	std::string t = std::to_string(scale);
+	set_str("SCALE", t.c_str()); // set SF, which also does a default init (e.g. random seed)
 	init_rand();                 // no random numbers without this
 }
 

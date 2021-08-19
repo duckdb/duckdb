@@ -278,7 +278,8 @@ ds_key_t get_rowcount(int table) {
 				break;
 			default:
 				nBadScale = QERR_BAD_SCALE;
-				switch (dist_member(NULL, "rowcounts", nTable + 1, 3)) {
+				int mem = dist_member(NULL, "rowcounts", nTable + 1, 3);
+				switch (mem) {
 				case 2:
 					arRowcount[nTable].kBaseRowcount = LinearScale(nTable + nRowcountOffset, nScale);
 					break;
