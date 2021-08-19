@@ -177,4 +177,7 @@
 #ifdef _MYSQL
 #define STR_QUOTES
 #endif
+
+#include "init.h"
+
 #endif /* CONFIG_H */

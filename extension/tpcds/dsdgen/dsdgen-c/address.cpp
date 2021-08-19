@@ -35,6 +35,7 @@
  */
 #include "config.h"
 #include "porting.h"
+#include "init.h"
 #include <stdio.h>
 #include "address.h"
 #include "dist.h"
@@ -73,13 +74,13 @@ void resetCountCount(void) {
 int mk_address(ds_addr_t *pAddr, int nColumn) {
 	int i, nRegion;
 	char *szZipPrefix, szAddr[100];
-	static int nMaxCities, nMaxCounties, bInit = 0;
+	static int nMaxCities, nMaxCounties;
 	tdef *pTdef;
 
-	if (!bInit) {
+	if (!InitConstants::mk_address_init) {
 		nMaxCities = (int)get_rowcount(ACTIVE_CITIES);
 		nMaxCounties = (int)get_rowcount(ACTIVE_COUNTIES);
-		bInit = 1;
+		InitConstants::mk_address_init = 1;
 	}
 
 	/* street_number is [1..1000] */
