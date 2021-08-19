@@ -128,276 +128,71 @@ SELECT COUNT(*) FROM web_site
 ----
 30
 
-# missing queries: 13, 14, 16, 40, 51, 52, 55, 68, 76, 86, 89, 101
-# statement ok
-# PRAGMA tpcds(1)
+# broken queries:
+# 17, 54, 67
+# too slow queries:
+# 64, 85
 
-# statement ok
-# PRAGMA tpcds(2)
+loop i 1 9
 
-# statement ok
-# PRAGMA tpcds(3)
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/0${i}.csv
 
-# statement ok
-# PRAGMA tpcds(4)
+endloop
 
-# statement ok
-# PRAGMA tpcds(5)
+loop i 10 17
 
-# statement ok
-# PRAGMA tpcds(6)
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
 
-# statement ok
-# PRAGMA tpcds(7)
+endloop
 
-# statement ok
-# PRAGMA tpcds(8)
+loop i 18 54
 
-# statement ok
-# PRAGMA tpcds(9)
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
 
-# statement ok
-# PRAGMA tpcds(10)
+endloop
 
-# statement ok
-# PRAGMA tpcds(11)
+loop i 55 64
 
-# statement ok
-# PRAGMA tpcds(12)
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
 
-# statement ok
-# PRAGMA tpcds(15)
+endloop
 
-# statement ok
-# PRAGMA tpcds(17)
+loop i 65 67
 
-# statement ok
-# PRAGMA tpcds(18)
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
 
-# statement ok
-# PRAGMA tpcds(19)
+endloop
 
-# statement ok
-# PRAGMA tpcds(20)
+loop i 68 85
 
-# statement ok
-# PRAGMA tpcds(21)
 
-# statement ok
-# PRAGMA tpcds(22)
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
 
-# statement ok
-# PRAGMA tpcds(23)
+endloop
 
-# statement ok
-# PRAGMA tpcds(24)
+loop i 86 99
 
-# statement ok
-# PRAGMA tpcds(25)
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
 
-# statement ok
-# PRAGMA tpcds(26)
-
-# statement ok
-# PRAGMA tpcds(27)
-
-# statement ok
-# PRAGMA tpcds(28)
-
-# statement ok
-# PRAGMA tpcds(29)
-
-# statement ok
-# PRAGMA tpcds(30)
-
-# statement ok
-# PRAGMA tpcds(31)
-
-# statement ok
-# PRAGMA tpcds(32)
-
-# statement ok
-# PRAGMA tpcds(33)
-
-# statement ok
-# PRAGMA tpcds(34)
-
-# statement ok
-# PRAGMA tpcds(35)
-
-# statement ok
-# PRAGMA tpcds(36)
-
-# statement ok
-# PRAGMA tpcds(37)
-
-# statement ok
-# PRAGMA tpcds(38)
-
-# statement ok
-# PRAGMA tpcds(39)
-
-# statement ok
-# PRAGMA tpcds(41)
-
-# statement ok
-# PRAGMA tpcds(42)
-
-# statement ok
-# PRAGMA tpcds(43)
-
-# statement ok
-# PRAGMA tpcds(44)
-
-# statement ok
-# PRAGMA tpcds(45)
-
-# statement ok
-# PRAGMA tpcds(46)
-
-# statement ok
-# PRAGMA tpcds(47)
-
-# statement ok
-# PRAGMA tpcds(48)
-
-# statement ok
-# PRAGMA tpcds(49)
-
-# statement ok
-# PRAGMA tpcds(50)
-
-# statement ok
-# PRAGMA tpcds(53)
-
-# statement ok
-# PRAGMA tpcds(54)
-
-# statement ok
-# PRAGMA tpcds(56)
-
-# statement ok
-# PRAGMA tpcds(57)
-
-# statement ok
-# PRAGMA tpcds(58)
-
-# statement ok
-# PRAGMA tpcds(59)
-
-# statement ok
-# PRAGMA tpcds(60)
-
-# statement ok
-# PRAGMA tpcds(61)
-
-# statement ok
-# PRAGMA tpcds(62)
-
-# statement ok
-# PRAGMA tpcds(63)
-
-# statement ok
-# PRAGMA tpcds(64)
-
-# statement ok
-# PRAGMA tpcds(65)
-
-# statement ok
-# PRAGMA tpcds(66)
-
-# statement ok
-# PRAGMA tpcds(67)
-
-# statement ok
-# PRAGMA tpcds(69)
-
-# statement ok
-# PRAGMA tpcds(70)
-
-# statement ok
-# PRAGMA tpcds(71)
-
-# statement ok
-# PRAGMA tpcds(72)
-
-# statement ok
-# PRAGMA tpcds(73)
-
-# statement ok
-# PRAGMA tpcds(74)
-
-# statement ok
-# PRAGMA tpcds(75)
-
-# statement ok
-# PRAGMA tpcds(77)
-
-# statement ok
-# PRAGMA tpcds(78)
-
-# statement ok
-# PRAGMA tpcds(79)
-
-# statement ok
-# PRAGMA tpcds(80)
-
-# statement ok
-# PRAGMA tpcds(81)
-
-# statement ok
-# PRAGMA tpcds(82)
-
-# statement ok
-# PRAGMA tpcds(83)
-
-# statement ok
-# PRAGMA tpcds(84)
-
-# statement ok
-# PRAGMA tpcds(85)
-
-# statement ok
-# PRAGMA tpcds(87)
-
-# statement ok
-# PRAGMA tpcds(88)
-
-# statement ok
-# PRAGMA tpcds(90)
-
-# statement ok
-# PRAGMA tpcds(91)
-
-# statement ok
-# PRAGMA tpcds(92)
-
-# statement ok
-# PRAGMA tpcds(93)
-
-# statement ok
-# PRAGMA tpcds(94)
-
-# statement ok
-# PRAGMA tpcds(95)
-
-# statement ok
-# PRAGMA tpcds(96)
-
-# statement ok
-# PRAGMA tpcds(97)
-
-# statement ok
-# PRAGMA tpcds(98)
-
-# statement ok
-# PRAGMA tpcds(99)
-
-# statement ok
-# PRAGMA tpcds(100)
-
-# statement ok
-# PRAGMA tpcds(102)
-
-# statement ok
-# PRAGMA tpcds(103)
+endloop
