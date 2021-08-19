@@ -57,13 +57,13 @@ struct UncompressedCompressState : public CompressionState {
 		current_segment = move(compressed_segment);
 	}
 
-	void FlushSegment() {
+	void FlushSegment(idx_t segment_size) {
 		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(move(current_segment));
+		state.FlushSegment(move(current_segment), segment_size);
 	}
 
-	void Finalize() {
-		FlushSegment();
+	void Finalize(idx_t segment_size) {
+		FlushSegment(segment_size);
 		current_segment.reset();
 	}
 
@@ -91,7 +91,7 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 		}
 		auto next_start = state.current_segment->start + state.current_segment->count;
 		// the segment is full: flush it to disk
-		state.FlushSegment();
+		state.FlushSegment(state.current_segment->FinalizeAppend());
 
 		// now create a new segment and continue appending
 		state.CreateEmptySegment(next_start);
@@ -102,7 +102,7 @@ void UncompressedFunctions::Compress(CompressionState &state_p, Vector &data, id
 
 void UncompressedFunctions::FinalizeCompress(CompressionState &state_p) {
 	auto &state = (UncompressedCompressState &)state_p;
-	state.Finalize();
+	state.Finalize(state.current_segment->FinalizeAppend());
 }
 
 //===--------------------------------------------------------------------===//
@@ -128,7 +128,7 @@ void FixedSizeScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t 
 	auto &scan_state = (FixedSizeScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
-	auto data = scan_state.handle->node->buffer;
+	auto data = scan_state.handle->node->buffer + segment.GetBlockOffset();
 	auto source_data = data + start * sizeof(T);
 
 	// copy the data from the base table
@@ -152,7 +152,7 @@ void FixedSizeFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t ro
 	auto handle = buffer_manager.Pin(segment.block);
 
 	// first fetch the data from the base table
-	auto data_ptr = handle->node->buffer + row_id * sizeof(T);
+	auto data_ptr = handle->node->buffer + segment.GetBlockOffset() + row_id * sizeof(T);
 
 	memcpy(FlatVector::GetData(result) + result_idx * sizeof(T), data_ptr, sizeof(T));
 }
@@ -205,6 +205,7 @@ template <class T>
 idx_t FixedSizeAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t count) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
+	D_ASSERT(segment.GetBlockOffset() == 0);
 
 	auto target_ptr = handle->node->buffer;
 	idx_t max_tuple_count = Storage::BLOCK_SIZE / sizeof(T);
@@ -213,6 +214,11 @@ idx_t FixedSizeAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorDa
 	AppendLoop<T>(stats, target_ptr, segment.count, data, offset, copy_count);
 	segment.count += copy_count;
 	return copy_count;
+}
+
+template <class T>
+idx_t FixedSizeFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
+	return segment.count * sizeof(T);
 }
 
 //===--------------------------------------------------------------------===//
@@ -224,7 +230,8 @@ CompressionFunction FixedSizeGetFunction(PhysicalType data_type) {
 	                           FixedSizeAnalyze, FixedSizeFinalAnalyze<T>, UncompressedFunctions::InitCompression,
 	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
 	                           FixedSizeInitScan, FixedSizeScan<T>, FixedSizeScanPartial<T>, FixedSizeFetchRow<T>,
-	                           UncompressedFunctions::EmptySkip, nullptr, FixedSizeAppend<T>, nullptr);
+	                           UncompressedFunctions::EmptySkip, nullptr, FixedSizeAppend<T>,
+	                           FixedSizeFinalizeAppend<T>, nullptr);
 }
 
 CompressionFunction FixedSizeUncompressed::GetFunction(PhysicalType data_type) {

@@ -59,6 +59,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 	if (!state.initialized) {
 		D_ASSERT(state.current);
 		state.current->InitializeScan(state);
+		state.internal_index = state.current->start;
 		state.initialized = true;
 	}
 	D_ASSERT(state.internal_index <= state.row_index);
