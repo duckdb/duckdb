@@ -162,8 +162,8 @@ struct StringMinMaxBase : public MinMaxBase {
 		} else {
 			// non-inlined string, need to allocate space for it
 			auto len = input.GetSize();
-			auto ptr = new char[len + 1];
-			memcpy(ptr, input.GetDataUnsafe(), len + 1);
+			auto ptr = new char[len];
+			memcpy(ptr, input.GetDataUnsafe(), len);
 
 			state->value = string_t(ptr, len);
 		}

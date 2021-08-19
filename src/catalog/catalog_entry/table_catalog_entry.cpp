@@ -561,9 +561,8 @@ void TableCatalogEntry::CommitAlter(AlterInfo &info) {
 	idx_t removed_index = INVALID_INDEX;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (columns[i].name == column_name) {
-			D_ASSERT(removed_index == INVALID_INDEX);
 			removed_index = i;
-			continue;
+			break;
 		}
 	}
 	D_ASSERT(removed_index != INVALID_INDEX);

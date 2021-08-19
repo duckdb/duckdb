@@ -26,14 +26,44 @@ SELECT * FROM a WHERE id=1
 statement ok
 INSERT INTO a VALUES (2, NULL)
 
+query II
+SELECT * FROM a ORDER BY id
+----
+1	{'i': {'a': 3}, 'j': 4}
+2	NULL
+
 statement ok
 INSERT INTO a VALUES (3, ROW(ROW(NULL), 1))
+
+query II
+SELECT * FROM a ORDER BY id
+----
+1	{'i': {'a': 3}, 'j': 4}
+2	NULL
+3	{'i': {'a': NULL}, 'j': 1}
 
 statement ok
 INSERT INTO a VALUES (4, ROW(ROW(1), NULL))
 
+query II
+SELECT * FROM a ORDER BY id
+----
+1	{'i': {'a': 3}, 'j': 4}
+2	NULL
+3	{'i': {'a': NULL}, 'j': 1}
+4	{'i': {'a': 1}, 'j': NULL}
+
 statement ok
 INSERT INTO a VALUES (5, ROW(NULL, 1))
+
+query II
+SELECT * FROM a ORDER BY id
+----
+1	{'i': {'a': 3}, 'j': 4}
+2	NULL
+3	{'i': {'a': NULL}, 'j': 1}
+4	{'i': {'a': 1}, 'j': NULL}
+5	{'i': NULL, 'j': 1}
 
 query II
 SELECT * FROM a WHERE id=2

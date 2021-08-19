@@ -77,12 +77,18 @@ public:
 	void InitializeAppend(ColumnAppendState &state);
 	//! Appends a (part of) vector to the segment, returns the amount of entries successfully appended
 	idx_t Append(ColumnAppendState &state, VectorData &data, idx_t offset, idx_t count);
+	//! Finalize the segment for appending - no more appends can follow on this segment
+	//! The segment should be compacted as much as possible
+	//! Returns the number of bytes occupied within the segment
+	idx_t FinalizeAppend();
 	//! Revert an append made to this segment
 	void RevertAppend(idx_t start_row);
 
 	//! Convert a transient in-memory segment into a persistent segment blocked by an on-disk block.
 	//! Only used during checkpointing.
-	void ConvertToPersistent(block_id_t block_id, idx_t offset_in_block);
+	void ConvertToPersistent(block_id_t block_id);
+	//! Convert a transient in-memory segment into a persistent segment blocked by an on-disk block.
+	void ConvertToPersistent(shared_ptr<BlockHandle> block, block_id_t block_id, uint32_t offset_in_block);
 
 	block_id_t GetBlockId() {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
@@ -90,7 +96,7 @@ public:
 	}
 
 	idx_t GetBlockOffset() {
-		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
+		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT || offset == 0);
 		return offset;
 	}
 

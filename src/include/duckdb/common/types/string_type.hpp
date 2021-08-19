@@ -38,10 +38,6 @@ public:
 				return;
 			}
 			// small string: inlined
-			/* Note: this appears to write out-of bounds on `prefix` if `length` > `PREFIX_LENGTH`
-			 but this is not the case because the `value_` union `inlined` char array directly
-			 follows it with 8 more chars to use for the string value.
-			 */
 			memcpy(value.inlined.inlined, data, GetSize());
 		} else {
 			// large string: store pointer

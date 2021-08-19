@@ -68,6 +68,7 @@ struct LoopDefinition {
 struct SQLLogicTestRunner {
 public:
 	SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
+		config = GetTestConfig();
 	}
 	~SQLLogicTestRunner();
 
@@ -1548,10 +1549,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				DeleteDatabase(dbpath);
 			}
 			// set up the config file
-			config = GetTestConfig();
 			if (readonly) {
 				config->use_temporary_directory = false;
 				config->access_mode = AccessMode::READ_ONLY;
+			} else {
+				config->use_temporary_directory = true;
+				config->access_mode = AccessMode::AUTOMATIC;
 			}
 			// now create the database file
 			LoadDatabase(dbpath);
