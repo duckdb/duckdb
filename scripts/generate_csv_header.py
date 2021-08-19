@@ -69,6 +69,7 @@ tpcds_dir = 'extension/tpcds/dsdgen'
 tpcds_queries = os.path.join(tpcds_dir, 'queries')
 tpcds_schema = os.path.join(tpcds_dir, 'schema')
 tpcds_answers_sf001 = os.path.join(tpcds_dir, 'answers', 'sf0.01')
+tpcds_answers_sf1 = os.path.join(tpcds_dir, 'answers', 'sf1')
 tpcds_header = os.path.join(tpcds_dir, 'include', 'tpcds_constants.hpp')
 
 def create_tpcds_header(tpch_dir):
@@ -81,7 +82,8 @@ const int TPCDS_TABLE_COUNT = 24;
 """
 	# write the queries
 	result += write_dir(tpcds_queries, "TPCDS_QUERIES")
-	# result += write_dir(tpcds_answers_sf001, "TPCDS_ANSWERS_SF0_01")
+	result += write_dir(tpcds_answers_sf001, "TPCDS_ANSWERS_SF0_01")
+	result += write_dir(tpcds_answers_sf1, "TPCDS_ANSWERS_SF1")
 	result += write_dir(tpcds_schema, "TPCDS_TABLE_DDL_NOKEYS")
 
 	with open_utf8(tpcds_header, 'w+') as f:

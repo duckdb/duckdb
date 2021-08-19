@@ -98,6 +98,12 @@ string DSDGenWrapper::GetQuery(int query) {
 string DSDGenWrapper::GetAnswer(double sf, int query) {
 	if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-DS query number %d", query);
+	}
+
+	if (sf == 0.01) {
+		return TPCDS_ANSWERS_SF0_01[query - 1];
+	} else if (sf == 1) {
+		return TPCDS_ANSWERS_SF1[query - 1];
 	} else {
 		throw NotImplementedException("Don't have TPC-DS answers for SF %llf!", sf);
 	}

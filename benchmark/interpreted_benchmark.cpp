@@ -37,7 +37,8 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	unique_ptr<MaterializedQueryResult> result;
 	InterpretedBenchmarkState() : db(nullptr), con(db) {
 		con.EnableProfiling();
-		auto res = con.Query("PRAGMA threads=1");
+		auto &instance = BenchmarkRunner::GetInstance();
+		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
 		D_ASSERT(res->success);
 	}
 };
@@ -171,7 +172,9 @@ void InterpretedBenchmark::LoadBenchmark() {
 				result_column_count = -1;
 				std::ifstream csv_infile(splits[1]);
 				bool skipped_header = false;
+				idx_t line_number = 0;
 				while (std::getline(csv_infile, line)) {
+					line_number++;
 					if (line.empty()) {
 						break;
 					}
@@ -183,7 +186,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 					if (result_column_count < 0) {
 						result_column_count = result_splits.size();
 					} else if (idx_t(result_column_count) != result_splits.size()) {
-						throw std::runtime_error("error in file " + splits[1] + ", inconsistent amount of rows in CSV");
+						throw std::runtime_error("error in file " + splits[1] + ", inconsistent amount of rows in CSV on line " + to_string(line_number));
 					}
 					result_values.push_back(move(result_splits));
 				}
@@ -328,7 +331,7 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 		return string();
 	}
 	// compare the column count
-	if ((int64_t)state.result->ColumnCount() != result_column_count) {
+	if (result_column_count >= 0 && (int64_t)state.result->ColumnCount() != result_column_count) {
 		return StringUtil::Format("Error in result: expected %lld columns but got %lld\nObtained result: %s",
 		                          (int64_t)result_column_count, (int64_t)state.result->ColumnCount(),
 		                          state.result->ToString());
@@ -336,15 +339,21 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 	// compare row count
 	if (state.result->collection.Count() != result_values.size()) {
 		return StringUtil::Format("Error in result: expected %lld rows but got %lld\nObtained result: %s",
-		                          (int64_t)state.result->collection.Count(), (int64_t)result_values.size(),
+		                          (int64_t)result_values.size(), (int64_t)state.result->collection.Count(),
 		                          state.result->ToString());
 	}
 	// compare values
 	for (int64_t r = 0; r < (int64_t)result_values.size(); r++) {
 		for (int64_t c = 0; c < result_column_count; c++) {
 			auto value = state.result->collection.GetValue(c, r);
+			if (result_values[r][c] == "NULL" && value.is_null) {
+				continue;
+			}
 			Value verify_val(result_values[r][c]);
 			verify_val = verify_val.CastAs(state.result->types[c]);
+			if (result_values[r][c] == "(empty)" && (verify_val.ToString() == "" || value.is_null)) {
+				continue;
+			}
 			if (!Value::ValuesAreEqual(value, verify_val)) {
 				return StringUtil::Format(
 				    "Error in result on row %lld column %lld: expected value \"%s\" but got value \"%s\"", r + 1, c + 1,
