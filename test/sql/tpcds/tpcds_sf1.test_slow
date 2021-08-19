@@ -7,8 +7,6 @@ require tpcds
 statement ok
 CALL dsdgen(sf=1)
 
-mode skip
-
 # check table counts
 query T
 SELECT COUNT(*) FROM call_center
