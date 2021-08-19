@@ -44,7 +44,7 @@ WITH my_customers AS
           AND d_moy = 12)
    GROUP BY c_customer_sk),
      segments AS
-  (SELECT cast((revenue/50) AS int) AS SEGMENT
+  (SELECT cast(round(revenue/50) AS int) AS SEGMENT
    FROM my_revenue)
 SELECT SEGMENT,
        count(*) AS num_customers,
