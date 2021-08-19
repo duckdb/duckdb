@@ -84,6 +84,10 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 	}
 }
 
+uint32_t DSDGenWrapper::QueriesCount() {
+	return TPCDS_QUERIES_COUNT;
+}
+
 string DSDGenWrapper::GetQuery(int query) {
 	if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-DS query number %d", query);

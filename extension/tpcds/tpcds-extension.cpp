@@ -85,7 +85,7 @@ static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Va
 static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_data,
                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (TPCDSData &)*operator_state;
-	idx_t tpcds_queries = 103;
+	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	if (data.offset >= tpcds_queries) {
 		// finished returning values
 		return;
@@ -123,7 +123,7 @@ static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vec
 static void TPCDSQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (TPCDSData &)*operator_state;
-	idx_t tpcds_queries = 103;
+	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	vector<double> scale_factors {1, 10};
 	idx_t total_answers = tpcds_queries * scale_factors.size();
 	if (data.offset >= total_answers) {
