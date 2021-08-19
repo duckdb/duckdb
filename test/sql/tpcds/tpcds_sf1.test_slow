@@ -132,7 +132,7 @@ SELECT COUNT(*) FROM web_site
 30
 
 # broken queries:
-# 54, 67
+# 54
 # too slow queries:
 # 64, 85
 
@@ -163,17 +163,7 @@ PRAGMA tpcds(${i})
 
 endloop
 
-loop i 65 67
-
-query I
-PRAGMA tpcds(${i})
-----
-<FILE>:extension/tpcds/dsdgen/answers/sf1/${i}.csv
-
-endloop
-
-loop i 68 85
-
+loop i 65 85
 
 query I
 PRAGMA tpcds(${i})

@@ -52,6 +52,7 @@ SELECT SEGMENT,
 FROM segments
 GROUP BY SEGMENT
 ORDER BY SEGMENT NULLS FIRST,
-         num_customers NULLS FIRST
+         num_customers NULLS FIRST,
+         segment_base
 LIMIT 100;
 
