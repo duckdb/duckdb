@@ -57,7 +57,6 @@ unique_ptr<BufferHandle> BlockHandle::Load(shared_ptr<BlockHandle> &handle) {
 			handle->buffer = buffer_manager.ReadTemporaryBuffer(handle->block_id);
 		}
 	}
-
 	handle->state = BlockState::BLOCK_LOADED;
 	return make_unique<BufferHandle>(handle, handle->buffer.get());
 }
@@ -356,15 +355,14 @@ bool BufferManager::EvictBlocks(idx_t extra_memory, idx_t memory_limit) {
 			current_memory -= extra_memory;
 			return false;
 		}
-		// try to get a reference to the underlying block pointer
+		// get a reference to the underlying block pointer
 		auto handle = node->TryGetBlockHandle();
 		if (!handle) {
-			// we did not get a reference: the node was redundant
 			continue;
 		}
 		// we might be able to free this block: grab the mutex and check if we can free it
 		lock_guard<mutex> lock(handle->lock);
-		if (!handle->CanUnload()) {
+		if (!node->CanUnload(*handle)) {
 			// something changed in the mean-time, bail out
 			continue;
 		}
