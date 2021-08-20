@@ -1,0 +1,9 @@
+cd_gender|cd_marital_status|cd_education_status|cnt1|cd_purchase_estimate|cnt2|cd_credit_rating|cnt3
+F|D|Advanced Degree|1|4500|1|Unknown|1
+F|M|Secondary|1|7000|1|High Risk|1
+F|M|Unknown|1|4500|1|High Risk|1
+F|S|Advanced Degree|1|6000|1|Unknown|1
+F|W|Unknown|1|1000|1|Unknown|1
+M|M|Unknown|1|9500|1|Unknown|1
+M|S|Unknown|1|3500|1|High Risk|1
+M|U|4 yr Degree|1|500|1|Unknown|1

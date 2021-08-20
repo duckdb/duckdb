@@ -17,7 +17,7 @@ vector<AggregateObject> AggregateObject::CreateAggregateObjects(const vector<Bou
 	for (auto &binding : bindings) {
 		auto payload_size = binding->function.state_size();
 #ifndef DUCKDB_ALLOW_UNDEFINED
-		payload_size = RowLayout::Align(payload_size);
+		payload_size = AlignValue(payload_size);
 #endif
 		aggregates.emplace_back(binding->function, binding->bind_info.get(), binding->children.size(), payload_size,
 		                        binding->distinct, binding->return_type.InternalType(), binding->filter.get());
@@ -68,7 +68,7 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p,
 	// Alignment padding for aggregates
 #ifndef DUCKDB_ALLOW_UNDEFINED
 	if (align) {
-		row_width = Align(row_width);
+		row_width = AlignValue(row_width);
 	}
 #endif
 	data_width = row_width - flag_width;
@@ -79,7 +79,7 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p,
 		offsets.push_back(row_width);
 		row_width += aggregate.payload_size;
 #ifndef DUCKDB_ALLOW_UNDEFINED
-		D_ASSERT(aggregate.payload_size == Align(aggregate.payload_size));
+		D_ASSERT(aggregate.payload_size == AlignValue(aggregate.payload_size));
 #endif
 	}
 	aggr_width = row_width - data_width - flag_width;
@@ -87,7 +87,7 @@ void RowLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p,
 	// Alignment padding for the next row
 #ifndef DUCKDB_ALLOW_UNDEFINED
 	if (align) {
-		row_width = Align(row_width);
+		row_width = AlignValue(row_width);
 	}
 #endif
 }

@@ -35,6 +35,7 @@
  */
 #include "config.h"
 #include "porting.h"
+#include "init.h"
 #include <stdio.h>
 #include "r_params.h"
 #include "scaling.h"
@@ -120,11 +121,11 @@ int split_work(int tnum, ds_key_t *pkFirstRow, ds_key_t *pkRowCount) {
  */
 int checkSeeds(tdef *pTdef) {
 	int i, res, nReturnCode = 0;
-	static int bInit = 0, bSetSeeds = 0;
+	static int bSetSeeds = 0;
 
-	if (!bInit) {
+	if (!InitConstants::checkSeeds_init) {
 		bSetSeeds = is_set("CHKSEEDS");
-		bInit = 1;
+		InitConstants::checkSeeds_init = 1;
 	}
 
 	for (i = pTdef->nFirstColumn; i <= pTdef->nLastColumn; i++) {

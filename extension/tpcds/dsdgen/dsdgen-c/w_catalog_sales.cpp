@@ -44,6 +44,7 @@
 #include "decimal.h"
 #include "genrand.h"
 #include "nulls.h"
+#include "init.h"
 #include "parallel.h"
 #include "params.h"
 #include "permute.h"
@@ -74,11 +75,10 @@ static void mk_master(void *info_arr, ds_key_t index) {
 	static decimal_t dZero, dHundred, dOne, dOneHalf;
 	int nGiftPct;
 	struct W_CATALOG_SALES_TBL *r;
-	static int bInit = 0;
 
 	r = &g_w_catalog_sales;
 
-	if (!bInit) {
+	if (!InitConstants::mk_master_catalog_sales_init) {
 		strtodec(&dZero, "0.00");
 		strtodec(&dHundred, "100.00");
 		strtodec(&dOne, "1.00");
@@ -86,7 +86,7 @@ static void mk_master(void *info_arr, ds_key_t index) {
 		jDate = skipDays(CATALOG_SALES, &kNewDateIndex);
 		pItemPermutation = makePermutation(NULL, (nItemCount = (int)getIDCount(ITEM)), CS_PERMUTE);
 
-		bInit = 1;
+		InitConstants::mk_master_catalog_sales_init = 1;
 	}
 
 	while (index > kNewDateIndex) /* need to move to a new date */
@@ -143,19 +143,18 @@ static void mk_detail(void *info_arr, int bPrint) {
 	static ds_key_t kNewDateIndex = 0;
 	static ds_key_t jDate;
 	struct W_CATALOG_SALES_TBL *r;
-	static int bInit = 0;
 	tdef *pTdef = getSimpleTdefsByNumber(CATALOG_SALES);
 
 	r = &g_w_catalog_sales;
 
-	if (!bInit) {
+	if (!InitConstants::mk_detail_catalog_sales_init) {
 		strtodec(&dZero, "0.00");
 		strtodec(&dHundred, "100.00");
 		strtodec(&dOne, "1.00");
 		strtodec(&dOneHalf, "0.50");
 		jDate = skipDays(CATALOG_SALES, &kNewDateIndex);
 
-		bInit = 1;
+		InitConstants::mk_detail_catalog_sales_init = 1;
 	}
 
 	nullSet(&pTdef->kNullBitMap, CS_NULLS);

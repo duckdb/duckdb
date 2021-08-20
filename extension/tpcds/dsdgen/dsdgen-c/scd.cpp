@@ -69,12 +69,11 @@ char arBKeys[MAX_TABLE][17];
  */
 int setSCDKeys(int nColumnID, ds_key_t kIndex, char *szBKey, ds_key_t *pkBeginDateKey, ds_key_t *pkEndDateKey) {
 	int bNewBKey = 0, nModulo;
-	static int bInit = 0;
 	static ds_key_t jMinimumDataDate, jMaximumDataDate, jH1DataDate, jT1DataDate, jT2DataDate;
 	date_t dtTemp;
 	int nTableID;
 
-	if (!bInit) {
+	if (!InitConstants::setSCDKeys_init) {
 		strtodt(&dtTemp, DATA_START_DATE);
 		jMinimumDataDate = dtTemp.julian;
 		strtodt(&dtTemp, DATA_END_DATE);
@@ -83,7 +82,7 @@ int setSCDKeys(int nColumnID, ds_key_t kIndex, char *szBKey, ds_key_t *pkBeginDa
 		jT2DataDate = (jMaximumDataDate - jMinimumDataDate) / 3;
 		jT1DataDate = jMinimumDataDate + jT2DataDate;
 		jT2DataDate += jT1DataDate;
-		bInit = 1;
+		InitConstants::setSCDKeys_init = 1;
 	}
 
 	nTableID = getTableFromColumn(nColumnID);
@@ -148,10 +147,10 @@ int setSCDKeys(int nColumnID, ds_key_t kIndex, char *szBKey, ds_key_t *pkBeginDa
  */
 ds_key_t scd_join(int tbl, int col, ds_key_t jDate) {
 	ds_key_t res, kRowcount;
-	static int bInit = 0, jMinimumDataDate, jMaximumDataDate, jH1DataDate, jT1DataDate, jT2DataDate;
+	static int jMinimumDataDate, jMaximumDataDate, jH1DataDate, jT1DataDate, jT2DataDate;
 	date_t dtTemp;
 
-	if (!bInit) {
+	if (!InitConstants::scd_join_init) {
 		strtodt(&dtTemp, DATA_START_DATE);
 		jMinimumDataDate = dtTemp.julian;
 		strtodt(&dtTemp, DATA_END_DATE);
@@ -160,7 +159,7 @@ ds_key_t scd_join(int tbl, int col, ds_key_t jDate) {
 		jT2DataDate = (jMaximumDataDate - jMinimumDataDate) / 3;
 		jT1DataDate = jMinimumDataDate + jT2DataDate;
 		jT2DataDate += jT1DataDate;
-		bInit = 1;
+		InitConstants::scd_join_init = 1;
 	}
 
 	kRowcount = getIDCount(tbl);
@@ -190,12 +189,11 @@ ds_key_t scd_join(int tbl, int col, ds_key_t jDate) {
  */
 ds_key_t matchSCDSK(ds_key_t kUnique, ds_key_t jDate, int nTable) {
 	ds_key_t kReturn = -1;
-	static int bInit = 0;
 	int jMinimumDataDate, jMaximumDataDate;
 	static int jH1DataDate, jT1DataDate, jT2DataDate;
 	date_t dtTemp;
 
-	if (!bInit) {
+	if (!InitConstants::matchSCDSK_init) {
 		strtodt(&dtTemp, DATA_START_DATE);
 		jMinimumDataDate = dtTemp.julian;
 		strtodt(&dtTemp, DATA_END_DATE);
@@ -204,7 +202,7 @@ ds_key_t matchSCDSK(ds_key_t kUnique, ds_key_t jDate, int nTable) {
 		jT2DataDate = (jMaximumDataDate - jMinimumDataDate) / 3;
 		jT1DataDate = jMinimumDataDate + jT2DataDate;
 		jT2DataDate += jT1DataDate;
-		bInit = 1;
+		InitConstants::matchSCDSK_init = 1;
 	}
 
 	switch (kUnique % 3) /* number of revisions for the ID */
