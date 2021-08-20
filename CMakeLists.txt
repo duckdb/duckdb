@@ -90,7 +90,7 @@ option(
   FORCE_SANITIZER
   "Forces building with sanitizers even if the Python and R modules are enabled."
   FALSE)
-if((BUILD_PYTHON OR BUILD_R)
+if((BUILD_PYTHON OR BUILD_R OR CONFIGURE_R)
    AND (ENABLE_SANITIZER OR ENABLE_UBSAN)
    AND ("${CMAKE_BUILD_TYPE}" STREQUAL "Debug"))
   if(FORCE_SANITIZER)
@@ -239,6 +239,7 @@ endif()
 
 if(BUILD_PYTHON
    OR BUILD_R
+   OR CONFIGURE_R
    OR JDBC_DRIVER)
   set(BUILD_ICU_EXTENSION TRUE)
   set(BUILD_VISUALIZER_EXTENSION TRUE)

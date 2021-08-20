@@ -82,6 +82,9 @@ endif
 ifeq (${BUILD_R}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
 endif
+ifeq (${CONFIGURE_R}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DCONFIGURE_R=1
+endif
 ifeq (${BUILD_REST}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_REST=1
 endif
@@ -217,4 +220,3 @@ clangd:
 	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ../.. && \
 	cd ../.. && \
 	ln -sf ./build/clangd/compile_commands.json ./compile_commands.json
-
