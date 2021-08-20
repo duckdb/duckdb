@@ -27,7 +27,12 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
+	if (std::uncaught_exception()) {
+		return;
+	}
+
 	// shutting down: attempt to checkpoint the database
+	// but only if we are not cleaning up as part of an exception unwind
 	try {
 		auto &storage = StorageManager::GetStorageManager(*this);
 		if (!storage.InMemory()) {
