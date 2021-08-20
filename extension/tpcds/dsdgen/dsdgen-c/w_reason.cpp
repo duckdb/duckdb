@@ -53,15 +53,14 @@ struct W_REASON_TBL g_w_reason;
  * mk_reason
  */
 int mk_w_reason(void *info_arr, ds_key_t index) {
-	static int bInit = 0;
 	struct W_REASON_TBL *r;
 	tdef *pTdef = getSimpleTdefsByNumber(REASON);
 
 	r = &g_w_reason;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_reason_init) {
 		memset(&g_w_reason, 0, sizeof(struct W_REASON_TBL));
-		bInit = 1;
+		InitConstants::mk_w_reason_init = 1;
 	}
 
 	nullSet(&pTdef->kNullBitMap, R_NULLS);

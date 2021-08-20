@@ -14,6 +14,7 @@
 #include "benchmark.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/fstream.hpp"
+#include <thread>
 
 namespace duckdb {
 class DuckDB;
@@ -51,6 +52,7 @@ public:
 	vector<Benchmark *> benchmarks;
 	ofstream out_file;
 	ofstream log_file;
+	uint32_t threads = std::thread::hardware_concurrency();
 };
 
 } // namespace duckdb

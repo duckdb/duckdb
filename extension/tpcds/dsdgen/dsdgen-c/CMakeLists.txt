@@ -9,6 +9,7 @@ add_library(
   dist.cpp
   error_msg.cpp
   genrand.cpp
+  init.cpp
   join.cpp
   list.cpp
   load.cpp

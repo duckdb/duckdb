@@ -35,6 +35,7 @@
  */
 #include "config.h"
 #include "porting.h"
+#include "init.h"
 #include <stdio.h>
 #include "date.h"
 #include "decimal.h"
@@ -72,13 +73,13 @@ static ds_key_t web_join(int col, ds_key_t join_key);
  */
 static ds_key_t date_join(int from_tbl, int from_col, ds_key_t join_count, int nYear) {
 	int nDay, nTemp, nMin = -1, nMax = -1, nResult;
-	static int bInit = 0, jToday;
+	static int jToday;
 	date_t TempDate;
 
-	if (bInit == 0) {
+	if (InitConstants::date_join_init == 0) {
 		strtodt(&TempDate, TODAYS_DATE);
 		jToday = dttoj(&TempDate);
-		bInit = 1;
+		InitConstants::date_join_init = 1;
 	}
 
 	switch (from_tbl) {
@@ -177,15 +178,15 @@ static ds_key_t time_join(int to_tbl, int to_col, ds_key_t join_count) {
  */
 static ds_key_t cp_join(int tbl, int col, ds_key_t jDate) {
 	ds_key_t res;
-	static int init = 0, nPagePerCatalog;
+	static int nPagePerCatalog;
 	int nType, nCount, nOffset, nPage;
 	static date_t dTemp;
 	char *szTemp;
 
-	if (!init) {
+	if (!InitConstants::cp_join_init) {
 		nPagePerCatalog = ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) / (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
 		strtodt(&dTemp, DATA_START_DATE);
-		init = 1;
+		InitConstants::cp_join_init = 1;
 	}
 
 	nType = pick_distribution(&szTemp, "catalog_page_type", 1, 2, col);
@@ -226,12 +227,11 @@ static ds_key_t cp_join(int tbl, int col, ds_key_t jDate) {
  * TODO: None
  */
 ds_key_t getCatalogNumberFromPage(ds_key_t kPageNumber) {
-	static int bInit = 0;
 	static int nPagePerCatalog;
 
-	if (!bInit) {
+	if (!InitConstants::getCatalogNumberFromPage_init) {
 		nPagePerCatalog = ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) / (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
-		bInit = 1;
+		InitConstants::getCatalogNumberFromPage_init = 1;
 	}
 
 	return (kPageNumber / nPagePerCatalog);
@@ -258,14 +258,14 @@ ds_key_t getCatalogNumberFromPage(ds_key_t kPageNumber) {
  */
 static ds_key_t web_join(int col, ds_key_t join_key) {
 	ds_key_t res = -1, kSite;
-	static int init = 0, nConcurrentSites, nSiteDuration, nOffset;
+	static int nConcurrentSites, nSiteDuration, nOffset;
 	static date_t dSiteOpen, /* open/close dates for current web site */
 	    dSiteClose;
 	int nTemp;
 	tdef *pWS = getSimpleTdefsByNumber(WEB_SITE);
 	tdef *pWP = getSimpleTdefsByNumber(WEB_PAGE);
 
-	if (!init) {
+	if (!InitConstants::web_join_init) {
 		strtodt(&dSiteClose, WEB_END_DATE);
 		nSiteDuration = dSiteClose.julian;
 		nConcurrentSites = (int)get_rowcount(CONCURRENT_WEB_SITES);
@@ -273,7 +273,7 @@ static ds_key_t web_join(int col, ds_key_t join_key) {
 		nSiteDuration -= dSiteOpen.julian;
 		nSiteDuration *= nConcurrentSites;
 		nOffset = (dSiteClose.julian - dSiteOpen.julian) / (2 * nSiteDuration);
-		init = 1;
+		InitConstants::web_join_init = 1;
 	}
 
 	switch (col) {

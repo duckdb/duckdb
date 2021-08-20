@@ -35,6 +35,7 @@
  */
 #include "config.h"
 #include "porting.h"
+#include "init.h"
 #include <stdio.h>
 #include <assert.h>
 #include <stdio.h>
@@ -231,18 +232,19 @@ ds_key_t getIDCount(int nTable) {
  */
 ds_key_t get_rowcount(int table) {
 
-	static int bScaleSet = 0, nScale;
+	static double nScale;
 	int nTable, nMultiplier, i, nBadScale = 0, nRowcountOffset = 0;
 	tdef *pTdef;
 
-	if (!bScaleSet) {
-		nScale = get_int("SCALE");
+	if (!InitConstants::get_rowcount_init) {
+		nScale = get_dbl("SCALE");
 		if (nScale > 100000)
 			ReportErrorNoLine(QERR_BAD_SCALE, NULL, 1);
 
 		memset(arRowcount, 0, sizeof(long) * MAX_TABLE);
+		int iScale = nScale < 1 ? 1 : int(nScale);
 		for (nTable = CALL_CENTER; nTable <= MAX_TABLE; nTable++) {
-			switch (nScale) {
+			switch (iScale) {
 			case 100000:
 				arRowcount[nTable].kBaseRowcount = dist_weight(NULL, "rowcounts", nTable + nRowcountOffset + 1, 9);
 				break;
@@ -276,7 +278,8 @@ ds_key_t get_rowcount(int table) {
 				break;
 			default:
 				nBadScale = QERR_BAD_SCALE;
-				switch (dist_member(NULL, "rowcounts", nTable + 1, 3)) {
+				int mem = dist_member(NULL, "rowcounts", nTable + 1, 3);
+				switch (mem) {
 				case 2:
 					arRowcount[nTable].kBaseRowcount = LinearScale(nTable + nRowcountOffset, nScale);
 					break;
@@ -296,16 +299,27 @@ ds_key_t get_rowcount(int table) {
 				pTdef = getSimpleTdefsByNumber(nTable);
 				nMultiplier = (pTdef->flags & FL_TYPE_2) ? 2 : 1;
 			}
-			for (i = 1; i <= dist_member(NULL, "rowcounts", nTable + 1, 2); i++)
+			for (i = 1; i <= dist_member(NULL, "rowcounts", nTable + 1, 2); i++) {
 				nMultiplier *= 10;
+			}
 			arRowcount[nTable].kBaseRowcount *= nMultiplier;
-
+			if (arRowcount[nTable].kBaseRowcount >= 0) {
+				if (nScale < 1) {
+					int mem = dist_member(NULL, "rowcounts", nTable + 1, 3);
+					if (!(mem == 1 && nMultiplier == 1)) {
+						arRowcount[nTable].kBaseRowcount = int(arRowcount[nTable].kBaseRowcount * nScale);
+					}
+					if (arRowcount[nTable].kBaseRowcount == 0) {
+						arRowcount[nTable].kBaseRowcount = 1;
+					}
+				}
+			}
 		} /* for each table */
 
 		//		if (nBadScale && !is_set("QUIET"))
 		//			ReportErrorNoLine(nBadScale, NULL, 0);
 
-		bScaleSet = 1;
+		InitConstants::get_rowcount_init = 1;
 	}
 
 	if (table == INVENTORY)
@@ -599,7 +613,6 @@ Date.julian); *pnOrderNumber += nRowcount; row_skip(nParent, nRowcount);
  * TODO: None
  */
 ds_key_t dateScaling(int nTable, ds_key_t jDate) {
-	static int bInit = 0;
 	static dist_t *pDist;
 	d_idx_t *pDistIndex;
 	date_t Date;
@@ -607,12 +620,12 @@ ds_key_t dateScaling(int nTable, ds_key_t jDate) {
 	ds_key_t kRowCount = -1;
 	tdef *pTdef = getSimpleTdefsByNumber(nTable);
 
-	if (!bInit) {
+	if (!InitConstants::dateScaling_init) {
 		pDistIndex = find_dist("calendar");
 		pDist = pDistIndex->dist;
 		if (!pDist)
 			ReportError(QERR_NO_MEMORY, "dateScaling()", 1);
-		bInit = 1;
+		InitConstants::dateScaling_init = 1;
 	}
 
 	jtodt(&Date, (int)jDate);

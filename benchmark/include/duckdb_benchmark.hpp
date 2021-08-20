@@ -26,6 +26,9 @@ struct DuckDBBenchmarkState : public BenchmarkState {
 
 	DuckDBBenchmarkState(string path) : db(path.empty() ? nullptr : path.c_str()), conn(db) {
 		conn.EnableProfiling();
+		auto &instance = BenchmarkRunner::GetInstance();
+		auto res = conn.Query("PRAGMA threads=" + to_string(instance.threads));
+		D_ASSERT(res->success);
 	}
 	virtual ~DuckDBBenchmarkState() {
 	}
