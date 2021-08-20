@@ -31,6 +31,8 @@ public:
 	vector<unique_ptr<Expression>> partitions;
 	//! The set of ordering clauses
 	vector<BoundOrderByNode> orders;
+	//! The statistics of the order clauses
+	vector<unique_ptr<BaseStatistics>> order_statistics;
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;

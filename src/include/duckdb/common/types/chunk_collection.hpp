@@ -110,6 +110,7 @@ public:
 			return nullptr;
 		}
 
+		count -= chunks[0]->size();
 		auto res = move(chunks[0]);
 		chunks.erase(chunks.begin() + 0);
 		return res;

@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/limits.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/limits.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -34,6 +35,7 @@ struct BoundOrderByNode {
 	OrderType type;
 	OrderByNullType null_order;
 	unique_ptr<Expression> expression;
+	unique_ptr<BaseStatistics> stats;
 };
 
 class BoundLimitModifier : public BoundResultModifier {

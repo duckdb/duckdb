@@ -212,6 +212,9 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	for (auto &o : orders) {
 		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}
+	for (auto &os : order_statistics) {
+		new_window->order_statistics.push_back(os->Copy());
+	}
 
 	new_window->start = start;
 	new_window->end = end;
