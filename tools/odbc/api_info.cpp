@@ -120,6 +120,7 @@ SQLRETURN ApiInfo::GetFunctions(SQLHDBC connection_handle, SQLUSMALLINT function
 	case SQL_API_SQLBINDCOL:
 	case SQL_API_SQLCANCEL:
 	case SQL_API_SQLNUMPARAMS:
+	case SQL_API_SQLMORERESULTS:
 	// results
 	case SQL_API_SQLGETDATA:
 	case SQL_API_SQLFETCH:
