@@ -255,7 +255,7 @@ void LocalSortState::ReOrder(GlobalSortState &gstate) {
 	ReOrder(*sb.payload_data, sorting_ptr, *payload_heap, gstate);
 }
 
-GlobalSortState::GlobalSortState(BufferManager &buffer_manager, vector<BoundOrderByNode> &orders,
+GlobalSortState::GlobalSortState(BufferManager &buffer_manager, const vector<BoundOrderByNode> &orders,
                                  vector<unique_ptr<BaseStatistics>> &statistics, RowLayout &payload_layout)
     : buffer_manager(buffer_manager), sort_layout(SortLayout(orders, statistics)), payload_layout(payload_layout),
       block_capacity(0), external(false) {

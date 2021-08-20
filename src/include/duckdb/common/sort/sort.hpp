@@ -42,7 +42,7 @@ public:
 
 struct GlobalSortState {
 public:
-	GlobalSortState(BufferManager &buffer_manager, vector<BoundOrderByNode> &orders,
+	GlobalSortState(BufferManager &buffer_manager, const vector<BoundOrderByNode> &orders,
 	                vector<unique_ptr<BaseStatistics>> &statistics, RowLayout &payload_layout);
 
 	//! Add local state sorted data to this global state
@@ -67,7 +67,7 @@ public:
 	//! Sorted data
 	vector<unique_ptr<SortedBlock>> sorted_blocks;
 	vector<vector<unique_ptr<SortedBlock>>> sorted_blocks_temp;
-	unique_ptr<SortedBlock> odd_one_out = nullptr;
+	unique_ptr<SortedBlock> odd_one_out;
 
 	//! Pinned heap data (if sorting in memory)
 	vector<RowDataBlock> heap_blocks;
