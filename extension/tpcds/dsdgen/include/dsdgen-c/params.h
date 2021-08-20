@@ -51,7 +51,7 @@ option_t options[] = {{"ABREVIATION", OPT_STR, 0, "build table with abreviation 
                       {"PARAMS", OPT_STR, 6, "read parameters from file <s>", read_file, ""},
                       {"PROG", OPT_STR | OPT_HIDE | OPT_SET, 7, "DO NOT MODIFY", NULL, "dsdgen"},
                       {"QUIET", OPT_FLG, 8, "disable all output to stdout/stderr", NULL, "N"},
-                      {"SCALE", OPT_INT, 9, "volume of data to generate in GB", SetScaleIndex, "1"},
+                      {"SCALE", OPT_STR, 9, "volume of data to generate in GB", SetScaleIndex, "1"},
                       {"SUFFIX", OPT_STR | OPT_ADV, 10, "use <s> as output file suffix", NULL, ".dat"},
                       {"TABLE", OPT_STR, 11, "build only table <s>", NULL, "ALL"},
                       {"TERMINATE", OPT_FLG | OPT_ADV, 12, "end each record with a field delimiter", NULL, "Y"},

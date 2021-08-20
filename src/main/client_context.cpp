@@ -58,6 +58,11 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 }
 
 ClientContext::~ClientContext() {
+	if (std::uncaught_exception()) {
+		return;
+	}
+	// destroy the client context and rollback if there is an active transaction
+	// but only if we are not destroying this client context as part of an exception stack unwind
 	Destroy();
 }
 
@@ -209,9 +214,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 }
 
 int ClientContext::GetProgress() {
-	if (!progress_bar) {
-		return -1;
-	}
+	D_ASSERT(progress_bar);
 	return progress_bar->GetCurrentPercentage();
 }
 
@@ -733,7 +736,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 bool ClientContext::UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function,
                                                 CreateScalarFunctionInfo *new_info) {
 	if (new_info->functions.empty()) {
-		throw std::runtime_error("Registering function without scalar function definitions!");
+		throw InternalException("Registering function without scalar function definitions!");
 	}
 	bool need_rewrite_entry = false;
 	idx_t size_new_func = new_info->functions.size();

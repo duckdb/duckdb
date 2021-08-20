@@ -63,19 +63,18 @@ int mk_w_item(void *info_arr, ds_key_t index) {
 	int32_t bUseSize, bFirstRecord = 0, nFieldChangeFlags, nMin, nMax, nIndex, nTemp;
 	char *cp;
 	struct W_ITEM_TBL *r;
-	static int32_t bInit = 0;
 	struct W_ITEM_TBL *rOldValues = &g_OldValues;
 	char *szMinPrice = NULL, *szMaxPrice = NULL;
 	tdef *pT = getSimpleTdefsByNumber(ITEM);
 
 	r = &g_w_item;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_item_init) {
 		/* some fields are static throughout the data set */
 		strtodec(&dMinMarkdown, MIN_ITEM_MARKDOWN_PCT);
 		strtodec(&dMaxMarkdown, MAX_ITEM_MARKDOWN_PCT);
 
-		bInit = 1;
+		InitConstants::mk_w_item_init = 1;
 	}
 
 	memset(r, 0, sizeof(struct W_ITEM_TBL));

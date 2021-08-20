@@ -39,7 +39,8 @@ RowGroup::RowGroup(DatabaseInstance &db, DataTableInfo &table_info, const vector
 
 	// set up the statistics
 	for (auto &stats : pointer.statistics) {
-		this->stats.push_back(make_shared<SegmentStatistics>(stats->type, move(stats)));
+		auto stats_type = stats->type;
+		this->stats.push_back(make_shared<SegmentStatistics>(stats_type, move(stats)));
 	}
 	this->version_info = move(pointer.versions);
 

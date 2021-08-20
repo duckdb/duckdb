@@ -1,13 +1,10 @@
 # name: benchmark/micro/groupby-parallel/tiny_groups.benchmark
-# description: Paralllel aggregation with large group count
+# description: Aggregation with large group count
 # group: [groupby]
 
 name Grouped Aggregate (L, 1000000 groups)
 group aggregate
 subgroup parallel
-
-init
-PRAGMA threads=4
 
 load
 create temporary table d as select mod(range, 1000000) g, 42 p from range(1000000);

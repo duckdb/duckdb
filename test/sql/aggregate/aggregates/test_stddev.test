@@ -8,6 +8,16 @@ create table stddev_test(val integer, grp integer)
 statement ok
 insert into stddev_test values (42, 1), (43, 1), (42, 2), (1000, 2), (NULL, 1), (NULL, 3)
 
+query I
+SELECT stddev_samp(1)
+----
+NULL
+
+query I
+SELECT var_samp(1)
+----
+NULL
+
 # stddev_samp
 query R
 select round(stddev_samp(val), 1) from stddev_test
@@ -120,3 +130,17 @@ query R
 select round(stddev(val), 1) from stddev_test_alias
 ----
 478.800000
+
+query I
+select stddev(0) from range(10)
+----
+0
+
+statement error
+select stddev(a) from (values (1e301), (-1e301)) tbl(a)
+
+statement error
+select var_samp(a) from (values (1e301), (-1e301)) tbl(a)
+
+statement error
+select var_pop(a) from (values (1e301), (-1e301)) tbl(a)

@@ -12,6 +12,7 @@
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
@@ -51,23 +52,25 @@ typedef void (*aggregate_window_t)(Vector inputs[], FunctionData *bind_data, idx
 
 class AggregateFunction : public BaseScalarFunction {
 public:
-	AggregateFunction(string name, vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
-	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
-	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
+	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
+	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
+	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
+	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
+	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
+	                  aggregate_window_t window = nullptr, bool order_sensitive = false)
 	    : BaseScalarFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
 	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), window(window),
-	      bind(bind), destructor(destructor), statistics(statistics) {
+	      order_sensitive(order_sensitive), bind(bind), destructor(destructor), statistics(statistics) {
 	}
 
-	AggregateFunction(vector<LogicalType> arguments, LogicalType return_type, aggregate_size_t state_size,
+	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
+	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr,
+	                  bool order_sensitive = false)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        simple_update, bind, destructor, statistics, window) {
+	                        simple_update, bind, destructor, statistics, window, order_sensitive) {
 	}
 
 	//! The hashed aggregate state sizing function
@@ -84,6 +87,8 @@ public:
 	aggregate_simple_update_t simple_update;
 	//! The windowed aggregate frame update function (may be null)
 	aggregate_window_t window;
+	//! True if the aggregate is order-sensitive
+	bool order_sensitive;
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind;
@@ -101,11 +106,15 @@ public:
 		return !(*this == rhs);
 	}
 
-	static unique_ptr<BoundAggregateExpression> BindAggregateFunction(ClientContext &context,
-	                                                                  AggregateFunction bound_function,
-	                                                                  vector<unique_ptr<Expression>> children,
-	                                                                  unique_ptr<Expression> filter = nullptr,
-	                                                                  bool is_distinct = false);
+	static unique_ptr<BoundAggregateExpression>
+	BindAggregateFunction(ClientContext &context, AggregateFunction bound_function,
+	                      vector<unique_ptr<Expression>> children, unique_ptr<Expression> filter = nullptr,
+	                      bool is_distinct = false, unique_ptr<BoundOrderModifier> order_bys = nullptr);
+
+	static unique_ptr<FunctionData> BindSortedAggregate(AggregateFunction &bound_function,
+	                                                    vector<unique_ptr<Expression>> &children,
+	                                                    unique_ptr<FunctionData> bind_info,
+	                                                    unique_ptr<BoundOrderModifier> order_bys);
 
 public:
 	template <class STATE, class RESULT_TYPE, class OP>
@@ -117,7 +126,7 @@ public:
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
-	static AggregateFunction UnaryAggregate(LogicalType input_type, LogicalType return_type) {
+	static AggregateFunction UnaryAggregate(const LogicalType &input_type, LogicalType return_type) {
 		return AggregateFunction(
 		    {input_type}, return_type, AggregateFunction::StateSize<STATE>,
 		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
@@ -133,7 +142,8 @@ public:
 	}
 
 	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP>
-	static AggregateFunction BinaryAggregate(LogicalType a_type, LogicalType b_type, LogicalType return_type) {
+	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
+	                                         LogicalType return_type) {
 		return AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP>,
 		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,

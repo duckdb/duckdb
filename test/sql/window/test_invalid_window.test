@@ -23,3 +23,6 @@ select row_number() over (range between unbounded following and unbounded preced
 statement error
 select row_number() over (range between unbounded preceding and unbounded preceding);
 
+# ORDER BY is not implemented for window functions
+statement error
+select LIST(salary ORDER BY enroll_date) OVER (PARTITION BY depname) FROM empsalary
