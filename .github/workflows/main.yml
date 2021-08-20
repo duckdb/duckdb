@@ -830,7 +830,7 @@ jobs:
   odbc:
     name: ODBC
     runs-on: ubuntu-20.04
-    needs: linux-debug
+#    needs: linux-debug
 
     env:
       BUILD_ODBC: 1
@@ -870,6 +870,10 @@ jobs:
 
     - name: Test isql
       run: ./tools/odbc/test/run_isql_tests.sh
+
+    - name: Test R ODBC
+      run: R -f tools/odbc/test/rodbc.R
+
 
   linux-python3:
     name: Python 3 Linux
