@@ -1,7 +1,0 @@
-# name: benchmark/tpch/sf1-parallel/q09.benchmark
-# description: Run query 09 from the TPC-H benchmark (4 threads)
-# group: [sf1]
-
-template benchmark/tpch/sf1-parallel/tpch_sf1_parallel.benchmark.in
-QUERY_NUMBER=9
-QUERY_NUMBER_PADDED=09

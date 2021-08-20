@@ -15,13 +15,7 @@ using namespace std;
 
 namespace tpcds {
 
-void DSDGenWrapper::DSDGen(int scale, ClientContext &context, string schema, string suffix) {
-	if (scale != 0 && scale != 1 && scale != 10 && scale != 100 && scale != 300 && scale != 1000 && scale != 3000 &&
-	    scale != 10000 && scale != 30000 && scale != 100000) {
-		throw InvalidInputException(
-		    "Scale factor must be one of {0, 1, 10, 100, 300, 1000, 3000, 10000, 30000, 100000}");
-	}
-
+void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, string suffix) {
 	Connection con(*context.db);
 
 	con.Query("BEGIN TRANSACTION");
@@ -34,7 +28,7 @@ void DSDGenWrapper::DSDGen(int scale, ClientContext &context, string schema, str
 
 	con.Query("COMMIT");
 
-	if (scale == 0) {
+	if (scale <= 0) {
 		// schema only
 		return;
 	}
@@ -90,6 +84,10 @@ void DSDGenWrapper::DSDGen(int scale, ClientContext &context, string schema, str
 	}
 }
 
+uint32_t DSDGenWrapper::QueriesCount() {
+	return TPCDS_QUERIES_COUNT;
+}
+
 string DSDGenWrapper::GetQuery(int query) {
 	if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-DS query number %d", query);
@@ -100,6 +98,12 @@ string DSDGenWrapper::GetQuery(int query) {
 string DSDGenWrapper::GetAnswer(double sf, int query) {
 	if (query <= 0 || query > TPCDS_QUERIES_COUNT) {
 		throw SyntaxException("Out of range TPC-DS query number %d", query);
+	}
+
+	if (sf == 0.01) {
+		return TPCDS_ANSWERS_SF0_01[query - 1];
+	} else if (sf == 1) {
+		return TPCDS_ANSWERS_SF1[query - 1];
 	} else {
 		throw NotImplementedException("Don't have TPC-DS answers for SF %llf!", sf);
 	}

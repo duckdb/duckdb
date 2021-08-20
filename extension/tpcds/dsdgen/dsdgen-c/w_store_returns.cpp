@@ -67,7 +67,6 @@ int mk_w_store_returns(void *row, ds_key_t index) {
 	int res = 0, nTemp;
 	struct W_STORE_RETURNS_TBL *r;
 	struct W_STORE_SALES_TBL *sale = &g_w_store_sales;
-	static int bInit = 0;
 	tdef *pT = getSimpleTdefsByNumber(STORE_RETURNS);
 
 	static decimal_t dMin, dMax;
@@ -78,9 +77,10 @@ int mk_w_store_returns(void *row, ds_key_t index) {
 	else
 		r = (W_STORE_RETURNS_TBL *)row;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_store_returns_init) {
 		strtodec(&dMin, "1.00");
 		strtodec(&dMax, "100000.00");
+		InitConstants::mk_w_store_returns_init = 1;
 	}
 
 	nullSet(&pT->kNullBitMap, SR_NULLS);

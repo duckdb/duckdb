@@ -72,14 +72,13 @@ int mk_w_customer(void *info_arr, ds_key_t index) {
 	/* begin locals declarations */
 	int nNameIndex, nGender;
 	struct W_CUSTOMER_TBL *r;
-	static int bInit = 0;
 	date_t dtTemp;
 	static date_t dtBirthMin, dtBirthMax, dtToday, dt1YearAgo, dt10YearsAgo;
 	tdef *pT = getSimpleTdefsByNumber(CUSTOMER);
 
 	r = &g_w_customer;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_customer_init) {
 		date_t min_date;
 		strtodt(&min_date, DATE_MINIMUM);
 		nBaseDate = dttoj(&min_date);
@@ -90,7 +89,7 @@ int mk_w_customer(void *info_arr, ds_key_t index) {
 		jtodt(&dt1YearAgo, dtToday.julian - 365);
 		jtodt(&dt10YearsAgo, dtToday.julian - 3650);
 
-		bInit = 1;
+		InitConstants::mk_w_customer_init = 1;
 	}
 
 	nullSet(&pT->kNullBitMap, C_NULLS);
@@ -137,7 +136,7 @@ int mk_w_customer(void *info_arr, ds_key_t index) {
 	append_varchar(info, r->c_salutation);
 	append_varchar(info, r->c_first_name);
 	append_varchar(info, r->c_last_name);
-	append_boolean(info, r->c_preferred_cust_flag);
+	append_varchar(info, r->c_preferred_cust_flag ? "Y" : "N");
 	append_integer(info, r->c_birth_day);
 	append_integer(info, r->c_birth_month);
 	append_integer(info, r->c_birth_year);

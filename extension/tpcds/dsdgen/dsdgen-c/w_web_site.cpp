@@ -72,7 +72,6 @@ static struct W_WEB_SITE_TBL g_OldValues;
 int mk_w_web_site(void *info_arr, ds_key_t index) {
 	int32_t nFieldChangeFlags, bFirstRecord = 0;
 	static decimal_t dMinTaxPercentage, dMaxTaxPercentage;
-	static int32_t bInit = 0;
 
 	/* begin locals declarations */
 	char szTemp[16], *sName1, *sName2;
@@ -81,14 +80,14 @@ int mk_w_web_site(void *info_arr, ds_key_t index) {
 
 	r = &g_w_web_site;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_web_site_init) {
 		/* setup invariant values */
 		sprintf(szTemp, "%d-%d-%d", CURRENT_YEAR, CURRENT_MONTH, CURRENT_DAY);
 		strcpy(r->web_class, "Unknown");
 		strtodec(&dMinTaxPercentage, WEB_MIN_TAX_PERCENTAGE);
 		strtodec(&dMaxTaxPercentage, WEB_MAX_TAX_PERCENTAGE);
 
-		bInit = 1;
+		InitConstants::mk_w_web_site_init = 1;
 	}
 
 	nullSet(&pT->kNullBitMap, WEB_NULLS);

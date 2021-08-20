@@ -49,10 +49,10 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	// Set external (can be force with the PRAGMA)
 	state->global_sort_state.external = context.force_external;
 	// Memory usage per thread should scale with max mem / num threads
-	// We take 1/6th of this, to be conservative
+	// We take 1/5th of this, to be conservative
 	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
 	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	state->memory_per_thread = (max_memory / num_threads) / 6;
+	state->memory_per_thread = (max_memory / num_threads) / 5;
 	return move(state);
 }
 

@@ -68,7 +68,6 @@ struct W_INVENTORY_TBL g_w_inventory;
  * TODO: None
  */
 int mk_w_inventory(void *info_arr, ds_key_t index) {
-	static int bInit = 0;
 	struct W_INVENTORY_TBL *r;
 	static ds_key_t item_count;
 	static ds_key_t warehouse_count;
@@ -80,7 +79,7 @@ int mk_w_inventory(void *info_arr, ds_key_t index) {
 
 	r = &g_w_inventory;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_inventory_init) {
 		memset(&g_w_inventory, 0, sizeof(struct W_INVENTORY_TBL));
 		item_count = getIDCount(ITEM);
 		warehouse_count = get_rowcount(WAREHOUSE);
@@ -88,7 +87,7 @@ int mk_w_inventory(void *info_arr, ds_key_t index) {
 		jDate = base_date->julian;
 		set_dow(base_date);
 		/* Make exceptions to the 1-rng-call-per-row rule */
-		bInit = 1;
+		InitConstants::mk_w_inventory_init = 1;
 	}
 
 	nullSet(&pTdef->kNullBitMap, INV_NULLS);

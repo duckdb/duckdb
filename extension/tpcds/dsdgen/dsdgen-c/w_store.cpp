@@ -67,13 +67,12 @@ int mk_w_store(void *info_arr, ds_key_t index) {
 	int32_t nHierarchyTotal, nStoreType, nPercentage, nDaysOpen, nMin, nMax;
 	static date_t tDate;
 	static decimal_t min_rev_growth, max_rev_growth, dMinTaxPercentage, dMaxTaxPercentage;
-	static int32_t bInit = 0;
 	struct W_STORE_TBL *r, *rOldValues = &g_OldValues;
 	tdef *pT = getSimpleTdefsByNumber(STORE);
 
 	r = &g_w_store;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_store_init) {
 		nHierarchyTotal = (int)get_rowcount(DIVISIONS);
 		nHierarchyTotal *= (int)get_rowcount(COMPANY);
 		strtodt(&tDate, DATE_MINIMUM);
@@ -86,6 +85,7 @@ int mk_w_store(void *info_arr, ds_key_t index) {
 
 		/* columns that should be dynamic */
 		r->rec_end_date_id = -1;
+		InitConstants::mk_w_store_init = 1;
 	}
 
 	nullSet(&pT->kNullBitMap, W_STORE_NULLS);

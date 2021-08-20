@@ -54,15 +54,9 @@ struct W_INCOME_BAND_TBL g_w_income_band;
  */
 int mk_w_income_band(void *info_arr, ds_key_t index) {
 	struct W_INCOME_BAND_TBL *r;
-	static int bInit = 0;
 	tdef *pTdef = getSimpleTdefsByNumber(INCOME_BAND);
 
 	r = &g_w_income_band;
-
-	if (!bInit) {
-		/* Make exceptions to the 1-rng-call-per-row rule */
-		bInit = 1;
-	}
 
 	nullSet(&pTdef->kNullBitMap, IB_NULLS);
 	r->ib_income_band_id = (long)index;
