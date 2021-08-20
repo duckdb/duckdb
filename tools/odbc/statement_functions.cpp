@@ -55,32 +55,46 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 	});
 }
 
-SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
-	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		if (stmt->res) {
-			stmt->res.reset();
-		}
-		stmt->odbc_fetcher->ClearChunks();
-
-		stmt->open = false;
-		if (stmt->rows_fetched_ptr) {
-			*stmt->rows_fetched_ptr = 0;
-		}
-
-		std::vector<Value> values;
-		SQLRETURN ret_param;
+//! Execute stmt in a batch manner while there is a parameter set to process,
+//! the stmt is executed multiple times when there is a bound array of parameters in INSERT and UPDATE statements
+SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		SQLRETURN ret;
 		do {
-			ret_param = stmt->param_wrapper->GetValues(values);
-			stmt->res = stmt->stmt->Execute(values);
-		} while (ret_param != SQL_NO_DATA); // Execute while there is a parameter set
-
-		if (!stmt->res->success) {
-			stmt->error_messages.emplace_back(stmt->res->error);
-			return SQL_ERROR;
-		}
-		stmt->open = true;
-		return SQL_SUCCESS;
+			ret = SingleExecuteStmt(stmt);
+		} while (ret == SQL_STILL_EXECUTING);
+		return ret;
 	});
+}
+
+//! Execute statement only once
+SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
+	if (stmt->res) {
+		stmt->res.reset();
+	}
+	stmt->odbc_fetcher->ClearChunks();
+
+	stmt->open = false;
+	if (stmt->rows_fetched_ptr) {
+		*stmt->rows_fetched_ptr = 0;
+	}
+
+	std::vector<Value> values;
+	SQLRETURN ret = stmt->param_wrapper->GetValues(values);
+	if (ret == SQL_NEED_DATA) {
+		return ret;
+	}
+	stmt->res = stmt->stmt->Execute(values);
+
+	if (!stmt->res->success) {
+		stmt->error_messages.emplace_back(stmt->res->error);
+		return SQL_ERROR;
+	}
+	stmt->open = true;
+	if (ret == SQL_STILL_EXECUTING) {
+		return SQL_STILL_EXECUTING;
+	}
+	return SQL_SUCCESS;
 }
 
 SQLRETURN duckdb::FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
