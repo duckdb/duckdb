@@ -12,6 +12,14 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 	// then propagate to each of the order expressions
 	for (auto &window_expr : window.expressions) {
 		auto over_expr = reinterpret_cast<BoundWindowExpression *>(window_expr.get());
+		for (auto &expr : over_expr->partitions) {
+			PropagateExpression(expr);
+			if (expr->stats) {
+				over_expr->partitions_stats.push_back(expr->stats->Copy());
+			} else {
+				over_expr->partitions_stats.push_back(nullptr);
+			}
+		}
 		for (auto &bound_order : over_expr->orders) {
 			auto &expr = bound_order.expression;
 			PropagateExpression(expr);

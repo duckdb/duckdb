@@ -97,6 +97,7 @@ void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManage
 }
 
 void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
+	D_ASSERT(sort.size() == payload.size());
 	// Build and serialize sorting data to radix sortable rows
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 	auto handles = radix_sorting_data->Build(sort.size(), data_pointers, nullptr);

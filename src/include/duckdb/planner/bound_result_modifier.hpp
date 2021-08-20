@@ -28,8 +28,21 @@ public:
 };
 
 struct BoundOrderByNode {
+public:
 	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression)
 	    : type(type), null_order(null_order), expression(move(expression)) {
+	}
+	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression,
+	                 unique_ptr<BaseStatistics> stats)
+	    : type(type), null_order(null_order), expression(move(expression)), stats(move(stats)) {
+	}
+
+	BoundOrderByNode Copy() const {
+		if (stats) {
+			return BoundOrderByNode(type, null_order, expression->Copy(), stats->Copy());
+		} else {
+			return BoundOrderByNode(type, null_order, expression->Copy());
+		}
 	}
 
 	OrderType type;

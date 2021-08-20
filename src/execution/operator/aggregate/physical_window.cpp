@@ -430,24 +430,27 @@ static void SortCollectionForPartition(PhysicalWindowOperatorState &state, Bound
 	vector<BoundOrderByNode> orders;
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
-		auto expr = make_unique_base<Expression, BoundReferenceExpression>(LogicalType::UBIGINT, prt_idx);
-		orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, move(expr));
+		if (wexpr->partitions_stats.empty()) {
+			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, wexpr->partitions[prt_idx]->Copy(),
+			                    nullptr);
+		} else {
+			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, wexpr->partitions[prt_idx]->Copy(),
+			                    wexpr->partitions_stats[prt_idx]->Copy());
+		}
 	}
-
 	for (const auto &order : wexpr->orders) {
-		orders.emplace_back(order.type, order.null_order, order.expression->Copy());
+		orders.push_back(order.Copy());
 	}
 
 	// fuse input and sort collection into one
-	ChunkCollection payload_collection;
-	payload_collection.Fuse(input);
-	payload_collection.Fuse(sort_collection);
 	auto input_types = input.Types();
-	input.Reset();
+	auto sort_types = sort_collection.Types();
+	input.Fuse(sort_collection);
+	auto payload_types = input.Types();
 
 	// initialize row layout for sorting
 	RowLayout payload_layout;
-	payload_layout.Initialize(payload_collection.Types());
+	payload_layout.Initialize(payload_types);
 
 	// initialize sorting states
 	state.global_sort_state = make_unique<GlobalSortState>(*state.buffer_manager, orders, payload_layout);
@@ -458,10 +461,12 @@ static void SortCollectionForPartition(PhysicalWindowOperatorState &state, Bound
 	// sink collection chunks into row format
 	const idx_t chunk_count = sort_collection.ChunkCount();
 	for (idx_t i = 0; i < chunk_count; i++) {
-		auto sort_chunk = sort_collection.Fetch();
-		auto payload_chunk = payload_collection.Fetch();
-		local_sort_state.SinkChunk(*sort_chunk, *payload_chunk);
+		auto &sort_chunk = *sort_collection.Chunks()[i];
+		auto &payload_chunk = *input.Chunks()[i];
+		local_sort_state.SinkChunk(sort_chunk, payload_chunk);
 	}
+	sort_collection.Reset();
+	input.Reset();
 
 	// add local state to global state, which sorts the data
 	global_sort_state.AddLocalState(local_sort_state);
@@ -472,9 +477,8 @@ static void SortCollectionForPartition(PhysicalWindowOperatorState &state, Bound
 	SortedDataScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	for (idx_t i = 0; i < chunk_count; i++) {
 		DataChunk payload_chunk;
-		payload_chunk.Initialize(payload_collection.Types());
+		payload_chunk.Initialize(payload_types);
 		scanner.Scan(payload_chunk);
-		payload_collection.Append(payload_chunk);
 
 		// split into two
 		DataChunk sort_chunk;
