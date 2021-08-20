@@ -830,7 +830,7 @@ jobs:
   odbc:
     name: ODBC
     runs-on: ubuntu-20.04
-#    needs: linux-debug
+    needs: linux-debug
 
     env:
       BUILD_ODBC: 1
