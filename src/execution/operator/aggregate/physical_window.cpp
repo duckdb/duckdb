@@ -430,7 +430,7 @@ static void SortCollectionForPartition(PhysicalWindowOperatorState &state, Bound
 	vector<BoundOrderByNode> orders;
 	// we sort by both 1) partition by expression list and 2) order by expressions
 	for (idx_t prt_idx = 0; prt_idx < wexpr->partitions.size(); prt_idx++) {
-		if (wexpr->partitions_stats.empty()) {
+		if (wexpr->partitions_stats.empty() || !wexpr->partitions_stats[prt_idx]) {
 			orders.emplace_back(OrderType::ASCENDING, OrderByNullType::NULLS_FIRST, wexpr->partitions[prt_idx]->Copy(),
 			                    nullptr);
 		} else {
