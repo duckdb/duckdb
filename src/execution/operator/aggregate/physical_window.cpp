@@ -396,7 +396,32 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static void SortCollectionForPartition(BufferManager &buffer_manager, BoundWindowExpression *wexpr,
+// Per-thread read state
+class PhysicalWindowOperatorState : public PhysicalOperatorState {
+public:
+	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
+	    : PhysicalOperatorState(op, child), parallel_state(nullptr), initialized(false) {
+	}
+
+	ParallelState *parallel_state;
+	bool initialized;
+
+	//! The number of partitions to process (0 if there is no partitioning)
+	size_t partitions;
+	//! The output read position.
+	size_t next_part;
+	//! The generated input chunks
+	ChunkCollection chunks;
+	//! The generated output chunks
+	ChunkCollection window_results;
+	//! The read cursor
+	idx_t position;
+
+	BufferManager *buffer_manager;
+	unique_ptr<GlobalSortState> global_sort_state;
+};
+
+static void SortCollectionForPartition(PhysicalWindowOperatorState &state, BoundWindowExpression *wexpr,
                                        ChunkCollection &input, ChunkCollection &sort_collection) {
 	if (input.Count() == 0) {
 		return;
@@ -425,9 +450,10 @@ static void SortCollectionForPartition(BufferManager &buffer_manager, BoundWindo
 	payload_layout.Initialize(payload_collection.Types());
 
 	// initialize sorting states
-	GlobalSortState global_sort_state(buffer_manager, orders, payload_layout);
+	state.global_sort_state = make_unique<GlobalSortState>(*state.buffer_manager, orders, payload_layout);
+	auto &global_sort_state = *state.global_sort_state;
 	LocalSortState local_sort_state;
-	local_sort_state.Initialize(global_sort_state, buffer_manager);
+	local_sort_state.Initialize(global_sort_state, *state.buffer_manager);
 
 	// sink collection chunks into row format
 	const idx_t chunk_count = sort_collection.ChunkCount();
@@ -439,6 +465,8 @@ static void SortCollectionForPartition(BufferManager &buffer_manager, BoundWindo
 
 	// add local state to global state, which sorts the data
 	global_sort_state.AddLocalState(local_sort_state);
+	// Prepare for merge phase (in this case we never have a merge phase, but this call is still needed)
+	global_sort_state.PrepareMergePhase();
 
 	// scan the sorted row data
 	SortedDataScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
@@ -1089,8 +1117,8 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 using WindowExpressions = vector<BoundWindowExpression *>;
 
-static void ComputeWindowExpressions(WindowGlobalState &gstate, WindowExpressions &window_exprs, ChunkCollection &input,
-                                     ChunkCollection &window_results, ChunkCollection &over) {
+static void ComputeWindowExpressions(PhysicalWindowOperatorState &state, WindowExpressions &window_exprs,
+                                     ChunkCollection &input, ChunkCollection &window_results, ChunkCollection &over) {
 	//	Idempotency
 	if (input.Count() == 0) {
 		return;
@@ -1101,7 +1129,7 @@ static void ComputeWindowExpressions(WindowGlobalState &gstate, WindowExpression
 	//	Sort the partition
 	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
 	if (sort_col_count > 0) {
-		SortCollectionForPartition(gstate.buffer_manager, over_expr, input, over);
+		SortCollectionForPartition(state, over_expr, input, over);
 	}
 
 	//	Set bits for the start of each partition
@@ -1204,28 +1232,6 @@ unique_ptr<ParallelState> PhysicalWindow::GetParallelState() {
 	return move(result);
 }
 
-// Per-thread read state
-class PhysicalWindowOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), parallel_state(nullptr), initialized(false) {
-	}
-
-	ParallelState *parallel_state;
-	bool initialized;
-
-	//! The number of partitions to process (0 if there is no partitioning)
-	size_t partitions;
-	//! The output read position.
-	size_t next_part;
-	//! The generated input chunks
-	ChunkCollection chunks;
-	//! The generated output chunks
-	ChunkCollection window_results;
-	//! The read cursor
-	idx_t position;
-};
-
 unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
 	return make_unique<PhysicalWindowOperatorState>(*this, children.empty() ? nullptr : children[0].get());
 }
@@ -1243,12 +1249,13 @@ static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalSt
 	state.chunks.Reset();
 	state.window_results.Reset();
 	state.position = 0;
+	state.global_sort_state = nullptr;
 
 	if (gstate.counts.empty() && hash_bin == 0) {
 		ChunkCollection &big_data = gstate.chunks;
 		ChunkCollection output;
 		ChunkCollection &over_collection = gstate.over_collection;
-		ComputeWindowExpressions(gstate, window_exprs, big_data, output, over_collection);
+		ComputeWindowExpressions(state, window_exprs, big_data, output, over_collection);
 		state.chunks.Merge(big_data);
 		state.window_results.Merge(output);
 	} else if (hash_bin < gstate.counts.size() && gstate.counts[hash_bin] > 0) {
@@ -1257,7 +1264,7 @@ static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalSt
 		ChunkCollection over;
 		const auto hash_mask = hash_t(gstate.counts.size() - 1);
 		ExtractPartition(gstate, input, over, hash_bin, hash_mask);
-		ComputeWindowExpressions(gstate, window_exprs, input, output, over);
+		ComputeWindowExpressions(state, window_exprs, input, output, over);
 		state.chunks.Merge(input);
 		state.window_results.Merge(output);
 	}
@@ -1308,6 +1315,7 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			// parallel scan init
 			state.parallel_state = task_info->second;
 		}
+		state.buffer_manager = &BufferManager::GetBufferManager(context.client);
 		state.initialized = true;
 	}
 

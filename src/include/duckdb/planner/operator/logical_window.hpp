@@ -22,8 +22,6 @@ public:
 
 	idx_t window_index;
 
-	vector<unique_ptr<BaseStatistics>> order_statistics;
-
 public:
 	vector<ColumnBinding> GetColumnBindings() override;
 
