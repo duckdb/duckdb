@@ -396,21 +396,6 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static OrderByNullType NormaliseNullOrder(OrderType type, OrderByNullType null_order) {
-	if (type != OrderType::DESCENDING) {
-		return null_order;
-	}
-
-	switch (null_order) {
-	case OrderByNullType::NULLS_FIRST:
-		return OrderByNullType::NULLS_LAST;
-	case OrderByNullType::NULLS_LAST:
-		return OrderByNullType::NULLS_FIRST;
-	default:
-		throw InternalException("Unknown NULL order type");
-	}
-}
-
 static void SortCollectionForPartition(BufferManager &buffer_manager, BoundWindowExpression *wexpr,
                                        ChunkCollection &input, ChunkCollection &sort_collection) {
 	if (input.Count() == 0) {
