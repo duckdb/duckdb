@@ -29,20 +29,21 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 		idx_t param_idx = parameter_number - 1;
 		stmt->param_wrapper->param_descriptors[param_idx].io_type = input_output_type;
 		stmt->param_wrapper->param_descriptors[param_idx].idx = param_idx;
-		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.value_type = value_type;
-		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.param_value_ptr = parameter_value_ptr;
-		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.buffer_len = buffer_length;
-		stmt->param_wrapper->param_descriptors[param_idx].app_param_desc.str_len_or_ind_ptr = str_len_or_ind_ptr;
-		stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.param_type = parameter_type;
-		stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.col_size = column_size;
-		stmt->param_wrapper->param_descriptors[param_idx].impl_param_desc.dec_digits = decimal_digits;
+		stmt->param_wrapper->param_descriptors[param_idx].apd.value_type = value_type;
+		stmt->param_wrapper->param_descriptors[param_idx].apd.param_value_ptr = parameter_value_ptr;
+		stmt->param_wrapper->param_descriptors[param_idx].apd.buffer_len = buffer_length;
+		stmt->param_wrapper->param_descriptors[param_idx].apd.str_len_or_ind_ptr = str_len_or_ind_ptr;
+		stmt->param_wrapper->param_descriptors[param_idx].ipd.param_type = parameter_type;
+		stmt->param_wrapper->param_descriptors[param_idx].ipd.col_size = column_size;
+		stmt->param_wrapper->param_descriptors[param_idx].ipd.dec_digits = decimal_digits;
 
 		return SQL_SUCCESS;
 	});
 }
 
 SQLRETURN SQLExecute(SQLHSTMT statement_handle) {
-	return duckdb::ExecuteStmt(statement_handle);
+	return duckdb::WithStatement(statement_handle,
+	                             [&](duckdb::OdbcHandleStmt *stmt) { return duckdb::BatchExecuteStmt(stmt); });
 }
 
 SQLRETURN SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *column_count_ptr) {
@@ -177,6 +178,29 @@ SQLRETURN SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, 
 		if (nullable_ptr) {
 			*nullable_ptr = SQL_NULLABLE_UNKNOWN;
 		}
+		return SQL_SUCCESS;
+	});
+}
+
+SQLRETURN SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_ptr) {
+	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		auto ret = stmt->param_wrapper->GetNextParam(value_ptr_ptr);
+		if (ret != SQL_NO_DATA) {
+			return ret;
+		}
+		// should try to get value from bound columns
+		return SQL_SUCCESS;
+	});
+}
+
+SQLRETURN SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
+	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		auto ret = stmt->param_wrapper->PutData(data_ptr, str_len_or_ind_ptr);
+		if (ret == SQL_SUCCESS) {
+			return ret;
+		}
+
+		// should try to put value into bound columns
 		return SQL_SUCCESS;
 	});
 }
