@@ -13,9 +13,6 @@ StreamQueryResult::StreamQueryResult(StatementType statement_type, shared_ptr<Cl
 }
 
 StreamQueryResult::~StreamQueryResult() {
-	if (std::uncaught_exception()) {
-		return;
-	}
 	Close();
 }
 
