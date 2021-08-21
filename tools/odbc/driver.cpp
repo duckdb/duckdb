@@ -1,4 +1,5 @@
 #include "duckdb_odbc.hpp"
+#include "parameter_wrapper.hpp"
 #include <odbcinst.h>
 
 using std::string;
@@ -50,6 +51,7 @@ SQLRETURN SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	case SQL_HANDLE_STMT: {
 		auto *hdl = (duckdb::OdbcHandleStmt *)handle;
 		if (hdl == hdl->dbc->stmt_handle) {
+			hdl->param_wrapper->Clear();
 			hdl->dbc->stmt_handle = nullptr;
 		}
 		delete hdl;
