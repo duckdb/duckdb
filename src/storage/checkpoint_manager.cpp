@@ -64,6 +64,7 @@ void CheckpointManager::CreateCheckpoint() {
 	for (auto &schema : schemas) {
 		WriteSchema(*schema);
 	}
+	FlushPartialSegments();
 	// flush the meta data to disk
 	metadata_writer->Flush();
 	tabledata_writer->Flush();
@@ -260,7 +261,7 @@ void CheckpointManager::WriteTable(TableCatalogEntry &table) {
 	// write the table meta data
 	table.Serialize(*metadata_writer);
 	// now we need to write the table data
-	TableDataWriter writer(db, table, *tabledata_writer);
+	TableDataWriter writer(db, *this, table, *tabledata_writer);
 	auto pointer = writer.WriteTableData();
 
 	//! write the block pointer for the table info
@@ -286,6 +287,78 @@ void CheckpointManager::ReadTable(ClientContext &context, MetaBlockReader &reade
 	// finally create the table in the catalog
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateTable(context, bound_info.get());
+}
+
+//===--------------------------------------------------------------------===//
+// Partial Blocks
+//===--------------------------------------------------------------------===//
+bool CheckpointManager::GetPartialBlock(ColumnSegment *segment, idx_t segment_size, block_id_t &block_id,
+                                        uint32_t &offset_in_block, PartialBlock *&partial_block_ptr,
+                                        unique_ptr<PartialBlock> &owned_partial_block) {
+	auto entry = partially_filled_blocks.lower_bound(segment_size);
+	if (entry == partially_filled_blocks.end()) {
+		return false;
+	}
+	// found a partially filled block! fill in the info
+	auto partial_block = move(entry->second);
+	partial_block_ptr = partial_block.get();
+	block_id = partial_block->block_id;
+	offset_in_block = Storage::BLOCK_SIZE - entry->first;
+	partially_filled_blocks.erase(entry);
+	PartialColumnSegment partial_segment;
+	partial_segment.segment = segment;
+	partial_segment.offset_in_block = offset_in_block;
+	partial_block->segments.push_back(partial_segment);
+
+	D_ASSERT(offset_in_block > 0);
+	D_ASSERT(ValueIsAligned(offset_in_block));
+
+	// check if the block is STILL partially filled after adding the segment_size
+	auto new_size = AlignValue(offset_in_block + segment_size);
+	if (new_size <= CheckpointManager::PARTIAL_BLOCK_THRESHOLD) {
+		// the block is still partially filled: add it to the partially_filled_blocks list
+		auto new_space_left = Storage::BLOCK_SIZE - new_size;
+		partially_filled_blocks.insert(make_pair(new_space_left, move(partial_block)));
+		// should not write the block yet: perhaps more columns will be added
+	} else {
+		// we are done with this block after the current write: write it to disk
+		owned_partial_block = move(partial_block);
+	}
+	return true;
+}
+
+void CheckpointManager::RegisterPartialBlock(ColumnSegment *segment, idx_t segment_size, block_id_t block_id) {
+	D_ASSERT(segment_size <= CheckpointManager::PARTIAL_BLOCK_THRESHOLD);
+	auto partial_block = make_unique<PartialBlock>();
+	partial_block->block_id = block_id;
+	partial_block->block = segment->block;
+
+	PartialColumnSegment partial_segment;
+	partial_segment.segment = segment;
+	partial_segment.offset_in_block = 0;
+	partial_block->segments.push_back(partial_segment);
+	auto space_left = Storage::BLOCK_SIZE - AlignValue(segment_size);
+	partially_filled_blocks.insert(make_pair(space_left, move(partial_block)));
+}
+
+void CheckpointManager::FlushPartialSegments() {
+	for (auto &entry : partially_filled_blocks) {
+		entry.second->FlushToDisk(db);
+	}
+}
+
+void PartialBlock::FlushToDisk(DatabaseInstance &db) {
+	auto &buffer_manager = BufferManager::GetBufferManager(db);
+	auto &block_manager = BlockManager::GetBlockManager(db);
+
+	// the data for the block might already exists in-memory of our block
+	// instead of copying the data we alter some metadata so the buffer points to an on-disk block
+	block = buffer_manager.ConvertToPersistent(block_manager, block_id, move(block));
+
+	// now set this block as the block for all segments
+	for (auto &seg : segments) {
+		seg.segment->ConvertToPersistent(block, block_id, seg.offset_in_block);
+	}
 }
 
 } // namespace duckdb

@@ -62,8 +62,6 @@ option_t options[] = {{"PROG", OPT_STR | OPT_HIDE, 0, NULL, NULL, "tester"},
 char *params[9];
 #endif
 
-static int param_init = 0;
-
 #define MAX_LINE_LEN 120
 #ifdef WIN32
 #define OPTION_START '/'
@@ -231,6 +229,18 @@ int get_int(char *var) {
 		return (0);
 }
 
+double get_dbl(char *var) {
+	int nParam;
+
+	init_params();
+	nParam = fnd_param(var);
+	if (nParam >= 0)
+		return (atof(params[options[nParam].index]));
+	else
+		return (0);
+
+}
+
 /*
  * Routine: set_str(int var, char *value)
  * Purpose: set a character parameter
@@ -299,9 +309,8 @@ char *get_str(char *var) {
  */
 int init_params(void) {
 	int i;
-	static int init = 0;
 
-	if (init)
+	if (InitConstants::init_params_init)
 		return (0);
 
 	for (i = 0; options[i].name != NULL; i++) {
@@ -312,8 +321,7 @@ int init_params(void) {
 			options[i].flags |= OPT_DFLT;
 	}
 
-	init = 1;
-	param_init = 1;
+	InitConstants::init_params_init = 1;
 
 	return (0);
 }

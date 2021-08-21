@@ -382,11 +382,10 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 	                                            move(bind_info), is_operator);
 }
 
-unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(ClientContext &context,
-                                                                              AggregateFunction bound_function,
-                                                                              vector<unique_ptr<Expression>> children,
-                                                                              unique_ptr<Expression> filter,
-                                                                              bool is_distinct) {
+unique_ptr<BoundAggregateExpression>
+AggregateFunction::BindAggregateFunction(ClientContext &context, AggregateFunction bound_function,
+                                         vector<unique_ptr<Expression>> children, unique_ptr<Expression> filter,
+                                         bool is_distinct, unique_ptr<BoundOrderModifier> order_bys) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
@@ -396,6 +395,12 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(Cl
 
 	// check if we need to add casts to the children
 	bound_function.CastToFunctionArguments(children);
+
+	// Special case: for ORDER BY aggregates, we wrap the aggregate function in a SortedAggregateFunction
+	// The children are the sort clauses and the binding contains the ordering data.
+	if (order_bys && !order_bys->orders.empty()) {
+		bind_info = BindSortedAggregate(bound_function, children, move(bind_info), move(order_bys));
+	}
 
 	return make_unique<BoundAggregateExpression>(move(bound_function), move(children), move(filter), move(bind_info),
 	                                             is_distinct);

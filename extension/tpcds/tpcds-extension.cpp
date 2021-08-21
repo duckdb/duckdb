@@ -18,7 +18,7 @@ struct DSDGenFunctionData : public TableFunctionData {
 	}
 
 	bool finished = false;
-	int sf = 0;
+	double sf = 0;
 	string schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
@@ -31,13 +31,13 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value>
 	auto result = make_unique<DSDGenFunctionData>();
 	for (auto &kv : named_parameters) {
 		if (kv.first == "sf") {
-			result->sf = kv.second.value_.integer;
+			result->sf = kv.second.GetValue<double>();
 		} else if (kv.first == "schema") {
 			result->schema = kv.second.str_value;
 		} else if (kv.first == "suffix") {
 			result->suffix = kv.second.str_value;
 		} else if (kv.first == "overwrite") {
-			result->overwrite = kv.second.value_.boolean;
+			result->overwrite = kv.second.GetValue<bool>();
 		}
 	}
 	return_types.push_back(LogicalType::BOOLEAN);
@@ -85,7 +85,7 @@ static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Va
 static void TPCDSQueryFunction(ClientContext &context, const FunctionData *bind_data,
                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (TPCDSData &)*operator_state;
-	idx_t tpcds_queries = 103;
+	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	if (data.offset >= tpcds_queries) {
 		// finished returning values
 		return;
@@ -112,7 +112,7 @@ static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vec
 	return_types.push_back(LogicalType::INTEGER);
 
 	names.emplace_back("scale_factor");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.push_back(LogicalType::DOUBLE);
 
 	names.emplace_back("answer");
 	return_types.push_back(LogicalType::VARCHAR);
@@ -123,7 +123,7 @@ static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vec
 static void TPCDSQueryAnswerFunction(ClientContext &context, const FunctionData *bind_data,
                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
 	auto &data = (TPCDSData &)*operator_state;
-	idx_t tpcds_queries = 103;
+	idx_t tpcds_queries = tpcds::DSDGenWrapper::QueriesCount();
 	vector<double> scale_factors {1, 10};
 	idx_t total_answers = tpcds_queries * scale_factors.size();
 	if (data.offset >= total_answers) {
@@ -137,7 +137,7 @@ static void TPCDSQueryAnswerFunction(ClientContext &context, const FunctionData 
 		auto answer = TPCDSExtension::GetAnswer(scale_factors[cur_sf], cur_query + 1);
 		// "query_nr", PhysicalType::INT32
 		output.SetValue(0, chunk_count, Value::INTEGER((int32_t)cur_query + 1));
-		// "scale_factor", PhysicalType::INT32
+		// "scale_factor", PhysicalType::DOUBLE
 		output.SetValue(1, chunk_count, Value::DOUBLE(scale_factors[cur_sf]));
 		// "query", PhysicalType::VARCHAR
 		output.SetValue(2, chunk_count, Value(answer));
@@ -157,7 +157,7 @@ void TPCDSExtension::Load(DuckDB &db) {
 	con.BeginTransaction();
 
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
-	dsdgen_func.named_parameters["sf"] = LogicalType::INTEGER;
+	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
 	// FIXME: no support for these parameters for now
 	//	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
 	//	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;

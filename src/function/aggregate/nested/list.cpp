@@ -111,10 +111,11 @@ unique_ptr<FunctionData> ListBindFunction(ClientContext &context, AggregateFunct
 }
 
 void ListFun::RegisterFunction(BuiltinFunctions &set) {
-	auto agg = AggregateFunction(
-	    "list", {LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
-	    AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction, ListCombineFunction,
-	    ListFinalize, nullptr, ListBindFunction, AggregateFunction::StateDestroy<ListAggState, ListFunction>);
+	auto agg =
+	    AggregateFunction("list", {LogicalType::ANY}, LogicalTypeId::LIST, AggregateFunction::StateSize<ListAggState>,
+	                      AggregateFunction::StateInitialize<ListAggState, ListFunction>, ListUpdateFunction,
+	                      ListCombineFunction, ListFinalize, nullptr, ListBindFunction,
+	                      AggregateFunction::StateDestroy<ListAggState, ListFunction>, nullptr, nullptr, true);
 	set.AddFunction(agg);
 	agg.name = "array_agg";
 	set.AddFunction(agg);

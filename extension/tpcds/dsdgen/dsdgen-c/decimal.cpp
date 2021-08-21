@@ -210,12 +210,11 @@ int strtodec(decimal_t *dest, char *s) {
 int dectostr(char *dest, decimal_t *d) {
 	ds_key_t number;
 	int i;
-	static int bInit = 0;
 	static char szFormat[20];
 
-	if (!bInit) {
+	if (!InitConstants::dectostr_init) {
 		sprintf(szFormat, "%s.%s", HUGE_FORMAT, HUGE_FORMAT);
-		bInit = 1;
+		InitConstants::dectostr_init = 1;
 	}
 
 	if (d == NULL || dest == NULL)
