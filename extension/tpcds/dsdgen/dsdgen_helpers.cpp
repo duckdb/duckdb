@@ -10,13 +10,15 @@
 #include "porting.h"
 #include "scaling.h"
 #include "tdefs.h"
+#include "init.h"
 
 namespace tpcds {
 
-void InitializeDSDgen(int scale) {
-	char scale_str[12];
-	sprintf(scale_str, "%d", scale);
-	set_int("SCALE", scale_str); // set SF, which also does a default init (e.g. random seed)
+void InitializeDSDgen(double scale) {
+	InitConstants::Reset();
+	ResetCountCount();
+	std::string t = std::to_string(scale);
+	set_str("SCALE", (char*) t.c_str()); // set SF, which also does a default init (e.g. random seed)
 	init_rand();                 // no random numbers without this
 }
 

@@ -72,16 +72,16 @@ static void mk_master(void *info_arr, ds_key_t index) {
 	static decimal_t dMin, dMax;
 	int nGiftPct;
 	struct W_WEB_SALES_TBL *r;
-	static int bInit = 0, nItemCount;
+	static int nItemCount;
 
 	r = &g_w_web_sales;
 
-	if (!bInit) {
+	if (!InitConstants::mk_master_init) {
 		strtodec(&dMin, "1.00");
 		strtodec(&dMax, "100000.00");
 		jDate = skipDays(WEB_SALES, &kNewDateIndex);
 		nItemCount = (int)getIDCount(ITEM);
-		bInit = 1;
+		InitConstants::mk_master_init = 1;
 	}
 
 	/***
@@ -124,17 +124,17 @@ static void mk_master(void *info_arr, ds_key_t index) {
 }
 
 static void mk_detail(void *info_arr, int bPrint) {
-	static int *pItemPermutation, nItemCount, bInit = 0;
+	static int *pItemPermutation, nItemCount;
 	struct W_WEB_SALES_TBL *r;
 	int nShipLag, nTemp;
 	struct W_WEB_RETURNS_TBL w_web_returns;
 	tdef *pT = getSimpleTdefsByNumber(WEB_SALES);
 
-	if (!bInit) {
+	if (!InitConstants::mk_detail_init) {
 		jDate = skipDays(WEB_SALES, &kNewDateIndex);
 		pItemPermutation = makePermutation(NULL, nItemCount = (int)getIDCount(ITEM), WS_PERMUTATION);
 
-		bInit = 1;
+		InitConstants::mk_detail_init = 1;
 	}
 
 	r = &g_w_web_sales;

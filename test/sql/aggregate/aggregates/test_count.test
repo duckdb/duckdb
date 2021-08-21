@@ -30,8 +30,10 @@ SELECT COUNT(*), COUNT(1), COUNT(i), COUNT(COALESCE(i, 1)), COUNT(DISTINCT i), C
 1
 
 # ordered aggregates are not supported
-statement error
+query I
 SELECT COUNT(1 ORDER BY 1)
+----
+1
 
 # cannot do DISTINCT *
 statement error

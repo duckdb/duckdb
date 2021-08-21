@@ -35,6 +35,7 @@
  */
 #include "config.h"
 #include "porting.h"
+#include "init.h"
 #include <stdio.h>
 #include <time.h>
 #include "dbgen_version.h"
@@ -61,7 +62,6 @@ struct DBGEN_VERSION_TBL g_dbgen_version;
  * TODO: None
  */
 int mk_dbgen_version(void *pDest, ds_key_t kIndex) {
-	static int bInit = 0;
 	struct DBGEN_VERSION_TBL *r;
 	time_t ltime;
 	struct tm *pTimeStamp;
@@ -71,9 +71,9 @@ int mk_dbgen_version(void *pDest, ds_key_t kIndex) {
 	else
 		r = (DBGEN_VERSION_TBL *)pDest;
 
-	if (!bInit) {
+	if (!InitConstants::mk_dbgen_version_init) {
 		memset(&g_dbgen_version, 0, sizeof(struct DBGEN_VERSION_TBL));
-		bInit = 1;
+		InitConstants::mk_dbgen_version_init = 1;
 	}
 
 	time(&ltime);                   /* Get time in seconds */

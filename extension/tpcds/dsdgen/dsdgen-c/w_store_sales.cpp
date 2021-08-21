@@ -67,19 +67,19 @@ static ds_key_t jDate, kNewDateIndex;
 static void mk_master(void *info_arr, ds_key_t index) {
 	struct W_STORE_SALES_TBL *r;
 	static decimal_t dMin, dMax;
-	static int bInit = 0, nMaxItemCount;
+	static int nMaxItemCount;
 	static ds_key_t kNewDateIndex = 0;
 
 	r = &g_w_store_sales;
 
-	if (!bInit) {
+	if (!InitConstants::mk_master_store_sales_init) {
 		strtodec(&dMin, "1.00");
 		strtodec(&dMax, "100000.00");
 		nMaxItemCount = 20;
 		jDate = skipDays(STORE_SALES, &kNewDateIndex);
 		pItemPermutation = makePermutation(NULL, nItemCount = (int)getIDCount(ITEM), SS_PERMUTATION);
 
-		bInit = 1;
+		InitConstants::mk_master_store_sales_init = 1;
 	}
 
 	while (index > kNewDateIndex) /* need to move to a new date */

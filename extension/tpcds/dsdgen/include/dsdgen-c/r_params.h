@@ -66,6 +66,7 @@ char *get_str(char *var);
 void set_str(char *param, char *value);
 int get_int(char *var);
 void set_int(char *var, char *val);
+double get_dbl(char *var);
 int is_set(char *flag);
 void clr_flg(char *flag);
 int find_table(char *szParamName, char *tname);
