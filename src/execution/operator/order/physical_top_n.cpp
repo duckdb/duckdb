@@ -141,13 +141,20 @@ void TopNSortState::Finalize() {
 
 void TopNSortState::InitializeScan(TopNScanState &state, bool exclude_offset) {
 	D_ASSERT(is_sorted);
-	D_ASSERT(global_state->sorted_blocks.size() == 1);
-	state.scanner = make_unique<SortedDataScanner>(*global_state->sorted_blocks[0]->payload_data, *global_state);
+	if (global_state->sorted_blocks.empty()) {
+		state.scanner = nullptr;
+	} else {
+		D_ASSERT(global_state->sorted_blocks.size() == 1);
+		state.scanner = make_unique<SortedDataScanner>(*global_state->sorted_blocks[0]->payload_data, *global_state);
+	}
 	state.pos = 0;
 	state.exclude_offset = exclude_offset && heap.offset > 0;
 }
 
 void TopNSortState::Scan(TopNScanState &state, DataChunk &chunk) {
+	if (!state.scanner) {
+		return;
+	}
 	auto offset = heap.offset;
 	auto limit = heap.limit;
 	D_ASSERT(is_sorted);
