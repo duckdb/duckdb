@@ -46,7 +46,8 @@ public:
 
 class TopNHeap {
 public:
-	TopNHeap(ClientContext &context, const vector<LogicalType> &payload_types, const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset);
+	TopNHeap(ClientContext &context, const vector<LogicalType> &payload_types, const vector<BoundOrderByNode> &orders,
+	         idx_t limit, idx_t offset);
 
 	ClientContext &context;
 	const vector<LogicalType> &payload_types;
@@ -57,7 +58,8 @@ public:
 	ExpressionExecutor executor;
 	DataChunk sort_chunk;
 	DataChunk payload_chunk;
-	//! A set of boundary values that determine either the minimum or the maximum value we have to consider for our top-n
+	//! A set of boundary values that determine either the minimum or the maximum value we have to consider for our
+	//! top-n
 	DataChunk boundary_values;
 	//! Whether or not the boundary_values has been set. The boundary_values are only set after a reduce step
 	bool has_boundary_values;
@@ -66,6 +68,7 @@ public:
 	SelectionVector true_sel;
 	SelectionVector false_sel;
 	SelectionVector new_remaining_sel;
+
 public:
 	void Sink(DataChunk &input);
 	void Combine(TopNHeap &other);
@@ -83,8 +86,7 @@ public:
 //===--------------------------------------------------------------------===//
 // TopNSortState
 //===--------------------------------------------------------------------===//
-TopNSortState::TopNSortState(TopNHeap &heap) :
-	heap(heap), count(0), is_sorted(false) {
+TopNSortState::TopNSortState(TopNHeap &heap) : heap(heap), count(0), is_sorted(false) {
 }
 
 void TopNSortState::Initialize() {
@@ -129,7 +131,7 @@ void TopNSortState::Finalize() {
 	global_state->AddLocalState(*local_state);
 
 	global_state->PrepareMergePhase();
-	while(global_state->sorted_blocks.size() > 1) {
+	while (global_state->sorted_blocks.size() > 1) {
 		MergeSorter merge_sorter(*global_state, BufferManager::GetBufferManager(heap.context));
 		merge_sorter.PerformInMergeRound();
 		global_state->CompleteMergeRound();
@@ -149,7 +151,7 @@ void TopNSortState::Scan(TopNScanState &state, DataChunk &chunk) {
 	auto offset = heap.offset;
 	auto limit = heap.limit;
 	D_ASSERT(is_sorted);
-	while(chunk.size() == 0) {
+	while (chunk.size() == 0) {
 		state.scanner->Scan(chunk);
 		if (chunk.size() == 0) {
 			break;
@@ -187,7 +189,7 @@ void TopNSortState::Scan(TopNScanState &state, DataChunk &chunk) {
 			break;
 		} else if (chunk_start > 0) {
 			SelectionVector sel(STANDARD_VECTOR_SIZE);
-			for(idx_t i = chunk_start; i < chunk_end; i++) {
+			for (idx_t i = chunk_start; i < chunk_end; i++) {
 				sel.set_index(i - chunk_start, i);
 			}
 			chunk.Slice(sel, chunk_end - chunk_start);
@@ -200,9 +202,11 @@ void TopNSortState::Scan(TopNScanState &state, DataChunk &chunk) {
 //===--------------------------------------------------------------------===//
 // TopNHeap
 //===--------------------------------------------------------------------===//
-TopNHeap::TopNHeap(ClientContext &context_p, const vector<LogicalType> &payload_types_p, const vector<BoundOrderByNode> &orders_p, idx_t limit, idx_t offset)
-	: context(context_p), payload_types(payload_types_p), orders(orders_p), limit(limit), offset(offset), sort_state(*this),
-	has_boundary_values(false), final_sel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE), new_remaining_sel(STANDARD_VECTOR_SIZE) {
+TopNHeap::TopNHeap(ClientContext &context_p, const vector<LogicalType> &payload_types_p,
+                   const vector<BoundOrderByNode> &orders_p, idx_t limit, idx_t offset)
+    : context(context_p), payload_types(payload_types_p), orders(orders_p), limit(limit), offset(offset),
+      sort_state(*this), has_boundary_values(false), final_sel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
+      false_sel(STANDARD_VECTOR_SIZE), new_remaining_sel(STANDARD_VECTOR_SIZE) {
 	// initialize the executor and the sort_chunk
 	vector<LogicalType> sort_types;
 	for (auto &order : orders) {
@@ -214,7 +218,6 @@ TopNHeap::TopNHeap(ClientContext &context_p, const vector<LogicalType> &payload_
 	sort_chunk.Initialize(sort_types);
 	boundary_values.Initialize(sort_types);
 	sort_state.Initialize();
-
 }
 
 void TopNHeap::Sink(DataChunk &input) {
@@ -226,7 +229,7 @@ void TopNHeap::Combine(TopNHeap &other) {
 
 	TopNScanState state;
 	other.InitializeScan(state, false);
-	while(true) {
+	while (true) {
 		payload_chunk.Reset();
 		other.Scan(state, payload_chunk);
 		if (payload_chunk.size() == 0) {
@@ -260,7 +263,7 @@ void TopNHeap::Reduce() {
 	DataChunk *current_chunk = &new_chunk;
 	DataChunk *prev_chunk = &payload_chunk;
 	has_boundary_values = false;
-	while(true) {
+	while (true) {
 		current_chunk->Reset();
 		Scan(state, *current_chunk);
 		if (current_chunk->size() == 0) {
@@ -277,8 +280,9 @@ void TopNHeap::Reduce() {
 void TopNHeap::ExtractBoundaryValues(DataChunk &current_chunk, DataChunk &prev_chunk) {
 	// extract the last entry of the prev_chunk and set as minimum value
 	D_ASSERT(prev_chunk.size() > 0);
-	for(idx_t col_idx = 0; col_idx < current_chunk.ColumnCount(); col_idx++) {
-		ConstantVector::Reference(current_chunk.data[col_idx], prev_chunk.data[col_idx], prev_chunk.size() - 1, prev_chunk.size());
+	for (idx_t col_idx = 0; col_idx < current_chunk.ColumnCount(); col_idx++) {
+		ConstantVector::Reference(current_chunk.data[col_idx], prev_chunk.data[col_idx], prev_chunk.size() - 1,
+		                          prev_chunk.size());
 	}
 	current_chunk.SetCardinality(1);
 	executor.Execute(&current_chunk, sort_chunk);
@@ -286,7 +290,7 @@ void TopNHeap::ExtractBoundaryValues(DataChunk &current_chunk, DataChunk &prev_c
 	boundary_values.Reset();
 	boundary_values.Append(sort_chunk);
 	boundary_values.SetCardinality(1);
-	for(idx_t i = 0; i < boundary_values.ColumnCount(); i++) {
+	for (idx_t i = 0; i < boundary_values.ColumnCount(); i++) {
 		boundary_values.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 	has_boundary_values = true;
@@ -299,21 +303,28 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload) {
 
 	SelectionVector remaining_sel(nullptr);
 	idx_t remaining_count = sort_chunk.size();
-	for(idx_t i = 0; i < orders.size(); i++) {
+	for (idx_t i = 0; i < orders.size(); i++) {
 		bool is_last = i + 1 == orders.size();
 		idx_t true_count;
 		if (orders[i].null_order == OrderByNullType::NULLS_LAST) {
 			if (orders[i].type == OrderType::ASCENDING) {
-				true_count = VectorOperations::DistinctLessThan(sort_chunk.data[i], boundary_values.data[i], &remaining_sel, remaining_count, &true_sel, &false_sel);
+				true_count = VectorOperations::DistinctLessThan(sort_chunk.data[i], boundary_values.data[i],
+				                                                &remaining_sel, remaining_count, &true_sel, &false_sel);
 			} else {
-				true_count = VectorOperations::DistinctGreaterThanNullsFirst(sort_chunk.data[i], boundary_values.data[i], &remaining_sel, remaining_count, &true_sel, &false_sel);
+				true_count = VectorOperations::DistinctGreaterThanNullsFirst(sort_chunk.data[i],
+				                                                             boundary_values.data[i], &remaining_sel,
+				                                                             remaining_count, &true_sel, &false_sel);
 			}
 		} else {
 			D_ASSERT(orders[i].null_order == OrderByNullType::NULLS_FIRST);
 			if (orders[i].type == OrderType::ASCENDING) {
-				true_count = VectorOperations::DistinctLessThanNullsFirst(sort_chunk.data[i], boundary_values.data[i], &remaining_sel, remaining_count, &true_sel, &false_sel);
+				true_count = VectorOperations::DistinctLessThanNullsFirst(sort_chunk.data[i], boundary_values.data[i],
+				                                                          &remaining_sel, remaining_count, &true_sel,
+				                                                          &false_sel);
 			} else {
-				true_count = VectorOperations::DistinctGreaterThan(sort_chunk.data[i], boundary_values.data[i], &remaining_sel, remaining_count, &true_sel, &false_sel);
+				true_count =
+				    VectorOperations::DistinctGreaterThan(sort_chunk.data[i], boundary_values.data[i], &remaining_sel,
+				                                          remaining_count, &true_sel, &false_sel);
 			}
 		}
 
@@ -324,7 +335,8 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload) {
 		idx_t false_count = remaining_count - true_count;
 		if (false_count > 0 && !is_last) {
 			// check what we should continue to check
-			remaining_count = VectorOperations::NotDistinctFrom(sort_chunk.data[i], boundary_values.data[i], &false_sel, false_count, &new_remaining_sel, nullptr);
+			remaining_count = VectorOperations::NotDistinctFrom(sort_chunk.data[i], boundary_values.data[i], &false_sel,
+			                                                    false_count, &new_remaining_sel, nullptr);
 			remaining_sel.Initialize(new_remaining_sel);
 		} else {
 			break;
@@ -350,8 +362,9 @@ void TopNHeap::Scan(TopNScanState &state, DataChunk &chunk) {
 
 class TopNGlobalState : public GlobalOperatorState {
 public:
-	TopNGlobalState(ClientContext &context, const vector<LogicalType> &payload_types, const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset) :
-	   heap(context, payload_types, orders, limit, offset) {
+	TopNGlobalState(ClientContext &context, const vector<LogicalType> &payload_types,
+	                const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
+	    : heap(context, payload_types, orders, limit, offset) {
 	}
 
 	mutex lock;
@@ -360,8 +373,9 @@ public:
 
 class TopNLocalState : public LocalSinkState {
 public:
-	TopNLocalState(ClientContext &context, const vector<LogicalType> &payload_types, const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset) :
-	   heap(context, payload_types, orders, limit, offset) {
+	TopNLocalState(ClientContext &context, const vector<LogicalType> &payload_types,
+	               const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
+	    : heap(context, payload_types, orders, limit, offset) {
 	}
 
 	TopNHeap heap;
@@ -415,8 +429,7 @@ bool PhysicalTopN::Finalize(Pipeline &pipeline, ClientContext &context, unique_p
 //===--------------------------------------------------------------------===//
 class PhysicalTopNOperatorState : public PhysicalOperatorState {
 public:
-	PhysicalTopNOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child) {
+	PhysicalTopNOperatorState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child) {
 	}
 
 	TopNScanState state;

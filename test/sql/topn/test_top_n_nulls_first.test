@@ -1,6 +1,6 @@
-# name: test/sql/order/test_top_n_nulls_first.test
+# name: test/sql/topn/test_top_n_nulls_first.test
 # description: Test NULLS FIRST/NULLS LAST with top n implementation
-# group: [order]
+# group: [topn]
 
 statement ok
 PRAGMA enable_verification

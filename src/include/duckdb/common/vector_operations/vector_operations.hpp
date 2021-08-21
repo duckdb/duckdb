@@ -116,10 +116,10 @@ struct VectorOperations {
 
 	// true := A > B with nulls being minimal
 	static idx_t DistinctGreaterThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                                 SelectionVector *true_sel, SelectionVector *false_sel);
+	                                           SelectionVector *true_sel, SelectionVector *false_sel);
 	// true := A < B with nulls being minimal
 	static idx_t DistinctLessThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
-	                              SelectionVector *true_sel, SelectionVector *false_sel);
+	                                        SelectionVector *true_sel, SelectionVector *false_sel);
 
 	//===--------------------------------------------------------------------===//
 	// Nested Comparisons

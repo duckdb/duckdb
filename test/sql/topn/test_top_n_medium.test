@@ -1,6 +1,6 @@
-# name: test/sql/order/test_top_n_medium.test
+# name: test/sql/topn/test_top_n_medium.test
 # description: Test Top N with medium sized data
-# group: [order]
+# group: [topn]
 
 statement ok
 PRAGMA enable_verification

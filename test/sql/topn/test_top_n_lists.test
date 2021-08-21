@@ -1,6 +1,6 @@
 # name: test/sql/topn/test_top_n_lists.test
 # description: Test Top N with lists
-# group: [order]
+# group: [topn]
 
 statement ok
 PRAGMA enable_verification

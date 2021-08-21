@@ -107,7 +107,6 @@ struct DistinctLessThan {
 	}
 };
 
-
 struct DistinctLessThanNullsFirst {
 	template <class T>
 	static inline bool Operation(T left, T right, bool left_null, bool right_null) {
