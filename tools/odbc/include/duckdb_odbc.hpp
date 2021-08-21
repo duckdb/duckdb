@@ -69,7 +69,6 @@ SQLRETURN SQLCancel(SQLHSTMT statement_handle);
 SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_ptr);
 
 SQLRETURN SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_ptr);
-
 SQLRETURN SQLMoreResults(SQLHSTMT statement_handle);
 
 // diagnostics

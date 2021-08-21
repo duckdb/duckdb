@@ -128,7 +128,6 @@ SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLIN
 	}
 
 	// TODO make this a nice template? also going to use this for SQLColumns etc.
-
 	if (!SQL_SUCCEEDED(SQLPrepare(
 	        statement_handle,
 	        (SQLCHAR

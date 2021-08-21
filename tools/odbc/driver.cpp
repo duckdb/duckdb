@@ -73,8 +73,8 @@ SQLRETURN SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOI
 	}
 	switch (attribute) {
 	case SQL_ATTR_ODBC_VERSION: {
-		auto version = (SQLINTEGER)(uintptr_t)value_ptr;
 		// TODO actually do something with this?
+		// auto version = (SQLINTEGER)(uintptr_t)value_ptr;
 		return SQL_SUCCESS;
 	}
 	default:
