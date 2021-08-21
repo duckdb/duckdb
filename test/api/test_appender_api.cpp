@@ -227,3 +227,30 @@ TEST_CASE("Test usage of appender interleaved with connection usage", "[api]") {
 	result = con.Query("SELECT * FROM t1");
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2}));
 }
+
+TEST_CASE("Test appender during stack unwinding", "[api]") {
+	// test appender exception
+	DuckDB db;
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	{
+		Appender appender(con, "integers");
+		appender.AppendRow(1);
+
+		// closing the apender throws an exception, because we changed the table's type
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE integers ALTER i SET DATA TYPE VARCHAR"));
+		REQUIRE_THROWS(appender.Close());
+	}
+	REQUIRE_NO_FAIL(con.Query("DROP TABLE integers"));
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE integers(i INTEGER)"));
+	try {
+		// now we do the same, but we trigger the destructor of the appender during stack unwinding
+		Appender appender(con, "integers");
+		appender.AppendRow(1);
+
+		REQUIRE_NO_FAIL(con.Query("ALTER TABLE integers ALTER i SET DATA TYPE VARCHAR"));
+		{ throw std::runtime_error("Hello"); }
+	} catch (...) {
+	}
+}

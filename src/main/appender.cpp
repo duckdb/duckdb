@@ -29,7 +29,10 @@ Appender::Appender(Connection &con, const string &table_name) : Appender(con, DE
 }
 
 Appender::~Appender() {
-	// flush any remaining chunks
+	if (std::uncaught_exception()) {
+		return;
+	}
+	// flush any remaining chunks, but only if we are not cleaning up the appender as part of an exception stack unwind
 	// wrapped in a try/catch because Close() can throw if the table was dropped in the meantime
 	try {
 		Close();

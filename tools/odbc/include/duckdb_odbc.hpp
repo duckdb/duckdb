@@ -62,12 +62,13 @@ SQLRETURN SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *column_count_
 SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
                      SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr);
 
-SQLRETURN SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN target_typestr_len_or_ind_ptr);
+SQLRETURN SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr);
 
 SQLRETURN SQLCancel(SQLHSTMT statement_handle);
 
 SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_ptr);
 
+SQLRETURN SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_ptr);
 SQLRETURN SQLMoreResults(SQLHSTMT statement_handle);
 
 // diagnostics
@@ -153,10 +154,9 @@ struct OdbcHandleStmt : public OdbcHandle {
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN *rows_fetched_ptr;
-
 	// appending all statement error messages into it
 	vector<std::string> error_messages;
-
+	// fetcher
 	unique_ptr<OdbcFetch> odbc_fetcher;
 };
 
