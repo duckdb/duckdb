@@ -57,15 +57,27 @@ public:
 	ExpressionExecutor executor;
 	DataChunk sort_chunk;
 	DataChunk payload_chunk;
+	//! A set of boundary values that determine either the minimum or the maximum value we have to consider for our top-n
+	DataChunk boundary_values;
+	//! Whether or not the boundary_values has been set. The boundary_values are only set after a reduce step
+	bool has_boundary_values;
 
+	SelectionVector final_sel;
+	SelectionVector true_sel;
+	SelectionVector false_sel;
+	SelectionVector new_remaining_sel;
 public:
 	void Sink(DataChunk &input);
 	void Combine(TopNHeap &other);
 	void Reduce();
 	void Finalize();
 
+	void ExtractBoundaryValues(DataChunk &current_chunk, DataChunk &prev_chunk);
+
 	void InitializeScan(TopNScanState &state, bool exclude_offset);
 	void Scan(TopNScanState &state, DataChunk &chunk);
+
+	bool CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload);
 };
 
 //===--------------------------------------------------------------------===//
@@ -87,6 +99,12 @@ void TopNSortState::Initialize() {
 
 void TopNSortState::Append(DataChunk &sort_chunk, DataChunk &payload) {
 	D_ASSERT(!is_sorted);
+	if (heap.has_boundary_values) {
+		if (!heap.CheckBoundaryValues(sort_chunk, payload)) {
+			return;
+		}
+	}
+
 	local_state->SinkChunk(sort_chunk, payload);
 	count += payload.size();
 }
@@ -183,7 +201,8 @@ void TopNSortState::Scan(TopNScanState &state, DataChunk &chunk) {
 // TopNHeap
 //===--------------------------------------------------------------------===//
 TopNHeap::TopNHeap(ClientContext &context_p, const vector<LogicalType> &payload_types_p, const vector<BoundOrderByNode> &orders_p, idx_t limit, idx_t offset)
-	: context(context_p), payload_types(payload_types_p), orders(orders_p), limit(limit), offset(offset), sort_state(*this) {
+	: context(context_p), payload_types(payload_types_p), orders(orders_p), limit(limit), offset(offset), sort_state(*this),
+	has_boundary_values(false), final_sel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE), new_remaining_sel(STANDARD_VECTOR_SIZE) {
 	// initialize the executor and the sort_chunk
 	vector<LogicalType> sort_types;
 	for (auto &order : orders) {
@@ -193,7 +212,9 @@ TopNHeap::TopNHeap(ClientContext &context_p, const vector<LogicalType> &payload_
 	}
 	payload_chunk.Initialize(payload_types);
 	sort_chunk.Initialize(sort_types);
+	boundary_values.Initialize(sort_types);
 	sort_state.Initialize();
+
 }
 
 void TopNHeap::Sink(DataChunk &input) {
@@ -221,9 +242,9 @@ void TopNHeap::Finalize() {
 }
 
 void TopNHeap::Reduce() {
-	idx_t min_sort_threshold = MaxValue<idx_t>(STANDARD_VECTOR_SIZE * 20, 2 * (limit + offset));
+	idx_t min_sort_threshold = MaxValue<idx_t>(STANDARD_VECTOR_SIZE * 5, 2 * (limit + offset));
 	if (sort_state.count < min_sort_threshold) {
-		// only reduce when we pass two times the limit + offset, or 10 vectors (whichever comes first)
+		// only reduce when we pass two times the limit + offset, or 5 vectors (whichever comes first)
 		return;
 	}
 	sort_state.Finalize();
@@ -232,16 +253,91 @@ void TopNHeap::Reduce() {
 
 	TopNScanState state;
 	sort_state.InitializeScan(state, false);
+
+	DataChunk new_chunk;
+	new_chunk.Initialize(payload_types);
+
+	DataChunk *current_chunk = &new_chunk;
+	DataChunk *prev_chunk = &payload_chunk;
+	has_boundary_values = false;
 	while(true) {
-		payload_chunk.Reset();
-		Scan(state, payload_chunk);
-		if (payload_chunk.size() == 0) {
+		current_chunk->Reset();
+		Scan(state, *current_chunk);
+		if (current_chunk->size() == 0) {
+			ExtractBoundaryValues(*current_chunk, *prev_chunk);
 			break;
 		}
-		new_state.Sink(payload_chunk);
+		new_state.Sink(*current_chunk);
+		std::swap(current_chunk, prev_chunk);
 	}
 
 	sort_state.Move(new_state);
+}
+
+void TopNHeap::ExtractBoundaryValues(DataChunk &current_chunk, DataChunk &prev_chunk) {
+	// extract the last entry of the prev_chunk and set as minimum value
+	D_ASSERT(prev_chunk.size() > 0);
+	for(idx_t col_idx = 0; col_idx < current_chunk.ColumnCount(); col_idx++) {
+		ConstantVector::Reference(current_chunk.data[col_idx], prev_chunk.data[col_idx], prev_chunk.size() - 1, prev_chunk.size());
+	}
+	current_chunk.SetCardinality(1);
+	executor.Execute(&current_chunk, sort_chunk);
+
+	boundary_values.Reset();
+	boundary_values.Append(sort_chunk);
+	boundary_values.SetCardinality(1);
+	for(idx_t i = 0; i < boundary_values.ColumnCount(); i++) {
+		boundary_values.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
+	}
+	has_boundary_values = true;
+}
+
+bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload) {
+	// we have boundary values
+	// from these boundary values, determine which values we should insert (if any)
+	idx_t final_count = 0;
+
+	SelectionVector remaining_sel(nullptr);
+	idx_t remaining_count = sort_chunk.size();
+	for(idx_t i = 0; i < orders.size(); i++) {
+		bool is_last = i + 1 == orders.size();
+		idx_t true_count;
+		if (orders[i].null_order == OrderByNullType::NULLS_LAST) {
+			if (orders[i].type == OrderType::ASCENDING) {
+				true_count = VectorOperations::DistinctLessThan(sort_chunk.data[i], boundary_values.data[i], &remaining_sel, remaining_count, &true_sel, &false_sel);
+			} else {
+				true_count = VectorOperations::DistinctGreaterThanNullsFirst(sort_chunk.data[i], boundary_values.data[i], &remaining_sel, remaining_count, &true_sel, &false_sel);
+			}
+		} else {
+			D_ASSERT(orders[i].null_order == OrderByNullType::NULLS_FIRST);
+			if (orders[i].type == OrderType::ASCENDING) {
+				true_count = VectorOperations::DistinctLessThanNullsFirst(sort_chunk.data[i], boundary_values.data[i], &remaining_sel, remaining_count, &true_sel, &false_sel);
+			} else {
+				true_count = VectorOperations::DistinctGreaterThan(sort_chunk.data[i], boundary_values.data[i], &remaining_sel, remaining_count, &true_sel, &false_sel);
+			}
+		}
+
+		if (true_count > 0) {
+			memcpy(final_sel.data() + final_count, true_sel.data(), true_count * sizeof(sel_t));
+			final_count += true_count;
+		}
+		idx_t false_count = remaining_count - true_count;
+		if (false_count > 0 && !is_last) {
+			// check what we should continue to check
+			remaining_count = VectorOperations::NotDistinctFrom(sort_chunk.data[i], boundary_values.data[i], &false_sel, false_count, &new_remaining_sel, nullptr);
+			remaining_sel.Initialize(new_remaining_sel);
+		} else {
+			break;
+		}
+	}
+	if (final_count == 0) {
+		return false;
+	}
+	if (final_count < sort_chunk.size()) {
+		sort_chunk.Slice(final_sel, final_count);
+		payload.Slice(final_sel, final_count);
+	}
+	return true;
 }
 
 void TopNHeap::InitializeScan(TopNScanState &state, bool exclude_offset) {
@@ -251,7 +347,6 @@ void TopNHeap::InitializeScan(TopNScanState &state, bool exclude_offset) {
 void TopNHeap::Scan(TopNScanState &state, DataChunk &chunk) {
 	sort_state.Scan(state, chunk);
 }
-
 
 class TopNGlobalState : public GlobalOperatorState {
 public:

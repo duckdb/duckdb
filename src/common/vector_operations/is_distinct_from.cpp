@@ -810,6 +810,13 @@ idx_t VectorOperations::DistinctGreaterThan(Vector &left, Vector &right, const S
 	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan, true>(left, right, count, sel, count, true_sel,
 	                                                                           false_sel);
 }
+
+// true := A > B with nulls being minimal
+idx_t VectorOperations::DistinctGreaterThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                            SelectionVector *true_sel, SelectionVector *false_sel) {
+	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst, true>(left, right, count, sel, count, true_sel,
+	                                                                           false_sel);
+}
 // true := A >= B with nulls being maximal
 idx_t VectorOperations::DistinctGreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                   SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -822,6 +829,14 @@ idx_t VectorOperations::DistinctLessThan(Vector &left, Vector &right, const Sele
 	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThan, true>(left, right, count, sel, count, true_sel,
 	                                                                        false_sel);
 }
+
+// true := A < B with nulls being minimal
+idx_t VectorOperations::DistinctLessThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                         SelectionVector *true_sel, SelectionVector *false_sel) {
+	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThanNullsFirst, true>(left, right, count, sel, count, true_sel,
+	                                                                        false_sel);
+}
+
 // true := A <= B with nulls being maximal
 idx_t VectorOperations::DistinctLessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                SelectionVector *true_sel, SelectionVector *false_sel) {
