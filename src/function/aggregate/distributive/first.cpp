@@ -192,17 +192,21 @@ static AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
 	return agg;
 }
 
+template <bool LAST>
+static AggregateFunction GetFirstFunction(const LogicalType &type);
+
+template <bool LAST>
 AggregateFunction GetDecimalFirstFunction(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	switch (type.InternalType()) {
 	case PhysicalType::INT16:
-		return FirstFun::GetFunction(LogicalType::SMALLINT);
+		return GetFirstFunction<LAST>(LogicalType::SMALLINT);
 	case PhysicalType::INT32:
-		return FirstFun::GetFunction(LogicalType::INTEGER);
+		return GetFirstFunction<LAST>(LogicalType::INTEGER);
 	case PhysicalType::INT64:
-		return FirstFun::GetFunction(LogicalType::BIGINT);
+		return GetFirstFunction<LAST>(LogicalType::BIGINT);
 	default:
-		return FirstFun::GetFunction(LogicalType::HUGEINT);
+		return GetFirstFunction<LAST>(LogicalType::HUGEINT);
 	}
 }
 
@@ -247,7 +251,7 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 	}
 	case LogicalTypeId::DECIMAL: {
 		type.Verify();
-		AggregateFunction function = GetDecimalFirstFunction(type);
+		AggregateFunction function = GetDecimalFirstFunction<LAST>(type);
 		function.arguments[0] = type;
 		function.return_type = type;
 		return function;
@@ -272,6 +276,7 @@ unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunct
                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
 	function = GetFirstFunction<LAST>(decimal_type);
+	function.return_type = decimal_type;
 	return nullptr;
 }
 
@@ -281,9 +286,9 @@ void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                    BindDecimalFirst<false>));
+			                                    BindDecimalFirst<false>, nullptr, nullptr, nullptr, true));
 			last.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                   BindDecimalFirst<true>));
+			                                   BindDecimalFirst<true>, nullptr, nullptr, nullptr, true));
 		} else {
 			first.AddFunction(GetFirstFunction<false>(type));
 			last.AddFunction(GetFirstFunction<true>(type));
