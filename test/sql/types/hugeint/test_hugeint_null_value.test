@@ -16,10 +16,10 @@ CREATE TABLE hugeints(id INTEGER, h HUGEINT)
 statement ok
 INSERT INTO hugeints VALUES (1, NULL), (1, 1), (1, 2)
 
-query II
-SELECT id, FIRST(h) FROM hugeints WHERE h IS NULL GROUP BY id
+query III
+SELECT id, FIRST(h), LAST(h) FROM hugeints WHERE h IS NULL GROUP BY id
 ----
-1	NULL
+1	NULL	NULL
 
 query II
 SELECT h, SUM(id) FROM hugeints GROUP BY h ORDER BY 1
