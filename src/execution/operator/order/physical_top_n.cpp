@@ -23,7 +23,7 @@ struct TopNScanState {
 
 class TopNSortState {
 public:
-	TopNSortState(TopNHeap &heap);
+	explicit TopNSortState(TopNHeap &heap);
 
 	TopNHeap &heap;
 	unique_ptr<LocalSortState> local_state;
