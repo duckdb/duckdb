@@ -826,7 +826,7 @@ DUCKDB_API duckdb_state duckdb_appender_create(duckdb_connection connection, con
 Returns the error message associated with the given appender.
 If the appender has no error message, this returns `nullptr` instead.
 
-The error message should be freed using `duckdb_free`.
+The error message should not be freed. It will be de-allocated when `duckdb_appender_destroy` is called.
 
 * appender: The appender to get the error from.
 * returns: The error message, or `nullptr` if there is none.
@@ -1031,7 +1031,7 @@ DUCKDB_API idx_t duckdb_arrow_rows_changed(duckdb_arrow result);
 Returns the error message contained within the result. The error is only set if `duckdb_query_arrow` returns
 `DuckDBError`.
 
-The result should be freed using `duckdb_free`.
+The error message should not be freed. It will be de-allocated when `duckdb_destroy_arrow` is called.
 
 * result: The result object to fetch the nullmask from.
 * returns: The error of the result.
