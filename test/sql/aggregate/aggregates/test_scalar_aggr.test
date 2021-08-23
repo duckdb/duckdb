@@ -3,9 +3,10 @@
 # group: [aggregates]
 
 # test aggregate on scalar values
-query IIIIIT
-SELECT COUNT(1), MIN(1), FIRST(1), MAX(1), SUM(1), STRING_AGG('hello', ',')
+query IIIIIIT
+SELECT COUNT(1), MIN(1), FIRST(1), LAST(1),MAX(1), SUM(1), STRING_AGG('hello', ',')
 ----
+1
 1
 1
 1
@@ -14,10 +15,11 @@ SELECT COUNT(1), MIN(1), FIRST(1), MAX(1), SUM(1), STRING_AGG('hello', ',')
 hello
 
 # test aggregate on scalar NULLs
-query IIIIIT
-SELECT COUNT(NULL), MIN(NULL), FIRST(NULL), MAX(NULL), SUM(NULL), STRING_AGG(NULL, NULL)
+query IIIIIIT
+SELECT COUNT(NULL), MIN(NULL), FIRST(NULL), LAST(NULL), MAX(NULL), SUM(NULL), STRING_AGG(NULL, NULL)
 ----
 0
+NULL
 NULL
 NULL
 NULL
@@ -26,6 +28,11 @@ NULL
 
 query I
 SELECT FIRST(NULL)
+----
+NULL
+
+query I
+SELECT LAST(NULL)
 ----
 NULL
 
@@ -42,10 +49,11 @@ CREATE TABLE integers(i INTEGER);
 statement ok
 INSERT INTO integers VALUES (1), (2), (NULL)
 
-query IIIIIT
-SELECT COUNT(1), MIN(1), FIRST(1), MAX(1), SUM(1), STRING_AGG('hello', ',') FROM integers
+query IIIIIIT
+SELECT COUNT(1), MIN(1), FIRST(1), LAST(1), MAX(1), SUM(1), STRING_AGG('hello', ',') FROM integers
 ----
 3
+1
 1
 1
 1
@@ -53,10 +61,11 @@ SELECT COUNT(1), MIN(1), FIRST(1), MAX(1), SUM(1), STRING_AGG('hello', ',') FROM
 hello,hello,hello
 
 # test aggregates on a set of values with scalar NULL values as inputs
-query IIIIIT
-SELECT COUNT(NULL), MIN(NULL), FIRST(NULL), MAX(NULL), SUM(NULL), STRING_AGG(NULL, NULL) FROM integers
+query IIIIIIT
+SELECT COUNT(NULL), MIN(NULL), FIRST(NULL), LAST(NULL), MAX(NULL), SUM(NULL), STRING_AGG(NULL, NULL) FROM integers
 ----
 0
+NULL
 NULL
 NULL
 NULL
