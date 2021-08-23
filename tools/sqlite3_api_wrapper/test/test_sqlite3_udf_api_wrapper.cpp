@@ -145,6 +145,9 @@ TEST_CASE("SQLite UDF wrapper: text and blob values", "[sqlite3wrapper]") {
 	REQUIRE(sqlite3_create_function(db_w.db, "check_text", 1, 0, nullptr, &check_text, nullptr, nullptr) == SQLITE_OK);
 	// create function check_blob
 	REQUIRE(sqlite3_create_function(db_w.db, "check_blob", 1, 0, nullptr, &check_blob, nullptr, nullptr) == SQLITE_OK);
+	// create function check_null-terminated_string
+	REQUIRE(sqlite3_create_function(db_w.db, "check_null_terminated_string", 1, 0, nullptr,
+	                                &check_null_terminated_string, nullptr, nullptr) == SQLITE_OK);
 
 	// TEXT
 	REQUIRE(db_w.Execute("SELECT check_text('XXXX'::VARCHAR)"));
@@ -153,6 +156,10 @@ TEST_CASE("SQLite UDF wrapper: text and blob values", "[sqlite3wrapper]") {
 	// BLOB
 	REQUIRE(db_w.Execute("SELECT check_blob('XXXX'::BLOB)"));
 	REQUIRE(db_w.CheckColumn(0, {"BBBB"}));
+
+	// check_null_terminated_string
+	REQUIRE(db_w.Execute("SELECT check_null_terminated_string('Hello world')"));
+	REQUIRE(db_w.CheckColumn(0, {"Hello world"}));
 }
 
 TEST_CASE("SQLite UDF wrapper: check type", "[sqlite3wrapper]") {

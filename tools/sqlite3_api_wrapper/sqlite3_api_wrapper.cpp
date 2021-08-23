@@ -1482,8 +1482,7 @@ SQLITE_API void sqlite3_result_text(sqlite3_context *context, const char *str_c,
 	}
 	context->result.type = SQLiteTypeValue::TEXT;
 	context->result.n = n_chars;
-	string_t str = string_t(str_c, n_chars);
-	context->result.str_t = str;
+	context->result.str_t = string_t(str_c, n_chars);
 }
 
 SQLITE_API void sqlite3_result_text64(sqlite3_context *, const char *, sqlite3_uint64, void (*)(void *),
@@ -1588,9 +1587,17 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 	}
 
 	if (pVal->type == SQLiteTypeValue::TEXT || pVal->type == SQLiteTypeValue::BLOB) {
-		// We need don't need to append \0 at the end of string
-		// To know the number of chars or bytes, call function sqlite3_value_bytes()
-		return (const unsigned char *)pVal->str_t.GetDataUnsafe();
+		auto length = pVal->str_t.GetSize();
+		// new string including space for the null-terminated char ('\0')
+		pVal->zMalloc = (char *)malloc(sizeof(char) * length + 1);
+		if (!pVal->zMalloc) {
+			pVal->db->errCode = SQLITE_NOMEM;
+			return nullptr;
+		}
+		pVal->szMalloc = length + 1;
+		memcpy(pVal->zMalloc, pVal->str_t.GetDataUnsafe(), length);
+		pVal->zMalloc[length] = '\0';
+		return (const unsigned char *)pVal->zMalloc;
 	}
 
 	if (pVal->type == SQLiteTypeValue::INTEGER || pVal->type == SQLiteTypeValue::FLOAT) {
