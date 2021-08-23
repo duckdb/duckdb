@@ -61,14 +61,13 @@ static void check_text(sqlite3_context *context, int argc, sqlite3_value **argv)
 static void check_null_terminated_string(sqlite3_context *context, int argc, sqlite3_value **argv) {
 	assert(argc == 1);
 	char *str = (char *)sqlite3_value_text(argv[0]);
-	size_t val_len = sqlite3_value_bytes(argv[0]);
 
 	// strlen expects a null-terminated string
 	// otherwise, the result is undefined, it's likely to happen a 'heap-buffer-overflow'
 	size_t str_len = strlen(str);
 
 	// both length must be equal
-	assert(val_len == str_len);
+	assert(str_len == (size_t)sqlite3_value_bytes(argv[0]));
 
 	sqlite3_result_text(context, str, str_len, nullptr);
 }
