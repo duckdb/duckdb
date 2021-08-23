@@ -1,0 +1,158 @@
+# group: [aggregates]
+# name: test/sql/aggregate/aggregates/test_last.test
+# description: Test the LAST function
+# GROUP: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+#
+# Test all types
+#
+
+# Numerics
+foreach type <numeric>
+
+statement ok
+CREATE TABLE five AS SELECT i::${type} AS i FROM range(1, 6, 1) t1(i)
+
+query I
+SELECT LAST(i) FROM five
+----
+5
+
+query II
+SELECT i % 3 AS g, LAST(i) FROM five GROUP BY 1 ORDER BY 1
+----
+0	3
+1	4
+2	5
+
+query I
+SELECT LAST(i ORDER BY 5-i) FROM five
+----
+1
+
+query II
+SELECT i % 3 AS g, LAST(i ORDER BY 5-i) FROM five GROUP BY 1 ORDER BY 1
+----
+0	3
+1	1
+2	2
+
+statement ok
+DROP TABLE five
+
+endloop
+
+# Decimals
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+
+statement ok
+CREATE TABLE five AS SELECT i::${type} AS i FROM range(1, 6, 1) t1(i)
+
+query I
+SELECT LAST(i ORDER BY 5-i) FROM five
+----
+1.0
+
+query II
+SELECT i::INTEGER % 3 AS g, LAST(i ORDER BY 5-i) FROM five GROUP BY 1 ORDER BY 1
+----
+0	3.0
+1	1.0
+2	2.0
+
+statement ok
+DROP TABLE five
+
+endloop
+
+# Temporal
+statement ok
+CREATE TABLE five_dates AS
+	SELECT
+		i::integer AS i,
+		'2021-08-20'::DATE + i::INTEGER AS d,
+		'2021-08-20'::TIMESTAMP + INTERVAL (i) HOUR AS dt,
+		'14:59:37'::TIME + INTERVAL (i) MINUTE AS t,
+		INTERVAL (i) SECOND AS s
+	FROM range(1, 6, 1) t1(i)
+
+query IIII
+SELECT LAST(d), LAST(dt), LAST(t), LAST(s) FROM five_dates
+----
+2021-08-25	2021-08-20 05:00:00	15:04:37	00:00:05
+
+query IIIII
+SELECT i % 3 AS g, LAST(d), LAST(dt), LAST(t), LAST(s)
+FROM five_dates
+GROUP BY 1
+ORDER BY 1
+----
+0	2021-08-23	2021-08-20 03:00:00	15:02:37	00:00:03
+1	2021-08-24	2021-08-20 04:00:00	15:03:37	00:00:04
+2	2021-08-25	2021-08-20 05:00:00	15:04:37	00:00:05
+
+query IIII
+SELECT LAST(d ORDER BY 5-i), LAST(dt ORDER BY 5-i), LAST(t ORDER BY 5-i), LAST(s ORDER BY 5-i) FROM five_dates
+----
+2021-08-21	2021-08-20 01:00:00	15:00:37	00:00:01
+
+query IIIII
+SELECT i % 3 AS g, LAST(d ORDER BY 5-i), LAST(dt ORDER BY 5-i), LAST(t ORDER BY 5-i), LAST(s ORDER BY 5-i)
+FROM five_dates
+GROUP BY 1
+ORDER BY 1
+----
+0	2021-08-23	2021-08-20 03:00:00	15:02:37	00:00:03
+1	2021-08-21	2021-08-20 01:00:00	15:00:37	00:00:01
+2	2021-08-22	2021-08-20 02:00:00	15:01:37	00:00:02
+
+statement ok
+DROP TABLE five_dates
+
+# Complex
+statement ok
+CREATE TABLE five_complex AS
+	SELECT
+		i::integer AS i,
+		i::VARCHAR AS s,
+		[i] AS l,
+		{'a': i} AS r
+	FROM range(1, 6, 1) t1(i)
+
+query III
+SELECT LAST(s), LAST(l), LAST(r)
+FROM five_complex
+----
+5	[5]	{'a': 5}
+
+query IIII
+SELECT i % 3 AS g, LAST(s), LAST(l), LAST(r)
+FROM five_complex
+GROUP BY 1
+ORDER BY 1
+----
+0	3	[3]	{'a': 3}
+1	4	[4]	{'a': 4}
+2	5	[5]	{'a': 5}
+
+query III
+SELECT LAST(s ORDER BY 5-i), LAST(l ORDER BY 5-i), LAST(r ORDER BY 5-i)
+FROM five_complex
+----
+1	[1]	{'a': 1}
+
+query IIII
+SELECT i % 3 AS g, LAST(s ORDER BY 5-i), LAST(l ORDER BY 5-i), LAST(r ORDER BY 5-i)
+FROM five_complex
+GROUP BY 1
+ORDER BY 1
+----
+0	3	[3]	{'a': 3}
+1	1	[1]	{'a': 1}
+2	2	[2]	{'a': 2}
+
+statement ok
+DROP TABLE five_complex

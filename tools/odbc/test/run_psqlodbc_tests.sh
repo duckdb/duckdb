@@ -17,7 +17,7 @@ if [[ $? != 0 ]]; then
 fi
 
 # running supported tests
-./build/debug/psql_odbc_test -f ${BASE_DUCKDB_DIR}/tools/odbc/supported_tests
+./build/debug/psql_odbc_test -f ${BASE_DUCKDB_DIR}/tools/odbc/test/psql_supported_tests
 if [[ $? != 0 ]]; then
     cat /tmp/odbctrace
     exit 1

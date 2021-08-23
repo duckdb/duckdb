@@ -67,7 +67,7 @@ idx_t duckdb_arrow_rows_changed(duckdb_arrow result) {
 
 const char *duckdb_query_arrow_error(duckdb_arrow result) {
 	auto wrapper = (ArrowResultWrapper *)result;
-	return strdup(wrapper->result->error.c_str());
+	return wrapper->result->error.c_str();
 }
 
 void duckdb_destroy_arrow(duckdb_arrow *result) {

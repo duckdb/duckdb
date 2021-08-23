@@ -76,7 +76,7 @@ const char *duckdb_appender_error(duckdb_appender appender) {
 	if (wrapper->error.empty()) {
 		return nullptr;
 	}
-	return strdup(wrapper->error.c_str());
+	return wrapper->error.c_str();
 }
 
 duckdb_state duckdb_appender_begin_row(duckdb_appender appender) {
