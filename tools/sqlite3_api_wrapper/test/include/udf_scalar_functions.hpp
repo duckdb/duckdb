@@ -69,6 +69,11 @@ static void check_null_terminated_string(sqlite3_context *context, int argc, sql
 	// both length must be equal
 	assert(str_len == (size_t)sqlite3_value_bytes(argv[0]));
 
+	// calling sqlite3_value_text multiple times,  i.e., 5x
+	for (size_t i = 0; i < 5; ++i) {
+		char *str2 = (char *)sqlite3_value_text(argv[0]);
+		assert(str == str2);
+	}
 	sqlite3_result_text(context, str, str_len, nullptr);
 }
 
