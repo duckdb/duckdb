@@ -69,11 +69,6 @@ static void check_null_terminated_string(sqlite3_context *context, int argc, sql
 	// both length must be equal
 	assert(str_len == (size_t)sqlite3_value_bytes(argv[0]));
 
-	// calling sqlite3_value_text multiple times,  i.e., 5x
-	for (size_t i = 0; i < 5; ++i) {
-		char *str2 = (char *)sqlite3_value_text(argv[0]);
-		assert(str == str2);
-	}
 	sqlite3_result_text(context, str, str_len, nullptr);
 }
 
@@ -214,4 +209,23 @@ static void sum_overload_function(sqlite3_context *context, int argc, sqlite3_va
 	}
 
 	sqlite3_result_int(context, value1 + value2 + value3);
+}
+
+// calling sqlite3_value_text() multiple times
+static void calling_value_text_multiple_times(sqlite3_context *context, int argc, sqlite3_value **argv) {
+	assert(sqlite3_value_type(argv[0]) == SQLITE_INTEGER || sqlite3_value_type(argv[0]) == SQLITE_FLOAT ||
+	       sqlite3_value_type(argv[0]) == SQLITE_TEXT);
+	char *str = (char *)sqlite3_value_text(argv[0]);
+	assert(sqlite3_value_type(argv[0]) == SQLITE_TEXT);
+	auto len = strlen(str);
+
+	// calling sqlite3_value_text multiple times,  i.e., 10x
+	for (size_t i = 0; i < 10; ++i) {
+		char *str2 = (char *)sqlite3_value_text(argv[0]);
+		assert(str == str2);
+		auto len2 = strlen(str2);
+		assert(len == len2);
+	}
+	len = sqlite3_value_bytes(argv[0]);
+	sqlite3_result_text(context, str, len, nullptr);
 }

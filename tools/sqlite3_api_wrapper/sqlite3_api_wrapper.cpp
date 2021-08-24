@@ -1585,12 +1585,12 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 		pVal->db->errCode = SQLITE_MISUSE;
 		return nullptr;
 	}
+	// check if the string has already been allocated
+	if (pVal->szMalloc > 0) {
+		return (const unsigned char *)pVal->zMalloc;
+	}
 
 	if (pVal->type == SQLiteTypeValue::TEXT || pVal->type == SQLiteTypeValue::BLOB) {
-		// check if the string has already been allocated
-		if (pVal->szMalloc > 0) {
-			return (const unsigned char *)pVal->zMalloc;
-		}
 		auto length = pVal->str_t.GetSize();
 		// new string including space for the null-terminated char ('\0')
 		pVal->zMalloc = (char *)malloc(sizeof(char) * length + 1);
@@ -1610,17 +1610,19 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 			pVal->db->errCode = SQLITE_NOMEM;
 			return nullptr;
 		}
-		pVal->zMalloc = (char *)malloc(sizeof(char) * value.str_value.size());
+		size_t str_len = value.str_value.size();
+		pVal->zMalloc = (char *)malloc(sizeof(char) * (str_len + 1));
 		if (!pVal->zMalloc) {
 			pVal->db->errCode = SQLITE_NOMEM;
 			return nullptr;
 		}
-		pVal->szMalloc = value.str_value.size();
+		pVal->szMalloc = str_len + 1; // +1 null-terminated char
 		memcpy(pVal->zMalloc, value.str_value.c_str(), pVal->szMalloc);
-		pVal->str_t = string_t(pVal->zMalloc, pVal->szMalloc);
+
+		pVal->str_t = string_t(pVal->zMalloc, pVal->szMalloc - 1); // -1 null-terminated char
 		pVal->n = pVal->str_t.GetSize();
 		pVal->type = SQLiteTypeValue::TEXT;
-		return (const unsigned char *)pVal->str_t.GetDataUnsafe();
+		return (const unsigned char *)pVal->zMalloc;
 	}
 	if (pVal->type == SQLiteTypeValue::NULL_VALUE) {
 		return nullptr;

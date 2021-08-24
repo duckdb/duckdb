@@ -356,3 +356,26 @@ TEST_CASE("SQLite UDF wrapper: overload function", "[sqlite3wrapper]") {
 	REQUIRE(db_w.Execute("SELECT sum_overload_function(i, j, k) FROM tbl"));
 	REQUIRE(db_w.CheckColumn(0, {"6", "6"}));
 }
+
+TEST_CASE("SQLite UDF wrapper: calling sqlite3_value_text() multiple times", "[sqlite3wrapper]") {
+	SQLiteDBWrapper db_w;
+
+	// open an in-memory db
+	REQUIRE(db_w.Open(":memory:"));
+
+	int argc = 1;
+	REQUIRE(sqlite3_create_function(db_w.db, "calling_value_text_multiple_times", argc, 0, nullptr,
+	                                &calling_value_text_multiple_times, nullptr, nullptr) == SQLITE_OK);
+
+	// testing with integer
+	REQUIRE(db_w.Execute("SELECT calling_value_text_multiple_times(9999::INTEGER)"));
+	REQUIRE(db_w.CheckColumn(0, {"9999"}));
+
+	// testing with float
+	REQUIRE(db_w.Execute("SELECT calling_value_text_multiple_times(9999.0::FLOAT)"));
+	REQUIRE(db_w.CheckColumn(0, {"9999.0"}));
+
+	// testing with string
+	REQUIRE(db_w.Execute("SELECT calling_value_text_multiple_times('Hello world'::TEXT)"));
+	REQUIRE(db_w.CheckColumn(0, {"Hello world"}));
+}
