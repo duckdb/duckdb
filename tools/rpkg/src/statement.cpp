@@ -136,7 +136,7 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 	return retlist;
 }
 
-SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp) {
+SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp) {
 	if (TYPEOF(stmtsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_bind_R: Need external pointer parameter");
 	}
@@ -150,22 +150,47 @@ SEXP RApi::Bind(SEXP stmtsexp, SEXP paramsexp) {
 
 	if (stmtholder->stmt->n_param == 0) {
 		Rf_error("duckdb_bind_R: dbBind called but query takes no parameters");
-		return R_NilValue;
 	}
 
 	if (TYPEOF(paramsexp) != VECSXP || (idx_t)Rf_length(paramsexp) != stmtholder->stmt->n_param) {
 		Rf_error("duckdb_bind_R: bind parameters need to be a list of length %i", stmtholder->stmt->n_param);
 	}
 
-	for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
-		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
-		if (Rf_length(valsexp) != 1) {
-			Rf_error("duckdb_bind_R: bind parameter values need to have length 1");
-		}
-		auto val = RApiTypes::SexpToValue(valsexp);
-		stmtholder->parameters[param_idx] = val;
+	if (TYPEOF(arrowsexp) != LGLSXP) {
+		Rf_error("duckdb_bind_R: Need logical for third parameter");
 	}
-	return R_NilValue;
+
+	bool arrow_fetch = LOGICAL_POINTER(arrowsexp)[0] != 0;
+
+	R_len_t n_rows = Rf_length(VECTOR_ELT(paramsexp, 0));
+
+	for (idx_t param_idx = 1; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
+		SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
+		if (Rf_length(valsexp) != n_rows) {
+			Rf_error("duckdb_bind_R: bind parameter values need to have the same length");
+		}
+	}
+
+	if (n_rows != 1 && arrow_fetch) {
+		Rf_error("duckdb_bind_R: bind parameter values need to have length one for arrow queries");
+	}
+
+	RProtector r;
+	auto out = r.Protect(NEW_LIST(n_rows));
+
+	for (idx_t row_idx = 0; row_idx < n_rows; ++row_idx) {
+		for (idx_t param_idx = 0; param_idx < (idx_t)Rf_length(paramsexp); param_idx++) {
+			SEXP valsexp = VECTOR_ELT(paramsexp, param_idx);
+			auto val = RApiTypes::SexpToValue(valsexp, row_idx);
+			stmtholder->parameters[param_idx] = val;
+		}
+
+		// No protection, assigned immediately
+		auto exec_result = RApi::Execute(stmtsexp, arrowsexp);
+		SET_VECTOR_ELT(out, row_idx, exec_result);
+	}
+
+	return out;
 }
 
 static SEXP duckdb_execute_R_impl(MaterializedQueryResult *result) {

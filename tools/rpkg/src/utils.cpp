@@ -87,36 +87,40 @@ static void AppendColumnSegment(SRC *source_data, Vector &result, idx_t count) {
 	}
 }
 
-Value RApiTypes::SexpToValue(SEXP valsexp) {
+Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 	Value val;
 	auto rtype = RApiTypes::DetectRType(valsexp);
 	switch (rtype) {
 	case RType::LOGICAL: {
-		auto lgl_val = INTEGER_POINTER(valsexp)[0];
+		auto lgl_val = INTEGER_POINTER(valsexp)[idx];
 		val = Value::BOOLEAN(lgl_val);
 		val.is_null = RBooleanType::IsNull(lgl_val);
 		break;
 	}
 	case RType::INTEGER: {
-		auto int_val = INTEGER_POINTER(valsexp)[0];
+		auto int_val = INTEGER_POINTER(valsexp)[idx];
 		val = Value::INTEGER(int_val);
 		val.is_null = RIntegerType::IsNull(int_val);
 		break;
 	}
 	case RType::NUMERIC: {
-		auto dbl_val = NUMERIC_POINTER(valsexp)[0];
-		val = Value::DOUBLE(dbl_val);
-		val.is_null = RDoubleType::IsNull(dbl_val);
+		auto dbl_val = NUMERIC_POINTER(valsexp)[idx];
+		bool is_null = RDoubleType::IsNull(dbl_val);
+		if (is_null) {
+			val = Value(LogicalType::DOUBLE);
+		} else {
+			val = Value::DOUBLE(dbl_val);
+		}
 		break;
 	}
 	case RType::STRING: {
-		auto str_val = STRING_ELT(valsexp, 0);
+		auto str_val = STRING_ELT(valsexp, idx);
 		val = Value(CHAR(str_val));
 		val.is_null = str_val == NA_STRING;
 		break;
 	}
 	case RType::FACTOR: {
-		auto int_val = INTEGER_POINTER(valsexp)[0];
+		auto int_val = INTEGER_POINTER(valsexp)[idx];
 		auto levels = GET_LEVELS(valsexp);
 		bool is_null = RIntegerType::IsNull(int_val);
 		if (!is_null) {
@@ -128,45 +132,85 @@ Value RApiTypes::SexpToValue(SEXP valsexp) {
 		break;
 	}
 	case RType::TIMESTAMP: {
-		auto ts_val = NUMERIC_POINTER(valsexp)[0];
-		val = Value::TIMESTAMP(RTimestampType::Convert(ts_val));
-		val.is_null = RTimestampType::IsNull(ts_val);
+		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
+		bool is_null = RTimestampType::IsNull(ts_val);
+		if (!is_null) {
+			val = Value::TIMESTAMP(RTimestampType::Convert(ts_val));
+		} else {
+			val = Value(LogicalType::TIMESTAMP);
+		}
 		break;
 	}
 	case RType::DATE: {
-		auto d_val = NUMERIC_POINTER(valsexp)[0];
+		auto d_val = NUMERIC_POINTER(valsexp)[idx];
 		val = Value::DATE(RDateType::Convert(d_val));
 		val.is_null = RDateType::IsNull(d_val);
 		break;
 	}
+	case RType::DATE_INTEGER: {
+		auto d_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::DATE(RDateType::Convert(d_val));
+		val.is_null = RIntegerType::IsNull(d_val);
+		break;
+	}
 	case RType::TIME_SECONDS: {
-		auto ts_val = NUMERIC_POINTER(valsexp)[0];
+		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
 		val = Value::TIME(RTimeSecondsType::Convert(ts_val));
 		val.is_null = RTimeSecondsType::IsNull(ts_val);
 		break;
 	}
 	case RType::TIME_MINUTES: {
-		auto ts_val = NUMERIC_POINTER(valsexp)[0];
+		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
 		val = Value::TIME(RTimeMinutesType::Convert(ts_val));
 		val.is_null = RTimeMinutesType::IsNull(ts_val);
 		break;
 	}
 	case RType::TIME_HOURS: {
-		auto ts_val = NUMERIC_POINTER(valsexp)[0];
+		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
 		val = Value::TIME(RTimeHoursType::Convert(ts_val));
 		val.is_null = RTimeHoursType::IsNull(ts_val);
 		break;
 	}
 	case RType::TIME_DAYS: {
-		auto ts_val = NUMERIC_POINTER(valsexp)[0];
+		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
 		val = Value::TIME(RTimeDaysType::Convert(ts_val));
 		val.is_null = RTimeDaysType::IsNull(ts_val);
 		break;
 	}
 	case RType::TIME_WEEKS: {
-		auto ts_val = NUMERIC_POINTER(valsexp)[0];
+		auto ts_val = NUMERIC_POINTER(valsexp)[idx];
 		val = Value::TIME(RTimeWeeksType::Convert(ts_val));
 		val.is_null = RTimeWeeksType::IsNull(ts_val);
+		break;
+	}
+	case RType::TIME_SECONDS_INTEGER: {
+		auto ts_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::TIME(RTimeSecondsType::Convert(ts_val));
+		val.is_null = RIntegerType::IsNull(ts_val);
+		break;
+	}
+	case RType::TIME_MINUTES_INTEGER: {
+		auto ts_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::TIME(RTimeMinutesType::Convert(ts_val));
+		val.is_null = RIntegerType::IsNull(ts_val);
+		break;
+	}
+	case RType::TIME_HOURS_INTEGER: {
+		auto ts_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::TIME(RTimeHoursType::Convert(ts_val));
+		val.is_null = RIntegerType::IsNull(ts_val);
+		break;
+	}
+	case RType::TIME_DAYS_INTEGER: {
+		auto ts_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::TIME(RTimeDaysType::Convert(ts_val));
+		val.is_null = RIntegerType::IsNull(ts_val);
+		break;
+	}
+	case RType::TIME_WEEKS_INTEGER: {
+		auto ts_val = INTEGER_POINTER(valsexp)[idx];
+		val = Value::TIME(RTimeWeeksType::Convert(ts_val));
+		val.is_null = RIntegerType::IsNull(ts_val);
 		break;
 	}
 	default:

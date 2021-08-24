@@ -42,19 +42,31 @@ duckdb_result <- function(connection, stmt_lst, arrow) {
 }
 
 duckdb_execute <- function(res) {
-  if (res@arrow){
-    query <- .Call(duckdb_execute_R, res@stmt_lst$ref, res@arrow)
-    return (query)
-  }
-  res@env$resultset <- .Call(duckdb_execute_R, res@stmt_lst$ref, res@arrow)
+  out <- .Call(duckdb_execute_R, res@stmt_lst$ref, res@arrow)
+  duckdb_post_execute(res, out)
+}
+
+duckdb_post_execute <- function(res, out) {
   if (!res@arrow) {
-      attr(res@env$resultset, "row.names") <-
-        c(NA_integer_, as.integer(-1 * length(res@env$resultset[[1]])))
-      class(res@env$resultset) <- "data.frame"
+    out <- list_to_df(out)
+
+    if (res@stmt_lst$type != "SELECT") {
+      res@env$rows_affected <- sum(as.numeric(out[[1]]))
+    }
+
+    res@env$resultset <- out
   }
-  if (res@stmt_lst$type != "SELECT") {
-    res@env$rows_affected <- as.numeric(res@env$resultset[[1]][1])
+
+  out
+}
+
+list_to_df <- function(x) {
+  if (is.data.frame(x)) {
+    return(x)
   }
+  attr(x, "row.names") <- c(NA_integer_, -length(x[[1]]))
+  class(x) <- "data.frame"
+  x
 }
 
 
@@ -127,6 +139,10 @@ setMethod(
     if (!res@env$open) {
       stop("result set was closed")
     }
+    if (is.null(res@env$resultset)) {
+      stop("Need to call `dbBind()` before `dbFetch()`")
+    }
+
     if (length(n) != 1) {
       stop("need exactly one value in n")
     }
@@ -195,10 +211,14 @@ setMethod(
     if (!res@env$open) {
       stop("result has already been cleared")
     }
-    if (res@stmt_lst$type != "SELECT") {
-      return(TRUE)
+
+    if (is.null(res@env$resultset)) {
+      FALSE
+    } else if (res@stmt_lst$type == "SELECT") {
+      res@env$rows_fetched == nrow(res@env$resultset)
+    } else {
+      TRUE
     }
-    return(res@env$rows_fetched == nrow(res@env$resultset))
   }
 )
 
@@ -271,6 +291,9 @@ setMethod(
     if (!res@env$open) {
       stop("result has already been cleared")
     }
+    if (is.null(res@env$resultset)) {
+      return(NA_integer_)
+    }
     return(res@env$rows_affected)
   }
 )
@@ -287,8 +310,23 @@ setMethod(
     res@env$rows_fetched <- 0
     res@env$resultset <- data.frame()
 
-    invisible(.Call(duckdb_bind_R, res@stmt_lst$ref, params))
-    duckdb_execute(res)
+    params <- as.list(params)
+    if (!is.null(names(params))) {
+      stop("`params` must not be named")
+    }
+
+    params <- encode_values(params)
+
+    out <- .Call(duckdb_bind_R, res@stmt_lst$ref, params, res@arrow)
+    if (length(out) == 1) {
+      out <- out[[1]]
+    } else if (length(out) == 0) {
+      out <- data.frame()
+    } else {
+      out <- do.call(rbind, lapply(out, list_to_df))
+    }
+    duckdb_post_execute(res, out)
+    invisible(res)
   }
 )
 

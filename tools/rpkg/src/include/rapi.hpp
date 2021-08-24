@@ -21,7 +21,7 @@ struct RApi {
 
 	static SEXP Prepare(SEXP connsexp, SEXP querysexp);
 
-	static SEXP Bind(SEXP stmtsexp, SEXP paramsexp);
+	static SEXP Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp);
 
 	static SEXP Execute(SEXP stmtsexp, SEXP arrowsexp);
 

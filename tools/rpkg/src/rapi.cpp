@@ -5,7 +5,7 @@ using namespace duckdb;
 static const R_CallMethodDef R_CallDef[] = {{"duckdb_startup_R", (DL_FUNC)RApi::Startup, 3},
                                             {"duckdb_connect_R", (DL_FUNC)RApi::Connect, 1},
                                             {"duckdb_prepare_R", (DL_FUNC)RApi::Prepare, 2},
-                                            {"duckdb_bind_R", (DL_FUNC)RApi::Bind, 2},
+                                            {"duckdb_bind_R", (DL_FUNC)RApi::Bind, 3},
                                             {"duckdb_execute_R", (DL_FUNC)RApi::Execute, 2},
                                             {"duckdb_fetch_arrow_R", (DL_FUNC)RApi::DuckDBExecuteArrow, 4},
                                             {"duckdb_fetch_record_batch_R", (DL_FUNC)RApi::DuckDBRecordBatchR, 1},
