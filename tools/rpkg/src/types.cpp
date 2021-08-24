@@ -14,7 +14,7 @@ RType RApiTypes::DetectRType(SEXP v) {
 	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "Date")) {
 		return RType::DATE;
 	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "difftime")) {
-		SEXP units = Rf_getAttrib(v, Rf_install("units"));
+		SEXP units = Rf_getAttrib(v, RStrings::get().units_sym);
 		if (TYPEOF(units) != STRSXP) {
 			return RType::UNKNOWN;
 		}

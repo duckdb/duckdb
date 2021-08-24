@@ -41,14 +41,36 @@ RStrings::RStrings() {
 	// allocate strings once
 	RProtector r;
 
-	SEXP out = r.Protect(Rf_allocVector(STRSXP, 5));
-	SET_STRING_ELT(out, 0, secs = Rf_mkChar("secs"));
-	SET_STRING_ELT(out, 1, mins = Rf_mkChar("mins"));
-	SET_STRING_ELT(out, 2, hours = Rf_mkChar("hours"));
-	SET_STRING_ELT(out, 3, days = Rf_mkChar("days"));
-	SET_STRING_ELT(out, 4, weeks = Rf_mkChar("weeks"));
-	R_PreserveObject(out);
-	MARK_NOT_MUTABLE(out);
+	SEXP strings = r.Protect(Rf_allocVector(STRSXP, 5));
+	SET_STRING_ELT(strings, 0, secs = Rf_mkChar("secs"));
+	SET_STRING_ELT(strings, 1, mins = Rf_mkChar("mins"));
+	SET_STRING_ELT(strings, 2, hours = Rf_mkChar("hours"));
+	SET_STRING_ELT(strings, 3, days = Rf_mkChar("days"));
+	SET_STRING_ELT(strings, 4, weeks = Rf_mkChar("weeks"));
+	R_PreserveObject(strings);
+	MARK_NOT_MUTABLE(strings);
+
+	SEXP chars = r.Protect(Rf_allocVector(VECSXP, 7));
+	SET_VECTOR_ELT(chars, 0, UTC_str = Rf_mkString("UTC"));
+	SET_VECTOR_ELT(chars, 1, Date_str = Rf_mkString("Date"));
+	SET_VECTOR_ELT(chars, 2, difftime_str = Rf_mkString("difftime"));
+	SET_VECTOR_ELT(chars, 3, secs_str = Rf_mkString("secs"));
+	SET_VECTOR_ELT(chars, 4, arrow_str = Rf_mkString("arrow"));
+	SET_VECTOR_ELT(chars, 5, POSIXct_POSIXt_str = RApi::StringsToSexp({"POSIXct", "POSIXt"}));
+	SET_VECTOR_ELT(chars, 6,
+	               str_ref_type_names_rtypes_n_param_str =
+	                   RApi::StringsToSexp({"str", "ref", "type", "names", "rtypes", "n_param"}));
+	R_PreserveObject(chars);
+	MARK_NOT_MUTABLE(chars);
+
+	// Symbols don't need to be protected
+	tzone_sym = Rf_install("tzone");
+	units_sym = Rf_install("units");
+	getNamespace_sym = Rf_install("getNamespace");
+	ImportSchema_sym = Rf_install("ImportSchema");
+	ImportRecordBatch_sym = Rf_install("ImportRecordBatch");
+	ImportRecordBatchReader_sym = Rf_install("ImportRecordBatchReader");
+	Table__from_record_batches_sym = Rf_install("Table__from_record_batches");
 }
 
 template <class SRC, class DST, class RTYPE>
@@ -190,12 +212,8 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
 		dest_ptr[0] = (double)Timestamp::GetEpochSeconds(val.value_.timestamp);
 		// some dresssup for R
-		RProtector r_ts;
-		SEXP cl = r_ts.Protect(NEW_STRING(2));
-		SET_STRING_ELT(cl, 0, r_ts.Protect(Rf_mkChar("POSIXct")));
-		SET_STRING_ELT(cl, 1, r_ts.Protect(Rf_mkChar("POSIXt")));
-		SET_CLASS(res, cl);
-		Rf_setAttrib(res, Rf_install("tzone"), r_ts.Protect(Rf_mkString("UTC")));
+		SET_CLASS(res, RStrings::get().POSIXct_POSIXt_str);
+		Rf_setAttrib(res, RStrings::get().tzone_sym, RStrings::get().UTC_str);
 		return res;
 	}
 
@@ -204,8 +222,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 		double *dest_ptr = ((double *)NUMERIC_POINTER(res));
 		dest_ptr[0] = (double)int32_t(val.value_.date);
 		// some dresssup for R
-		RProtector r_date;
-		SET_CLASS(res, r_date.Protect(Rf_mkString("Date")));
+		SET_CLASS(res, RStrings::get().Date_str);
 		return res;
 	}
 
