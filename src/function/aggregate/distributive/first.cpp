@@ -120,12 +120,12 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 };
 
-struct FirstStateValue {
-	Value *value;
+struct FirstStateVector {
+	Vector *value;
 };
 
 template <bool LAST>
-struct FirstValueFunction {
+struct FirstVectorFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		state->value = nullptr;
@@ -142,9 +142,14 @@ struct FirstValueFunction {
 	}
 
 	template <class STATE>
-	static void SetValue(STATE *state, const Value &value) {
-		Destroy(state);
-		state->value = new Value(value);
+	static void SetValue(STATE *state, Vector &input, const idx_t idx) {
+		if (!state->value) {
+			state->value = new Vector(input.GetType());
+			state->value->SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+		sel_t selv = idx;
+		SelectionVector sel(&selv);
+		VectorOperations::Copy(input, *state->value, sel, 1, 0, 0);
 	}
 
 	static void Update(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector, idx_t count) {
@@ -152,11 +157,11 @@ struct FirstValueFunction {
 		VectorData sdata;
 		state_vector.Orrify(count, sdata);
 
-		auto states = (FirstStateValue **)sdata.data;
+		auto states = (FirstStateVector **)sdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			auto state = states[sdata.sel->get_index(i)];
 			if (LAST || !state->value) {
-				SetValue(state, input.GetValue(i));
+				SetValue(state, input, i);
 			}
 		}
 	}
@@ -164,16 +169,23 @@ struct FirstValueFunction {
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE *target) {
 		if (source.value && (LAST || !target->value)) {
-			target->value = new Value(*source.value);
+			SetValue(target, *source.value, 0);
 		}
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->value) {
-			mask.SetInvalid(idx);
+			// we need to use FlatVector::SetNull here
+			// since for STRUCT columns only setting the validity mask of the struct is incorrect
+			// as for a struct column, we need to also set ALL child columns to NULL
+			if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				ConstantVector::SetNull(result, true);
+			} else {
+				FlatVector::SetNull(result, idx, true);
+			}
 		} else {
-			result.SetValue(idx, *state->value);
+			VectorOperations::Copy(*state->value, result, 1, 0, idx);
 		}
 	}
 
@@ -257,12 +269,12 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 		return function;
 	}
 	default: {
-		using OP = FirstValueFunction<LAST>;
-		return AggregateFunction({type}, type, AggregateFunction::StateSize<FirstStateValue>,
-		                         AggregateFunction::StateInitialize<FirstStateValue, OP>, OP::Update,
-		                         AggregateFunction::StateCombine<FirstStateValue, OP>,
-		                         AggregateFunction::StateFinalize<FirstStateValue, void, OP>, nullptr, OP::Bind,
-		                         AggregateFunction::StateDestroy<FirstStateValue, OP>, nullptr, nullptr, true);
+		using OP = FirstVectorFunction<LAST>;
+		return AggregateFunction({type}, type, AggregateFunction::StateSize<FirstStateVector>,
+		                         AggregateFunction::StateInitialize<FirstStateVector, OP>, OP::Update,
+		                         AggregateFunction::StateCombine<FirstStateVector, OP>,
+		                         AggregateFunction::StateFinalize<FirstStateVector, void, OP>, nullptr, OP::Bind,
+		                         AggregateFunction::StateDestroy<FirstStateVector, OP>, nullptr, nullptr, true);
 	}
 	}
 }
