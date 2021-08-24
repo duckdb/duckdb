@@ -218,12 +218,13 @@ static void calling_value_text_multiple_times(sqlite3_context *context, int argc
 	char *str = (char *)sqlite3_value_text(argv[0]);
 	assert(sqlite3_value_type(argv[0]) == SQLITE_TEXT);
 	auto len = strlen(str);
-
+	size_t len2;
+	char *str2;
 	// calling sqlite3_value_text multiple times,  i.e., 10x
 	for (size_t i = 0; i < 10; ++i) {
-		char *str2 = (char *)sqlite3_value_text(argv[0]);
+		str2 = (char *)sqlite3_value_text(argv[0]);
 		assert(str == str2);
-		auto len2 = strlen(str2);
+		len2 = strlen(str2);
 		assert(len == len2);
 	}
 	len = sqlite3_value_bytes(argv[0]);
