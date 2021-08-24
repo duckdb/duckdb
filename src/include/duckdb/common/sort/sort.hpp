@@ -19,7 +19,7 @@ struct LocalSortState;
 
 struct SortLayout {
 public:
-	SortLayout(const vector<BoundOrderByNode> &orders, const vector<unique_ptr<BaseStatistics>> &statistics);
+	SortLayout(const vector<BoundOrderByNode> &orders);
 
 public:
 	idx_t column_count;
@@ -42,8 +42,7 @@ public:
 
 struct GlobalSortState {
 public:
-	GlobalSortState(BufferManager &buffer_manager, vector<BoundOrderByNode> &orders,
-	                vector<unique_ptr<BaseStatistics>> &statistics, RowLayout &payload_layout);
+	GlobalSortState(BufferManager &buffer_manager, vector<BoundOrderByNode> &orders, RowLayout &payload_layout);
 
 	//! Add local state sorted data to this global state
 	void AddLocalState(LocalSortState &local_sort_state);

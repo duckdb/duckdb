@@ -27,7 +27,7 @@ static idx_t GetSortingColSize(const LogicalType &type) {
 	}
 }
 
-SortLayout::SortLayout(const vector<BoundOrderByNode> &orders, const vector<unique_ptr<BaseStatistics>> &statistics)
+SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
     : column_count(orders.size()), all_constant(true), comparison_size(0), entry_size(0) {
 	vector<LogicalType> blob_layout_types;
 	for (idx_t i = 0; i < orders.size(); i++) {
@@ -44,8 +44,8 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders, const vector<uniq
 		column_sizes.push_back(0);
 		auto &col_size = column_sizes.back();
 
-		if (!statistics.empty() && statistics[i]) {
-			stats.push_back(statistics[i].get());
+		if (order.stats) {
+			stats.push_back(order.stats.get());
 			has_null.push_back(stats.back()->CanHaveNull());
 		} else {
 			stats.push_back(nullptr);
@@ -97,6 +97,7 @@ void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManage
 }
 
 void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
+	D_ASSERT(sort.size() == payload.size());
 	// Build and serialize sorting data to radix sortable rows
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 	auto handles = radix_sorting_data->Build(sort.size(), data_pointers, nullptr);
@@ -256,8 +257,8 @@ void LocalSortState::ReOrder(GlobalSortState &gstate) {
 }
 
 GlobalSortState::GlobalSortState(BufferManager &buffer_manager, vector<BoundOrderByNode> &orders,
-                                 vector<unique_ptr<BaseStatistics>> &statistics, RowLayout &payload_layout)
-    : buffer_manager(buffer_manager), sort_layout(SortLayout(orders, statistics)), payload_layout(payload_layout),
+                                 RowLayout &payload_layout)
+    : buffer_manager(buffer_manager), sort_layout(SortLayout(orders)), payload_layout(payload_layout),
       block_capacity(0), external(false) {
 }
 

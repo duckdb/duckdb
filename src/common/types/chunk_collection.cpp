@@ -1,11 +1,11 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/assert.hpp"
 
 #include <algorithm>
 #include <cstring>
