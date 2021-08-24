@@ -1587,6 +1587,10 @@ const unsigned char *sqlite3_value_text(sqlite3_value *pVal) {
 	}
 
 	if (pVal->type == SQLiteTypeValue::TEXT || pVal->type == SQLiteTypeValue::BLOB) {
+		// check if the string has already been allocated
+		if (pVal->szMalloc > 0) {
+			return (const unsigned char *)pVal->zMalloc;
+		}
 		auto length = pVal->str_t.GetSize();
 		// new string including space for the null-terminated char ('\0')
 		pVal->zMalloc = (char *)malloc(sizeof(char) * length + 1);
