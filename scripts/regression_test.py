@@ -1,24 +1,20 @@
 # This script runs in the Regression Test CI.
 # We build the current commit and compare it with the Master branch.
 # If there is a diference of 10% in regression on any query the build breaks.
-import subprocess
-import sys
 import os
 import statistics
 import time
-import pip
 
 def install_duck_master():
-     pip.main(['install', 'duckdb', '--pre'])
+    os.system("pip install duckdb --pre")
 
 def uninstall_duck():
-     pip.main(['uninstall', '-y', 'duckdb'])
+    os.system("pip uninstall -y duckdb")
 
 def install_duck_current():
     os.system("BUILD_PYTHON=1 GEN=ninja make release")
 
 def run_tpch_query(duckdb_conn,query_number):
-    import duckdb
     query_result = []
     for i in range(5):
         query = duckdb_conn.execute("select query from tpch_queries() where query_nr="+str(query_number)).fetchone()[0]
