@@ -133,6 +133,10 @@ unittestci:
 	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
+unittestarrow:
+	build/release_expanded/test/unittest "[arrow]"
+
+
 allunit: release_expanded # uses release build because otherwise allunit takes forever
 	build/release_expanded/test/unittest "*"
 
