@@ -331,13 +331,13 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload) {
 		} else {
 			D_ASSERT(orders[i].null_order == OrderByNullType::NULLS_FIRST);
 			if (orders[i].type == OrderType::ASCENDING) {
-				true_count = VectorOperations::DistinctLessThanNullsFirst(compare_chunk.data[i], boundary_values.data[i],
-				                                                          &remaining_sel, remaining_count, &true_sel,
-				                                                          &false_sel);
+				true_count = VectorOperations::DistinctLessThanNullsFirst(compare_chunk.data[i],
+				                                                          boundary_values.data[i], &remaining_sel,
+				                                                          remaining_count, &true_sel, &false_sel);
 			} else {
 				true_count =
-				    VectorOperations::DistinctGreaterThan(compare_chunk.data[i], boundary_values.data[i], &remaining_sel,
-				                                          remaining_count, &true_sel, &false_sel);
+				    VectorOperations::DistinctGreaterThan(compare_chunk.data[i], boundary_values.data[i],
+				                                          &remaining_sel, remaining_count, &true_sel, &false_sel);
 			}
 		}
 
