@@ -42,7 +42,7 @@ public:
 
 struct GlobalSortState {
 public:
-	GlobalSortState(BufferManager &buffer_manager, vector<BoundOrderByNode> &orders, RowLayout &payload_layout);
+	GlobalSortState(BufferManager &buffer_manager, const vector<BoundOrderByNode> &orders, RowLayout &payload_layout);
 
 	//! Add local state sorted data to this global state
 	void AddLocalState(LocalSortState &local_sort_state);

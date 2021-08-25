@@ -93,8 +93,7 @@ void TopNSortState::Initialize() {
 	RowLayout layout;
 	layout.Initialize(heap.payload_types, false);
 	auto &buffer_manager = BufferManager::GetBufferManager(heap.context);
-	vector<unique_ptr<BaseStatistics>> stats;
-	global_state = make_unique<GlobalSortState>(buffer_manager, heap.orders, stats, layout);
+	global_state = make_unique<GlobalSortState>(buffer_manager, heap.orders, layout);
 	local_state = make_unique<LocalSortState>();
 	local_state->Initialize(*global_state, buffer_manager);
 }
