@@ -847,7 +847,7 @@ jobs:
 
     - name: Dependencies
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python-pip
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3-pip
         sudo pip install pyodbc
 
     - name: Install nanodbc
