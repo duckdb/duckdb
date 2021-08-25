@@ -18,6 +18,7 @@ def install_duck_current():
     os.system("BUILD_PYTHON=1 GEN=ninja make release")
 
 def run_tpch_query(duckdb_conn,query_number):
+    import duckdb
     query_result = []
     for i in range(5):
         query = duckdb_conn.execute("select query from tpch_queries() where query_nr="+str(query_number)).fetchone()[0]
