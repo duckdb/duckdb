@@ -346,11 +346,16 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload) {
 			final_count += true_count;
 		}
 		idx_t false_count = remaining_count - true_count;
-		if (false_count > 0 && !is_last) {
+		if (false_count > 0) {
 			// check what we should continue to check
-			remaining_count = VectorOperations::NotDistinctFrom(sort_chunk.data[i], boundary_values.data[i], &false_sel,
-			                                                    false_count, &new_remaining_sel, nullptr);
-			remaining_sel.Initialize(new_remaining_sel);
+			remaining_count = VectorOperations::NotDistinctFrom(compare_chunk.data[i], boundary_values.data[i],
+			                                                    &false_sel, false_count, &new_remaining_sel, nullptr);
+			if (is_last) {
+				memcpy(final_sel.data() + final_count, new_remaining_sel.data(), remaining_count * sizeof(sel_t));
+				final_count += remaining_count;
+			} else {
+				remaining_sel.Initialize(new_remaining_sel);
+			}
 		} else {
 			break;
 		}

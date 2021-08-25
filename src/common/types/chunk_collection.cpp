@@ -393,28 +393,6 @@ void ChunkCollection::Reorder(idx_t order_org[]) {
 	}
 }
 
-template <class TYPE>
-static void TemplatedSetValues(ChunkCollection *src_coll, Vector &tgt_vec, idx_t order[], idx_t col_idx,
-                               idx_t start_offset, idx_t remaining_data) {
-	D_ASSERT(src_coll);
-
-	for (idx_t row_idx = 0; row_idx < remaining_data; row_idx++) {
-		idx_t chunk_idx_src = order[start_offset + row_idx] / STANDARD_VECTOR_SIZE;
-		idx_t vector_idx_src = order[start_offset + row_idx] % STANDARD_VECTOR_SIZE;
-
-		auto &src_chunk = src_coll->GetChunk(chunk_idx_src);
-		Vector &src_vec = src_chunk.data[col_idx];
-		auto source_data = FlatVector::GetData<TYPE>(src_vec);
-		auto target_data = FlatVector::GetData<TYPE>(tgt_vec);
-
-		if (FlatVector::IsNull(src_vec, vector_idx_src)) {
-			FlatVector::SetNull(tgt_vec, row_idx, true);
-		} else {
-			target_data[row_idx] = source_data[vector_idx_src];
-		}
-	}
-}
-
 Value ChunkCollection::GetValue(idx_t column, idx_t index) {
 	return chunks[LocateChunk(index)]->GetValue(column, index % STANDARD_VECTOR_SIZE);
 }
