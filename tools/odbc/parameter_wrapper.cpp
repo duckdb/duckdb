@@ -11,6 +11,7 @@ using duckdb::ParameterWrapper;
 //! ParameterWrapper methods *****************************************
 
 ParameterWrapper::~ParameterWrapper() {
+	Clear();
 }
 
 void ParameterWrapper::Clear() {
