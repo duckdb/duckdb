@@ -846,7 +846,7 @@ jobs:
         python-version: '3.7'
 
     - name: Dependencies
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3-pyodbc
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3 python3-pyodbc
 
     - name: Install nanodbc
       run: |
