@@ -85,7 +85,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
                                      Vector &out) {
 	switch (bind_data.pandas_type) {
 	case PandasType::BOOLEAN:
-		ScanPandasColumn<bool>(numpy_col, count, offset, out, count);
+		ScanPandasColumn<bool>(numpy_col, bind_data.numpy_stride, offset, out, count);
 		break;
 	case PandasType::UTINYINT:
 		ScanPandasNumeric<uint8_t>(bind_data, count, offset, out);

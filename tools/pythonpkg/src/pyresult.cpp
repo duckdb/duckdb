@@ -14,6 +14,7 @@ namespace duckdb {
 
 void DuckDBPyResult::Initialize(py::handle &m) {
 	py::class_<DuckDBPyResult>(m, "DuckDBPyResult")
+	    .def("description", &DuckDBPyResult::Description)
 	    .def("close", &DuckDBPyResult::Close)
 	    .def("fetchone", &DuckDBPyResult::Fetchone)
 	    .def("fetchall", &DuckDBPyResult::Fetchall)
@@ -124,7 +125,7 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 		return std::move(py_struct);
 	}
 	default:
-		throw std::runtime_error("unsupported type: " + type.ToString());
+		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
 }
 
@@ -165,8 +166,10 @@ py::list DuckDBPyResult::Fetchall() {
 	}
 	return res;
 }
-
-py::dict DuckDBPyResult::FetchNumpy(bool stream, idx_t vectors_per_chunk) {
+py::dict DuckDBPyResult::FetchNumpy() {
+	return FetchNumpyInternal();
+}
+py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
 		throw std::runtime_error("result closed");
 	}
@@ -182,21 +185,10 @@ py::dict DuckDBPyResult::FetchNumpy(bool stream, idx_t vectors_per_chunk) {
 	NumpyResultConversion conversion(result->types, initial_capacity);
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = (MaterializedQueryResult &)*result;
-		if (!stream) {
-			for (auto &chunk : materialized.collection.Chunks()) {
-				conversion.Append(*chunk);
-			}
-			materialized.collection.Reset();
-		} else {
-			for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
-				auto chunk = materialized.Fetch();
-				if (!chunk || chunk->size() == 0) {
-					//! finished
-					break;
-				}
-				conversion.Append(*chunk);
-			}
+		for (auto &chunk : materialized.collection.Chunks()) {
+			conversion.Append(*chunk);
 		}
+		materialized.collection.Reset();
 	} else {
 		if (!stream) {
 			while (true) {
@@ -232,11 +224,11 @@ py::dict DuckDBPyResult::FetchNumpy(bool stream, idx_t vectors_per_chunk) {
 }
 
 py::object DuckDBPyResult::FetchDF() {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpy());
+	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal());
 }
 
 py::object DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpy(true, num_of_vectors));
+	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal(true, num_of_vectors));
 }
 
 bool FetchArrowChunk(QueryResult *result, py::list &batches,
@@ -348,7 +340,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 		return py::str("list");
 	}
 	default:
-		throw std::runtime_error("unsupported type: " + type.ToString());
+		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
 }
 

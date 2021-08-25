@@ -62,7 +62,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("unregister", &DuckDBPyConnection::UnregisterPythonObject, "Unregister the view name",
 	         py::arg("view_name"))
 	    .def("register_arrow", &DuckDBPyConnection::RegisterArrow,
-	         "Register the passed Arrow Table for querying with a view", py::arg("view_name"), py::arg("arrow_table"),
+	         "Register the passed Arrow Table for querying with a view", py::arg("view_name"), py::arg("arrow_object"),
 	         py::arg("rows_per_thread") = 1000000)
 	    .def("table", &DuckDBPyConnection::Table, "Create a relation object for the name'd table",
 	         py::arg("table_name"))
@@ -361,7 +361,7 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
-	return result->FetchNumpy();
+	return result->FetchNumpyInternal();
 }
 py::object DuckDBPyConnection::FetchDF() {
 	if (!result) {

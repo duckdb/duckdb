@@ -137,3 +137,35 @@ query II
 explain select count(*) from t where b <=3 and b>=0;
 ----
 physical_plan	<REGEX>:.*b<=3.*
+
+# test time pushdown
+
+statement ok
+CREATE TABLE test_time (a  TIME, b TIME, c TIME)
+
+statement ok
+INSERT INTO  test_time VALUES ('00:01:00','00:01:00','00:01:00'),('00:10:00','00:10:00','00:10:00'),('01:00:00','00:10:00','01:00:00'),(NULL,NULL,NULL)
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II
+EXPLAIN SELECT count(*) from test_time where a ='00:01:00'
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+# test bool pushdown
+
+statement ok
+CREATE TABLE test_bool (i bool, j bool)
+
+statement ok
+INSERT INTO  test_bool VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+query II
+EXPLAIN SELECT i FROM test_bool where j = TRUE
+----
+logical_opt	<!REGEX>:.*FILTER.*

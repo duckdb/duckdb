@@ -1,10 +1,12 @@
 import duckdb
 import os
 import sys
+import pytest
 import tempfile
 try:
     import pyarrow as pa
     import pyarrow.parquet as pq
+    import pyarrow.dataset as ds
     import numpy as np
     import pandas as pd
     can_run = True
@@ -53,14 +55,17 @@ class TestArrowFilterPushdown(object):
             numeric_operators(data_type)
 
 # ArrowNotImplementedError: Function equal has no kernel matching input types (array[decimal128(4, 1)], scalar[decimal128(4, 1)])
-    # def test_filter_pushdown_hugeint(self,duckdb_cursor):
-    #     numeric_operators('HUGEINT')
+# These tests will break whenever arrow implements them
+    def test_filter_pushdown_hugeint(self,duckdb_cursor):
+        with pytest.raises(Exception):
+            numeric_operators('HUGEINT')
 
-    # def test_filter_pushdown_decimal(self,duckdb_cursor):
-    #     numeric_types = ['DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)'],'DECIMAL(30,12)']
+    def test_filter_pushdown_decimal(self,duckdb_cursor):
+        numeric_types = ['DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)','DECIMAL(30,12)']
 
-    #     for data_type in numeric_types:
-    #         numeric_operators(data_type)
+        for data_type in numeric_types:
+            with pytest.raises(Exception):
+                numeric_operators(data_type)
 
     def test_filter_pushdown_varchar(self,duckdb_cursor):
         if not can_run:
@@ -214,6 +219,21 @@ class TestArrowFilterPushdown(object):
         # Try Or
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a = '2010-01-01' or b ='2000-01-01'").fetchone()[0] == 2
 
+        
+    def test_filter_pushdown_no_projection(self,duckdb_cursor):
+        if not can_run:
+            return
+        duckdb_conn = duckdb.connect()
+        duckdb_conn.execute("CREATE TABLE test (a  INTEGER, b INTEGER, c INTEGER)")
+        duckdb_conn.execute("INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
+        duck_tbl = duckdb_conn.table("test")
+        arrow_table = duck_tbl.arrow()
+        duckdb_conn.register_arrow("testarrowtable",arrow_table)
+        assert duckdb_conn.execute("SELECT * FROM  testarrowtable VALUES where a =1").fetchall() == [(1, 1, 1)]
+        arrow_dataset = ds.dataset(arrow_table)
+        duckdb_conn.register_arrow("testarrowdataset",arrow_dataset)
+        assert duckdb_conn.execute("SELECT * FROM  testarrowdataset VALUES where a =1").fetchall() == [(1, 1, 1)]
+
     def test_filter_pushdown_2145(self,duckdb_cursor):
         if not can_run:
             return
@@ -240,5 +260,4 @@ class TestArrowFilterPushdown(object):
 
         os.remove("data1.parquet")
         os.remove("data2.parquet")
-
 

@@ -4,6 +4,7 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb_python/vector_conversion.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/atomic.hpp"
 
@@ -75,6 +76,9 @@ unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanInit(ClientContex
 }
 
 idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
+	if (context.force_parallelism) {
+		return context.db->NumberOfThreads();
+	}
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;
 	return bind_data.row_count / PANDAS_PARTITION_COUNT + 1;
 }

@@ -12,18 +12,16 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
     TableFilterCollection *filters) {
 	py::gil_scoped_acquire acquire;
 	PythonTableArrowArrayStreamFactory *factory = (PythonTableArrowArrayStreamFactory *)factory_ptr;
-	if (!factory->arrow_table) {
-		return nullptr;
-	}
-	py::handle table(factory->arrow_table);
+	D_ASSERT(factory->arrow_object);
+	py::handle arrow_obj_handle(factory->arrow_object);
 	py::object scanner;
 	py::object arrow_scanner = py::module_::import("pyarrow.dataset").attr("Scanner").attr("from_dataset");
-	auto py_object_type = string(py::str(table.get_type().attr("__name__")));
+	auto py_object_type = string(py::str(arrow_obj_handle.get_type().attr("__name__")));
 	py::list projection_list = py::cast(project_columns.second);
 	bool has_filter = filters && filters->table_filters && !filters->table_filters->filters.empty();
 	if (py_object_type == "Table") {
 		auto arrow_dataset = py::module_::import("pyarrow.dataset").attr("dataset");
-		auto dataset = arrow_dataset(table);
+		auto dataset = arrow_dataset(arrow_obj_handle);
 		if (project_columns.second.empty()) {
 			//! This is only called at the binder to get the schema
 			scanner = arrow_scanner(dataset);
@@ -39,13 +37,14 @@ unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(
 	} else {
 		if (project_columns.second.empty()) {
 			//! This is only called at the binder to get the schema
-			scanner = arrow_scanner(table);
+			scanner = arrow_scanner(arrow_obj_handle);
 		} else {
 			if (has_filter) {
 				auto filter = TransformFilter(*filters, project_columns.first);
-				scanner = arrow_scanner(table, py::arg("columns") = projection_list, py::arg("filter") = filter);
+				scanner =
+				    arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
 			} else {
-				scanner = arrow_scanner(table, py::arg("columns") = projection_list);
+				scanner = arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
 			}
 		}
 	}
@@ -76,20 +75,16 @@ py::object GetScalar(Value &constant) {
 	case LogicalTypeId::BIGINT:
 		scalar_value = dataset_scalar(constant.GetValue<int64_t>());
 		return scalar_value;
-	case LogicalTypeId::HUGEINT: {
-		py::object date_type = py::module_::import("pyarrow").attr("decimal128");
-		scalar_value = dataset_scalar(scalar(constant.GetValue<hugeint_t>(), date_type(38)));
-		return scalar_value;
-	}
-
 	case LogicalTypeId::DATE: {
 		py::object date_type = py::module_::import("pyarrow").attr("date32");
 		scalar_value = dataset_scalar(scalar(constant.GetValue<int32_t>(), date_type()));
 		return scalar_value;
 	}
-	case LogicalTypeId::TIME:
-		scalar_value = dataset_scalar(constant.GetValue<int64_t>());
+	case LogicalTypeId::TIME: {
+		py::object date_type = py::module_::import("pyarrow").attr("time64");
+		scalar_value = dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
 		return scalar_value;
+	}
 	case LogicalTypeId::TIMESTAMP: {
 		py::object date_type = py::module_::import("pyarrow").attr("timestamp");
 		scalar_value = dataset_scalar(scalar(constant.GetValue<int64_t>(), date_type("us")));
@@ -122,7 +117,6 @@ py::object GetScalar(Value &constant) {
 		uint8_t scale;
 		constant.type().GetDecimalProperties(width, scale);
 		switch (constant.type().InternalType()) {
-
 		case PhysicalType::INT16:
 			scalar_value = dataset_scalar(scalar(constant.GetValue<int16_t>(), date_type(width, scale)));
 			return scalar_value;
@@ -137,8 +131,6 @@ py::object GetScalar(Value &constant) {
 			return scalar_value;
 		}
 	}
-
-	break;
 	default:
 		throw NotImplementedException("Unimplemented type \"%s\" for Arrow Filter Pushdown",
 		                              constant.type().ToString());
@@ -170,11 +162,10 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 			return constant_field.attr("__ge__")(constant_value);
 		}
 		default:
-			throw std::runtime_error("Comparison Type can't be an Arrow Scan Pushdown Filter");
+			throw NotImplementedException("Comparison Type can't be an Arrow Scan Pushdown Filter");
 		}
-		break;
 	}
-		//! I guess arrow cant handle IS_NULL or IS_NOT_NULL
+	//! We do not pushdown is null yet
 	case TableFilterType::IS_NULL: {
 		auto constant_field = field(column_name);
 		return constant_field.attr("is_null")();
@@ -183,6 +174,7 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 		auto constant_field = field(column_name);
 		return constant_field.attr("is_valid")();
 	}
+	//! We do not pushdown or conjuctions yet
 	case TableFilterType::CONJUNCTION_OR: {
 		idx_t i = 0;
 		auto or_filter = (ConjunctionOrFilter *)filter;
@@ -196,7 +188,6 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 		}
 		return expression;
 	}
-
 	case TableFilterType::CONJUNCTION_AND: {
 		idx_t i = 0;
 		auto and_filter = (ConjunctionAndFilter *)filter;
@@ -210,7 +201,7 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 		return expression;
 	}
 	default:
-		throw std::runtime_error("Pushdown Filter Type not supported in Arrow Scans");
+		throw NotImplementedException("Pushdown Filter Type not supported in Arrow Scans");
 	}
 }
 

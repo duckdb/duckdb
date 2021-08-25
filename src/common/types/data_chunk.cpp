@@ -287,6 +287,7 @@ void InitializeChild(DuckDBArrowArrayChildHolder &child_holder, idx_t size) {
 }
 
 void SetChildValidityMask(Vector &vector, ArrowArray &child) {
+	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto &mask = FlatVector::Validity(vector);
 	if (!mask.AllValid()) {
 		//! any bits are set: might have nulls
@@ -590,7 +591,8 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	default:
 		throw std::runtime_error("Unsupported type " + type.ToString());
 	}
-} // namespace duckdb
+}
+
 void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	Normalify();
 	D_ASSERT(out_array);
