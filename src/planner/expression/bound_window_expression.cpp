@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
-#include "duckdb/function/aggregate_function.hpp"
+
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/function/aggregate_function.hpp"
 
 namespace duckdb {
 
@@ -208,7 +209,13 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	for (auto &e : partitions) {
 		new_window->partitions.push_back(e->Copy());
 	}
-
+	for (auto &ps : partitions_stats) {
+		if (ps) {
+			new_window->partitions_stats.push_back(ps->Copy());
+		} else {
+			new_window->partitions_stats.push_back(nullptr);
+		}
+	}
 	for (auto &o : orders) {
 		new_window->orders.emplace_back(o.type, o.null_order, o.expression->Copy());
 	}

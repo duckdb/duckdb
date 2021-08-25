@@ -17,7 +17,7 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_PARAMS_PROCESSED_PTR:
-			stmt->param_wrapper->param_processed_ptr = (SQLULEN *)value_ptr;
+			stmt->param_wrapper->SetParamProcessedPtr(value_ptr);
 			return SQL_SUCCESS;
 		case SQL_ATTR_PARAM_STATUS_PTR:
 			stmt->param_wrapper->param_status_ptr = (SQLUSMALLINT *)value_ptr;
@@ -84,7 +84,7 @@ SQLRETURN SQLExecDirect(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLI
 		return SQL_ERROR;
 	}
 
-	auto execute_status = duckdb::ExecuteStmt(statement_handle);
+	auto execute_status = duckdb::BatchExecuteStmt(statement_handle);
 	if (execute_status != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
@@ -128,7 +128,6 @@ SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLIN
 	}
 
 	// TODO make this a nice template? also going to use this for SQLColumns etc.
-
 	if (!SQL_SUCCEEDED(SQLPrepare(
 	        statement_handle,
 	        (SQLCHAR
@@ -259,11 +258,20 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			stmt->odbc_fetcher->ClearChunks();
 			// stmt->stmt.reset(); // the statment can be reuse in prepared statement
 			stmt->bound_cols.clear();
-			// stmt->params.clear(); //  the parameter values can be reused after
-			stmt->param_wrapper->ResetParamSetIndex();
+			// stmt->param_wrapper->Clear(); // the parameter values can be reused after
+			stmt->param_wrapper->Reset();
 			stmt->error_messages.clear();
 			return SQL_SUCCESS;
 		}
 		return SQL_ERROR;
+	});
+}
+
+SQLRETURN SQLMoreResults(SQLHSTMT statement_handle) {
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		if (!stmt->param_wrapper->HasParamSetToProcess()) {
+			return SQL_NO_DATA;
+		}
+		return duckdb::SingleExecuteStmt(stmt);
 	});
 }

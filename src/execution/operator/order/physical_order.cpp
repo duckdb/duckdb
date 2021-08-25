@@ -8,10 +8,8 @@
 
 namespace duckdb {
 
-PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders,
-                             vector<unique_ptr<BaseStatistics>> statistics, idx_t estimated_cardinality)
-    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)),
-      statistics(move(statistics)) {
+PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality)
+    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -19,8 +17,8 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 class OrderGlobalState : public GlobalOperatorState {
 public:
-	OrderGlobalState(BufferManager &buffer_manager, PhysicalOrder &order, RowLayout payload_layout)
-	    : global_sort_state(buffer_manager, order.orders, order.statistics, payload_layout) {
+	OrderGlobalState(BufferManager &buffer_manager, PhysicalOrder &order, RowLayout &payload_layout)
+	    : global_sort_state(buffer_manager, order.orders, payload_layout) {
 	}
 
 	//! Global sort state

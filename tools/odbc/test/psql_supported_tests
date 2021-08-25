@@ -6,6 +6,7 @@ connect-test
 cte-test
 cursor-commit-test
 declare-fetch-block-test
+dataatexecution-test
 numeric-test
 quotes-test
 result-conversions-test

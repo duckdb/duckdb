@@ -10,13 +10,13 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrde
 	node_stats = PropagateStatistics(order.children[0]);
 
 	// then propagate to each of the order expressions
-	for (idx_t i = 0; i < order.orders.size(); i++) {
-		auto &expr = order.orders[i].expression;
+	for (auto &bound_order : order.orders) {
+		auto &expr = bound_order.expression;
 		PropagateExpression(expr);
 		if (expr->stats) {
-			order.statistics.push_back(expr->stats->Copy());
+			bound_order.stats = expr->stats->Copy();
 		} else {
-			order.statistics.push_back(nullptr);
+			bound_order.stats = nullptr;
 		}
 	}
 	return move(node_stats);

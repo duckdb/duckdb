@@ -302,9 +302,6 @@ void SortedDataScanner::Scan(DataChunk &chunk) {
 	// Eagerly delete references to blocks that we've passed
 	for (idx_t i = 0; i < sorted_data.block_idx; i++) {
 		sorted_data.data_blocks[i].block = nullptr;
-		if (!sorted_data.layout.AllConstant() && global_sort_state.external) {
-			sorted_data.heap_blocks[i].block = nullptr;
-		}
 	}
 	const idx_t &row_width = sorted_data.layout.GetRowWidth();
 	// Set up a batch of pointers to scan data from

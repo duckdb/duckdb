@@ -8,10 +8,11 @@
 
 #pragma once
 
+#include "duckdb/common/limits.hpp"
 #include "duckdb/parser/result_modifier.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/expression.hpp"
-#include "duckdb/common/limits.hpp"
+#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -27,13 +28,27 @@ public:
 };
 
 struct BoundOrderByNode {
+public:
 	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression)
 	    : type(type), null_order(null_order), expression(move(expression)) {
+	}
+	BoundOrderByNode(OrderType type, OrderByNullType null_order, unique_ptr<Expression> expression,
+	                 unique_ptr<BaseStatistics> stats)
+	    : type(type), null_order(null_order), expression(move(expression)), stats(move(stats)) {
+	}
+
+	BoundOrderByNode Copy() const {
+		if (stats) {
+			return BoundOrderByNode(type, null_order, expression->Copy(), stats->Copy());
+		} else {
+			return BoundOrderByNode(type, null_order, expression->Copy());
+		}
 	}
 
 	OrderType type;
 	OrderByNullType null_order;
 	unique_ptr<Expression> expression;
+	unique_ptr<BaseStatistics> stats;
 };
 
 class BoundLimitModifier : public BoundResultModifier {

@@ -20,13 +20,10 @@ class OrderGlobalState;
 //! Physically re-orders the input data
 class PhysicalOrder : public PhysicalSink {
 public:
-	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders,
-	              vector<unique_ptr<BaseStatistics>> statistics, idx_t estimated_cardinality);
+	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality);
 
 	//! Input data
 	vector<BoundOrderByNode> orders;
-	//! Statistics of the order expressions
-	vector<unique_ptr<BaseStatistics>> statistics;
 
 public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;

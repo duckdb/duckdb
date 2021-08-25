@@ -1,4 +1,5 @@
 #include "duckdb_odbc.hpp"
+#include "parameter_wrapper.hpp"
 #include <odbcinst.h>
 
 using std::string;
@@ -50,6 +51,7 @@ SQLRETURN SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 	case SQL_HANDLE_STMT: {
 		auto *hdl = (duckdb::OdbcHandleStmt *)handle;
 		if (hdl == hdl->dbc->stmt_handle) {
+			hdl->param_wrapper->Clear();
 			hdl->dbc->stmt_handle = nullptr;
 		}
 		delete hdl;
@@ -71,8 +73,8 @@ SQLRETURN SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOI
 	}
 	switch (attribute) {
 	case SQL_ATTR_ODBC_VERSION: {
-		auto version = (SQLINTEGER)(uintptr_t)value_ptr;
 		// TODO actually do something with this?
+		// auto version = (SQLINTEGER)(uintptr_t)value_ptr;
 		return SQL_SUCCESS;
 	}
 	default:

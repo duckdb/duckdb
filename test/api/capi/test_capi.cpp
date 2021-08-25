@@ -525,8 +525,7 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	REQUIRE(duckdb_prepare(tester.connection, "SELECT * from INVALID_TABLE", &stmt) == DuckDBError);
 	REQUIRE(duckdb_prepare_error(nullptr) == nullptr);
 	REQUIRE(stmt != nullptr);
-	auto err_msg = duckdb_prepare_error(stmt);
-	REQUIRE(err_msg != nullptr);
+	REQUIRE(duckdb_prepare_error(stmt) != nullptr);
 	duckdb_destroy_prepare(&stmt);
 
 	REQUIRE(duckdb_bind_boolean(NULL, 0, true) == DuckDBError);
@@ -536,9 +535,7 @@ TEST_CASE("Test errors in C API", "[capi]") {
 	// fail to query arrow
 	duckdb_arrow out_arrow;
 	REQUIRE(duckdb_query_arrow(tester.connection, "SELECT * from INVALID_TABLE", &out_arrow) == DuckDBError);
-	err_msg = duckdb_query_arrow_error(out_arrow);
-	REQUIRE(err_msg != nullptr);
-	duckdb_free((void *)err_msg);
+	REQUIRE(duckdb_query_arrow_error(out_arrow) != nullptr);
 	duckdb_destroy_arrow(&out_arrow);
 
 	// various edge cases/nullptrs
@@ -799,9 +796,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_appender_create(tester.connection, nullptr, "nonexistant-table", &appender);
 	REQUIRE(status == DuckDBError);
 	REQUIRE(appender != nullptr);
-	auto msg = duckdb_appender_error(appender);
-	REQUIRE(msg != nullptr);
-	duckdb_free((void *)msg);
+	REQUIRE(duckdb_appender_error(appender) != nullptr);
 	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
 	REQUIRE(duckdb_appender_destroy(nullptr) == DuckDBError);
 
@@ -846,9 +841,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	// not enough cols here
 	status = duckdb_appender_end_row(appender);
 	REQUIRE(status == DuckDBError);
-	auto err_msg = duckdb_appender_error(appender);
-	REQUIRE(err_msg != nullptr);
-	duckdb_free((void *)err_msg);
+	REQUIRE(duckdb_appender_error(appender) != nullptr);
 
 	status = duckdb_append_varchar(appender, "Hello, World");
 	REQUIRE(status == DuckDBSuccess);
@@ -857,9 +850,7 @@ TEST_CASE("Test appender statements in C API", "[capi]") {
 	status = duckdb_append_int32(appender, 42);
 	REQUIRE(status == DuckDBError);
 
-	err_msg = duckdb_appender_error(appender);
-	REQUIRE(err_msg != nullptr);
-	duckdb_free((void *)err_msg);
+	REQUIRE(duckdb_appender_error(appender) != nullptr);
 
 	status = duckdb_appender_end_row(appender);
 	REQUIRE(status == DuckDBSuccess);
