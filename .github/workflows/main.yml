@@ -846,8 +846,9 @@ jobs:
         python-version: '3.7'
 
     - name: Dependencies
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev
-
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python-pip
+        sudo pip install pyodbc
 
     - name: Install nanodbc
       run: |
@@ -873,6 +874,9 @@ jobs:
 
     - name: Test R ODBC
       run: R -f tools/odbc/test/rodbc.R
+
+    - name: Test Python ODBC
+      run: ./tools/odbc/test/run_pyodbc_tests.sh
 
 
   linux-python3:
