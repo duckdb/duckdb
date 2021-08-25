@@ -57,6 +57,7 @@ public:
 	TopNSortState sort_state;
 	ExpressionExecutor executor;
 	DataChunk sort_chunk;
+	DataChunk compare_chunk;
 	DataChunk payload_chunk;
 	//! A set of boundary values that determine either the minimum or the maximum value we have to consider for our
 	//! top-n
@@ -222,6 +223,7 @@ TopNHeap::TopNHeap(ClientContext &context_p, const vector<LogicalType> &payload_
 	}
 	payload_chunk.Initialize(payload_types);
 	sort_chunk.Initialize(sort_types);
+	compare_chunk.Initialize(sort_types);
 	boundary_values.Initialize(sort_types);
 	sort_state.Initialize();
 }
@@ -310,26 +312,31 @@ bool TopNHeap::CheckBoundaryValues(DataChunk &sort_chunk, DataChunk &payload) {
 	SelectionVector remaining_sel(nullptr);
 	idx_t remaining_count = sort_chunk.size();
 	for (idx_t i = 0; i < orders.size(); i++) {
+		if (remaining_sel.data()) {
+			compare_chunk.data[i].Slice(sort_chunk.data[i], remaining_sel, remaining_count);
+		} else {
+			compare_chunk.data[i].Reference(sort_chunk.data[i]);
+		}
 		bool is_last = i + 1 == orders.size();
 		idx_t true_count;
 		if (orders[i].null_order == OrderByNullType::NULLS_LAST) {
 			if (orders[i].type == OrderType::ASCENDING) {
-				true_count = VectorOperations::DistinctLessThan(sort_chunk.data[i], boundary_values.data[i],
+				true_count = VectorOperations::DistinctLessThan(compare_chunk.data[i], boundary_values.data[i],
 				                                                &remaining_sel, remaining_count, &true_sel, &false_sel);
 			} else {
-				true_count = VectorOperations::DistinctGreaterThanNullsFirst(sort_chunk.data[i],
+				true_count = VectorOperations::DistinctGreaterThanNullsFirst(compare_chunk.data[i],
 				                                                             boundary_values.data[i], &remaining_sel,
 				                                                             remaining_count, &true_sel, &false_sel);
 			}
 		} else {
 			D_ASSERT(orders[i].null_order == OrderByNullType::NULLS_FIRST);
 			if (orders[i].type == OrderType::ASCENDING) {
-				true_count = VectorOperations::DistinctLessThanNullsFirst(sort_chunk.data[i], boundary_values.data[i],
+				true_count = VectorOperations::DistinctLessThanNullsFirst(compare_chunk.data[i], boundary_values.data[i],
 				                                                          &remaining_sel, remaining_count, &true_sel,
 				                                                          &false_sel);
 			} else {
 				true_count =
-				    VectorOperations::DistinctGreaterThan(sort_chunk.data[i], boundary_values.data[i], &remaining_sel,
+				    VectorOperations::DistinctGreaterThan(compare_chunk.data[i], boundary_values.data[i], &remaining_sel,
 				                                          remaining_count, &true_sel, &false_sel);
 			}
 		}
