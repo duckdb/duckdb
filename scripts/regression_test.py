@@ -51,14 +51,15 @@ def regression_test(threshold):
     # Print Query Results for Logging
     is_it_faster = True
     for i in range(len(master_time)):
+        # Query Ok means that in all runs at least once it finished below the threshold
         query_ok = False
-        query_faster = False
+        # Query Faster means that is always finished faster than the master (using threshold)
+        query_faster = True
         for j in range (repetitions):
             if current_time[i][j] <= master_time[i][j] * (1+threshold):
                 query_ok = True
-
-            if current_time[i][j] <= master_time[i][j] * (1-threshold):
-                query_faster = True
+            if current_time[i][j] > master_time[i][j] * (1-threshold):
+                query_faster = False
 
         if not query_ok:
                 is_it_faster = False
