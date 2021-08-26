@@ -11,34 +11,45 @@ create table quantiles as select range r, random() FROM range(0,1000000,100) uni
 
 # temporal types
 query I
-SELECT quantile_cont('2021-01-01'::TIMESTAMP + interval (r/100) hour, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+SELECT quantile_cont('2021-01-01'::TIMESTAMP + interval (r/100) hour, [0.25, 0.5, 0.75]) FROM quantiles
 ----
 [2021-04-15 03:45:00, 2021-07-28 07:30:00, 2021-11-09 11:15:00]
 
 query I
-SELECT quantile_cont('1990-01-01'::DATE + interval (r/100) day, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+SELECT quantile_cont('1990-01-01'::DATE + interval (r/100) day, [0.25, 0.5, 0.75]) FROM quantiles
 ----
 [1996-11-04 18:00:00, 2003-09-09 12:00:00, 2010-07-14 06:00:00]
 
 query I
-SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+SELECT quantile_cont('00:00:00'::TIME + interval (r/100) second, [0.25, 0.5, 0.75]) FROM quantiles
 ----
 [00:41:39.75, 01:23:19.5, 02:04:59.25]
 
 statement error
-SELECT quantile_cont(interval (r/100) second, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+SELECT quantile_cont(interval (r/100) second, [0.25, 0.5, 0.75]) FROM quantiles
 ----
 [00:16:39, 01:23:19, 02:29:59]
 
 # single GROUP
 query R
-SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+SELECT quantile_cont(r, [0.25, 0.5, 0.75]) FROM quantiles
 ----
 [249975.000000, 499950.000000, 749925.000000]
 
+# Decimals
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
+
+query I
+SELECT quantile_cont(d::${type}, [0.25, 0.5, 0.75])
+FROM range(0,100) tbl(d)
+----
+[24.7, 49.5, 74.2]
+
+endloop
+
 # multiple groups
 query RR
-SELECT mod(r,1000) as g, quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles GROUP BY 1 ORDER BY 1
+SELECT mod(r,1000) as g, quantile_cont(r, [0.25, 0.5, 0.75]) FROM quantiles GROUP BY 1 ORDER BY 1
 ----
 NULL	NULL
 0	[249750.000000, 499500.000000, 749250.000000]
@@ -54,19 +65,19 @@ NULL	NULL
 
 # constant input
 query R
-SELECT quantile_cont(1, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+SELECT quantile_cont(1, [0.25, 0.5, 0.75]) FROM quantiles
 ----
 [1.000000, 1.000000, 1.000000]
 
 # empty input
 query R
-SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles WHERE 1=0
+SELECT quantile_cont(r, [0.25, 0.5, 0.75]) FROM quantiles WHERE 1=0
 ----
 NULL
 
 # empty list
 query R
-SELECT quantile_cont(r, LIST_VALUE()) FROM quantiles
+SELECT quantile_cont(r, []) FROM quantiles
 ----
 []
 
@@ -78,13 +89,13 @@ PRAGMA force_parallelism
 
 # single GROUP
 query R
-SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+SELECT quantile_cont(r, [0.25, 0.5, 0.75]) FROM quantiles
 ----
 [249975.000000, 499950.000000, 749925.000000]
 
 # multiple groups
 query RR
-SELECT mod(r,1000) as g, quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles GROUP BY 1 ORDER BY 1
+SELECT mod(r,1000) as g, quantile_cont(r, [0.25, 0.5, 0.75]) FROM quantiles GROUP BY 1 ORDER BY 1
 ----
 NULL	NULL
 0	[249750.000000, 499500.000000, 749250.000000]
@@ -100,36 +111,36 @@ NULL	NULL
 
 # constant input
 query R
-SELECT quantile_cont(1, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+SELECT quantile_cont(1, [0.25, 0.5, 0.75]) FROM quantiles
 ----
 [1.000000, 1.000000, 1.000000]
 
 # empty input
 query R
-SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles WHERE 1=0
+SELECT quantile_cont(r, [0.25, 0.5, 0.75]) FROM quantiles WHERE 1=0
 ----
 NULL
 
 # empty list
 query R
-SELECT quantile_cont(r, LIST_VALUE()) FROM quantiles
+SELECT quantile_cont(r, []) FROM quantiles
 ----
 []
 
 statement error
-SELECT quantile_cont(r, LIST_VALUE(-0.25, 0.5, 0.75)) FROM quantiles
+SELECT quantile_cont(r, [-0.25, 0.5, 0.75]) FROM quantiles
 
 statement error
 SELECT quantile_cont(r, (0.25, 0.5, 1.1)) FROM quantiles
 
 statement error
-SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, NULL)) FROM quantiles
+SELECT quantile_cont(r, [0.25, 0.5, NULL]) FROM quantiles
 
 statement error
-SELECT quantile_cont(r, LIST_VALUE("0.25", "0.5", "0.75")) FROM quantiles
+SELECT quantile_cont(r, ["0.25", "0.5", "0.75"]) FROM quantiles
 
 statement error
-SELECT quantile_cont(r::string, LIST_VALUE(0.25, 0.5, 0.75)) FROM quantiles
+SELECT quantile_cont(r::string, [0.25, 0.5, 0.75]) FROM quantiles
 
 statement error
-SELECT quantile_cont(r, LIST_VALUE(0.25, 0.5, 0.75), 50) FROM quantiles
+SELECT quantile_cont(r, [0.25, 0.5, 0.75], 50) FROM quantiles
