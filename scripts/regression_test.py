@@ -76,6 +76,8 @@ def regression_test(threshold):
 
         os.environ["REGRESSION_DESCRIPTION"] = description
         exp = 'export REGRESSION_DESCRIPTION="youAsWell"'
-        os.system(exp)
+        f = open("test.sh", "w")
+        f.write(exp)
+        f.close()
 
 regression_test(0.1)
