@@ -627,7 +627,8 @@ static idx_t DistinctSelectNested(Vector &left, Vector &right, idx_t vcount, con
 
 	idx_t true_count = 0;
 	if (PhysicalType::LIST == left.GetType().InternalType()) {
-		true_count = DistinctSelectList<OPNESTED>(left, right, vcount, lvdata, rvdata, count, maybe_vec, true_opt, false_opt);
+		true_count =
+		    DistinctSelectList<OPNESTED>(left, right, vcount, lvdata, rvdata, count, maybe_vec, true_opt, false_opt);
 	} else {
 		true_count =
 		    DistinctSelectStruct<OPNESTED>(left, right, vcount, lvdata, rvdata, count, maybe_vec, true_opt, false_opt);
@@ -705,7 +706,7 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 	}
 }
 
-template <class OP, bool DENSE, class OPNESTED=OP>
+template <class OP, bool DENSE, class OPNESTED = OP>
 static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, idx_t vcount, const SelectionVector *sel,
                                               idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
@@ -815,8 +816,8 @@ idx_t VectorOperations::DistinctGreaterThan(Vector &left, Vector &right, const S
 idx_t VectorOperations::DistinctGreaterThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel,
                                                       idx_t count, SelectionVector *true_sel,
                                                       SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst, true, duckdb::DistinctGreaterThan>(left, right, count, sel, count,
-	                                                                                     true_sel, false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst, true, duckdb::DistinctGreaterThan>(
+	    left, right, count, sel, count, true_sel, false_sel);
 }
 // true := A >= B with nulls being maximal
 idx_t VectorOperations::DistinctGreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
@@ -834,8 +835,8 @@ idx_t VectorOperations::DistinctLessThan(Vector &left, Vector &right, const Sele
 // true := A < B with nulls being minimal
 idx_t VectorOperations::DistinctLessThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                    SelectionVector *true_sel, SelectionVector *false_sel) {
-	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThanNullsFirst, true, duckdb::DistinctLessThan>(left, right, count, sel, count,
-	                                                                                  true_sel, false_sel);
+	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThanNullsFirst, true, duckdb::DistinctLessThan>(
+	    left, right, count, sel, count, true_sel, false_sel);
 }
 
 // true := A <= B with nulls being maximal
