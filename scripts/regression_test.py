@@ -50,7 +50,7 @@ def regression_test(threshold):
 
     # If the regression status is true, there was no regression
     regression_status = True
-    description = ''
+    description = 'test'
     for i in range(len(master_time)):
         # Query Ok means that in all runs at least once it finished below the threshold
         query_ok = False
