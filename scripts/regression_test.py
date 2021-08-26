@@ -4,6 +4,7 @@
 import os
 import statistics
 import time
+import subprocess
 
 def install_duck_master():
     os.system("pip install duckdb --pre")
@@ -74,5 +75,7 @@ def regression_test(threshold):
             os.environ["REGRESSION_STATE"] = "failure"
 
         os.environ["REGRESSION_DESCRIPTION"] = description
+        exp = 'export REGRESSION_DESCRIPTION="youAsWell"'
+        subprocess.Popen(exp, shell=True).wait()
 
 regression_test(0.1)
