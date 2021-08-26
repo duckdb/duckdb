@@ -227,6 +227,7 @@ private:
 	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
 
+	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
 	unique_ptr<Expression> BindFilter(unique_ptr<ParsedExpression> condition);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
