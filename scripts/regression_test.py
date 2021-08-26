@@ -27,7 +27,7 @@ def run_tpch_query(duckdb_conn,query_number):
 def run_tpch(repetitions):
     import duckdb
     duckdb_conn = duckdb.connect()
-    duckdb_conn.execute("CALL dbgen(sf=0.01);")
+    duckdb_conn.execute("CALL dbgen(sf=1);")
     result_list = []
     for i in range (1,23):
         query_result_list = []
