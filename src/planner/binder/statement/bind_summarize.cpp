@@ -9,7 +9,8 @@
 
 namespace duckdb {
 
-static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<ParsedExpression>> &children, const string &alias) {
+static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<ParsedExpression>> &children,
+                                                        const string &alias) {
 	auto list_function = make_unique<FunctionExpression>("list_value", move(children));
 	vector<unique_ptr<ParsedExpression>> unnest_children;
 	unnest_children.push_back(move(list_function));
@@ -40,7 +41,8 @@ static unique_ptr<ParsedExpression> SummarizeCreateCountUnique(string column_nam
 	return move(aggregate_function);
 }
 
-static unique_ptr<ParsedExpression> SummarizeCreateBinaryFunction(string op, unique_ptr<ParsedExpression> left, unique_ptr<ParsedExpression> right) {
+static unique_ptr<ParsedExpression> SummarizeCreateBinaryFunction(string op, unique_ptr<ParsedExpression> left,
+                                                                  unique_ptr<ParsedExpression> right) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -52,9 +54,12 @@ static unique_ptr<ParsedExpression> SummarizeCreateNullPercentage(string column_
 	auto count_star = make_unique<CastExpression>(LogicalType::DOUBLE, SummarizeCreateCountStar());
 	auto count = make_unique<CastExpression>(LogicalType::DOUBLE, SummarizeCreateAggregate("count", column_name));
 	auto null_percentage = SummarizeCreateBinaryFunction("/", move(count), move(count_star));
-	auto negate_x = SummarizeCreateBinaryFunction("-", make_unique<ConstantExpression>(Value::DOUBLE(1)), move(null_percentage));
-	auto percentage_x = SummarizeCreateBinaryFunction("*", move(negate_x), make_unique<ConstantExpression>(Value::DOUBLE(100)));
-	auto round_x = SummarizeCreateBinaryFunction("round", move(percentage_x), make_unique<ConstantExpression>(Value::INTEGER(2)));
+	auto negate_x =
+	    SummarizeCreateBinaryFunction("-", make_unique<ConstantExpression>(Value::DOUBLE(1)), move(null_percentage));
+	auto percentage_x =
+	    SummarizeCreateBinaryFunction("*", move(negate_x), make_unique<ConstantExpression>(Value::DOUBLE(100)));
+	auto round_x =
+	    SummarizeCreateBinaryFunction("round", move(percentage_x), make_unique<ConstantExpression>(Value::INTEGER(2)));
 	auto concat_x = SummarizeCreateBinaryFunction("concat", move(round_x), make_unique<ConstantExpression>(Value("%")));
 
 	return concat_x;
@@ -77,13 +82,14 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 	vector<unique_ptr<ParsedExpression>> null_percentage_children;
 	auto select = make_unique<SelectStatement>();
 	select->node = move(query_copy);
-	for(idx_t i = 0; i < plan.names.size(); i++) {
+	for (idx_t i = 0; i < plan.names.size(); i++) {
 		name_children.push_back(make_unique<ConstantExpression>(Value(plan.names[i])));
 		type_children.push_back(make_unique<ConstantExpression>(Value(plan.types[i].ToString())));
 		min_children.push_back(SummarizeCreateAggregate("min", plan.names[i]));
 		max_children.push_back(SummarizeCreateAggregate("max", plan.names[i]));
 		unique_children.push_back(SummarizeCreateCountUnique(plan.names[i]));
-		avg_children.push_back(plan.types[i].IsNumeric() ? SummarizeCreateAggregate("avg", plan.names[i]) : make_unique<ConstantExpression>(Value()));
+		avg_children.push_back(plan.types[i].IsNumeric() ? SummarizeCreateAggregate("avg", plan.names[i])
+		                                                 : make_unique<ConstantExpression>(Value()));
 		count_children.push_back(SummarizeCreateCountStar());
 		null_percentage_children.push_back(SummarizeCreateNullPercentage(plan.names[i]));
 	}
@@ -104,4 +110,4 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 	return Bind(*select_node);
 }
 
-}
+} // namespace duckdb

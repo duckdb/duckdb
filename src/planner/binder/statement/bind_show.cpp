@@ -22,7 +22,7 @@ BoundStatement Binder::Bind(ShowStatement &stmt) {
 
 	result.names = {"Field", "Type", "Null", "Key", "Default", "Extra"};
 	result.types = {LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR,
-					LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
+	                LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR};
 	return result;
 }
 
