@@ -1,4 +1,4 @@
-# name: test/sql/topn/test_top_n_nulls_medium.test
+# name: test/sql/topn/test_top_n_nulls_medium.test_slow
 # description: Test Top N NULLS FIRST/LAST with many rows
 # group: [topn]
 
