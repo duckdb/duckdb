@@ -75,6 +75,4 @@ def regression_test(threshold):
 
         os.environ["REGRESSION_DESCRIPTION"] = description
 
-    assert (is_it_faster)
-
 regression_test(0.1)
