@@ -1,6 +1,6 @@
-# name: test/sql/order/test_top_n.test
+# name: test/sql/topn/test_top_n.test
 # description: Test Top N Optimization
-# group: [order]
+# group: [topn]
 
 statement ok
 PRAGMA enable_verification

@@ -255,6 +255,7 @@ void Pipeline::Schedule() {
 		}
 		break;
 	}
+	case PhysicalOperatorType::TOP_N:
 	case PhysicalOperatorType::CREATE_TABLE_AS:
 	case PhysicalOperatorType::ORDER_BY:
 	case PhysicalOperatorType::RESERVOIR_SAMPLE:

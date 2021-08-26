@@ -129,9 +129,6 @@ public:
 		return result;
 	}
 
-	DUCKDB_API void Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[], idx_t heap_size);
-	DUCKDB_API idx_t MaterializeHeapChunk(DataChunk &target, idx_t order[], idx_t start_offset, idx_t heap_size);
-
 private:
 	//! The total amount of elements in the collection
 	idx_t count;
