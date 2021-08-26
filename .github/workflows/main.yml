@@ -18,8 +18,7 @@ jobs:
     with: 
       authToken: ${{secrets.GH_TOKEN}}
       description: echo $REGRESSION_DESCRIPTION
-      state: $REGRESSION_STATE
-      sha: ${{github.event.pull_request.head.sha || github.sha}}
+      state: echo $REGRESSION_STATE
     runs-on: ubuntu-20.04
 
     env:
