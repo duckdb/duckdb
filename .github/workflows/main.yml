@@ -36,8 +36,7 @@ jobs:
 
     - name: Test
       run: python scripts/regression_test.py
-
-    - uses: Sibz/github-status-action@v1.1.5
+      uses: Sibz/github-status-action@v1.1.5
       with: 
         authToken: ${{secrets.GH_TOKEN}}
         description: echo $REGRESSION_DESCRIPTION
