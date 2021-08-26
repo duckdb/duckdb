@@ -27,7 +27,7 @@ def run_tpch_query(duckdb_conn,query_number):
 def run_tpch(repetitions):
     import duckdb
     duckdb_conn = duckdb.connect()
-    duckdb_conn.execute("CALL dbgen(sf=1);")
+    duckdb_conn.execute("CALL dbgen(sf=0.01);")
     result_list = []
     for i in range (1,23):
         query_result_list = []
@@ -48,8 +48,9 @@ def regression_test(threshold):
     master_time = run_benchmark(install_duck_master,repetitions)
     current_time = run_benchmark(install_duck_current,repetitions)
 
-    # Print Query Results for Logging
-    is_it_faster = True
+    # If the regression status is true, there was no regression
+    regression_status = True
+    description = ''
     for i in range(len(master_time)):
         # Query Ok means that in all runs at least once it finished below the threshold
         query_ok = False
@@ -62,10 +63,17 @@ def regression_test(threshold):
                 query_faster = False
 
         if not query_ok:
-                is_it_faster = False
-                print ("Query "+ str(i+1) + " (SLOWER) ")
+                regression_status = False
+                description += "Q"+ str(i+1) + " is slower ("+ str(current_time[i][0]) + "vs" + str(master_time[i][0]) + "). "
         if query_faster:
-                print ("Query "+ str(i+1) + " (FASTER) ")
+                description += "Q"+ str(i+1) + " is faster ("+ str(current_time[i][0]) + "vs" + str(master_time[i][0]) + "). "
+
+        if regression_status:
+            os.environ["REGRESSION_STATE"] = "success"
+        else:
+            os.environ["REGRESSION_STATE"] = "failure"
+
+        os.environ["REGRESSION_DESCRIPTION"] = description
 
     assert (is_it_faster)
 

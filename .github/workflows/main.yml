@@ -14,6 +14,12 @@ env:
 jobs:
   linux-debug:
     name: Regression Test
+    uses: Sibz/github-status-action@v1.1.5
+    with: 
+      authToken: ${{secrets.GH_TOKEN}}
+      description: echo $REGRESSION_DESCRIPTION
+      state: $REGRESSION_STATE
+      sha: ${{github.event.pull_request.head.sha || github.sha}}
     runs-on: ubuntu-20.04
 
     env:
