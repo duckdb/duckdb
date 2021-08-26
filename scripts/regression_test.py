@@ -76,6 +76,6 @@ def regression_test(threshold):
 
         os.environ["REGRESSION_DESCRIPTION"] = description
         exp = 'export REGRESSION_DESCRIPTION="youAsWell"'
-        subprocess.Popen(exp, shell=True).wait()
+        os.system(exp)
 
 regression_test(0.1)
