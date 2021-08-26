@@ -172,11 +172,11 @@ void TopNSortState::Scan(TopNScanState &state, DataChunk &chunk) {
 		if (state.exclude_offset) {
 			// we need to exclude all tuples before the OFFSET
 			// check if we should include anything
-			if (end < offset) {
+			if (end <= offset) {
 				// end is smaller than offset: include nothing!
 				chunk.Reset();
 				continue;
-			} else if (end > offset && start < offset) {
+			} else if (start < offset) {
 				// we need to slice
 				chunk_start = offset - start;
 			}
