@@ -10,7 +10,7 @@ env:
   AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
   AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
-  REGRESSION_DESCRIPTION: BLA
+
 
 jobs:
   linux-debug:
@@ -22,7 +22,8 @@ jobs:
       CXX: ccache g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
-
+      REGRESSION_DESCRIPTION: BLA
+      
     steps:
     - uses: actions/checkout@v2
       with:
