@@ -5,8 +5,11 @@
 statement ok
 PRAGMA enable_verification
 
+# top-n with lists and null values
 statement ok
 CREATE TABLE tbl AS SELECT [i] l FROM range(1000) tbl(i) UNION ALL SELECT NULL l FROM range(3)
+
+loop i 0 2
 
 query I
 SELECT l FROM tbl ORDER BY l NULLS FIRST LIMIT 5
@@ -43,6 +46,66 @@ SELECT l FROM tbl ORDER BY l DESC NULLS LAST LIMIT 5
 [997]
 [996]
 [995]
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+CREATE TABLE tbl AS SELECT NULL l FROM range(3) UNION ALL SELECT [i] l FROM range(1000) tbl(i)
+
+endloop
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+CREATE TABLE tbl AS SELECT [i] l FROM range(1000) tbl(i) UNION ALL SELECT [NULL] l FROM range(3)
+
+loop i 0 2
+
+query I
+SELECT l FROM tbl ORDER BY l NULLS FIRST LIMIT 5
+----
+[0]
+[1]
+[2]
+[3]
+[4]
+
+query I
+SELECT l FROM tbl ORDER BY l NULLS LAST LIMIT 5
+----
+[0]
+[1]
+[2]
+[3]
+[4]
+
+query I
+SELECT l FROM tbl ORDER BY l DESC NULLS FIRST LIMIT 5
+----
+[NULL]
+[NULL]
+[NULL]
+[999]
+[998]
+
+query I
+SELECT l FROM tbl ORDER BY l DESC NULLS LAST LIMIT 5
+----
+[NULL]
+[NULL]
+[NULL]
+[999]
+[998]
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+CREATE TABLE tbl AS SELECT [NULL] l FROM range(3) UNION ALL SELECT [i] l FROM range(1000) tbl(i)
+
+endloop
 
 # bigger lists
 query I
