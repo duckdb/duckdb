@@ -15,7 +15,7 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class OrderGlobalState : public GlobalOperatorState {
+class OrderGlobalState : public GlobalSinkState {
 public:
 	OrderGlobalState(BufferManager &buffer_manager, PhysicalOrder &order, RowLayout &payload_layout)
 	    : global_sort_state(buffer_manager, order.orders, payload_layout) {
@@ -41,7 +41,7 @@ public:
 	DataChunk sort;
 };
 
-unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
+unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &context) {
 	// Get the payload layout from the return types
 	RowLayout payload_layout;
 	payload_layout.Initialize(types, false);
@@ -68,7 +68,7 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 	return move(result);
 }
 
-void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
+void PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                          DataChunk &input) const {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
@@ -94,7 +94,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 	}
 }
 
-void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
+void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
 	gstate.global_sort_state.AddLocalState(lstate.local_sort_state);
@@ -132,7 +132,7 @@ private:
 	OrderGlobalState &state;
 };
 
-bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state_p) {
+bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> state_p) {
 	this->sink_state = move(state_p);
 	auto &state = (OrderGlobalState &)*this->sink_state;
 	auto &global_sort_state = state.global_sort_state;
@@ -168,25 +168,20 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &contex
 }
 
 //===--------------------------------------------------------------------===//
-// GetChunkInternal
+// Source
 //===--------------------------------------------------------------------===//
-class PhysicalOrderOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalOrderOperatorState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child) {
-	}
-
+class PhysicalOrderOperatorState : public GlobalSourceState {
 public:
 	//! Payload scanner
-	unique_ptr<SortedDataScanner> scanner = nullptr;
+	unique_ptr<SortedDataScanner> scanner;
 };
 
-unique_ptr<PhysicalOperatorState> PhysicalOrder::GetOperatorState() {
-	return make_unique<PhysicalOrderOperatorState>(*this, children[0].get());
+unique_ptr<GlobalSourceState> PhysicalOrder::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<PhysicalOrderOperatorState>();
 }
 
-void PhysicalOrder::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                     PhysicalOperatorState *state_p) const {
-	auto &state = *reinterpret_cast<PhysicalOrderOperatorState *>(state_p);
+void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	auto &state = (PhysicalOrderOperatorState &) gstate;
 
 	if (!state.scanner) {
 		// Initialize scanner (if not yet initialized)

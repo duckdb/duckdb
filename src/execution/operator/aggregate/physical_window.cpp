@@ -11,6 +11,7 @@
 #include "duckdb/parallel/task_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/common/types/chunk_collection.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -20,8 +21,34 @@ namespace duckdb {
 
 using counts_t = std::vector<size_t>;
 
+
+// Per-thread read state
+class PhysicalWindowOperatorState : public LocalSourceState {
+public:
+	PhysicalWindowOperatorState()
+	    : parallel_state(nullptr), initialized(false) {
+	}
+
+	ParallelState *parallel_state;
+	bool initialized;
+
+	//! The number of partitions to process (0 if there is no partitioning)
+	size_t partitions;
+	//! The output read position.
+	size_t next_part;
+	//! The generated input chunks
+	ChunkCollection chunks;
+	//! The generated output chunks
+	ChunkCollection window_results;
+	//! The read cursor
+	idx_t position;
+
+	BufferManager *buffer_manager;
+	unique_ptr<GlobalSortState> global_sort_state;
+};
+
 //	Global sink state
-class WindowGlobalState : public GlobalOperatorState {
+class WindowGlobalState : public GlobalSinkState {
 public:
 	WindowGlobalState(PhysicalWindow &op_p, ClientContext &context)
 	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)) {
@@ -54,7 +81,7 @@ public:
 // this implements a sorted window functions variant
 PhysicalWindow::PhysicalWindow(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                idx_t estimated_cardinality, PhysicalOperatorType type)
-    : PhysicalSink(type, move(types), estimated_cardinality), select_list(move(select_list)) {
+    : PhysicalOperator(type, move(types), estimated_cardinality), select_list(move(select_list)) {
 }
 
 template <typename W>
@@ -395,31 +422,6 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
                                   bool scalar = false) {
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
-
-// Per-thread read state
-class PhysicalWindowOperatorState : public PhysicalOperatorState {
-public:
-	PhysicalWindowOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), parallel_state(nullptr), initialized(false) {
-	}
-
-	ParallelState *parallel_state;
-	bool initialized;
-
-	//! The number of partitions to process (0 if there is no partitioning)
-	size_t partitions;
-	//! The output read position.
-	size_t next_part;
-	//! The generated input chunks
-	ChunkCollection chunks;
-	//! The generated output chunks
-	ChunkCollection window_results;
-	//! The read cursor
-	idx_t position;
-
-	BufferManager *buffer_manager;
-	unique_ptr<GlobalSortState> global_sort_state;
-};
 
 static void SortCollectionForPartition(PhysicalWindowOperatorState &state, BoundWindowExpression *wexpr,
                                        ChunkCollection &input, ChunkCollection &sort_collection) {
@@ -1198,7 +1200,7 @@ static void ExtractPartition(WindowGlobalState &gstate, ChunkCollection &chunks,
 }
 
 //===--------------------------------------------------------------------===//
-// GetChunkInternal
+// Sink
 //===--------------------------------------------------------------------===//
 idx_t PhysicalWindow::MaxThreads(ClientContext &context) {
 	// Recursive CTE can cause us to be called befor Finalize,
@@ -1234,10 +1236,6 @@ public:
 unique_ptr<ParallelState> PhysicalWindow::GetParallelState() {
 	auto result = make_unique<WindowParallelState>();
 	return move(result);
-}
-
-unique_ptr<PhysicalOperatorState> PhysicalWindow::GetOperatorState() {
-	return make_unique<PhysicalWindowOperatorState>(*this, children.empty() ? nullptr : children[0].get());
 }
 
 static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalState &gstate, const idx_t hash_bin) {
@@ -1300,9 +1298,82 @@ static void Scan(PhysicalWindowOperatorState &state, DataChunk &chunk) {
 	state.position += STANDARD_VECTOR_SIZE;
 }
 
-void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                      PhysicalOperatorState *state_p) const {
-	auto &state = *reinterpret_cast<PhysicalWindowOperatorState *>(state_p);
+void PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
+                          DataChunk &input) const {
+	auto &lstate = (WindowLocalState &)lstate_p;
+	lstate.chunks.Append(input);
+
+	// Compute the over columns and the hash values for this block (if any)
+	const auto over_idx = 0;
+	auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
+
+	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
+	if (sort_col_count > 0) {
+		DataChunk over_chunk;
+		MaterializeOverForWindow(over_expr, input, over_chunk);
+
+		if (!over_expr->partitions.empty()) {
+			if (lstate.counts.empty()) {
+				lstate.counts.resize(lstate.partition_count, 0);
+			}
+
+			DataChunk hash_chunk;
+			HashChunk(lstate.counts, hash_chunk, over_chunk, over_expr->partitions.size());
+			lstate.hash_collection.Append(hash_chunk);
+			D_ASSERT(lstate.chunks.Count() == lstate.hash_collection.Count());
+		}
+
+		lstate.over_collection.Append(over_chunk);
+		D_ASSERT(lstate.chunks.Count() == lstate.over_collection.Count());
+	}
+}
+
+void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
+	auto &lstate = (WindowLocalState &)lstate_p;
+	if (lstate.chunks.Count() == 0) {
+		return;
+	}
+	auto &gstate = (WindowGlobalState &)gstate_p;
+	lock_guard<mutex> glock(gstate.lock);
+	gstate.chunks.Merge(lstate.chunks);
+	gstate.over_collection.Merge(lstate.over_collection);
+	gstate.hash_collection.Merge(lstate.hash_collection);
+	if (gstate.counts.empty()) {
+		gstate.counts = lstate.counts;
+	} else {
+		D_ASSERT(gstate.counts.size() == lstate.counts.size());
+		for (idx_t i = 0; i < gstate.counts.size(); ++i) {
+			gstate.counts[i] += lstate.counts[i];
+		}
+	}
+}
+
+bool PhysicalWindow::FinalizeInternal(ClientContext &context, unique_ptr<GlobalSinkState> gstate_p) {
+	this->sink_state = move(gstate_p);
+	return true;
+}
+
+bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate_p) {
+	return FinalizeInternal(context, move(gstate_p));
+}
+
+unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
+	return make_unique<WindowLocalState>(*this);
+}
+
+unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &context) const {
+	return make_unique<WindowGlobalState>(*this, context);
+}
+
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const {
+	return make_unique<PhysicalWindowOperatorState>();
+}
+
+void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate_p) const {
+	auto &state = (PhysicalWindowOperatorState &) lstate_p;
 	auto &gstate = (WindowGlobalState &)*sink_state;
 
 	if (!state.initialized) {
@@ -1360,73 +1431,6 @@ void PhysicalWindow::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		} while (true);
 	}
 	D_ASSERT(chunk.size() == 0);
-}
-
-void PhysicalWindow::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                          DataChunk &input) const {
-	auto &lstate = (WindowLocalState &)lstate_p;
-	lstate.chunks.Append(input);
-
-	// Compute the over columns and the hash values for this block (if any)
-	const auto over_idx = 0;
-	auto over_expr = reinterpret_cast<BoundWindowExpression *>(select_list[over_idx].get());
-
-	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
-	if (sort_col_count > 0) {
-		DataChunk over_chunk;
-		MaterializeOverForWindow(over_expr, input, over_chunk);
-
-		if (!over_expr->partitions.empty()) {
-			if (lstate.counts.empty()) {
-				lstate.counts.resize(lstate.partition_count, 0);
-			}
-
-			DataChunk hash_chunk;
-			HashChunk(lstate.counts, hash_chunk, over_chunk, over_expr->partitions.size());
-			lstate.hash_collection.Append(hash_chunk);
-			D_ASSERT(lstate.chunks.Count() == lstate.hash_collection.Count());
-		}
-
-		lstate.over_collection.Append(over_chunk);
-		D_ASSERT(lstate.chunks.Count() == lstate.over_collection.Count());
-	}
-}
-
-void PhysicalWindow::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) {
-	auto &lstate = (WindowLocalState &)lstate_p;
-	if (lstate.chunks.Count() == 0) {
-		return;
-	}
-	auto &gstate = (WindowGlobalState &)gstate_p;
-	lock_guard<mutex> glock(gstate.lock);
-	gstate.chunks.Merge(lstate.chunks);
-	gstate.over_collection.Merge(lstate.over_collection);
-	gstate.hash_collection.Merge(lstate.hash_collection);
-	if (gstate.counts.empty()) {
-		gstate.counts = lstate.counts;
-	} else {
-		D_ASSERT(gstate.counts.size() == lstate.counts.size());
-		for (idx_t i = 0; i < gstate.counts.size(); ++i) {
-			gstate.counts[i] += lstate.counts[i];
-		}
-	}
-}
-
-bool PhysicalWindow::FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
-	this->sink_state = move(gstate_p);
-	return true;
-}
-
-bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) {
-	return FinalizeInternal(context, move(gstate_p));
-}
-
-unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) {
-	return make_unique<WindowLocalState>(*this);
-}
-
-unique_ptr<GlobalOperatorState> PhysicalWindow::GetGlobalState(ClientContext &context) {
-	return make_unique<WindowGlobalState>(*this, context);
 }
 
 string PhysicalWindow::ParamsToString() const {

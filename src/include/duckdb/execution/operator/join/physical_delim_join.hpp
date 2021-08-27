@@ -9,14 +9,14 @@
 #pragma once
 
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
 class PhysicalHashAggregate;
 
 //! PhysicalDelimJoin represents a join where the LHS will be duplicate eliminated and pushed into a
 //! PhysicalChunkCollectionScan in the RHS.
-class PhysicalDelimJoin : public PhysicalSink {
+class PhysicalDelimJoin : public PhysicalOperator {
 public:
 	PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
 	                  vector<PhysicalOperator *> delim_scans, idx_t estimated_cardinality);
@@ -26,15 +26,15 @@ public:
 	vector<PhysicalOperator *> delim_scans;
 
 public:
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
-	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) override;
+	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
+	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> state) override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
+	// unique_ptr<OperatorState> GetOperatorState() override;
 
 	string ParamsToString() const override;
 };

@@ -19,7 +19,7 @@ namespace duckdb {
 class ClientContext;
 class DataChunk;
 class PhysicalOperator;
-class PhysicalOperatorState;
+class OperatorState;
 class ThreadContext;
 class Task;
 
@@ -57,7 +57,7 @@ public:
 
 private:
 	PhysicalOperator *physical_plan;
-	unique_ptr<PhysicalOperatorState> physical_state;
+	unique_ptr<OperatorState> physical_state;
 
 	mutex executor_lock;
 	//! The pipelines of the current query

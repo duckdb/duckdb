@@ -23,16 +23,19 @@ public:
 
 	unique_ptr<Expression> condition;
 
+// public:
+// 	// Operator interface
+// 	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+// 	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+
 public:
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	// Sink interface
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
-	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) override;
-
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> state) override;
 
 	string ParamsToString() const override;
 };

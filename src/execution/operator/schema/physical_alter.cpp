@@ -4,10 +4,28 @@
 
 namespace duckdb {
 
-void PhysicalAlter::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class AlterSourceState : public GlobalSourceState {
+public:
+	AlterSourceState() : finished(false) {}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalAlter::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<AlterSourceState>();
+}
+
+void PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	auto &state = (AlterSourceState &) gstate;
+	if (state.finished) {
+		return;
+	}
 	auto &catalog = Catalog::GetCatalog(context.client);
 	catalog.Alter(context.client, info.get());
-	state->finished = true;
+	state.finished = true;
 }
 
 } // namespace duckdb

@@ -2,33 +2,32 @@
 
 namespace duckdb {
 
-class PhysicalChunkScanState : public PhysicalOperatorState {
+class PhysicalChunkScanState : public GlobalSourceState {
 public:
-	explicit PhysicalChunkScanState(PhysicalOperator &op) : PhysicalOperatorState(op, nullptr), chunk_index(0) {
+	explicit PhysicalChunkScanState() : chunk_index(0) {
 	}
 
 	//! The current position in the scan
 	idx_t chunk_index;
 };
 
-void PhysicalChunkScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                         PhysicalOperatorState *state_p) const {
-	auto state = (PhysicalChunkScanState *)state_p;
+unique_ptr<GlobalSourceState> PhysicalChunkScan::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<PhysicalChunkScanState>(*this);
+}
+
+void PhysicalChunkScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	auto &state = (PhysicalChunkScanState &) gstate;
 	D_ASSERT(collection);
 	if (collection->Count() == 0) {
 		return;
 	}
 	D_ASSERT(chunk.GetTypes() == collection->Types());
-	if (state->chunk_index >= collection->ChunkCount()) {
+	if (state.chunk_index >= collection->ChunkCount()) {
 		return;
 	}
-	auto &collection_chunk = collection->GetChunk(state->chunk_index);
+	auto &collection_chunk = collection->GetChunk(state.chunk_index);
 	chunk.Reference(collection_chunk);
-	state->chunk_index++;
-}
-
-unique_ptr<PhysicalOperatorState> PhysicalChunkScan::GetOperatorState() {
-	return make_unique<PhysicalChunkScanState>(*this);
+	state.chunk_index++;
 }
 
 } // namespace duckdb

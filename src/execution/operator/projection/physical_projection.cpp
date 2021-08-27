@@ -4,39 +4,34 @@
 
 namespace duckdb {
 
-class PhysicalProjectionState : public PhysicalOperatorState {
+class ProjectionState : public OperatorState {
 public:
-	PhysicalProjectionState(PhysicalOperator &op, PhysicalOperator *child, vector<unique_ptr<Expression>> &expressions)
-	    : PhysicalOperatorState(op, child), executor(expressions) {
-		D_ASSERT(child);
+	ProjectionState(const vector<unique_ptr<Expression>> &expressions)
+	    : executor(expressions) {
 	}
 
 	ExpressionExecutor executor;
+
+public:
+	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
+		context.thread.profiler.Flush(op, &executor, "projection", 0);
+	}
 };
 
-void PhysicalProjection::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                          PhysicalOperatorState *state_p) const {
-	auto state = reinterpret_cast<PhysicalProjectionState *>(state_p);
-
-	// get the next chunk from the child
-	children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-	if (state->child_chunk.size() == 0) {
-		return;
-	}
-
-	state->executor.Execute(state->child_chunk, chunk);
+PhysicalProjection::PhysicalProjection(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
+					idx_t estimated_cardinality)
+	: PhysicalOperator(PhysicalOperatorType::PROJECTION, move(types), estimated_cardinality),
+		select_list(move(select_list)) {
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalProjection::GetOperatorState() {
-	return make_unique<PhysicalProjectionState>(*this, children[0].get(), select_list);
+bool PhysicalProjection::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+	auto &state = (ProjectionState &) state_p;
+	state.executor.Execute(input, chunk);
+	return false;
 }
 
-void PhysicalProjection::FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) {
-	auto &state = reinterpret_cast<PhysicalProjectionState &>(state_p);
-	context.thread.profiler.Flush(this, &state.executor, "projection", 0);
-	if (!children.empty() && state.child_state) {
-		children[0]->FinalizeOperatorState(*state.child_state, context);
-	}
+unique_ptr<OperatorState> PhysicalProjection::GetOperatorState(ClientContext &context) const {
+	return make_unique<ProjectionState>(select_list);
 }
 
 string PhysicalProjection::ParamsToString() const {

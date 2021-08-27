@@ -230,7 +230,7 @@ void Pipeline::ClearParents() {
 }
 
 void Pipeline::Reset(ClientContext &context) {
-	sink_state = sink->GetGlobalState(context);
+	sink_state = sink->GetGlobalSinkState(context);
 	finished_tasks = 0;
 	total_tasks = 0;
 	finished = false;

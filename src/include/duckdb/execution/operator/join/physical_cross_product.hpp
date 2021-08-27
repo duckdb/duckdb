@@ -9,23 +9,23 @@
 #pragma once
 
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
 //! PhysicalCrossProduct represents a cross product between two tables
-class PhysicalCrossProduct : public PhysicalSink {
+class PhysicalCrossProduct : public PhysicalOperator {
 public:
 	PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
 	                     unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality);
 
 public:
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
+	// unique_ptr<OperatorState> GetOperatorState() override;
 };
 
 } // namespace duckdb

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
@@ -18,7 +18,7 @@ class BufferManager;
 
 //! PhysicalHashAggregate is an group-by and aggregate implementation that uses
 //! a hash table to perform the grouping
-class PhysicalHashAggregate : public PhysicalSink {
+class PhysicalHashAggregate : public PhysicalOperator {
 public:
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      idx_t estimated_cardinality, PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
@@ -49,21 +49,28 @@ public:
 	vector<BoundAggregateExpression *> bindings;
 
 	unordered_map<Expression *, size_t> filter_indexes;
+public:
+	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	// Sink interface
+	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
-	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
+	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate) override;
 
-	void FinalizeImmediate(ClientContext &context, unique_ptr<GlobalOperatorState> gstate);
+	void FinalizeImmediate(ClientContext &context, unique_ptr<GlobalSinkState> gstate);
 
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	bool IsSink() const override {
+		return true;
+	}
 
+public:
 	string ParamsToString() const override;
 
 private:
@@ -71,9 +78,9 @@ private:
 	idx_t radix_limit;
 
 private:
-	bool FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> gstate, bool immediate,
+	bool FinalizeInternal(ClientContext &context, unique_ptr<GlobalSinkState> gstate, bool immediate,
 	                      Pipeline *pipeline);
-	bool ForceSingleHT(GlobalOperatorState &state) const;
+	bool ForceSingleHT(GlobalSinkState &state) const;
 };
 
 } // namespace duckdb

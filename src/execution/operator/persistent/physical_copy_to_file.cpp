@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-class CopyToFunctionGlobalState : public GlobalOperatorState {
+class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(unique_ptr<GlobalFunctionData> global_state)
 	    : rows_copied(0), global_state(move(global_state)) {
@@ -22,17 +22,16 @@ public:
 	unique_ptr<LocalFunctionData> local_state;
 };
 
-void PhysicalCopyToFile::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                          PhysicalOperatorState *state) const {
-	auto &g = (CopyToFunctionGlobalState &)*sink_state;
-
-	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
-
-	state->finished = true;
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
+					idx_t estimated_cardinality)
+	: PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, move(types), estimated_cardinality), function(function),
+		bind_data(move(bind_data)) {
 }
 
-void PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate,
+void PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
                               DataChunk &input) const {
 	auto &g = (CopyToFunctionGlobalState &)gstate;
 	auto &l = (CopyToFunctionLocalState &)lstate;
@@ -41,7 +40,7 @@ void PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalOperatorState &gs
 	function.copy_to_sink(context.client, *bind_data, *g.global_state, *l.local_state, input);
 }
 
-void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
+void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 	auto &g = (CopyToFunctionGlobalState &)gstate;
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
@@ -49,20 +48,46 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalOperatorState 
 		function.copy_to_combine(context.client, *bind_data, *g.global_state, *l.local_state);
 	}
 }
-bool PhysicalCopyToFile::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) {
+bool PhysicalCopyToFile::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate) {
 	auto g = (CopyToFunctionGlobalState *)gstate.get();
 	if (function.copy_to_finalize) {
 		function.copy_to_finalize(context, *bind_data, *g->global_state);
 	}
-	PhysicalSink::Finalize(pipeline, context, move(gstate));
+	PhysicalOperator::Finalize(pipeline, context, move(gstate));
 	return true;
 }
 
-unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
 	return make_unique<CopyToFunctionLocalState>(function.copy_to_initialize_local(context.client, *bind_data));
 }
-unique_ptr<GlobalOperatorState> PhysicalCopyToFile::GetGlobalState(ClientContext &context) {
+unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<CopyToFunctionGlobalState>(function.copy_to_initialize_global(context, *bind_data));
+}
+
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class CopyToFileState : public GlobalSourceState {
+public:
+	CopyToFileState() : finished(false) {}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalCopyToFile::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<CopyToFileState>();
+}
+
+void PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	auto &state = (CopyToFileState &) gstate;
+	auto &g = (CopyToFunctionGlobalState &)*sink_state;
+	if (state.finished) {
+		return;
+	}
+
+	chunk.SetCardinality(1);
+	chunk.SetValue(0, 0, Value::BIGINT(g.rows_copied));
+	state.finished = true;
 }
 
 } // namespace duckdb

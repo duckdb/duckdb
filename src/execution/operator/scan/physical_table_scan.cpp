@@ -10,18 +10,6 @@
 
 namespace duckdb {
 
-class PhysicalTableScanOperatorState : public PhysicalOperatorState {
-public:
-	explicit PhysicalTableScanOperatorState(PhysicalOperator &op)
-	    : PhysicalOperatorState(op, nullptr), initialized(false) {
-	}
-
-	ParallelState *parallel_state;
-	unique_ptr<FunctionOperatorData> operator_data;
-	//! Whether or not the scan has been initialized
-	bool initialized;
-};
-
 PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction function_p,
                                      unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
@@ -31,37 +19,50 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
       table_filters(move(table_filters_p)) {
 }
 
-void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                         PhysicalOperatorState *state_p) const {
-	auto &state = (PhysicalTableScanOperatorState &)*state_p;
-	if (column_ids.empty()) {
-		return;
-	}
-	if (!state.initialized) {
-		state.parallel_state = nullptr;
-		if (function.init) {
-			auto &task = context.task;
-			// check if there is any parallel state to fetch
-			state.parallel_state = nullptr;
-			auto task_info = task.task_info.find(this);
-			TableFilterCollection filters(table_filters.get());
-			if (task_info != task.task_info.end()) {
-				// parallel scan init
-				state.parallel_state = task_info->second;
-				state.operator_data =
-				    function.parallel_init(context.client, bind_data.get(), state.parallel_state, column_ids, &filters);
-			} else {
-				// sequential scan init
-				state.operator_data = function.init(context.client, bind_data.get(), column_ids, &filters);
-			}
-			if (!state.operator_data) {
-				// no operator data returned: nothing to scan
-				return;
-			}
+
+class TableScanGlobalState : public GlobalSourceState {
+public:
+	TableScanGlobalState(ClientContext &context, PhysicalTableScan &op) {
+		if (op.function.init_parallel_state) {
+			parallel_state = op.function.init_parallel_state(context, op.bind_data.get());
 		}
-		state.initialized = true;
 	}
-	if (!state.parallel_state) {
+
+	unique_ptr<ParallelState> parallel_state;
+};
+
+class TableScanLocalState : public LocalSourceState {
+public:
+	TableScanLocalState(ExecutionContext &context, TableScanGlobalState &gstate, PhysicalTableScan &op) {
+		TableFilterCollection filters(op.table_filters.get());
+		if (gstate.parallel_state) {
+			// parallel scan init
+			operator_data =
+				op.function.parallel_init(context.client, op.bind_data.get(), gstate.parallel_state.get(), op.column_ids, &filters);
+		} else {
+			// sequential scan init
+			operator_data = op.function.init(context.client, op.bind_data.get(), op.column_ids, &filters);
+		}
+	}
+
+	unique_ptr<FunctionOperatorData> operator_data;
+};
+
+
+unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const {
+	return make_unique<TableScanLocalState>(context, (TableScanGlobalState &) gstate, *this);
+}
+
+unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<TableScanGlobalState>(context, *this);
+}
+
+void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+	D_ASSERT(!column_ids.empty());
+	auto &gstate = (TableScanGlobalState &) gstate_p;
+	auto &state = (TableScanLocalState &) lstate;
+
+	if (!gstate.parallel_state) {
 		// sequential scan
 		function.function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk);
 		if (chunk.size() != 0) {
@@ -72,7 +73,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 		do {
 			if (function.parallel_function) {
 				function.parallel_function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk,
-				                           state.parallel_state);
+				                           gstate.parallel_state.get());
 			} else {
 				function.function(context.client, bind_data.get(), state.operator_data.get(), nullptr, chunk);
 			}
@@ -80,7 +81,7 @@ void PhysicalTableScan::GetChunkInternal(ExecutionContext &context, DataChunk &c
 			if (chunk.size() == 0) {
 				D_ASSERT(function.parallel_state_next);
 				if (function.parallel_state_next(context.client, bind_data.get(), state.operator_data.get(),
-				                                 state.parallel_state)) {
+				                                 gstate.parallel_state.get())) {
 					continue;
 				} else {
 					break;
@@ -129,10 +130,6 @@ string PhysicalTableScan::ParamsToString() const {
 		}
 	}
 	return result;
-}
-
-unique_ptr<PhysicalOperatorState> PhysicalTableScan::GetOperatorState() {
-	return make_unique<PhysicalTableScanOperatorState>(*this);
 }
 
 } // namespace duckdb

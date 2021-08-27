@@ -4,10 +4,9 @@
 
 namespace duckdb {
 
-void PhysicalSet::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
+void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
 	auto &db = context.client.db;
 	db->config.set_variables[name] = value; // woop
-	state->finished = true;
 }
 
 } // namespace duckdb

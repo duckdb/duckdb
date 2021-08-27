@@ -7,8 +7,25 @@
 
 namespace duckdb {
 
-void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                           PhysicalOperatorState *state) const {
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class CreateIndexSourceState : public GlobalSourceState {
+public:
+	CreateIndexSourceState() : finished(false) {}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalCreateIndex::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<CreateIndexSourceState>();
+}
+
+void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	auto &state = (CreateIndexSourceState &) gstate;
+	if (state.finished) {
+		return;
+	}
 	if (column_ids.empty()) {
 		throw BinderException("CREATE INDEX does not refer to any columns in the base table!");
 	}
@@ -34,7 +51,7 @@ void PhysicalCreateIndex::GetChunkInternal(ExecutionContext &context, DataChunk 
 	table.storage->AddIndex(move(index), expressions);
 
 	chunk.SetCardinality(0);
-	state->finished = true;
+	state.finished = true;
 }
 
 } // namespace duckdb

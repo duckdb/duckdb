@@ -10,7 +10,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class DeleteGlobalState : public GlobalOperatorState {
+class DeleteGlobalState : public GlobalSinkState {
 public:
 	DeleteGlobalState() : deleted_count(0) {
 	}
@@ -18,7 +18,7 @@ public:
 	atomic<idx_t> deleted_count;
 };
 
-void PhysicalDelete::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                           DataChunk &input) const {
 	auto &gstate = (DeleteGlobalState &)state;
 
@@ -27,20 +27,34 @@ void PhysicalDelete::Sink(ExecutionContext &context, GlobalOperatorState &state,
 	gstate.deleted_count += table.Delete(tableref, context.client, input.data[row_id_index], input.size());
 }
 
-unique_ptr<GlobalOperatorState> PhysicalDelete::GetGlobalState(ClientContext &context) {
+unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<DeleteGlobalState>();
 }
 
 //===--------------------------------------------------------------------===//
-// GetChunkInternal
+// Source
 //===--------------------------------------------------------------------===//
-void PhysicalDelete::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
-	auto &gstate = (DeleteGlobalState &)*sink_state;
+class DeleteSourceState : public GlobalSourceState {
+public:
+	DeleteSourceState() : finished(false) {}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<DeleteSourceState>();
+}
+
+void PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	auto &state = (DeleteSourceState &) gstate;
+	auto &g = (DeleteGlobalState &)*sink_state;
+	if (state.finished) {
+		return;
+	}
 
 	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(gstate.deleted_count));
-
-	state->finished = true;
+	chunk.SetValue(0, 0, Value::BIGINT(g.deleted_count));
+	state.finished = true;
 }
 
 } // namespace duckdb

@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 
@@ -18,7 +18,7 @@ namespace duckdb {
 class OrderGlobalState;
 
 //! Physically re-orders the input data
-class PhysicalOrder : public PhysicalSink {
+class PhysicalOrder : public PhysicalOperator {
 public:
 	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality);
 
@@ -26,16 +26,19 @@ public:
 	vector<BoundOrderByNode> orders;
 
 public:
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	// Source interface
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const override;
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
 
-	void Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
+public:
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+
+	void Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
 	          DataChunk &input) const override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) override;
-	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) override;
-
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
+	void Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const override;
+	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate_p) override;
 
 	string ParamsToString() const override;
 

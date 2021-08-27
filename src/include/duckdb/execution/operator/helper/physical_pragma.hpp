@@ -28,7 +28,8 @@ public:
 	PragmaInfo info;
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
+	// Source interface
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
 };
 
 } // namespace duckdb

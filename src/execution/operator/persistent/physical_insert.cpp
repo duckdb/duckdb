@@ -12,7 +12,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class InsertGlobalState : public GlobalOperatorState {
+class InsertGlobalState : public GlobalSinkState {
 public:
 	InsertGlobalState() : insert_count(0) {
 	}
@@ -32,7 +32,7 @@ public:
 	ExpressionExecutor default_executor;
 };
 
-void PhysicalInsert::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                           DataChunk &chunk) const {
 	auto &gstate = (InsertGlobalState &)state;
 	auto &istate = (InsertLocalState &)lstate;
@@ -68,29 +68,44 @@ void PhysicalInsert::Sink(ExecutionContext &context, GlobalOperatorState &state,
 	gstate.insert_count += chunk.size();
 }
 
-unique_ptr<GlobalOperatorState> PhysicalInsert::GetGlobalState(ClientContext &context) {
+unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<InsertGlobalState>();
 }
 
-unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> PhysicalInsert::GetLocalSinkState(ExecutionContext &context) const {
 	return make_unique<InsertLocalState>(table->GetTypes(), bound_defaults);
 }
 
-//===--------------------------------------------------------------------===//
-// GetChunkInternal
-//===--------------------------------------------------------------------===//
-void PhysicalInsert::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
-	auto &gstate = (InsertGlobalState &)*sink_state;
-
-	chunk.SetCardinality(1);
-	chunk.SetValue(0, 0, Value::BIGINT(gstate.insert_count));
-
-	state->finished = true;
-}
-void PhysicalInsert::Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) {
+void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 	auto &state = (InsertLocalState &)lstate;
 	context.thread.profiler.Flush(this, &state.default_executor, "default_executor", 1);
 	context.client.profiler->Flush(context.thread.profiler);
+}
+
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class InsertSourceState : public GlobalSourceState {
+public:
+	InsertSourceState() : finished(false) {}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<InsertSourceState>();
+}
+
+void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	auto &state = (InsertSourceState &) gstate;
+	auto &g = (InsertGlobalState &)*sink_state;
+	if (state.finished) {
+		return;
+	}
+
+	chunk.SetCardinality(1);
+	chunk.SetValue(0, 0, Value::BIGINT(g.insert_count));
+	state.finished = true;
 }
 
 } // namespace duckdb

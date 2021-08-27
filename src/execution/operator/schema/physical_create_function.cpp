@@ -5,10 +5,27 @@
 
 namespace duckdb {
 
-void PhysicalCreateFunction::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                              PhysicalOperatorState *state) const {
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class CreateFunctionSourceState : public GlobalSourceState {
+public:
+	CreateFunctionSourceState() : finished(false) {}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalCreateFunction::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<CreateFunctionSourceState>();
+}
+
+void PhysicalCreateFunction::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	auto &state = (CreateFunctionSourceState &) gstate;
+	if (state.finished) {
+		return;
+	}
 	Catalog::GetCatalog(context.client).CreateFunction(context.client, info.get());
-	state->finished = true;
+	state.finished = true;
 }
 
 } // namespace duckdb

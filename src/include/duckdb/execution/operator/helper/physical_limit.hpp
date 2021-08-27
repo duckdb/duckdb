@@ -26,9 +26,9 @@ public:
 	unique_ptr<Expression> offset_expression;
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	// Operator interface
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
 };
 
 } // namespace duckdb

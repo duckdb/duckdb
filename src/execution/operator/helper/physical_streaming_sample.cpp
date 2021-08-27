@@ -13,16 +13,16 @@ PhysicalStreamingSample::PhysicalStreamingSample(vector<LogicalType> types, Samp
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
-class StreamingSampleOperatorState : public PhysicalOperatorState {
+class StreamingSampleOperatorState : public OperatorState {
 public:
 	StreamingSampleOperatorState(PhysicalOperator &op, PhysicalOperator *child, int64_t seed)
-	    : PhysicalOperatorState(op, child), random(seed) {
+	    : OperatorState(op, child), random(seed) {
 	}
 
 	RandomEngine random;
 };
 
-void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, PhysicalOperatorState *state_p) const {
+void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, OperatorState *state_p) const {
 	// system sampling: we throw one dice per chunk
 	auto &state = (StreamingSampleOperatorState &)*state_p;
 	double rand = state.random.NextRandom();
@@ -33,7 +33,7 @@ void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, 
 }
 
 void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &result,
-                                              PhysicalOperatorState *state_p) const {
+                                              OperatorState *state_p) const {
 	// bernoulli sampling: we throw one dice per tuple
 	// then slice the result chunk
 	auto &state = (StreamingSampleOperatorState &)*state_p;
@@ -51,7 +51,7 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 }
 
 void PhysicalStreamingSample::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state) const {
+                                               OperatorState *state) const {
 
 	// get the next chunk from the child
 	do {
@@ -73,7 +73,7 @@ void PhysicalStreamingSample::GetChunkInternal(ExecutionContext &context, DataCh
 	} while (chunk.size() == 0);
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalStreamingSample::GetOperatorState() {
+unique_ptr<OperatorState> PhysicalStreamingSample::GetOperatorState() {
 	return make_unique<StreamingSampleOperatorState>(*this, children[0].get(), seed);
 }
 

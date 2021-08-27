@@ -8,32 +8,33 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/function/copy_function.hpp"
 
 namespace duckdb {
 
 //! Copy the contents of a query into a table
-class PhysicalCopyToFile : public PhysicalSink {
+class PhysicalCopyToFile : public PhysicalOperator {
 public:
 	PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
-	                   idx_t estimated_cardinality)
-	    : PhysicalSink(PhysicalOperatorType::COPY_TO_FILE, move(types), estimated_cardinality), function(function),
-	      bind_data(move(bind_data)) {
-	}
+	                   idx_t estimated_cardinality);
 
 	CopyFunction function;
 	unique_ptr<FunctionData> bind_data;
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
+	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
 
-	void Sink(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate,
+public:
+	// Sink interface
+	void Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
 	          DataChunk &input) const override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
-	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
+	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate) override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 };
 } // namespace duckdb

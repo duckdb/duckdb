@@ -24,21 +24,22 @@ public:
 	                       vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
 
 public:
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
-	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
-	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
+	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
+	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate) override;
+
+	// void FinalizeOperatorState(OperatorState &state, ExecutionContext &context) override;
+	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
+	// unique_ptr<OperatorState> GetOperatorState() override;
 
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
-	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const;
+	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const;
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
-	void ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const;
+	void ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const;
 };
 
 } // namespace duckdb

@@ -111,7 +111,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 		// operator is a sink, build a pipeline
 		auto pipeline = make_shared<Pipeline>(*this, *producer);
 		pipeline->sink = (PhysicalSink *)op;
-		pipeline->sink_state = pipeline->sink->GetGlobalState(context);
+		pipeline->sink_state = pipeline->sink->GetGlobalSinkState(context);
 		if (parent) {
 			// the parent is dependent on this pipeline to complete
 			parent->AddDependency(pipeline);

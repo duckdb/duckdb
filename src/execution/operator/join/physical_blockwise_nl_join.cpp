@@ -16,6 +16,7 @@ PhysicalBlockwiseNLJoin::PhysicalBlockwiseNLJoin(LogicalOperator &op, unique_ptr
 	// MARK, SINGLE and RIGHT OUTER joins not handled
 	D_ASSERT(join_type != JoinType::MARK);
 	D_ASSERT(join_type != JoinType::SINGLE);
+	throw InternalException("FIXME: blockwise nl join");
 }
 
 //===--------------------------------------------------------------------===//
@@ -27,7 +28,7 @@ public:
 	}
 };
 
-class BlockwiseNLJoinGlobalState : public GlobalOperatorState {
+class BlockwiseNLJoinGlobalState : public GlobalSinkState {
 public:
 	BlockwiseNLJoinGlobalState() : right_outer_position(0) {
 	}
@@ -39,15 +40,15 @@ public:
 	idx_t right_outer_position;
 };
 
-unique_ptr<GlobalOperatorState> PhysicalBlockwiseNLJoin::GetGlobalState(ClientContext &context) {
+unique_ptr<GlobalSinkState> PhysicalBlockwiseNLJoin::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<BlockwiseNLJoinGlobalState>();
 }
 
-unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionContext &context) const {
 	return make_unique<BlockwiseNLJoinLocalState>();
 }
 
-void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                    DataChunk &input) const {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)state;
 	gstate.right_chunks.Append(input);
@@ -57,165 +58,160 @@ void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalOperatorStat
 // Finalize
 //===--------------------------------------------------------------------===//
 bool PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ClientContext &context,
-                                       unique_ptr<GlobalOperatorState> state) {
+                                       unique_ptr<GlobalSinkState> state) {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*state;
 	if (IsRightOuterJoin(join_type)) {
 		gstate.rhs_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.Count()]);
 		memset(gstate.rhs_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.Count());
 	}
-	PhysicalSink::Finalize(pipeline, context, move(state));
+	PhysicalOperator::Finalize(pipeline, context, move(state));
 	return true;
 }
 
 //===--------------------------------------------------------------------===//
-// GetChunkInternal
+// Operator
 //===--------------------------------------------------------------------===//
-class PhysicalBlockwiseNLJoinState : public PhysicalOperatorState {
-public:
-	PhysicalBlockwiseNLJoinState(PhysicalOperator &op, PhysicalOperator *left, JoinType join_type,
-	                             Expression &condition)
-	    : PhysicalOperatorState(op, left), left_position(0), right_position(0), fill_in_rhs(false),
-	      checked_found_match(false), executor(condition) {
-		if (IsLeftOuterJoin(join_type)) {
-			lhs_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
-		}
-	}
+// class PhysicalBlockwiseNLJoinState : public OperatorState {
+// public:
+// 	PhysicalBlockwiseNLJoinState(JoinType join_type, Expression &condition)
+// 	    : left_position(0), right_position(0), fill_in_rhs(false),
+// 	      checked_found_match(false), executor(condition) {
+// 		if (IsLeftOuterJoin(join_type)) {
+// 			lhs_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
+// 		}
+// 	}
 
-	//! Whether or not a tuple on the LHS has found a match, only used for LEFT OUTER and FULL OUTER joins
-	unique_ptr<bool[]> lhs_found_match;
-	idx_t left_position;
-	idx_t right_position;
-	bool fill_in_rhs;
-	bool checked_found_match;
-	ExpressionExecutor executor;
-};
+// 	//! Whether or not a tuple on the LHS has found a match, only used for LEFT OUTER and FULL OUTER joins
+// 	unique_ptr<bool[]> lhs_found_match;
+// 	idx_t left_position;
+// 	idx_t right_position;
+// 	bool fill_in_rhs;
+// 	bool checked_found_match;
+// 	ExpressionExecutor executor;
+// };
 
-void PhysicalBlockwiseNLJoin::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state_p) const {
-	auto state = reinterpret_cast<PhysicalBlockwiseNLJoinState *>(state_p);
-	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
+// unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ClientContext &context) const {
+// 	return make_unique<PhysicalBlockwiseNLJoinState>(join_type, *condition);
+// }
 
-	if (gstate.right_chunks.Count() == 0) {
-		// empty RHS
-		if (join_type == JoinType::SEMI || join_type == JoinType::INNER) {
-			// for SEMI or INNER join: empty RHS means empty result
-			return;
-		}
-		D_ASSERT(join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::ANTI ||
-		         join_type == JoinType::RIGHT);
-		// pull a chunk from the LHS
-		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (state->child_chunk.size() == 0) {
-			return;
-		}
-		PhysicalComparisonJoin::ConstructEmptyJoinResult(join_type, true, state->child_chunk, chunk);
-		return;
-	}
+// bool PhysicalBlockwiseNLJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+// 	D_ASSERT(input.size() > 0);
+// 	auto &state = (PhysicalBlockwiseNLJoinState &) state_p;
+// 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
 
-	// now perform the actual join
-	// we construct a combined DataChunk by referencing the LHS and the RHS
-	// every step that we do not have output results we shift the vectors of the RHS one up or down
-	// this creates a new "alignment" between the tuples, exhausting all possible O(n^2) combinations
-	// while allowing us to use vectorized execution for every step
-	idx_t result_count = 0;
-	do {
-		if (state->fill_in_rhs) {
-			PhysicalComparisonJoin::ConstructFullOuterJoinResult(gstate.rhs_found_match.get(), gstate.right_chunks,
-			                                                     chunk, gstate.right_outer_position);
-			return;
-		}
-		if (state->left_position >= state->child_chunk.size()) {
-			// exhausted LHS, have to pull new LHS chunk
-			if (!state->checked_found_match && state->lhs_found_match) {
-				// LEFT OUTER JOIN or FULL OUTER JOIN, first check if we need to create extra results because of
-				// non-matching tuples
-				SelectionVector sel(STANDARD_VECTOR_SIZE);
-				for (idx_t i = 0; i < state->child_chunk.size(); i++) {
-					if (!state->lhs_found_match[i]) {
-						sel.set_index(result_count++, i);
-					}
-				}
-				if (result_count > 0) {
-					// have to create the chunk, set the selection vector and count
-					// for the LHS, reference the child_chunk and set the sel_vector and count
-					chunk.Slice(state->child_chunk, sel, result_count);
-					// for the RHS, set the mask to NULL and set the sel_vector and count
-					for (idx_t i = state->child_chunk.ColumnCount(); i < chunk.ColumnCount(); i++) {
-						chunk.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
-						ConstantVector::SetNull(chunk.data[i], true);
-					}
-					state->checked_found_match = true;
-					return;
-				}
-			}
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			// no more data on LHS, if FULL OUTER JOIN iterate over RHS
-			if (state->child_chunk.size() == 0) {
-				if (IsRightOuterJoin(join_type)) {
-					state->fill_in_rhs = true;
-					continue;
-				} else {
-					return;
-				}
-			}
-			state->left_position = 0;
-			state->right_position = 0;
-			if (state->lhs_found_match) {
-				state->checked_found_match = false;
-				memset(state->lhs_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
-			}
-		}
-		auto &lchunk = state->child_chunk;
-		auto &rchunk = gstate.right_chunks.GetChunk(state->right_position);
+// 	if (gstate.right_chunks.Count() == 0) {
+// 		// empty RHS
+// 		if (join_type == JoinType::SEMI || join_type == JoinType::INNER) {
+// 			// for SEMI or INNER join: empty RHS means empty result
+// 			return false;
+// 		}
+// 		D_ASSERT(join_type == JoinType::LEFT || join_type == JoinType::OUTER || join_type == JoinType::ANTI ||
+// 		         join_type == JoinType::RIGHT);
+// 		// pull a chunk from the LHS
+// 		PhysicalComparisonJoin::ConstructEmptyJoinResult(join_type, true, input, chunk);
+// 		return false;
+// 	}
 
-		// fill in the current element of the LHS into the chunk
-		D_ASSERT(chunk.ColumnCount() == lchunk.ColumnCount() + rchunk.ColumnCount());
-		for (idx_t i = 0; i < lchunk.ColumnCount(); i++) {
-			ConstantVector::Reference(chunk.data[i], lchunk.data[i], state->left_position, lchunk.size());
-		}
-		// for the RHS we just reference the entire vector
-		for (idx_t i = 0; i < rchunk.ColumnCount(); i++) {
-			chunk.data[lchunk.ColumnCount() + i].Reference(rchunk.data[i]);
-		}
-		chunk.SetCardinality(rchunk.size());
+// 	// now perform the actual join
+// 	// we construct a combined DataChunk by referencing the LHS and the RHS
+// 	// every step that we do not have output results we shift the vectors of the RHS one up or down
+// 	// this creates a new "alignment" between the tuples, exhausting all possible O(n^2) combinations
+// 	// while allowing us to use vectorized execution for every step
+// 	idx_t result_count = 0;
+// 	do {
+// 		if (state.fill_in_rhs) {
+// 			PhysicalComparisonJoin::ConstructFullOuterJoinResult(gstate.rhs_found_match.get(), gstate.right_chunks,
+// 			                                                     chunk, gstate.right_outer_position);
+// 			return;
+// 		}
+// 		if (state.left_position >= input.size()) {
+// 			// exhausted LHS, have to pull new LHS chunk
+// 			if (!state->checked_found_match && state->lhs_found_match) {
+// 				// LEFT OUTER JOIN or FULL OUTER JOIN, first check if we need to create extra results because of
+// 				// non-matching tuples
+// 				SelectionVector sel(STANDARD_VECTOR_SIZE);
+// 				for (idx_t i = 0; i < state->child_chunk.size(); i++) {
+// 					if (!state->lhs_found_match[i]) {
+// 						sel.set_index(result_count++, i);
+// 					}
+// 				}
+// 				if (result_count > 0) {
+// 					// have to create the chunk, set the selection vector and count
+// 					// for the LHS, reference the child_chunk and set the sel_vector and count
+// 					chunk.Slice(state->child_chunk, sel, result_count);
+// 					// for the RHS, set the mask to NULL and set the sel_vector and count
+// 					for (idx_t i = state->child_chunk.ColumnCount(); i < chunk.ColumnCount(); i++) {
+// 						chunk.data[i].SetVectorType(VectorType::CONSTANT_VECTOR);
+// 						ConstantVector::SetNull(chunk.data[i], true);
+// 					}
+// 					state->checked_found_match = true;
+// 					return;
+// 				}
+// 			}
+// 			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
+// 			// no more data on LHS, if FULL OUTER JOIN iterate over RHS
+// 			if (state->child_chunk.size() == 0) {
+// 				if (IsRightOuterJoin(join_type)) {
+// 					state->fill_in_rhs = true;
+// 					continue;
+// 				} else {
+// 					return;
+// 				}
+// 			}
+// 			state.left_position = 0;
+// 			state.right_position = 0;
+// 			if (state.lhs_found_match) {
+// 				state.checked_found_match = false;
+// 				memset(state.lhs_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+// 			}
+// 		}
+// 		auto &lchunk = state.child_chunk;
+// 		auto &rchunk = gstate.right_chunks.GetChunk(state.right_position);
 
-		// now perform the computation
-		SelectionVector match_sel(STANDARD_VECTOR_SIZE);
-		result_count = state->executor.SelectExpression(chunk, match_sel);
-		if (result_count > 0) {
-			// found a match!
-			// set the match flags in the LHS
-			if (state->lhs_found_match) {
-				state->lhs_found_match[state->left_position] = true;
-			}
-			// set the match flags in the RHS
-			if (gstate.rhs_found_match) {
-				for (idx_t i = 0; i < result_count; i++) {
-					auto idx = match_sel.get_index(i);
-					gstate.rhs_found_match[state->right_position * STANDARD_VECTOR_SIZE + idx] = true;
-				}
-			}
-			chunk.Slice(match_sel, result_count);
-		} else {
-			// no result: reset the chunk
-			chunk.Reset();
-		}
-		// move to the next tuple on the LHS
-		state->left_position++;
-		if (state->left_position >= state->child_chunk.size()) {
-			// exhausted the current chunk, move to the next RHS chunk
-			state->right_position++;
-			if (state->right_position < gstate.right_chunks.ChunkCount()) {
-				// we still have chunks left! start over on the LHS
-				state->left_position = 0;
-			}
-		}
-	} while (result_count == 0);
-}
+// 		// fill in the current element of the LHS into the chunk
+// 		D_ASSERT(chunk.ColumnCount() == lchunk.ColumnCount() + rchunk.ColumnCount());
+// 		for (idx_t i = 0; i < lchunk.ColumnCount(); i++) {
+// 			ConstantVector::Reference(chunk.data[i], lchunk.data[i], state.left_position, lchunk.size());
+// 		}
+// 		// for the RHS we just reference the entire vector
+// 		for (idx_t i = 0; i < rchunk.ColumnCount(); i++) {
+// 			chunk.data[lchunk.ColumnCount() + i].Reference(rchunk.data[i]);
+// 		}
+// 		chunk.SetCardinality(rchunk.size());
 
-unique_ptr<PhysicalOperatorState> PhysicalBlockwiseNLJoin::GetOperatorState() {
-	return make_unique<PhysicalBlockwiseNLJoinState>(*this, children[0].get(), join_type, *condition);
-}
+// 		// now perform the computation
+// 		SelectionVector match_sel(STANDARD_VECTOR_SIZE);
+// 		result_count = state.executor.SelectExpression(chunk, match_sel);
+// 		if (result_count > 0) {
+// 			// found a match!
+// 			// set the match flags in the LHS
+// 			if (state.lhs_found_match) {
+// 				state.lhs_found_match[state.left_position] = true;
+// 			}
+// 			// set the match flags in the RHS
+// 			if (gstate.rhs_found_match) {
+// 				for (idx_t i = 0; i < result_count; i++) {
+// 					auto idx = match_sel.get_index(i);
+// 					gstate.rhs_found_match[state.right_position * STANDARD_VECTOR_SIZE + idx] = true;
+// 				}
+// 			}
+// 			chunk.Slice(match_sel, result_count);
+// 		} else {
+// 			// no result: reset the chunk
+// 			chunk.Reset();
+// 		}
+// 		// move to the next tuple on the LHS
+// 		state.left_position++;
+// 		if (state.left_position >= state.child_chunk.size()) {
+// 			// exhausted the current chunk, move to the next RHS chunk
+// 			state.right_position++;
+// 			if (state.right_position < gstate.right_chunks.ChunkCount()) {
+// 				// we still have chunks left! start over on the LHS
+// 				state.left_position = 0;
+// 			}
+// 		}
+// 	} while (result_count == 0);
+// }
 
 string PhysicalBlockwiseNLJoin::ParamsToString() const {
 	string extra_info = JoinTypeToString(join_type) + "\n";

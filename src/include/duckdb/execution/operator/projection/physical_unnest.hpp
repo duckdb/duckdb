@@ -19,13 +19,12 @@ public:
 	PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list, idx_t estimated_cardinality,
 	               PhysicalOperatorType type = PhysicalOperatorType::UNNEST);
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-
 	//! The projection list of the SELECT statement (that contains aggregates)
 	vector<unique_ptr<Expression>> select_list;
 
 public:
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	// unique_ptr<OperatorState> GetOperatorState() override;
+	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
 };
 
 } // namespace duckdb

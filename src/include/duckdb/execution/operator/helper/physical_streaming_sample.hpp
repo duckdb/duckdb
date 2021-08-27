@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
@@ -24,14 +24,14 @@ public:
 	int64_t seed;
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
+	unique_ptr<OperatorState> GetOperatorState() override;
 
 	string ParamsToString() const override;
 
 private:
-	void SystemSample(DataChunk &input, DataChunk &result, PhysicalOperatorState *state) const;
-	void BernoulliSample(DataChunk &input, DataChunk &result, PhysicalOperatorState *state) const;
+	void SystemSample(DataChunk &input, DataChunk &result, OperatorState *state) const;
+	void BernoulliSample(DataChunk &input, DataChunk &result, OperatorState *state) const;
 };
 
 } // namespace duckdb

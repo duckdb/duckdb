@@ -74,7 +74,27 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEnt
 	ss << ");" << std::endl;
 }
 
-void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
+
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class ExportSourceState : public GlobalSourceState {
+public:
+	ExportSourceState() : finished(false) {}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<ExportSourceState>();
+}
+
+void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	auto &state = (ExportSourceState &) gstate;
+	if (state.finished) {
+		return;
+	}
+
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
 
@@ -127,7 +147,7 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		WriteCopyStatement(fs, load_ss, table, *info, exported_table_info, function);
 	}
 	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));
-	state->finished = true;
+	state.finished = true;
 }
 
 } // namespace duckdb

@@ -23,10 +23,10 @@ public:
 	unique_ptr<Expression> expression;
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+
 	string ParamsToString() const override;
-	void FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) override;
 };
 } // namespace duckdb

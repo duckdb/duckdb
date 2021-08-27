@@ -25,7 +25,7 @@ public:
 	                 idx_t estimated_cardinality);
 	PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left, unique_ptr<PhysicalOperator> right,
 	                 vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality);
-	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
+	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) override;
 
 	vector<idx_t> right_projection_map;
 	//! The types of the keys
@@ -38,20 +38,21 @@ public:
 	bool can_cache;
 
 public:
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
-	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate) override;
+	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
+	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate) override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
+	// unique_ptr<OperatorState> GetOperatorState() override;
 
-	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
+	// void FinalizeOperatorState(OperatorState &state, ExecutionContext &context) override;
 
 private:
-	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const;
+	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, OperatorState *state_p) const;
 };
 
 } // namespace duckdb

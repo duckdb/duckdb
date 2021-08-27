@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/unordered_set.hpp"
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/parallel/parallel_state.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -78,9 +78,9 @@ private:
 	//! The child from which to pull chunks
 	PhysicalOperator *child;
 	//! The global sink state
-	unique_ptr<GlobalOperatorState> sink_state;
+	unique_ptr<GlobalSinkState> sink_state;
 	//! The sink (i.e. destination) for data; this is e.g. a hash table to-be-built
-	PhysicalSink *sink;
+	PhysicalOperator *sink;
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	unordered_map<Pipeline *, weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline
