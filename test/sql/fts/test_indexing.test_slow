@@ -212,7 +212,7 @@ statement ok
 INSERT INTO my_stopwords VALUES ('quacking')
 
 statement ok
-PRAGMA create_fts_index('documents', 'id', 'body', stopwords := 'my_stopwords')
+PRAGMA create_fts_index('documents', 'id', 'body', stopwords='my_stopwords')
 
 # the word 'quacking' is no longer indexed, therefore doc1 is no longer retrieved with this query
 query III
