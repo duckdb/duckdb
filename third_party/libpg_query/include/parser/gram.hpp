@@ -427,90 +427,91 @@
      STRUCT = 643,
      SUBSCRIPTION = 644,
      SUBSTRING = 645,
-     SYMMETRIC = 646,
-     SYSID = 647,
-     SYSTEM_P = 648,
-     TABLE = 649,
-     TABLES = 650,
-     TABLESAMPLE = 651,
-     TABLESPACE = 652,
-     TEMP = 653,
-     TEMPLATE = 654,
-     TEMPORARY = 655,
-     TEXT_P = 656,
-     THEN = 657,
-     TIME = 658,
-     TIMESTAMP = 659,
-     TO = 660,
-     TRAILING = 661,
-     TRANSACTION = 662,
-     TRANSFORM = 663,
-     TREAT = 664,
-     TRIGGER = 665,
-     TRIM = 666,
-     TRUE_P = 667,
-     TRUNCATE = 668,
-     TRUSTED = 669,
-     TRY_CAST = 670,
-     TYPE_P = 671,
-     TYPES_P = 672,
-     UNBOUNDED = 673,
-     UNCOMMITTED = 674,
-     UNENCRYPTED = 675,
-     UNION = 676,
-     UNIQUE = 677,
-     UNKNOWN = 678,
-     UNLISTEN = 679,
-     UNLOGGED = 680,
-     UNTIL = 681,
-     UPDATE = 682,
-     USER = 683,
-     USING = 684,
-     VACUUM = 685,
-     VALID = 686,
-     VALIDATE = 687,
-     VALIDATOR = 688,
-     VALUE_P = 689,
-     VALUES = 690,
-     VARCHAR = 691,
-     VARIADIC = 692,
-     VARYING = 693,
-     VERBOSE = 694,
-     VERSION_P = 695,
-     VIEW = 696,
-     VIEWS = 697,
-     VOLATILE = 698,
-     WHEN = 699,
-     WHERE = 700,
-     WHITESPACE_P = 701,
-     WINDOW = 702,
-     WITH = 703,
-     WITHIN = 704,
-     WITHOUT = 705,
-     WORK = 706,
-     WRAPPER = 707,
-     WRITE_P = 708,
-     XML_P = 709,
-     XMLATTRIBUTES = 710,
-     XMLCONCAT = 711,
-     XMLELEMENT = 712,
-     XMLEXISTS = 713,
-     XMLFOREST = 714,
-     XMLNAMESPACES = 715,
-     XMLPARSE = 716,
-     XMLPI = 717,
-     XMLROOT = 718,
-     XMLSERIALIZE = 719,
-     XMLTABLE = 720,
-     YEAR_P = 721,
-     YEARS_P = 722,
-     YES_P = 723,
-     ZONE = 724,
-     NOT_LA = 725,
-     NULLS_LA = 726,
-     WITH_LA = 727,
-     POSTFIXOP = 728,
-     UMINUS = 729
+     SUMMARIZE = 646,
+     SYMMETRIC = 647,
+     SYSID = 648,
+     SYSTEM_P = 649,
+     TABLE = 650,
+     TABLES = 651,
+     TABLESAMPLE = 652,
+     TABLESPACE = 653,
+     TEMP = 654,
+     TEMPLATE = 655,
+     TEMPORARY = 656,
+     TEXT_P = 657,
+     THEN = 658,
+     TIME = 659,
+     TIMESTAMP = 660,
+     TO = 661,
+     TRAILING = 662,
+     TRANSACTION = 663,
+     TRANSFORM = 664,
+     TREAT = 665,
+     TRIGGER = 666,
+     TRIM = 667,
+     TRUE_P = 668,
+     TRUNCATE = 669,
+     TRUSTED = 670,
+     TRY_CAST = 671,
+     TYPE_P = 672,
+     TYPES_P = 673,
+     UNBOUNDED = 674,
+     UNCOMMITTED = 675,
+     UNENCRYPTED = 676,
+     UNION = 677,
+     UNIQUE = 678,
+     UNKNOWN = 679,
+     UNLISTEN = 680,
+     UNLOGGED = 681,
+     UNTIL = 682,
+     UPDATE = 683,
+     USER = 684,
+     USING = 685,
+     VACUUM = 686,
+     VALID = 687,
+     VALIDATE = 688,
+     VALIDATOR = 689,
+     VALUE_P = 690,
+     VALUES = 691,
+     VARCHAR = 692,
+     VARIADIC = 693,
+     VARYING = 694,
+     VERBOSE = 695,
+     VERSION_P = 696,
+     VIEW = 697,
+     VIEWS = 698,
+     VOLATILE = 699,
+     WHEN = 700,
+     WHERE = 701,
+     WHITESPACE_P = 702,
+     WINDOW = 703,
+     WITH = 704,
+     WITHIN = 705,
+     WITHOUT = 706,
+     WORK = 707,
+     WRAPPER = 708,
+     WRITE_P = 709,
+     XML_P = 710,
+     XMLATTRIBUTES = 711,
+     XMLCONCAT = 712,
+     XMLELEMENT = 713,
+     XMLEXISTS = 714,
+     XMLFOREST = 715,
+     XMLNAMESPACES = 716,
+     XMLPARSE = 717,
+     XMLPI = 718,
+     XMLROOT = 719,
+     XMLSERIALIZE = 720,
+     XMLTABLE = 721,
+     YEAR_P = 722,
+     YEARS_P = 723,
+     YES_P = 724,
+     ZONE = 725,
+     NOT_LA = 726,
+     NULLS_LA = 727,
+     WITH_LA = 728,
+     POSTFIXOP = 729,
+     UMINUS = 730
    };
 #endif
 /* Tokens.  */
@@ -902,90 +903,91 @@
 #define STRUCT 643
 #define SUBSCRIPTION 644
 #define SUBSTRING 645
-#define SYMMETRIC 646
-#define SYSID 647
-#define SYSTEM_P 648
-#define TABLE 649
-#define TABLES 650
-#define TABLESAMPLE 651
-#define TABLESPACE 652
-#define TEMP 653
-#define TEMPLATE 654
-#define TEMPORARY 655
-#define TEXT_P 656
-#define THEN 657
-#define TIME 658
-#define TIMESTAMP 659
-#define TO 660
-#define TRAILING 661
-#define TRANSACTION 662
-#define TRANSFORM 663
-#define TREAT 664
-#define TRIGGER 665
-#define TRIM 666
-#define TRUE_P 667
-#define TRUNCATE 668
-#define TRUSTED 669
-#define TRY_CAST 670
-#define TYPE_P 671
-#define TYPES_P 672
-#define UNBOUNDED 673
-#define UNCOMMITTED 674
-#define UNENCRYPTED 675
-#define UNION 676
-#define UNIQUE 677
-#define UNKNOWN 678
-#define UNLISTEN 679
-#define UNLOGGED 680
-#define UNTIL 681
-#define UPDATE 682
-#define USER 683
-#define USING 684
-#define VACUUM 685
-#define VALID 686
-#define VALIDATE 687
-#define VALIDATOR 688
-#define VALUE_P 689
-#define VALUES 690
-#define VARCHAR 691
-#define VARIADIC 692
-#define VARYING 693
-#define VERBOSE 694
-#define VERSION_P 695
-#define VIEW 696
-#define VIEWS 697
-#define VOLATILE 698
-#define WHEN 699
-#define WHERE 700
-#define WHITESPACE_P 701
-#define WINDOW 702
-#define WITH 703
-#define WITHIN 704
-#define WITHOUT 705
-#define WORK 706
-#define WRAPPER 707
-#define WRITE_P 708
-#define XML_P 709
-#define XMLATTRIBUTES 710
-#define XMLCONCAT 711
-#define XMLELEMENT 712
-#define XMLEXISTS 713
-#define XMLFOREST 714
-#define XMLNAMESPACES 715
-#define XMLPARSE 716
-#define XMLPI 717
-#define XMLROOT 718
-#define XMLSERIALIZE 719
-#define XMLTABLE 720
-#define YEAR_P 721
-#define YEARS_P 722
-#define YES_P 723
-#define ZONE 724
-#define NOT_LA 725
-#define NULLS_LA 726
-#define WITH_LA 727
-#define POSTFIXOP 728
-#define UMINUS 729
+#define SUMMARIZE 646
+#define SYMMETRIC 647
+#define SYSID 648
+#define SYSTEM_P 649
+#define TABLE 650
+#define TABLES 651
+#define TABLESAMPLE 652
+#define TABLESPACE 653
+#define TEMP 654
+#define TEMPLATE 655
+#define TEMPORARY 656
+#define TEXT_P 657
+#define THEN 658
+#define TIME 659
+#define TIMESTAMP 660
+#define TO 661
+#define TRAILING 662
+#define TRANSACTION 663
+#define TRANSFORM 664
+#define TREAT 665
+#define TRIGGER 666
+#define TRIM 667
+#define TRUE_P 668
+#define TRUNCATE 669
+#define TRUSTED 670
+#define TRY_CAST 671
+#define TYPE_P 672
+#define TYPES_P 673
+#define UNBOUNDED 674
+#define UNCOMMITTED 675
+#define UNENCRYPTED 676
+#define UNION 677
+#define UNIQUE 678
+#define UNKNOWN 679
+#define UNLISTEN 680
+#define UNLOGGED 681
+#define UNTIL 682
+#define UPDATE 683
+#define USER 684
+#define USING 685
+#define VACUUM 686
+#define VALID 687
+#define VALIDATE 688
+#define VALIDATOR 689
+#define VALUE_P 690
+#define VALUES 691
+#define VARCHAR 692
+#define VARIADIC 693
+#define VARYING 694
+#define VERBOSE 695
+#define VERSION_P 696
+#define VIEW 697
+#define VIEWS 698
+#define VOLATILE 699
+#define WHEN 700
+#define WHERE 701
+#define WHITESPACE_P 702
+#define WINDOW 703
+#define WITH 704
+#define WITHIN 705
+#define WITHOUT 706
+#define WORK 707
+#define WRAPPER 708
+#define WRITE_P 709
+#define XML_P 710
+#define XMLATTRIBUTES 711
+#define XMLCONCAT 712
+#define XMLELEMENT 713
+#define XMLEXISTS 714
+#define XMLFOREST 715
+#define XMLNAMESPACES 716
+#define XMLPARSE 717
+#define XMLPI 718
+#define XMLROOT 719
+#define XMLSERIALIZE 720
+#define XMLTABLE 721
+#define YEAR_P 722
+#define YEARS_P 723
+#define YES_P 724
+#define ZONE 725
+#define NOT_LA 726
+#define NULLS_LA 727
+#define WITH_LA 728
+#define POSTFIXOP 729
+#define UMINUS 730
 
 
 
@@ -1036,7 +1038,7 @@ typedef union YYSTYPE
 	PGViewCheckOption viewcheckoption;
 }
 /* Line 1529 of yacc.c.  */
-#line 1040 "third_party/libpg_query/grammar/grammar_out.hpp"
+#line 1042 "third_party/libpg_query/grammar/grammar_out.hpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

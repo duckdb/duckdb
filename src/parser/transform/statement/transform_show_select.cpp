@@ -11,6 +11,7 @@ unique_ptr<ShowStatement> Transformer::TransformShowSelect(duckdb_libpgquery::PG
 
 	auto result = make_unique<ShowStatement>();
 	auto &info = *result->info;
+	info.is_summary = stmt->is_summary;
 
 	info.query = TransformSelectNode(select_stmt);
 
