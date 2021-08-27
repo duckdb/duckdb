@@ -8,7 +8,7 @@ namespace duckdb {
 
 class PhysicalLimitOperatorState : public OperatorState {
 public:
-	PhysicalLimitOperatorState(PhysicalLimit &op, idx_t current_offset)
+	explicit PhysicalLimitOperatorState(const PhysicalLimit &op)
 	    : current_offset(0) {
 		this->limit = op.limit_expression ? INVALID_INDEX : op.limit_value;
 		this->offset = op.offset_expression ? INVALID_INDEX : op.offset_value;

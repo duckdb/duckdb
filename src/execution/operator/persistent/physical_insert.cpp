@@ -23,7 +23,7 @@ public:
 
 class InsertLocalState : public LocalSinkState {
 public:
-	InsertLocalState(const vector<LogicalType> &types, vector<unique_ptr<Expression>> &bound_defaults)
+	InsertLocalState(const vector<LogicalType> &types, const vector<unique_ptr<Expression>> &bound_defaults)
 	    : default_executor(bound_defaults) {
 		insert_chunk.Initialize(types);
 	}

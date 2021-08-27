@@ -70,7 +70,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	}
 }
 
-unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(ClientContext &context) {
+unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(ClientContext &context) const {
 	return make_unique<PerfectAggregateHashTable>(BufferManager::GetBufferManager(context), group_types, payload_types,
 	                                              aggregate_objects, group_minima, required_bits);
 }
@@ -80,7 +80,7 @@ unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Cli
 //===--------------------------------------------------------------------===//
 class PerfectHashAggregateGlobalState : public GlobalSinkState {
 public:
-	PerfectHashAggregateGlobalState(PhysicalPerfectHashAggregate &op, ClientContext &context)
+	PerfectHashAggregateGlobalState(const PhysicalPerfectHashAggregate &op, ClientContext &context)
 	    : ht(op.CreateHT(context)) {
 	}
 
@@ -92,7 +92,7 @@ public:
 
 class PerfectHashAggregateLocalState : public LocalSinkState {
 public:
-	PerfectHashAggregateLocalState(PhysicalPerfectHashAggregate &op, ClientContext &context)
+	PerfectHashAggregateLocalState(const PhysicalPerfectHashAggregate &op, ClientContext &context)
 	    : ht(op.CreateHT(context)) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {

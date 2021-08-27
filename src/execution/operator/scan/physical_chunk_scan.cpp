@@ -12,7 +12,7 @@ public:
 };
 
 unique_ptr<GlobalSourceState> PhysicalChunkScan::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<PhysicalChunkScanState>(*this);
+	return make_unique<PhysicalChunkScanState>();
 }
 
 void PhysicalChunkScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {

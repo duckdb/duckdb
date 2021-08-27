@@ -93,12 +93,12 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 //===--------------------------------------------------------------------===//
 class HashAggregateGlobalState : public GlobalSinkState {
 public:
-	HashAggregateGlobalState(PhysicalHashAggregate &op_p, ClientContext &context)
+	HashAggregateGlobalState(const PhysicalHashAggregate &op_p, ClientContext &context)
 	    : op(op_p), is_empty(true), total_groups(0),
 	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()) {
 	}
 
-	PhysicalHashAggregate &op;
+	const PhysicalHashAggregate &op;
 	vector<unique_ptr<PartitionableHashTable>> intermediate_hts;
 	vector<unique_ptr<GroupedAggregateHashTable>> finalized_hts;
 
@@ -114,7 +114,7 @@ public:
 
 class HashAggregateLocalState : public LocalSinkState {
 public:
-	explicit HashAggregateLocalState(PhysicalHashAggregate &op_p) : op(op_p), is_empty(true) {
+	explicit HashAggregateLocalState(const PhysicalHashAggregate &op_p) : op(op_p), is_empty(true) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
@@ -126,7 +126,7 @@ public:
 		}
 	}
 
-	PhysicalHashAggregate &op;
+	const PhysicalHashAggregate &op;
 
 	DataChunk group_chunk;
 	DataChunk aggregate_input_chunk;
@@ -370,7 +370,7 @@ bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 //===--------------------------------------------------------------------===//
 class PhysicalHashAggregateState : public GlobalSourceState {
 public:
-	PhysicalHashAggregateState(vector<LogicalType> &group_types, vector<LogicalType> &aggregate_types)
+	PhysicalHashAggregateState(const vector<LogicalType> &group_types, const vector<LogicalType> &aggregate_types)
 	    : ht_index(0), ht_scan_position(0), finished(false) {
 		auto scan_chunk_types = group_types;
 		for (auto &aggr_type : aggregate_types) {

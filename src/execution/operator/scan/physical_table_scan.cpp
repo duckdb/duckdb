@@ -22,7 +22,7 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
 
 class TableScanGlobalState : public GlobalSourceState {
 public:
-	TableScanGlobalState(ClientContext &context, PhysicalTableScan &op) {
+	TableScanGlobalState(ClientContext &context, const PhysicalTableScan &op) {
 		if (op.function.init_parallel_state) {
 			parallel_state = op.function.init_parallel_state(context, op.bind_data.get());
 		}
@@ -33,7 +33,7 @@ public:
 
 class TableScanLocalState : public LocalSourceState {
 public:
-	TableScanLocalState(ExecutionContext &context, TableScanGlobalState &gstate, PhysicalTableScan &op) {
+	TableScanLocalState(ExecutionContext &context, TableScanGlobalState &gstate, const PhysicalTableScan &op) {
 		TableFilterCollection filters(op.table_filters.get());
 		if (gstate.parallel_state) {
 			// parallel scan init

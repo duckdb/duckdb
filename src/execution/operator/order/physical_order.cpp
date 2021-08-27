@@ -9,7 +9,7 @@
 namespace duckdb {
 
 PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality)
-    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)) {
+    : PhysicalOperator(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -17,7 +17,7 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 class OrderGlobalState : public GlobalSinkState {
 public:
-	OrderGlobalState(BufferManager &buffer_manager, PhysicalOrder &order, RowLayout &payload_layout)
+	OrderGlobalState(BufferManager &buffer_manager, const PhysicalOrder &order, RowLayout &payload_layout)
 	    : global_sort_state(buffer_manager, order.orders, payload_layout) {
 	}
 
@@ -41,7 +41,7 @@ public:
 	DataChunk sort;
 };
 
-unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &context) {
+unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &context) const {
 	// Get the payload layout from the return types
 	RowLayout payload_layout;
 	payload_layout.Initialize(types, false);
@@ -56,7 +56,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	return move(state);
 }
 
-unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &context) const {
 	auto result = make_unique<OrderLocalState>();
 	// Initialize order clause expression executor and DataChunk
 	vector<LogicalType> types;
@@ -94,7 +94,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, L
 	}
 }
 
-void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) {
+void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
 	gstate.global_sort_state.AddLocalState(lstate.local_sort_state);

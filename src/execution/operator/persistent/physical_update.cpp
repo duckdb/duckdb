@@ -24,8 +24,8 @@ public:
 
 class UpdateLocalState : public LocalSinkState {
 public:
-	UpdateLocalState(vector<unique_ptr<Expression>> &expressions, vector<LogicalType> &table_types,
-	                 vector<unique_ptr<Expression>> &bound_defaults)
+	UpdateLocalState(const vector<unique_ptr<Expression>> &expressions, const vector<LogicalType> &table_types,
+	                 const vector<unique_ptr<Expression>> &bound_defaults)
 	    : default_executor(bound_defaults) {
 		// initialize the update chunk
 		vector<LogicalType> update_types;

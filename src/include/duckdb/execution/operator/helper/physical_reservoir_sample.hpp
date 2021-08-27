@@ -25,7 +25,7 @@ public:
 
 public:
 	// Source interface
-	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
 
 public:
 	// Sink interface

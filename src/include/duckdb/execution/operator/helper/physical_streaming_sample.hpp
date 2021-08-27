@@ -24,14 +24,15 @@ public:
 	int64_t seed;
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
-	unique_ptr<OperatorState> GetOperatorState() override;
+	// Operator interface
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
 
 	string ParamsToString() const override;
 
 private:
-	void SystemSample(DataChunk &input, DataChunk &result, OperatorState *state) const;
-	void BernoulliSample(DataChunk &input, DataChunk &result, OperatorState *state) const;
+	void SystemSample(DataChunk &input, DataChunk &result, OperatorState &state) const;
+	void BernoulliSample(DataChunk &input, DataChunk &result, OperatorState &state) const;
 };
 
 } // namespace duckdb

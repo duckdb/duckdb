@@ -46,19 +46,19 @@ void PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalSinkState &sta
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-class CreateTableSourceState : public GlobalSourceState {
+class CreateTableAsSourceState : public GlobalSourceState {
 public:
-	CreateTableSourceState() : finished(false) {}
+	CreateTableAsSourceState() : finished(false) {}
 
 	bool finished;
 };
 
 unique_ptr<GlobalSourceState> PhysicalCreateTableAs::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<CreateTableSourceState>();
+	return make_unique<CreateTableAsSourceState>();
 }
 
 void PhysicalCreateTableAs::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (CreateTableSourceState &) gstate;
+	auto &state = (CreateTableAsSourceState &) gstate;
 	auto &sink = (CreateTableAsGlobalState &)*sink_state;
 	if (state.finished) {
 		return;

@@ -50,11 +50,11 @@ public:
 //	Global sink state
 class WindowGlobalState : public GlobalSinkState {
 public:
-	WindowGlobalState(PhysicalWindow &op_p, ClientContext &context)
+	WindowGlobalState(const PhysicalWindow &op_p, ClientContext &context)
 	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)) {
 	}
 
-	PhysicalWindow &op;
+	const PhysicalWindow &op;
 	BufferManager &buffer_manager;
 	mutex lock;
 	ChunkCollection chunks;
@@ -66,11 +66,11 @@ public:
 //	Per-thread sink state
 class WindowLocalState : public LocalSinkState {
 public:
-	explicit WindowLocalState(PhysicalWindow &op_p, const unsigned partition_bits = 10)
+	explicit WindowLocalState(const PhysicalWindow &op_p, const unsigned partition_bits = 10)
 	    : op(op_p), partition_count(size_t(1) << partition_bits) {
 	}
 
-	PhysicalWindow &op;
+	const PhysicalWindow &op;
 	ChunkCollection chunks;
 	ChunkCollection over_collection;
 	ChunkCollection hash_collection;
