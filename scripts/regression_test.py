@@ -79,5 +79,6 @@ def regression_test(threshold):
         f = open("test.sh", "w")
         f.write(exp)
         f.close()
+        os.execute("chmod +x test.sh")
 
 regression_test(0.1)
