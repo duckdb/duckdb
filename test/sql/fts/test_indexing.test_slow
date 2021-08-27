@@ -167,38 +167,38 @@ EXECUTE fts_query(NULL)
 
 # different order by changing the parameters
 query III
-SELECT id, body, author FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked', k=0.6, b=0.1) AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+SELECT id, body, author FROM (SELECT *, fts_main_documents.match_bm25(id, 'quacked barked', k := 0.6, b := 0.1) AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
 doc2	 BÁRKING+BÁRKING+BÁRKING+BÁRKING	Mark
 doc1	 QUÁCKING+QUÁCKING+QUÁCKING	Hannes
 
 # no results for conjunctive query because no document contains both 'mark' and 'laurens
 query I
-SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', conjunctive=1) AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', conjunctive := 1) AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
 
 # strings 'mark' and 'laurens' are not found in the 'body' field of the table 'documents'
 query I
-SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', fields='body') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', fields := 'body') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
 
 # but they are found in the 'author' field!
 query I
-SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', fields='author') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', fields := 'author') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
 doc2
 doc3
 
 # if we search both the 'author' and 'body' fields then we get the same behaviour as leaving the fields empty
 query I
-SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', fields='body,author') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'mark laurens', fields := 'body,author') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
 doc2
 doc3
 
 # if we don't search any fields, we won't get any results
 query I
-SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'hannes mark laurens', fields='') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
+SELECT id FROM (SELECT *, fts_main_documents.match_bm25(id, 'hannes mark laurens', fields := '') AS score FROM documents) sq WHERE score IS NOT NULL ORDER BY score DESC
 ----
 
 # re-index with different stopwords table
@@ -212,7 +212,7 @@ statement ok
 INSERT INTO my_stopwords VALUES ('quacking')
 
 statement ok
-PRAGMA create_fts_index('documents', 'id', 'body', stopwords='my_stopwords')
+PRAGMA create_fts_index('documents', 'id', 'body', stopwords := 'my_stopwords')
 
 # the word 'quacking' is no longer indexed, therefore doc1 is no longer retrieved with this query
 query III

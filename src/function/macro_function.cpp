@@ -18,19 +18,20 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 	// separate positional and default arguments
 	auto &macro_def = *macro_func.function;
 	for (auto &arg : function_expr.children) {
-		if (arg->type == ExpressionType::COMPARE_EQUAL) {
-			// possibly default argument
-			auto &comp_expr = (ComparisonExpression &)*arg;
-			if (macro_def.default_parameters.find(comp_expr.left->ToString()) != macro_def.default_parameters.end()) {
-				// it's a default arg!
-				defaults[comp_expr.left->ToString()] = move(comp_expr.right);
-				continue;
+		if (arg->type == ExpressionType::VALUE_CONSTANT && !arg->alias.empty()) {
+			// default argument
+			if (macro_def.default_parameters.find(arg->alias) == macro_def.default_parameters.end()) {
+				return StringUtil::Format("Macro %s does not have default parameter %s!", macro_func.name, arg->alias);
+			} else if (defaults.find(arg->alias) != defaults.end()) {
+				return StringUtil::Format("Duplicate default parameters %s!", arg->alias);
 			}
+			defaults[arg->alias] = move(arg);
 		} else if (!defaults.empty()) {
 			return "Positional parameters cannot come after parameters with a default value!";
+		} else {
+			// positional argument
+			positionals.push_back(move(arg));
 		}
-		// positional argument
-		positionals.push_back(move(arg));
 	}
 
 	// validate if the right number of arguments was supplied
