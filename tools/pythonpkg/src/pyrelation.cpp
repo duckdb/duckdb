@@ -221,10 +221,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateViewDf(py::object df, const string &view_name, bool replace) {
-	return DuckDBPyConnection::DefaultConnection()->FromDF(std::move(df))->CreateView(view_name, replace);
-}
-
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
 	auto res = make_unique<DuckDBPyResult>();
 	res->result = rel->Query(view_name, sql_query);

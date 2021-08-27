@@ -214,15 +214,7 @@ unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData
                                                      TableFilterCollection *filters) {
 	//! Generate Projection Pushdown Vector
 	pair<unordered_map<idx_t, string>, vector<string>> project_columns;
-	if (scan_state.column_ids.empty()) {
-		//! We have to push all columns, to generate proper scanners.
-		auto &schema = function.schema_root.arrow_schema;
-		for (idx_t col_idx = 0; col_idx < (idx_t)schema.n_children; col_idx++) {
-			auto &column_schema = *schema.children[col_idx];
-			project_columns.first[col_idx] = column_schema.name;
-			project_columns.second.emplace_back(column_schema.name);
-		}
-	}
+	D_ASSERT(!scan_state.column_ids.empty());
 	for (idx_t idx = 0; idx < scan_state.column_ids.size(); idx++) {
 		auto col_idx = scan_state.column_ids[idx];
 		if (col_idx != COLUMN_IDENTIFIER_ROW_ID) {
@@ -513,11 +505,15 @@ template <class T>
 void TimeConversion(Vector &vector, ArrowArray &array, ArrowScanState &scan_state, int64_t nested_offset, idx_t size,
                     int64_t conversion) {
 	auto tgt_ptr = (dtime_t *)FlatVector::GetData(vector);
+	auto &validity_mask = FlatVector::Validity(vector);
 	auto src_ptr = (T *)array.buffers[1] + scan_state.chunk_offset + array.offset;
 	if (nested_offset != -1) {
 		src_ptr = (T *)array.buffers[1] + nested_offset + array.offset;
 	}
 	for (idx_t row = 0; row < size; row++) {
+		if (!validity_mask.RowIsValid(row)) {
+			continue;
+		}
 		if (!TryMultiplyOperator::Operation((int64_t)src_ptr[row], conversion, tgt_ptr[row].micros)) {
 			throw ConversionException("Could not convert Interval to Microsecond");
 		}

@@ -11,7 +11,7 @@ from setuptools import setup, Extension
 extensions = ['parquet', 'icu', 'fts','tpch', 'tpcds', 'visualizer']
 
 if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts']
+    extensions = ['parquet', 'icu', 'fts','tpch']
 
 
 def parallel_cpp_compile(self, sources, output_dir=None, macros=None, include_dirs=None, debug=0,
@@ -78,7 +78,7 @@ if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
 
 if platform.system() == 'Windows':
-    toolchain_args.extend(['-DDUCKDB_BUILD_LIBRARY'])
+    toolchain_args.extend(['-DDUCKDB_BUILD_LIBRARY','-DWIN32'])
 
 for ext in extensions:
     toolchain_args.extend(['-DBUILD_{}_EXTENSION'.format(ext.upper())])

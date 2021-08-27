@@ -33,6 +33,16 @@ query I nosort bug687_nulls
 SELECT * FROM parquet_scan('__TEST_DIR__/bug687_nulls.parquet') LIMIT 10;
 ----
 
+# Issue #1637: booleans encoded incorrectly
+statement ok
+COPY (SELECT true as x UNION ALL SELECT true) TO '__TEST_DIR__/bug1637_booleans.parquet' (FORMAT 'PARQUET');
+
+# Prior to the #1637 fix, duckdb wrote a parquet file containing true, false
+query I
+SELECT COUNT(*) FROM parquet_scan('__TEST_DIR__/bug1637_booleans.parquet') WHERE x;
+----
+2
+
 # userdata1.parquet
 query I nosort userdata1.parquet
 SELECT * FROM parquet_scan('data/parquet-testing/userdata1.parquet') ORDER BY 1 LIMIT 10;
