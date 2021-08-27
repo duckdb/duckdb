@@ -33,14 +33,6 @@ static unique_ptr<ParsedExpression> SummarizeCreateCountStar() {
 	return move(aggregate_function);
 }
 
-static unique_ptr<ParsedExpression> SummarizeCreateCountUnique(string column_name) {
-	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ColumnRefExpression>(move(column_name)));
-	auto aggregate_function = make_unique<FunctionExpression>("count", move(children));
-	aggregate_function->distinct = true;
-	return move(aggregate_function);
-}
-
 static unique_ptr<ParsedExpression> SummarizeCreateBinaryFunction(const string &op, unique_ptr<ParsedExpression> left,
                                                                   unique_ptr<ParsedExpression> right) {
 	vector<unique_ptr<ParsedExpression>> children;
@@ -87,7 +79,7 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 		type_children.push_back(make_unique<ConstantExpression>(Value(plan.types[i].ToString())));
 		min_children.push_back(SummarizeCreateAggregate("min", plan.names[i]));
 		max_children.push_back(SummarizeCreateAggregate("max", plan.names[i]));
-		unique_children.push_back(SummarizeCreateCountUnique(plan.names[i]));
+		unique_children.push_back(SummarizeCreateAggregate("approx_count_distinct", plan.names[i]));
 		avg_children.push_back(plan.types[i].IsNumeric() ? SummarizeCreateAggregate("avg", plan.names[i])
 		                                                 : make_unique<ConstantExpression>(Value()));
 		count_children.push_back(SummarizeCreateCountStar());
@@ -101,7 +93,7 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 	select_node->select_list.push_back(SummarizeWrapUnnest(type_children, "column_type"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(min_children, "min"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(max_children, "max"));
-	select_node->select_list.push_back(SummarizeWrapUnnest(unique_children, "unique"));
+	select_node->select_list.push_back(SummarizeWrapUnnest(unique_children, "approx_unique"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(avg_children, "avg"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(count_children, "count"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(null_percentage_children, "null_percentage"));
