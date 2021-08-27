@@ -137,6 +137,16 @@ SELECT IFELSE(0,'true','false')
 ----
 false
 
+query T
+SELECT IFELSE(a = 1, 'true', 'false') FROM integers
+----
+true
+
+query T
+SELECT IFELSE(a = 0, 'true', 'false') FROM integers
+----
+false
+
 # incorrect number of arguments
 statement error
 SELECT IFELSE();

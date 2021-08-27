@@ -1,7 +1,8 @@
 #include "duckdb/function/macro_function.hpp"
-#include "duckdb/common/string_util.hpp"
+
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -18,19 +19,18 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 	auto &macro_def = *macro_func.function;
 	for (auto &arg : function_expr.children) {
 		if (arg->type == ExpressionType::COMPARE_EQUAL) {
-			// default argument
+			// possibly default argument
 			auto &comp_expr = (ComparisonExpression &)*arg;
-			if (macro_def.default_parameters.find(comp_expr.left->ToString()) == macro_def.default_parameters.end()) {
-				return StringUtil::Format("Macro '%s()' does not have default parameter '%'s", macro_func.name,
-				                          comp_expr.left->ToString());
+			if (macro_def.default_parameters.find(comp_expr.left->ToString()) != macro_def.default_parameters.end()) {
+				// it's a default arg!
+				defaults[comp_expr.left->ToString()] = move(comp_expr.right);
+				continue;
 			}
-			defaults[comp_expr.left->ToString()] = move(comp_expr.right);
 		} else if (!defaults.empty()) {
 			return "Positional parameters cannot come after parameters with a default value!";
-		} else {
-			// positional argument
-			positionals.push_back(move(arg));
 		}
+		// positional argument
+		positionals.push_back(move(arg));
 	}
 
 	// validate if the right number of arguments was supplied
