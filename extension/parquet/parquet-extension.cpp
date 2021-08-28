@@ -80,7 +80,13 @@ public:
 	                                                vector<string> &expected_names,
 	                                                vector<LogicalType> &expected_types) {
 		for (auto &option : info.options) {
-			throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
+			auto loption = StringUtil::Lower(option.first);
+			if (loption == "compression" || loption == "codec") {
+				// CODEC option has no effect on parquet read: we determine codec from the file
+				continue;
+			} else {
+				throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
+			}
 		}
 		auto result = make_unique<ParquetReadBindData>();
 
