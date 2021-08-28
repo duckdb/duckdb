@@ -5,18 +5,19 @@
 
 namespace duckdb {
 
-PerfectHashJoinExecutor::PerfectHashJoinExecutor(PerfectHashJoinStats pjoin_stats_) : pjoin_stats(pjoin_stats_) {
+PerfectHashJoinExecutor::PerfectHashJoinExecutor(PerfectHashJoinStats perfect_join_stats)
+    : perfect_join_statistics(perfect_join_stats) {
 }
 
 bool PerfectHashJoinExecutor::CanDoPerfectHashJoin() {
-	return pjoin_stats.is_build_small;
+	return perfect_join_statistics.is_build_small;
 }
 
 void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
                                                     LogicalType key_type) {
 	// First, allocate memory for each build column
-	auto build_size = pjoin_stats.build_range + 1;
-	for (auto type : hash_table_ptr->build_types) {
+	auto build_size = perfect_join_statistics.build_range + 1;
+	for (const auto &type : hash_table_ptr->build_types) {
 		perfect_hash_table.emplace_back(type, build_size);
 	}
 	// and for duplicate_checking
@@ -24,7 +25,7 @@ void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_pt
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
 	// Now fill columns with build data
-	FullScanHashTable(join_ht_state, key_type, hash_table_ptr);
+	FullScanHashTable(join_ht_state, move(key_type), hash_table_ptr);
 }
 
 void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType key_type,
@@ -35,7 +36,7 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	// Go through all the blocks and fill the keys addresses
 	auto keys_count = hash_table->FillWithHTOffsets(key_locations, state);
 	// Scan the build keys in the hash table
-	Vector build_vector(key_type, keys_count);
+	Vector build_vector(move(key_type), keys_count);
 	RowOperations::FullScanColumn(hash_table->layout, tuples_addresses, build_vector, keys_count, 0);
 	// Now fill the selection vector using the build keys and create a sequential vector
 	// todo: add check for fast pass when probe is part of build domain
@@ -43,10 +44,11 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	SelectionVector sel_tuples(keys_count + 1);
 	FillSelectionVectorSwitchBuild(build_vector, sel_build, sel_tuples, keys_count);
 	// early out
-	if (has_duplicates)
+	if (has_duplicates) {
 		return;
-	if (unique_keys == pjoin_stats.build_range + 1 && !hash_table->has_null) {
-		pjoin_stats.is_build_dense = true;
+	}
+	if (unique_keys == perfect_join_statistics.build_range + 1 && !hash_table->has_null) {
+		perfect_join_statistics.is_build_dense = true;
 	}
 	keys_count = unique_keys; // do not condider keys out of the range
 	// Full scan the remaining build columns and fill the perfect hash table
@@ -100,8 +102,8 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, Sel
 template <typename T>
 void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec,
                                                                 SelectionVector &seq_sel_vec, idx_t count) {
-	auto min_value = pjoin_stats.build_min.GetValue<T>();
-	auto max_value = pjoin_stats.build_max.GetValue<T>();
+	auto min_value = perfect_join_statistics.build_min.GetValue<T>();
+	auto max_value = perfect_join_statistics.build_max.GetValue<T>();
 	VectorData vector_data;
 	source.Orrify(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);
@@ -144,7 +146,7 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
 		FillSelectionVectorSwitchProbe(keys_vec, physical_state->build_sel_vec, physical_state->probe_sel_vec,
 		                               keys_count);
 		// If build is dense and probe is in build's domain, just reference probe
-		if (pjoin_stats.is_build_dense && keys_count == probe_sel_count) {
+		if (perfect_join_statistics.is_build_dense && keys_count == probe_sel_count) {
 			result.Reference(physical_state->child_chunk);
 		} else {
 			// otherwise, filter it out the values that do not match
@@ -204,8 +206,8 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, Sel
 template <typename T>
 void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, SelectionVector &build_sel_vec,
                                                                 SelectionVector &probe_sel_vec, idx_t count) {
-	auto min_value = pjoin_stats.build_min.GetValue<T>();
-	auto max_value = pjoin_stats.build_max.GetValue<T>();
+	auto min_value = perfect_join_statistics.build_min.GetValue<T>();
+	auto max_value = perfect_join_statistics.build_max.GetValue<T>();
 	VectorData vector_data;
 	source.Orrify(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);

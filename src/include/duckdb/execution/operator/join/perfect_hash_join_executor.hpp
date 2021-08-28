@@ -56,7 +56,7 @@ public:
 
 private:
 	PerfectHashTable perfect_hash_table;           // columnar perfect hash table
-	PerfectHashJoinStats pjoin_stats;              // build and probe statistics
+	PerfectHashJoinStats perfect_join_statistics;  // build and probe statistics
 	unique_ptr<bool[]> bitmap_build_idx {nullptr}; // stores the occurences of each value in the build side
 	size_t unique_keys {0};                        // stores the number of unique keys in the build side
 	size_t probe_sel_count {0};                    // keeps track of how many probe keys have a match

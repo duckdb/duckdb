@@ -56,7 +56,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type, estimated_cardinality),
       right_projection_map(right_projection_map_p), delim_types(move(delim_types)),
-      perfect_join_statistics(perfect_join_stats) {
+      perfect_join_statistics(move(perfect_join_stats)) {
 
 	children.push_back(move(left));
 	children.push_back(move(right));
@@ -135,7 +135,7 @@ unique_ptr<GlobalOperatorState> PhysicalHashJoin::GetGlobalState(ClientContext &
 		}
 	}
 	// for perfect hash join
-	state->perfect_join_executor = make_unique<PerfectHashJoinExecutor>(perfect_join_statistics);
+	state->perfect_join_executor = make_unique<PerfectHashJoinExecutor>(move(perfect_join_statistics));
 	return move(state);
 }
 

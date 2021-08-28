@@ -33,14 +33,17 @@ static bool CanPlanIndexJoin(Transaction &transaction, TableScanBindData *bind_d
 
 void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &join_state) {
 	// we only do this optimization for inner joins
-	if (op.join_type != JoinType::INNER)
+	if (op.join_type != JoinType::INNER) {
 		return;
+	}
 	// with one condition
-	if (op.conditions.size() != 1)
+	if (op.conditions.size() != 1) {
 		return;
+	}
 	// with propagated statistics
-	if (op.join_stats.size() <= 0)
+	if (op.join_stats.size() <= 0) {
 		return;
+	}
 	// with equality condition
 	for (auto &&condition : op.conditions) {
 		if (condition.comparison != ExpressionType::COMPARE_EQUAL) {
