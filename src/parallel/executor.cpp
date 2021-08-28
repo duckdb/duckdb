@@ -28,7 +28,6 @@ void Executor::Initialize(PhysicalOperator *plan) {
 	{
 		lock_guard<mutex> elock(executor_lock);
 		physical_plan = plan;
-		physical_state = physical_plan->GetOperatorState();
 
 		context.profiler->Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
@@ -99,7 +98,6 @@ void Executor::Reset() {
 	delim_join_dependencies.clear();
 	recursive_cte = nullptr;
 	physical_plan = nullptr;
-	physical_state = nullptr;
 	completed_pipelines = 0;
 	total_pipelines = 0;
 	exceptions.clear();
@@ -110,7 +108,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *parent) {
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
 		auto pipeline = make_shared<Pipeline>(*this, *producer);
-		pipeline->sink = (PhysicalSink *)op;
+		pipeline->sink = op;
 		pipeline->sink_state = pipeline->sink->GetGlobalSinkState(context);
 		if (parent) {
 			// the parent is dependent on this pipeline to complete
@@ -299,13 +297,14 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	TaskContext task;
 	ExecutionContext econtext(context, thread, task);
 
-	auto chunk = make_unique<DataChunk>();
-	// run the plan to get the next chunks
-	physical_plan->InitializeChunk(*chunk);
-	physical_plan->GetChunk(econtext, *chunk, physical_state.get());
-	physical_plan->FinalizeOperatorState(*physical_state, econtext);
-	context.profiler->Flush(thread.profiler);
-	return chunk;
+	throw InternalException("FIXME: FetchChunk");
+	// auto chunk = make_unique<DataChunk>();
+	// // run the plan to get the next chunks
+	// physical_plan->InitializeChunk(*chunk);
+	// physical_plan->GetChunk(econtext, *chunk, physical_state.get());
+	// physical_plan->FinalizeOperatorState(*physical_state, econtext);
+	// context.profiler->Flush(thread.profiler);
+	// return chunk;
 }
 
 } // namespace duckdb

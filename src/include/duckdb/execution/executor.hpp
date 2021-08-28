@@ -57,7 +57,6 @@ public:
 
 private:
 	PhysicalOperator *physical_plan;
-	unique_ptr<OperatorState> physical_state;
 
 	mutex executor_lock;
 	//! The pipelines of the current query

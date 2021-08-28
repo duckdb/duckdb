@@ -89,22 +89,23 @@ void Pipeline::Execute(TaskContext &task) {
 	ThreadContext thread(client);
 	ExecutionContext context(client, thread, task);
 	try {
-		auto state = child->GetOperatorState();
-		auto lstate = sink->GetLocalSinkState(context);
-		// incrementally process the pipeline
-		DataChunk intermediate;
-		child->InitializeChunk(intermediate);
-		while (true) {
-			child->GetChunk(context, intermediate, state.get());
-			thread.profiler.StartOperator(sink);
-			if (intermediate.size() == 0) {
-				sink->Combine(context, *sink_state, *lstate);
-				break;
-			}
-			sink->Sink(context, *sink_state, *lstate, intermediate);
-			thread.profiler.EndOperator(nullptr);
-		}
-		child->FinalizeOperatorState(*state, context);
+		throw InternalException("FIXME: execute pipeline");
+		// auto state = child->GetOperatorState(client);
+		// auto lstate = sink->GetLocalSinkState(context);
+		// // incrementally process the pipeline
+		// DataChunk intermediate;
+		// child->InitializeChunk(intermediate);
+		// while (true) {
+		// 	child->GetChunk(context, intermediate, state.get());
+		// 	thread.profiler.StartOperator(sink);
+		// 	if (intermediate.size() == 0) {
+		// 		sink->Combine(context, *sink_state, *lstate);
+		// 		break;
+		// 	}
+		// 	sink->Sink(context, *sink_state, *lstate, intermediate);
+		// 	thread.profiler.EndOperator(nullptr);
+		// }
+		// child->FinalizeOperatorState(*state, context);
 	} catch (std::exception &ex) {
 		executor.PushError(ex.what());
 	} catch (...) { // LCOV_EXCL_START

@@ -24,7 +24,7 @@ public:
 	virtual ~OperatorState() {
 	}
 
-	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context);
+	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {}
 };
 
 class GlobalSinkState {
