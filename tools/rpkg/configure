@@ -5,4 +5,11 @@ set -x
 
 cd `dirname $0`
 
-python rconfigure.py
+echo "R: configure"
+
+if [ -z "${DUCKDB_R_DEBUG}" ]; then
+  python rconfigure.py
+else
+  cd ../..
+  GEN=ninja CONFIGURE_R=1 nice make debug -Onone
+fi

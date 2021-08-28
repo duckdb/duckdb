@@ -1,9 +1,12 @@
 #include "statement_functions.hpp"
 #include "odbc_interval.hpp"
+#include "odbc_fetch.hpp"
+#include "parameter_wrapper.hpp"
 
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -34,9 +37,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 		if (stmt->res) {
 			stmt->res.reset();
 		}
-		if (stmt->chunk) {
-			stmt->chunk.reset();
-		}
+		stmt->odbc_fetcher->ClearChunks();
 		// we should not clear the parameters because of SQLExecDirect may reuse them
 		// stmt->params.resize(0);
 		// we should not clear the bound columns because SQLBindCol might bind columns in it
@@ -48,32 +49,65 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 			stmt->error_messages.emplace_back(stmt->stmt->error);
 			return SQL_ERROR;
 		}
-		stmt->params.resize(stmt->stmt->n_param);
+		stmt->param_wrapper->param_descriptors.resize(stmt->stmt->n_param);
 		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
 		return SQL_SUCCESS;
 	});
 }
 
-SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
-	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		if (stmt->res) {
-			stmt->res.reset();
+//! Execute stmt in a batch manner while there is a parameter set to process,
+//! the stmt is executed multiple times when there is a bound array of parameters in INSERT and UPDATE statements
+SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		SQLRETURN ret;
+		do {
+			ret = SingleExecuteStmt(stmt);
+		} while (ret == SQL_STILL_EXECUTING);
+		return ret;
+	});
+}
+
+//! Execute statement only once
+SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
+	if (stmt->res) {
+		stmt->res.reset();
+	}
+	stmt->odbc_fetcher->ClearChunks();
+
+	stmt->open = false;
+	if (stmt->rows_fetched_ptr) {
+		*stmt->rows_fetched_ptr = 0;
+	}
+
+	std::vector<Value> values;
+	SQLRETURN ret = stmt->param_wrapper->GetValues(values);
+	if (ret == SQL_NEED_DATA) {
+		return ret;
+	}
+	stmt->res = stmt->stmt->Execute(values);
+
+	if (!stmt->res->success) {
+		stmt->error_messages.emplace_back(stmt->res->error);
+		return SQL_ERROR;
+	}
+	stmt->open = true;
+	if (ret == SQL_STILL_EXECUTING) {
+		return SQL_STILL_EXECUTING;
+	}
+	return SQL_SUCCESS;
+}
+
+SQLRETURN duckdb::FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
+	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		if (!stmt->open) {
+			return SQL_NO_DATA;
 		}
-		if (stmt->chunk) {
-			stmt->chunk.reset();
+		SQLRETURN ret = stmt->odbc_fetcher->Fetch(statement_handle, stmt, fetch_orientation, fetch_offset);
+		if (!SQL_SUCCEEDED(ret)) {
+			return ret;
 		}
 
-		stmt->chunk_row = -1;
-		stmt->open = false;
-		if (stmt->rows_fetched_ptr) {
-			*stmt->rows_fetched_ptr = 0;
-		}
-		stmt->res = stmt->stmt->Execute(stmt->params);
-		if (!stmt->res->success) {
-			stmt->error_messages.emplace_back(stmt->res->error);
-			return SQL_ERROR;
-		}
-		stmt->open = true;
+		stmt->odbc_fetcher->AssertCurrentChunk();
 		return SQL_SUCCESS;
 	});
 }
@@ -95,13 +129,18 @@ static void LogInvalidCast(const LogicalType &from_type, const LogicalType &to_t
 	stmt->error_messages.emplace_back(msg);
 }
 
-template <class T>
+template <class SRC, class DEST = SRC>
 static SQLRETURN GetInternalValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value &val, const LogicalType &type,
-                                  SQLLEN buffer_length, SQLPOINTER target_value_ptr) {
-	D_ASSERT(((size_t)buffer_length) >= sizeof(T));
+                                  SQLPOINTER target_value_ptr, SQLLEN *str_len_or_ind_ptr) {
+	// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlbindcol-function
+	// When the driver returns fixed-length data, such as an integer or a date structure, the driver ignores
+	// BufferLength... D_ASSERT(((size_t)buffer_length) >= sizeof(DEST));
 	try {
-		auto casted_value = val.CastAs(type).GetValue<T>();
-		Store<T>(casted_value, (duckdb::data_ptr_t)target_value_ptr);
+		auto casted_value = val.CastAs(type).GetValue<SRC>();
+		Store<DEST>(casted_value, (duckdb::data_ptr_t)target_value_ptr);
+		if (str_len_or_ind_ptr) {
+			*str_len_or_ind_ptr = sizeof(casted_value);
+		}
 		return SQL_SUCCESS;
 	} catch (std::exception &ex) {
 		stmt->error_messages.emplace_back(ex.what());
@@ -122,18 +161,26 @@ static bool CastTimestampValue(duckdb::OdbcHandleStmt *stmt, const duckdb::Value
 	}
 }
 
+SQLRETURN SetStringValueLength(const std::string &val_str, SQLLEN *str_len_or_ind_ptr) {
+	if (str_len_or_ind_ptr) {
+		// it fills the required lenght from string value
+		*str_len_or_ind_ptr = val_str.size();
+		return SQL_SUCCESS;
+	}
+	// there is no length pointer
+	return SQL_ERROR;
+}
+
 SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
 	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		if (!target_value_ptr) {
+		if (!target_value_ptr && !IsSQLVarcharType(target_type)) {
 			return SQL_ERROR;
 		}
 
-		if (!stmt->chunk) {
-			return SQL_ERROR;
-		}
-		auto val = stmt->chunk->GetValue(col_or_param_num - 1, stmt->chunk_row);
+		Value val;
+		stmt->odbc_fetcher->GetValue(col_or_param_num - 1, val);
 		if (val.is_null) {
 			if (!str_len_or_ind_ptr) {
 				return SQL_ERROR;
@@ -144,33 +191,47 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 
 		switch (target_type) {
 		case SQL_C_SSHORT:
-			return GetInternalValue<SQLSMALLINT>(stmt, val, LogicalType::SMALLINT, buffer_length, target_value_ptr);
+			return GetInternalValue<int16_t, SQLSMALLINT>(stmt, val, LogicalType::SMALLINT, target_value_ptr,
+			                                              str_len_or_ind_ptr);
 		case SQL_C_USHORT:
-			return GetInternalValue<SQLUSMALLINT>(stmt, val, LogicalType::USMALLINT, buffer_length, target_value_ptr);
+			return GetInternalValue<uint16_t, SQLUSMALLINT>(stmt, val, LogicalType::USMALLINT, target_value_ptr,
+			                                                str_len_or_ind_ptr);
 		case SQL_C_LONG:
 		case SQL_C_SLONG:
-			return GetInternalValue<SQLINTEGER>(stmt, val, LogicalType::INTEGER, buffer_length, target_value_ptr);
+			return GetInternalValue<int32_t, SQLINTEGER>(stmt, val, LogicalType::INTEGER, target_value_ptr,
+			                                             str_len_or_ind_ptr);
 		case SQL_C_ULONG:
-			return GetInternalValue<SQLUINTEGER>(stmt, val, LogicalType::UINTEGER, buffer_length, target_value_ptr);
+			return GetInternalValue<uint32_t, SQLUINTEGER>(stmt, val, LogicalType::UINTEGER, target_value_ptr,
+			                                               str_len_or_ind_ptr);
 		case SQL_C_FLOAT:
-			return GetInternalValue<SQLREAL>(stmt, val, LogicalType::FLOAT, buffer_length, target_value_ptr);
+			return GetInternalValue<float, SQLREAL>(stmt, val, LogicalType::FLOAT, target_value_ptr,
+			                                        str_len_or_ind_ptr);
 		case SQL_C_DOUBLE:
-			return GetInternalValue<SQLFLOAT>(stmt, val, LogicalType::DOUBLE, buffer_length, target_value_ptr);
+			return GetInternalValue<double, SQLFLOAT>(stmt, val, LogicalType::DOUBLE, target_value_ptr,
+			                                          str_len_or_ind_ptr);
 		case SQL_C_BIT: {
 			LogicalType char_type = LogicalType(LogicalTypeId::CHAR);
-			return GetInternalValue<SQLCHAR>(stmt, val, char_type, buffer_length, target_value_ptr);
+			return GetInternalValue<SQLCHAR>(stmt, val, char_type, target_value_ptr, str_len_or_ind_ptr);
 		}
 		case SQL_C_STINYINT:
-			return GetInternalValue<SQLSCHAR>(stmt, val, LogicalType::TINYINT, buffer_length, target_value_ptr);
+			return GetInternalValue<int8_t, SQLSCHAR>(stmt, val, LogicalType::TINYINT, target_value_ptr,
+			                                          str_len_or_ind_ptr);
 		case SQL_C_UTINYINT:
-			return GetInternalValue<SQLSCHAR>(stmt, val, LogicalType::UTINYINT, buffer_length, target_value_ptr);
+			return GetInternalValue<uint8_t, uint8_t>(stmt, val, LogicalType::UTINYINT, target_value_ptr,
+			                                          str_len_or_ind_ptr);
 		case SQL_C_SBIGINT:
-			return GetInternalValue<SQLBIGINT>(stmt, val, LogicalType::BIGINT, buffer_length, target_value_ptr);
+			return GetInternalValue<int64_t, SQLBIGINT>(stmt, val, LogicalType::BIGINT, target_value_ptr,
+			                                            str_len_or_ind_ptr);
 		case SQL_C_UBIGINT:
 			// case SQL_C_BOOKMARK: // same ODBC type (\\TODO we don't support bookmark types)
-			return GetInternalValue<SQLUBIGINT>(stmt, val, LogicalType::UBIGINT, buffer_length, target_value_ptr);
+			return GetInternalValue<uint64_t, SQLUBIGINT>(stmt, val, LogicalType::UBIGINT, target_value_ptr,
+			                                              str_len_or_ind_ptr);
 		case SQL_C_WCHAR: {
 			std::string str = val.GetValue<std::string>();
+			if (!target_value_ptr) {
+				return SetStringValueLength(str, str_len_or_ind_ptr);
+			}
+
 			std::wstring w_str = std::wstring(str.begin(), str.end());
 			auto out_len = swprintf((wchar_t *)target_value_ptr, buffer_length, L"%ls", w_str.c_str());
 
@@ -183,7 +244,14 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		case SQL_C_BINARY: {
 			// threating binary values as BLOB type
 			string blob = duckdb::Blob::ToBlob(duckdb::string_t(val.GetValue<string>().c_str()));
-			auto out_len = snprintf((char *)target_value_ptr, buffer_length, "%s", blob.c_str());
+			auto out_len = duckdb::MinValue(blob.size(), (size_t)buffer_length);
+			memcpy((char *)target_value_ptr, blob.c_str(), out_len);
+			// terminating null character
+			if (blob.size() < (size_t)buffer_length) {
+				((char *)target_value_ptr)[blob.size()] = '\0';
+			} else {
+				((char *)target_value_ptr)[buffer_length - 1] = '\0';
+			}
 
 			if (str_len_or_ind_ptr) {
 				*str_len_or_ind_ptr = out_len;
@@ -191,7 +259,19 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			return SQL_SUCCESS;
 		}
 		case SQL_C_CHAR: {
-			auto out_len = snprintf((char *)target_value_ptr, buffer_length, "%s", val.GetValue<string>().c_str());
+			std::string val_str = val.GetValue<std::string>();
+			if (!target_value_ptr) {
+				return SetStringValueLength(val_str, str_len_or_ind_ptr);
+			}
+
+			auto out_len = duckdb::MinValue(val_str.size(), (size_t)buffer_length);
+			memcpy((char *)target_value_ptr, val_str.c_str(), out_len);
+			// terminating null character
+			if (val_str.size() < (size_t)buffer_length) {
+				((char *)target_value_ptr)[val_str.size()] = '\0';
+			} else {
+				((char *)target_value_ptr)[buffer_length - 1] = '\0';
+			}
 
 			if (str_len_or_ind_ptr) {
 				*str_len_or_ind_ptr = out_len;
@@ -237,13 +317,23 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			string_t str_t(str_val.c_str(), width);
 			if (numeric->precision <= Decimal::MAX_WIDTH_INT64) {
 				int64_t val_i64;
-				duckdb::TryCast::Operation(str_t, val_i64);
+				if (!duckdb::TryCast::Operation(str_t, val_i64)) {
+					return SQL_ERROR;
+				}
 				memcpy(dataptr, &val_i64, sizeof(val_i64));
 			} else {
-				hugeint_t huge_int =
-				    duckdb::CastToDecimal::Operation<string_t, hugeint_t>(str_t, numeric->precision, numeric->scale);
+				hugeint_t huge_int;
+				string error_message;
+				if (!duckdb::TryCastToDecimal::Operation<string_t, hugeint_t>(str_t, huge_int, &error_message,
+				                                                              numeric->precision, numeric->scale)) {
+					return SQL_ERROR;
+				}
 				memcpy(dataptr, &huge_int.lower, sizeof(huge_int.lower));
 				memcpy(dataptr + sizeof(huge_int.lower), &huge_int.upper, sizeof(huge_int.upper));
+			}
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_NUMERIC_STRUCT);
 			}
 			return SQL_SUCCESS;
 		}
@@ -254,39 +344,36 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				date = val.GetValue<date_t>();
 				break;
 			case LogicalTypeId::TIMESTAMP_SEC: {
-				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(stmt, val, date,
-				                                                             duckdb::Timestamp::FromEpochSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date, duckdb::Timestamp::FromEpochSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_MS: {
-				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(stmt, val, date,
-				                                                             duckdb::Timestamp::FromEpochMs)) {
+				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date, duckdb::Timestamp::FromEpochMs)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP: {
-				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(
-				        stmt, val, date, duckdb::Timestamp::FromEpochMicroSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date,
+				                                              duckdb::Timestamp::FromEpochMicroSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_NS: {
-				if (!CastTimestampValue<duckdb::CastTimestampToDate, date_t>(stmt, val, date,
-				                                                             duckdb::Timestamp::FromEpochNanoSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, date_t>(stmt, val, date,
+				                                              duckdb::Timestamp::FromEpochNanoSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::VARCHAR: {
 				string val_str = val.GetValue<string>();
-				try {
-					date = duckdb::CastToDate::Operation<string_t, date_t>(string_t(val_str));
-				} catch (duckdb::Exception &ex) {
-					stmt->error_messages.emplace_back(ex.what());
+				auto str_input = string_t(val_str);
+				if (!TryCast::Operation<string_t, date_t>(str_input, date)) {
+					stmt->error_messages.emplace_back(CastExceptionText<string_t, date_t>(str_input));
 					return SQL_ERROR;
 				}
 				break;
@@ -297,15 +384,15 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			} // end switch "val.type().id()": SQL_C_TYPE_DATE
 
 			SQL_DATE_STRUCT *date_struct = (SQL_DATE_STRUCT *)target_value_ptr;
-			try {
-				date_struct->year = duckdb::Date::ExtractYear(date);
-				date_struct->month = duckdb::Date::ExtractMonth(date);
-				date_struct->day = duckdb::Date::ExtractDay(date);
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
+			int32_t year, month, day;
+			Date::Convert(date, year, month, day);
+			date_struct->year = year;
+			date_struct->month = month;
+			date_struct->day = day;
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_DATE_STRUCT);
 			}
+			return SQL_SUCCESS;
 		}
 		case SQL_C_TYPE_TIME: {
 			dtime_t time;
@@ -314,39 +401,36 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				time = val.GetValue<dtime_t>();
 				break;
 			case LogicalTypeId::TIMESTAMP_SEC: {
-				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(stmt, val, time,
-				                                                              duckdb::Timestamp::FromEpochSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time, duckdb::Timestamp::FromEpochSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_MS: {
-				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(stmt, val, time,
-				                                                              duckdb::Timestamp::FromEpochMs)) {
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time, duckdb::Timestamp::FromEpochMs)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP: {
-				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(
-				        stmt, val, time, duckdb::Timestamp::FromEpochMicroSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time,
+				                                               duckdb::Timestamp::FromEpochMicroSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::TIMESTAMP_NS: {
-				if (!CastTimestampValue<duckdb::CastTimestampToTime, dtime_t>(
-				        stmt, val, time, duckdb::Timestamp::FromEpochNanoSeconds)) {
+				if (!CastTimestampValue<duckdb::Cast, dtime_t>(stmt, val, time,
+				                                               duckdb::Timestamp::FromEpochNanoSeconds)) {
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::VARCHAR: {
 				string val_str = val.GetValue<string>();
-				try {
-					time = duckdb::CastToTime::Operation<string_t, dtime_t>(string_t(val_str));
-				} catch (duckdb::Exception &ex) {
-					stmt->error_messages.emplace_back(ex.what());
+				auto str_input = string_t(val_str);
+				if (!TryCast::Operation<string_t, dtime_t>(str_input, time)) {
+					stmt->error_messages.emplace_back(CastExceptionText<string_t, dtime_t>(str_input));
 					return SQL_ERROR;
 				}
 				break;
@@ -357,18 +441,16 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			} // end switch "val.type().id()": SQL_C_TYPE_TIME
 
 			SQL_TIME_STRUCT *time_struct = (SQL_TIME_STRUCT *)target_value_ptr;
-			try {
-				int32_t hour, minute, second, micros;
-				duckdb::Time::Convert(time, hour, minute, second, micros);
+			int32_t hour, minute, second, micros;
+			duckdb::Time::Convert(time, hour, minute, second, micros);
 
-				time_struct->hour = hour;
-				time_struct->minute = minute;
-				time_struct->second = second;
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
+			time_struct->hour = hour;
+			time_struct->minute = minute;
+			time_struct->second = second;
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_TIME_STRUCT);
 			}
+			return SQL_SUCCESS;
 		}
 		case SQL_C_TYPE_TIMESTAMP: {
 			timestamp_t timestamp;
@@ -386,20 +468,18 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 				timestamp = duckdb::Timestamp::FromEpochNanoSeconds(val.GetValue<int64_t>());
 				break;
 			case LogicalTypeId::DATE: {
-				try {
-					timestamp = duckdb::CastDateToTimestamp::Operation<date_t, timestamp_t>(val.GetValue<date_t>());
-				} catch (duckdb::Exception &ex) {
-					stmt->error_messages.emplace_back(ex.what());
+				auto date_input = val.GetValue<date_t>();
+				if (!TryCast::Operation<date_t, timestamp_t>(date_input, timestamp)) {
+					stmt->error_messages.emplace_back(CastExceptionText<date_t, timestamp_t>(date_input));
 					return SQL_ERROR;
 				}
 				break;
 			}
 			case LogicalTypeId::VARCHAR: {
 				string val_str = val.GetValue<string>();
-				try {
-					timestamp = duckdb::CastToTimestamp::Operation<string_t, timestamp_t>(string_t(val_str));
-				} catch (duckdb::Exception &ex) {
-					stmt->error_messages.emplace_back(ex.what());
+				auto str_input = string_t(val_str);
+				if (!TryCast::Operation<string_t, timestamp_t>(str_input, timestamp)) {
+					stmt->error_messages.emplace_back(CastExceptionText<string_t, timestamp_t>(str_input));
 					return SQL_ERROR;
 				}
 				break;
@@ -410,25 +490,26 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			} // end switch "val.type().id()"
 
 			SQL_TIMESTAMP_STRUCT *timestamp_struct = (SQL_TIMESTAMP_STRUCT *)target_value_ptr;
-			try {
-				date_t date = duckdb::Timestamp::GetDate(timestamp);
-				timestamp_struct->year = duckdb::Date::ExtractYear(date);
-				timestamp_struct->month = duckdb::Date::ExtractMonth(date);
-				timestamp_struct->day = duckdb::Date::ExtractDay(date);
+			date_t date = duckdb::Timestamp::GetDate(timestamp);
 
-				dtime_t time = duckdb::Timestamp::GetTime(timestamp);
-				int32_t hour, minute, second, micros;
-				duckdb::Time::Convert(time, hour, minute, second, micros);
-				timestamp_struct->hour = hour;
-				timestamp_struct->minute = minute;
-				timestamp_struct->second = second;
-				timestamp_struct->fraction = micros;
+			int32_t year, month, day;
+			Date::Convert(date, year, month, day);
+			timestamp_struct->year = year;
+			timestamp_struct->month = month;
+			timestamp_struct->day = day;
 
-				return SQL_SUCCESS;
-			} catch (duckdb::Exception &ex) {
-				stmt->error_messages.emplace_back(ex.what());
-				return SQL_ERROR;
+			dtime_t time = duckdb::Timestamp::GetTime(timestamp);
+			int32_t hour, minute, second, micros;
+			duckdb::Time::Convert(time, hour, minute, second, micros);
+			timestamp_struct->hour = hour;
+			timestamp_struct->minute = minute;
+			timestamp_struct->second = second;
+			timestamp_struct->fraction = micros;
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_TIMESTAMP_STRUCT);
 			}
+
+			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_YEAR: {
 			interval_t interval;
@@ -440,6 +521,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetYear(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_MONTH: {
@@ -452,6 +538,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetMonth(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_DAY: {
@@ -464,6 +555,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetDay(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_HOUR: {
@@ -476,6 +572,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetHour(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_MINUTE: {
@@ -488,6 +589,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetMinute(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_SECOND: {
@@ -500,6 +606,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetSecond(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_YEAR_TO_MONTH: {
@@ -515,6 +626,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			interval_struct->intval.year_month.month = std::abs(interval.months) % duckdb::Interval::MONTHS_PER_YEAR;
 			interval_struct->interval_type = SQLINTERVAL::SQL_IS_YEAR_TO_MONTH;
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_DAY_TO_HOUR: {
@@ -527,6 +643,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetDayToHour(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_DAY_TO_MINUTE: {
@@ -539,6 +660,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetDayToMinute(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_DAY_TO_SECOND: {
@@ -551,6 +677,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetDayToSecond(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_HOUR_TO_MINUTE: {
@@ -563,6 +694,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetHourToMinute(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_HOUR_TO_SECOND: {
@@ -575,6 +711,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetHourToSecond(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		case SQL_C_INTERVAL_MINUTE_TO_SECOND: {
@@ -587,6 +728,11 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 			SQL_INTERVAL_STRUCT *interval_struct = (SQL_INTERVAL_STRUCT *)target_value_ptr;
 			OdbcInterval::SetMinuteToSecond(interval, interval_struct);
 			OdbcInterval::SetSignal(interval, interval_struct);
+
+			if (str_len_or_ind_ptr) {
+				*str_len_or_ind_ptr = sizeof(SQL_INTERVAL_STRUCT);
+			}
+
 			return SQL_SUCCESS;
 		}
 		// TODO other types

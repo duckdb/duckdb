@@ -46,6 +46,11 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         "Fetch a chunk of the result as Data.Frame following execute()", py::arg("vectors_per_chunk") = 1)
 	    .def("df", &DuckDBPyConnection::FetchDF, "Fetch a result as Data.Frame following execute()")
 	    .def("fetch_arrow_table", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
+	    .def("fetch_arrow_chunk", &DuckDBPyConnection::FetchArrowChunk,
+	         "Fetch a chunk of the result as an Arrow Table following execute()", py::arg("vectors_per_chunk") = 1,
+	         py::arg("return_table") = false)
+	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
+	         "Fetch an Arrow RecordBatchReader following execute()")
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
@@ -57,7 +62,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("unregister", &DuckDBPyConnection::UnregisterPythonObject, "Unregister the view name",
 	         py::arg("view_name"))
 	    .def("register_arrow", &DuckDBPyConnection::RegisterArrow,
-	         "Register the passed Arrow Table for querying with a view", py::arg("view_name"), py::arg("arrow_table"),
+	         "Register the passed Arrow Table for querying with a view", py::arg("view_name"), py::arg("arrow_object"),
 	         py::arg("rows_per_thread") = 1000000)
 	    .def("table", &DuckDBPyConnection::Table, "Create a relation object for the name'd table",
 	         py::arg("table_name"))
@@ -167,10 +172,6 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::ob
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	auto py_object_type = string(py::str(table.get_type().attr("__name__")));
-	if (table.is_none() || (py_object_type != "Table" && py_object_type != "FileSystemDataset")) {
-		throw std::runtime_error("Only arrow tables/datasets are supported");
-	}
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
@@ -270,19 +271,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 		throw std::runtime_error("connection closed");
 	}
 	py::gil_scoped_acquire acquire;
-
-	// the following is a careful dance around having to depend on pyarrow
-	auto py_object_type = string(py::str(table.get_type().attr("__name__")));
-	if (table.is_none() || (py_object_type != "Table" && py_object_type != "FileSystemDataset")) {
-		throw std::runtime_error("Only arrow tables/datasets are supported");
-	}
-
 	string name = "arrow_table_" + GenerateRandomName();
 
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 
-	unique_ptr<ArrowArrayStreamWrapper> (*stream_factory_produce)(uintptr_t factory) =
-	    PythonTableArrowArrayStreamFactory::Produce;
+	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto rel = make_unique<DuckDBPyRelation>(
 	    connection
 	        ->TableFunction("arrow_scan",
@@ -368,7 +361,7 @@ py::dict DuckDBPyConnection::FetchNumpy() {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
-	return result->FetchNumpy();
+	return result->FetchNumpyInternal();
 }
 py::object DuckDBPyConnection::FetchDF() {
 	if (!result) {
@@ -389,6 +382,20 @@ py::object DuckDBPyConnection::FetchArrow() {
 		throw std::runtime_error("no open result set");
 	}
 	return result->FetchArrowTable();
+}
+
+py::object DuckDBPyConnection::FetchArrowChunk(const idx_t vectors_per_chunk, bool return_table) const {
+	if (!result) {
+		throw std::runtime_error("no open result set");
+	}
+	return result->FetchArrowTableChunk(vectors_per_chunk, return_table);
+}
+
+py::object DuckDBPyConnection::FetchRecordBatchReader() const {
+	if (!result) {
+		throw std::runtime_error("no open result set");
+	}
+	return result->FetchRecordBatchReader();
 }
 
 static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str &table_name) {

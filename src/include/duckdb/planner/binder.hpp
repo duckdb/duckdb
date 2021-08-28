@@ -151,6 +151,8 @@ private:
 	bool plan_subquery = true;
 	//! Whether CTEs should reference the parent binder (if it exists)
 	bool inherit_ctes = true;
+	//! Whether or not the binder can contain NULLs as the root of expressions
+	bool can_contain_nulls = false;
 	//! The root statement of the query that is currently being parsed
 	SQLStatement *root_statement = nullptr;
 
@@ -225,6 +227,7 @@ private:
 	void BindModifiers(OrderBinder &order_binder, QueryNode &statement, BoundQueryNode &result);
 	void BindModifierTypes(BoundQueryNode &result, const vector<LogicalType> &sql_types, idx_t projection_index);
 
+	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
 	unique_ptr<Expression> BindFilter(unique_ptr<ParsedExpression> condition);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);

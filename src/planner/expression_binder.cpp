@@ -113,45 +113,68 @@ void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &
 	                                      [&](Expression &child) { ExtractCorrelatedExpressions(binder, child); });
 }
 
-static bool ContainsNullType(const LogicalType &type) {
+bool ExpressionBinder::ContainsType(const LogicalType &type, LogicalTypeId target) {
+	if (type.id() == target) {
+		return true;
+	}
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP: {
 		auto child_count = StructType::GetChildCount(type);
 		for (idx_t i = 0; i < child_count; i++) {
-			if (ContainsNullType(StructType::GetChildType(type, i))) {
+			if (ContainsType(StructType::GetChildType(type, i), target)) {
 				return true;
 			}
 		}
 		return false;
 	}
 	case LogicalTypeId::LIST:
-		return ContainsNullType(ListType::GetChildType(type));
-	case LogicalTypeId::SQLNULL:
-		return true;
+		return ContainsType(ListType::GetChildType(type), target);
 	default:
 		return false;
 	}
 }
 
-static LogicalType ExchangeNullType(const LogicalType &type) {
+LogicalType ExpressionBinder::ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type) {
+	if (type.id() == target) {
+		return new_type;
+	}
 	switch (type.id()) {
 	case LogicalTypeId::STRUCT:
 	case LogicalTypeId::MAP: {
 		// we make a copy of the child types of the struct here
 		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
-			child_type.second = ExchangeNullType(child_type.second);
+			child_type.second = ExchangeType(child_type.second, target, new_type);
 		}
 		return type.id() == LogicalTypeId::MAP ? LogicalType::MAP(move(child_types))
 		                                       : LogicalType::STRUCT(move(child_types));
 	}
 	case LogicalTypeId::LIST:
-		return LogicalType::LIST(ExchangeNullType(ListType::GetChildType(type)));
-	case LogicalTypeId::SQLNULL:
-		return LogicalType::INTEGER;
+		return LogicalType::LIST(ExchangeType(ListType::GetChildType(type), target, new_type));
 	default:
 		return type;
+	}
+}
+
+bool ExpressionBinder::ContainsNullType(const LogicalType &type) {
+	return ContainsType(type, LogicalTypeId::SQLNULL);
+}
+
+LogicalType ExpressionBinder::ExchangeNullType(const LogicalType &type) {
+	return ExchangeType(type, LogicalTypeId::SQLNULL, LogicalType::INTEGER);
+}
+
+void ExpressionBinder::ResolveParameterType(LogicalType &type) {
+	if (type.id() == LogicalTypeId::UNKNOWN) {
+		type = LogicalType::VARCHAR;
+	}
+}
+
+void ExpressionBinder::ResolveParameterType(unique_ptr<Expression> &expr) {
+	if (ContainsType(expr->return_type, LogicalTypeId::UNKNOWN)) {
+		auto result_type = ExchangeType(expr->return_type, LogicalTypeId::UNKNOWN, LogicalType::VARCHAR);
+		expr = BoundCastExpression::AddCastToType(move(expr), result_type);
 	}
 }
 
@@ -175,12 +198,17 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 		// the binder has a specific target type: add a cast to that type
 		result = BoundCastExpression::AddCastToType(move(result), target_type);
 	} else {
-		// SQL NULL type is only used internally in the binder
-		// cast to INTEGER if we encounter it outside of the binder
-		if (ContainsNullType(result->return_type)) {
-			auto result_type = ExchangeNullType(result->return_type);
-			result = BoundCastExpression::AddCastToType(move(result), result_type);
+		if (!binder.can_contain_nulls) {
+			// SQL NULL type is only used internally in the binder
+			// cast to INTEGER if we encounter it outside of the binder
+			if (ContainsNullType(result->return_type)) {
+				auto result_type = ExchangeNullType(result->return_type);
+				result = BoundCastExpression::AddCastToType(move(result), result_type);
+			}
 		}
+		// check if we failed to convert any parameters
+		// if we did, we push a cast
+		ExpressionBinder::ResolveParameterType(result);
 	}
 	if (result_type) {
 		*result_type = result->return_type;

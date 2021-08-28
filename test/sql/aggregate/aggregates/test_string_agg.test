@@ -2,6 +2,9 @@
 # description: Test STRING_AGG operator
 # group: [aggregates]
 
+statement ok
+PRAGMA enable_verification
+
 # test incorrect usage of STRING_AGG function
 
 statement error
@@ -88,3 +91,117 @@ SELECT g, GROUP_CONCAT(x) FROM strings GROUP BY g ORDER BY g
 2	i,j
 3	p
 4	x,y,z
+
+#
+# Test ORDER BY
+#
+
+# Impervious to threading
+statement ok
+PRAGMA force_parallelism
+
+# Single group
+query TT
+SELECT STRING_AGG(x,',' ORDER BY x ASC), STRING_AGG(x,y ORDER BY x ASC) FROM strings
+----
+a,b,i,j,p,x,y,z
+a-b/i+j/p/x-y+z
+
+query TT
+SELECT STRING_AGG(x,',' ORDER BY x DESC), STRING_AGG(x,y ORDER BY x DESC) FROM strings
+----
+z,y,x,p,j,i,b,a
+z-y/x/p+j/i-b/a
+
+# Constant separator
+query II
+SELECT g, STRING_AGG(x, ',' ORDER BY x ASC) FROM strings GROUP BY g ORDER BY 1
+----
+1	a,b
+2	i,j
+3	p
+4	x,y,z
+
+query II
+SELECT g, STRING_AGG(x, ',' ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
+----
+1	b,a
+2	j,i
+3	p
+4	z,y,x
+
+# Variable separator
+query II
+SELECT g, STRING_AGG(x, y ORDER BY x ASC) FROM strings GROUP BY g ORDER BY 1
+----
+1	a-b
+2	i+j
+3	p
+4	x-y+z
+
+query II
+SELECT g, STRING_AGG(x, y ORDER BY x DESC) FROM strings GROUP BY g ORDER BY 1
+----
+1	b/a
+2	j/i
+3	p
+4	z-y/x
+
+# A more complex ORDER BY expression
+# Ordering [NULL a b i j p x y z]
+query I
+SELECT STRING_AGG(g::VARCHAR, ',' ORDER BY CONCAT(x, y) ASC) FROM strings ORDER BY 1
+----
+2,1,1,2,2,3,4,4,4
+
+# Ordering by multiple columns
+query I
+SELECT STRING_AGG(g::VARCHAR, ',' ORDER BY x, y) FROM strings ORDER BY 1
+----
+2,1,1,2,2,3,4,4,4
+
+# Two expressions with a different ORDER BY clause
+query II
+SELECT STRING_AGG(x, ',' ORDER BY x DESC), STRING_AGG(x, ',' ORDER BY x ASC) FROM strings;
+----
+z,y,x,p,j,i,b,a	a,b,i,j,p,x,y,z
+
+# ORDER + FILTER
+query II
+SELECT y, STRING_AGG(x, ',' ORDER BY x DESC) FILTER (WHERE g < 3)
+FROM strings
+GROUP BY y
+ORDER BY 1
+----
++	j
+-	b
+/	i,a
+
+# ORDER + FILTER + DISTINCT
+query II
+SELECT g, STRING_AGG(DISTINCT y, ',' ORDER BY x DESC) FILTER (WHERE g < 4)
+FROM strings
+GROUP BY g
+ORDER BY 1
+----
+1	-,/
+2	-,+,/
+3	/
+4	NULL
+
+# ORDER BY on a correlated column
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers (VALUES (1), (2), (3), (NULL));
+
+query II
+SELECT i1.i, (SELECT STRING_AGG(i::VARCHAR, ',' ORDER BY i1.i) FROM integers WHERE i<=i1.i) c1
+FROM integers i1
+ORDER BY 1 NULLS LAST
+----
+1	1
+2	1,2
+3	1,2,3
+NULL	NULL

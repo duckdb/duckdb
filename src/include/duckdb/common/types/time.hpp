@@ -29,6 +29,12 @@ public:
 
 	//! Extract the time from a given timestamp object
 	static void Convert(dtime_t time, int32_t &out_hour, int32_t &out_min, int32_t &out_sec, int32_t &out_micros);
+
+	static string ConversionError(const string &str);
+	static string ConversionError(string_t str);
+
+private:
+	static bool TryConvertInternal(const char *buf, idx_t len, idx_t &pos, dtime_t &result, bool strict);
 };
 
 } // namespace duckdb

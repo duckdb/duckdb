@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/types/row_chunk.hpp
+// duckdb/common/types/row_data_collection.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -61,6 +61,19 @@ public:
 	                                       const SelectionVector *sel = &FlatVector::INCREMENTAL_SELECTION_VECTOR);
 
 	void Merge(RowDataCollection &other);
+
+	//! The size (in bytes) of this RowDataCollection if it were stored in a single block
+	idx_t SizeInBytes() const {
+		idx_t bytes = 0;
+		if (entry_size == 1) {
+			for (auto &block : blocks) {
+				bytes += block.byte_offset;
+			}
+		} else {
+			bytes = count * entry_size;
+		}
+		return MaxValue(bytes, (idx_t)Storage::BLOCK_SIZE);
+	}
 
 private:
 	mutex rdc_lock;

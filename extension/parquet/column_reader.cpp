@@ -421,6 +421,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
                              Vector &result_out) {
 	idx_t result_offset = 0;
 	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
+	auto &result_mask = FlatVector::Validity(result_out);
 
 	D_ASSERT(ListVector::GetListSize(result_out) == 0);
 	// if an individual list is longer than STANDARD_VECTOR_SIZE we actually have to loop the child read to fill it
@@ -478,7 +479,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint
 				result_ptr[result_offset].length = 1;
 			} else {
 				// value is NULL somewhere up the stack
-				FlatVector::SetNull(result_out, result_offset, true);
+				result_mask.SetInvalid(result_offset);
 				result_ptr[result_offset].offset = 0;
 				result_ptr[result_offset].length = 0;
 			}

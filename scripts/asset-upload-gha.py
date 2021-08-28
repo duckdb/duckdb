@@ -93,7 +93,7 @@ for filename in files:
 		asset_filename = parts[0]
 		paths = glob.glob(parts[1])
 		if len(paths) != 1:
-			raise ValueError("Could not find file for pattern %s" % local_filename)
+			raise ValueError("Could not find file for pattern %s" % parts[1])
 		local_filename = paths[0]
 	else :
 		asset_filename = os.path.basename(filename)

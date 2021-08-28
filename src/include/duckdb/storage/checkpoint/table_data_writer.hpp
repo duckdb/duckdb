@@ -11,8 +11,9 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
 
 namespace duckdb {
+class CheckpointManager;
 class ColumnData;
-class UncompressedSegment;
+class ColumnSegment;
 class RowGroup;
 class BaseStatistics;
 class SegmentStatistics;
@@ -22,7 +23,8 @@ class TableDataWriter {
 	friend class ColumnData;
 
 public:
-	TableDataWriter(DatabaseInstance &db, TableCatalogEntry &table, MetaBlockWriter &meta_writer);
+	TableDataWriter(DatabaseInstance &db, CheckpointManager &checkpoint_manager, TableCatalogEntry &table,
+	                MetaBlockWriter &meta_writer);
 	~TableDataWriter();
 
 	BlockPointer WriteTableData();
@@ -31,8 +33,12 @@ public:
 		return meta_writer;
 	}
 
+	CheckpointManager &GetCheckpointManager() {
+		return checkpoint_manager;
+	}
+
 private:
-	DatabaseInstance &db;
+	CheckpointManager &checkpoint_manager;
 	TableCatalogEntry &table;
 	MetaBlockWriter &meta_writer;
 };

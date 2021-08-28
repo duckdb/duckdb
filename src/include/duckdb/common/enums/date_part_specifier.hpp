@@ -29,9 +29,11 @@ enum class DatePartSpecifier : uint8_t {
 	ISODOW,
 	WEEK,
 	QUARTER,
-	DOY
+	DOY,
+	YEARWEEK
 };
 
-DatePartSpecifier GetDatePartSpecifier(string specifier);
+bool TryGetDatePartSpecifier(const string &specifier, DatePartSpecifier &result);
+DatePartSpecifier GetDatePartSpecifier(const string &specifier);
 
 } // namespace duckdb

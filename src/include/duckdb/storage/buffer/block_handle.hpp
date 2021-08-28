@@ -29,7 +29,7 @@ class BlockHandle {
 public:
 	BlockHandle(DatabaseInstance &db, block_id_t block_id);
 	BlockHandle(DatabaseInstance &db, block_id_t block_id, unique_ptr<FileBuffer> buffer, bool can_destroy,
-	            idx_t alloc_size);
+	            idx_t block_size);
 	~BlockHandle();
 
 	DatabaseInstance &db;

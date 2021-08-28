@@ -40,6 +40,8 @@ public:
 	bool use_perfect_hash {false};
 	// used in perfect hash join
 	PerfectHashJoinStats perfect_join_statistics;
+	//! Whether or not we can cache the chunk
+	bool can_cache;
 
 public:
 	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;

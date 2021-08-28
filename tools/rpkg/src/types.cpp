@@ -13,8 +13,10 @@ RType RApiTypes::DetectRType(SEXP v) {
 		return RType::TIMESTAMP;
 	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "Date")) {
 		return RType::DATE;
+	} else if (TYPEOF(v) == INTSXP && Rf_inherits(v, "Date")) {
+		return RType::DATE_INTEGER;
 	} else if (TYPEOF(v) == REALSXP && Rf_inherits(v, "difftime")) {
-		SEXP units = Rf_getAttrib(v, Rf_install("units"));
+		SEXP units = Rf_getAttrib(v, RStrings::get().units_sym);
 		if (TYPEOF(units) != STRSXP) {
 			return RType::UNKNOWN;
 		}
@@ -29,6 +31,25 @@ RType RApiTypes::DetectRType(SEXP v) {
 			return RType::TIME_DAYS;
 		} else if (units0 == RStrings::get().weeks) {
 			return RType::TIME_WEEKS;
+		} else {
+			return RType::UNKNOWN;
+		}
+	} else if (TYPEOF(v) == INTSXP && Rf_inherits(v, "difftime")) {
+		SEXP units = Rf_getAttrib(v, Rf_install("units"));
+		if (TYPEOF(units) != STRSXP) {
+			return RType::UNKNOWN;
+		}
+		SEXP units0 = STRING_ELT(units, 0);
+		if (units0 == RStrings::get().secs) {
+			return RType::TIME_SECONDS_INTEGER;
+		} else if (units0 == RStrings::get().mins) {
+			return RType::TIME_MINUTES_INTEGER;
+		} else if (units0 == RStrings::get().hours) {
+			return RType::TIME_HOURS_INTEGER;
+		} else if (units0 == RStrings::get().days) {
+			return RType::TIME_DAYS_INTEGER;
+		} else if (units0 == RStrings::get().weeks) {
+			return RType::TIME_WEEKS_INTEGER;
 		} else {
 			return RType::UNKNOWN;
 		}
@@ -79,7 +100,7 @@ dtime_t RTimeDaysType::Convert(double val) {
 }
 
 dtime_t RTimeWeeksType::Convert(double val) {
-	return dtime_t(int64_t(val * Interval::MICROS_PER_DAY * 7));
+	return dtime_t(int64_t(val * (Interval::MICROS_PER_DAY * Interval::DAYS_PER_WEEK)));
 }
 
 bool RIntegerType::IsNull(int val) {

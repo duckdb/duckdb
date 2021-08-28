@@ -15,16 +15,24 @@ enum class RType {
 	STRING,
 	FACTOR,
 	DATE,
+	DATE_INTEGER,
 	TIMESTAMP,
 	TIME_SECONDS,
 	TIME_MINUTES,
 	TIME_HOURS,
 	TIME_DAYS,
-	TIME_WEEKS
+	TIME_WEEKS,
+	TIME_SECONDS_INTEGER,
+	TIME_MINUTES_INTEGER,
+	TIME_HOURS_INTEGER,
+	TIME_DAYS_INTEGER,
+	TIME_WEEKS_INTEGER,
 };
 
 struct RApiTypes {
 	static RType DetectRType(SEXP v);
+	static Value SexpToValue(SEXP valsexp, R_len_t idx);
+	static SEXP ValueToSexp(Value &val);
 };
 
 struct RIntegralType {

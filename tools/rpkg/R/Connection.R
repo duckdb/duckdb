@@ -67,10 +67,11 @@ setMethod(
 #' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbSendQuery
 #' @inheritParams DBI::dbBind
+#' @param arrow Whether the query should be returned as an Arrow Table
 #' @export
 setMethod(
   "dbSendQuery", c("duckdb_connection", "character"),
-  function(conn, statement, params = NULL, ...) {
+  function(conn, statement, params = NULL, ..., arrow=FALSE) {
     if (conn@debug) {
       message("Q ", statement)
     }
@@ -79,7 +80,8 @@ setMethod(
 
     res <- duckdb_result(
       connection = conn,
-      stmt_lst = stmt_lst
+      stmt_lst = stmt_lst,
+      arrow = arrow
     )
     if (length(params) > 0) {
       dbBind(res, params)
@@ -131,16 +133,15 @@ setMethod(
       stop("Setting both overwrite and append makes no sense")
     }
 
-    # oof
-    if (!is.null(field.types) &&
-      (
-        !is.character(field.types) ||
-          any(is.na(names(field.types))) ||
-          length(unique(names(field.types))) != length(names(field.types)) ||
-          append
-      )) {
-      stop("invalid field.types argument")
+    if (!is.null(field.types)) {
+      if (!(is.character(field.types) && !is.null(names(field.types)) && !anyDuplicated(names(field.types)))) {
+        stop("`field.types` must be a named character vector with unique names, or NULL")
+      }
     }
+    if (append && !is.null(field.types)) {
+      stop("Cannot specify `field.types` with `append = TRUE`")
+    }
+
     value <- as.data.frame(value)
     if (!is.data.frame(value)) {
       stop("need a data frame as parameter")
@@ -148,6 +149,12 @@ setMethod(
 
     # use Kirill's magic, convert rownames to additional column
     value <- sqlRownamesToColumn(value, row.names)
+
+    is_factor <- vapply(value, is.factor, logical(1))
+    value[is_factor] <- lapply(value[is_factor], function(x) {
+      levels(x) <- enc2utf8(levels(x))
+      as.character(x)
+    })
 
     if (dbExistsTable(conn, name)) {
       if (overwrite) {
@@ -157,13 +164,9 @@ setMethod(
         stop(
           "Table ",
           name,
-          " already exists. Set overwrite=TRUE if you want
-                  to remove the existing table. Set append=TRUE if you would like to add the new data to the
-                  existing table."
+          " already exists. Set `overwrite = TRUE` if you want to remove the existing table. ",
+          "Set `append = TRUE` if you would like to add the new data to the existing table."
         )
-      }
-      if (append && any(names(value) != dbListFields(conn, name))) {
-        stop("Column name mismatch for append")
       }
     }
     table_name <- dbQuoteIdentifier(conn, name)
@@ -174,12 +177,7 @@ setMethod(
         vapply(value, dbDataType, dbObj = conn, FUN.VALUE = "character")
 
       if (!is.null(field.types)) {
-        mapped_column_types <- field.types[names(value)]
-        if (any(is.na(mapped_column_types)) ||
-          length(mapped_column_types) != length(names(value))) {
-          stop("Column name/type mismatch")
-        }
-        column_types <- mapped_column_types
+        column_types[names(field.types)] <- field.types
       }
 
       temp_str <- ""
@@ -191,27 +189,61 @@ setMethod(
       )))
     }
 
-    if (length(value[[1]])) {
-      classes <- unlist(lapply(value, function(v) {
-        class(v)[[1]]
-      }))
-      for (c in names(classes[classes == "character"])) {
-        value[[c]] <- enc2utf8(value[[c]])
-      }
-      for (c in names(classes[classes == "factor"])) {
-        levels(value[[c]]) <- enc2utf8(levels(value[[c]]))
-      }
-    }
-    view_name <- sprintf("_duckdb_append_view_%s", duckdb_random_string())
-    on.exit(duckdb_unregister(conn, view_name))
-    duckdb_register(conn, view_name, value)
-    dbExecute(conn, sprintf("INSERT INTO %s SELECT * FROM %s", table_name, view_name))
-
-    on_connection_updated(conn, hint=paste0("Updated table'", table_name,"'"))
-
+    dbAppendTable(conn, name, value)
     invisible(TRUE)
   }
 )
+
+#' @rdname duckdb_connection-class
+#' @inheritParams DBI::dbAppendTable
+#' @export
+setMethod(
+  "dbAppendTable", "duckdb_connection",
+  function(conn, name, value, ..., row.names = NULL) {
+    if (!is.null(row.names)) {
+      stop("Can't pass `row.names` to `dbAppendTable()`")
+    }
+
+    if (!identical(names(value), dbListFields(conn, name))) {
+      stop("Column name mismatch for append")
+    }
+
+    value <- encode_values(value)
+
+    if (nrow(value)) {
+      table_name <- dbQuoteIdentifier(conn, name)
+
+      view_name <- sprintf("_duckdb_append_view_%s", duckdb_random_string())
+      on.exit(duckdb_unregister(conn, view_name))
+      duckdb_register(conn, view_name, value)
+      dbExecute(conn, sprintf("INSERT INTO %s SELECT * FROM %s", table_name, view_name))
+
+      rs_on_connection_updated(conn, hint=paste0("Updated table'", table_name,"'"))
+    }
+
+    invisible(nrow(value))
+  }
+)
+
+encode_values <- function(value) {
+  is_factor <- vapply(value, is.factor, logical(1))
+  if (any(is_factor)) {
+    warning("Factors converted to character")
+  }
+
+  value[is_factor] <- lapply(value[is_factor], function(x) {
+    levels(x) <- enc2utf8(levels(x))
+    as.character(x)
+  })
+
+  is_character <- vapply(value, is.character, logical(1))
+  value[is_character] <- lapply(value[is_character], enc2utf8)
+
+  is_posixlt <- vapply(value, inherits, "POSIXlt", FUN.VALUE = logical(1))
+  value[is_posixlt] <- lapply(value[is_posixlt], as.POSIXct)
+
+  value
+}
 
 #' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbListTables
@@ -282,11 +314,13 @@ setMethod(
 #' @export
 setMethod(
   "dbRemoveTable", c("duckdb_connection", "character"),
-  function(conn, name, ...) {
+  function(conn, name, ..., fail_if_missing = TRUE) {
+    sql <- paste0("DROP TABLE ", if (!fail_if_missing) "IF EXISTS ", "?")
     dbExecute(
       conn,
-      sqlInterpolate(conn, "DROP TABLE ?", dbQuoteIdentifier(conn, name))
+      sqlInterpolate(conn, sql, dbQuoteIdentifier(conn, name))
     )
+    rs_on_connection_updated(conn, "Table removed")
     invisible(TRUE)
   }
 )
@@ -326,7 +360,6 @@ setMethod(
   "dbCommit", "duckdb_connection",
   function(conn, ...) {
     dbExecute(conn, SQL("COMMIT"))
-    on_connection_updated(conn, "Committing changes")
     invisible(TRUE)
   }
 )
@@ -339,5 +372,67 @@ setMethod(
   function(conn, ...) {
     dbExecute(conn, SQL("ROLLBACK"))
     invisible(TRUE)
+  }
+)
+
+#' @rdname duckdb_connection-class
+#' @export
+setMethod(
+  "dbQuoteLiteral", signature("duckdb_connection"),
+  function(conn, x, ...) {
+    # Switchpatching to avoid ambiguous S4 dispatch, so that our method
+    # is used only if no alternatives are available.
+
+    if (is(x, "SQL")) {
+      return(x)
+    }
+
+    if (is.factor(x)) {
+      return(dbQuoteString(conn, as.character(x)))
+    }
+
+    if (is.character(x)) {
+      return(dbQuoteString(conn, x))
+    }
+
+    if (inherits(x, "POSIXt")) {
+      out <- dbQuoteString(
+        conn,
+        strftime(as.POSIXct(x), "%Y-%m-%d %H:%M:%S", tz = "UTC")
+      )
+
+      return(SQL(paste0(out, "::timestamp")))
+    }
+
+    if (inherits(x, "Date")) {
+      out <- callNextMethod()
+      return(SQL(paste0(out, "::date")))
+    }
+
+    if (inherits(x, "difftime")) {
+      out <- callNextMethod()
+      return(SQL(paste0(out, "::time")))
+    }
+
+    if (is.list(x)) {
+      blob_data <- vapply(
+        x,
+        function(x) {
+          if (is.null(x)) {
+            "NULL"
+          } else if (is.raw(x)) {
+            paste0("X'", paste(format(x), collapse = ""), "'")
+          } else {
+            stop("Lists must contain raw vectors or NULL", call. = FALSE)
+          }
+        },
+        character(1)
+      )
+      return(SQL(blob_data, names = names(x)))
+    }
+
+    x <- as.character(x)
+    x[is.na(x)] <- "NULL"
+    SQL(x, names = names(x))
   }
 )

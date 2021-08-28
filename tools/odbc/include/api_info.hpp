@@ -6,8 +6,8 @@
 #include <sql.h>
 #include <sqltypes.h>
 #include <sqlext.h>
-#include <map>
 #include <vector>
+#include <unordered_set>
 
 #define NUM_FUNC_SUPPORTED 4000
 
@@ -17,10 +17,10 @@ struct ApiInfo {
 
 private:
 	// fill all supported functions in this array
-	static const std::vector<SQLUSMALLINT> ALL_SUPPORTED_FUNCTIONS;
+	static const std::unordered_set<SQLUSMALLINT> BASE_SUPPORTED_FUNCTIONS;
 
 	// fill ODBC3 supported functions in this array
-	static const std::vector<SQLUSMALLINT> ODBC3_SUPPORTED_FUNCTIONS;
+	static const std::unordered_set<SQLUSMALLINT> ODBC3_EXTRA_SUPPORTED_FUNCTIONS;
 
 	static const std::vector<SQLSMALLINT> ODBC_SUPPORTED_SQL_TYPES;
 
@@ -34,6 +34,10 @@ public:
 	static SQLSMALLINT FindRelatedSQLType(duckdb::LogicalTypeId type_id);
 
 	static SQLRETURN CheckDataType(SQLSMALLINT data_type);
+
+	static SQLLEN PointerSizeOf(SQLSMALLINT sql_type);
+
+	static SQLRETURN GetColumnSize(const duckdb::LogicalType &logical_type, SQLULEN *col_size_ptr);
 
 }; // end ApiInfo struct
 

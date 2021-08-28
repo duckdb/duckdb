@@ -12,9 +12,9 @@
 
 namespace duckdb {
 
-template <>
-timestamp_t Cast::Operation(date_t date) {
-	return Timestamp::FromDatetime(date, dtime_t(0));
+// HUGEINT scaling by a double
+hugeint_t operator*(const hugeint_t &h, const double &d) {
+	return Hugeint::Convert(Hugeint::Cast<double>(h) * d);
 }
 
 using FrameBounds = std::pair<idx_t, idx_t>;
@@ -152,7 +152,7 @@ struct IndirectLess {
 
 template <class INPUT_TYPE, class TARGET_TYPE, bool DISCRETE>
 struct Interpolator {
-	Interpolator(const float q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(ceil(RN)) {
+	Interpolator(const double q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(ceil(RN)) {
 	}
 
 	TARGET_TYPE operator()(INPUT_TYPE *v_t) const {
@@ -188,7 +188,7 @@ struct Interpolator {
 
 template <class INPUT_TYPE, class TARGET_TYPE>
 struct Interpolator<INPUT_TYPE, TARGET_TYPE, true> {
-	Interpolator(const float q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(FRN) {
+	Interpolator(const double q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(FRN) {
 	}
 
 	TARGET_TYPE operator()(INPUT_TYPE *v_t) const {
@@ -207,15 +207,15 @@ struct Interpolator<INPUT_TYPE, TARGET_TYPE, true> {
 };
 
 struct QuantileBindData : public FunctionData {
-	explicit QuantileBindData(float quantile_p) : quantiles(1, quantile_p), order(1, 0) {
+	explicit QuantileBindData(double quantile_p) : quantiles(1, quantile_p), order(1, 0) {
 	}
 
-	explicit QuantileBindData(const vector<float> &quantiles_p) : quantiles(quantiles_p) {
+	explicit QuantileBindData(const vector<double> &quantiles_p) : quantiles(quantiles_p) {
 		for (idx_t i = 0; i < quantiles.size(); ++i) {
 			order.push_back(i);
 		}
 
-		IndirectLess<float> lt(quantiles.data());
+		IndirectLess<double> lt(quantiles.data());
 		std::sort(order.begin(), order.end(), lt);
 	}
 
@@ -228,7 +228,7 @@ struct QuantileBindData : public FunctionData {
 		return quantiles == other.quantiles;
 	}
 
-	vector<float> quantiles;
+	vector<double> quantiles;
 	vector<idx_t> order;
 };
 
@@ -654,7 +654,7 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 		case PhysicalType::INT128:
 			return GetTypedContinuousQuantileAggregateFunction<hugeint_t, hugeint_t>(type, type);
 		default:
-			throw NotImplementedException("Unimplemented discrete quantile list aggregate");
+			throw NotImplementedException("Unimplemented continuous quantile DECIMAL aggregate");
 		}
 		break;
 
@@ -666,7 +666,7 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 		return GetTypedContinuousQuantileAggregateFunction<dtime_t, dtime_t>(type, type);
 
 	default:
-		throw NotImplementedException("Unimplemented discrete quantile list aggregate");
+		throw NotImplementedException("Unimplemented continuous quantile aggregate");
 	}
 }
 
@@ -700,15 +700,15 @@ AggregateFunction GetContinuousQuantileListAggregateFunction(const LogicalType &
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			return GetTypedContinuousQuantileListAggregateFunction<int16_t, double>(type, LogicalType::DOUBLE);
+			return GetTypedContinuousQuantileListAggregateFunction<int16_t, int16_t>(type, type);
 		case PhysicalType::INT32:
-			return GetTypedContinuousQuantileListAggregateFunction<int32_t, double>(type, LogicalType::DOUBLE);
+			return GetTypedContinuousQuantileListAggregateFunction<int32_t, int32_t>(type, type);
 		case PhysicalType::INT64:
-			return GetTypedContinuousQuantileListAggregateFunction<int64_t, double>(type, LogicalType::DOUBLE);
+			return GetTypedContinuousQuantileListAggregateFunction<int64_t, int64_t>(type, type);
 		case PhysicalType::INT128:
-			return GetTypedContinuousQuantileListAggregateFunction<hugeint_t, double>(type, LogicalType::DOUBLE);
+			return GetTypedContinuousQuantileListAggregateFunction<hugeint_t, hugeint_t>(type, type);
 		default:
-			throw NotImplementedException("Unimplemented discrete quantile list aggregate");
+			throw NotImplementedException("Unimplemented discrete quantile DECIMAL list aggregate");
 		}
 		break;
 
@@ -738,8 +738,8 @@ unique_ptr<FunctionData> BindMedianDecimal(ClientContext &context, AggregateFunc
 	return bind_data;
 }
 
-static float CheckQuantile(const Value &quantile_val) {
-	auto quantile = quantile_val.GetValue<float>();
+static double CheckQuantile(const Value &quantile_val) {
+	auto quantile = quantile_val.GetValue<double>();
 
 	if (quantile_val.is_null || quantile < 0 || quantile > 1) {
 		throw BinderException("QUANTILE can only take parameters in the range [0, 1]");
@@ -750,11 +750,11 @@ static float CheckQuantile(const Value &quantile_val) {
 
 unique_ptr<FunctionData> BindQuantile(ClientContext &context, AggregateFunction &function,
                                       vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[1]->IsScalar()) {
+	if (!arguments[1]->IsFoldable()) {
 		throw BinderException("QUANTILE can only take constant parameters");
 	}
 	Value quantile_val = ExpressionExecutor::EvaluateScalar(*arguments[1]);
-	vector<float> quantiles;
+	vector<double> quantiles;
 	if (quantile_val.type().id() != LogicalTypeId::LIST) {
 		quantiles.push_back(CheckQuantile(quantile_val));
 	} else {
@@ -775,10 +775,26 @@ unique_ptr<FunctionData> BindDiscreteQuantileDecimal(ClientContext &context, Agg
 	return bind_data;
 }
 
+unique_ptr<FunctionData> BindDiscreteQuantileDecimalList(ClientContext &context, AggregateFunction &function,
+                                                         vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = BindQuantile(context, function, arguments);
+	function = GetDiscreteQuantileListAggregateFunction(arguments[0]->return_type);
+	function.name = "quantile_disc";
+	return bind_data;
+}
+
 unique_ptr<FunctionData> BindContinuousQuantileDecimal(ClientContext &context, AggregateFunction &function,
                                                        vector<unique_ptr<Expression>> &arguments) {
 	auto bind_data = BindQuantile(context, function, arguments);
 	function = GetContinuousQuantileAggregateFunction(arguments[0]->return_type);
+	function.name = "quantile_cont";
+	return bind_data;
+}
+
+unique_ptr<FunctionData> BindContinuousQuantileDecimalList(ClientContext &context, AggregateFunction &function,
+                                                           vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = BindQuantile(context, function, arguments);
+	function = GetContinuousQuantileListAggregateFunction(arguments[0]->return_type);
 	function.name = "quantile_cont";
 	return bind_data;
 }
@@ -794,7 +810,7 @@ AggregateFunction GetDiscreteQuantileAggregate(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::FLOAT);
+	fun.arguments.push_back(LogicalType::DOUBLE);
 	return fun;
 }
 
@@ -802,8 +818,8 @@ AggregateFunction GetDiscreteQuantileListAggregate(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileListAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	auto list_of_float = LogicalType::LIST(LogicalType::FLOAT);
-	fun.arguments.push_back(list_of_float);
+	auto list_of_double = LogicalType::LIST(LogicalType::DOUBLE);
+	fun.arguments.push_back(list_of_double);
 	return fun;
 }
 
@@ -811,7 +827,7 @@ AggregateFunction GetContinuousQuantileAggregate(const LogicalType &type) {
 	auto fun = GetContinuousQuantileAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::FLOAT);
+	fun.arguments.push_back(LogicalType::DOUBLE);
 	return fun;
 }
 
@@ -835,14 +851,20 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	                                     nullptr, nullptr, nullptr, BindMedianDecimal));
 
 	AggregateFunctionSet quantile_disc("quantile_disc");
-	quantile_disc.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::FLOAT}, LogicalTypeId::DECIMAL,
+	quantile_disc.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::DOUBLE}, LogicalTypeId::DECIMAL,
 	                                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                            BindDiscreteQuantileDecimal));
+	quantile_disc.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
+	                                            LogicalType::LIST(LogicalTypeId::DECIMAL), nullptr, nullptr, nullptr,
+	                                            nullptr, nullptr, nullptr, BindDiscreteQuantileDecimalList));
 
 	AggregateFunctionSet quantile_cont("quantile_cont");
-	quantile_cont.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::FLOAT}, LogicalTypeId::DECIMAL,
+	quantile_cont.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::DOUBLE}, LogicalTypeId::DECIMAL,
 	                                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
 	                                            BindContinuousQuantileDecimal));
+	quantile_cont.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::DOUBLE)},
+	                                            LogicalType::LIST(LogicalTypeId::DECIMAL), nullptr, nullptr, nullptr,
+	                                            nullptr, nullptr, nullptr, BindContinuousQuantileDecimalList));
 
 	for (const auto &type : QUANTILES) {
 		median.AddFunction(GetMedianAggregate(type));

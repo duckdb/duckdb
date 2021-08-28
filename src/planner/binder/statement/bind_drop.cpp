@@ -43,6 +43,7 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	result.plan = make_unique<LogicalSimple>(LogicalOperatorType::LOGICAL_DROP, move(stmt.info));
 	result.names = {"Success"};
 	result.types = {LogicalType::BOOLEAN};
+	this->allow_stream_result = false;
 	return result;
 }
 

@@ -4,7 +4,7 @@ set(SHELL_SOURCES shell.c)
 if(NOT WIN32)
   add_definitions(-DHAVE_LINENOISE=1)
   set(SHELL_SOURCES ${SHELL_SOURCES} linenoise.cpp)
-  include_directories(../../third_party/third_party/utf8proc/include)
+  include_directories(../../third_party/utf8proc/include)
 endif()
 
 option(STATIC_LIBCPP "Statically link CLI to libc++" FALSE)

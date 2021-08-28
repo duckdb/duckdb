@@ -11,15 +11,18 @@ bool OdbcInterval::GetInterval(Value &value, interval_t &interval, duckdb::OdbcH
 		// interval = value.GetValue<interval_t>(); // we don't have a get to retrieve interval
 		interval = value.value_.interval;
 		return true;
-	case LogicalTypeId::VARCHAR:
-		try {
-			string val_str = value.GetValue<string>();
-			interval = duckdb::Cast::Operation<string_t, interval_t>(string_t(val_str));
-			return true;
-		} catch (duckdb::Exception &ex) {
-			stmt->error_messages.emplace_back(ex.what());
+	case LogicalTypeId::VARCHAR: {
+		string error_message;
+		string val_str = value.GetValue<string>();
+		if (!TryCastErrorMessage::Operation<string_t, interval_t>(string_t(val_str), interval, &error_message)) {
+			if (error_message.empty()) {
+				error_message = CastExceptionText<string_t, interval_t>(string_t(val_str));
+			}
+			stmt->error_messages.emplace_back(error_message);
 			return false;
 		}
+		return true;
+	}
 	default:
 		return false;
 	}

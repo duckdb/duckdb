@@ -242,6 +242,8 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE;
 	} else if (checkpoint_abort == "before_header") {
 		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
+	} else if (checkpoint_abort == "after_free_list_write") {
+		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE;
 	} else {
 		throw ParserException(
 		    "Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header");
@@ -251,6 +253,26 @@ static void PragmaDebugCheckpointAbort(ClientContext &context, const FunctionPar
 static void PragmaSetTempDirectory(ClientContext &context, const FunctionParameters &parameters) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	buffer_manager.SetTemporaryDirectory(parameters.values[0].ToString());
+}
+
+static void PragmaForceCompression(ClientContext &context, const FunctionParameters &parameters) {
+	auto compression = StringUtil::Lower(parameters.values[0].ToString());
+	auto &config = DBConfig::GetConfig(context);
+	if (compression == "none") {
+		config.force_compression = CompressionType::COMPRESSION_INVALID;
+	} else {
+		auto compression_type = CompressionTypeFromString(compression);
+		if (compression_type == CompressionType::COMPRESSION_INVALID) {
+			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, "
+			                      "dictionary, pfor, bitpacking or fsst");
+		}
+		config.force_compression = compression_type;
+	}
+}
+
+static void PragmaDebugManyFreeListBlocks(ClientContext &context, const FunctionParameters &parameters) {
+	auto &config = DBConfig::GetConfig(context);
+	config.debug_many_free_list_blocks = true;
 }
 
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
@@ -327,6 +349,11 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	    PragmaFunction::PragmaAssignment("debug_checkpoint_abort", PragmaDebugCheckpointAbort, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaAssignment("temp_directory", PragmaSetTempDirectory, LogicalType::VARCHAR));
+
+	set.AddFunction(
+	    PragmaFunction::PragmaAssignment("force_compression", PragmaForceCompression, LogicalType::VARCHAR));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("debug_many_free_list_blocks", PragmaDebugManyFreeListBlocks));
 }
 
 } // namespace duckdb

@@ -20,12 +20,15 @@ struct ShowSelectInfo : public ParseInfo {
 	unique_ptr<QueryNode> query;
 	//! Aliases of projected columns
 	vector<string> aliases;
+	//! Whether or not we are requesting a summary or a describe
+	bool is_summary;
 
 	unique_ptr<ShowSelectInfo> Copy() {
 		auto result = make_unique<ShowSelectInfo>();
 		result->types = types;
 		result->query = query->Copy();
 		result->aliases = aliases;
+		result->is_summary = is_summary;
 		return result;
 	}
 };

@@ -101,9 +101,15 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 		case RType::TIME_HOURS:
 		case RType::TIME_DAYS:
 		case RType::TIME_WEEKS:
+		case RType::TIME_SECONDS_INTEGER:
+		case RType::TIME_MINUTES_INTEGER:
+		case RType::TIME_HOURS_INTEGER:
+		case RType::TIME_DAYS_INTEGER:
+		case RType::TIME_WEEKS_INTEGER:
 			duckdb_col_type = LogicalType::TIME;
 			break;
 		case RType::DATE:
+		case RType::DATE_INTEGER:
 			duckdb_col_type = LogicalType::DATE;
 			break;
 		default:
@@ -190,9 +196,39 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 			AppendColumnSegment<double, dtime_t, RTimeWeeksType>(data_ptr, v, this_count);
 			break;
 		}
+		case RType::TIME_SECONDS_INTEGER: {
+			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			AppendColumnSegment<int, dtime_t, RTimeSecondsType>(data_ptr, v, this_count);
+			break;
+		}
+		case RType::TIME_MINUTES_INTEGER: {
+			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			AppendColumnSegment<int, dtime_t, RTimeMinutesType>(data_ptr, v, this_count);
+			break;
+		}
+		case RType::TIME_HOURS_INTEGER: {
+			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			AppendColumnSegment<int, dtime_t, RTimeHoursType>(data_ptr, v, this_count);
+			break;
+		}
+		case RType::TIME_DAYS_INTEGER: {
+			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			AppendColumnSegment<int, dtime_t, RTimeDaysType>(data_ptr, v, this_count);
+			break;
+		}
+		case RType::TIME_WEEKS_INTEGER: {
+			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			AppendColumnSegment<int, dtime_t, RTimeWeeksType>(data_ptr, v, this_count);
+			break;
+		}
 		case RType::DATE: {
 			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 			AppendColumnSegment<double, date_t, RDateType>(data_ptr, v, this_count);
+			break;
+		}
+		case RType::DATE_INTEGER: {
+			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			AppendColumnSegment<int, date_t, RDateType>(data_ptr, v, this_count);
 			break;
 		}
 		default:

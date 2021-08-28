@@ -1,0 +1,350 @@
+# name: test/sql/tpcds/tpcds_reentrant.test_slow
+# description: Test that TPC-DS is re-entrant
+# group: [tpcds]
+
+require tpcds
+
+statement ok
+CALL dsdgen(sf=0.01);
+
+query I nosort call_center_sf0001
+SELECT * FROM call_center
+----
+
+query I nosort catalog_page_sf0001
+SELECT * FROM catalog_page
+----
+
+query I nosort catalog_returns_sf0001
+SELECT * FROM catalog_returns
+----
+
+query I nosort catalog_sales_sf0001
+SELECT * FROM catalog_sales
+----
+
+query I nosort customer_sf0001
+SELECT * FROM customer
+----
+
+query I nosort customer_address_sf0001
+SELECT * FROM customer_address
+----
+
+query I nosort customer_demographics_sf0001
+SELECT * FROM customer_demographics
+----
+
+query I nosort date_dim_sf0001
+SELECT * FROM date_dim
+----
+
+query I nosort household_demographics_sf0001
+SELECT * FROM household_demographics
+----
+
+query I nosort income_band_sf0001
+SELECT * FROM income_band
+----
+
+query I nosort inventory_sf0001
+SELECT * FROM inventory
+----
+
+query I nosort item_sf0001
+SELECT * FROM item
+----
+
+query I nosort promotion_sf0001
+SELECT * FROM promotion
+----
+
+query I nosort reason_sf0001
+SELECT * FROM reason
+----
+
+query I nosort ship_mode_sf0001
+SELECT * FROM ship_mode
+----
+
+query I nosort store_sf0001
+SELECT * FROM store
+----
+
+query I nosort store_returns_sf0001
+SELECT * FROM store_returns
+----
+
+query I nosort store_sales_sf0001
+SELECT * FROM store_sales
+----
+
+query I nosort time_dim_sf0001
+SELECT * FROM time_dim
+----
+
+query I nosort warehouse_sf0001
+SELECT * FROM warehouse
+----
+
+query I nosort web_page_sf0001
+SELECT * FROM web_page
+----
+
+query I nosort web_returns_sf0001
+SELECT * FROM web_returns
+----
+
+query I nosort web_sales_sf0001
+SELECT * FROM web_sales
+----
+
+query I nosort web_site_sf0001
+SELECT * FROM web_site
+----
+
+statement ok
+DROP TABLE call_center;
+
+statement ok
+DROP TABLE catalog_page;
+
+statement ok
+DROP TABLE catalog_returns;
+
+statement ok
+DROP TABLE catalog_sales;
+
+statement ok
+DROP TABLE customer;
+
+statement ok
+DROP TABLE customer_address;
+
+statement ok
+DROP TABLE customer_demographics;
+
+statement ok
+DROP TABLE date_dim;
+
+statement ok
+DROP TABLE household_demographics;
+
+statement ok
+DROP TABLE income_band;
+
+statement ok
+DROP TABLE inventory;
+
+statement ok
+DROP TABLE item;
+
+statement ok
+DROP TABLE promotion;
+
+statement ok
+DROP TABLE reason;
+
+statement ok
+DROP TABLE ship_mode;
+
+statement ok
+DROP TABLE store;
+
+statement ok
+DROP TABLE store_returns;
+
+statement ok
+DROP TABLE store_sales;
+
+statement ok
+DROP TABLE time_dim;
+
+statement ok
+DROP TABLE warehouse;
+
+statement ok
+DROP TABLE web_page;
+
+statement ok
+DROP TABLE web_returns;
+
+statement ok
+DROP TABLE web_sales;
+
+statement ok
+DROP TABLE web_site;
+
+statement ok
+CALL dsdgen(sf=0.1);
+
+statement ok
+DROP TABLE call_center;
+
+statement ok
+DROP TABLE catalog_page;
+
+statement ok
+DROP TABLE catalog_returns;
+
+statement ok
+DROP TABLE catalog_sales;
+
+statement ok
+DROP TABLE customer;
+
+statement ok
+DROP TABLE customer_address;
+
+statement ok
+DROP TABLE customer_demographics;
+
+statement ok
+DROP TABLE date_dim;
+
+statement ok
+DROP TABLE household_demographics;
+
+statement ok
+DROP TABLE income_band;
+
+statement ok
+DROP TABLE inventory;
+
+statement ok
+DROP TABLE item;
+
+statement ok
+DROP TABLE promotion;
+
+statement ok
+DROP TABLE reason;
+
+statement ok
+DROP TABLE ship_mode;
+
+statement ok
+DROP TABLE store;
+
+statement ok
+DROP TABLE store_returns;
+
+statement ok
+DROP TABLE store_sales;
+
+statement ok
+DROP TABLE time_dim;
+
+statement ok
+DROP TABLE warehouse;
+
+statement ok
+DROP TABLE web_page;
+
+statement ok
+DROP TABLE web_returns;
+
+statement ok
+DROP TABLE web_sales;
+
+statement ok
+DROP TABLE web_site;
+
+statement ok
+CALL dsdgen(sf=0.01);
+
+query I nosort call_center_sf0001
+SELECT * FROM call_center
+----
+
+query I nosort catalog_page_sf0001
+SELECT * FROM catalog_page
+----
+
+query I nosort catalog_returns_sf0001
+SELECT * FROM catalog_returns
+----
+
+query I nosort catalog_sales_sf0001
+SELECT * FROM catalog_sales
+----
+
+query I nosort customer_sf0001
+SELECT * FROM customer
+----
+
+query I nosort customer_address_sf0001
+SELECT * FROM customer_address
+----
+
+query I nosort customer_demographics_sf0001
+SELECT * FROM customer_demographics
+----
+
+query I nosort date_dim_sf0001
+SELECT * FROM date_dim
+----
+
+query I nosort household_demographics_sf0001
+SELECT * FROM household_demographics
+----
+
+query I nosort income_band_sf0001
+SELECT * FROM income_band
+----
+
+query I nosort inventory_sf0001
+SELECT * FROM inventory
+----
+
+query I nosort item_sf0001
+SELECT * FROM item
+----
+
+query I nosort promotion_sf0001
+SELECT * FROM promotion
+----
+
+query I nosort reason_sf0001
+SELECT * FROM reason
+----
+
+query I nosort ship_mode_sf0001
+SELECT * FROM ship_mode
+----
+
+query I nosort store_sf0001
+SELECT * FROM store
+----
+
+query I nosort store_returns_sf0001
+SELECT * FROM store_returns
+----
+
+query I nosort store_sales_sf0001
+SELECT * FROM store_sales
+----
+
+query I nosort time_dim_sf0001
+SELECT * FROM time_dim
+----
+
+query I nosort warehouse_sf0001
+SELECT * FROM warehouse
+----
+
+query I nosort web_page_sf0001
+SELECT * FROM web_page
+----
+
+query I nosort web_returns_sf0001
+SELECT * FROM web_returns
+----
+
+query I nosort web_sales_sf0001
+SELECT * FROM web_sales
+----
+
+query I nosort web_site_sf0001
+SELECT * FROM web_site
+----

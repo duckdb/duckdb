@@ -1,10 +1,6 @@
 #include "duckdb/common/types/row_data_collection.hpp"
 
-#include "duckdb/common/types/chunk_collection.hpp"
-
 namespace duckdb {
-
-using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
 RowDataCollection::RowDataCollection(BufferManager &buffer_manager, idx_t block_capacity, idx_t entry_size,
                                      bool keep_pinned)
@@ -18,13 +14,19 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 	idx_t append_count = 0;
 	data_ptr_t dataptr;
 	if (entry_sizes) {
-		// compute how many entries fit if entry size if variable
-		dataptr = handle.node->buffer + block.byte_offset;
+		D_ASSERT(entry_size == 1);
+		// compute how many entries fit if entry size is variable
+		dataptr = handle.Ptr() + block.byte_offset;
 		for (idx_t i = 0; i < remaining; i++) {
-			if (block.byte_offset + entry_sizes[i] > block_capacity * entry_size) {
-				while (entry_sizes[i] > block_capacity * entry_size) {
-					// if an entry does not fit, increase capacity until it does
-					block_capacity *= 2;
+			if (block.byte_offset + entry_sizes[i] > block.capacity) {
+				if (block.count == 0 && append_count == 0 && entry_sizes[i] > block.capacity) {
+					// special case: single entry is bigger than block capacity
+					// resize current block to fit the entry, append it, and move to the next block
+					block.capacity = entry_sizes[i];
+					buffer_manager.ReAllocate(block.block, block.capacity);
+					dataptr = handle.Ptr();
+					append_count++;
+					block.byte_offset += entry_sizes[i];
 				}
 				break;
 			}
@@ -33,7 +35,7 @@ idx_t RowDataCollection::AppendToBlock(RowDataBlock &block, BufferHandle &handle
 		}
 	} else {
 		append_count = MinValue<idx_t>(remaining, block.capacity - block.count);
-		dataptr = handle.node->buffer + block.count * entry_size;
+		dataptr = handle.Ptr() + block.count * entry_size;
 	}
 	append_entries.emplace_back(dataptr, append_count);
 	block.count += append_count;
@@ -72,16 +74,14 @@ vector<unique_ptr<BufferHandle>> RowDataCollection::Build(idx_t added_count, dat
 			idx_t *offset_entry_sizes = entry_sizes ? entry_sizes + added_count - remaining : nullptr;
 
 			idx_t append_count = AppendToBlock(new_block, *handle, append_entries, remaining, offset_entry_sizes);
+			D_ASSERT(new_block.count > 0);
 			remaining -= append_count;
 
-			if (new_block.count > 0) {
-				// in case 0 tuples fit the block (huge entry, e.g. large string) we do not add
-				blocks.push_back(move(new_block));
-				if (keep_pinned) {
-					pinned_blocks.push_back(move(handle));
-				} else {
-					handles.push_back(move(handle));
-				}
+			blocks.push_back(move(new_block));
+			if (keep_pinned) {
+				pinned_blocks.push_back(move(handle));
+			} else {
+				handles.push_back(move(handle));
 			}
 		}
 	}

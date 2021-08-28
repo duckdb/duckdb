@@ -75,6 +75,20 @@ SELECT EXTRACT(ISODOW FROM i) FROM dates
 6
 NULL
 
+# week (1-53)
+query I
+SELECT EXTRACT(WEEK FROM i) FROM dates
+----
+32
+NULL
+
+# yearweek (YYYYWW)
+query I
+SELECT EXTRACT(YEARWEEK FROM i) FROM dates
+----
+199332
+NULL
+
 # millenium (change of millenium is January 1, X001)
 query I
 SELECT EXTRACT(millennium FROM i) FROM dates

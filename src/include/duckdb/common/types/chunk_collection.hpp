@@ -48,6 +48,9 @@ public:
 	//! Append a new DataChunk directly to this ChunkCollection
 	DUCKDB_API void Append(DataChunk &new_chunk);
 
+	//! Append a new DataChunk directly to this ChunkCollection
+	DUCKDB_API void Append(unique_ptr<DataChunk> new_chunk);
+
 	//! Append another ChunkCollection directly to this ChunkCollection
 	DUCKDB_API void Append(ChunkCollection &other);
 
@@ -125,9 +128,6 @@ public:
 		D_ASSERT(result < chunks.size());
 		return result;
 	}
-
-	DUCKDB_API void Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[], idx_t heap_size);
-	DUCKDB_API idx_t MaterializeHeapChunk(DataChunk &target, idx_t order[], idx_t start_offset, idx_t heap_size);
 
 private:
 	//! The total amount of elements in the collection

@@ -75,7 +75,8 @@ if '--extended' in sys.argv:
         "duckdb/planner/filter/constant_filter.hpp",
         "duckdb/execution/operator/persistent/buffered_csv_reader.hpp",
         "duckdb/common/types/vector_cache.hpp",
-        "duckdb/planner/filter/null_filter.hpp"]]
+        "duckdb/planner/filter/null_filter.hpp",
+        "duckdb/common/arrow_wrapper.hpp"]]
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/tableref'))
@@ -87,11 +88,9 @@ compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, hll_dir, utf8proc_d
 # files always excluded
 always_excluded = ['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-amalgamation.cpp', 'src/amalgamation/parquet-amalgamation.hpp']
 # files excluded from the amalgamation
-excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp', 'file_system.cpp']
+excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp']
 # files excluded from individual file compilation during test_compile
 excluded_compilation_files = excluded_files + ['gram.hpp', 'kwlist.hpp', "duckdb-c.cpp"]
-
-file_system_cpp = os.path.join('src', 'common', 'file_system.cpp')
 
 linenumbers = False
 
@@ -274,11 +273,9 @@ def generate_amalgamation(source_file, header_file):
         header_file_name = header_file.split(os.sep)[-1]
         sfile.write('#include "' + header_file_name + '"\n\n')
         sfile.write("#ifndef DUCKDB_AMALGAMATION\n#error header mismatch\n#endif\n\n")
+        sfile.write("#if (!defined(DEBUG) && !defined NDEBUG)\n#define NDEBUG\n#endif\n\n")
         for compile_dir in compile_directories:
             sfile.write(write_dir(compile_dir))
-        # for windows we write file_system.cpp last
-        # this is because it includes windows.h which contains a lot of #define statements that mess up the other code
-        sfile.write(write_file(file_system_cpp, True))
 
         sfile.write('\n\n/*\n')
         license_idx = 0
@@ -314,7 +311,7 @@ def list_sources():
     file_list = []
     for compile_dir in compile_directories:
         list_files(compile_dir, file_list)
-    return file_list + [file_system_cpp]
+    return file_list
 
 def list_include_files_recursive(dname, file_list):
     files = os.listdir(dname)
@@ -397,10 +394,6 @@ def generate_amalgamation_splits(source_file, header_file, nsplits):
         if compile_dir != src_dir:
             continue
         gather_files(compile_dir, source_files, header_files)
-
-    # for windows we write file_system.cpp last
-    # this is because it includes windows.h which contains a lot of #define statements that mess up the other code
-    source_files.append(write_file(os.path.join('src', 'common', 'file_system.cpp'), True))
 
     # write duckdb-internal.hpp
     if '.hpp' in header_file:

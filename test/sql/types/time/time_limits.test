@@ -1,0 +1,46 @@
+# name: test/sql/types/time/time_limits.test
+# description: Test time limits
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select time '23:59:59.999999'
+----
+23:59:59.999999
+
+query I
+select time '23:59:59.999999' + interval (1) microsecond
+----
+00:00:00
+
+query I
+select time '23:59:59.999999' + interval (1) second
+----
+00:00:00.999999
+
+query I
+select time '23:59:59.999999' + interval (1) minute
+----
+00:00:59.999999
+
+query I
+select time '23:59:59.999999' + interval (1) hour
+----
+00:59:59.999999
+
+query I
+select time '23:59:59.999999' + interval (1) day
+----
+23:59:59.999999
+
+query I
+select time '23:59:59.999999' + interval (1) month
+----
+23:59:59.999999
+
+query I
+select time '23:59:59.999999' + interval (1) year
+----
+23:59:59.999999

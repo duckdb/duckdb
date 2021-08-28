@@ -8292,35 +8292,16 @@ namespace Catch {
 
     std::size_t listTests( Config const& config ) {
         TestSpec testSpec = config.testSpec();
-        if( config.hasTestFilters() )
-            Catch::cout() << "Matching test cases:\n";
-        else {
-            Catch::cout() << "All available test cases:\n";
-        }
+        Catch::cout() << "name\tgroup" << std::endl;
 
         auto matchedTestCases = filterTests( getAllTestCasesSorted( config ), testSpec, config );
         for( auto const& testCaseInfo : matchedTestCases ) {
-            Colour::Code colour = testCaseInfo.isHidden()
-                ? Colour::SecondaryText
-                : Colour::None;
-            Colour colourGuard( colour );
-
-            Catch::cout() << Column( testCaseInfo.name ).initialIndent( 2 ).indent( 4 ) << "\n";
-            if( config.verbosity() >= Verbosity::High ) {
-                Catch::cout() << Column( Catch::Detail::stringify( testCaseInfo.lineInfo ) ).indent(4) << std::endl;
-                std::string description = testCaseInfo.description;
-                if( description.empty() )
-                    description = "(NO DESCRIPTION)";
-                Catch::cout() << Column( description ).indent(4) << std::endl;
+            Catch::cout() << testCaseInfo.name << "\t";
+            if( !testCaseInfo.tags.empty() ) {
+                Catch::cout() << testCaseInfo.tagsAsString();
             }
-            if( !testCaseInfo.tags.empty() )
-                Catch::cout() << Column( testCaseInfo.tagsAsString() ).indent( 6 ) << "\n";
+            Catch::cout() << std::endl;
         }
-
-        if( !config.hasTestFilters() )
-            Catch::cout() << pluralise( matchedTestCases.size(), "test case" ) << '\n' << std::endl;
-        else
-            Catch::cout() << pluralise( matchedTestCases.size(), "matching test case" ) << '\n' << std::endl;
         return matchedTestCases.size();
     }
 

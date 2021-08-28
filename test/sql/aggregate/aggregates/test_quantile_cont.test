@@ -60,6 +60,16 @@ SELECT quantile_cont(r, 0.25), quantile_cont(r, 0.5), quantile_cont(r, 0.75) fro
 499950
 749925
 
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
+
+query III
+SELECT quantile_cont(d::${type}, 0.25), quantile_cont(d::${type}, 0.5), quantile_cont(d::${type}, 0.75)
+FROM range(0,100) tbl(d)
+----
+24.7	49.5	74.2
+
+endloop
+
 # multiple groups
 query RR
 SELECT mod(r,1000) as g, quantile_cont(r, 0.25) FROM quantile GROUP BY 1 ORDER BY 1
@@ -273,3 +283,5 @@ SELECT quantile_cont(t, 0.5) FROM bigints;
 ----
 9223372036854775800
 
+statement error
+SELECT quantile_cont(r, random()) FROM quantile

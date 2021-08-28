@@ -53,6 +53,7 @@
 #include "StringBuffer.h"
 #include "error_msg.h"
 #include "scaling.h"
+#include "init.h"
 
 /*
  * Routine: hierarchy_item
@@ -70,14 +71,10 @@
  * TODO:
  */
 void hierarchy_item(int h_level, ds_key_t *id, char **name, ds_key_t kIndex) {
-	static int bInit = 0, nLastCategory = -1, nLastClass = -1, nBrandBase;
+	static int nLastCategory = -1, nLastClass = -1, nBrandBase;
 	int nBrandCount;
 	static char *szClassDistName = NULL;
 	char sTemp[6];
-
-	if (!bInit) {
-		bInit = 1;
-	}
 
 	switch (h_level) {
 	case I_CATEGORY:
@@ -383,11 +380,11 @@ int SetScaleIndex(char *szName, char *szValue) {
  * TODO: None
  */
 void setUpdateDateRange(int nTable, date_t *pMinDate, date_t *pMaxDate) {
-	static int nUpdateNumber, bInit = 0;
+	static int nUpdateNumber;
 
-	if (!bInit) {
+	if (!InitConstants::setUpdateDateRange_init) {
 		nUpdateNumber = get_int("UPDATE");
-		bInit = 1;
+		InitConstants::setUpdateDateRange_init = 1;
 	}
 
 	switch (nTable) /* no per-table changes at the moment; but could be */

@@ -1,0 +1,24 @@
+# name: test/sql/catalog/case_insensitive_caps.test
+# description: Test case insensitivity with quoted values
+# group: [catalog]
+
+# we create a table in lowercase names
+statement ok
+CREATE TABLE mytable(mycolumn INTEGER, myothercolumn INTEGER);
+
+# we can query the column using quoted text
+statement ok
+SELECT "MYCOLUMN" FROM "MYTABLE";
+
+# we can also alter in this manner
+statement ok
+ALTER TABLE "MYTABLE" DROP COLUMN "MYCOLUMN";
+
+statement ok
+ALTER TABLE "MYTABLE" ADD COLUMN mycolumn INTEGER;
+
+statement ok
+ALTER TABLE "MYTABLE" ALTER COLUMN "MYCOLUMN" SET DEFAULT 3
+
+statement ok
+DROP TABLE "MYTABLE"

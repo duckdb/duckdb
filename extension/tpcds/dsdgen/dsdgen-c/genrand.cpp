@@ -34,6 +34,7 @@
  * Gradient Systems
  */
 #include "config.h"
+#include "init.h"
 #include "porting.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -512,10 +513,9 @@ int genrand_date(date_t *dest, int dist, date_t *min, date_t *max, date_t *mean,
  */
 // FIXME: allow re-init
 void init_rand(void) {
-	static int bInit = 0;
 	long long i, skip, nSeed; // changed to long long from int
 
-	if (!bInit) {
+	if (!InitConstants::init_rand_init) {
 		if (is_set("RNGSEED"))
 			nSeed = get_int("RNGSEED");
 		else
@@ -536,7 +536,7 @@ void init_rand(void) {
             }
 			    Streams[i].nUsed = 0;
 		}
-		bInit = 1;
+		InitConstants::init_rand_init = 1;
 	}
 	return;
 }

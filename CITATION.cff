@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Raasveldt"
+  given-names: "Mark"
+  orcid: "https://orcid.org/0000-0001-5005-6844"
+- family-names: "Muehleisen"
+  given-names: "Hannes"
+  orcid: "https://orcid.org/0000-0001-8552-0029"
+title: "DuckDB"
+url: "https://github.com/duckdb/duckdb"

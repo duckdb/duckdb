@@ -49,13 +49,32 @@ void TableCatalogEntry::AddLowerCaseAliases(unordered_map<string, column_t> &nam
 	}
 }
 
+idx_t TableCatalogEntry::GetColumnIndex(string &column_name, bool if_exists) {
+	auto entry = name_map.find(column_name);
+	if (entry == name_map.end()) {
+		// entry not found: try lower-casing the name
+		entry = name_map.find(StringUtil::Lower(column_name));
+		if (entry == name_map.end()) {
+			if (if_exists) {
+				return INVALID_INDEX;
+			}
+			throw BinderException("Table \"%s\" does not have a column with name \"%s\"", name, column_name);
+		}
+	}
+	column_name = columns[entry->second].name;
+	return idx_t(entry->second);
+}
+
 TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, BoundCreateTableInfo *info,
                                      std::shared_ptr<DataTable> inherited_storage)
     : StandardEntry(CatalogType::TABLE_ENTRY, schema, catalog, info->Base().table), storage(move(inherited_storage)),
       columns(move(info->Base().columns)), constraints(move(info->Base().constraints)),
-      bound_constraints(move(info->bound_constraints)), name_map(info->name_map) {
+      bound_constraints(move(info->bound_constraints)) {
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
+	for (idx_t i = 0; i < columns.size(); i++) {
+		name_map[columns[i].name] = i;
+	}
 	AddLowerCaseAliases(name_map);
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
@@ -149,19 +168,14 @@ static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 unique_ptr<CatalogEntry> TableCatalogEntry::RenameColumn(ClientContext &context, RenameColumnInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
-	bool found = false;
+	idx_t rename_idx = GetColumnIndex(info.old_name);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		ColumnDefinition copy = columns[i].Copy();
 
 		create_info->columns.push_back(move(copy));
-		if (info.old_name == columns[i].name) {
-			D_ASSERT(!found);
+		if (rename_idx == i) {
 			create_info->columns[i].name = info.new_name;
-			found = true;
 		}
-	}
-	if (!found) {
-		throw CatalogException("Table does not have a column with name \"%s\"", info.name);
 	}
 	for (idx_t c_idx = 0; c_idx < constraints.size(); c_idx++) {
 		auto copy = constraints[c_idx]->Copy();
@@ -213,22 +227,16 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 }
 
 unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context, RemoveColumnInfo &info) {
-	idx_t removed_index = INVALID_INDEX;
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
 	create_info->temporary = temporary;
-	for (idx_t i = 0; i < columns.size(); i++) {
-		if (columns[i].name == info.removed_column) {
-			D_ASSERT(removed_index == INVALID_INDEX);
-			removed_index = i;
-			continue;
-		}
-		create_info->columns.push_back(columns[i].Copy());
-	}
+	idx_t removed_index = GetColumnIndex(info.removed_column, info.if_exists);
 	if (removed_index == INVALID_INDEX) {
-		if (!info.if_exists) {
-			throw CatalogException("Table does not have a column with name \"%s\"", info.removed_column);
-		}
 		return nullptr;
+	}
+	for (idx_t i = 0; i < columns.size(); i++) {
+		if (removed_index != i) {
+			create_info->columns.push_back(columns[i].Copy());
+		}
 	}
 	if (create_info->columns.empty()) {
 		throw CatalogException("Cannot drop column: table only has one column remaining!");
@@ -300,18 +308,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::RemoveColumn(ClientContext &context,
 
 unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-	bool found = false;
+	idx_t default_idx = GetColumnIndex(info.column_name);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
-		if (info.column_name == copy.name) {
+		if (default_idx == i) {
 			// set the default value of this column
 			copy.default_value = info.expression ? info.expression->Copy() : nullptr;
-			found = true;
 		}
 		create_info->columns.push_back(move(copy));
-	}
-	if (!found) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.name, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -326,18 +330,14 @@ unique_ptr<CatalogEntry> TableCatalogEntry::SetDefault(ClientContext &context, S
 
 unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &context, ChangeColumnTypeInfo &info) {
 	auto create_info = make_unique<CreateTableInfo>(schema->name, name);
-	idx_t change_idx = INVALID_INDEX;
+	idx_t change_idx = GetColumnIndex(info.column_name);
 	for (idx_t i = 0; i < columns.size(); i++) {
 		auto copy = columns[i].Copy();
-		if (info.column_name == copy.name) {
+		if (change_idx == i) {
 			// set the default value of this column
-			change_idx = i;
 			copy.type = info.target_type;
 		}
 		create_info->columns.push_back(move(copy));
-	}
-	if (change_idx == INVALID_INDEX) {
-		throw BinderException("Table \"%s\" does not have a column with name \"%s\"", info.name, info.column_name);
 	}
 
 	for (idx_t i = 0; i < constraints.size(); i++) {
@@ -369,7 +369,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::ChangeColumnType(ClientContext &cont
 	auto binder = Binder::CreateBinder(context);
 	// bind the specified expression
 	vector<column_t> bound_columns;
-	AlterBinder expr_binder(*binder, context, name, columns, bound_columns, info.target_type);
+	AlterBinder expr_binder(*binder, context, *this, bound_columns, info.target_type);
 	auto expression = info.expression->Copy();
 	auto bound_expression = expr_binder.Bind(expression);
 	auto bound_create_info = binder->BindCreateTableInfo(move(create_info));
@@ -400,6 +400,7 @@ vector<LogicalType> TableCatalogEntry::GetTypes() {
 }
 
 void TableCatalogEntry::Serialize(Serializer &serializer) {
+	D_ASSERT(!internal);
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
 	D_ASSERT(columns.size() <= NumericLimits<uint32_t>::Maximum());
@@ -560,9 +561,8 @@ void TableCatalogEntry::CommitAlter(AlterInfo &info) {
 	idx_t removed_index = INVALID_INDEX;
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (columns[i].name == column_name) {
-			D_ASSERT(removed_index == INVALID_INDEX);
 			removed_index = i;
-			continue;
+			break;
 		}
 	}
 	D_ASSERT(removed_index != INVALID_INDEX);

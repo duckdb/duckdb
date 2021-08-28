@@ -224,21 +224,3 @@ TEST_CASE("Test Parquet Files Glob", "[arrow]") {
 		REQUIRE(RoundTrip(parquet_path, skip, conn));
 	}
 }
-
-TEST_CASE("Test Parquet Files H2O", "[arrow]") {
-	duckdb::DuckDB db;
-	duckdb::Connection conn {db};
-	auto &fs = duckdb::FileSystem::GetFileSystem(*conn.context);
-
-	//! Impossible to round-trip Dictionaries so we just validate a query result
-	std::string parquet_path = "data/parquet-testing/h2oai/h2oai_group_small.parquet";
-	auto table = ReadParquetFile(parquet_path);
-	auto query = "SELECT COUNT(*), sum(v1) AS v1, sum(v3) AS v3 FROM (SELECT id3, sum(v1) AS v1, avg(v3) AS v3 FROM x "
-	             "GROUP BY id3) as t;";
-	auto result = ArrowToDuck(conn, *table, query, "x");
-
-	REQUIRE(result->success);
-	REQUIRE(CHECK_COLUMN(result, 0, {9081}));
-	REQUIRE(CHECK_COLUMN(result, 1, {28427.000000}));
-	REQUIRE(CHECK_COLUMN(result, 2, {432502.450130}));
-}

@@ -17,7 +17,15 @@ struct AgeFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct DateDiffFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct DatePartFun {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct DateSubFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

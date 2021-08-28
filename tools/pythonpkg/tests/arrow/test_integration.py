@@ -96,10 +96,10 @@ class TestArrowIntegration(object):
 
         arrow_result = duckdb_conn.execute("SELECT typeof(a), typeof(b), typeof(c),typeof(d) from testarrow").fetchone()
 
-        assert (arrow_result[0] == 'DECIMAL(4,2)') 
-        assert (arrow_result[1] == 'DECIMAL(9,2)') 
-        assert (arrow_result[2] == 'DECIMAL(18,2)') 
-        assert (arrow_result[3] == 'DECIMAL(30,2)') 
+        assert (arrow_result[0] == 'DECIMAL(4,2)')
+        assert (arrow_result[1] == 'DECIMAL(9,2)')
+        assert (arrow_result[2] == 'DECIMAL(18,2)')
+        assert (arrow_result[3] == 'DECIMAL(30,2)')
 
         #Lets also test big number comming from arrow land
         data = (pyarrow.array(np.array([9999999999999999999999999999999999]), type=pyarrow.decimal128(38,0)))

@@ -59,6 +59,26 @@ T MinValue(T a, T b) {
 }
 
 template <typename T>
+T AbsValue(T a) {
+	return a < 0 ? -a : a;
+}
+
+template<class T, T val=8>
+static inline T AlignValue(T n) {
+	return ((n + (val - 1)) / val) * val;
+}
+
+template<class T, T val=8>
+static inline bool ValueIsAligned(T n) {
+	return (n % val) == 0;
+}
+
+template <typename T>
+T SignValue(T a) {
+	return a < 0 ? -1 : 1;
+}
+
+template <typename T>
 const T Load(const_data_ptr_t ptr) {
 	T ret;
 	memcpy(&ret, ptr, sizeof(ret));

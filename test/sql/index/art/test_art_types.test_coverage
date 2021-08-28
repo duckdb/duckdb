@@ -185,3 +185,5 @@ statement ok
 DROP TABLE integers
 
 endloop
+
+endloop

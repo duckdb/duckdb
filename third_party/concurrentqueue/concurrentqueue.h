@@ -226,12 +226,13 @@ namespace duckdb_moodycamel { namespace details {
 
 // Compiler-specific likely/unlikely hints
 namespace duckdb_moodycamel { namespace details {
+
 #if defined(__GNUC__)
 	static inline bool (likely)(bool x) { return __builtin_expect((x), true); }
-	static inline bool (unlikely)(bool x) { return __builtin_expect((x), false); }
+//	static inline bool (unlikely)(bool x) { return __builtin_expect((x), false); }
 #else
 	static inline bool (likely)(bool x) { return x; }
-	static inline bool (unlikely)(bool x) { return x; }
+//	static inline bool (unlikely)(bool x) { return x; }
 #endif
 } }
 
@@ -1320,7 +1321,7 @@ private:
 		}
 		auto prodCount = producerCount.load(std::memory_order_relaxed);
 		auto globalOffset = globalExplicitConsumerOffset.load(std::memory_order_relaxed);
-		if ((details::unlikely)(token.desiredProducer == nullptr)) {
+		if (token.desiredProducer == nullptr) {
 			// Aha, first time we're dequeueing anything.
 			// Figure out our local position
 			// Note: offset is from start, not end, but we're traversing from end -- subtract from count first

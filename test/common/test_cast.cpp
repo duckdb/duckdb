@@ -41,7 +41,7 @@ static void TestStringCast(vector<string> &working_values, vector<DST> &expected
 			continue;
 		}
 		splits = StringUtil::Split(value, '.');
-		REQUIRE(Cast::Operation<DST, string>(result) == splits[0]);
+		REQUIRE(ConvertToString::Operation<DST>(result) == splits[0]);
 	}
 	for (auto &value : broken_values) {
 		REQUIRE_THROWS(Cast::Operation<string_t, DST>(string_t(value)));
@@ -253,7 +253,8 @@ static void TestStringCastDouble(vector<string> &working_values, vector<DST> &ex
 		REQUIRE(TryCast::Operation<string_t, DST>(string_t(value), result));
 		REQUIRE(ApproxEqual(result, expected_value));
 
-		auto to_str_and_back = Cast::Operation<string_t, DST>(string_t(Cast::Operation<DST, string>(expected_value)));
+		auto to_str_and_back =
+		    Cast::Operation<string_t, DST>(string_t(ConvertToString::Operation<DST>(expected_value)));
 		REQUIRE(ApproxEqual(to_str_and_back, expected_value));
 	}
 	for (auto &value : broken_values) {

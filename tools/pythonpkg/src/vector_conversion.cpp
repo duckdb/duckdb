@@ -6,20 +6,28 @@
 namespace duckdb {
 
 template <class T>
-void ScanPandasColumn(py::array &numpy_col, idx_t count, idx_t offset, Vector &out) {
+void ScanPandasColumn(py::array &numpy_col, idx_t stride, idx_t offset, Vector &out, idx_t count) {
 	auto src_ptr = (T *)numpy_col.data();
-	FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
+	if (stride == sizeof(T)) {
+		FlatVector::SetData(out, (data_ptr_t)(src_ptr + offset));
+	} else {
+		auto tgt_ptr = (T *)FlatVector::GetData(out);
+		for (idx_t i = 0; i < count; i++) {
+			tgt_ptr[i] = src_ptr[stride / sizeof(T) * (i + offset)];
+		}
+	}
 }
 
 template <class T>
 void ScanPandasNumeric(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
-	ScanPandasColumn<T>(bind_data.numpy_col, count, offset, out);
+	ScanPandasColumn<T>(bind_data.numpy_col, bind_data.numpy_stride, offset, out, count);
+	auto &result_mask = FlatVector::Validity(out);
 	if (bind_data.mask) {
 		auto mask = (bool *)bind_data.mask->numpy_array.data();
 		for (idx_t i = 0; i < count; i++) {
 			auto is_null = mask[offset + i];
 			if (is_null) {
-				FlatVector::SetNull(out, i, true);
+				result_mask.SetInvalid(i);
 			}
 		}
 	}
@@ -77,7 +85,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
                                      Vector &out) {
 	switch (bind_data.pandas_type) {
 	case PandasType::BOOLEAN:
-		ScanPandasColumn<bool>(numpy_col, count, offset, out);
+		ScanPandasColumn<bool>(numpy_col, bind_data.numpy_stride, offset, out, count);
 		break;
 	case PandasType::UTINYINT:
 		ScanPandasNumeric<uint8_t>(bind_data, count, offset, out);
@@ -150,17 +158,39 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		}
 		break;
 	}
-	case PandasType::VARCHAR: {
+	case PandasType::VARCHAR:
+	case PandasType::OBJECT: {
 		auto src_ptr = (PyObject **)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
+		auto &out_mask = FlatVector::Validity(out);
 		for (idx_t row = 0; row < count; row++) {
 			auto source_idx = offset + row;
-			auto val = src_ptr[source_idx];
+			py::str str_val;
+			PyObject *val = src_ptr[source_idx];
+#if PY_MAJOR_VERSION >= 3
+			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
+				py::handle object_handle = val;
+				if (val == Py_None) {
+					out_mask.SetInvalid(row);
+					continue;
+				}
+				if (py::isinstance<py::float_>(val)) {
+					bool is_nan = py::cast<bool>(object_handle.attr("__ne__")(object_handle));
+					if (is_nan) {
+						out_mask.SetInvalid(row);
+						continue;
+					}
+				}
+				str_val = py::str(object_handle);
+				val = str_val.ptr();
+			}
+#endif
+
 #if PY_MAJOR_VERSION >= 3
 			// Python 3 string representation:
 			// https://github.com/python/cpython/blob/3a8fdb28794b2f19f6c8464378fb8b46bce1f5f4/Include/cpython/unicodeobject.h#L79
 			if (!PyUnicode_CheckExact(val)) {
-				FlatVector::SetNull(out, row, true);
+				out_mask.SetInvalid(row);
 				continue;
 			}
 			if (PyUnicode_IS_COMPACT_ASCII(val)) {
@@ -212,7 +242,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 			} else if (PyUnicode_CheckExact(val)) {
 				throw std::runtime_error("Unicode is only supported in Python 3 and up.");
 			} else {
-				FlatVector::SetNull(out, row, true);
+				out_mask.SetInvalid(row);
 				continue;
 			}
 #endif
@@ -258,8 +288,11 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 	} else if (col_type == "float64") {
 		duckdb_col_type = LogicalType::DOUBLE;
 		pandas_type = PandasType::DOUBLE;
-	} else if (col_type == "object" || col_type == "string") {
-		// this better be strings
+	} else if (col_type == "object") {
+		//! this better be castable to strings
+		duckdb_col_type = LogicalType::VARCHAR;
+		pandas_type = PandasType::OBJECT;
+	} else if (col_type == "string") {
 		duckdb_col_type = LogicalType::VARCHAR;
 		pandas_type = PandasType::VARCHAR;
 	} else if (col_type == "timedelta64[ns]") {
@@ -283,7 +316,6 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
 		LogicalType duckdb_col_type;
 		PandasColumnBindData bind_data;
-
 		auto col_type = string(py::str(df_types[col_idx]));
 		if (col_type == "Int8" || col_type == "Int16" || col_type == "Int32" || col_type == "Int64") {
 			// numeric object
@@ -311,6 +343,9 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 				ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
 			}
 		}
+		D_ASSERT(py::hasattr(bind_data.numpy_col, "strides"));
+		bind_data.numpy_stride = bind_data.numpy_col.attr("strides").attr("__getitem__")(0).cast<idx_t>();
+
 		names.emplace_back(py::str(df_columns[col_idx]));
 		return_types.push_back(duckdb_col_type);
 		bind_columns.push_back(move(bind_data));

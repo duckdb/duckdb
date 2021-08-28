@@ -42,7 +42,7 @@ struct StringAggBaseFunction {
 
 	static inline void PerformOperation(StringAggState *state, const char *str, const char *sep, idx_t str_size,
 	                                    idx_t sep_size) {
-		if (state->dataptr == nullptr) {
+		if (!state->dataptr) {
 			// first iteration: allocate space for the string and copy it into the state
 			state->alloc_size = MaxValue<idx_t>(8, NextPowerOfTwo(str_size));
 			state->dataptr = new char[state->alloc_size];
@@ -104,7 +104,7 @@ struct StringAggSingleFunction : public StringAggBaseFunction {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE *target) {
-		if (source.dataptr == nullptr) {
+		if (!source.dataptr) {
 			// source is not set: skip combining
 			return;
 		}
@@ -114,22 +114,22 @@ struct StringAggSingleFunction : public StringAggBaseFunction {
 
 void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet string_agg("string_agg");
-	string_agg.AddFunction(
-	    AggregateFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                      AggregateFunction::StateSize<StringAggState>,
-	                      AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
-	                      AggregateFunction::BinaryScatterUpdate<StringAggState, string_t, string_t, StringAggFunction>,
-	                      nullptr, AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
-	                      AggregateFunction::BinaryUpdate<StringAggState, string_t, string_t, StringAggFunction>,
-	                      nullptr, AggregateFunction::StateDestroy<StringAggState, StringAggFunction>));
-	string_agg.AddFunction(
-	    AggregateFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
-	                      AggregateFunction::StateInitialize<StringAggState, StringAggSingleFunction>,
-	                      AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggSingleFunction>,
-	                      AggregateFunction::StateCombine<StringAggState, StringAggSingleFunction>,
-	                      AggregateFunction::StateFinalize<StringAggState, string_t, StringAggSingleFunction>,
-	                      AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggSingleFunction>, nullptr,
-	                      AggregateFunction::StateDestroy<StringAggState, StringAggSingleFunction>));
+	string_agg.AddFunction(AggregateFunction(
+	    {LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
+	    AggregateFunction::StateSize<StringAggState>,
+	    AggregateFunction::StateInitialize<StringAggState, StringAggFunction>,
+	    AggregateFunction::BinaryScatterUpdate<StringAggState, string_t, string_t, StringAggFunction>, nullptr,
+	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
+	    AggregateFunction::BinaryUpdate<StringAggState, string_t, string_t, StringAggFunction>, nullptr,
+	    AggregateFunction::StateDestroy<StringAggState, StringAggFunction>, nullptr, nullptr, true));
+	string_agg.AddFunction(AggregateFunction(
+	    {LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
+	    AggregateFunction::StateInitialize<StringAggState, StringAggSingleFunction>,
+	    AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggSingleFunction>,
+	    AggregateFunction::StateCombine<StringAggState, StringAggSingleFunction>,
+	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggSingleFunction>,
+	    AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggSingleFunction>, nullptr,
+	    AggregateFunction::StateDestroy<StringAggState, StringAggSingleFunction>, nullptr, nullptr, true));
 	set.AddFunction(string_agg);
 	string_agg.name = "group_concat";
 	set.AddFunction(string_agg);

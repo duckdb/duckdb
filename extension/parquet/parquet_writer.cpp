@@ -146,12 +146,19 @@ ParquetWriter::ParquetWriter(FileSystem &fs, string file_name_p, vector<LogicalT
 	writer->WriteData((const_data_ptr_t) "PAR1", 4);
 	TCompactProtocolFactoryT<MyTransport> tproto_factory;
 	protocol = tproto_factory.getProtocol(make_shared<MyTransport>(*writer));
+
 	file_meta_data.num_rows = 0;
+	file_meta_data.version = 1;
+
+	file_meta_data.__isset.created_by = true;
+	file_meta_data.created_by = "DuckDB";
+
 	file_meta_data.schema.resize(sql_types.size() + 1);
 
+	// populate root schema object
+	file_meta_data.schema[0].name = "duckdb_schema";
 	file_meta_data.schema[0].num_children = sql_types.size();
 	file_meta_data.schema[0].__isset.num_children = true;
-	file_meta_data.version = 1;
 
 	for (idx_t i = 0; i < sql_types.size(); i++) {
 		auto &schema_element = file_meta_data.schema[i + 1];
@@ -246,7 +253,6 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 						byte |= (ptr[r] & 1) << byte_pos;
 						byte_pos++;
 
-						temp_writer.Write<uint8_t>(byte);
 						if (byte_pos == 8) {
 							temp_writer.Write<uint8_t>(byte);
 							byte = 0;

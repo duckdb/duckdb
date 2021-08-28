@@ -23,7 +23,9 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 		auto &then_expr = (BoundExpression &)*check.then_expr;
 		return_type = LogicalType::MaxLogicalType(return_type, then_expr.expr->return_type);
 	}
-	// now rewrite hte case into a chain of cases
+	ExpressionBinder::ResolveParameterType(return_type);
+
+	// now rewrite the case into a chain of cases
 
 	// CASE WHEN e1 THEN r1 WHEN w2 THEN r2 ELSE r3 is rewritten to
 	// CASE WHEN e1 THEN r1 ELSE CASE WHEN e2 THEN r2 ELSE r3

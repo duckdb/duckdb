@@ -1,0 +1,123 @@
+# name: test/sql/topn/test_top_n_lists.test
+# description: Test Top N with lists
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+# top-n with lists and null values
+statement ok
+CREATE TABLE tbl AS SELECT [i] l FROM range(1000) tbl(i) UNION ALL SELECT NULL l FROM range(3)
+
+loop i 0 2
+
+query I
+SELECT l FROM tbl ORDER BY l NULLS FIRST LIMIT 5
+----
+NULL
+NULL
+NULL
+[0]
+[1]
+
+query I
+SELECT l FROM tbl ORDER BY l NULLS LAST LIMIT 5
+----
+[0]
+[1]
+[2]
+[3]
+[4]
+
+query I
+SELECT l FROM tbl ORDER BY l DESC NULLS FIRST LIMIT 5
+----
+NULL
+NULL
+NULL
+[999]
+[998]
+
+query I
+SELECT l FROM tbl ORDER BY l DESC NULLS LAST LIMIT 5
+----
+[999]
+[998]
+[997]
+[996]
+[995]
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+CREATE TABLE tbl AS SELECT NULL l FROM range(3) UNION ALL SELECT [i] l FROM range(1000) tbl(i)
+
+endloop
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+CREATE TABLE tbl AS SELECT [i] l FROM range(1000) tbl(i) UNION ALL SELECT [NULL] l FROM range(3)
+
+loop i 0 2
+
+query I
+SELECT l FROM tbl ORDER BY l NULLS FIRST LIMIT 5
+----
+[0]
+[1]
+[2]
+[3]
+[4]
+
+query I
+SELECT l FROM tbl ORDER BY l NULLS LAST LIMIT 5
+----
+[0]
+[1]
+[2]
+[3]
+[4]
+
+query I
+SELECT l FROM tbl ORDER BY l DESC NULLS FIRST LIMIT 5
+----
+[NULL]
+[NULL]
+[NULL]
+[999]
+[998]
+
+query I
+SELECT l FROM tbl ORDER BY l DESC NULLS LAST LIMIT 5
+----
+[NULL]
+[NULL]
+[NULL]
+[999]
+[998]
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+CREATE TABLE tbl AS SELECT [NULL] l FROM range(3) UNION ALL SELECT [i] l FROM range(1000) tbl(i)
+
+endloop
+
+# bigger lists
+query I
+SELECT range(i) l FROM range(10) tbl(i) ORDER BY l DESC LIMIT 3
+----
+[0, 1, 2, 3, 4, 5, 6, 7, 8]
+[0, 1, 2, 3, 4, 5, 6, 7]
+[0, 1, 2, 3, 4, 5, 6]
+
+query I
+SELECT range(i) l FROM range(10) tbl(i) ORDER BY l ASC LIMIT 3
+----
+[]
+[0]
+[0, 1]

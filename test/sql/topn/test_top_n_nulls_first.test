@@ -1,0 +1,36 @@
+# name: test/sql/topn/test_top_n_nulls_first.test
+# description: Test NULLS FIRST/NULLS LAST with top n implementation
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1), (NULL)
+
+query I
+SELECT * FROM integers ORDER BY i NULLS FIRST LIMIT 2
+----
+NULL
+1
+
+query I
+SELECT * FROM integers ORDER BY i NULLS LAST LIMIT 2
+----
+1
+NULL
+
+query I
+SELECT * FROM integers ORDER BY i DESC NULLS FIRST LIMIT 2
+----
+NULL
+1
+
+query I
+SELECT * FROM integers ORDER BY i DESC NULLS LAST LIMIT 2
+----
+1
+NULL

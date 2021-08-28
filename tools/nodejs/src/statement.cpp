@@ -162,7 +162,7 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 #if (NAPI_VERSION > 4)
 			case duckdb::LogicalTypeId::DATE: {
 				const auto scale = duckdb::Interval::SECS_PER_DAY * duckdb::Interval::MSECS_PER_SEC;
-				value = Napi::Date::New(env, double(dval.GetValue<int64_t>() * scale));
+				value = Napi::Date::New(env, double(dval.GetValue<int32_t>() * scale));
 			} break;
 			case duckdb::LogicalTypeId::TIMESTAMP: {
 				value = Napi::Date::New(env, double(dval.GetValue<int64_t>() / duckdb::Interval::MICROS_PER_MSEC));

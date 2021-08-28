@@ -98,10 +98,7 @@ setMethod(
 
     on.exit(NULL)
 
-    if (!isTRUE(debug)){
-      # only has effect in RStudio
-      on_connection_opened(conn)
-    }
+    rs_on_connection_opened(conn)
 
     conn
   }
@@ -125,7 +122,7 @@ setMethod(
     if (shutdown) {
       duckdb_shutdown(conn@driver)
     }
-    on_connection_closed(conn)
+    rs_on_connection_closed(conn)
     invisible(TRUE)
   }
 )

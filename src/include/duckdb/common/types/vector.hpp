@@ -279,10 +279,7 @@ struct FlatVector {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		vector.validity.Initialize(new_validity);
 	}
-	static inline void SetNull(Vector &vector, idx_t idx, bool is_null) {
-		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
-		vector.validity.Set(idx, !is_null);
-	}
+	static void SetNull(Vector &vector, idx_t idx, bool is_null);
 	static inline bool IsNull(const Vector &vector, idx_t idx) {
 		D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 		return !vector.validity.RowIsValid(idx);

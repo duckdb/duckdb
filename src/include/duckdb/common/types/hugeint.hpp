@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
@@ -40,7 +41,16 @@ public:
 	}
 
 	template <class T>
-	static hugeint_t Convert(T value);
+	static bool TryConvert(T value, hugeint_t &result);
+
+	template <class T>
+	static hugeint_t Convert(T value) {
+		hugeint_t result;
+		if (!TryConvert(value, result)) { // LCOV_EXCL_START
+			throw ValueOutOfRangeException(double(value), GetTypeId<T>(), GetTypeId<hugeint_t>());
+		} // LCOV_EXCL_STOP
+		return result;
+	}
 
 	static void NegateInPlace(hugeint_t &input) {
 		input.lower = NumericLimits<uint64_t>::Maximum() - input.lower + 1;
@@ -131,23 +141,24 @@ template <>
 bool Hugeint::TryCast(hugeint_t input, double &result);
 
 template <>
-hugeint_t Hugeint::Convert(int8_t value);
+bool Hugeint::TryConvert(int8_t value, hugeint_t &result);
 template <>
-hugeint_t Hugeint::Convert(int16_t value);
+bool Hugeint::TryConvert(int16_t value, hugeint_t &result);
 template <>
-hugeint_t Hugeint::Convert(int32_t value);
+bool Hugeint::TryConvert(int32_t value, hugeint_t &result);
 template <>
-hugeint_t Hugeint::Convert(int64_t value);
+bool Hugeint::TryConvert(int64_t value, hugeint_t &result);
 template <>
-hugeint_t Hugeint::Convert(uint8_t value);
+bool Hugeint::TryConvert(uint8_t value, hugeint_t &result);
 template <>
-hugeint_t Hugeint::Convert(uint16_t value);
+bool Hugeint::TryConvert(uint16_t value, hugeint_t &result);
 template <>
-hugeint_t Hugeint::Convert(uint32_t value);
+bool Hugeint::TryConvert(uint32_t value, hugeint_t &result);
 template <>
-hugeint_t Hugeint::Convert(uint64_t value);
+bool Hugeint::TryConvert(uint64_t value, hugeint_t &result);
 template <>
-hugeint_t Hugeint::Convert(float value);
+bool Hugeint::TryConvert(float value, hugeint_t &result);
 template <>
-hugeint_t Hugeint::Convert(double value);
+bool Hugeint::TryConvert(double value, hugeint_t &result);
+
 } // namespace duckdb

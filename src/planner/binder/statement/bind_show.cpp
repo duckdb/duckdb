@@ -7,6 +7,9 @@ namespace duckdb {
 BoundStatement Binder::Bind(ShowStatement &stmt) {
 	BoundStatement result;
 
+	if (stmt.info->is_summary) {
+		return BindSummarize(stmt);
+	}
 	auto plan = Bind(*stmt.info->query);
 	stmt.info->types = plan.types;
 	stmt.info->aliases = plan.names;

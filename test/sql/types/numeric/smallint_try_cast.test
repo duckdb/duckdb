@@ -1,0 +1,218 @@
+# name: test/sql/types/numeric/smallint_try_cast.test
+# description: Smallint try cast
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# smallint casts
+statement ok
+CREATE TABLE smallints AS SELECT i::SMALLINT i FROM (VALUES (-32768), (0), (32767)) tbl(i)
+
+# -> unsigned
+statement error
+SELECT i::UTINYINT FROM smallints
+
+statement error
+SELECT i::USMALLINT FROM smallints
+
+statement error
+SELECT i::UINTEGER FROM smallints
+
+statement error
+SELECT i::UBIGINT FROM smallints
+
+statement error
+SELECT i::UTINYINT FROM smallints WHERE i>=0 ORDER BY i
+
+query I
+SELECT i::USMALLINT FROM smallints WHERE i>=0 ORDER BY i
+----
+0
+32767
+
+query I
+SELECT i::UINTEGER FROM smallints WHERE i>=0 ORDER BY i
+----
+0
+32767
+
+query I
+SELECT i::UBIGINT FROM smallints WHERE i>=0 ORDER BY i
+----
+0
+32767
+
+query I
+SELECT TRY_CAST(i AS UTINYINT)::SMALLINT FROM smallints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS USMALLINT)::SMALLINT FROM smallints ORDER BY i
+----
+NULL
+0
+32767
+
+query I
+SELECT TRY_CAST(i AS UINTEGER)::SMALLINT FROM smallints ORDER BY i
+----
+NULL
+0
+32767
+
+query I
+SELECT TRY_CAST(i AS UBIGINT)::SMALLINT FROM smallints ORDER BY i
+----
+NULL
+0
+32767
+
+# -> signed
+statement error
+SELECT i::TINYINT FROM smallints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS TINYINT)::SMALLINT FROM smallints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT i::INTEGER::SMALLINT FROM smallints ORDER BY i
+----
+-32768
+0
+32767
+
+query I
+SELECT i::BIGINT::SMALLINT FROM smallints ORDER BY i
+----
+-32768
+0
+32767
+
+query I
+SELECT i::HUGEINT::SMALLINT FROM smallints ORDER BY i
+----
+-32768
+0
+32767
+
+# -> float
+query I
+SELECT i::FLOAT FROM smallints ORDER BY i
+----
+-32768
+0
+32767
+
+query I
+SELECT i::DOUBLE FROM smallints ORDER BY i
+----
+-32768
+0
+32767
+
+# -> bool
+query I
+SELECT i::BOOL FROM smallints ORDER BY i
+----
+True
+False
+True
+
+# -> varchar
+query I
+SELECT i::VARCHAR FROM smallints ORDER BY i
+----
+-32768
+0
+32767
+
+# from string casts
+statement ok
+CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-100000'), ('-32768'), ('0'), ('32767'), ('100000')) tbl(s)
+
+statement error
+SELECT s::SMALLINT FROM strings
+
+query I
+SELECT TRY_CAST(s AS SMALLINT) FROM strings
+----
+NULL
+NULL
+NULL
+-32768
+0
+32767
+NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::SMALLINT FROM smallints ORDER BY i
+
+query I
+SELECT i::DECIMAL(9,0)::SMALLINT FROM smallints ORDER BY i
+----
+-32768
+0
+32767
+
+query I
+SELECT i::DECIMAL(18,0)::SMALLINT FROM smallints ORDER BY i
+----
+-32768
+0
+32767
+
+query I
+SELECT i::DECIMAL(38,0)::SMALLINT FROM smallints ORDER BY i
+----
+-32768
+0
+32767
+
+statement error
+SELECT i::DECIMAL(3,0)::SMALLINT FROM smallints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(9,5)::SMALLINT FROM smallints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,14)::SMALLINT FROM smallints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,34)::SMALLINT FROM smallints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::SMALLINT FROM smallints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,5))::SMALLINT FROM smallints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,14))::SMALLINT FROM smallints ORDER BY i
+----
+NULL
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,34))::SMALLINT FROM smallints ORDER BY i
+----
+NULL
+0
+NULL
