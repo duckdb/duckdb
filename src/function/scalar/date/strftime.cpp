@@ -16,8 +16,6 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 
-#include "re2/re2.h"
-
 #include <cctype>
 
 namespace duckdb {

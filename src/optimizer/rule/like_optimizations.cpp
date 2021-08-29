@@ -3,8 +3,8 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
-
-#include "re2/re2.h"
+#include "duckdb/planner/expression/bound_operator_expression.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 
 namespace duckdb {
 
@@ -14,9 +14,89 @@ LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(
 	func->matchers.push_back(make_unique<ConstantExpressionMatcher>());
 	func->matchers.push_back(make_unique<ExpressionMatcher>());
 	func->policy = SetMatcher::Policy::SOME;
-	// we only match on LIKE ("~~")
-	func->function = make_unique<SpecificFunctionMatcher>("~~");
+	// we match on LIKE ("~~") and NOT LIKE ("!~~")
+	func->function = make_unique<ManyFunctionMatcher>(unordered_set<string> {"!~~", "~~"});
 	root = move(func);
+}
+
+static bool PatternIsConstant(const string &pattern) {
+	for (idx_t i = 0; i < pattern.size(); i++) {
+		if (pattern[i] == '%' || pattern[i] == '_') {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool PatternIsPrefix(const string &pattern) {
+	idx_t i;
+	for (i = pattern.size(); i > 0; i--) {
+		if (pattern[i - 1] != '%') {
+			break;
+		}
+	}
+	if (i == pattern.size()) {
+		// no trailing %
+		// cannot be a prefix
+		return false;
+	}
+	// continue to look in the string
+	// if there is a % or _ in the string (besides at the very end) this is not a prefix match
+	for (; i > 0; i--) {
+		if (pattern[i - 1] == '%' || pattern[i - 1] == '_') {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool PatternIsSuffix(const string &pattern) {
+	idx_t i;
+	for (i = 0; i < pattern.size(); i++) {
+		if (pattern[i] != '%') {
+			break;
+		}
+	}
+	if (i == 0) {
+		// no leading %
+		// cannot be a suffix
+		return false;
+	}
+	// continue to look in the string
+	// if there is a % or _ in the string (besides at the beginning) this is not a suffix match
+	for (; i < pattern.size(); i++) {
+		if (pattern[i] == '%' || pattern[i] == '_') {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool PatternIsContains(const string &pattern) {
+	idx_t start;
+	idx_t end;
+	for (start = 0; start < pattern.size(); start++) {
+		if (pattern[start] != '%') {
+			break;
+		}
+	}
+	for (end = pattern.size(); end > 0; end--) {
+		if (pattern[end - 1] != '%') {
+			break;
+		}
+	}
+	if (start == 0 || end == pattern.size()) {
+		// contains requires both a leading AND a trailing %
+		return false;
+	}
+	// check if there are any other special characters in the string
+	// if there is a % or _ in the string (besides at the beginning/end) this is not a contains match
+	for (idx_t i = start; i < end; i++) {
+		if (pattern[i] == '%' || pattern[i] == '_') {
+			return false;
+		}
+	}
+	return true;
 }
 
 unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
@@ -38,35 +118,46 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	D_ASSERT(constant_value.type() == constant_expr->return_type);
 	auto patt_str = constant_value.str_value;
 
-	duckdb_re2::RE2 prefix_pattern("[^%_]*[%]+");
-	duckdb_re2::RE2 suffix_pattern("[%]+[^%_]*");
-	duckdb_re2::RE2 contains_pattern("[%]+[^%_]*[%]+");
+	bool is_not_like = root->function.name == "!~~";
 
-	if (duckdb_re2::RE2::FullMatch(patt_str, prefix_pattern)) {
+	if (PatternIsConstant(patt_str)) {
+		// Pattern is constant
+		return make_unique<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
+		                                                          : ExpressionType::COMPARE_EQUAL,
+		                                              move(root->children[0]), move(root->children[1]));
+	} else if (PatternIsPrefix(patt_str)) {
 		// Prefix LIKE pattern : [^%_]*[%]+, ignoring underscore
-		return ApplyRule(root, PrefixFun::GetFunction(), patt_str);
-	} else if (duckdb_re2::RE2::FullMatch(patt_str, suffix_pattern)) {
+		return ApplyRule(root, PrefixFun::GetFunction(), patt_str, is_not_like);
+	} else if (PatternIsSuffix(patt_str)) {
 		// Suffix LIKE pattern: [%]+[^%_]*, ignoring underscore
-		return ApplyRule(root, SuffixFun::GetFunction(), patt_str);
-	} else if (duckdb_re2::RE2::FullMatch(patt_str, contains_pattern)) {
+		return ApplyRule(root, SuffixFun::GetFunction(), patt_str, is_not_like);
+	} else if (PatternIsContains(patt_str)) {
 		// Contains LIKE pattern: [%]+[^%_]*[%]+, ignoring underscore
-		return ApplyRule(root, ContainsFun::GetFunction(), patt_str);
+		return ApplyRule(root, ContainsFun::GetFunction(), patt_str, is_not_like);
 	}
-
 	return nullptr;
 }
 
 unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *expr, ScalarFunction function,
-                                                       string pattern) {
+                                                       string pattern, bool is_not_like) {
 	// replace LIKE by an optimized function
-	expr->function = move(function);
+	unique_ptr<Expression> result;
+	auto new_function =
+	    make_unique<BoundFunctionExpression>(expr->return_type, function, move(expr->children), nullptr);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
 
-	expr->children[1] = make_unique<BoundConstantExpression>(Value(move(pattern)));
+	new_function->children[1] = make_unique<BoundConstantExpression>(Value(move(pattern)));
 
-	return expr->Copy();
+	result = move(new_function);
+	if (is_not_like) {
+		auto negation = make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_NOT, LogicalType::BOOLEAN);
+		negation->children.push_back(move(result));
+		result = move(negation);
+	}
+
+	return result;
 }
 
 } // namespace duckdb
