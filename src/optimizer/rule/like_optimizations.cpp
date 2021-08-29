@@ -11,9 +11,9 @@ namespace duckdb {
 LikeOptimizationRule::LikeOptimizationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a FunctionExpression that has a foldable ConstantExpression
 	auto func = make_unique<FunctionExpressionMatcher>();
-	func->matchers.push_back(make_unique<ConstantExpressionMatcher>());
 	func->matchers.push_back(make_unique<ExpressionMatcher>());
-	func->policy = SetMatcher::Policy::SOME;
+	func->matchers.push_back(make_unique<ConstantExpressionMatcher>());
+	func->policy = SetMatcher::Policy::ORDERED;
 	// we match on LIKE ("~~") and NOT LIKE ("!~~")
 	func->function = make_unique<ManyFunctionMatcher>(unordered_set<string> {"!~~", "~~"});
 	root = move(func);
@@ -102,7 +102,7 @@ static bool PatternIsContains(const string &pattern) {
 unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                    bool &changes_made) {
 	auto root = (BoundFunctionExpression *)bindings[0];
-	auto constant_expr = (BoundConstantExpression *)bindings[1];
+	auto constant_expr = (BoundConstantExpression *)bindings[2];
 	D_ASSERT(root->children.size() == 2);
 
 	if (constant_expr->value.is_null) {
@@ -111,7 +111,7 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 
 	// the constant_expr is a scalar expression that we have to fold
 	if (!constant_expr->IsFoldable()) {
-		return root->Copy();
+		return nullptr;
 	}
 
 	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
@@ -119,7 +119,6 @@ unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<E
 	auto patt_str = constant_value.str_value;
 
 	bool is_not_like = root->function.name == "!~~";
-
 	if (PatternIsConstant(patt_str)) {
 		// Pattern is constant
 		return make_unique<BoundComparisonExpression>(is_not_like ? ExpressionType::COMPARE_NOTEQUAL
@@ -143,7 +142,7 @@ unique_ptr<Expression> LikeOptimizationRule::ApplyRule(BoundFunctionExpression *
 	// replace LIKE by an optimized function
 	unique_ptr<Expression> result;
 	auto new_function =
-	    make_unique<BoundFunctionExpression>(expr->return_type, function, move(expr->children), nullptr);
+	    make_unique<BoundFunctionExpression>(expr->return_type, move(function), move(expr->children), nullptr);
 
 	// removing "%" from the pattern
 	pattern.erase(std::remove(pattern.begin(), pattern.end(), '%'), pattern.end());
