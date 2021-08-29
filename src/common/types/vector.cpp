@@ -1274,6 +1274,9 @@ void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
 
 void StringVector::AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+	if (buffer.get() == vector.auxiliary.get()) {
+		return;
+	}
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
@@ -1290,6 +1293,9 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 		return;
 	}
 	if (!other.auxiliary) {
+		return;
+	}
+	if (vector.auxiliary.get() == other.auxiliary.get()) {
 		return;
 	}
 	if (!vector.auxiliary) {
