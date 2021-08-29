@@ -940,12 +940,15 @@ jobs:
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
-    - name: Remove dist for aarch64
+    - name: Deploy aarch64
       if: ${{ matrix.arch == 'aarch64' }}
       run: |
-        cd tools/pythonpkg && rm dist/duckdb-*.tar.gz
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+        fi
 
-    - name: Deploy
+    - name: Deploy regular
+      if: ${{ matrix.arch != 'aarch64' }}
       run: |
         python scripts/asset-upload-gha.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
