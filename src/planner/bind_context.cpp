@@ -214,6 +214,7 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 						for (auto &child_binding : using_binding->bindings) {
 							coalesce->children.push_back(make_unique<ColumnRefExpression>(column_name, child_binding));
 						}
+						coalesce->alias = column_name;
 						new_select_list.push_back(move(coalesce));
 					} else {
 						// primary binding: output the qualified column ref
@@ -256,6 +257,16 @@ void BindContext::AddTableFunction(idx_t index, const string &alias, const vecto
 	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index));
 }
 
+static string AddColumnNameToBinding(const string &base_name, unordered_set<string> &current_names) {
+	idx_t index = 1;
+	string name = base_name;
+	while (current_names.find(name) != current_names.end()) {
+		name = base_name + ":" + to_string(index++);
+	}
+	current_names.insert(name);
+	return name;
+}
+
 vector<string> BindContext::AliasColumnNames(const string &table_name, const vector<string> &names,
                                              const vector<string> &column_aliases) {
 	vector<string> result;
@@ -263,13 +274,14 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
 		                      names.size(), column_aliases.size());
 	}
+	unordered_set<string> current_names;
 	// use any provided column aliases first
 	for (idx_t i = 0; i < column_aliases.size(); i++) {
-		result.push_back(column_aliases[i]);
+		result.push_back(AddColumnNameToBinding(column_aliases[i], current_names));
 	}
 	// if not enough aliases were provided, use the default names for remaining columns
 	for (idx_t i = column_aliases.size(); i < names.size(); i++) {
-		result.push_back(names[i]);
+		result.push_back(AddColumnNameToBinding(names[i], current_names));
 	}
 	return result;
 }
