@@ -29,6 +29,11 @@ class SimpleFunction;
 
 struct MacroBinding;
 
+struct BoundColumnReferenceInfo {
+	string name;
+	idx_t query_location;
+};
+
 struct BindResult {
 	explicit BindResult(string error) : error(error) {
 	}
@@ -57,7 +62,10 @@ public:
 	                            bool root_expression = true);
 
 	//! Returns whether or not any columns have been bound by the expression binder
-	bool BoundColumns() {
+	bool HasBoundColumns() {
+		return !bound_columns.empty();
+	}
+	const vector<BoundColumnReferenceInfo> &GetBoundColumns() {
 		return bound_columns;
 	}
 
@@ -121,7 +129,7 @@ protected:
 	ClientContext &context;
 	ExpressionBinder *stored_binder;
 	MacroBinding *macro_binding;
-	bool bound_columns = false;
+	vector<BoundColumnReferenceInfo> bound_columns;
 };
 
 } // namespace duckdb

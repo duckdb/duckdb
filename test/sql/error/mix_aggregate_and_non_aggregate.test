@@ -1,0 +1,16 @@
+# name: test/sql/error/mix_aggregate_and_non_aggregate.test
+# description: Test mix of aggregate and non-aggregate
+# group: [error]
+
+statement ok
+CREATE TABLE tbl(name VARCHAR, style VARCHAR, brewery_id INTEGER, abv DOUBLE, ibu INTEGER);
+
+statement error
+SELECT FIRST(name), FIRST(abv)
+FROM tbl
+GROUP BY style
+ORDER BY abv DESC;
+
+statement error
+SELECT FIRST(name)||abv
+FROM tbl

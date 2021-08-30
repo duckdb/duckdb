@@ -36,7 +36,7 @@ BindResult SelectBinder::BindAggregate(FunctionExpression &aggr, AggregateFuncti
 
 	if (!error.empty()) {
 		// failed to bind child
-		if (aggregate_binder.BoundColumns()) {
+		if (aggregate_binder.HasBoundColumns()) {
 			for (idx_t i = 0; i < aggr.children.size(); i++) {
 				// however, we bound columns!
 				// that means this aggregation belongs to this node

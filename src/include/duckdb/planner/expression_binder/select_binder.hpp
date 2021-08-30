@@ -33,7 +33,7 @@ public:
 	}
 	void ResetBindings() {
 		this->bound_aggregate = false;
-		this->bound_columns = false;
+		this->bound_columns.clear();
 	}
 
 protected:

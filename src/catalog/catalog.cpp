@@ -201,7 +201,7 @@ TableCatalogEntry *Catalog::GetEntry(ClientContext &context, string schema_name,
 		return nullptr;
 	}
 	if (entry->type != CatalogType::TABLE_ENTRY) {
-		throw CatalogException("%s is not a table", name);
+		throw CatalogException(error_context.FormatError("%s is not a table", name));
 	}
 	return (TableCatalogEntry *)entry;
 }
@@ -240,7 +240,7 @@ AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, string 
 	auto entry =
 	    GetEntry(context, CatalogType::AGGREGATE_FUNCTION_ENTRY, move(schema_name), name, if_exists, error_context);
 	if (entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
-		throw CatalogException("%s is not an aggregate function", name);
+		throw CatalogException(error_context.FormatError("%s is not an aggregate function", name));
 	}
 	return (AggregateFunctionCatalogEntry *)entry;
 }
