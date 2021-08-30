@@ -422,7 +422,7 @@ public:
 };
 
 static void SortCollectionForPartition(PhysicalWindowOperatorState &state, BoundWindowExpression *wexpr,
-                                       ChunkCollection &input, ChunkCollection &sort_collection) {
+                                       ChunkCollection &input, ChunkCollection &over) {
 	if (input.Count() == 0) {
 		return;
 	}
@@ -443,10 +443,11 @@ static void SortCollectionForPartition(PhysicalWindowOperatorState &state, Bound
 	}
 
 	// fuse input and sort collection into one
-	auto input_types = input.Types();
-	auto sort_types = sort_collection.Types();
-	input.Fuse(sort_collection);
-	auto payload_types = input.Types();
+	// (sorting columns are not decoded, and we need them later)
+	ChunkCollection payload;
+	payload.Fuse(input);
+	payload.Fuse(over);
+	auto payload_types = payload.Types();
 
 	// initialize row layout for sorting
 	RowLayout payload_layout;
@@ -459,34 +460,45 @@ static void SortCollectionForPartition(PhysicalWindowOperatorState &state, Bound
 	local_sort_state.Initialize(global_sort_state, *state.buffer_manager);
 
 	// sink collection chunks into row format
-	const idx_t chunk_count = sort_collection.ChunkCount();
+	const idx_t chunk_count = over.ChunkCount();
 	for (idx_t i = 0; i < chunk_count; i++) {
-		auto &sort_chunk = *sort_collection.Chunks()[i];
-		auto &payload_chunk = *input.Chunks()[i];
-		local_sort_state.SinkChunk(sort_chunk, payload_chunk);
+		auto &over_chunk = *over.Chunks()[i];
+		auto &payload_chunk = *payload.Chunks()[i];
+		local_sort_state.SinkChunk(over_chunk, payload_chunk);
 	}
-	sort_collection.Reset();
-	input.Reset();
 
 	// add local state to global state, which sorts the data
 	global_sort_state.AddLocalState(local_sort_state);
 	// Prepare for merge phase (in this case we never have a merge phase, but this call is still needed)
 	global_sort_state.PrepareMergePhase();
+}
+
+static void ScanSortedPartition(PhysicalWindowOperatorState &state, ChunkCollection &input,
+                                const vector<LogicalType> &input_types, ChunkCollection &over,
+                                const vector<LogicalType> &over_types) {
+	auto &global_sort_state = *state.global_sort_state;
+
+	auto payload_types = input_types;
+	payload_types.insert(payload_types.end(), over_types.begin(), over_types.end());
 
 	// scan the sorted row data
 	SortedDataScanner scanner(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
-	for (idx_t i = 0; i < chunk_count; i++) {
+	for (;;) {
 		DataChunk payload_chunk;
 		payload_chunk.Initialize(payload_types);
+		payload_chunk.SetCardinality(0);
 		scanner.Scan(payload_chunk);
+		if (payload_chunk.size() == 0) {
+			break;
+		}
 
 		// split into two
-		DataChunk sort_chunk;
-		payload_chunk.Split(sort_chunk, input_types.size());
+		DataChunk over_chunk;
+		payload_chunk.Split(over_chunk, input_types.size());
 
 		// append back to collection
 		input.Append(payload_chunk);
-		sort_collection.Append(sort_chunk);
+		over.Append(over_chunk);
 	}
 }
 
@@ -1121,20 +1133,14 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 using WindowExpressions = vector<BoundWindowExpression *>;
 
-static void ComputeWindowExpressions(PhysicalWindowOperatorState &state, WindowExpressions &window_exprs,
-                                     ChunkCollection &input, ChunkCollection &window_results, ChunkCollection &over) {
+static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkCollection &input,
+                                     ChunkCollection &window_results, ChunkCollection &over) {
 	//	Idempotency
 	if (input.Count() == 0) {
 		return;
 	}
 	//	Pick out a function for the OVER clause
 	auto over_expr = window_exprs[0];
-
-	//	Sort the partition
-	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
-	if (sort_col_count > 0) {
-		SortCollectionForPartition(state, over_expr, input, over);
-	}
 
 	//	Set bits for the start of each partition
 	BitArray<uint64_t> partition_bits(input.Count());
@@ -1146,6 +1152,7 @@ static void ComputeWindowExpressions(PhysicalWindowOperatorState &state, WindowE
 
 	//	Set bits for the start of each peer group.
 	//	Partitions also break peer groups, so start with the partition bits.
+	const auto sort_col_count = over_expr->partitions.size() + over_expr->orders.size();
 	auto order_bits = partition_bits;
 	for (idx_t c = over_expr->partitions.size(); c < sort_col_count; ++c) {
 		MaskColumn(order_bits, over, c);
@@ -1255,20 +1262,51 @@ static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalSt
 	state.position = 0;
 	state.global_sort_state = nullptr;
 
+	//	Pick out a function for the OVER clause
+	auto over_expr = window_exprs[0];
+
+	// There are three types of partitions:
+	// 1. No partition (no sorting)
+	// 2. One partition (sorting, but no hashing)
+	// 3. Multiple partitions (sorting and hashing)
+	const auto input_types = gstate.chunks.Types();
+	const auto over_types = gstate.over_collection.Types();
+
 	if (gstate.counts.empty() && hash_bin == 0) {
-		ChunkCollection &big_data = gstate.chunks;
+		ChunkCollection &input = gstate.chunks;
 		ChunkCollection output;
-		ChunkCollection &over_collection = gstate.over_collection;
-		ComputeWindowExpressions(state, window_exprs, big_data, output, over_collection);
-		state.chunks.Merge(big_data);
+		ChunkCollection &over = gstate.over_collection;
+
+		const auto has_sorting = over_expr->partitions.size() + over_expr->orders.size();
+		if (has_sorting && input.Count() > 0) {
+			// 2. One partition
+			SortCollectionForPartition(state, over_expr, input, over);
+
+			// Overwrite the collections with the sorted data
+			over.Reset();
+			input.Reset();
+			ScanSortedPartition(state, input, input_types, over, over_types);
+		}
+
+		ComputeWindowExpressions(window_exprs, input, output, over);
+		state.chunks.Merge(input);
 		state.window_results.Merge(output);
+
 	} else if (hash_bin < gstate.counts.size() && gstate.counts[hash_bin] > 0) {
+		// 3. Multiple partitions
 		ChunkCollection input;
 		ChunkCollection output;
 		ChunkCollection over;
 		const auto hash_mask = hash_t(gstate.counts.size() - 1);
 		ExtractPartition(gstate, input, over, hash_bin, hash_mask);
-		ComputeWindowExpressions(state, window_exprs, input, output, over);
+		SortCollectionForPartition(state, over_expr, input, over);
+
+		// Overwrite the collections with the sorted data
+		over.Reset();
+		input.Reset();
+		ScanSortedPartition(state, input, input_types, over, over_types);
+
+		ComputeWindowExpressions(window_exprs, input, output, over);
 		state.chunks.Merge(input);
 		state.window_results.Merge(output);
 	}
