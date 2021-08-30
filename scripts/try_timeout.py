@@ -37,4 +37,6 @@ for i in range(retries):
     command = Command(cmd)
     returncode = command.run(timeout)
     if returncode == 0:
-        break
+        exit(0)
+
+exit(1)
