@@ -24,4 +24,4 @@ jobs:
     - name: Run
       run: |
         (cd tools/rpkg && ./configure && R CMD build .)
-        docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c "export CMAKE_UNITY_BUILD=OFF && export ARROW_R_DEV=TRUE && cd /duckdb/tools/rpkg/ && RDsan -f dependencies.R && RDsan CMD INSTALL duckdb_*.tar.gz && cd tests && UBSAN_OPTIONS=print_stacktrace=1 RDsan -f testthat.R"
+        docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c "export CMAKE_UNITY_BUILD=OFF && export ARROW_R_DEV=TRUE && export LIBARROW_BINARY=true && cd /duckdb/tools/rpkg/ && RDsan -f dependencies.R && RDsan CMD INSTALL duckdb_*.tar.gz && cd tests && UBSAN_OPTIONS=print_stacktrace=1 RDsan -f testthat.R"
