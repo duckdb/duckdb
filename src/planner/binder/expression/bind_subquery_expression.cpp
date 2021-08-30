@@ -46,7 +46,8 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			}
 		}
 		if (expr.subquery_type != SubqueryType::EXISTS && bound_node->types.size() > 1) {
-			throw BinderException(binder.FormatError(expr, StringUtil::Format("Subquery returns %zu columns - expected 1", bound_node->types.size())));
+			throw BinderException(binder.FormatError(
+			    expr, StringUtil::Format("Subquery returns %zu columns - expected 1", bound_node->types.size())));
 		}
 		auto prior_subquery = move(expr.subquery);
 		expr.subquery = make_unique<SelectStatement>();

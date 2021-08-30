@@ -1,4 +1,4 @@
-# name: testtest/sql/function/generic/case_varchar.test
+# name: test/sql/function/generic/case_varchar.test
 # description: Test case statement with VARCHAR columns
 # group: [generic]
 
