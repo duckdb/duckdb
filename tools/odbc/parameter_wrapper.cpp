@@ -230,6 +230,12 @@ SQLRETURN ParameterDescriptor::SetValue(idx_t val_idx) {
 		value = Value(duckdb::OdbcUtils::ReadString(str_data, str_len));
 		break;
 	}
+	case SQL_WCHAR: {
+		auto str_data = (wchar_t *)apd.param_value_ptr + (val_idx * ipd.col_size);
+		auto str_len = apd.str_len_or_ind_ptr[val_idx];
+		value = Value(duckdb::OdbcUtils::ReadString(str_data, str_len));
+		break;
+	}
 	case SQL_VARBINARY:
 	case SQL_BINARY: {
 		auto blob_data = (duckdb::const_data_ptr_t)apd.param_value_ptr + (val_idx * ipd.col_size);
