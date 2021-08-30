@@ -84,6 +84,7 @@ struct StrfTimeFormat : public StrTimeFormat {
 	void FormatString(date_t date, dtime_t time, char *target);
 
 	static string Format(timestamp_t timestamp, const string &format);
+
 protected:
 	//! The variable-length specifiers. To determine total string size, these need to be checked.
 	vector<StrTimeSpecifier> var_length_specifiers;
