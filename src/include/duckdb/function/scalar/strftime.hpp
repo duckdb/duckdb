@@ -58,7 +58,7 @@ public:
 	virtual ~StrTimeFormat() {
 	}
 
-	static string ParseFormatSpecifier(string format_string, StrTimeFormat &format);
+	static string ParseFormatSpecifier(const string &format_string, StrTimeFormat &format);
 
 protected:
 	//! The format specifiers
@@ -71,6 +71,8 @@ protected:
 	idx_t constant_size;
 	//! The max numeric width of the specifier (if it is parsed as a number), or -1 if it is not a number
 	vector<int> numeric_width;
+
+protected:
 	void AddLiteral(string literal);
 	virtual void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier);
 };
@@ -81,6 +83,7 @@ struct StrfTimeFormat : public StrTimeFormat {
 	void FormatString(date_t date, int32_t data[7], char *target);
 	void FormatString(date_t date, dtime_t time, char *target);
 
+	static string Format(timestamp_t timestamp, const string &format);
 protected:
 	//! The variable-length specifiers. To determine total string size, these need to be checked.
 	vector<StrTimeSpecifier> var_length_specifiers;
@@ -88,6 +91,7 @@ protected:
 	//! generate)
 	vector<bool> is_date_specifier;
 
+protected:
 	void AddFormatSpecifier(string preceding_literal, StrTimeSpecifier specifier) override;
 	static idx_t GetSpecifierLength(StrTimeSpecifier specifier, date_t date, dtime_t time);
 	char *WriteString(char *target, const string_t &str);
