@@ -20,7 +20,7 @@ unique_ptr<BoundTableRef> Binder::Bind(SubqueryRef &ref, CommonTableExpressionIn
 		alias = ref.alias;
 	}
 	auto result = make_unique<BoundSubqueryRef>(move(binder), move(subquery));
-	bind_context.AddSubquery(bind_index, move(alias), ref, *result->subquery);
+	bind_context.AddSubquery(bind_index, alias, ref, *result->subquery);
 	MoveCorrelatedExpressions(*result->binder);
 	return move(result);
 }
