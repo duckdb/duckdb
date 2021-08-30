@@ -54,6 +54,7 @@ struct CorrelatedColumnInfo {
 */
 class Binder : public std::enable_shared_from_this<Binder> {
 	friend class ExpressionBinder;
+	friend class SelectBinder;
 	friend class RecursiveSubqueryPlanner;
 
 public:

@@ -276,7 +276,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
-		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.BoundColumns()) {
+		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
 			}
@@ -306,8 +306,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
 			throw BinderException("Aggregates cannot be present in a Project relation!");
 		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {
-			if (select_binder.BoundColumns()) {
-				throw BinderException("column must appear in the GROUP BY clause or be used in an aggregate function");
+			if (select_binder.HasBoundColumns()) {
+				auto &bound_columns = select_binder.GetBoundColumns();
+				throw BinderException(FormatError(bound_columns[0].query_location, "column \"%s\" must appear in the GROUP BY clause or be used in an aggregate function", bound_columns[0].name));
 			}
 		}
 	}
