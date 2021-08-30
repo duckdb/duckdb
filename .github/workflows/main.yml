@@ -678,7 +678,7 @@ jobs:
           build/coverage/test/unittest
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"
-          python3 scripts/run_tests_one_by_one.py build/coverage/test/unittest "[coverage]"
+          build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[detailed_profiler]"
           build/coverage/test/unittest "[tpch]"
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
