@@ -19,7 +19,6 @@ class Command(object):
 
     def run(self, timeout):
         def target():
-            print(self.cmd)
             self.process = subprocess.Popen(self.cmd)
             self.process.communicate()
 
@@ -36,6 +35,6 @@ class Command(object):
 for i in range(retries):
     print("Attempting to run command \"" + ' '.join(cmd) + '"')
     command = Command(cmd)
-    returncode = command.run(5)
+    returncode = command.run(timeout)
     if returncode == 0:
         break
