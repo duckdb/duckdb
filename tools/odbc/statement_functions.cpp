@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <codecvt>
+#include <locale>
 
 using std::string;
 
