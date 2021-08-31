@@ -125,6 +125,7 @@ SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
 		return SQL_BIGINT;
 	case LogicalTypeId::FLOAT:
 		return SQL_FLOAT;
+	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DOUBLE:
 		return SQL_DOUBLE;
 	case LogicalTypeId::DATE:
