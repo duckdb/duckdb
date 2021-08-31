@@ -69,6 +69,7 @@ void PhysicalOperator::Combine(ExecutionContext &context, GlobalSinkState &gstat
 }
 
 bool PhysicalOperator::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate) {
+	this->sink_state = move(gstate);
 	return true;
 }
 

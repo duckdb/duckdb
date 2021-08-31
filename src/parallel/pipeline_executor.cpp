@@ -54,15 +54,15 @@ void PipelineExecutor::Execute(DataChunk &result) {
 	if (context.client.interrupted) {
 		return;
 	}
-	result.Reset();
 
+	idx_t current_idx = 0;
 	while(true) {
-		idx_t current_idx = 0;
 		if (!in_process_operators.empty()) {
 			current_idx = in_process_operators.top();
 			in_process_operators.pop();
 		}
 		auto &current_chunk = current_idx >= intermediate_chunks.size() ? result : *intermediate_chunks[current_idx];
+		current_chunk.Reset();
 		if (current_idx == 0) {
 			pipeline.source->GetData(
 				context,
@@ -84,6 +84,7 @@ void PipelineExecutor::Execute(DataChunk &result) {
 			if (current_idx == 0) {
 				break;
 			} else {
+				current_idx = 0;
 				continue;
 			}
 		} else {

@@ -37,6 +37,10 @@ public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
+
+	bool IsSink() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

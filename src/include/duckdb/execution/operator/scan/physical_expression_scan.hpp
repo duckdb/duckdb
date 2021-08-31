@@ -36,6 +36,9 @@ public:
 
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
+	bool IsSink() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

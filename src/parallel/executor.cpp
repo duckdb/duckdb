@@ -112,14 +112,14 @@ void Executor::Reset() {
 }
 
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
+	D_ASSERT(current);
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
 		auto pipeline = make_shared<Pipeline>(*this, *producer);
 		pipeline->sink = op;
-		if (current) {
-			// the current is dependent on this pipeline to complete
-			current->AddDependency(pipeline);
-		}
+
+		// the current is dependent on this pipeline to complete
+		current->AddDependency(pipeline);
 		PhysicalOperator *pipeline_child;
 		switch (op->type) {
 		case PhysicalOperatorType::CREATE_TABLE_AS:
@@ -134,6 +134,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::RESERVOIR_SAMPLE:
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
+		case PhysicalOperatorType::EXPRESSION_SCAN:
 			// single operator:
 			// the operator becomes the data source of the current pipeline
 			current->source = op;
@@ -269,6 +270,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			if (op->children.size() != 1) {
 				throw InternalException("Operator not supported yet");
 			}
+			current->operators.push_back(op);
 			BuildPipelines(op->children[0].get(), current);
 		}
 	}
@@ -319,18 +321,6 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	root_executor->InitializeChunk(*chunk);
 	root_executor->Execute(*chunk);
 	return chunk;
-
-	ThreadContext thread(context);
-	ExecutionContext econtext(context, thread);
-
-	throw InternalException("FIXME: FetchChunk");
-	// auto chunk = make_unique<DataChunk>();
-	// // run the plan to get the next chunks
-	// physical_plan->InitializeChunk(*chunk);
-	// physical_plan->GetChunk(econtext, *chunk, physical_state.get());
-	// physical_plan->FinalizeOperatorState(*physical_state, econtext);
-	// context.profiler->Flush(thread.profiler);
-	// return chunk;
 }
 
 } // namespace duckdb

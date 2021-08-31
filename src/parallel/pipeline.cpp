@@ -114,6 +114,9 @@ void Pipeline::Schedule() {
 	D_ASSERT(finished_tasks == 0);
 	D_ASSERT(total_tasks == 0);
 	D_ASSERT(finished_dependencies == dependencies.size());
+	if (!sink) {
+		return;
+	}
 	if (!ScheduleParallel()) {
 		// could not parallelize this pipeline: push a sequential task instead
 		ScheduleSequentialTask();
