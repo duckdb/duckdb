@@ -92,7 +92,7 @@ TopNSortState::TopNSortState(TopNHeap &heap) : heap(heap), count(0), is_sorted(f
 
 void TopNSortState::Initialize() {
 	RowLayout layout;
-	layout.Initialize(heap.payload_types, false);
+	layout.Initialize(heap.payload_types);
 	auto &buffer_manager = BufferManager::GetBufferManager(heap.context);
 	global_state = make_unique<GlobalSortState>(buffer_manager, heap.orders, layout);
 	local_state = make_unique<LocalSortState>();

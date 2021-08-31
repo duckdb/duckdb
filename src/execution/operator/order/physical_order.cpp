@@ -44,7 +44,7 @@ public:
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
 	// Get the payload layout from the return types
 	RowLayout payload_layout;
-	payload_layout.Initialize(types, false);
+	payload_layout.Initialize(types);
 	auto state = make_unique<OrderGlobalState>(BufferManager::GetBufferManager(context), *this, payload_layout);
 	// Set external (can be force with the PRAGMA)
 	state->global_sort_state.external = context.force_external;

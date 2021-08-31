@@ -44,11 +44,11 @@ public:
 
 public:
 	//! Initializes the RowLayout with the specified types and aggregates to an empty RowLayout
-	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align = true);
+	void Initialize(vector<LogicalType> types_p, Aggregates aggregates_p);
 	//! Initializes the RowLayout with the specified types to an empty RowLayout
-	void Initialize(vector<LogicalType> types, bool align = true);
+	void Initialize(vector<LogicalType> types);
 	//! Initializes the RowLayout with the specified aggregates to an empty RowLayout
-	void Initialize(Aggregates aggregates_p, bool align = true);
+	void Initialize(Aggregates aggregates_p);
 	//! Returns the number of data columns
 	inline idx_t ColumnCount() const {
 		return types.size();

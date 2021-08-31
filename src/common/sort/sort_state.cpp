@@ -1,26 +1,35 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
 
 #include <numeric>
 
 namespace duckdb {
 
-static idx_t GetSortingColSize(const LogicalType &type) {
+idx_t GetNestedSortingColSize(idx_t &col_size, const LogicalType &type) {
 	auto physical_type = type.InternalType();
 	if (TypeIsConstantSize(physical_type)) {
-		return GetTypeIdSize(physical_type);
+		col_size += GetTypeIdSize(physical_type);
+		return 0;
 	} else {
 		switch (physical_type) {
-		case PhysicalType::VARCHAR:
-			// TODO: make use of statistics
-			return string_t::INLINE_LENGTH;
+		case PhysicalType::VARCHAR: {
+			// Nested strings are between 4 and 11 chars long for alignment
+			auto size_before_str = col_size;
+			col_size += 11;
+			col_size -= (col_size - 12) % 8;
+			return col_size - size_before_str;
+		}
 		case PhysicalType::LIST:
-			// Lists get another byte to denote the empty list
-			return 2 + GetSortingColSize(ListType::GetChildType(type));
+			// Lists get 2 bytes (null and empty list)
+			col_size += 2;
+			return GetNestedSortingColSize(col_size, ListType::GetChildType(type));
 		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
-			return 1 + GetSortingColSize(StructType::GetChildType(type, 0));
+			// Structs get 1 bytes (null)
+			col_size++;
+			return GetNestedSortingColSize(col_size, StructType::GetChildType(type, 0));
 		default:
 			throw NotImplementedException("Unable to order column with type %s", type.ToString());
 		}
@@ -41,8 +50,6 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 		auto physical_type = expr.return_type.InternalType();
 		all_constant = all_constant && TypeIsConstantSize(physical_type);
 		constant_size.push_back(TypeIsConstantSize(physical_type));
-		column_sizes.push_back(0);
-		auto &col_size = column_sizes.back();
 
 		if (order.stats) {
 			stats.push_back(order.stats.get());
@@ -52,18 +59,49 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 			has_null.push_back(true);
 		}
 
-		col_size += has_null.back() ? 1 : 0;
-		if (TypeIsConstantSize(physical_type)) {
-			col_size += GetTypeIdSize(physical_type);
+		idx_t col_size = has_null.back() ? 1 : 0;
+		prefix_lengths.push_back(0);
+		if (!TypeIsConstantSize(physical_type) && physical_type != PhysicalType::STRING) {
+			prefix_lengths.back() = GetNestedSortingColSize(col_size, expr.return_type);
+			all_constant = false;
+		} else if (physical_type == PhysicalType::STRING) {
+			idx_t size_before = col_size;
+			if (stats.back()) {
+				auto &str_stats = (StringStatistics &)*stats.back();
+				col_size += str_stats.max_string_length;
+				if (col_size + str_stats.max_string_length > 12) {
+					col_size = 12;
+					constant_size.push_back(false);
+				} else {
+					col_size += str_stats.max_string_length;
+					constant_size.back() = true;
+				}
+			} else {
+				col_size = 12;
+			}
+			prefix_lengths.back() = col_size - size_before;
 		} else {
-			col_size += GetSortingColSize(expr.return_type);
+			col_size += GetTypeIdSize(physical_type);
+		}
+
+		if (!constant_size.back()) {
 			sorting_to_blob_col[i] = blob_layout_types.size();
 			blob_layout_types.push_back(expr.return_type);
 		}
+
 		comparison_size += col_size;
+		column_sizes.push_back(col_size);
 	}
-	entry_size = comparison_size + sizeof(idx_t);
-	blob_layout.Initialize(blob_layout_types, false);
+	entry_size = comparison_size + sizeof(uint32_t);
+
+	// 8-byte alignment
+	if (entry_size % 8 != 0) {
+		if (all_constant) {
+			entry_size = AlignValue(entry_size);
+		}
+	}
+
+	blob_layout.Initialize(blob_layout_types);
 }
 
 LocalSortState::LocalSortState() : initialized(false) {
@@ -105,9 +143,8 @@ void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
 		bool has_null = sort_layout->has_null[sort_col];
 		bool nulls_first = sort_layout->order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
 		bool desc = sort_layout->order_types[sort_col] == OrderType::DESCENDING;
-		// TODO: use actual string statistics
 		RowOperations::RadixScatter(sort.data[sort_col], sort.size(), sel_ptr, sort.size(), data_pointers, desc,
-		                            has_null, nulls_first, string_t::INLINE_LENGTH,
+		                            has_null, nulls_first, sort_layout->prefix_lengths[sort_col],
 		                            sort_layout->column_sizes[sort_col]);
 	}
 
@@ -203,7 +240,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	const idx_t row_width = sd.layout.GetRowWidth();
 	const idx_t sorting_entry_size = gstate.sort_layout.entry_size;
 	for (idx_t i = 0; i < count; i++) {
-		idx_t index = Load<idx_t>(sorting_ptr);
+		auto index = Load<uint32_t>(sorting_ptr);
 		memcpy(ordered_data_ptr, unordered_data_ptr + index * row_width, row_width);
 		ordered_data_ptr += row_width;
 		sorting_ptr += sorting_entry_size;
@@ -229,7 +266,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		const idx_t heap_pointer_offset = sd.layout.GetHeapPointerOffset();
 		for (idx_t i = 0; i < count; i++) {
 			auto heap_row_ptr = Load<data_ptr_t>(ordered_data_ptr + heap_pointer_offset);
-			auto heap_row_size = Load<idx_t>(heap_row_ptr);
+			auto heap_row_size = Load<uint32_t>(heap_row_ptr);
 			memcpy(ordered_heap_ptr, heap_row_ptr, heap_row_size);
 			ordered_heap_ptr += heap_row_size;
 			ordered_data_ptr += row_width;

@@ -19,7 +19,7 @@ struct LocalSortState;
 
 struct SortLayout {
 public:
-	SortLayout(const vector<BoundOrderByNode> &orders);
+	explicit SortLayout(const vector<BoundOrderByNode> &orders);
 
 public:
 	idx_t column_count;
@@ -30,6 +30,7 @@ public:
 	bool all_constant;
 	vector<bool> constant_size;
 	vector<idx_t> column_sizes;
+	vector<idx_t> prefix_lengths;
 	vector<BaseStatistics *> stats;
 	vector<bool> has_null;
 
