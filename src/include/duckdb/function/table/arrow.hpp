@@ -15,6 +15,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/thread.hpp"
 #include <map>
+#include <condition_variable>
 
 namespace duckdb {
 //===--------------------------------------------------------------------===//
