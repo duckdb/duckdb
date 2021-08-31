@@ -39,6 +39,7 @@ void DataChunk::Initialize(const vector<LogicalType> &types) {
 	for (idx_t i = 0; i < types.size(); i++) {
 		VectorCache cache(types[i]);
 		data.emplace_back(cache);
+		// move 是完美转发吗？
 		vector_caches.push_back(move(cache));
 	}
 }

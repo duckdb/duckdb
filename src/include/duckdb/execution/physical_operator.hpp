@@ -93,6 +93,7 @@ public:
 
 	//! Create a new empty instance of the operator state
 	virtual unique_ptr<PhysicalOperatorState> GetOperatorState() {
+		// unique_ptr.get()?
 		return make_unique<PhysicalOperatorState>(*this, children.size() == 0 ? nullptr : children[0].get());
 	}
 
