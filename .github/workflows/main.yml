@@ -678,7 +678,7 @@ jobs:
           build/coverage/test/unittest
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"
-          build/coverage/test/unittest "[coverage]"
+          python3 scripts/try_timeout.py --timeout=1200 --retry=3 build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[detailed_profiler]"
           build/coverage/test/unittest "[tpch]"
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
