@@ -190,7 +190,7 @@ void HTTPFileHandle::IntializeMetadata() {
 	auto &hfs = (HTTPFileSystem &)file_system;
 	auto res = hfs.Request(*this, path, "HEAD");
 	if (res->code != 200) {
-		throw std::runtime_error("Unable to connect " + res->error);
+		throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + res->error);
 	}
 	length = std::atoll(res->headers["Content-Length"].c_str());
 
@@ -201,7 +201,7 @@ void HTTPFileHandle::IntializeMetadata() {
 
 ResponseWrapper::ResponseWrapper(httplib::Response &res) {
 	code = res.status;
-	error = res.body;
+	error = res.reason;
 	for (auto &h : res.headers) {
 		headers[h.first] = h.second;
 	}
