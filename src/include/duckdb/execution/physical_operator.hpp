@@ -43,6 +43,10 @@ class GlobalSourceState {
 public:
 	virtual ~GlobalSourceState() {
 	}
+
+	virtual idx_t MaxThreads() {
+		return 1;
+	}
 };
 
 class LocalSourceState {
@@ -90,12 +94,18 @@ public:
 	virtual unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const;
 	virtual bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
 
+	virtual bool ParallelOperator() const {
+		return false;
+	}
 public:
 	// Source interface
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const;
 
+	virtual bool ParallelSource() const {
+		return false;
+	}
 public:
 	// Sink interface
 
@@ -115,6 +125,10 @@ public:
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
 
 	virtual bool IsSink() const {
+		return false;
+	}
+
+	virtual bool ParallelSink() const {
 		return false;
 	}
 };

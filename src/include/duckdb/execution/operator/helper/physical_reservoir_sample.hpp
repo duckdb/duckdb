@@ -33,6 +33,10 @@ public:
 	          DataChunk &input) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
+	bool ParallelSink() const override {
+		return true;
+	}
+
 	string ParamsToString() const override;
 };
 

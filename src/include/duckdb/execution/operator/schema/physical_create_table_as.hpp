@@ -34,5 +34,10 @@ public:
 
 	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
+
+	bool ParallelSink() const override {
+		return true;
+	}
+
 };
 } // namespace duckdb

@@ -94,7 +94,33 @@ void Pipeline::ScheduleSequentialTask() {
 	scheduler.ScheduleTask(*executor.producer, move(task));
 }
 
-bool Pipeline::LaunchScanTasks(PhysicalOperator *op, idx_t max_threads, unique_ptr<ParallelState> pstate) {
+bool Pipeline::ScheduleParallel() {
+	if (!sink->ParallelSink()) {
+		return false;
+	}
+	if (!source->ParallelSource()) {
+		return false;
+	}
+	for(auto &op : operators) {
+		if (!op->ParallelOperator()) {
+			return false;
+		}
+	}
+	idx_t max_threads = source_state->MaxThreads();
+	return LaunchScanTasks(max_threads);
+}
+
+void Pipeline::Schedule() {
+	D_ASSERT(finished_tasks == 0);
+	D_ASSERT(total_tasks == 0);
+	D_ASSERT(finished_dependencies == dependencies.size());
+	if (!ScheduleParallel()) {
+		// could not parallelize this pipeline: push a sequential task instead
+		ScheduleSequentialTask();
+	}
+}
+
+bool Pipeline::LaunchScanTasks(idx_t max_threads) {
 	// split the scan up into parts and schedule the parts
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
 	if (max_threads > executor.context.db->NumberOfThreads()) {
@@ -105,63 +131,13 @@ bool Pipeline::LaunchScanTasks(PhysicalOperator *op, idx_t max_threads, unique_p
 		return false;
 	}
 
-	this->parallel_node = op;
-	this->parallel_state = move(pstate);
-
 	// launch a task for every thread
 	this->total_tasks = max_threads;
 	for (idx_t i = 0; i < max_threads; i++) {
 		auto task = make_unique<PipelineTask>(shared_from_this());
 		scheduler.ScheduleTask(*executor.producer, move(task));
 	}
-
 	return true;
-}
-
-bool Pipeline::ScheduleOperator(PhysicalOperator *op) {
-	switch (op->type) {
-	case PhysicalOperatorType::UNNEST:
-	case PhysicalOperatorType::FILTER:
-	case PhysicalOperatorType::PROJECTION:
-	case PhysicalOperatorType::CROSS_PRODUCT:
-	case PhysicalOperatorType::STREAMING_SAMPLE:
-	case PhysicalOperatorType::INOUT_FUNCTION:
-		// filter, projection or hash probe: continue in children
-		return ScheduleOperator(op->children[0].get());
-	case PhysicalOperatorType::HASH_JOIN: {
-		// hash join; for now we can't safely parallelize right or full outer join probes
-		auto &join = (PhysicalHashJoin &)*op;
-		if (IsRightOuterJoin(join.join_type)) {
-			return false;
-		}
-		return ScheduleOperator(op->children[0].get());
-	}
-	case PhysicalOperatorType::TABLE_SCAN: {
-		auto &get = (PhysicalTableScan &)*op;
-		if (!get.function.max_threads) {
-			// table function cannot be parallelized
-			return false;
-		}
-		D_ASSERT(get.function.init_parallel_state);
-		D_ASSERT(get.function.parallel_state_next);
-		idx_t max_threads = get.function.max_threads(executor.context, get.bind_data.get());
-		auto pstate = get.function.init_parallel_state(executor.context, get.bind_data.get());
-		return LaunchScanTasks(op, max_threads, move(pstate));
-	}
-	case PhysicalOperatorType::WINDOW: {
-		auto &win = (PhysicalWindow &)*op;
-		idx_t max_threads = win.MaxThreads(executor.context);
-		auto pstate = win.GetParallelState();
-		return LaunchScanTasks(op, max_threads, move(pstate));
-	}
-	case PhysicalOperatorType::HASH_GROUP_BY: {
-		// FIXME: parallelize scan of GROUP_BY HT
-		return false;
-	}
-	default:
-		// unknown operator: skip parallel task scheduling
-		return false;
-	}
 }
 
 void Pipeline::ClearParents() {
@@ -196,73 +172,6 @@ void Pipeline::Reset() {
 void Pipeline::Ready() {
 	Reset();
 	std::reverse(operators.begin(), operators.end());
-}
-
-void Pipeline::Schedule() {
-	D_ASSERT(finished_tasks == 0);
-	D_ASSERT(total_tasks == 0);
-	D_ASSERT(finished_dependencies == dependencies.size());
-	// check if we can parallelize this task based on the sink
-	switch (sink->type) {
-	case PhysicalOperatorType::SIMPLE_AGGREGATE: {
-		auto &simple_aggregate = (PhysicalSimpleAggregate &)*sink;
-		// simple aggregate: check if we can parallelize it
-		if (!simple_aggregate.all_combinable) {
-			// not all aggregates are parallelizable: switch to sequential mode
-			break;
-		}
-		if (ScheduleOperator(sink->children[0].get())) {
-			// all parallel tasks have been scheduled: return
-			return;
-		}
-		break;
-	}
-	case PhysicalOperatorType::TOP_N:
-	case PhysicalOperatorType::CREATE_TABLE_AS:
-	case PhysicalOperatorType::ORDER_BY:
-	case PhysicalOperatorType::RESERVOIR_SAMPLE:
-	case PhysicalOperatorType::PERFECT_HASH_GROUP_BY: {
-		// perfect hash aggregate can always be parallelized
-		if (ScheduleOperator(sink->children[0].get())) {
-			// all parallel tasks have been scheduled: return
-			return;
-		}
-		break;
-	}
-	case PhysicalOperatorType::HASH_GROUP_BY: {
-		auto &hash_aggr = (PhysicalHashAggregate &)*sink;
-		if (!hash_aggr.all_combinable) {
-			// not all aggregates are parallelizable: switch to sequential mode
-			break;
-		}
-		if (ScheduleOperator(sink->children[0].get())) {
-			// all parallel tasks have been scheduled: return
-			return;
-		}
-		break;
-	}
-	case PhysicalOperatorType::CROSS_PRODUCT:
-	case PhysicalOperatorType::HASH_JOIN: {
-		// schedule build side of the join
-		if (ScheduleOperator(sink->children[1].get())) {
-			// all parallel tasks have been scheduled: return
-			return;
-		}
-		break;
-	}
-	case PhysicalOperatorType::WINDOW: {
-		// schedule child op
-		if (ScheduleOperator(sink->children[0].get())) {
-			// all parallel tasks have been scheduled: return
-			return;
-		}
-		break;
-	}
-	default:
-		break;
-	}
-	// could not parallelize this pipeline: push a sequential task instead
-	ScheduleSequentialTask();
 }
 
 void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {

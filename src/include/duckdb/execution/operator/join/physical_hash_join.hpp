@@ -37,6 +37,14 @@ public:
 	bool can_cache;
 
 public:
+	bool ParallelOperator() const override {
+		// hash join; FIXME: for now we can't safely parallelize right or full outer join probes
+		if (IsRightOuterJoin(join_type)) {
+			return false;
+		}
+		return true;
+	}
+
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
@@ -45,11 +53,9 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate) override;
 
-	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
-	// unique_ptr<OperatorState> GetOperatorState() override;
-
-	// void FinalizeOperatorState(OperatorState &state, ExecutionContext &context) override;
-
+	bool ParallelSink() const override {
+		return true;
+	}
 private:
 	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, OperatorState *state_p) const;
 };

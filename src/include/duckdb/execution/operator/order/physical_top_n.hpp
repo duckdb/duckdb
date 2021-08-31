@@ -38,6 +38,10 @@ public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
+	bool ParallelSink() const override {
+		return true;
+	}
+
 	string ParamsToString() const override;
 
 private:

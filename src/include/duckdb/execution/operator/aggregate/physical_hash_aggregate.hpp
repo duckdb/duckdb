@@ -70,6 +70,9 @@ public:
 		return true;
 	}
 
+	bool ParallelSink() const override {
+		return all_combinable;
+	}
 public:
 	string ParamsToString() const override;
 

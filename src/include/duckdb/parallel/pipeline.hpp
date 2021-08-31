@@ -95,11 +95,6 @@ private:
 	//! executing)
 	atomic<idx_t> finished_dependencies;
 
-	//! The parallel operator (if any)
-	PhysicalOperator *parallel_node;
-	//! The parallel state (if any)
-	unique_ptr<ParallelState> parallel_state;
-
 	//! Whether or not the pipeline is finished executing
 	bool finished;
 	//! The recursive CTE node that this pipeline belongs to, and may be executed multiple times
@@ -108,8 +103,9 @@ private:
 private:
 	bool GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage);
 	void ScheduleSequentialTask();
-	bool LaunchScanTasks(PhysicalOperator *op, idx_t max_threads, unique_ptr<ParallelState> parallel_state);
-	bool ScheduleOperator(PhysicalOperator *op);
+	bool LaunchScanTasks(idx_t max_threads);
+
+	bool ScheduleParallel();
 };
 
 } // namespace duckdb

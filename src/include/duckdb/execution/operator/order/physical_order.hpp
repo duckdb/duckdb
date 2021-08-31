@@ -39,6 +39,10 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const override;
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate_p) override;
 
+	bool ParallelSink() const override {
+		return true;
+	}
+
 	string ParamsToString() const override;
 
 	//! Schedules tasks to merge the data during the Finalize phase

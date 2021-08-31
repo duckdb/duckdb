@@ -24,8 +24,9 @@ public:
 	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
 
-	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
-	// unique_ptr<OperatorState> GetOperatorState() override;
+	bool ParallelSink() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

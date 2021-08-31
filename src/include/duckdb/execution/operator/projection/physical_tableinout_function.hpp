@@ -26,6 +26,10 @@ public:
 // public:
 // 	unique_ptr<OperatorState> GetOperatorState() override;
 
+	bool ParallelOperator() const override {
+		return true;
+	}
+
 private:
 	//! The table function
 	TableFunction function;

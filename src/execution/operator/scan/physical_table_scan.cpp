@@ -22,12 +22,28 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
 class TableScanGlobalState : public GlobalSourceState {
 public:
 	TableScanGlobalState(ClientContext &context, const PhysicalTableScan &op) {
+		if (!op.function.max_threads || !op.function.init_parallel_state) {
+			// table function cannot be parallelized
+			return;
+		}
+		// table function can be parallelized
+		// check how many threads we can have
+		max_threads = op.function.max_threads(context, op.bind_data.get());
+		if (max_threads <= 1) {
+			return;
+		}
 		if (op.function.init_parallel_state) {
 			parallel_state = op.function.init_parallel_state(context, op.bind_data.get());
 		}
 	}
 
+	idx_t max_threads;
 	unique_ptr<ParallelState> parallel_state;
+
+	idx_t MaxThreads() override{
+		return max_threads;
+	}
+
 };
 
 class TableScanLocalState : public LocalSourceState {

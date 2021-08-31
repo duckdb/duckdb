@@ -29,6 +29,9 @@ public:
 	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
 
+	bool ParallelSource() const override {
+		return true;
+	}
 public:
 	// Sink interface
 	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -41,6 +44,10 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	bool IsSink() const override {
+		return true;
+	}
+
+	bool ParallelSink() const override {
 		return true;
 	}
 

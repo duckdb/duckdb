@@ -50,6 +50,10 @@ public:
 	bool IsSink() const override {
 		return true;
 	}
+
+	bool ParallelSink() const override {
+		return true;
+	}
 public:
 	//! The group types
 	vector<LogicalType> group_types;
