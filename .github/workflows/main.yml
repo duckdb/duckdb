@@ -678,7 +678,7 @@ jobs:
           build/coverage/test/unittest
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"
-          build/coverage/test/unittest "[coverage]"
+          python3 scripts/try_timeout.py --timeout=1200 --retry=3 build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[detailed_profiler]"
           build/coverage/test/unittest "[tpch]"
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
@@ -871,8 +871,9 @@ jobs:
         python-version: '3.7'
 
     - name: Dependencies
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev
-
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3 python3-pyodbc python3-pip
+        pip3 install pyodbc
 
     - name: Install nanodbc
       run: |
@@ -898,6 +899,9 @@ jobs:
 
     - name: Test R ODBC
       run: R -f tools/odbc/test/rodbc.R
+
+    - name: Test Python ODBC
+      run: ./tools/odbc/test/run_pyodbc_tests.sh
 
 
   linux-python3:
