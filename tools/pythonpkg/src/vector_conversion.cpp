@@ -313,6 +313,23 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 	if (py::len(df_columns) == 0 || py::len(df_types) == 0 || py::len(df_columns) != py::len(df_types)) {
 		throw std::runtime_error("Need a DataFrame with at least one column");
 	}
+
+	// check if names in pandas dataframe are unique
+	unordered_map<string, idx_t> pandas_column_names_map;
+	py::array column_attributes = df.attr("columns").attr("values");
+	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
+		pandas_column_names_map[py::str(df_columns[col_idx])]++;
+		if (pandas_column_names_map[py::str(df_columns[col_idx])] > 1) {
+			// If the column name is repeated we start adding _x where x is the repetition number
+			string column_name = py::str(df_columns[col_idx]);
+			column_name += "_" + to_string(pandas_column_names_map[py::str(df_columns[col_idx])] - 1);
+			names.emplace_back(py::str(column_name));
+			column_attributes[py::cast(col_idx)] = py::str(column_name);
+		} else {
+			names.emplace_back(py::str(df_columns[col_idx]));
+		}
+	}
+
 	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
 		LogicalType duckdb_col_type;
 		PandasColumnBindData bind_data;
@@ -345,8 +362,6 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 		}
 		D_ASSERT(py::hasattr(bind_data.numpy_col, "strides"));
 		bind_data.numpy_stride = bind_data.numpy_col.attr("strides").attr("__getitem__")(0).cast<idx_t>();
-
-		names.emplace_back(py::str(df_columns[col_idx]));
 		return_types.push_back(duckdb_col_type);
 		bind_columns.push_back(move(bind_data));
 	}
