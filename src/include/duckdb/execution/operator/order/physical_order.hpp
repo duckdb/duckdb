@@ -39,6 +39,9 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const override;
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate_p) override;
 
+	bool IsSink() const override {
+		return true;
+	}
 	bool ParallelSink() const override {
 		return true;
 	}

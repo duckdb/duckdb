@@ -44,6 +44,7 @@ bool PhysicalFilter::Execute(ExecutionContext &context, DataChunk &input, DataCh
 	idx_t result_count = state.executor.SelectExpression(input, state.sel);
 	if (result_count == input.size()) {
 		// nothing was filtered: skip adding any selection vectors
+		chunk.Reference(input);
 		return false;
 	}
 	chunk.Slice(input, state.sel, result_count);

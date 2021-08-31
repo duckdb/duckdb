@@ -33,6 +33,7 @@ void PipelineExecutor::Execute() {
 	auto &executor = pipeline.executor;
 	try {
 		while(true) {
+			final_chunk.Reset();
 			Execute(final_chunk);
 			if (final_chunk.size() == 0) {
 				pipeline.sink->Combine(context, *pipeline.sink_state, *local_sink_state);
