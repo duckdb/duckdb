@@ -2,9 +2,9 @@
 
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/parallel/parallel_state.hpp"
 
 #include <utility>
 
@@ -18,7 +18,6 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
       function(move(function_p)), bind_data(move(bind_data_p)), column_ids(move(column_ids_p)), names(move(names_p)),
       table_filters(move(table_filters_p)) {
 }
-
 
 class TableScanGlobalState : public GlobalSourceState {
 public:
@@ -37,8 +36,8 @@ public:
 		TableFilterCollection filters(op.table_filters.get());
 		if (gstate.parallel_state) {
 			// parallel scan init
-			operator_data =
-				op.function.parallel_init(context.client, op.bind_data.get(), gstate.parallel_state.get(), op.column_ids, &filters);
+			operator_data = op.function.parallel_init(context.client, op.bind_data.get(), gstate.parallel_state.get(),
+			                                          op.column_ids, &filters);
 		} else {
 			// sequential scan init
 			operator_data = op.function.init(context.client, op.bind_data.get(), op.column_ids, &filters);
@@ -48,19 +47,20 @@ public:
 	unique_ptr<FunctionOperatorData> operator_data;
 };
 
-
-unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const {
-	return make_unique<TableScanLocalState>(context, (TableScanGlobalState &) gstate, *this);
+unique_ptr<LocalSourceState> PhysicalTableScan::GetLocalSourceState(ExecutionContext &context,
+                                                                    GlobalSourceState &gstate) const {
+	return make_unique<TableScanLocalState>(context, (TableScanGlobalState &)gstate, *this);
 }
 
 unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientContext &context) const {
 	return make_unique<TableScanGlobalState>(context, *this);
 }
 
-void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+void PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                LocalSourceState &lstate) const {
 	D_ASSERT(!column_ids.empty());
-	auto &gstate = (TableScanGlobalState &) gstate_p;
-	auto &state = (TableScanLocalState &) lstate;
+	auto &gstate = (TableScanGlobalState &)gstate_p;
+	auto &state = (TableScanLocalState &)lstate;
 
 	if (!gstate.parallel_state) {
 		// sequential scan

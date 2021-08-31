@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #endif
 
@@ -59,8 +58,7 @@ int main() {
 	// first set up some contexts
 	auto &client_context = *con.context;
 	ThreadContext thread_context(client_context);
-	TaskContext task_context;
-	ExecutionContext econtext(client_context, thread_context, task_context);
+	ExecutionContext econtext(client_context, thread_context);
 
 	// global state needs to be shared amongst all threads
 	// local_state is thread-local - every thread should have their own

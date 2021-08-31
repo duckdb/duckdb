@@ -1,7 +1,6 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"

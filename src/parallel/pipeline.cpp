@@ -3,7 +3,6 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/main/database.hpp"
@@ -14,27 +13,35 @@
 #include "duckdb/execution/operator/order/physical_order.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
+#include "duckdb/parallel/pipeline_executor.hpp"
+
+#include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
 
 class PipelineTask : public Task {
 public:
-	explicit PipelineTask(shared_ptr<Pipeline> pipeline_p) : pipeline(move(pipeline_p)) {
+	explicit PipelineTask(shared_ptr<Pipeline> pipeline_p)
+	    : pipeline(move(pipeline_p)), executor(pipeline->GetClientContext(), *pipeline) {
 	}
 
-	TaskContext task;
 	shared_ptr<Pipeline> pipeline;
+	PipelineExecutor executor;
 
 public:
 	void Execute() override {
-		pipeline->Execute(task);
+		executor.Execute();
 		pipeline->FinishTask();
 	}
 };
 
 Pipeline::Pipeline(Executor &executor_p, ProducerToken &token_p)
-    : executor(executor_p), token(token_p), finished_tasks(0), total_tasks(0), finished_dependencies(0),
-      finished(false), recursive_cte(nullptr) {
+    : executor(executor_p), token(token_p), finished_tasks(0), total_tasks(0), source(nullptr), sink(nullptr),
+      finished_dependencies(0), finished(false), recursive_cte(nullptr) {
+}
+
+ClientContext &Pipeline::GetClientContext() {
+	return executor.context;
 }
 
 bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage) {
@@ -50,68 +57,14 @@ bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &cu
 		current_percentage = -1;
 		return false;
 	}
-	default: {
-		vector<idx_t> progress;
-		vector<idx_t> cardinality;
-		double total_cardinality = 0;
-		current_percentage = 0;
-		for (auto &op_child : op->children) {
-			int child_percentage = 0;
-			if (!GetProgress(context, op_child.get(), child_percentage)) {
-				return false;
-			}
-			progress.push_back(child_percentage);
-			cardinality.push_back(op_child->estimated_cardinality);
-			total_cardinality += op_child->estimated_cardinality;
-		}
-		for (size_t i = 0; i < progress.size(); i++) {
-			current_percentage += progress[i] * cardinality[i] / total_cardinality;
-		}
-		return true;
-	}
+	default:
+		return false;
 	}
 }
 
 bool Pipeline::GetProgress(int &current_percentage) {
 	auto &client = executor.context;
-	return GetProgress(client, child, current_percentage);
-}
-
-void Pipeline::Execute(TaskContext &task) {
-	auto &client = executor.context;
-	if (client.interrupted) {
-		return;
-	}
-	if (parallel_state) {
-		task.task_info[parallel_node] = parallel_state.get();
-	}
-
-	ThreadContext thread(client);
-	ExecutionContext context(client, thread, task);
-	try {
-		throw InternalException("FIXME: execute pipeline");
-		// auto state = child->GetOperatorState(client);
-		// auto lstate = sink->GetLocalSinkState(context);
-		// // incrementally process the pipeline
-		// DataChunk intermediate;
-		// child->InitializeChunk(intermediate);
-		// while (true) {
-		// 	child->GetChunk(context, intermediate, state.get());
-		// 	thread.profiler.StartOperator(sink);
-		// 	if (intermediate.size() == 0) {
-		// 		sink->Combine(context, *sink_state, *lstate);
-		// 		break;
-		// 	}
-		// 	sink->Sink(context, *sink_state, *lstate, intermediate);
-		// 	thread.profiler.EndOperator(nullptr);
-		// }
-		// child->FinalizeOperatorState(*state, context);
-	} catch (std::exception &ex) {
-		executor.PushError(ex.what());
-	} catch (...) { // LCOV_EXCL_START
-		executor.PushError("Unknown exception in pipeline!");
-	} // LCOV_EXCL_STOP
-	executor.Flush(thread);
+	return GetProgress(client, source, current_percentage);
 }
 
 void Pipeline::FinishTask() {
@@ -230,11 +183,19 @@ void Pipeline::ClearParents() {
 	dependencies.clear();
 }
 
-void Pipeline::Reset(ClientContext &context) {
-	sink_state = sink->GetGlobalSinkState(context);
+void Pipeline::Reset() {
+	if (sink) {
+		sink_state = sink->GetGlobalSinkState(GetClientContext());
+	}
+	source_state = source->GetGlobalSourceState(GetClientContext());
 	finished_tasks = 0;
 	total_tasks = 0;
 	finished = false;
+}
+
+void Pipeline::Ready() {
+	Reset();
+	std::reverse(operators.begin(), operators.end());
 }
 
 void Pipeline::Schedule() {
@@ -338,11 +299,10 @@ void Pipeline::Finish() {
 
 string Pipeline::ToString() const {
 	string str = PhysicalOperatorToString(sink->type);
-	auto node = this->child;
-	while (node) {
-		str = PhysicalOperatorToString(node->type) + " -> " + str;
-		node = node->children.empty() ? nullptr : node->children[0].get();
+	for (auto &op : operators) {
+		str = PhysicalOperatorToString(op->type) + " -> " + str;
 	}
+	str = PhysicalOperatorToString(source->type) + " -> " + str;
 	return str;
 }
 

@@ -17,11 +17,11 @@
 
 namespace duckdb {
 class Executor;
-class TaskContext;
 
 //! The Pipeline class represents an execution pipeline
 class Pipeline : public std::enable_shared_from_this<Pipeline> {
 	friend class Executor;
+	friend class PipelineExecutor;
 
 public:
 	Pipeline(Executor &execution_context, ProducerToken &token);
@@ -30,8 +30,7 @@ public:
 	ProducerToken &token;
 
 public:
-	//! Execute a task within the pipeline on a single thread
-	void Execute(TaskContext &task);
+	ClientContext &GetClientContext();
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
 	void CompleteDependency();
@@ -39,7 +38,8 @@ public:
 		return !dependencies.empty();
 	}
 
-	void Reset(ClientContext &context);
+	void Ready();
+	void Reset();
 	void Schedule();
 
 	//! Finish a single task of this pipeline
@@ -75,12 +75,18 @@ public:
 	atomic<idx_t> total_tasks;
 
 private:
-	//! The child from which to pull chunks
-	PhysicalOperator *child;
-	//! The global sink state
-	unique_ptr<GlobalSinkState> sink_state;
+	//! The source for data; this is e.g. a table scan or read from a parquet file
+	PhysicalOperator *source;
+	//! The chain of intermediate operators
+	vector<PhysicalOperator *> operators;
 	//! The sink (i.e. destination) for data; this is e.g. a hash table to-be-built
 	PhysicalOperator *sink;
+
+	//! The global source state
+	unique_ptr<GlobalSourceState> source_state;
+	//! The global sink state
+	unique_ptr<GlobalSinkState> sink_state;
+
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
 	unordered_map<Pipeline *, weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline

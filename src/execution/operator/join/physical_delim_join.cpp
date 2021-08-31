@@ -4,7 +4,6 @@
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/parallel/task_context.hpp"
 
 namespace duckdb {
 

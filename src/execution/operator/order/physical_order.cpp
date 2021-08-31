@@ -3,7 +3,6 @@
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
@@ -180,8 +179,9 @@ unique_ptr<GlobalSourceState> PhysicalOrder::GetGlobalSourceState(ClientContext 
 	return make_unique<PhysicalOrderOperatorState>();
 }
 
-void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (PhysicalOrderOperatorState &) gstate;
+void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                            LocalSourceState &lstate) const {
+	auto &state = (PhysicalOrderOperatorState &)gstate;
 
 	if (!state.scanner) {
 		// Initialize scanner (if not yet initialized)

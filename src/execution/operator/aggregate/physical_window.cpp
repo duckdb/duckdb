@@ -8,7 +8,6 @@
 #include "duckdb/common/windows_undefs.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/window_segment_tree.hpp"
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
@@ -21,12 +20,10 @@ namespace duckdb {
 
 using counts_t = std::vector<size_t>;
 
-
 // Per-thread read state
 class PhysicalWindowOperatorState : public LocalSourceState {
 public:
-	PhysicalWindowOperatorState()
-	    : parallel_state(nullptr), initialized(false) {
+	PhysicalWindowOperatorState() : parallel_state(nullptr), initialized(false) {
 	}
 
 	ParallelState *parallel_state;
@@ -1368,69 +1365,72 @@ unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &co
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const {
+unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
+                                                                 GlobalSourceState &gstate) const {
 	return make_unique<PhysicalWindowOperatorState>();
 }
 
-void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate_p) const {
-	auto &state = (PhysicalWindowOperatorState &) lstate_p;
-	auto &gstate = (WindowGlobalState &)*sink_state;
+void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                             LocalSourceState &lstate_p) const {
+	throw InternalException("FIXME: window scan!");
+	// auto &state = (PhysicalWindowOperatorState &) lstate_p;
+	// auto &gstate = (WindowGlobalState &)*sink_state;
 
-	if (!state.initialized) {
-		// initialize thread-local operator state
-		state.partitions = gstate.counts.size();
-		state.next_part = 0;
-		// record parallel state (if any)
-		state.parallel_state = nullptr;
-		auto &task = context.task;
-		// check if there is any parallel state to fetch
-		state.parallel_state = nullptr;
-		auto task_info = task.task_info.find(this);
-		if (task_info != task.task_info.end()) {
-			// parallel scan init
-			state.parallel_state = task_info->second;
-		}
-		state.buffer_manager = &BufferManager::GetBufferManager(context.client);
-		state.initialized = true;
-	}
+	// if (!state.initialized) {
+	// 	// initialize thread-local operator state
+	// 	state.partitions = gstate.counts.size();
+	// 	state.next_part = 0;
+	// 	// record parallel state (if any)
+	// 	state.parallel_state = nullptr;
+	// 	auto &task = context.task;
+	// 	// check if there is any parallel state to fetch
+	// 	state.parallel_state = nullptr;
+	// 	auto task_info = task.task_info.find(this);
+	// 	if (task_info != task.task_info.end()) {
+	// 		// parallel scan init
+	// 		state.parallel_state = task_info->second;
+	// 	}
+	// 	state.buffer_manager = &BufferManager::GetBufferManager(context.client);
+	// 	state.initialized = true;
+	// }
 
-	if (!state.parallel_state) {
-		// sequential scan
-		if (state.position >= state.chunks.Count()) {
-			auto hash_bin = state.next_part++;
-			for (; hash_bin < state.partitions; hash_bin = state.next_part++) {
-				if (gstate.counts[hash_bin] > 0) {
-					break;
-				}
-			}
-			GeneratePartition(state, gstate, hash_bin);
-		}
-		Scan(state, chunk);
-		if (chunk.size() != 0) {
-			return;
-		}
-	} else {
-		// parallel scan
-		auto &parallel_state = *reinterpret_cast<WindowParallelState *>(state.parallel_state);
-		do {
-			if (state.position >= state.chunks.Count()) {
-				auto hash_bin = parallel_state.next_part++;
-				for (; hash_bin < state.partitions; hash_bin = parallel_state.next_part++) {
-					if (gstate.counts[hash_bin] > 0) {
-						break;
-					}
-				}
-				GeneratePartition(state, gstate, hash_bin);
-			}
-			Scan(state, chunk);
-			if (chunk.size() != 0) {
-				return;
-			} else {
-				break;
-			}
-		} while (true);
-	}
-	D_ASSERT(chunk.size() == 0);
+	// if (!state.parallel_state) {
+	// 	// sequential scan
+	// 	if (state.position >= state.chunks.Count()) {
+	// 		auto hash_bin = state.next_part++;
+	// 		for (; hash_bin < state.partitions; hash_bin = state.next_part++) {
+	// 			if (gstate.counts[hash_bin] > 0) {
+	// 				break;
+	// 			}
+	// 		}
+	// 		GeneratePartition(state, gstate, hash_bin);
+	// 	}
+	// 	Scan(state, chunk);
+	// 	if (chunk.size() != 0) {
+	// 		return;
+	// 	}
+	// } else {
+	// 	// parallel scan
+	// 	auto &parallel_state = *reinterpret_cast<WindowParallelState *>(state.parallel_state);
+	// 	do {
+	// 		if (state.position >= state.chunks.Count()) {
+	// 			auto hash_bin = parallel_state.next_part++;
+	// 			for (; hash_bin < state.partitions; hash_bin = parallel_state.next_part++) {
+	// 				if (gstate.counts[hash_bin] > 0) {
+	// 					break;
+	// 				}
+	// 			}
+	// 			GeneratePartition(state, gstate, hash_bin);
+	// 		}
+	// 		Scan(state, chunk);
+	// 		if (chunk.size() != 0) {
+	// 			return;
+	// 		} else {
+	// 			break;
+	// 		}
+	// 	} while (true);
+	// }
+	// D_ASSERT(chunk.size() == 0);
 }
 
 string PhysicalWindow::ParamsToString() const {

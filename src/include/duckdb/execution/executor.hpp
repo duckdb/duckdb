@@ -19,6 +19,7 @@ namespace duckdb {
 class ClientContext;
 class DataChunk;
 class PhysicalOperator;
+class PipelineExecutor;
 class OperatorState;
 class ThreadContext;
 class Task;
@@ -37,7 +38,7 @@ public:
 
 public:
 	void Initialize(PhysicalOperator *physical_plan);
-	void BuildPipelines(PhysicalOperator *op, Pipeline *parent);
+	void BuildPipelines(PhysicalOperator *op, Pipeline *current);
 
 	void Reset();
 
@@ -61,6 +62,10 @@ private:
 	mutex executor_lock;
 	//! The pipelines of the current query
 	vector<shared_ptr<Pipeline>> pipelines;
+	//! The root pipeline of the query
+	shared_ptr<Pipeline> root_pipeline;
+	//! The pipeline executor for the root pipeline
+	unique_ptr<PipelineExecutor> root_executor;
 	//! The producer of this query
 	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
