@@ -33,37 +33,37 @@ const std::unordered_set<SQLUSMALLINT> ApiInfo::BASE_SUPPORTED_FUNCTIONS = {
 
 const std::unordered_set<SQLUSMALLINT> ApiInfo::ODBC3_EXTRA_SUPPORTED_FUNCTIONS = {};
 
-const std::vector<SQLSMALLINT> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {SQL_CHAR,
-                                                                    SQL_TINYINT,
-                                                                    SQL_SMALLINT,
-                                                                    SQL_INTEGER,
-                                                                    SQL_BIGINT,
-                                                                    SQL_DATE,
-                                                                    SQL_TYPE_DATE,
-                                                                    SQL_TIME,
-                                                                    SQL_TYPE_TIME,
-                                                                    SQL_TIMESTAMP,
-                                                                    SQL_TYPE_TIMESTAMP,
-                                                                    SQL_DECIMAL,
-                                                                    SQL_NUMERIC,
-                                                                    SQL_FLOAT,
-                                                                    SQL_DOUBLE,
-                                                                    SQL_VARCHAR,
-                                                                    SQL_BINARY,
-                                                                    SQL_VARBINARY,
-                                                                    SQL_INTERVAL_MONTH,
-                                                                    SQL_INTERVAL_YEAR,
-                                                                    SQL_INTERVAL_YEAR_TO_MONTH,
-                                                                    SQL_INTERVAL_DAY,
-                                                                    SQL_INTERVAL_HOUR,
-                                                                    SQL_INTERVAL_MINUTE,
-                                                                    SQL_INTERVAL_SECOND,
-                                                                    SQL_INTERVAL_DAY_TO_HOUR,
-                                                                    SQL_INTERVAL_DAY_TO_MINUTE,
-                                                                    SQL_INTERVAL_DAY_TO_SECOND,
-                                                                    SQL_INTERVAL_HOUR_TO_MINUTE,
-                                                                    SQL_INTERVAL_HOUR_TO_SECOND,
-                                                                    SQL_INTERVAL_MINUTE_TO_SECOND};
+const std::unordered_set<SQLSMALLINT> ApiInfo::ODBC_SUPPORTED_SQL_TYPES = {SQL_CHAR,
+                                                                           SQL_TINYINT,
+                                                                           SQL_SMALLINT,
+                                                                           SQL_INTEGER,
+                                                                           SQL_BIGINT,
+                                                                           SQL_DATE,
+                                                                           SQL_TYPE_DATE,
+                                                                           SQL_TIME,
+                                                                           SQL_TYPE_TIME,
+                                                                           SQL_TIMESTAMP,
+                                                                           SQL_TYPE_TIMESTAMP,
+                                                                           SQL_DECIMAL,
+                                                                           SQL_NUMERIC,
+                                                                           SQL_FLOAT,
+                                                                           SQL_DOUBLE,
+                                                                           SQL_VARCHAR,
+                                                                           SQL_BINARY,
+                                                                           SQL_VARBINARY,
+                                                                           SQL_INTERVAL_MONTH,
+                                                                           SQL_INTERVAL_YEAR,
+                                                                           SQL_INTERVAL_YEAR_TO_MONTH,
+                                                                           SQL_INTERVAL_DAY,
+                                                                           SQL_INTERVAL_HOUR,
+                                                                           SQL_INTERVAL_MINUTE,
+                                                                           SQL_INTERVAL_SECOND,
+                                                                           SQL_INTERVAL_DAY_TO_HOUR,
+                                                                           SQL_INTERVAL_DAY_TO_MINUTE,
+                                                                           SQL_INTERVAL_DAY_TO_SECOND,
+                                                                           SQL_INTERVAL_HOUR_TO_MINUTE,
+                                                                           SQL_INTERVAL_HOUR_TO_SECOND,
+                                                                           SQL_INTERVAL_MINUTE_TO_SECOND};
 
 void ApiInfo::SetFunctionSupported(SQLUSMALLINT *flags, int function_id) {
 	flags[function_id >> 4] |= (1 << (function_id & 0xF));
@@ -125,6 +125,7 @@ SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
 		return SQL_BIGINT;
 	case LogicalTypeId::FLOAT:
 		return SQL_FLOAT;
+	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DOUBLE:
 		return SQL_DOUBLE;
 	case LogicalTypeId::DATE:
@@ -145,10 +146,8 @@ SQLSMALLINT ApiInfo::FindRelatedSQLType(duckdb::LogicalTypeId type_id) {
 }
 
 SQLRETURN ApiInfo::CheckDataType(SQLSMALLINT data_type) {
-	for (idx_t i = 0; i < ODBC_SUPPORTED_SQL_TYPES.size(); ++i) {
-		if (ODBC_SUPPORTED_SQL_TYPES[i] == data_type) {
-			return SQL_SUCCESS;
-		}
+	if (ODBC_SUPPORTED_SQL_TYPES.find(data_type) != ODBC_SUPPORTED_SQL_TYPES.end()) {
+		return SQL_SUCCESS;
 	}
 	return SQL_ERROR;
 }

@@ -388,7 +388,20 @@ void StrfTimeFormat::FormatString(date_t date, dtime_t time, char *target) {
 	FormatString(date, data, target);
 }
 
-string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &format) {
+string StrfTimeFormat::Format(timestamp_t timestamp, const string &format_str) {
+	StrfTimeFormat format;
+	format.ParseFormatSpecifier(format_str, format);
+
+	auto date = Timestamp::GetDate(timestamp);
+	auto time = Timestamp::GetTime(timestamp);
+
+	auto len = format.GetLength(date, time);
+	auto result = unique_ptr<char[]>(new char[len]);
+	format.FormatString(date, time, result.get());
+	return string(result.get(), len);
+}
+
+string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeFormat &format) {
 	format.specifiers.clear();
 	format.literals.clear();
 	format.numeric_width.clear();
