@@ -22,7 +22,6 @@ jobs:
       CXX: ccache g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
-      REGRESSION_DESCRIPTION: BLA
 
     steps:
     - uses: actions/checkout@v2
@@ -43,7 +42,7 @@ jobs:
       with: 
         authToken: ${{secrets.GH_TOKEN}}
         description: ${{env.REGRESSION_DESCRIPTION}}
-        state: success
+        state: ${{env.REGRESSION_STATE}}
 #
 #  format-check:
 #    name: Format Check

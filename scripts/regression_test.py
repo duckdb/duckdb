@@ -70,10 +70,10 @@ def regression_test(threshold):
                 description += "Q"+ str(i+1) + " is faster ("+ str(current_time[i][0]) + "vs" + str(master_time[i][0]) + "). "
 
         if regression_status:
-            os.environ["REGRESSION_STATE"] = "success"
+            os.system("echo \"REGRESSION_STATE=success\" >> $GITHUB_ENV")
         else:
-            os.environ["REGRESSION_STATE"] = "failure"
+            os.system("echo \"REGRESSION_STATE=failure\" >> $GITHUB_ENV")
 
-        os.system("echo \"REGRESSION_DESCRIPTION=youAsWell\" >> $GITHUB_ENV")
+        os.system("echo \"REGRESSION_DESCRIPTION="+description"\" >> $GITHUB_ENV")
 
 regression_test(0.1)
