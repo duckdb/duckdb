@@ -99,6 +99,7 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 		if (all_constant) {
 			entry_size = AlignValue(entry_size);
 		}
+		// TODO: else - assign more bytes to strings instead of aligning
 	}
 
 	blob_layout.Initialize(blob_layout_types);
