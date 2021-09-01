@@ -37,11 +37,13 @@ jobs:
     - name: Test
       run: python scripts/regression_test.py
 
-    - uses: Sibz/github-status-action@v1.1.5
+    - name: github-status-action
+      uses: Sibz/github-status-action@v1.1.5
       with:
         authToken: ${{secrets.GH_TOKEN}}
         description: ${{env.REGRESSION_DESCRIPTION}}
         state: ${{env.REGRESSION_STATE}}
+        sha: ${{github.event.pull_request.head.sha || github.sha}}
 #  linux-debug:
 #    name: Linux Debug
 #    runs-on: ubuntu-20.04
