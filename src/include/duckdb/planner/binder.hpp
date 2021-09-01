@@ -122,6 +122,8 @@ public:
 	//! Add a correlated column to this binder (if it does not exist)
 	void AddCorrelatedColumn(const CorrelatedColumnInfo &info);
 
+	void AddUsingBindingSet(unique_ptr<UsingColumnSet> set);
+
 	string FormatError(ParsedExpression &expr_context, const string &message);
 	string FormatError(TableRef &ref_context, const string &message);
 

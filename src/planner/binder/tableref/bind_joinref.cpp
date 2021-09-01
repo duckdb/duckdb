@@ -156,7 +156,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			left_binder.bind_context.RemoveUsingBinding(column_name, left_using_binding);
 			right_binder.bind_context.RemoveUsingBinding(column_name, right_using_binding);
 			bind_context.AddUsingBinding(column_name, set.get());
-			bind_context.AddUsingBindingSet(move(set));
+			AddUsingBindingSet(move(set));
 		}
 		if (extra_conditions.empty()) {
 			// no matching bindings found in natural join: throw an exception
@@ -226,7 +226,7 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			if (left_column_name != right_column_name) {
 				bind_context.AddUsingBinding(right_column_name, set.get());
 			}
-			bind_context.AddUsingBindingSet(move(set));
+			AddUsingBindingSet(move(set));
 		}
 	}
 	bind_context.AddContext(move(left_binder.bind_context));
