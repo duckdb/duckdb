@@ -108,12 +108,10 @@ SQLRETURN SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT comp
 	return duckdb::WithConnection(handle, [&](duckdb::OdbcHandleDbc *dbc) {
 		switch (completion_type) {
 		case SQL_COMMIT:
-			if (dbc->stmt_handle) {
-				// it needs to materialize the result set because ODBC can still fetch after a commit
-				if (dbc->stmt_handle->MaterializeResult() != SQL_SUCCESS) {
-					// for some reason we couldn't materialize the result set
-					return SQL_ERROR;
-				}
+			// it needs to materialize the result set because ODBC can still fetch after a commit
+			if (dbc->MaterializeResult() != SQL_SUCCESS) {
+				// for some reason we couldn't materialize the result set
+				return SQL_ERROR;
 			}
 			if (dbc->conn->IsAutoCommit()) {
 				return SQL_SUCCESS;

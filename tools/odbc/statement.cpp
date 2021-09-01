@@ -4,6 +4,8 @@
 #include "statement_functions.hpp"
 #include "parameter_wrapper.hpp"
 
+using duckdb::LogicalTypeId;
+
 SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                          SQLINTEGER string_length) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
@@ -231,6 +233,20 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 				return SQL_ERROR;
 			}
 		}
+		case SQL_DESC_UNSIGNED: {
+			auto type = stmt->stmt->GetTypes()[col_idx];
+			switch (type.id()) {
+			case LogicalTypeId::UTINYINT:
+			case LogicalTypeId::USMALLINT:
+			case LogicalTypeId::UINTEGER:
+			case LogicalTypeId::UBIGINT:
+				*numeric_attribute_ptr = SQL_TRUE;
+				break;
+			default:
+				*numeric_attribute_ptr = SQL_FALSE;
+			}
+			return SQL_SUCCESS;
+		}
 		default:
 			stmt->error_messages.emplace_back("Unsupported attribute type.");
 			return SQL_ERROR;
@@ -253,14 +269,7 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
-			stmt->open = false;
-			stmt->res.reset();
-			stmt->odbc_fetcher->ClearChunks();
-			// stmt->stmt.reset(); // the statment can be reuse in prepared statement
-			stmt->bound_cols.clear();
-			// stmt->param_wrapper->Clear(); // the parameter values can be reused after
-			stmt->param_wrapper->Reset();
-			stmt->error_messages.clear();
+			stmt->Close();
 			return SQL_SUCCESS;
 		}
 		return SQL_ERROR;
