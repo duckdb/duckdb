@@ -46,15 +46,15 @@ using duckdb_parquet::format::SchemaElement;
 using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftProtocol(FileHandle &file_handle) {
-	shared_ptr<ThriftFileTransport> trans(new ThriftFileTransport(file_handle));
-	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(trans);
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftProtocol(Allocator &allocator, FileHandle &file_handle) {
+	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle);
+	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(move(transport));
 }
 
 static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-	auto proto = CreateThriftProtocol(file_handle);
+	auto proto = CreateThriftProtocol(allocator, file_handle);
 	auto &transport = ((ThriftFileTransport &)*proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
@@ -78,6 +78,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	}
 	auto metadata_pos = file_size - (footer_len + 8);
 	transport.SetLocation(metadata_pos);
+	transport.Prefetch(metadata_pos, footer_len);
 
 	auto metadata = make_unique<FileMetaData>();
 	metadata->read(proto.get());
@@ -386,7 +387,7 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.filters = filters;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	state.file_handle = file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ);
-	state.thrift_file_proto = CreateThriftProtocol(*state.file_handle);
+	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle);
 	state.root_reader = CreateReader(*this, GetFileMetadata());
 
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
