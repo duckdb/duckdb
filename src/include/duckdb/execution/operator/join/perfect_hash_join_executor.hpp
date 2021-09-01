@@ -12,7 +12,6 @@
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/join_hashtable.hpp"
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
 

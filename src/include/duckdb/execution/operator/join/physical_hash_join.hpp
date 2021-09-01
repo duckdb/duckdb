@@ -18,6 +18,36 @@
 
 namespace duckdb {
 
+class PhysicalHashJoinState : public PhysicalOperatorState {
+public:
+	PhysicalHashJoinState(PhysicalOperator &op, PhysicalOperator *left, PhysicalOperator *right,
+	                      vector<JoinCondition> &conditions)
+	    : PhysicalOperatorState(op, left) {
+	}
+
+	DataChunk cached_chunk;
+	DataChunk join_keys;
+	ExpressionExecutor probe_executor;
+	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
+	SelectionVector build_sel_vec;
+	SelectionVector probe_sel_vec;
+	SelectionVector seq_sel_vec;
+};
+
+class HashJoinGlobalState : public GlobalOperatorState {
+public:
+	HashJoinGlobalState() {
+	}
+
+	//! The HT used by the join
+	unique_ptr<JoinHashTable> hash_table;
+	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
+	JoinHTScanState ht_scan_state;
+	LogicalType key_type {LogicalType::INVALID};
+	//! Checks and execute perfect hash join optimization
+	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor {nullptr};
+};
+
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PhysicalHashJoin : public PhysicalComparisonJoin {
 public:

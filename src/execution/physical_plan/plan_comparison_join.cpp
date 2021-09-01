@@ -11,6 +11,7 @@
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/transaction/transaction.hpp"
+#include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
 namespace duckdb {
 
@@ -41,7 +42,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 		return;
 	}
 	// with propagated statistics
-	if (op.join_stats.size() <= 0) {
+	if (op.join_stats.empty()) {
 		return;
 	}
 	// with equality condition

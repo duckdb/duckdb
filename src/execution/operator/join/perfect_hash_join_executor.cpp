@@ -6,7 +6,7 @@
 namespace duckdb {
 
 PerfectHashJoinExecutor::PerfectHashJoinExecutor(PerfectHashJoinStats perfect_join_stats)
-    : perfect_join_statistics(perfect_join_stats) {
+    : perfect_join_statistics(std::move(perfect_join_stats)) {
 }
 
 bool PerfectHashJoinExecutor::CanDoPerfectHashJoin() {
