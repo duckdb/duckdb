@@ -1,0 +1,146 @@
+# name: test/sql/catalog/issue_2180.test
+# description: Issue #2180: Duplicate Join Column Names with USING Statements
+# group: [catalog]
+
+statement ok
+create table A as select 1 as "X", 2 as "Y";
+
+statement ok
+create table B as select 1 as "X", 3 as "Z";
+
+query III
+select * from A join B using(X);
+----
+1	2	3
+
+query III
+select * from A join B using("X");
+----
+1	2	3
+
+# case mismatch in using clause
+statement ok
+DROP TABLE "A"
+
+statement ok
+DROP TABLE "B"
+
+statement ok
+create table A as select 1 as "X", 2 as "Y";
+
+statement ok
+create table B as select 1 as X, 3 as "Z";
+
+query III
+select * from A join B using(X);
+----
+1	2	3
+
+query III
+select * from A join B using(X);
+----
+1	2	3
+
+# case mismatch with ambiguity in using clause
+statement ok
+DROP TABLE "A"
+
+statement ok
+DROP TABLE "B"
+
+statement ok
+create table A as select 1 as "X", 2 as x;
+
+statement ok
+create table B as select 1 as "X", 2 as x;
+
+query III
+select * from A join B using(x);
+----
+1	2	1
+
+query III
+select * from A join B using("X");
+----
+1	2	2
+
+query II
+select * from A natural join B;
+----
+1	2
+
+# multi-way using
+statement ok
+create table C as select 1 as "X", 2 as x;
+
+query IIII
+select * from A join B using(x) join C using(x);
+----
+1	2	1	1
+
+query IIII
+select * from A join B using("X") join C using ("X");
+----
+1	2	2	2
+
+query II
+select * from A natural join B natural join C;
+----
+1	2
+
+# complete ambiguity
+statement ok
+DROP TABLE "A"
+
+statement ok
+DROP TABLE "B"
+
+statement ok
+DROP TABLE "C"
+
+statement ok
+create table A as select 1 as "HELLO", 2 as hello;
+
+statement ok
+create table B as select 1 as "HELLO", 2 as hello;
+
+query III
+select * from A join B using(hello);
+----
+1	2	1
+
+query III
+select * from A join B using("HELLO");
+----
+1	2	2
+
+query III
+select * from A join B using(hello);
+----
+1	2	1
+
+# complete ambiguity with multi-way tables
+statement ok
+create table C as select 1 as "HELLO", 2 as hello;
+
+query IIII
+select * from A join B using(hello) join C using(hello);
+----
+1	2	1	1
+
+query IIII
+select * from A join B using("HELLO") join C using("HELLO");
+----
+1	2	2	2
+
+query II
+select * from A natural join B natural join C;
+----
+1	2
+
+# like this doesn't work - ambiguity
+statement error
+select * from A join B using(hello) join C using("HELLO");
+
+statement error
+select * from A join B using("HELLO") join C using(hello);

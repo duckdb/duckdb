@@ -46,20 +46,33 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 	return StringUtil::TopNStrings(scores);
 }
 
-void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet set) {
-	using_columns[column_name].push_back(move(set));
+void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet *set) {
+	using_columns[column_name].push_back(set);
+}
+
+void BindContext::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
+	using_column_sets.push_back(move(set));
+}
+
+bool BindContext::FindUsingBinding(const string &column_name, vector<UsingColumnSet *> **out) {
+	auto entry = using_columns.find(column_name);
+	if (entry != using_columns.end()) {
+		*out = &entry->second;
+		return true;
+	}
+	return false;
 }
 
 UsingColumnSet *BindContext::GetUsingBinding(const string &column_name) {
-	auto entry = using_columns.find(column_name);
-	if (entry == using_columns.end()) {
+	vector<UsingColumnSet *> *using_bindings;
+	if (!FindUsingBinding(column_name, &using_bindings)) {
 		return nullptr;
 	}
-	if (entry->second.size() > 1) {
+	if (using_bindings->size() > 1) {
 		string error = "Ambiguous column reference: column \"" + column_name + "\" can refer to either:\n";
-		for (auto &using_set : entry->second) {
+		for (auto &using_set : *using_bindings) {
 			string result_bindings;
-			for (auto &binding : using_set.bindings) {
+			for (auto &binding : using_set->bindings) {
 				if (result_bindings.empty()) {
 					result_bindings = "[";
 				} else {
@@ -73,21 +86,21 @@ UsingColumnSet *BindContext::GetUsingBinding(const string &column_name) {
 		}
 		throw BinderException(error);
 	}
-	return &entry->second[0];
+	return (*using_bindings)[0];
 }
 
 UsingColumnSet *BindContext::GetUsingBinding(const string &column_name, const string &binding_name) {
 	if (binding_name.empty()) {
 		return GetUsingBinding(column_name);
 	}
-	auto entry = using_columns.find(column_name);
-	if (entry == using_columns.end()) {
+	vector<UsingColumnSet *> *using_bindings;
+	if (!FindUsingBinding(column_name, &using_bindings)) {
 		return nullptr;
 	}
-	for (auto &using_set : entry->second) {
-		auto &bindings = using_set.bindings;
+	for (auto &using_set : *using_bindings) {
+		auto &bindings = using_set->bindings;
 		if (bindings.find(binding_name) != bindings.end()) {
-			return &using_set;
+			return using_set;
 		}
 	}
 	return nullptr;
@@ -101,7 +114,7 @@ void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet *
 	D_ASSERT(entry != using_columns.end());
 	auto &bindings = entry->second;
 	for (size_t i = 0; i < bindings.size(); i++) {
-		if (&bindings[i] == set) {
+		if (bindings[i] == set) {
 			bindings.erase(bindings.begin() + i);
 			break;
 		}
@@ -109,6 +122,20 @@ void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet *
 	if (bindings.empty()) {
 		using_columns.erase(column_name);
 	}
+}
+
+string BindContext::GetActualColumnName(const string &binding_name, const string &column_name) {
+	string error;
+	auto binding = GetBinding(binding_name, error);
+	if (!binding) {
+		throw InternalException("No binding with name \"%s\"", binding_name);
+	}
+	idx_t binding_index;
+	if (!binding->TryGetBindingIndex(column_name, binding_index)) {
+		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding_name,
+		                        column_name);
+	}
+	return binding->names[binding_index];
 }
 
 unordered_set<string> BindContext::GetMatchingBindings(const string &column_name) {
@@ -321,8 +348,8 @@ void BindContext::AddContext(BindContext other) {
 		for (auto &alias : entry.second) {
 #ifdef DEBUG
 			for (auto &other_alias : using_columns[entry.first]) {
-				for (auto &col : alias.bindings) {
-					D_ASSERT(other_alias.bindings.find(col) == other_alias.bindings.end());
+				for (auto &col : alias->bindings) {
+					D_ASSERT(other_alias->bindings.find(col) == other_alias->bindings.end());
 				}
 			}
 #endif

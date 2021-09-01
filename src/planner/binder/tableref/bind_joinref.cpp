@@ -149,13 +149,14 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			extra_conditions.push_back(
 			    AddCondition(context, left_binder, right_binder, left_binding, right_binding, column_name));
 
-			UsingColumnSet set;
-			AddUsingBindings(set, left_using_binding, left_binding);
-			AddUsingBindings(set, right_using_binding, right_binding);
-			SetPrimaryBinding(set, ref.type, left_binding, right_binding);
+			auto set = make_unique<UsingColumnSet>();
+			AddUsingBindings(*set, left_using_binding, left_binding);
+			AddUsingBindings(*set, right_using_binding, right_binding);
+			SetPrimaryBinding(*set, ref.type, left_binding, right_binding);
 			left_binder.bind_context.RemoveUsingBinding(column_name, left_using_binding);
 			right_binder.bind_context.RemoveUsingBinding(column_name, right_using_binding);
-			bind_context.AddUsingBinding(column_name, move(set));
+			bind_context.AddUsingBinding(column_name, set.get());
+			bind_context.AddUsingBindingSet(move(set));
 		}
 		if (extra_conditions.empty()) {
 			// no matching bindings found in natural join: throw an exception
@@ -189,9 +190,12 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 		D_ASSERT(!result->condition);
 
 		for (idx_t i = 0; i < ref.using_columns.size(); i++) {
-			auto &using_column = ref.using_columns[i];
+			auto using_column = ref.using_columns[i];
 			string left_binding;
 			string right_binding;
+			// we check if there is ALREADY a using column of the same name in the left and right set
+			// this can happen if we chain USING clauses
+			// e.g. x JOIN y USING (c) JOIN z USING (c)
 			auto left_using_binding = left_binder.bind_context.GetUsingBinding(using_column);
 			auto right_using_binding = right_binder.bind_context.GetUsingBinding(using_column);
 			if (!left_using_binding) {
@@ -204,16 +208,25 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			} else {
 				right_binding = right_using_binding->primary_binding;
 			}
+			// we fetch the actual column name here
+			// it might be different from the USING clause because of case insensitivity
+			auto left_column_name = left_binder.bind_context.GetActualColumnName(left_binding, using_column);
+			auto right_column_name = right_binder.bind_context.GetActualColumnName(right_binding, using_column);
+
 			extra_conditions.push_back(
 			    AddCondition(context, left_binder, right_binder, left_binding, right_binding, using_column));
 
-			UsingColumnSet set;
-			AddUsingBindings(set, left_using_binding, left_binding);
-			AddUsingBindings(set, right_using_binding, right_binding);
-			SetPrimaryBinding(set, ref.type, left_binding, right_binding);
+			auto set = make_unique<UsingColumnSet>();
+			AddUsingBindings(*set, left_using_binding, left_binding);
+			AddUsingBindings(*set, right_using_binding, right_binding);
+			SetPrimaryBinding(*set, ref.type, left_binding, right_binding);
 			left_binder.bind_context.RemoveUsingBinding(using_column, left_using_binding);
 			right_binder.bind_context.RemoveUsingBinding(using_column, right_using_binding);
-			bind_context.AddUsingBinding(using_column, move(set));
+			bind_context.AddUsingBinding(left_column_name, set.get());
+			if (left_column_name != right_column_name) {
+				bind_context.AddUsingBinding(right_column_name, set.get());
+			}
+			bind_context.AddUsingBindingSet(move(set));
 		}
 	}
 	bind_context.AddContext(move(left_binder.bind_context));

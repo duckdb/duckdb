@@ -81,7 +81,9 @@ public:
 	void AddCTEBinding(idx_t index, const string &alias, const vector<string> &names, const vector<LogicalType> &types);
 
 	//! Add an implicit join condition (e.g. USING (x))
-	void AddUsingBinding(const string &column_name, UsingColumnSet set);
+	void AddUsingBinding(const string &column_name, UsingColumnSet *set);
+
+	void AddUsingBindingSet(unique_ptr<UsingColumnSet> set);
 
 	//! Returns any using column set for the given column name, or nullptr if there is none. On conflict (multiple using
 	//! column sets with the same name) throw an exception.
@@ -90,6 +92,13 @@ public:
 	UsingColumnSet *GetUsingBinding(const string &column_name, const string &binding_name);
 	//! Erase a using binding from the set of using bindings
 	void RemoveUsingBinding(const string &column_name, UsingColumnSet *set);
+	//! Finds the using bindings for a given column. Returns true if any exists, false otherwise.
+	bool FindUsingBinding(const string &column_name, vector<UsingColumnSet *> **using_columns);
+
+	//! Fetch the actual column name from the given binding, or throws if none exists
+	//! This can be different from "column_name" because of case insensitivity
+	//! (e.g. "column_name" might return "COLUMN_NAME")
+	string GetActualColumnName(const string &binding, const string &column_name);
 
 	unordered_map<string, std::shared_ptr<Binding>> GetCTEBindings() {
 		return cte_bindings;
@@ -118,7 +127,9 @@ private:
 	//! The list of bindings in insertion order
 	vector<std::pair<string, Binding *>> bindings_list;
 	//! The set of columns used in USING join conditions
-	unordered_map<string, vector<UsingColumnSet>> using_columns;
+	unordered_map<string, vector<UsingColumnSet *>> using_columns;
+	//! Using column sets
+	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 
 	//! The set of CTE bindings
 	unordered_map<string, std::shared_ptr<Binding>> cte_bindings;
