@@ -82,7 +82,7 @@ def regression_test(threshold):
                 regression_status = False
                 description += "Q"+ str(i+1) + " slow ("+ str(truncate(current_time[i][0],4)) + " vs " + str(truncate(master_time[i][0],4)) + "). "
         if query_faster:
-                description += "Q"+ str(i+1) + " fast ("+ str(truncate(current_time[i][0],4)) + " vs " + str(truncate(master_time[i][0]),4) + "). "
+                description += "Q"+ str(i+1) + " fast ("+ str(truncate(current_time[i][0],4)) + " vs " + str(truncate(master_time[i][0],4)) + "). "
 
         if regression_status:
             os.system("echo \"REGRESSION_STATE=success\" >> $GITHUB_ENV")
