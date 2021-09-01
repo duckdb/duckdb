@@ -5,6 +5,21 @@ import os
 import statistics
 import time
 import subprocess
+import math
+
+def truncate(number, decimals=0):
+    """
+    Returns a value truncated to a specific number of decimal places.
+    """
+    if not isinstance(decimals, int):
+        raise TypeError("decimal places must be an integer.")
+    elif decimals < 0:
+        raise ValueError("decimal places has to be 0 or more.")
+    elif decimals == 0:
+        return math.trunc(number)
+
+    factor = 10.0 ** decimals
+    return math.trunc(number * factor) / factor
 
 def install_duck_master():
     os.system("pip install duckdb --pre")
@@ -51,7 +66,7 @@ def regression_test(threshold):
 
     # If the regression status is true, there was no regression
     regression_status = True
-    description = 'test'
+    description = ''
     for i in range(len(master_time)):
         # Query Ok means that in all runs at least once it finished below the threshold
         query_ok = False
@@ -65,9 +80,9 @@ def regression_test(threshold):
 
         if not query_ok:
                 regression_status = False
-                description += "Q"+ str(i+1) + " is slower ("+ str(current_time[i][0]) + "vs" + str(master_time[i][0]) + "). "
+                description += "Q"+ str(i+1) + " slow ("+ str(truncate(current_time[i][0],4)) + " vs " + str(truncate(master_time[i][0],4)) + "). "
         if query_faster:
-                description += "Q"+ str(i+1) + " is faster ("+ str(current_time[i][0]) + "vs" + str(master_time[i][0]) + "). "
+                description += "Q"+ str(i+1) + " fast ("+ str(truncate(current_time[i][0],4)) + " vs " + str(truncate(master_time[i][0]),4) + "). "
 
         if regression_status:
             os.system("echo \"REGRESSION_STATE=success\" >> $GITHUB_ENV")
