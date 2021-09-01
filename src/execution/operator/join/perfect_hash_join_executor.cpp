@@ -32,7 +32,7 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
                                                 JoinHashTable *hash_table) {
 	Vector tuples_addresses(LogicalType::POINTER, hash_table->Count());     // allocate space for all the tuples
 	auto key_locations = FlatVector::GetData<data_ptr_t>(tuples_addresses); // get a pointer to vector data
-	// TODO: In a parallel finalize: One should exclusivly lock and each thread should do one part of the code below.
+	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
 	// Go through all the blocks and fill the keys addresses
 	auto keys_count = hash_table->FillWithHTOffsets(key_locations, state);
 	// Scan the build keys in the hash table
@@ -95,7 +95,6 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, Sel
 		break;
 	default:
 		throw NotImplementedException("Type not supported");
-		break;
 	}
 }
 
@@ -131,6 +130,9 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
                                                     PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr,
                                                     PhysicalOperator *operator_child) {
 	do {
+		// keeps track of how many probe keys have a match
+		idx_t probe_sel_count = 0;
+
 		// fetch the chunk to join
 		operator_child->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
 		if (physical_state->child_chunk.size() == 0) {
@@ -144,7 +146,8 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
 		auto keys_count = physical_state->join_keys.size();
 		// todo: add check for fast pass when probe is part of build domain
 		FillSelectionVectorSwitchProbe(keys_vec, physical_state->build_sel_vec, physical_state->probe_sel_vec,
-		                               keys_count);
+		                               keys_count, probe_sel_count);
+
 		// If build is dense and probe is in build's domain, just reference probe
 		if (perfect_join_statistics.is_build_dense && keys_count == probe_sel_count) {
 			result.Reference(physical_state->child_chunk);
@@ -160,52 +163,53 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
 			result_vector.Reference(build_vec); //
 			result_vector.Slice(physical_state->build_sel_vec, probe_sel_count);
 		}
-		probe_sel_count = 0;
+
 	} while (result.size() == 0);
 	return true;
 }
 
 void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, SelectionVector &build_sel_vec,
-                                                             SelectionVector &probe_sel_vec, idx_t count) {
+                                                             SelectionVector &probe_sel_vec, idx_t count,
+                                                             idx_t &probe_sel_count) {
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::INT8:
-		TemplatedFillSelectionVectorProbe<int8_t>(source, build_sel_vec, probe_sel_vec, count);
+		TemplatedFillSelectionVectorProbe<int8_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
 	case PhysicalType::INT16:
-		TemplatedFillSelectionVectorProbe<int16_t>(source, build_sel_vec, probe_sel_vec, count);
+		TemplatedFillSelectionVectorProbe<int16_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
 	case PhysicalType::TIME32:
 	case PhysicalType::DATE32:
 	case PhysicalType::INT32:
-		TemplatedFillSelectionVectorProbe<int32_t>(source, build_sel_vec, probe_sel_vec, count);
+		TemplatedFillSelectionVectorProbe<int32_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
 	case PhysicalType::TIMESTAMP:
 	case PhysicalType::TIME64:
 	case PhysicalType::DATE64:
 	case PhysicalType::INT64:
-		TemplatedFillSelectionVectorProbe<int64_t>(source, build_sel_vec, probe_sel_vec, count);
+		TemplatedFillSelectionVectorProbe<int64_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedFillSelectionVectorProbe<uint8_t>(source, build_sel_vec, probe_sel_vec, count);
+		TemplatedFillSelectionVectorProbe<uint8_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedFillSelectionVectorProbe<uint16_t>(source, build_sel_vec, probe_sel_vec, count);
+		TemplatedFillSelectionVectorProbe<uint16_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedFillSelectionVectorProbe<uint32_t>(source, build_sel_vec, probe_sel_vec, count);
+		TemplatedFillSelectionVectorProbe<uint32_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedFillSelectionVectorProbe<uint64_t>(source, build_sel_vec, probe_sel_vec, count);
+		TemplatedFillSelectionVectorProbe<uint64_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
 	default:
 		throw NotImplementedException("Type not supported");
-		break;
 	}
 }
 
 template <typename T>
 void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, SelectionVector &build_sel_vec,
-                                                                SelectionVector &probe_sel_vec, idx_t count) {
+                                                                SelectionVector &probe_sel_vec, idx_t count,
+                                                                idx_t &probe_sel_count) {
 	auto min_value = perfect_join_statistics.build_min.GetValue<T>();
 	auto max_value = perfect_join_statistics.build_max.GetValue<T>();
 	VectorData vector_data;
