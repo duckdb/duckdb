@@ -140,6 +140,20 @@ void DataChunk::Append(const DataChunk &other) {
 	SetCardinality(size() + other.size());
 }
 
+void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t count) {
+	if (other.size() == 0) {
+		return;
+	}
+	if (ColumnCount() != other.ColumnCount()) {
+		throw InternalException("Column counts of appending chunk doesn't match!");
+	}
+	for (idx_t i = 0; i < ColumnCount(); i++) {
+		D_ASSERT(data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+		VectorOperations::Copy(other.data[i], data[i], sel, count, 0, size());
+	}
+	SetCardinality(size() + count);
+}
+
 void DataChunk::Normalify() {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].Normalify(size());
