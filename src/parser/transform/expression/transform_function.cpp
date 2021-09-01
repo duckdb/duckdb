@@ -183,7 +183,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		}
 		TransformWindowDef(window_ref, expr.get(), depth);
 		TransformWindowFrame(window_spec, expr.get(), depth);
-
+		expr->query_location = root->location;
 		return move(expr);
 	}
 

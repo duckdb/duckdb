@@ -1,0 +1,47 @@
+# name: test/sql/tpch/tpch_topn.test_slow
+# description: Test top-n queries on TPC-H
+# group: [tpch]
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CALL dbgen(sf=1);
+
+query IIIIIIII
+SELECT o_orderkey, o_custkey, o_orderstatus, o_totalprice, o_orderdate, o_orderpriority, o_clerk, o_shippriority FROM orders ORDER BY o_orderkey LIMIT 5;
+----
+1	36901	O	173665.47	1996-01-02	5-LOW	Clerk#000000951	0
+2	78002	O	46929.18	1996-12-01	1-URGENT	Clerk#000000880	0
+3	123314	F	193846.25	1993-10-14	5-LOW	Clerk#000000955	0
+4	136777	O	32151.78	1995-10-11	5-LOW	Clerk#000000124	0
+5	44485	F	144659.20	1994-07-30	5-LOW	Clerk#000000925	0
+
+query IIIIIIII
+SELECT o_orderkey, o_custkey, o_orderstatus, o_totalprice, o_orderdate, o_orderpriority, o_clerk, o_shippriority FROM orders ORDER BY o_orderkey DESC LIMIT 5;
+----
+6000000	110063	O	37625.29	1996-08-31	2-HIGH	Clerk#000000411	0
+5999975	113398	F	63216.65	1993-07-25	1-URGENT	Clerk#000000813	0
+5999974	55448	F	92750.90	1993-07-28	3-MEDIUM	Clerk#000000776	0
+5999973	32071	O	68906.56	1997-07-13	4-NOT SPECIFIED	Clerk#000000130	0
+5999972	143594	O	114856.68	1996-05-02	3-MEDIUM	Clerk#000000536	0
+
+query IIIIIIIIIIIIIII
+SELECT l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode FROM lineitem ORDER BY l_shipdate, l_orderkey LIMIT 5;
+----
+721220	177803	5355	2	19	35735.20	0.08	0.03	R	F	1992-01-02	1992-02-04	1992-01-09	TAKE BACK RETURN	SHIP
+842980	188156	5711	4	5	6220.75	0.01	0.03	A	F	1992-01-02	1992-03-20	1992-01-20	COLLECT COD	REG AIR
+904677	56678	1689	1	43	70290.81	0.08	0.01	R	F	1992-01-02	1992-03-22	1992-01-14	COLLECT COD	AIR
+990147	154290	4291	1	6	8065.74	0.10	0.01	R	F	1992-01-02	1992-03-01	1992-01-15	NONE	REG AIR
+1054181	16217	6218	1	45	50994.45	0.03	0.08	R	F	1992-01-02	1992-02-05	1992-01-15	NONE	MAIL
+
+query IIIIIIIIIIIIIII
+SELECT l_orderkey,l_partkey,l_suppkey,l_linenumber,l_quantity,l_extendedprice,l_discount,l_tax,l_returnflag,l_linestatus,l_shipdate,l_commitdate,l_receiptdate,l_shipinstruct,l_shipmode FROM lineitem ORDER BY l_orderkey DESC, l_shipdate DESC LIMIT 5;
+----
+6000000	32255	2256	1	5	5936.25	0.04	0.03	N	O	1996-11-02	1996-11-19	1996-12-01	TAKE BACK RETURN	MAIL
+6000000	96127	6128	2	28	31447.36	0.01	0.02	N	O	1996-09-22	1996-10-01	1996-10-21	NONE	AIR
+5999975	37131	2138	3	18	19226.34	0.04	0.01	A	F	1993-11-17	1993-08-28	1993-12-08	DELIVER IN PERSON	FOB
+5999975	6452	1453	2	7	9509.15	0.04	0.00	A	F	1993-11-02	1993-09-23	1993-11-19	DELIVER IN PERSON	SHIP
+5999975	7272	2273	1	32	37736.64	0.07	0.01	R	F	1993-10-07	1993-09-30	1993-10-21	COLLECT COD	REG AIR

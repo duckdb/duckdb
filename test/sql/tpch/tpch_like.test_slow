@@ -1,0 +1,75 @@
+# name: test/sql/tpch/tpch_like.test_slow
+# description: Test LIKE statement on TPC-H
+# group: [tpch]
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CALL dbgen(sf=0.1)
+
+# LIKE
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%horse%'
+----
+1230
+
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE 'horse%'
+----
+50
+
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%horse'
+----
+62
+
+# with underscore
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%h_rse%'
+----
+1230
+
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE 'h_rse%'
+----
+50
+
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%h_rse'
+----
+62
+
+# NOT LIKE
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment NOT LIKE '%a%'
+----
+106409
+
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment NOT LIKE 'h%'
+----
+588151
+
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment NOT LIKE '%a'
+----
+564066
+
+# with underscore
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment NOT LIKE '%a_%'
+----
+115225
+
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment NOT LIKE 'a_%'
+----
+563905
+
+query I
+SELECT COUNT(*) FROM lineitem WHERE l_comment NOT LIKE '%_a'
+----
+564066

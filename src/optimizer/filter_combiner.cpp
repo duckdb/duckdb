@@ -391,7 +391,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
 			    (TypeIsNumeric(constant_value.second[0].constant.type().InternalType()) ||
-			     constant_value.second[0].constant.type().InternalType() == PhysicalType::VARCHAR)) {
+			     constant_value.second[0].constant.type().InternalType() == PhysicalType::VARCHAR ||
+			     constant_value.second[0].constant.type().InternalType() == PhysicalType::BOOL)) {
 				//! Here we check if these filters are column references
 				filter_exp = equivalence_map.find(constant_value.first);
 				if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF) {

@@ -253,7 +253,6 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 						byte |= (ptr[r] & 1) << byte_pos;
 						byte_pos++;
 
-						temp_writer.Write<uint8_t>(byte);
 						if (byte_pos == 8) {
 							temp_writer.Write<uint8_t>(byte);
 							byte = 0;

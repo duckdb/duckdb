@@ -154,3 +154,154 @@ NULL	NULL	4
 7	NULL	4
 8	8	4
 9	NULL	4
+
+#
+# Coverage tests
+#
+
+# ReuseIndexes, backwards moving frame
+query II
+WITH t(i, p, f) AS (VALUES
+	(0, 1, 1),
+	(1, 1, 1),
+	(2, 1, 1),
+	(3, 3, 1),
+	(4, 1, 1),
+	(5, 3, 1)
+)
+SELECT i, MEDIAN(i) OVER (ORDER BY i ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	0.500000
+1	1.000000
+2	2.000000
+3	2.000000
+4	4.000000
+5	3.500000
+
+# CanReplace
+query II
+WITH t(r, i, p, f) AS (VALUES
+	(0, 0, 1, 1),
+	(1, 1, 1, 1),
+	(2, 2, 1, 1),
+	(3, 0, 1, 1),
+	(4, 1, 1, 1),
+	(5, 2, 1, 1)
+)
+SELECT r, MEDIAN(i) OVER (ORDER BY r ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	0.500000
+1	1.000000
+2	1.000000
+3	1.000000
+4	1.000000
+5	1.500000
+
+# Moving discrete list
+query II
+WITH t(r, i, p, f) AS (VALUES
+	(0, 0, 1, 2),
+	(1, 1, 1, 2),
+	(2, 2, 1, 2),
+	(3, 3, 1, 2),
+	(4, 4, 1, 2),
+	(5, 5, 1, 2)
+)
+SELECT r, QUANTILE_DISC(i, [0.25, 0.5, 0.75]) OVER (ORDER BY r ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	[0, 1, 1]
+1	[0, 1, 2]
+2	[1, 2, 3]
+3	[2, 3, 4]
+4	[3, 4, 4]
+5	[4, 4, 4]
+
+# Moving discrete list with NULLs
+query II
+WITH t(r, i, p, f) AS (VALUES
+	(0, NULL, 1, 2),
+	(1, 1, 1, 2),
+	(2, 2, 1, 2),
+	(3, 3, 1, 2),
+	(4, 4, 1, 2),
+	(5, 5, 1, 2)
+)
+SELECT r, QUANTILE_DISC(i, [0.25, 0.5, 0.75]) OVER (ORDER BY r ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	[1, 1, 1]
+1	[1, 2, 2]
+2	[1, 2, 3]
+3	[2, 3, 4]
+4	[3, 4, 4]
+5	[4, 4, 4]
+
+# Moving discrete list with all NULLs
+query II
+WITH t(r, i, p, f) AS (VALUES
+	(0, NULL, 1, 2),
+	(1, NULL, 1, 2),
+	(2, NULL, 1, 2),
+	(3, NULL, 1, 2),
+	(4, NULL, 1, 2),
+	(5, NULL, 1, 2)
+)
+SELECT r, QUANTILE_DISC(i, [0.25, 0.5, 0.75]) OVER (ORDER BY r ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	NULL
+1	NULL
+2	NULL
+3	NULL
+4	NULL
+5	NULL
+
+# Moving continuous list
+query II
+WITH t(r, i, p, f) AS (VALUES
+	(0, 0, 1, 2),
+	(1, 1, 1, 2),
+	(2, 2, 1, 2),
+	(3, 3, 1, 2),
+	(4, 4, 1, 2),
+	(5, 5, 1, 2)
+)
+SELECT r, QUANTILE_CONT(i, [0.25, 0.5, 0.75]) OVER (ORDER BY r ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	[0.500000, 1.000000, 1.500000]
+1	[0.750000, 1.500000, 2.250000]
+2	[1.750000, 2.500000, 3.250000]
+3	[2.750000, 3.500000, 4.250000]
+4	[3.500000, 4.000000, 4.500000]
+5	[4.250000, 4.500000, 4.750000]
+
+# Moving continuous list with replacement
+query II
+WITH t(r, i, p, f) AS (VALUES
+	(0, 0, 1, 2),
+	(1, 1, 1, 2),
+	(2, 2, 1, 2),
+	(3, 0, 1, 2),
+	(4, 1, 1, 2),
+	(5, 2, 1, 2)
+)
+SELECT r, QUANTILE_CONT(i, [0.25, 0.5, 0.75]) OVER (ORDER BY r ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	[0.500000, 1.000000, 1.500000]
+1	[0.000000, 0.500000, 1.250000]
+2	[0.750000, 1.000000, 1.250000]
+3	[0.750000, 1.500000, 2.000000]
+4	[0.500000, 1.000000, 1.500000]
+5	[1.250000, 1.500000, 1.750000]

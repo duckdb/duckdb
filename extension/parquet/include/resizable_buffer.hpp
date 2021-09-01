@@ -18,12 +18,13 @@ namespace duckdb {
 
 class ByteBuffer { // on to the 10 thousandth impl
 public:
-	char *ptr = nullptr;
-	uint64_t len = 0;
-
 	ByteBuffer() {};
 	ByteBuffer(char *ptr, uint64_t len) : ptr(ptr), len(len) {};
 
+	char *ptr = nullptr;
+	uint64_t len = 0;
+
+public:
 	void inc(uint64_t increment) {
 		available(increment);
 		len -= increment;

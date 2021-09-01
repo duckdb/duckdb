@@ -28,20 +28,15 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 		vector<unique_ptr<ParsedExpression>> parameters;
 		TransformExpressionList(*stmt->params, parameters, 0);
 		for (auto &param : parameters) {
-			if (param->type == ExpressionType::COMPARE_EQUAL) {
-				// parameters with default value
-				auto &comp_expr = (ComparisonExpression &)*param;
-				if (comp_expr.left->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
-					throw ParserException("Invalid parameter: '%s'", comp_expr.left->ToString());
+			if (param->type == ExpressionType::VALUE_CONSTANT) {
+				// parameters with default value (must have an alias)
+				if (param->alias.empty()) {
+					throw ParserException("Invalid parameter: '%s'", param->ToString());
 				}
-				if (comp_expr.right->GetExpressionClass() != ExpressionClass::CONSTANT) {
-					throw ParserException("Parameters may only have constants as default value!");
+				if (macro_func->default_parameters.find(param->alias) != macro_func->default_parameters.end()) {
+					throw ParserException("Duplicate default parameter: '%s'", param->alias);
 				}
-				auto &param_name_expr = (ColumnRefExpression &)*comp_expr.left;
-				if (!param_name_expr.table_name.empty()) {
-					throw BinderException("Invalid parameter name '%s'", param_name_expr.ToString());
-				}
-				macro_func->default_parameters[comp_expr.left->ToString()] = move(comp_expr.right);
+				macro_func->default_parameters[param->alias] = move(param);
 			} else if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 				// positional parameters
 				if (!macro_func->default_parameters.empty()) {

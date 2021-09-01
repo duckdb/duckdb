@@ -79,8 +79,8 @@ bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, string name) {
 	return true;
 }
 
-volatile bool is_active = false;
-volatile bool timeout = false;
+atomic<bool> is_active;
+atomic<bool> timeout;
 
 void sleep_thread(Benchmark *benchmark, BenchmarkState *state, int timeout_duration) {
 	// timeout is given in seconds
