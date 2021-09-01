@@ -84,14 +84,14 @@ def regression_test(threshold):
         if query_faster:
                 description += "Q"+ str(i+1) + " fast ("+ str(truncate(current_time[i][0],4)) + " vs " + str(truncate(master_time[i][0],4)) + "). "
 
-        if regression_status:
-            os.system("echo \"REGRESSION_STATE=success\" >> $GITHUB_ENV")
-        else:
-            os.system("echo \"REGRESSION_STATE=failure\" >> $GITHUB_ENV")
+    if regression_status:
+        os.system("echo \"REGRESSION_STATE=success\" >> $GITHUB_ENV")
+    else:
+        os.system("echo \"REGRESSION_STATE=failure\" >> $GITHUB_ENV")
 
-        if description == '':
-            description = "No Regression or Speed Up."
-            
-        os.system("echo \"REGRESSION_DESCRIPTION="+description+"\" >> $GITHUB_ENV")
+    if description == '':
+        description = "No Regression or Speed Up."
+        
+    os.system("echo \"REGRESSION_DESCRIPTION="+description+"\" >> $GITHUB_ENV")
 
 regression_test(0.1)
