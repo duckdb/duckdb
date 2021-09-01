@@ -1076,7 +1076,7 @@ jobs:
   rstats-linux:
     name: R Package Linux
     runs-on: ubuntu-20.04
-    needs: linux-debug
+#    needs: linux-debug
 
     steps:
     - uses: actions/checkout@v2
@@ -1093,19 +1093,32 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
-    - name: Build
+    - name: Prepare
       run: |
         cd tools/rpkg
         ./configure
         R CMD build .
-        R CMD INSTALL duckdb_*.tar.gz
+
+    - name: Tests
+      run: |
+        cd tools/rpkg
+        R CMD INSTALL -d duckdb_*.tar.gz
         (cd tests && R -f testthat.R)
+
+    - name: R CMD check
+      run: |
+        cd tools/rpkg
         R CMD check --as-cran -o /tmp duckdb_*.tar.gz
         if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+
+    - name: Valgrind
+      run: |
+        cd tools/rpkg
+        R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
 
     - name: Deploy
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
