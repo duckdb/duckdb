@@ -74,11 +74,6 @@ def regression_test(threshold):
         else:
             os.environ["REGRESSION_STATE"] = "failure"
 
-        os.environ["REGRESSION_DESCRIPTION"] = description
-        exp = 'export REGRESSION_DESCRIPTION="youAsWell"'
-        f = open("test.sh", "w")
-        f.write(exp)
-        f.close()
-        os.system("chmod +x test.sh")
+        os.system("echo \"REGRESSION_DESCRIPTION=youAsWell\" >> $GITHUB_ENV")
 
 regression_test(0.1)
