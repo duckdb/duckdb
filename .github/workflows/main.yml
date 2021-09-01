@@ -39,9 +39,6 @@ jobs:
     - name: Test
       run: python scripts/regression_test.py
 
-    - name: Export
-      run: ./test.sh
-
     - uses: Sibz/github-status-action@v1.1.5
       with: 
         authToken: ${{secrets.GH_TOKEN}}
