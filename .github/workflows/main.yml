@@ -1123,6 +1123,10 @@ jobs:
         cd tools/rpkg
         R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
 
+    - name: Print R log on failure
+      if: ${{ failure() }}
+      run: cat /tmp/duckdb.Rcheck/00check.log
+
     - name: Deploy
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
