@@ -155,7 +155,6 @@ private:
 	unique_ptr<RleBpDecoder> repeated_decoder;
 
 	// dummies for Skip()
-	Vector dummy_result;
 	parquet_filter_t none_filter;
 	ResizeableBuffer dummy_define;
 	ResizeableBuffer dummy_repeat;

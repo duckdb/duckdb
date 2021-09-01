@@ -1,0 +1,96 @@
+# name: test/sql/create/create_table_as_duplicate_names.test
+# description: Test CREATE TABLE AS with duplicate column names
+# group: [create]
+
+query II
+SELECT * FROM range(5) tbl1(i) JOIN range(5) tbl2(i) ON tbl1.i=tbl2.i;
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+
+query II
+SELECT i, i FROM range(5) tbl(i)
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+
+query II
+SELECT * FROM (SELECT i, i FROM range(5) tbl(i)) tbl;
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+
+query IIII
+SELECT * FROM (SELECT i, i, i, i FROM range(5) tbl(i)) tbl;
+----
+0	0	0	0
+1	1	1	1
+2	2	2	2
+3	3	3	3
+4	4	4	4
+
+statement ok
+CREATE TABLE t1 AS SELECT i, i FROM range(5) tbl(i)
+
+query II
+SELECT * FROM t1;
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+
+statement ok
+CREATE TABLE t2 AS SELECT i, i, i, i FROM range(5) tbl(i)
+
+query IIII
+SELECT * FROM (SELECT i, i, i, i FROM range(5) tbl(i)) tbl;
+----
+0	0	0	0
+1	1	1	1
+2	2	2	2
+3	3	3	3
+4	4	4	4
+
+query II
+SELECT * FROM (SELECT * FROM range(5) tbl1(i) JOIN range(5) tbl2(i) ON tbl1.i=tbl2.i) tbl;
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+
+statement ok
+CREATE TABLE t3 AS SELECT tbl1.i, tbl2.i FROM range(5) tbl1(i) JOIN range(5) tbl2(i) ON tbl1.i=tbl2.i;
+
+query II
+SELECT * FROM t3
+----
+0	0
+1	1
+2	2
+3	3
+4	4
+
+statement ok
+CREATE TABLE t4 AS SELECT * FROM range(5) tbl1(i) JOIN range(5) tbl2(i) ON tbl1.i=tbl2.i;
+
+query II
+SELECT * FROM t4
+----
+0	0
+1	1
+2	2
+3	3
+4	4

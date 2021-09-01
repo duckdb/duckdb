@@ -17,8 +17,8 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: ccache gcc-10
+      CXX: ccache g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
 
@@ -28,10 +28,10 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
 
     - name: Build
-      run: BUILD_ARROW_ABI_TEST=1 make debug
+      run:  make debug
 
     - name: Test
       run: make unittestci
@@ -445,6 +445,30 @@ jobs:
           libduckdb-linux-rpi.zip
           duckdb_cli-linux-rpi.zip
 
+  linux-arrow:
+      name: Linux Debug (Arrow Tests)
+      runs-on: ubuntu-20.04
+      needs: linux-debug
+
+      env:
+        CC: gcc-10
+        CXX: g++-10
+        TREAT_WARNINGS_AS_ERRORS: 1
+        GEN: ninja
+
+      steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Build
+        run: BUILD_ARROW_ABI_TEST=1 make debug
+
+      - name: Test
+        run: make unittestarrow
 
   old-gcc:
     name: GCC 4.8
@@ -654,7 +678,7 @@ jobs:
           build/coverage/test/unittest
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"
-          build/coverage/test/unittest "[coverage]"
+          python3 scripts/try_timeout.py --timeout=1200 --retry=3 build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[detailed_profiler]"
           build/coverage/test/unittest "[tpch]"
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
@@ -847,8 +871,9 @@ jobs:
         python-version: '3.7'
 
     - name: Dependencies
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev
-
+      run: |
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3 python3-pyodbc python3-pip
+        pip3 install pyodbc
 
     - name: Install nanodbc
       run: |
@@ -874,6 +899,9 @@ jobs:
 
     - name: Test R ODBC
       run: R -f tools/odbc/test/rodbc.R
+
+    - name: Test Python ODBC
+      run: ./tools/odbc/test/run_pyodbc_tests.sh
 
 
   linux-python3:
@@ -916,12 +944,15 @@ jobs:
         mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
         cibuildwheel --output-dir wheelhouse duckdb_tarball
 
-    - name: Remove dist for aarch64
+    - name: Deploy aarch64
       if: ${{ matrix.arch == 'aarch64' }}
       run: |
-        cd tools/pythonpkg && rm dist/duckdb-*.tar.gz
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+        fi
 
-    - name: Deploy
+    - name: Deploy regular
+      if: ${{ matrix.arch != 'aarch64' }}
       run: |
         python scripts/asset-upload-gha.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
@@ -1310,3 +1341,19 @@ jobs:
       run: |
         cd duckdb-web
         python3 scripts/generate_docs.py ..
+
+
+  rubsan:
+    name: R UBSAN
+    runs-on: ubuntu-latest
+    needs: linux-debug
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Run
+      run: |
+        (cd tools/rpkg && ./configure && R CMD build .)
+        docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c "mkdir -p ~/.R && echo -e \"PKG_CFLAGS=-fno-sanitize-recover=all\\nPKG_CXXFLAGS=-fno-sanitize-recover=all\" > ~/.R/Makevars && export CMAKE_UNITY_BUILD=OFF ARROW_R_DEV=TRUE LIBARROW_BINARY=true && cd /duckdb/tools/rpkg/ && RDsan -f dependencies.R && RDsan CMD INSTALL duckdb_*.tar.gz && cd tests && UBSAN_OPTIONS=print_stacktrace=1 RDsan -f testthat.R"

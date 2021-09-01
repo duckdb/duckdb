@@ -1,0 +1,6 @@
+# name: test/sql/error/unknown_window_function.test
+# description: Test unknown window function
+# group: [error]
+
+statement error
+SELECT substr('hello', 3, 2) OVER ();

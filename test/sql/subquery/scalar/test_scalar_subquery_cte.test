@@ -148,6 +148,7 @@ SELECT * FROM test WHERE EXISTS (WITH cte AS (SELECT * FROM test ts WHERE ts.a =
 13	22
 
 # duplicate name in subquery
-statement error
+query II
 SELECT * FROM (WITH cte AS (SELECT 42 AS a, 44 AS a) SELECT * FROM cte) tbl1
-
+----
+42	44

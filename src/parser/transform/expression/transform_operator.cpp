@@ -99,6 +99,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		subquery_expr->subquery_type = SubqueryType::ANY;
 		subquery_expr->child = move(left_expr);
 		subquery_expr->comparison_type = OperatorToExpressionType(name);
+		subquery_expr->query_location = root->location;
 
 		if (root->kind == duckdb_libpgquery::PG_AEXPR_OP_ALL) {
 			// ALL sublink is equivalent to NOT(ANY) with inverted comparison
@@ -121,6 +122,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 			operator_type = ExpressionType::COMPARE_IN;
 		}
 		auto result = make_unique<OperatorExpression>(operator_type, move(left_expr));
+		result->query_location = root->location;
 		TransformExpressionList(*((duckdb_libpgquery::PGList *)root->rexpr), result->children, depth);
 		return move(result);
 	}

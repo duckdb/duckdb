@@ -40,7 +40,7 @@ const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                            idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-      type(move(type_p)), page_rows_available(0), dummy_result(type, nullptr) {
+      type(move(type_p)), page_rows_available(0) {
 
 	// dummies for Skip()
 	none_filter.none();
@@ -338,6 +338,7 @@ void ColumnReader::Skip(idx_t num_values) {
 	dummy_repeat.zero();
 
 	// TODO this can be optimized, for example we dont actually have to bitunpack offsets
+	Vector dummy_result(type, nullptr);
 	auto values_read =
 	    Read(num_values, none_filter, (uint8_t *)dummy_define.ptr, (uint8_t *)dummy_repeat.ptr, dummy_result);
 	if (values_read != num_values) {

@@ -1,0 +1,7 @@
+# name: test/sql/error/subquery_single_column.test
+# description: Subqueries can only return a single column
+# group: [error]
+
+# subqueries can only return a single column
+statement error
+SELECT (SELECT 42, 84)

@@ -93,17 +93,18 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 }
 
 BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
+	QueryErrorContext error_context(binder.root_statement, window.query_location);
 	if (inside_window) {
-		throw BinderException("window function calls cannot be nested");
+		throw BinderException(error_context.FormatError("window function calls cannot be nested"));
 	}
 	if (depth > 0) {
-		throw BinderException("correlated columns in window functions not supported");
+		throw BinderException(error_context.FormatError("correlated columns in window functions not supported"));
 	}
 	// If we have range expressions, then only one order by clause is allowed.
 	if ((window.start == WindowBoundary::EXPR_PRECEDING_RANGE || window.start == WindowBoundary::EXPR_FOLLOWING_RANGE ||
 	     window.end == WindowBoundary::EXPR_PRECEDING_RANGE || window.end == WindowBoundary::EXPR_FOLLOWING_RANGE) &&
 	    window.orders.size() != 1) {
-		throw BinderException("RANGE frames must have only one ORDER BY expression");
+		throw BinderException(error_context.FormatError("RANGE frames must have only one ORDER BY expression"));
 	}
 	// bind inside the children of the window function
 	// we set the inside_window flag to true to prevent binding nested window functions
@@ -163,10 +164,9 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		//  Look up the aggregate function in the catalog
 		auto func =
 		    (AggregateFunctionCatalogEntry *)Catalog::GetCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(
-		        context, window.schema, window.function_name);
-		if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
-			throw BinderException("Unknown windowed aggregate");
-		}
+		        context, window.schema, window.function_name, false, error_context);
+		D_ASSERT(func->type == CatalogType::AGGREGATE_FUNCTION_ENTRY);
+
 		// bind the aggregate
 		string error;
 		auto best_function = Function::BindFunction(func->name, func->functions, types, error);
