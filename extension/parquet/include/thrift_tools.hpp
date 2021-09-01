@@ -13,12 +13,13 @@ namespace duckdb {
 
 class ThriftFileTransport : public duckdb_apache::thrift::transport::TVirtualTransport<ThriftFileTransport> {
 public:
-	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p) :
-	    allocator(allocator), handle(handle_p), location(0) {
+	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p)
+	    : allocator(allocator), handle(handle_p), location(0) {
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
-		if (prefetched_data && location >= prefetch_location && location + len < prefetch_location + prefetched_data->GetSize()) {
+		if (prefetched_data && location >= prefetch_location &&
+		    location + len < prefetch_location + prefetched_data->GetSize()) {
 			memcpy(buf, prefetched_data->get() + location - prefetch_location, len);
 		} else {
 			handle.Read(buf, len, location);
