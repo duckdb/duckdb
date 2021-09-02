@@ -39,7 +39,7 @@ idx_t GetNestedSortingColSize(idx_t &col_size, const LogicalType &type) {
 SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
     : column_count(orders.size()), all_constant(true), comparison_size(0), entry_size(0) {
 	vector<LogicalType> blob_layout_types;
-	for (idx_t i = 0; i < orders.size(); i++) {
+	for (idx_t i = 0; i < column_count; i++) {
 		const auto &order = orders[i];
 
 		order_types.push_back(order.type);
@@ -84,22 +84,43 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 			col_size += GetTypeIdSize(physical_type);
 		}
 
-		if (!constant_size.back()) {
-			sorting_to_blob_col[i] = blob_layout_types.size();
-			blob_layout_types.push_back(expr.return_type);
-		}
-
 		comparison_size += col_size;
 		column_sizes.push_back(col_size);
 	}
 	entry_size = comparison_size + sizeof(uint32_t);
 
 	// 8-byte alignment
-	if (entry_size % 8 != 0) {
-		if (all_constant) {
-			entry_size = AlignValue(entry_size);
+	if (all_constant) {
+		entry_size = AlignValue(entry_size);
+	} else if (entry_size % 8 != 0) {
+		// First assign more bytes to strings instead of aligning
+		idx_t bytes_to_fill = entry_size % 8;
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			if (bytes_to_fill == 0) {
+				break;
+			}
+			if (logical_types[col_idx].InternalType() == PhysicalType::STRING && stats[col_idx]) {
+				auto &str_stats = (StringStatistics &)*stats[col_idx];
+				idx_t diff = str_stats.max_string_length - prefix_lengths[col_idx];
+				if (diff > 0) {
+					// Increase all sizes accordingly
+					idx_t increase = MinValue(bytes_to_fill, diff);
+					column_sizes[col_idx] += increase;
+					prefix_lengths[col_idx] += increase;
+					constant_size[col_idx] = increase == diff;
+					entry_size += increase;
+					bytes_to_fill -= increase;
+				}
+			}
 		}
-		// TODO: else - assign more bytes to strings instead of aligning
+		entry_size = AlignValue(entry_size);
+	}
+
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		if (!constant_size[col_idx]) {
+			sorting_to_blob_col[col_idx] = blob_layout_types.size();
+			blob_layout_types.push_back(logical_types[col_idx]);
+		}
 	}
 
 	blob_layout.Initialize(blob_layout_types);
