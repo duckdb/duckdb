@@ -10,11 +10,12 @@ using namespace duckdb;
 
 static std::string uri_encode(std::string  input, bool encodeSlash = false) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-    static auto hex_digt = "0123456789ABCDEF";
+	static auto hex_digt = "0123456789ABCDEF";
 	std::string result = "";
 	for (int i = 0; i < input.length(); i++) {
 		char ch = input[i];
-		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' || ch == '~' || ch == '.') {
+		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
+		    ch == '-' || ch == '~' || ch == '.') {
 			result += ch;
 		} else if (ch == '/') {
 			if (encodeSlash) {
@@ -23,7 +24,8 @@ static std::string uri_encode(std::string  input, bool encodeSlash = false) {
 				result += ch;
 			}
 		} else {
-			result += std::string("%") + hex_digt[static_cast<unsigned char>(ch) >> 4] + hex_digt[static_cast<unsigned char>(ch) & 15];
+			result += std::string("%") + hex_digt[static_cast<unsigned char>(ch) >> 4] +
+			          hex_digt[static_cast<unsigned char>(ch) & 15];
 		}
 	}
 	return result;
@@ -50,9 +52,9 @@ static HeaderMap create_s3_get_header(std::string url, std::string host, std::st
 	// construct string to sign
 	hash_bytes canonical_request_hash;
 	hash_str canonical_request_hash_str;
-	auto canonical_request = method + "\n" + uri_encode(url) + "\n\nhost:" + host + "\nx-amz-content-sha256:" + empty_payload_hash +
-	                         "\nx-amz-date:" + datetime_now + "\n\nhost;x-amz-content-sha256;x-amz-date\n" +
-	                         empty_payload_hash;
+	auto canonical_request = method + "\n" + uri_encode(url) + "\n\nhost:" + host +
+	                         "\nx-amz-content-sha256:" + empty_payload_hash + "\nx-amz-date:" + datetime_now +
+	                         "\n\nhost;x-amz-content-sha256;x-amz-date\n" + empty_payload_hash;
 	sha256(canonical_request.c_str(), canonical_request.length(), canonical_request_hash);
 	hex256(canonical_request_hash, canonical_request_hash_str);
 	auto string_to_sign = "AWS4-HMAC-SHA256\n" + datetime_now + "\n" + date_now + "/" + region + "/" + service +
