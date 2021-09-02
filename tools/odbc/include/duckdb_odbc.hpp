@@ -4,6 +4,8 @@
 // needs to be first because BOOL
 #include "duckdb.hpp"
 
+#include "duckdb/common/windows.hpp"
+
 #include <sql.h>
 #include <sqltypes.h>
 #include <sqlext.h>
