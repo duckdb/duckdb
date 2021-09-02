@@ -47,14 +47,14 @@ vector<string> BindContext::GetSimilarBindings(const string &column_name) {
 }
 
 void BindContext::AddUsingBinding(const string &column_name, UsingColumnSet *set) {
-	using_columns[column_name].push_back(set);
+	using_columns[column_name].insert(set);
 }
 
 void BindContext::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
 	using_column_sets.push_back(move(set));
 }
 
-bool BindContext::FindUsingBinding(const string &column_name, vector<UsingColumnSet *> **out) {
+bool BindContext::FindUsingBinding(const string &column_name, unordered_set<UsingColumnSet *> **out) {
 	auto entry = using_columns.find(column_name);
 	if (entry != using_columns.end()) {
 		*out = &entry->second;
@@ -64,7 +64,7 @@ bool BindContext::FindUsingBinding(const string &column_name, vector<UsingColumn
 }
 
 UsingColumnSet *BindContext::GetUsingBinding(const string &column_name) {
-	vector<UsingColumnSet *> *using_bindings;
+	unordered_set<UsingColumnSet *> *using_bindings;
 	if (!FindUsingBinding(column_name, &using_bindings)) {
 		return nullptr;
 	}
@@ -80,20 +80,23 @@ UsingColumnSet *BindContext::GetUsingBinding(const string &column_name) {
 				}
 				result_bindings += binding;
 				result_bindings += ".";
-				result_bindings += column_name;
+				result_bindings += GetActualColumnName(binding, column_name);
 			}
 			error += result_bindings + "]";
 		}
 		throw BinderException(error);
 	}
-	return (*using_bindings)[0];
+	for (auto &using_set : *using_bindings) {
+		return using_set;
+	}
+	throw InternalException("Using binding found but no entries");
 }
 
 UsingColumnSet *BindContext::GetUsingBinding(const string &column_name, const string &binding_name) {
 	if (binding_name.empty()) {
 		return GetUsingBinding(column_name);
 	}
-	vector<UsingColumnSet *> *using_bindings;
+	unordered_set<UsingColumnSet *> *using_bindings;
 	if (!FindUsingBinding(column_name, &using_bindings)) {
 		return nullptr;
 	}
@@ -111,17 +114,21 @@ void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet *
 		return;
 	}
 	auto entry = using_columns.find(column_name);
-	D_ASSERT(entry != using_columns.end());
+	if (entry == using_columns.end()) {
+		return;
+	}
 	auto &bindings = entry->second;
-	for (size_t i = 0; i < bindings.size(); i++) {
-		if (bindings[i] == set) {
-			bindings.erase(bindings.begin() + i);
-			break;
-		}
+	if (bindings.find(set) != bindings.end()) {
+		bindings.erase(set);
 	}
 	if (bindings.empty()) {
 		using_columns.erase(column_name);
 	}
+}
+
+void BindContext::TransferUsingBinding(BindContext &current_context, UsingColumnSet *current_set, UsingColumnSet *new_set, const string &binding, const string &using_column) {
+	AddUsingBinding(using_column, new_set);
+	current_context.RemoveUsingBinding(using_column, current_set);
 }
 
 string BindContext::GetActualColumnName(const string &binding_name, const string &column_name) {
@@ -284,7 +291,7 @@ void BindContext::AddTableFunction(idx_t index, const string &alias, const vecto
 	AddBinding(alias, make_unique<TableBinding>(alias, types, names, get, index));
 }
 
-static string AddColumnNameToBinding(const string &base_name, unordered_set<string> &current_names) {
+static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {
 	idx_t index = 1;
 	string name = base_name;
 	while (current_names.find(name) != current_names.end()) {
@@ -301,7 +308,7 @@ vector<string> BindContext::AliasColumnNames(const string &table_name, const vec
 		throw BinderException("table \"%s\" has %lld columns available but %lld columns specified", table_name,
 		                      names.size(), column_aliases.size());
 	}
-	unordered_set<string> current_names;
+	case_insensitive_set_t current_names;
 	// use any provided column aliases first
 	for (idx_t i = 0; i < column_aliases.size(); i++) {
 		result.push_back(AddColumnNameToBinding(column_aliases[i], current_names));
@@ -353,7 +360,7 @@ void BindContext::AddContext(BindContext other) {
 				}
 			}
 #endif
-			using_columns[entry.first].push_back(alias);
+			using_columns[entry.first].insert(alias);
 		}
 	}
 }

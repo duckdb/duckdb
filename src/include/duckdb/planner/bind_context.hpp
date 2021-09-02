@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
@@ -35,7 +36,7 @@ struct UsingColumnSet {
 class BindContext {
 public:
 	//! Keep track of recursive CTE references
-	unordered_map<string, std::shared_ptr<idx_t>> cte_references;
+	case_insensitive_map_t<std::shared_ptr<idx_t>> cte_references;
 
 public:
 	//! Given a column name, find the matching table it belongs to. Throws an
@@ -93,17 +94,19 @@ public:
 	//! Erase a using binding from the set of using bindings
 	void RemoveUsingBinding(const string &column_name, UsingColumnSet *set);
 	//! Finds the using bindings for a given column. Returns true if any exists, false otherwise.
-	bool FindUsingBinding(const string &column_name, vector<UsingColumnSet *> **using_columns);
+	bool FindUsingBinding(const string &column_name, unordered_set<UsingColumnSet *> **using_columns);
+	//! Transfer a using binding from one bind context to this bind context
+	void TransferUsingBinding(BindContext &current_context, UsingColumnSet *current_set, UsingColumnSet *new_set, const string &binding, const string &using_column);
 
 	//! Fetch the actual column name from the given binding, or throws if none exists
 	//! This can be different from "column_name" because of case insensitivity
 	//! (e.g. "column_name" might return "COLUMN_NAME")
 	string GetActualColumnName(const string &binding, const string &column_name);
 
-	unordered_map<string, std::shared_ptr<Binding>> GetCTEBindings() {
+	case_insensitive_map_t<std::shared_ptr<Binding>> GetCTEBindings() {
 		return cte_bindings;
 	}
-	void SetCTEBindings(unordered_map<string, std::shared_ptr<Binding>> bindings) {
+	void SetCTEBindings(case_insensitive_map_t<std::shared_ptr<Binding>> bindings) {
 		cte_bindings = bindings;
 	}
 
@@ -123,15 +126,15 @@ private:
 
 private:
 	//! The set of bindings
-	unordered_map<string, unique_ptr<Binding>> bindings;
+	case_insensitive_map_t<unique_ptr<Binding>> bindings;
 	//! The list of bindings in insertion order
 	vector<std::pair<string, Binding *>> bindings_list;
 	//! The set of columns used in USING join conditions
-	unordered_map<string, vector<UsingColumnSet *>> using_columns;
+	case_insensitive_map_t<unordered_set<UsingColumnSet *>> using_columns;
 	//! Using column sets
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
 
 	//! The set of CTE bindings
-	unordered_map<string, std::shared_ptr<Binding>> cte_bindings;
+	case_insensitive_map_t<std::shared_ptr<Binding>> cte_bindings;
 };
 } // namespace duckdb

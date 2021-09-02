@@ -26,29 +26,20 @@ DROP TABLE MyOtherTable;
 statement ok
 CREATE TABLE "ABC"(i integer);
 
-statement ok
+statement error
 CREATE TABLE "AbC"(i integer);
 
 statement ok
 SELECT * FROM "ABC";
 
 statement ok
-SELECT * FROM "AbC";
-
-statement error
 SELECT * FROM abc; -- error: which table did I mean?
 
-statement error
+statement ok
 ALTER TABLE abc ADD COLUMN j INTEGER;
 
-statement ok
-ALTER TABLE "ABC" ADD COLUMN j INTEGER;
-
 statement error
+ALTER TABLE "ABC" ADD COLUMN "J" INTEGER;
+
+statement ok
 DROP TABLE abc
-
-statement ok
-DROP TABLE "ABC"
-
-statement ok
-DROP TABLE "AbC"

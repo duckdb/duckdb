@@ -17,23 +17,17 @@ Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<strin
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
+		auto lcase = StringUtil::Lower(name);
 		D_ASSERT(!name.empty());
-		if (name_map.find(name) != name_map.end()) {
+		if (name_map.find(lcase) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
 		}
-		name_map[name] = i;
+		name_map[lcase] = i;
 	}
-	TableCatalogEntry::AddLowerCaseAliases(name_map);
 }
 
 bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
 	auto entry = name_map.find(column_name);
-	if (entry != name_map.end()) {
-		result = entry->second;
-		return true;
-	}
-	// no match found: try to lowercase the column name
-	entry = name_map.find(StringUtil::Lower(column_name));
 	if (entry != name_map.end()) {
 		result = entry->second;
 		return true;
