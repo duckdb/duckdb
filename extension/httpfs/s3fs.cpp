@@ -8,6 +8,27 @@
 
 using namespace duckdb;
 
+static std::string uri_encode(std::string  input, bool encodeSlash = false) {
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+    static auto hex_digt = "0123456789ABCDEF";
+	std::string result = "";
+	for (int i = 0; i < input.length(); i++) {
+		char ch = input[i];
+		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' || ch == '~' || ch == '.') {
+			result += ch;
+		} else if (ch == '/') {
+			if (encodeSlash) {
+				result += std::string("%2F");
+			} else {
+				result += ch;
+			}
+		} else {
+			result += std::string("%") + hex_digt[static_cast<unsigned char>(ch) >> 4] + hex_digt[static_cast<unsigned char>(ch) & 15];
+		}
+	}
+	return result;
+}
+
 static HeaderMap create_s3_get_header(std::string url, std::string host, std::string region, std::string service,
                                       std::string method, std::string access_key_id, std::string secret_access_key,
                                       std::string date_now = "", std::string datetime_now = "") {
@@ -29,7 +50,7 @@ static HeaderMap create_s3_get_header(std::string url, std::string host, std::st
 	// construct string to sign
 	hash_bytes canonical_request_hash;
 	hash_str canonical_request_hash_str;
-	auto canonical_request = method + "\n" + url + "\n\nhost:" + host + "\nx-amz-content-sha256:" + empty_payload_hash +
+	auto canonical_request = method + "\n" + uri_encode(url) + "\n\nhost:" + host + "\nx-amz-content-sha256:" + empty_payload_hash +
 	                         "\nx-amz-date:" + datetime_now + "\n\nhost;x-amz-content-sha256;x-amz-date\n" +
 	                         empty_payload_hash;
 	sha256(canonical_request.c_str(), canonical_request.length(), canonical_request_hash);
@@ -71,7 +92,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::Request(FileHandle &handle, string url
 	}
 	auto path = url.substr(slash_pos);
 	if (path.empty()) {
-		throw std::runtime_error("URL needs to contain a bucket name");
+		throw std::runtime_error("URL needs to contain key");
 	}
 	auto host = bucket + ".s3.amazonaws.com";
 	auto http_host = "https://" + host;
