@@ -1,5 +1,5 @@
 # name: test/sql/window/test_partition_flushing.test
-# description: Test multithreaded partition flushing
+# description: Test chunk flushing under multithreaded partitioning
 # group: [window]
 
 require vector_size 512
