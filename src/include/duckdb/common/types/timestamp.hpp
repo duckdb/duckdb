@@ -64,7 +64,8 @@ public:
 	//! Convert a timestamp to epoch (in nanoseconds)
 	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
 
-	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset, int &minute_offset);
+	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset, 
+						 int &minute_offset);
 
 	DUCKDB_API static string ConversionError(const string &str);
 	DUCKDB_API static string ConversionError(string_t str);
