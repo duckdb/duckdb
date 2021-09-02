@@ -1,5 +1,7 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 
+#include <utility>
+
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
@@ -31,7 +33,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	children.push_back(move(left));
 	children.push_back(move(right));
 
-	D_ASSERT(left_projection_map.size() == 0);
+	D_ASSERT(left_projection_map.empty());
 	for (auto &condition : conditions) {
 		condition_types.push_back(condition.left->return_type);
 	}
@@ -53,7 +55,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_state)
     : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}, {}, estimated_cardinality,
-                       perfect_join_state) {
+                       std::move(perfect_join_state)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -129,7 +131,6 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 	lstate.build_executor.Execute(input, lstate.join_keys);
 	// TODO: add statement to check for possible per
 	// build the HT
-	sink.key_type = lstate.join_keys.GetTypes()[0];
 	if (!right_projection_map.empty()) {
 		// there is a projection map: fill the build chunk with the projected columns
 		lstate.build_chunk.Reset();
@@ -156,8 +157,10 @@ bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, uniq
 	// check for possible perfect hash table
 	use_perfect_hash = global_state->perfect_join_executor->CanDoPerfectHashJoin();
 	if (use_perfect_hash) {
+		D_ASSERT(global_state->hash_table->equality_types.size() == 1);
+		auto key_type = global_state->hash_table->equality_types[0];
 		global_state->perfect_join_executor->BuildPerfectHashTable(global_state->hash_table.get(),
-		                                                           global_state->ht_scan_state, global_state->key_type);
+		                                                           global_state->ht_scan_state, key_type);
 	}
 	// In case large build side or duplicates, use regular hash join
 	if (!use_perfect_hash || global_state->perfect_join_executor->has_duplicates) {

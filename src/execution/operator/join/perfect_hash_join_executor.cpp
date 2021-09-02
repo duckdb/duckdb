@@ -14,7 +14,7 @@ bool PerfectHashJoinExecutor::CanDoPerfectHashJoin() {
 }
 
 void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
-                                                    LogicalType key_type) {
+                                                    LogicalType &key_type) {
 	// First, allocate memory for each build column
 	auto build_size = perfect_join_statistics.build_range + 1;
 	for (const auto &type : hash_table_ptr->build_types) {
@@ -25,10 +25,10 @@ void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_pt
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
 	// Now fill columns with build data
-	FullScanHashTable(join_ht_state, move(key_type), hash_table_ptr);
+	FullScanHashTable(join_ht_state, key_type, hash_table_ptr);
 }
 
-void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType key_type,
+void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType &key_type,
                                                 JoinHashTable *hash_table) {
 	Vector tuples_addresses(LogicalType::POINTER, hash_table->Count());     // allocate space for all the tuples
 	auto key_locations = FlatVector::GetData<data_ptr_t>(tuples_addresses); // get a pointer to vector data
@@ -36,7 +36,7 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	// Go through all the blocks and fill the keys addresses
 	auto keys_count = hash_table->FillWithHTOffsets(key_locations, state);
 	// Scan the build keys in the hash table
-	Vector build_vector(move(key_type), keys_count);
+	Vector build_vector(key_type, keys_count);
 	RowOperations::FullScanColumn(hash_table->layout, tuples_addresses, build_vector, keys_count, 0);
 	// Now fill the selection vector using the build keys and create a sequential vector
 	// todo: add check for fast pass when probe is part of build domain
@@ -50,7 +50,7 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	if (unique_keys == perfect_join_statistics.build_range + 1 && !hash_table->has_null) {
 		perfect_join_statistics.is_build_dense = true;
 	}
-	keys_count = unique_keys; // do not condider keys out of the range
+	keys_count = unique_keys; // do not consider keys out of the range
 	// Full scan the remaining build columns and fill the perfect hash table
 	for (idx_t i = 0; i < hash_table->build_types.size(); i++) {
 		auto &vector = perfect_hash_table[i];
@@ -160,7 +160,7 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
 			auto &result_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
 			D_ASSERT(result_vector.GetType() == ht_ptr->build_types[i]);
 			auto &build_vec = perfect_hash_table[i];
-			result_vector.Reference(build_vec); //
+			result_vector.Reference(build_vec);
 			result_vector.Slice(physical_state->build_sel_vec, probe_sel_count);
 		}
 

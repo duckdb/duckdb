@@ -43,9 +43,8 @@ public:
 	unique_ptr<JoinHashTable> hash_table;
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
 	JoinHTScanState ht_scan_state;
-	LogicalType key_type {LogicalType::INVALID};
 	//! Checks and execute perfect hash join optimization
-	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor {nullptr};
+	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor;
 };
 
 //! PhysicalHashJoin represents a hash loop join between two tables

@@ -38,7 +38,7 @@ public:
 	bool ProbePerfectHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
 	                           JoinHashTable *ht_ptr, PhysicalOperator *operator_child);
 	bool CanDoPerfectHashJoin();
-	void BuildPerfectHashTable(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType type);
+	void BuildPerfectHashTable(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType &type);
 	void FillSelectionVectorSwitchProbe(Vector &source, SelectionVector &build_sel_vec, SelectionVector &probe_sel_vec,
 	                                    idx_t count, idx_t &probe_sel_count);
 	template <typename T>
@@ -49,7 +49,7 @@ public:
 	template <typename T>
 	void TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
 	                                       idx_t count);
-	void FullScanHashTable(JoinHTScanState &state, LogicalType key_type, JoinHashTable *hash_table);
+	void FullScanHashTable(JoinHTScanState &state, LogicalType &key_type, JoinHashTable *hash_table);
 
 public:
 	bool has_duplicates = false;
