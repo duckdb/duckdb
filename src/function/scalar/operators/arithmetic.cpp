@@ -263,11 +263,13 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			return ScalarFunction({left_type, right_type}, LogicalType::DATE,
 			                      ScalarFunction::BinaryFunction<date_t, interval_t, date_t, AddOperator>);
 		}
+		break;
 	case LogicalTypeId::INTEGER:
 		if (right_type.id() == LogicalTypeId::DATE) {
 			return ScalarFunction({left_type, right_type}, LogicalType::DATE,
 			                      ScalarFunction::BinaryFunction<int32_t, date_t, date_t, AddOperator>);
 		}
+		break;
 	case LogicalTypeId::INTERVAL:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction({left_type, right_type}, LogicalType::INTERVAL,
@@ -282,22 +284,26 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			return ScalarFunction({left_type, right_type}, LogicalType::TIMESTAMP,
 			                      ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>);
 		}
+		break;
 	case LogicalTypeId::TIME:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction({left_type, right_type}, LogicalType::TIME,
 			                      ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, AddTimeOperator>);
 		}
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction({left_type, right_type}, LogicalType::TIMESTAMP,
 			                      ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, AddOperator>);
 		}
+		break;
 	default:
-		// LCOV_EXCL_START
-		throw NotImplementedException("AddFun for types %s, %s", LogicalTypeIdToString(left_type.id()),
-		                              LogicalTypeIdToString(right_type.id()));
-		// LCOV_EXCL_STOP
+		break;
 	}
+	// LCOV_EXCL_START
+	throw NotImplementedException("AddFun for types %s, %s", LogicalTypeIdToString(left_type.id()),
+	                              LogicalTypeIdToString(right_type.id()));
+	// LCOV_EXCL_STOP
 }
 
 void AddFun::RegisterFunction(BuiltinFunctions &set) {
@@ -455,6 +461,7 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 			return ScalarFunction({left_type, right_type}, LogicalType::DATE,
 			                      ScalarFunction::BinaryFunction<date_t, interval_t, date_t, SubtractOperator>);
 		}
+		break;
 	case LogicalTypeId::TIMESTAMP:
 		if (right_type.id() == LogicalTypeId::TIMESTAMP) {
 			return ScalarFunction(
@@ -465,22 +472,26 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 			    {left_type, right_type}, LogicalType::TIMESTAMP,
 			    ScalarFunction::BinaryFunction<timestamp_t, interval_t, timestamp_t, SubtractOperator>);
 		}
+		break;
 	case LogicalTypeId::INTERVAL:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction({left_type, right_type}, LogicalType::INTERVAL,
 			                      ScalarFunction::BinaryFunction<interval_t, interval_t, interval_t, SubtractOperator>);
 		}
+		break;
 	case LogicalTypeId::TIME:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction({left_type, right_type}, LogicalType::TIME,
 			                      ScalarFunction::BinaryFunction<dtime_t, interval_t, dtime_t, SubtractTimeOperator>);
 		}
+		break;
 	default:
-		// LCOV_EXCL_START
-		throw NotImplementedException("SubtractFun for types %s, %s", LogicalTypeIdToString(left_type.id()),
-		                              LogicalTypeIdToString(right_type.id()));
-		// LCOV_EXCL_STOP
+		break;
 	}
+	// LCOV_EXCL_START
+	throw NotImplementedException("SubtractFun for types %s, %s", LogicalTypeIdToString(left_type.id()),
+	                              LogicalTypeIdToString(right_type.id()));
+	// LCOV_EXCL_STOP
 }
 
 void SubtractFun::RegisterFunction(BuiltinFunctions &set) {

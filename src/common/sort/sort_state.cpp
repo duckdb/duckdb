@@ -182,7 +182,7 @@ idx_t LocalSortState::SizeInBytes() const {
 	return size_in_bytes;
 }
 
-void LocalSortState::Sort(GlobalSortState &global_sort_state) {
+void LocalSortState::Sort(GlobalSortState &global_sort_state, bool reorder_heap) {
 	D_ASSERT(radix_sorting_data->count == payload_data->count);
 	if (radix_sorting_data->count == 0) {
 		return;
@@ -205,7 +205,7 @@ void LocalSortState::Sort(GlobalSortState &global_sort_state) {
 	// Now perform the actual sort
 	SortInMemory();
 	// Re-order before the merge sort
-	ReOrder(global_sort_state);
+	ReOrder(global_sort_state, reorder_heap);
 }
 
 RowDataBlock LocalSortState::ConcatenateBlocks(RowDataCollection &row_data) {
@@ -227,7 +227,9 @@ RowDataBlock LocalSortState::ConcatenateBlocks(RowDataCollection &row_data) {
 	return new_block;
 }
 
-void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap, GlobalSortState &gstate) {
+void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap, GlobalSortState &gstate,
+                             bool reorder_heap) {
+	sd.swizzled = reorder_heap;
 	auto &unordered_data_block = sd.data_blocks.back();
 	const idx_t &count = unordered_data_block.count;
 	auto unordered_data_handle = buffer_manager->Pin(unordered_data_block.block);
@@ -250,7 +252,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	sd.data_blocks.clear();
 	sd.data_blocks.push_back(move(ordered_data_block));
 	// Deal with the heap (if necessary)
-	if (!sd.layout.AllConstant()) {
+	if (!sd.layout.AllConstant() && reorder_heap) {
 		// Swizzle the column pointers to offsets
 		RowOperations::SwizzleColumns(sd.layout, ordered_data_handle->Ptr(), count);
 		// Create a single heap block to store the ordered heap
@@ -282,16 +284,16 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	}
 }
 
-void LocalSortState::ReOrder(GlobalSortState &gstate) {
+void LocalSortState::ReOrder(GlobalSortState &gstate, bool reorder_heap) {
 	auto &sb = *sorted_blocks.back();
 	auto sorting_handle = buffer_manager->Pin(sb.radix_sorting_data.back().block);
 	const data_ptr_t sorting_ptr = sorting_handle->Ptr() + gstate.sort_layout.comparison_size;
 	// Re-order variable size sorting columns
 	if (!gstate.sort_layout.all_constant) {
-		ReOrder(*sb.blob_sorting_data, sorting_ptr, *blob_sorting_heap, gstate);
+		ReOrder(*sb.blob_sorting_data, sorting_ptr, *blob_sorting_heap, gstate, reorder_heap);
 	}
 	// And the payload
-	ReOrder(*sb.payload_data, sorting_ptr, *payload_heap, gstate);
+	ReOrder(*sb.payload_data, sorting_ptr, *payload_heap, gstate, reorder_heap);
 }
 
 GlobalSortState::GlobalSortState(BufferManager &buffer_manager, const vector<BoundOrderByNode> &orders,
@@ -306,12 +308,24 @@ void GlobalSortState::AddLocalState(LocalSortState &local_sort_state) {
 	}
 
 	// Sort accumulated data
-	local_sort_state.Sort(*this);
+	local_sort_state.Sort(*this, external || !sorted_blocks.empty());
 
 	// Append local state sorted data to this global state
 	lock_guard<mutex> append_guard(lock);
 	for (auto &sb : local_sort_state.sorted_blocks) {
 		sorted_blocks.push_back(move(sb));
+	}
+	auto &payload_heap = local_sort_state.payload_heap;
+	for (idx_t i = 0; i < payload_heap->blocks.size(); i++) {
+		heap_blocks.push_back(move(payload_heap->blocks[i]));
+		pinned_blocks.push_back(move(payload_heap->pinned_blocks[i]));
+	}
+	if (!sort_layout.all_constant) {
+		auto &blob_heap = local_sort_state.blob_sorting_heap;
+		for (idx_t i = 0; i < blob_heap->blocks.size(); i++) {
+			heap_blocks.push_back(move(blob_heap->blocks[i]));
+			pinned_blocks.push_back(move(blob_heap->pinned_blocks[i]));
+		}
 	}
 }
 
@@ -320,11 +334,11 @@ void GlobalSortState::PrepareMergePhase() {
 	idx_t total_heap_size =
 	    std::accumulate(sorted_blocks.begin(), sorted_blocks.end(), (idx_t)0,
 	                    [](idx_t a, const unique_ptr<SortedBlock> &b) { return a + b->HeapSize(); });
-	if (external || total_heap_size > 0.25 * buffer_manager.GetMaxMemory()) {
+	if (external || (pinned_blocks.empty() && total_heap_size > 0.25 * buffer_manager.GetMaxMemory())) {
 		external = true;
 	}
 	// Use the data that we have to determine which partition size to use during the merge
-	if (total_heap_size > 0) {
+	if (external && total_heap_size > 0) {
 		// If we have variable size data we need to be conservative, as there might be skew
 		idx_t max_block_size = 0;
 		for (auto &sb : sorted_blocks) {

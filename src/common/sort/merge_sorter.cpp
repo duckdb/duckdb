@@ -548,7 +548,7 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 					const auto &entry_size = next_entry_sizes[copied + i];
 					memcpy(result_heap_ptr, l_heap_ptr, l_smaller * entry_size);
 					memcpy(result_heap_ptr, r_heap_ptr, r_smaller * entry_size);
-					D_ASSERT(Load<idx_t>(result_heap_ptr) == entry_size);
+					D_ASSERT(Load<uint32_t>(result_heap_ptr) == entry_size);
 					result_heap_ptr += entry_size;
 					l_heap_ptr += l_smaller * entry_size;
 					r_heap_ptr += r_smaller * entry_size;

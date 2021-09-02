@@ -90,7 +90,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 
 	// When sorting data reaches a certain size, we sort it
 	if (local_sort_state.SizeInBytes() >= gstate.memory_per_thread) {
-		local_sort_state.Sort(global_sort_state);
+		local_sort_state.Sort(global_sort_state, true);
 	}
 }
 
