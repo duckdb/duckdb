@@ -17,12 +17,11 @@ Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<strin
 	D_ASSERT(types.size() == names.size());
 	for (idx_t i = 0; i < names.size(); i++) {
 		auto &name = names[i];
-		auto lcase = StringUtil::Lower(name);
 		D_ASSERT(!name.empty());
-		if (name_map.find(lcase) != name_map.end()) {
+		if (name_map.find(name) != name_map.end()) {
 			throw BinderException("table \"%s\" has duplicate column name \"%s\"", alias, name);
 		}
-		name_map[lcase] = i;
+		name_map[name] = i;
 	}
 }
 

@@ -52,9 +52,8 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	this->temporary = info->Base().temporary;
 	// add lower case aliases
 	for (idx_t i = 0; i < columns.size(); i++) {
-		auto lcase = StringUtil::Lower(columns[i].name);
-		D_ASSERT(name_map.find(lcase) == name_map.end());
-		name_map[lcase] = i;
+		D_ASSERT(name_map.find(columns[i].name) == name_map.end());
+		name_map[columns[i].name] = i;
 	}
 	// add the "rowid" alias, if there is no rowid column specified in the table
 	if (name_map.find("rowid") == name_map.end()) {
