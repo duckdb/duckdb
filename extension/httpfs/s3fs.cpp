@@ -8,7 +8,7 @@
 
 using namespace duckdb;
 
-static std::string uri_encode(std::string  input, bool encodeSlash = false) {
+static std::string uri_encode(std::string input, bool encodeSlash = false) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 	static auto hex_digt = "0123456789ABCDEF";
 	std::string result = "";
