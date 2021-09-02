@@ -113,7 +113,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 		// add index to selection vector if value in the range
 		if (min_value <= input_value && input_value <= max_value) {
 			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-			sel_vec.set_index(sel_idx++, idx);
+			sel_vec.set_index(sel_idx, idx);
 			if (bitmap_build_idx[idx]) {
 				has_duplicates = true;
 				break;
@@ -121,8 +121,8 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 				bitmap_build_idx[idx] = true;
 				unique_keys++;
 			}
+			seq_sel_vec.set_index(sel_idx++, i);
 		}
-		seq_sel_vec.set_index(i, i);
 	}
 }
 

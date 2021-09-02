@@ -72,7 +72,10 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	join_state.build_max = stats_build->max;
 	join_state.estimated_cardinality = op.estimated_cardinality;
 	join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
-
+	D_ASSERT(!stats_build->min.is_null && !stats_build->max.is_null);
+	if (stats_probe->max.is_null || stats_probe->min.is_null) {
+		return;
+	}
 	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
 		join_state.is_probe_in_domain = true;
 	}
