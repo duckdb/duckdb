@@ -8,9 +8,8 @@
 
 namespace duckdb {
 
-unique_ptr<Expression> CastHugeintToSmallestType(unique_ptr<Expression> expr) {
+unique_ptr<Expression> CastHugeintToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {
 	// Compute range
-	auto &num_stats = (NumericStatistics &)*expr->stats;
 	if (num_stats.min.is_null || num_stats.max.is_null) {
 		return expr;
 	}
@@ -53,9 +52,8 @@ unique_ptr<Expression> CastHugeintToSmallestType(unique_ptr<Expression> expr) {
 }
 
 template <class T>
-unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr) {
+unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {
 	// Compute range
-	auto &num_stats = (NumericStatistics &)*expr->stats;
 	if (num_stats.min.is_null || num_stats.max.is_null) {
 		return expr;
 	}
@@ -97,26 +95,26 @@ unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr) 
 	return make_unique<BoundCastExpression>(move(minus_expr), cast_type);
 }
 
-unique_ptr<Expression> CastToSmallestType(unique_ptr<Expression> expr) {
+unique_ptr<Expression> CastToSmallestType(unique_ptr<Expression> expr, NumericStatistics &num_stats) {
 	auto physical_type = expr->return_type.InternalType();
 	switch (physical_type) {
 	case PhysicalType::UINT8:
 	case PhysicalType::INT8:
 		return expr;
 	case PhysicalType::UINT16:
-		return TemplatedCastToSmallestType<uint16_t>(move(expr));
+		return TemplatedCastToSmallestType<uint16_t>(move(expr), num_stats);
 	case PhysicalType::INT16:
-		return TemplatedCastToSmallestType<int16_t>(move(expr));
+		return TemplatedCastToSmallestType<int16_t>(move(expr), num_stats);
 	case PhysicalType::UINT32:
-		return TemplatedCastToSmallestType<uint32_t>(move(expr));
+		return TemplatedCastToSmallestType<uint32_t>(move(expr), num_stats);
 	case PhysicalType::INT32:
-		return TemplatedCastToSmallestType<int32_t>(move(expr));
+		return TemplatedCastToSmallestType<int32_t>(move(expr), num_stats);
 	case PhysicalType::UINT64:
-		return TemplatedCastToSmallestType<uint64_t>(move(expr));
+		return TemplatedCastToSmallestType<uint64_t>(move(expr), num_stats);
 	case PhysicalType::INT64:
-		return TemplatedCastToSmallestType<int64_t>(move(expr));
+		return TemplatedCastToSmallestType<int64_t>(move(expr), num_stats);
 	case PhysicalType::INT128:
-		return CastHugeintToSmallestType(move(expr));
+		return CastHugeintToSmallestType(move(expr), num_stats);
 	default:
 		throw NotImplementedException("Unknown integer type!");
 	}
@@ -129,15 +127,12 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrde
 
 	// then propagate to each of the order expressions
 	for (auto &bound_order : order.orders) {
-		PropagateExpression(bound_order.expression);
-		if (bound_order.expression->stats) {
-			bound_order.stats = bound_order.expression->stats->Copy();
+		bound_order.stats = PropagateExpression(bound_order.expression);
+		if (bound_order.stats) {
 			if (bound_order.expression->return_type.IsIntegral()) {
-				bound_order.expression = CastToSmallestType(move(bound_order.expression));
-				PropagateExpression(bound_order.expression);
+				bound_order.expression =
+				    CastToSmallestType(move(bound_order.expression), (NumericStatistics &)*bound_order.stats);
 			}
-		} else {
-			bound_order.stats = nullptr;
 		}
 	}
 	return move(node_stats);

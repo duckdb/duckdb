@@ -83,6 +83,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 
 	// Obtain sorting columns
 	auto &sort = lstate.sort;
+	sort.Reset();
 	lstate.executor.Execute(input, sort);
 
 	// Sink the data into the local sort state

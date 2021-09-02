@@ -92,3 +92,20 @@ statement ok
 drop table test
 
 endloop
+
+statement ok
+create table test (i hugeint)
+
+statement ok
+insert into test values (295147905179352825856), (18446744073709551616), (147573952589676412928), (36893488147419103232)
+
+query T
+select * from test order by i
+----
+18446744073709551616
+36893488147419103232
+73786976294838206464
+295147905179352825856
+
+statement ok
+drop table test
