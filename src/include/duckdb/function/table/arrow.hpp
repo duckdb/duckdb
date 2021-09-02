@@ -16,7 +16,7 @@
 #include "duckdb/common/thread.hpp"
 #include <map>
 #include <condition_variable>
-#define DUCKDB_NO_THREADS
+
 namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Arrow Variable Size Types
