@@ -243,10 +243,11 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
 			return ScalarFunction({left_type, right_type}, left_type, nullptr, false,
 			                      BindDecimalAddSubtract<AddOperator, DecimalAddOverflowCheck>);
-		} else if (TypeIsIntegral(left_type.InternalType()) && left_type.id() != LogicalTypeId::HUGEINT) {
-			ScalarFunction({left_type, right_type}, left_type,
-			               GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()), false, nullptr,
-			               nullptr, PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
+		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
+			return ScalarFunction({left_type, right_type}, left_type,
+			                      GetScalarIntegerFunction<AddOperatorOverflowCheck>(left_type.InternalType()), false,
+			                      nullptr, nullptr,
+			                      PropagateNumericStats<TryAddOperator, AddPropagateStatistics, AddOperator>);
 		} else {
 			return ScalarFunction({left_type, right_type}, left_type,
 			                      GetScalarBinaryFunction<AddOperator>(left_type.InternalType()));
@@ -431,11 +432,11 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 		if (left_type.id() == LogicalTypeId::DECIMAL) {
 			return ScalarFunction({left_type, right_type}, left_type, nullptr, false,
 			                      BindDecimalAddSubtract<SubtractOperator, DecimalSubtractOverflowCheck>);
-		} else if (TypeIsIntegral(left_type.InternalType()) && left_type.id() != LogicalTypeId::HUGEINT) {
-			ScalarFunction({left_type, right_type}, left_type,
-			               GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), false,
-			               nullptr, nullptr,
-			               PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
+		} else if (left_type.IsIntegral() && left_type.id() != LogicalTypeId::HUGEINT) {
+			return ScalarFunction(
+			    {left_type, right_type}, left_type,
+			    GetScalarIntegerFunction<SubtractOperatorOverflowCheck>(left_type.InternalType()), false, nullptr,
+			    nullptr, PropagateNumericStats<TrySubtractOperator, SubtractPropagateStatistics, SubtractOperator>);
 		} else {
 			return ScalarFunction({left_type, right_type}, left_type,
 			                      GetScalarBinaryFunction<SubtractOperator>(left_type.InternalType()));
@@ -445,8 +446,8 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 	switch (left_type.id()) {
 	case LogicalTypeId::DATE:
 		if (right_type.id() == LogicalTypeId::DATE) {
-			ScalarFunction({left_type, right_type}, LogicalType::BIGINT,
-			               ScalarFunction::BinaryFunction<date_t, date_t, int64_t, SubtractOperator>);
+			return ScalarFunction({left_type, right_type}, LogicalType::BIGINT,
+			                      ScalarFunction::BinaryFunction<date_t, date_t, int64_t, SubtractOperator>);
 		} else if (right_type.id() == LogicalTypeId::INTEGER) {
 			return ScalarFunction({left_type, right_type}, LogicalType::DATE,
 			                      ScalarFunction::BinaryFunction<date_t, int32_t, date_t, SubtractOperator>);
@@ -456,8 +457,9 @@ ScalarFunction SubtractFun::GetFunction(const LogicalType &left_type, const Logi
 		}
 	case LogicalTypeId::TIMESTAMP:
 		if (right_type.id() == LogicalTypeId::TIMESTAMP) {
-			ScalarFunction({left_type, right_type}, LogicalType::INTERVAL,
-			               ScalarFunction::BinaryFunction<timestamp_t, timestamp_t, interval_t, SubtractOperator>);
+			return ScalarFunction(
+			    {left_type, right_type}, LogicalType::INTERVAL,
+			    ScalarFunction::BinaryFunction<timestamp_t, timestamp_t, interval_t, SubtractOperator>);
 		} else if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction(
 			    {left_type, right_type}, LogicalType::TIMESTAMP,
