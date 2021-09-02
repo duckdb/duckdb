@@ -35,6 +35,9 @@ public:
 	const_data_ptr_t get() const {
 		return pointer;
 	}
+	idx_t GetSize() const {
+		return allocated_size;
+	}
 	void Reset();
 
 private:
