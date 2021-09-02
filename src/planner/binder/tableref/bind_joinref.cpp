@@ -92,7 +92,8 @@ static void SetPrimaryBinding(UsingColumnSet &set, JoinType join_type, const str
 	}
 }
 
-string Binder::RetrieveUsingBinding(Binder &current_binder, UsingColumnSet *current_set, const string &using_column, const string &join_side, UsingColumnSet *new_set) {
+string Binder::RetrieveUsingBinding(Binder &current_binder, UsingColumnSet *current_set, const string &using_column,
+                                    const string &join_side, UsingColumnSet *new_set) {
 	string binding;
 	if (!current_set) {
 		binding = current_binder.FindBinding(using_column, join_side);
@@ -208,8 +209,10 @@ unique_ptr<BoundTableRef> Binder::Bind(JoinRef &ref) {
 			AddUsingBindings(*set, left_using_binding, left_binding);
 			AddUsingBindings(*set, right_using_binding, right_binding);
 			SetPrimaryBinding(*set, ref.type, left_binding, right_binding);
-			bind_context.TransferUsingBinding(left_binder.bind_context, left_using_binding, set.get(), left_binding, using_column);
-			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, set.get(), right_binding, using_column);
+			bind_context.TransferUsingBinding(left_binder.bind_context, left_using_binding, set.get(), left_binding,
+			                                  using_column);
+			bind_context.TransferUsingBinding(right_binder.bind_context, right_using_binding, set.get(), right_binding,
+			                                  using_column);
 			AddUsingBindingSet(move(set));
 		}
 	}

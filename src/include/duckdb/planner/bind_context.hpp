@@ -96,7 +96,8 @@ public:
 	//! Finds the using bindings for a given column. Returns true if any exists, false otherwise.
 	bool FindUsingBinding(const string &column_name, unordered_set<UsingColumnSet *> **using_columns);
 	//! Transfer a using binding from one bind context to this bind context
-	void TransferUsingBinding(BindContext &current_context, UsingColumnSet *current_set, UsingColumnSet *new_set, const string &binding, const string &using_column);
+	void TransferUsingBinding(BindContext &current_context, UsingColumnSet *current_set, UsingColumnSet *new_set,
+	                          const string &binding, const string &using_column);
 
 	//! Fetch the actual column name from the given binding, or throws if none exists
 	//! This can be different from "column_name" because of case insensitivity

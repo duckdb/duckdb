@@ -93,8 +93,7 @@ private:
 	void DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
 	                       set_lock_map_t &lock_set);
 	CatalogEntry *CreateEntryInternal(ClientContext &context, unique_ptr<CatalogEntry> entry);
-	MappingValue *GetMapping(ClientContext &context, const string &name,
-	                         bool get_latest = false);
+	MappingValue *GetMapping(ClientContext &context, const string &name, bool get_latest = false);
 	void PutMapping(ClientContext &context, const string &name, idx_t entry_index);
 	void DeleteMapping(ClientContext &context, const string &name);
 

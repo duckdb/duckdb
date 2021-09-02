@@ -247,7 +247,8 @@ private:
 	bool TryFindBinding(const string &using_column, const string &join_side, string &result);
 
 	void AddUsingBindingSet(unique_ptr<UsingColumnSet> set);
-	string RetrieveUsingBinding(Binder &current_binder, UsingColumnSet *current_set, const string &column_name, const string &join_side, UsingColumnSet *new_set);
+	string RetrieveUsingBinding(Binder &current_binder, UsingColumnSet *current_set, const string &column_name,
+	                            const string &join_side, UsingColumnSet *new_set);
 
 public:
 	// This should really be a private constructor, but make_shared does not allow it...

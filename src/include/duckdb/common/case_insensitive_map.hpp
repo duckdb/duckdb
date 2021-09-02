@@ -29,7 +29,8 @@ struct CaseInsensitiveStringEquality {
 };
 
 template <typename T>
-using case_insensitive_map_t = unordered_map<string, T, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
+using case_insensitive_map_t =
+    unordered_map<string, T, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
 
 using case_insensitive_set_t = unordered_set<string, CaseInsensitiveStringHashFunction, CaseInsensitiveStringEquality>;
 

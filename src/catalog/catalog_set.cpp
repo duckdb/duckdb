@@ -225,8 +225,7 @@ bool CatalogSet::HasConflict(ClientContext &context, transaction_t timestamp) {
 	       (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
 }
 
-MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name,
-                                     bool get_latest) {
+MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name, bool get_latest) {
 	MappingValue *mapping_value;
 	auto entry = mapping.find(name);
 	if (entry != mapping.end()) {

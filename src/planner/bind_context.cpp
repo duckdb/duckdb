@@ -126,7 +126,8 @@ void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet *
 	}
 }
 
-void BindContext::TransferUsingBinding(BindContext &current_context, UsingColumnSet *current_set, UsingColumnSet *new_set, const string &binding, const string &using_column) {
+void BindContext::TransferUsingBinding(BindContext &current_context, UsingColumnSet *current_set,
+                                       UsingColumnSet *new_set, const string &binding, const string &using_column) {
 	AddUsingBinding(using_column, new_set);
 	current_context.RemoveUsingBinding(using_column, current_set);
 }
