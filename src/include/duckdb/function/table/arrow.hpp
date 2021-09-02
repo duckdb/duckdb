@@ -16,7 +16,7 @@
 #include "duckdb/common/thread.hpp"
 #include <map>
 #include <condition_variable>
-
+#define DUCKDB_NO_THREADS
 namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Arrow Variable Size Types
@@ -46,6 +46,8 @@ struct ArrowConvertData {
 };
 
 struct ArrowScanFunctionData : public TableFunctionData {
+#ifndef DUCKDB_NO_THREADS
+
 	ArrowScanFunctionData(idx_t rows_per_thread_p,
 	                      unique_ptr<ArrowArrayStreamWrapper> (*scanner_producer_p)(
 	                          uintptr_t stream_factory_ptr,
@@ -54,6 +56,17 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	                      uintptr_t stream_factory_ptr_p, std::thread::id thread_id_p)
 	    : lines_read(0), rows_per_thread(rows_per_thread_p), stream_factory_ptr(stream_factory_ptr_p),
 	      scanner_producer(scanner_producer_p), number_of_rows(0), thread_id(thread_id_p) {
+	}
+#endif
+
+	ArrowScanFunctionData(idx_t rows_per_thread_p,
+	                      unique_ptr<ArrowArrayStreamWrapper> (*scanner_producer_p)(
+	                          uintptr_t stream_factory_ptr,
+	                          std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
+	                          TableFilterCollection *filters),
+	                      uintptr_t stream_factory_ptr_p)
+	    : lines_read(0), rows_per_thread(rows_per_thread_p), stream_factory_ptr(stream_factory_ptr_p),
+	      scanner_producer(scanner_producer_p), number_of_rows(0) {
 	}
 	//! This holds the original list type (col_idx, [ArrowListType,size])
 	std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> arrow_convert_data;
@@ -69,8 +82,10 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	    TableFilterCollection *filters);
 	//! Number of rows (Used in cardinality and progress bar)
 	int64_t number_of_rows;
+#ifndef DUCKDB_NO_THREADS
 	// Thread that made first call in the binder
 	std::thread::id thread_id;
+#endif
 };
 
 struct ArrowScanState : public FunctionOperatorData {

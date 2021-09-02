@@ -177,8 +177,13 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	        .GetPointer();
 	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
 	std::pair<std::unordered_map<idx_t, string>, std::vector<string>> project_columns;
+#ifndef DUCKDB_NO_THREADS
+
 	auto res = make_unique<ArrowScanFunctionData>(rows_per_thread, stream_factory_produce, stream_factory_ptr,
 	                                              std::this_thread::get_id());
+#else
+	auto res = make_unique<ArrowScanFunctionData>(rows_per_thread, stream_factory_produce, stream_factory_ptr);
+#endif
 	auto &data = *res;
 	auto stream = stream_factory_produce(stream_factory_ptr, project_columns, nullptr);
 
@@ -1060,7 +1065,7 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	auto &state = (ArrowScanState &)*operator_state;
 	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
-
+#ifndef DUCKDB_NO_THREADS
 	if (!parallel_state.stream) {
 		std::unique_lock<mutex> sync_lock(parallel_state.sync_mutex);
 
@@ -1074,6 +1079,14 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 		}
 	}
 	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
+
+#else
+	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
+	if (!parallel_state.stream) {
+		//! Generate a Stream
+		parallel_state.stream = ProduceArrowScan(bind_data, state, state.filters);
+	}
+#endif
 
 	state.chunk_offset = 0;
 
