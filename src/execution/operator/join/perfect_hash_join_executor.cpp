@@ -96,8 +96,8 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, Sel
 template <typename T>
 void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec,
                                                                 SelectionVector &seq_sel_vec, idx_t count) {
-	auto min_value = perfect_join_statistics.build_min.GetValue<T>();
-	auto max_value = perfect_join_statistics.build_max.GetValue<T>();
+	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
+	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 	VectorData vector_data;
 	source.Orrify(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);
@@ -200,25 +200,46 @@ template <typename T>
 void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, SelectionVector &build_sel_vec,
                                                                 SelectionVector &probe_sel_vec, idx_t count,
                                                                 idx_t &probe_sel_count) {
-	auto min_value = perfect_join_statistics.build_min.GetValue<T>();
-	auto max_value = perfect_join_statistics.build_max.GetValue<T>();
+	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
+	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 	VectorData vector_data;
 	source.Orrify(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);
-
+	auto validity_mask = &vector_data.validity;
 	// build selection vector for non-dense build
-	for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
-		// retrieve value from vector
-		auto data_idx = vector_data.sel->get_index(i);
-		auto input_value = data[data_idx];
-		// add index to selection vector if value in the range
-		if (min_value <= input_value && input_value <= max_value) {
-			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
-			                                             // check for matches in the build
-			if (bitmap_build_idx[idx]) {
-				build_sel_vec.set_index(sel_idx, idx);
-				probe_sel_vec.set_index(sel_idx++, i);
-				probe_sel_count++;
+	if (validity_mask->AllValid()) {
+		for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
+			// retrieve value from vector
+			auto data_idx = vector_data.sel->get_index(i);
+			auto input_value = data[data_idx];
+			// add index to selection vector if value in the range
+			if (min_value <= input_value && input_value <= max_value) {
+				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
+				                                             // check for matches in the build
+				if (bitmap_build_idx[idx]) {
+					build_sel_vec.set_index(sel_idx, idx);
+					probe_sel_vec.set_index(sel_idx++, i);
+					probe_sel_count++;
+				}
+			}
+		}
+	} else {
+		for (idx_t i = 0, sel_idx = 0; i < count; ++i) {
+			// retrieve value from vector
+			auto data_idx = vector_data.sel->get_index(i);
+			if (!validity_mask->RowIsValid(data_idx)) {
+				continue;
+			}
+			auto input_value = data[data_idx];
+			// add index to selection vector if value in the range
+			if (min_value <= input_value && input_value <= max_value) {
+				auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
+				                                             // check for matches in the build
+				if (bitmap_build_idx[idx]) {
+					build_sel_vec.set_index(sel_idx, idx);
+					probe_sel_vec.set_index(sel_idx++, i);
+					probe_sel_count++;
+				}
 			}
 		}
 	}

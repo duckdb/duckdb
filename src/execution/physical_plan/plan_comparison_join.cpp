@@ -45,9 +45,9 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	if (op.join_stats.empty()) {
 		return;
 	}
-	// with equality condition
+	// with equality condition and null values not equal
 	for (auto &&condition : op.conditions) {
-		if (condition.comparison != ExpressionType::COMPARE_EQUAL) {
+		if (condition.comparison != ExpressionType::COMPARE_EQUAL || condition.null_values_are_equal) {
 			return;
 		}
 	}
@@ -71,7 +71,23 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	join_state.build_min = stats_build->min;
 	join_state.build_max = stats_build->max;
 	join_state.estimated_cardinality = op.estimated_cardinality;
-	join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
+	if (build_range.type().id() == LogicalTypeId::DECIMAL) {
+		switch (build_range.type().InternalType()) {
+		case PhysicalType::INT16:
+			join_state.build_range = build_range.value_.smallint;
+			break;
+		case PhysicalType::INT32:
+			join_state.build_range = build_range.value_.integer;
+			break;
+		case PhysicalType::INT64:
+			join_state.build_range = build_range.value_.bigint;
+			break;
+		default:
+			throw std::runtime_error("Invalid Physical Type for Decimals");
+		}
+	} else {
+		join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
+	}
 	D_ASSERT(!stats_build->min.is_null && !stats_build->max.is_null);
 	if (stats_probe->max.is_null || stats_probe->min.is_null) {
 		return;
