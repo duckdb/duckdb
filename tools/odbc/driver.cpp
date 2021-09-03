@@ -15,7 +15,7 @@ SQLRETURN SQLAllocHandle(SQLSMALLINT handle_type, SQLHANDLE input_handle, SQLHAN
 		return SQL_SUCCESS;
 	}
 	case SQL_HANDLE_DESC:
-		throw std::runtime_error("SQL_HANDLE_DESC");
+		return SQL_ERROR;
 	case SQL_HANDLE_ENV:
 		*output_handle_ptr = new duckdb::OdbcHandleEnv();
 		return SQL_SUCCESS;
@@ -43,7 +43,7 @@ SQLRETURN SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 		return SQL_SUCCESS;
 	}
 	case SQL_HANDLE_DESC:
-		throw std::runtime_error("SQL_HANDLE_DESC");
+		return SQL_ERROR;
 	case SQL_HANDLE_ENV: {
 		auto *hdl = (duckdb::OdbcHandleEnv *)handle;
 		delete hdl;
@@ -217,5 +217,5 @@ SQLRETURN SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT r
 SQLRETURN SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
                           SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
                           SQLSMALLINT *string_length_ptr) {
-	throw std::runtime_error("SQLGetDiagField");
+	return SQL_ERROR;
 }
