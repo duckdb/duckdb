@@ -1,6 +1,7 @@
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/execution_context.hpp"
+
 #include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/execution/execution_context.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
@@ -127,7 +128,12 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 
 void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
-	D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
+#ifdef DEBUG
+	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
+		D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
+	}
+#endif
+
 	if (count == 0) {
 		return;
 	}

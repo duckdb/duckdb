@@ -92,7 +92,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		}
 		if (cond.null_values_are_equal) {
 			has_null_equal_conditions = true;
-			D_ASSERT(cond.comparison == ExpressionType::COMPARE_EQUAL);
+			D_ASSERT(cond.comparison == ExpressionType::COMPARE_EQUAL ||
+			         cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM);
 		}
 	}
 	(void)has_null_equal_conditions;
@@ -119,8 +120,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 		                                     op.left_projection_map, op.right_projection_map, move(op.delim_types),
 		                                     op.estimated_cardinality);
 	} else {
-		D_ASSERT(!has_null_equal_conditions); // don't support this for anything but hash joins for now
 		if (op.conditions.size() == 1 && !has_inequality) {
+			D_ASSERT(!has_null_equal_conditions); // we support this for this join for now
 			// range join: use piecewise merge join
 			plan = make_unique<PhysicalPiecewiseMergeJoin>(op, move(left), move(right), move(op.conditions),
 			                                               op.join_type, op.estimated_cardinality);

@@ -113,6 +113,7 @@ void TopNSortState::Append(DataChunk &sort_chunk, DataChunk &payload) {
 
 void TopNSortState::Sink(DataChunk &input) {
 	// compute the ordering values for the new chunk
+	heap.sort_chunk.Reset();
 	heap.executor.Execute(input, heap.sort_chunk);
 
 	// append the new chunk to what we have already
@@ -293,6 +294,7 @@ void TopNHeap::ExtractBoundaryValues(DataChunk &current_chunk, DataChunk &prev_c
 		                          prev_chunk.size());
 	}
 	current_chunk.SetCardinality(1);
+	sort_chunk.Reset();
 	executor.Execute(&current_chunk, sort_chunk);
 
 	boundary_values.Reset();

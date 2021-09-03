@@ -1,9 +1,9 @@
 #include "duckdb/optimizer/join_order_optimizer.hpp"
 
+#include "duckdb/common/pair.hpp"
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/list.hpp"
-#include "duckdb/common/pair.hpp"
 
 #include <algorithm>
 
@@ -524,6 +524,9 @@ JoinOrderOptimizer::GenerateJoins(vector<unique_ptr<LogicalOperator>> &extracted
 				cond.right = !invert ? move(comparison.right) : move(comparison.left);
 				if (condition->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 					cond.comparison = ExpressionType::COMPARE_EQUAL;
+					cond.null_values_are_equal = true;
+				} else if (condition->type == ExpressionType::COMPARE_DISTINCT_FROM) {
+					cond.comparison = condition->type;
 					cond.null_values_are_equal = true;
 				} else {
 					cond.comparison = condition->type;

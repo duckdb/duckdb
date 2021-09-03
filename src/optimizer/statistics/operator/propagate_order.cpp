@@ -13,8 +13,12 @@ unique_ptr<Expression> CastHugeintToSmallestType(unique_ptr<Expression> expr, Nu
 	if (num_stats.min.is_null || num_stats.max.is_null) {
 		return expr;
 	}
+
 	auto min_val = num_stats.min.GetValue<hugeint_t>();
 	auto max_val = num_stats.max.GetValue<hugeint_t>();
+	if (max_val < min_val) {
+		return expr;
+	}
 
 	// Prevent overflow
 	if (min_val < NumericLimits<int64_t>().Minimum() && max_val > NumericLimits<int64_t>().Maximum()) {
@@ -57,8 +61,12 @@ unique_ptr<Expression> TemplatedCastToSmallestType(unique_ptr<Expression> expr, 
 	if (num_stats.min.is_null || num_stats.max.is_null) {
 		return expr;
 	}
+
 	auto signed_min_val = num_stats.min.GetValue<T>();
 	auto signed_max_val = num_stats.max.GetValue<T>();
+	if (signed_max_val < signed_min_val) {
+		return expr;
+	}
 
 	// Prevent signed integer overflow - we can't range map these
 	if (std::is_signed<T>() && signed_min_val < -((T)1 << (sizeof(T) * 8 - 2)) &&
