@@ -1,6 +1,6 @@
 Package: duckdb
 Title: DBI Package for the DuckDB Database Management System
-Version: 0.2.8-1
+>>>>>>> cran-0.2.8-3
 Authors@R:
     c(person(given = "Hannes",
              family = "Mühleisen",
