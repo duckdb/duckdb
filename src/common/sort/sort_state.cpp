@@ -48,7 +48,6 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 		logical_types.push_back(expr.return_type);
 
 		auto physical_type = expr.return_type.InternalType();
-		all_constant = all_constant && TypeIsConstantSize(physical_type);
 		constant_size.push_back(TypeIsConstantSize(physical_type));
 
 		if (order.stats) {
@@ -61,19 +60,16 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 
 		idx_t col_size = has_null.back() ? 1 : 0;
 		prefix_lengths.push_back(0);
-		if (!TypeIsConstantSize(physical_type) && physical_type != PhysicalType::STRING) {
+		if (!TypeIsConstantSize(physical_type) && physical_type != PhysicalType::VARCHAR) {
 			prefix_lengths.back() = GetNestedSortingColSize(col_size, expr.return_type);
-			all_constant = false;
-		} else if (physical_type == PhysicalType::STRING) {
+		} else if (physical_type == PhysicalType::VARCHAR) {
 			idx_t size_before = col_size;
 			if (stats.back()) {
 				auto &str_stats = (StringStatistics &)*stats.back();
 				col_size += str_stats.max_string_length;
-				if (col_size + str_stats.max_string_length > 12) {
+				if (col_size > 12) {
 					col_size = 12;
-					constant_size.push_back(false);
 				} else {
-					col_size += str_stats.max_string_length;
 					constant_size.back() = true;
 				}
 			} else {
@@ -90,16 +86,14 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 	entry_size = comparison_size + sizeof(uint32_t);
 
 	// 8-byte alignment
-	if (all_constant) {
-		entry_size = AlignValue(entry_size);
-	} else if (entry_size % 8 != 0) {
+	if (entry_size % 8 != 0) {
 		// First assign more bytes to strings instead of aligning
 		idx_t bytes_to_fill = entry_size % 8;
 		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 			if (bytes_to_fill == 0) {
 				break;
 			}
-			if (logical_types[col_idx].InternalType() == PhysicalType::STRING && stats[col_idx]) {
+			if (logical_types[col_idx].InternalType() == PhysicalType::VARCHAR && stats[col_idx]) {
 				auto &str_stats = (StringStatistics &)*stats[col_idx];
 				idx_t diff = str_stats.max_string_length - prefix_lengths[col_idx];
 				if (diff > 0) {
@@ -108,6 +102,7 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 					column_sizes[col_idx] += increase;
 					prefix_lengths[col_idx] += increase;
 					constant_size[col_idx] = increase == diff;
+					comparison_size += increase;
 					entry_size += increase;
 					bytes_to_fill -= increase;
 				}
@@ -117,6 +112,7 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 	}
 
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		all_constant = all_constant && constant_size[col_idx];
 		if (!constant_size[col_idx]) {
 			sorting_to_blob_col[col_idx] = blob_layout_types.size();
 			blob_layout_types.push_back(logical_types[col_idx]);
