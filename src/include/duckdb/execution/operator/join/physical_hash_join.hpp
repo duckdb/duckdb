@@ -66,7 +66,7 @@ public:
 	vector<LogicalType> build_types;
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
-	bool use_perfect_hash {false};
+	bool use_perfect_hash = false;
 	// used in perfect hash join
 	PerfectHashJoinStats perfect_join_statistics;
 	//! Whether or not we can cache the chunk

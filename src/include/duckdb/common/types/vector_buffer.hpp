@@ -95,7 +95,8 @@ public:
 	void SetSelVector(const SelectionVector &vector) {
 		this->sel_vector.Initialize(vector);
 	}
-	// private:
+
+private:
 	SelectionVector sel_vector;
 };
 

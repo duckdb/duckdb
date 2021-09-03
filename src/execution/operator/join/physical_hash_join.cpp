@@ -1,7 +1,4 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
-
-#include <utility>
-
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"

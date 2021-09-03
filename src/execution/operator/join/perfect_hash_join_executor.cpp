@@ -70,14 +70,9 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, Sel
 	case PhysicalType::INT16:
 		TemplatedFillSelectionVectorBuild<int16_t>(source, sel_vec, seq_sel_vec, count);
 		break;
-	case PhysicalType::TIME32:
-	case PhysicalType::DATE32:
 	case PhysicalType::INT32:
 		TemplatedFillSelectionVectorBuild<int32_t>(source, sel_vec, seq_sel_vec, count);
 		break;
-	case PhysicalType::TIMESTAMP:
-	case PhysicalType::TIME64:
-	case PhysicalType::DATE64:
 	case PhysicalType::INT64:
 		TemplatedFillSelectionVectorBuild<int64_t>(source, sel_vec, seq_sel_vec, count);
 		break;
@@ -178,14 +173,9 @@ void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, Sel
 	case PhysicalType::INT16:
 		TemplatedFillSelectionVectorProbe<int16_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
-	case PhysicalType::TIME32:
-	case PhysicalType::DATE32:
 	case PhysicalType::INT32:
 		TemplatedFillSelectionVectorProbe<int32_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;
-	case PhysicalType::TIMESTAMP:
-	case PhysicalType::TIME64:
-	case PhysicalType::DATE64:
 	case PhysicalType::INT64:
 		TemplatedFillSelectionVectorProbe<int64_t>(source, build_sel_vec, probe_sel_vec, count, probe_sel_count);
 		break;

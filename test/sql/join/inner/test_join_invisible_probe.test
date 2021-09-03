@@ -3,9 +3,7 @@
 # group: [inner]
 
 statement ok
-
-#mode output_hash
-
+PRAGMA enable_verification
 
 # create the table integers with the values 0..1000
 statement ok

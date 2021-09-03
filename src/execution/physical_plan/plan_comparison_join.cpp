@@ -53,8 +53,8 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 	// with integral types
 	for (auto &&join_stat : op.join_stats) {
-		if (!join_stat->type.IsIntegral() || join_stat->type == LogicalTypeId::HUGEINT) {
-			// perfect join not possible for no integral types or hugeint
+		if (!TypeIsInteger(join_stat->type.InternalType()) || join_stat->type == LogicalTypeId::HUGEINT) {
+			// perfect join not possible for non-integral types or hugeint
 			return;
 		}
 	}

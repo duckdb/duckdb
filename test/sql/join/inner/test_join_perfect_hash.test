@@ -3,6 +3,9 @@
 # group: [inner]
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE test1 (a INTEGER, b INTEGER);
 
 statement ok
@@ -135,11 +138,6 @@ SELECT a, test7.b,c FROM test7, test8 WHERE test7.b = test8.b;
 12	2	20
 13	3	30
 
-
-statement ok
-
-#mode output_hash
-
 # create the table integers with the values 0..1026
 statement ok
 CREATE TABLE test9 AS SELECT range r FROM range(0, 1026, 1);
@@ -151,12 +149,37 @@ CREATE TABLE test10 AS SELECT range r FROM range(0, 1025, 1);
 loop i 0 9
 
 statement ok
-INSERT INTO test10 SELECT * FROM test9;  
+INSERT INTO test10 SELECT * FROM test9;
 
 endloop
 
 # inner join with bigger than vector size tuples
 query I
-select test9.r, test10.r from test9,test10 where test9.r=test10.r;
+select test9.r, test10.r from test9,test10 where test9.r=test10.r order by test9.r, test10.r;
 ----
-20518 values hashing to d510b7d278762ec0843a16591fcf1680
+20518 values hashing to 43cfa09ff243deb128dd2bbcbb30527c
+
+
+
+statement ok
+create table null_equal (i integer)
+
+statement ok
+create table null_equal_sec (j integer)
+
+statement ok
+insert into null_equal values (1),(2),(3),(4),(5),(NULL)
+
+statement ok
+insert into null_equal_sec values (4),(5),(NULL)
+
+#Unoptimized version can't handle this query
+statement ok
+PRAGMA disable_verification
+
+query I
+SELECT i FROM null_equal inner join null_equal_sec on (i IS NOT DISTINCT FROM j);
+----
+4
+5
+NULL
