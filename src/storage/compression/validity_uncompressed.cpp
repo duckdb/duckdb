@@ -223,7 +223,8 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 	auto &scan_state = (ValidityScanState &)*state.scan_state;
 
 	auto &result_mask = FlatVector::Validity(result);
-	auto input_data = (validity_t *)scan_state.handle->node->buffer;
+	auto buffer_ptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
+	auto input_data = (validity_t *)buffer_ptr;
 
 #ifdef DEBUG
 	// this method relies on all the bits we are going to write to being set to valid
@@ -342,7 +343,8 @@ void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_cou
 		// note: this is only an optimization which avoids having to do messy bitshifting in the common case
 		// it is not required for correctness
 		auto &result_mask = FlatVector::Validity(result);
-		auto input_data = (validity_t *)scan_state.handle->node->buffer;
+		auto buffer_ptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
+		auto input_data = (validity_t *)buffer_ptr;
 		auto result_data = (validity_t *)result_mask.GetData();
 		idx_t start_offset = start / ValidityMask::BITS_PER_VALUE;
 		idx_t entry_scan_count = (scan_count + ValidityMask::BITS_PER_VALUE - 1) / ValidityMask::BITS_PER_VALUE;
@@ -370,7 +372,8 @@ void ValidityFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 	D_ASSERT(row_id >= 0 && row_id < row_t(segment.count));
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
-	ValidityMask mask((validity_t *)handle->node->buffer);
+	auto dataptr = handle->node->buffer + segment.GetBlockOffset();
+	ValidityMask mask((validity_t *)dataptr);
 	auto &result_mask = FlatVector::Validity(result);
 	if (!mask.RowIsValidUnsafe(row_id)) {
 		result_mask.SetInvalid(result_idx);
@@ -390,6 +393,7 @@ unique_ptr<CompressedSegmentState> ValidityInitSegment(ColumnSegment &segment, b
 }
 
 idx_t ValidityAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset, idx_t vcount) {
+	D_ASSERT(segment.GetBlockOffset() == 0);
 	auto &validity_stats = (ValidityStatistics &)*stats.statistics;
 
 	auto max_tuples = Storage::BLOCK_SIZE / ValidityMask::STANDARD_MASK_SIZE * STANDARD_VECTOR_SIZE;
@@ -415,6 +419,10 @@ idx_t ValidityAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorDat
 	}
 	segment.count += append_count;
 	return append_count;
+}
+
+idx_t ValidityFinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats) {
+	return ((segment.count + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE) * ValidityMask::STANDARD_MASK_SIZE;
 }
 
 void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
@@ -445,11 +453,12 @@ void ValidityRevertAppend(ColumnSegment &segment, idx_t start_row) {
 //===--------------------------------------------------------------------===//
 CompressionFunction ValidityUncompressed::GetFunction(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::BIT);
-	return CompressionFunction(
-	    CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze, ValidityAnalyze,
-	    ValidityFinalAnalyze, UncompressedFunctions::InitCompression, UncompressedFunctions::Compress,
-	    UncompressedFunctions::FinalizeCompress, ValidityInitScan, ValidityScan, ValidityScanPartial, ValidityFetchRow,
-	    UncompressedFunctions::EmptySkip, ValidityInitSegment, ValidityAppend, ValidityRevertAppend);
+	return CompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, data_type, ValidityInitAnalyze,
+	                           ValidityAnalyze, ValidityFinalAnalyze, UncompressedFunctions::InitCompression,
+	                           UncompressedFunctions::Compress, UncompressedFunctions::FinalizeCompress,
+	                           ValidityInitScan, ValidityScan, ValidityScanPartial, ValidityFetchRow,
+	                           UncompressedFunctions::EmptySkip, ValidityInitSegment, ValidityAppend,
+	                           ValidityFinalizeAppend, ValidityRevertAppend);
 }
 
 } // namespace duckdb

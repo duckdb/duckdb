@@ -70,6 +70,17 @@ SELECT FIRST()
 statement error
 SELECT FIRST(1, 2)
 
+query IIRTTTT
+SELECT LAST(1), LAST(NULL), LAST(33.3), LAST('hello'), LAST(True), LAST(DATE '1992-02-02'), LAST(TIMESTAMP '2008-01-01 00:00:01')
+----
+1	NULL	33.300000	hello	1	1992-02-02	2008-01-01 00:00:01
+
+statement error
+SELECT LAST()
+
+statement error
+SELECT LAST(1, 2)
+
 query RRR
 SELECT AVG(1), AVG(NULL), AVG(33.3)
 ----

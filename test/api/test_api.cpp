@@ -395,6 +395,18 @@ TEST_CASE("Test fetch API with big results", "[api][.]") {
 	VerifyStreamResult(move(result));
 }
 
+TEST_CASE("Test streaming query during stack unwinding", "[api]") {
+	DuckDB db;
+	Connection con(db);
+
+	try {
+		auto result = con.SendQuery("SELECT * FROM range(1000000)");
+
+		throw std::runtime_error("hello");
+	} catch (...) {
+	}
+}
+
 TEST_CASE("Test prepare dependencies with multiple connections", "[catalog]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);

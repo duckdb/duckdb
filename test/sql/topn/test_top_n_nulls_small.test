@@ -1,0 +1,144 @@
+# name: test/sql/topn/test_top_n_nulls_small.test
+# description: Test Top N NULLS FIRST/LAST with few rows
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+# we execute this set of tests twice
+# the data is the same, but organized different physically
+# first the nulls are at the end of the table
+# then the nulls are at the beginning of the table
+# all the results should stay the same
+
+statement ok
+CREATE TABLE integers AS SELECT i, i j FROM range(1000) tbl(i) UNION ALL SELECT NULL i, range j FROM range(1000)
+
+loop i 0 2
+
+# single column sort
+query I
+SELECT i FROM integers ORDER BY i ASC NULLS FIRST LIMIT 5;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT i FROM integers ORDER BY i ASC NULLS LAST LIMIT 5;
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT i FROM integers ORDER BY i DESC NULLS FIRST LIMIT 5;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+query I
+SELECT i FROM integers ORDER BY i DESC NULLS LAST LIMIT 5;
+----
+999
+998
+997
+996
+995
+
+query I
+SELECT i FROM integers ORDER BY i NULLS FIRST LIMIT 5 OFFSET 1000;
+----
+0
+1
+2
+3
+4
+
+query I
+SELECT i FROM integers ORDER BY i DESC NULLS FIRST LIMIT 5 OFFSET 1000;
+----
+999
+998
+997
+996
+995
+
+query I
+SELECT i FROM integers ORDER BY i NULLS LAST LIMIT 5 OFFSET 1000;
+----
+NULL
+NULL
+NULL
+NULL
+NULL
+
+# multi-column sort
+query II
+SELECT j, i FROM integers ORDER BY j, i NULLS FIRST LIMIT 5;
+----
+0	NULL
+0	0
+1	NULL
+1	1
+2	NULL
+
+query II
+SELECT j, i FROM integers ORDER BY j, i NULLS LAST LIMIT 5;
+----
+0	0
+0	NULL
+1	1
+1	NULL
+2	2
+
+query II
+SELECT j, i FROM integers ORDER BY j DESC, i DESC NULLS FIRST LIMIT 5;
+----
+999	NULL
+999	999
+998	NULL
+998	998
+997	NULL
+
+query II
+SELECT j, i FROM integers ORDER BY j DESC, i DESC NULLS LAST LIMIT 5;
+----
+999	999
+999	NULL
+998	998
+998	NULL
+997	997
+
+query II
+SELECT i, j FROM integers ORDER BY i DESC NULLS FIRST, j DESC LIMIT 5;
+----
+NULL	999
+NULL	998
+NULL	997
+NULL	996
+NULL	995
+
+query II
+SELECT i, j FROM integers ORDER BY i DESC NULLS LAST, j ASC LIMIT 5;
+----
+999	999
+998	998
+997	997
+996	996
+995	995
+
+statement ok
+DROP TABLE integers
+
+statement ok
+CREATE TABLE integers AS SELECT NULL i, i j FROM range(1000) tbl(i) UNION ALL SELECT range i, range j FROM range(1000)
+
+endloop

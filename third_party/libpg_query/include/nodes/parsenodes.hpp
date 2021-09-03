@@ -1474,8 +1474,9 @@ typedef struct PGVariableSetStmt {
  * ----------------------
  */
 typedef struct PGVariableShowStmt {
-	PGNodeTag type;
-	char *name;
+	PGNodeTag   type;
+	char       *name;
+	int         is_summary; // whether or not this is a DESCRIBE or a SUMMARIZE
 } PGVariableShowStmt;
 
 /* ----------------------
@@ -1484,9 +1485,10 @@ typedef struct PGVariableShowStmt {
  */
 typedef struct PGVariableShowSelectStmt
 {
-	PGNodeTag		type;
-	PGNode	*stmt;
-	char	   *name;
+	PGNodeTag   type;
+	PGNode     *stmt;
+	char       *name;
+	int         is_summary; // whether or not this is a DESCRIBE or a SUMMARIZE
 } PGVariableShowSelectStmt;
 
 

@@ -1,0 +1,152 @@
+# name: test/sql/tpcds/tpcds_sf001.test_slow
+# description: Test TPC-DS SF0.001
+# group: [tpcds]
+
+require tpcds
+
+# answers are generated from postgres
+# hence check with NULLS LAST flag
+statement ok
+PRAGMA default_null_order='NULLS LAST'
+
+statement ok
+CALL dsdgen(sf=0.01)
+
+query T
+SELECT COUNT(*) FROM call_center
+----
+1
+
+query T
+SELECT COUNT(*) FROM catalog_page
+----
+11718
+
+query T
+SELECT COUNT(*) FROM catalog_returns
+----
+1358
+
+query T
+SELECT COUNT(*) FROM catalog_sales
+----
+14313
+
+query T
+SELECT COUNT(*) FROM customer
+----
+1000
+
+query T
+SELECT COUNT(*) FROM customer_demographics
+----
+19208
+
+query T
+SELECT COUNT(*) FROM customer_address
+----
+500
+
+query T
+SELECT COUNT(*) FROM date_dim
+----
+73049
+
+query T
+SELECT COUNT(*) FROM household_demographics
+----
+7200
+
+query T
+SELECT COUNT(*) FROM inventory
+----
+23490
+
+query T
+SELECT COUNT(*) FROM income_band
+----
+20
+
+query T
+SELECT COUNT(*) FROM item
+----
+180
+
+query T
+SELECT COUNT(*) FROM promotion
+----
+3
+
+query T
+SELECT COUNT(*) FROM reason
+----
+1
+
+query T
+SELECT COUNT(*) FROM ship_mode
+----
+20
+
+query T
+SELECT COUNT(*) FROM store
+----
+1
+
+query T
+SELECT COUNT(*) FROM store_returns
+----
+2810
+
+query T
+SELECT COUNT(*) FROM store_sales
+----
+28810
+
+query T
+SELECT COUNT(*) FROM time_dim
+----
+86400
+
+query T
+SELECT COUNT(*) FROM warehouse
+----
+1
+
+query T
+SELECT COUNT(*) FROM web_page
+----
+1
+
+query T
+SELECT COUNT(*) FROM web_returns
+----
+679
+
+query T
+SELECT COUNT(*) FROM web_sales
+----
+7212
+
+query T
+SELECT COUNT(*) FROM web_site
+----
+1
+
+loop i 1 9
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/0${i}.csv
+
+endloop
+
+loop i 10 99
+
+query I
+PRAGMA tpcds(${i})
+----
+<FILE>:extension/tpcds/dsdgen/answers/sf0.01/${i}.csv
+
+endloop
+

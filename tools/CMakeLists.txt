@@ -20,6 +20,6 @@ if(BUILD_PYTHON_PKG)
 endif()
 
 # Just to make CLion aware of the python package for development purposes
-if(BUILD_R)
+if(BUILD_R OR CONFIGURE_R)
   add_subdirectory(rpkg)
 endif()

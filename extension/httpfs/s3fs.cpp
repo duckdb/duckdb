@@ -1,6 +1,10 @@
 #include "s3fs.hpp"
 #include "crypto.hpp"
 #include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
+#endif
 
 using namespace duckdb;
 
@@ -12,13 +16,9 @@ static HeaderMap create_s3_get_header(std::string url, std::string host, std::st
 
 	// we can pass date/time but this is mostly useful in testing. normally we just get the current datetime here.
 	if (datetime_now.empty()) {
-		auto t = std::time(NULL);
-		auto tmp = std::gmtime(&t);
-		date_now.resize(8);
-		datetime_now.resize(16);
-
-		strftime((char *)date_now.c_str(), date_now.size(), "%Y%m%d", tmp);
-		strftime((char *)datetime_now.c_str(), datetime_now.size(), "%Y%m%dT%H%M%SZ", tmp);
+		auto timestamp = Timestamp::GetCurrentTimestamp();
+		date_now = StrfTimeFormat::Format(timestamp, "%Y%m%d");
+		datetime_now = StrfTimeFormat::Format(timestamp, "%Y%m%dT%H%M%SZ");
 	}
 
 	HeaderMap res;

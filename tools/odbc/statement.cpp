@@ -2,6 +2,9 @@
 #include "api_info.hpp"
 #include "odbc_fetch.hpp"
 #include "statement_functions.hpp"
+#include "parameter_wrapper.hpp"
+
+using duckdb::LogicalTypeId;
 
 SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                          SQLINTEGER string_length) {
@@ -11,10 +14,16 @@ SQLRETURN SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOI
 			/* auto size = Load<SQLLEN>((data_ptr_t) value_ptr);
 			 return (size == 1) ? SQL_SUCCESS : SQL_ERROR;
 			 */
-			// this should be 1
-			stmt->paramset_size = (SQLULEN)value_ptr;
+			// this should be 1?
+			stmt->param_wrapper->paramset_size = (SQLULEN)value_ptr;
 			return SQL_SUCCESS;
 		}
+		case SQL_ATTR_PARAMS_PROCESSED_PTR:
+			stmt->param_wrapper->SetParamProcessedPtr(value_ptr);
+			return SQL_SUCCESS;
+		case SQL_ATTR_PARAM_STATUS_PTR:
+			stmt->param_wrapper->param_status_ptr = (SQLUSMALLINT *)value_ptr;
+			return SQL_SUCCESS;
 		case SQL_ATTR_QUERY_TIMEOUT: {
 			// this should be 0
 			return SQL_SUCCESS;
@@ -77,7 +86,7 @@ SQLRETURN SQLExecDirect(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLI
 		return SQL_ERROR;
 	}
 
-	auto execute_status = duckdb::ExecuteStmt(statement_handle);
+	auto execute_status = duckdb::BatchExecuteStmt(statement_handle);
 	if (execute_status != SQL_SUCCESS) {
 		return SQL_ERROR;
 	}
@@ -121,7 +130,6 @@ SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLIN
 	}
 
 	// TODO make this a nice template? also going to use this for SQLColumns etc.
-
 	if (!SQL_SUCCEEDED(SQLPrepare(
 	        statement_handle,
 	        (SQLCHAR
@@ -183,7 +191,10 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 			}
 
 			auto col_name = stmt->stmt->GetNames()[col_idx];
-			auto out_len = snprintf((char *)character_attribute_ptr, buffer_length, "%s", col_name.c_str());
+			auto out_len = duckdb::MinValue(col_name.size(), (size_t)buffer_length);
+			memcpy(character_attribute_ptr, col_name.c_str(), out_len);
+			((char *)character_attribute_ptr)[out_len] = '\0';
+
 			if (string_length_ptr) {
 				*string_length_ptr = out_len;
 			}
@@ -204,7 +215,10 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 
 			auto internal_type = stmt->stmt->GetTypes()[col_idx].InternalType();
 			std::string type_name = duckdb::TypeIdToString(internal_type);
-			auto out_len = snprintf((char *)character_attribute_ptr, buffer_length, "%s", type_name.c_str());
+			auto out_len = duckdb::MinValue(type_name.size(), (size_t)buffer_length);
+			memcpy(character_attribute_ptr, type_name.c_str(), out_len);
+			((char *)character_attribute_ptr)[out_len] = '\0';
+
 			if (string_length_ptr) {
 				*string_length_ptr = out_len;
 			}
@@ -218,6 +232,20 @@ SQLRETURN SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number,
 				stmt->error_messages.emplace_back("Unsupported type for display size.");
 				return SQL_ERROR;
 			}
+		}
+		case SQL_DESC_UNSIGNED: {
+			auto type = stmt->stmt->GetTypes()[col_idx];
+			switch (type.id()) {
+			case LogicalTypeId::UTINYINT:
+			case LogicalTypeId::USMALLINT:
+			case LogicalTypeId::UINTEGER:
+			case LogicalTypeId::UBIGINT:
+				*numeric_attribute_ptr = SQL_TRUE;
+				break;
+			default:
+				*numeric_attribute_ptr = SQL_FALSE;
+			}
+			return SQL_SUCCESS;
 		}
 		default:
 			stmt->error_messages.emplace_back("Unsupported attribute type.");
@@ -237,19 +265,22 @@ SQLRETURN SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_RESET_PARAMS) {
-			stmt->params.clear();
+			stmt->param_wrapper->Clear();
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
-			stmt->open = false;
-			stmt->res.reset();
-			stmt->odbc_fetcher->ClearChunks();
-			// stmt->stmt.reset(); // the statment can be reuse in prepared statement
-			stmt->bound_cols.clear();
-			stmt->params.clear();
-			stmt->error_messages.clear();
+			stmt->Close();
 			return SQL_SUCCESS;
 		}
 		return SQL_ERROR;
+	});
+}
+
+SQLRETURN SQLMoreResults(SQLHSTMT statement_handle) {
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
+		if (!stmt->param_wrapper->HasParamSetToProcess()) {
+			return SQL_NO_DATA;
+		}
+		return duckdb::SingleExecuteStmt(stmt);
 	});
 }

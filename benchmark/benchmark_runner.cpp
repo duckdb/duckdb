@@ -79,8 +79,8 @@ bool BenchmarkRunner::TryLoadDatabase(DuckDB &db, string name) {
 	return true;
 }
 
-volatile bool is_active = false;
-volatile bool timeout = false;
+atomic<bool> is_active;
+atomic<bool> timeout;
 
 void sleep_thread(Benchmark *benchmark, BenchmarkState *state, int timeout_duration) {
 	// timeout is given in seconds
@@ -184,6 +184,8 @@ void print_help() {
 	fprintf(stderr, "Usage: benchmark_runner\n");
 	fprintf(stderr, "              --list         Show a list of all benchmarks\n");
 	fprintf(stderr, "              --profile      Prints the query profile information\n");
+	fprintf(stderr, "              --threads=n    Sets the amount of threads to use during execution (default: "
+	                "hardware concurrency)\n");
 	fprintf(stderr, "              --out=[file]   Move benchmark output to file\n");
 	fprintf(stderr, "              --log=[file]   Move log output to file\n");
 	fprintf(stderr, "              --info         Prints info about the benchmark\n");
@@ -224,6 +226,10 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 		} else if (arg == "--profile") {
 			// write info of benchmark
 			instance.configuration.print_profile_info = true;
+		} else if (StringUtil::StartsWith(arg, "--threads=")) {
+			// write info of benchmark
+			auto splits = StringUtil::Split(arg, '=');
+			instance.threads = Value(splits[1]).CastAs(LogicalType::UINTEGER).GetValue<uint32_t>();
 		} else if (arg == "--query") {
 			// write group of benchmark
 			instance.configuration.meta = BenchmarkMetaType::QUERY;

@@ -36,7 +36,7 @@ public:
 		return global_stats->Copy();
 	}
 
-	virtual void FlushSegment(unique_ptr<ColumnSegment> segment);
+	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
 	virtual void FlushToDisk();
 };
 

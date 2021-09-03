@@ -6,7 +6,11 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-create table quantile as select range r, random() from range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+CREATE TABLE quantile as
+SELECT range r, random() AS q
+FROM range(10000)
+UNION ALL VALUES (NULL, 0.1), (NULL, 0.5), (NULL, 0.9)
+ORDER BY 2;
 
 query I
 SELECT quantile_disc(r, 0.5) FROM quantile
@@ -55,6 +59,16 @@ SELECT quantile_disc(r, 0.1), quantile_disc(r, 0.5), quantile_disc(r, 0.9) from 
 999
 4999
 8999
+
+foreach type decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
+
+query III
+SELECT quantile_disc(d::${type}, 0.1), quantile_disc(d::${type}, 0.5), quantile_disc(d::${type}, 0.9)
+FROM range(0,100) tbl(d)
+----
+9.0	49.0	89.0
+
+endloop
 
 # multiple groups
 query II
@@ -106,6 +120,7 @@ SELECT quantile_disc(r, 0.1) FROM quantile WHERE 1=0
 ----
 NULL
 
+# Invalid usage
 statement error
 SELECT quantile_disc(r, -0.1) FROM quantile
 
@@ -127,6 +142,8 @@ SELECT quantile_disc(r) FROM quantile
 statement error
 SELECT quantile_disc(r, 0.1, 50) FROM quantile
 
+statement error
+SELECT quantile_cont(r, q) FROM quantile
 
 statement ok
 pragma threads=4
@@ -169,4 +186,3 @@ query I
 SELECT quantile_disc(r, 0.1) FROM quantile WHERE 1=0
 ----
 NULL
-

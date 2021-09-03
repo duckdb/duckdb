@@ -27,7 +27,9 @@ public:
 
 	py::list Fetchall();
 
-	py::dict FetchNumpy(bool stream = false, idx_t vectors_per_chunk = 1);
+	py::dict FetchNumpy();
+
+	py::dict FetchNumpyInternal(bool stream = false, idx_t vectors_per_chunk = 1);
 
 	py::object FetchDF();
 

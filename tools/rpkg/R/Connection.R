@@ -208,19 +208,9 @@ setMethod(
       stop("Column name mismatch for append")
     }
 
-    is_factor <- vapply(value, is.factor, logical(1))
-    if (any(is_factor)) {
-      warning("Factors converted to character")
-    }
+    value <- encode_values(value)
 
     if (nrow(value)) {
-      is_character <- vapply(value, is.character, logical(1))
-      value[is_character] <- lapply(value[is_character], enc2utf8)
-      value[is_factor] <- lapply(value[is_factor], function(x) {
-        levels(x) <- enc2utf8(levels(x))
-        as.character(x)
-      })
-
       table_name <- dbQuoteIdentifier(conn, name)
 
       view_name <- sprintf("_duckdb_append_view_%s", duckdb_random_string())
@@ -234,6 +224,26 @@ setMethod(
     invisible(nrow(value))
   }
 )
+
+encode_values <- function(value) {
+  is_factor <- vapply(value, is.factor, logical(1))
+  if (any(is_factor)) {
+    warning("Factors converted to character")
+  }
+
+  value[is_factor] <- lapply(value[is_factor], function(x) {
+    levels(x) <- enc2utf8(levels(x))
+    as.character(x)
+  })
+
+  is_character <- vapply(value, is.character, logical(1))
+  value[is_character] <- lapply(value[is_character], enc2utf8)
+
+  is_posixlt <- vapply(value, inherits, "POSIXlt", FUN.VALUE = logical(1))
+  value[is_posixlt] <- lapply(value[is_posixlt], as.POSIXct)
+
+  value
+}
 
 #' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbListTables
@@ -362,5 +372,67 @@ setMethod(
   function(conn, ...) {
     dbExecute(conn, SQL("ROLLBACK"))
     invisible(TRUE)
+  }
+)
+
+#' @rdname duckdb_connection-class
+#' @export
+setMethod(
+  "dbQuoteLiteral", signature("duckdb_connection"),
+  function(conn, x, ...) {
+    # Switchpatching to avoid ambiguous S4 dispatch, so that our method
+    # is used only if no alternatives are available.
+
+    if (is(x, "SQL")) {
+      return(x)
+    }
+
+    if (is.factor(x)) {
+      return(dbQuoteString(conn, as.character(x)))
+    }
+
+    if (is.character(x)) {
+      return(dbQuoteString(conn, x))
+    }
+
+    if (inherits(x, "POSIXt")) {
+      out <- dbQuoteString(
+        conn,
+        strftime(as.POSIXct(x), "%Y-%m-%d %H:%M:%S", tz = "UTC")
+      )
+
+      return(SQL(paste0(out, "::timestamp")))
+    }
+
+    if (inherits(x, "Date")) {
+      out <- callNextMethod()
+      return(SQL(paste0(out, "::date")))
+    }
+
+    if (inherits(x, "difftime")) {
+      out <- callNextMethod()
+      return(SQL(paste0(out, "::time")))
+    }
+
+    if (is.list(x)) {
+      blob_data <- vapply(
+        x,
+        function(x) {
+          if (is.null(x)) {
+            "NULL"
+          } else if (is.raw(x)) {
+            paste0("X'", paste(format(x), collapse = ""), "'")
+          } else {
+            stop("Lists must contain raw vectors or NULL", call. = FALSE)
+          }
+        },
+        character(1)
+      )
+      return(SQL(blob_data, names = names(x)))
+    }
+
+    x <- as.character(x)
+    x[is.na(x)] <- "NULL"
+    SQL(x, names = names(x))
   }
 )

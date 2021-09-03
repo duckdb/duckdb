@@ -44,16 +44,21 @@ SELECT SUM(rowid), MIN(rowid), MAX(rowid), COUNT(rowid), FIRST(rowid) FROM a
 ----
 0.000000	0	0	1	0
 
+query RIIII
+SELECT SUM(rowid), MIN(rowid), MAX(rowid), COUNT(rowid), LAST(rowid) FROM a
+----
+0.000000	0	0	1	0
+
 query I
 SELECT COUNT(*) FROM a
 ----
 1
 
 # grouped aggregates
-query RIIII
-SELECT SUM(rowid), MIN(rowid), MAX(rowid), COUNT(rowid), FIRST(rowid) FROM a GROUP BY i
+query RIIIII
+SELECT SUM(rowid), MIN(rowid), MAX(rowid), COUNT(rowid), FIRST(rowid), LAST(rowid) FROM a GROUP BY i
 ----
-0.000000	0	0	1	0
+0.000000	0	0	1	0	0
 
 # group by rowid
 query R

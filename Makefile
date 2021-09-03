@@ -82,6 +82,9 @@ endif
 ifeq (${BUILD_R}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
 endif
+ifeq (${CONFIGURE_R}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DCONFIGURE_R=1
+endif
 ifeq (${BUILD_REST}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_REST=1
 endif
@@ -129,6 +132,10 @@ unittest: debug
 unittestci:
 	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+
+unittestarrow:
+	build/debug/test/unittest "[arrow]"
+
 
 allunit: release_expanded # uses release build because otherwise allunit takes forever
 	build/release_expanded/test/unittest "*"
@@ -217,4 +224,3 @@ clangd:
 	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ../.. && \
 	cd ../.. && \
 	ln -sf ./build/clangd/compile_commands.json ./compile_commands.json
-

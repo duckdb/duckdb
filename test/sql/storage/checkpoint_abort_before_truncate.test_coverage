@@ -36,7 +36,7 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 # now verify that empty blocks left by a checkpoint aborts are re-used
 # so that checkpoint aborts don't permanently leave holes in the file
 
-loop i 0 10
+loop i 0 100
 
 statement ok
 PRAGMA disable_checkpoint_on_shutdown;
@@ -61,7 +61,9 @@ SELECT MIN(i), MAX(i), COUNT(*) FROM integers
 ----
 0	199999	200000
 
-# query I nosort expected_blocks
-# select total_blocks from pragma_database_size();
+query I
+select total_blocks < 25 from pragma_database_size();
+----
+true
 
 endloop

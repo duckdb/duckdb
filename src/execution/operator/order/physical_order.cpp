@@ -8,10 +8,8 @@
 
 namespace duckdb {
 
-PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders,
-                             vector<unique_ptr<BaseStatistics>> statistics, idx_t estimated_cardinality)
-    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)),
-      statistics(move(statistics)) {
+PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality)
+    : PhysicalSink(PhysicalOperatorType::ORDER_BY, move(types), estimated_cardinality), orders(move(orders)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -19,8 +17,8 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 class OrderGlobalState : public GlobalOperatorState {
 public:
-	OrderGlobalState(BufferManager &buffer_manager, PhysicalOrder &order, RowLayout payload_layout)
-	    : global_sort_state(buffer_manager, order.orders, order.statistics, payload_layout) {
+	OrderGlobalState(BufferManager &buffer_manager, PhysicalOrder &order, RowLayout &payload_layout)
+	    : global_sort_state(buffer_manager, order.orders, payload_layout) {
 	}
 
 	//! Global sort state
@@ -51,10 +49,10 @@ unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &con
 	// Set external (can be force with the PRAGMA)
 	state->global_sort_state.external = context.force_external;
 	// Memory usage per thread should scale with max mem / num threads
-	// We take 1/6th of this, to be conservative
+	// We take 1/5th of this, to be conservative
 	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
 	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	state->memory_per_thread = (max_memory / num_threads) / 6;
+	state->memory_per_thread = (max_memory / num_threads) / 5;
 	return move(state);
 }
 

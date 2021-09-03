@@ -68,6 +68,7 @@ struct LoopDefinition {
 struct SQLLogicTestRunner {
 public:
 	SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
+		config = GetTestConfig();
 	}
 	~SQLLogicTestRunner();
 
@@ -87,6 +88,7 @@ public:
 	bool output_hash_mode = false;
 	bool output_result_mode = false;
 	bool debug_mode = false;
+	bool finished_processing_file = false;
 	int hashThreshold = 0; /* Threshold for hashing res */
 	vector<LoopCommand *> active_loops;
 	unique_ptr<Command> top_level_loop;
@@ -577,6 +579,9 @@ struct Command {
 
 	virtual void ExecuteInternal() = 0;
 	void Execute() {
+		if (runner.finished_processing_file) {
+			return;
+		}
 		if (runner.running_loops.empty()) {
 			ExecuteInternal();
 			return;
@@ -639,7 +644,7 @@ void LoopCommand::ExecuteInternal() {
 	definition.loop_idx = definition.loop_start;
 	runner.running_loops.push_back(&definition);
 	bool finished = false;
-	while (!finished) {
+	while (!finished && !runner.finished_processing_file) {
 		// execute the current iteration of the loop
 		for (auto &statement : loop_commands) {
 			statement->Execute();
@@ -673,6 +678,7 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 	}
 	active_loops.push_back(loop_ptr);
 }
+
 void SQLLogicTestRunner::EndLoop() {
 	// finish a loop: pop it from the active_loop queue
 	active_loops.pop_back();
@@ -681,6 +687,16 @@ void SQLLogicTestRunner::EndLoop() {
 		top_level_loop->Execute();
 		top_level_loop.reset();
 	}
+}
+
+static bool SkipErrorMessage(const string &message) {
+	if (StringUtil::Contains(message, "HTTP")) {
+		return true;
+	}
+	if (StringUtil::Contains(message, "Unable to connect")) {
+		return true;
+	}
+	return false;
 }
 
 void Statement::ExecuteInternal() {
@@ -724,6 +740,10 @@ void Statement::ExecuteInternal() {
 		print_line_sep();
 		if (result) {
 			result->Print();
+		}
+		if (expect_ok && SkipErrorMessage(result->error)) {
+			runner.finished_processing_file = true;
+			return;
 		}
 		FAIL_LINE(file_name, query_line, 0);
 	}
@@ -799,6 +819,10 @@ void Query::ExecuteInternal() {
 		print_line_sep();
 		print_header("Actual result:");
 		result->Print();
+		if (SkipErrorMessage(result->error)) {
+			runner.finished_processing_file = true;
+			return;
+		}
 		FAIL_LINE(file_name, query_line, 0);
 	}
 	idx_t row_count = result->collection.Count();
@@ -1548,10 +1572,12 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 				DeleteDatabase(dbpath);
 			}
 			// set up the config file
-			config = GetTestConfig();
 			if (readonly) {
 				config->use_temporary_directory = false;
 				config->access_mode = AccessMode::READ_ONLY;
+			} else {
+				config->use_temporary_directory = true;
+				config->access_mode = AccessMode::AUTOMATIC;
 			}
 			// now create the database file
 			LoadDatabase(dbpath);

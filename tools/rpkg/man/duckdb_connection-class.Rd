@@ -18,6 +18,7 @@
 \alias{dbBegin,duckdb_connection-method}
 \alias{dbCommit,duckdb_connection-method}
 \alias{dbRollback,duckdb_connection-method}
+\alias{dbQuoteLiteral,duckdb_connection-method}
 \title{DuckDB connection class}
 \usage{
 \S4method{show}{duckdb_connection}(object)
@@ -57,6 +58,8 @@
 \S4method{dbCommit}{duckdb_connection}(conn, ...)
 
 \S4method{dbRollback}{duckdb_connection}(conn, ...)
+
+\S4method{dbQuoteLiteral}{duckdb_connection}(conn, x, ...)
 }
 \arguments{
 \item{object}{Any R object}

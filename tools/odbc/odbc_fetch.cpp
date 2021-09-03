@@ -11,6 +11,7 @@ using duckdb::OdbcFetch;
 using duckdb::OdbcHandleStmt;
 
 OdbcFetch::~OdbcFetch() {
+	chunks.clear();
 }
 
 void OdbcFetch::IncreaseRowCount() {
@@ -301,7 +302,8 @@ SQLRETURN OdbcFetch::ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt)
 		// TODO actually vectorize this
 		for (duckdb::idx_t col_idx = 0; col_idx < stmt->stmt->ColumnCount(); col_idx++) {
 			auto bound_col = stmt->bound_cols[col_idx];
-			if (!bound_col.IsBound()) {
+
+			if (!bound_col.IsBound() && !bound_col.IsVarcharBound()) {
 				continue;
 			}
 			auto target_val_addr = bound_col.ptr;

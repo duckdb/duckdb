@@ -1,0 +1,40 @@
+# name: test/sql/show_select/test_summarize.test
+# description: Test summarize command
+# group: [show_select]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE types(i INTEGER, j VARCHAR, k HUGEINT, d DOUBLE)
+
+statement ok
+INSERT INTo types VALUES (1, 'hello', 12, 0.5), (2, 'world', -12, -0.5), (3, NULL, NULL, NULL);
+
+query IIII
+SELECT UNNEST(['i', 'j', 'k', 'd']) column_names,
+       UNNEST(['INTEGER', 'VARCHAR', 'HUGEINT', 'DOUBLE']) column_types,
+       UNNEST([MIN(i)::VARCHAR, MIN(j)::VARCHAR, MIN(k)::VARCHAR, MIN(d)::VARCHAR]) min,
+	   UNNEST([MAX(i)::VARCHAR, MAX(j)::VARCHAR, MAX(k)::VARCHAR, MAX(d)::VARCHAR]) max
+FROM (SELECT * FROM types) tbl
+----
+i	INTEGER	1	3
+j	VARCHAR	hello	world
+k	HUGEINT	-12	12
+d	DOUBLE	-0.5	0.5
+
+query IIIIIIII
+SUMMARIZE types;
+----
+i	INTEGER	1	3	3	2.0	3	0.0%
+j	VARCHAR	hello	world	2	NULL	3	33.33%
+k	HUGEINT	-12	12	2	0.0	3	33.33%
+d	DOUBLE	-0.5	0.5	2	0.0	3	33.33%
+
+query IIIIIIII
+SUMMARIZE SELECT * FROM types;
+----
+i	INTEGER	1	3	3	2.0	3	0.0%
+j	VARCHAR	hello	world	2	NULL	3	33.33%
+k	HUGEINT	-12	12	2	0.0	3	33.33%
+d	DOUBLE	-0.5	0.5	2	0.0	3	33.33%

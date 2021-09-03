@@ -86,6 +86,9 @@ public:
 	DUCKDB_API void Copy(DataChunk &other, const SelectionVector &sel, const idx_t source_count,
 	                     const idx_t offset = 0) const;
 
+	//! Splits the DataChunk in two
+	DUCKDB_API void Split(DataChunk &other, idx_t split_idx);
+
 	//! Turn all the vectors from the chunk into flat vectors
 	DUCKDB_API void Normalify();
 

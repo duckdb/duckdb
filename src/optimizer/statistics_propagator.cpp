@@ -45,6 +45,8 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 		return PropagateStatistics((LogicalSetOperation &)node, node_ptr);
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		return PropagateStatistics((LogicalOrder &)node, node_ptr);
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		return PropagateStatistics((LogicalWindow &)node, node_ptr);
 	default:
 		return PropagateChildren(node, node_ptr);
 	}

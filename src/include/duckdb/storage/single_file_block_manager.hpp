@@ -28,14 +28,16 @@ public:
 	SingleFileBlockManager(DatabaseInstance &db, string path, bool read_only, bool create_new, bool use_direct_io);
 
 	void StartCheckpoint() override;
-	//! Creates a new Block and returns a pointer
-	unique_ptr<Block> CreateBlock() override;
+	//! Creates a new Block using the specified block_id and returns a pointer
+	unique_ptr<Block> CreateBlock(block_id_t block_id) override;
 	//! Return the next free block id
 	block_id_t GetFreeBlockId() override;
 	//! Returns whether or not a specified block is the root block
 	bool IsRootBlock(block_id_t root) override;
-	//! Register a new block to be used as a meta block
+	//! Mark a block as modified
 	void MarkBlockAsModified(block_id_t block_id) override;
+	//! Increase the reference count of a block. The block should hold at least one reference
+	void IncreaseBlockReferenceCount(block_id_t block_id) override;
 	//! Return the meta block id
 	block_id_t GetMetaBlock() override;
 	//! Read the content of the block from disk
@@ -59,6 +61,9 @@ public:
 private:
 	void Initialize(DatabaseHeader &header);
 
+	//! Return the blocks to which we will write the free list and modified blocks
+	vector<block_id_t> GetFreeListBlocks();
+
 private:
 	DatabaseInstance &db;
 	//! The active DatabaseHeader, either 0 (h1) or 1 (h2)
@@ -71,6 +76,10 @@ private:
 	FileBuffer header_buffer;
 	//! The list of free blocks that can be written to currently
 	set<block_id_t> free_list;
+	//! The list of multi-use blocks (i.e. blocks that have >1 reference in the file)
+	//! When a multi-use block is marked as modified, the reference count is decreased by 1 instead of directly
+	//! Appending the block to the modified_blocks list
+	unordered_map<block_id_t, uint32_t> multi_use_blocks;
 	//! The list of blocks that will be added to the free list
 	unordered_set<block_id_t> modified_blocks;
 	//! The current meta block id

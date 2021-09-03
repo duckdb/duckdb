@@ -1,0 +1,55 @@
+# name: test/sql/topn/test_top_n_structs.test
+# description: Test Top N with structs
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl AS SELECT {'i': i} l FROM range(1000) tbl(i) UNION ALL SELECT NULL l FROM range(3)
+
+loop i 0 2
+
+query I
+SELECT l FROM tbl ORDER BY l NULLS FIRST LIMIT 5
+----
+NULL
+NULL
+NULL
+{'i': 0}
+{'i': 1}
+
+query I
+SELECT l FROM tbl ORDER BY l NULLS LAST LIMIT 5
+----
+{'i': 0}
+{'i': 1}
+{'i': 2}
+{'i': 3}
+{'i': 4}
+
+query I
+SELECT l FROM tbl ORDER BY l DESC NULLS FIRST LIMIT 5
+----
+NULL
+NULL
+NULL
+{'i': 999}
+{'i': 998}
+
+query I
+SELECT l FROM tbl ORDER BY l DESC NULLS LAST LIMIT 5
+----
+{'i': 999}
+{'i': 998}
+{'i': 997}
+{'i': 996}
+{'i': 995}
+
+statement ok
+DROP TABLE tbl
+
+statement ok
+CREATE TABLE tbl AS SELECT NULL l FROM range(3) UNION ALL SELECT {'i': i} l FROM range(1000) tbl(i)
+
+endloop

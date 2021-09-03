@@ -27,7 +27,7 @@ static idx_t GetSortingColSize(const LogicalType &type) {
 	}
 }
 
-SortLayout::SortLayout(const vector<BoundOrderByNode> &orders, const vector<unique_ptr<BaseStatistics>> &statistics)
+SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
     : column_count(orders.size()), all_constant(true), comparison_size(0), entry_size(0) {
 	vector<LogicalType> blob_layout_types;
 	for (idx_t i = 0; i < orders.size(); i++) {
@@ -44,8 +44,8 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders, const vector<uniq
 		column_sizes.push_back(0);
 		auto &col_size = column_sizes.back();
 
-		if (!statistics.empty() && statistics[i]) {
-			stats.push_back(statistics[i].get());
+		if (order.stats) {
+			stats.push_back(order.stats.get());
 			has_null.push_back(stats.back()->CanHaveNull());
 		} else {
 			stats.push_back(nullptr);
@@ -97,6 +97,7 @@ void LocalSortState::Initialize(GlobalSortState &global_sort_state, BufferManage
 }
 
 void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
+	D_ASSERT(sort.size() == payload.size());
 	// Build and serialize sorting data to radix sortable rows
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 	auto handles = radix_sorting_data->Build(sort.size(), data_pointers, nullptr);
@@ -255,9 +256,9 @@ void LocalSortState::ReOrder(GlobalSortState &gstate) {
 	ReOrder(*sb.payload_data, sorting_ptr, *payload_heap, gstate);
 }
 
-GlobalSortState::GlobalSortState(BufferManager &buffer_manager, vector<BoundOrderByNode> &orders,
-                                 vector<unique_ptr<BaseStatistics>> &statistics, RowLayout &payload_layout)
-    : buffer_manager(buffer_manager), sort_layout(SortLayout(orders, statistics)), payload_layout(payload_layout),
+GlobalSortState::GlobalSortState(BufferManager &buffer_manager, const vector<BoundOrderByNode> &orders,
+                                 RowLayout &payload_layout)
+    : buffer_manager(buffer_manager), sort_layout(SortLayout(orders)), payload_layout(payload_layout),
       block_capacity(0), external(false) {
 }
 
@@ -284,7 +285,7 @@ void GlobalSortState::PrepareMergePhase() {
 	if (external || total_heap_size > 0.25 * buffer_manager.GetMaxMemory()) {
 		external = true;
 	}
-	// Use the data that we have to determine which block size to use during the merge
+	// Use the data that we have to determine which partition size to use during the merge
 	if (total_heap_size > 0) {
 		// If we have variable size data we need to be conservative, as there might be skew
 		idx_t max_block_size = 0;
@@ -311,6 +312,9 @@ void GlobalSortState::PrepareMergePhase() {
 
 void GlobalSortState::InitializeMergeRound() {
 	D_ASSERT(sorted_blocks_temp.empty());
+	// If we reverse this list, the blocks that were merged last will be merged first in the next round
+	// These are still in memory, therefore this reduces the amount of read/write to disk!
+	std::reverse(sorted_blocks.begin(), sorted_blocks.end());
 	// Uneven number of blocks - keep one on the side
 	if (sorted_blocks.size() % 2 == 1) {
 		odd_one_out = move(sorted_blocks.back());
@@ -329,15 +333,15 @@ void GlobalSortState::InitializeMergeRound() {
 
 void GlobalSortState::CompleteMergeRound() {
 	sorted_blocks.clear();
-	if (odd_one_out) {
-		sorted_blocks.push_back(move(odd_one_out));
-		odd_one_out = nullptr;
-	}
 	for (auto &sorted_block_vector : sorted_blocks_temp) {
 		sorted_blocks.push_back(make_unique<SortedBlock>(buffer_manager, *this));
 		sorted_blocks.back()->AppendSortedBlocks(sorted_block_vector);
 	}
 	sorted_blocks_temp.clear();
+	if (odd_one_out) {
+		sorted_blocks.push_back(move(odd_one_out));
+		odd_one_out = nullptr;
+	}
 	// Only one block left: Done!
 	if (sorted_blocks.size() == 1) {
 		sorted_blocks[0]->radix_sorting_data.clear();
