@@ -32,6 +32,10 @@ static void TemplatedGatherLoop(Vector &rows, const SelectionVector &row_sel, Ve
 		data[col_idx] = Load<T>(row + col_offset);
 		ValidityBytes row_mask(row);
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
+			if (count > STANDARD_VECTOR_SIZE && col_mask.AllValid()) {
+				//! We need to initialize the mask with the vector size.
+				col_mask.Initialize(count);
+			}
 			col_mask.SetInvalid(col_idx);
 		}
 	}
