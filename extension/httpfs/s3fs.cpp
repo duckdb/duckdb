@@ -129,6 +129,16 @@ void S3FileSystem::Verify() {
 	    "Signature=182072eb53d85c36b2d791a1fa46a12d23454ec1e921b02075c23aee40166d5a") {
 		throw std::runtime_error("test fail");
 	}
+
+	if (uri_encode("/category=Books/") != "/category%3DBooks/") {
+		throw std::runtime_error("test fail");
+	}
+	if (uri_encode("/?category=Books&title=Ducks Retreat/") != "%2F%3Fcategory%3DBooks%26title%3DDucks+Retreat%2F") {
+		throw std::runtime_error("test fail");
+	}
+	if (uri_encode("/?category=Books&title=Ducks Retreat/", false) != "/%3Fcategory%3DBooks%26title%3DDucks+Retreat/") {
+		throw std::runtime_error("test fail");
+	}
 }
 
 bool S3FileSystem::CanHandleFile(const string &fpath) {
