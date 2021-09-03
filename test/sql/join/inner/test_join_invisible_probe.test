@@ -20,10 +20,11 @@ INSERT INTO test4 SELECT * FROM test3;
 
 endloop
 
+
 query I
-select test3.r, test4.r from test3,test4 where test3.r=test4.r;
+select test3.r, test4.r from test3,test4 where test3.r=test4.r order by test3.r, test4.r;
 ----
-20480 values hashing to 1bed6a560b72a2421a1e7859d7b4916d
+20480 values hashing to 35ba7ce9ff11516c6ab6793a3bf802e4
 
 loop i 0 90
 
@@ -33,9 +34,9 @@ INSERT INTO test4 SELECT * FROM test3;
 endloop
 
 query I
-select test3.r, test4.r from test3,test4 where test3.r=test4.r;
+select test3.r, test4.r from test3,test4 where test3.r=test4.r order by test3.r, test4.r;
 ----
-204800 values hashing to 52c83d9805cd0e3d903a3a4f8f93b166
+204800 values hashing to 77cdae057078ab7ba8339275f564fac1
 
 loop i 0 900
 
@@ -46,9 +47,9 @@ endloop
 
 
 query I
-select test3.r, test4.r from test3,test4 where test3.r=test4.r;
+select test3.r, test4.r from test3,test4 where test3.r=test4.r order by test3.r, test4.r;
 ----
-2048000 values hashing to 414f5ae39cf62b978a86538bd26090ac
+2048000 values hashing to bccebf996dfc50af5dcf31a047785871
 
 loop i 0 9000
 
@@ -57,26 +58,7 @@ INSERT INTO test4 SELECT * FROM test3;
 
 endloop
 
-
-#statement ok
-#PRAGMA enable_profiling;
-#
-#statement ok
-#PRAGMA profiling_mode = detailed
-#
-#statement ok
-#PRAGMA profiling_output='__TEST_DIR__/test.json'
-#
-#statement ok
-#PRAGMA all_profiling_output;
-
 query I
-select test3.r, test4.r from test3,test4 where test3.r=test4.r;
+select test3.r, test4.r from test3,test4 where test3.r=test4.r order by test3.r, test4.r;
 ----
-20480000 values hashing to eec5a5e92f6552db50f6ec59bc6cb2ad
-
-#query IIII
-#SELECT * FROM pragma_last_profiling_output()
-
-#query II
-#SELECT EXTRA_INFO, TIME FROM pragma_detailed_profiling_output();
+20480000 values hashing to 7b4097bf858201ecb9231cf9c1578b12
