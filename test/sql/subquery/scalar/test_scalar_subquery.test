@@ -148,6 +148,7 @@ SELECT * FROM test WHERE EXISTS (SELECT a FROM test ts WHERE ts.a = test.a AND b
 13	22
 
 # duplicate name in subquery
-statement error
+query II
 SELECT * FROM (SELECT 42 AS a, 44 AS a) tbl1
-
+----
+42	44

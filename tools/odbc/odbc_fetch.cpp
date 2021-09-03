@@ -11,6 +11,7 @@ using duckdb::OdbcFetch;
 using duckdb::OdbcHandleStmt;
 
 OdbcFetch::~OdbcFetch() {
+	chunks.clear();
 }
 
 void OdbcFetch::IncreaseRowCount() {

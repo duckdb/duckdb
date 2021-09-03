@@ -12,7 +12,7 @@ coverage:
           - "src"
        # advanced settings
         if_not_found: failure
-        if_ci_failed: error #success, failure, error, ignore
+        if_ci_failed: success #success, failure, error, ignore
         informational: false
         only_pulls: false
     patch:
@@ -25,6 +25,6 @@ coverage:
         branches:
           - master
         if_ci_failed: error #success, failure, error, ignore
-        only_pulls: false
+        only_pulls: true
         paths:
           - "src"
