@@ -6,11 +6,6 @@
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 
-#ifndef _WIN32
-#define CSTACK_DEFNS
-#include "Rinterface.h"
-#endif
-
 using namespace duckdb;
 
 SEXP RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {

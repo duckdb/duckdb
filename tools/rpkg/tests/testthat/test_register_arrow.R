@@ -309,3 +309,19 @@ test_that("duckdb_register_arrow() performs selection pushdown date type", {
     dbDisconnect(con, shutdown = T)
 })
 
+test_that("duckdb_register_arrow() under many threads", {
+    con <- DBI::dbConnect(duckdb::duckdb())
+    ds <- arrow::InMemoryDataset$create(mtcars)
+    duckdb::duckdb_register_arrow(con, "mtcars_arrow", ds)
+    DBI::dbExecute(con, "PRAGMA threads=32")
+    DBI::dbExecute(con, "PRAGMA force_parallelism")
+    expect_error(DBI::dbGetQuery(con, "SELECT cyl, COUNT(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
+
+    expect_error(DBI::dbGetQuery(con, "SELECT cyl, SUM(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
+
+
+    expect_error(DBI::dbGetQuery(con, "SELECT cyl, AVG(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
+
+})
+
+
