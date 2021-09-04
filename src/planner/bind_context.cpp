@@ -94,7 +94,7 @@ UsingColumnSet *BindContext::GetUsingBinding(const string &column_name) {
 
 UsingColumnSet *BindContext::GetUsingBinding(const string &column_name, const string &binding_name) {
 	if (binding_name.empty()) {
-		return GetUsingBinding(column_name);
+		throw InternalException("GetUsingBinding: expected non-empty binding_name");
 	}
 	unordered_set<UsingColumnSet *> *using_bindings;
 	if (!FindUsingBinding(column_name, &using_bindings)) {
@@ -115,7 +115,7 @@ void BindContext::RemoveUsingBinding(const string &column_name, UsingColumnSet *
 	}
 	auto entry = using_columns.find(column_name);
 	if (entry == using_columns.end()) {
-		return;
+		throw InternalException("Attempting to remove using binding that is not there");
 	}
 	auto &bindings = entry->second;
 	if (bindings.find(set) != bindings.end()) {
@@ -139,10 +139,10 @@ string BindContext::GetActualColumnName(const string &binding_name, const string
 		throw InternalException("No binding with name \"%s\"", binding_name);
 	}
 	idx_t binding_index;
-	if (!binding->TryGetBindingIndex(column_name, binding_index)) {
+	if (!binding->TryGetBindingIndex(column_name, binding_index)) { // LCOV_EXCL_START
 		throw InternalException("Binding with name \"%s\" does not have a column named \"%s\"", binding_name,
 		                        column_name);
-	}
+	} // LCOV_EXCL_STOP
 	return binding->names[binding_index];
 }
 
