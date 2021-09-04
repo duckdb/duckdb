@@ -916,4 +916,20 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	return make_unique<MaterializedQueryResult>(err_str);
 }
 
+bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) {
+	const auto &session_config_map = set_variables;
+	const auto &global_config_map = db->config.set_variables;
+
+	auto session_value = session_config_map.find(key);
+	bool found_session_value = session_value != session_config_map.end();
+	auto global_value = global_config_map.find(key);
+	bool found_global_value = global_value != global_config_map.end();
+	if (!found_session_value && !found_global_value) {
+		return false;
+	}
+
+	result = found_session_value ? session_value->second : global_value->second;
+	return true;
+}
+
 } // namespace duckdb
