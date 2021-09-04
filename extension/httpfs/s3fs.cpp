@@ -136,7 +136,8 @@ void S3FileSystem::Verify() {
 	if (uri_encode("/?category=Books&title=Ducks Retreat/") != "/%3Fcategory%3DBooks%26title%3DDucks+Retreat/") {
 		throw std::runtime_error("test fail");
 	}
-	if (uri_encode("/?category=Books&title=Ducks Retreat/", true) != "%2F%3Fcategory%3DBooks%26title%3DDucks+Retreat%2F") {
+	if (uri_encode("/?category=Books&title=Ducks Retreat/", true) !=
+	    "%2F%3Fcategory%3DBooks%26title%3DDucks+Retreat%2F") {
 		throw std::runtime_error("test fail");
 	}
 }
