@@ -1,0 +1,23 @@
+# name: test/issues/general/test_2240.test
+# description: Issue 2240: Exception thrown when inserting and updating a text column in the same row in a transaction
+# group: [general]
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE test (id INTEGER, name TEXT);
+
+statement ok
+INSERT INTO test VALUES (1, 'Bob');
+
+statement ok
+UPDATE test SET name = 'Alice' Where id = 1;
+
+statement ok
+COMMIT;
+
+query T
+select name from test where id = 1;
+----
+Alice
