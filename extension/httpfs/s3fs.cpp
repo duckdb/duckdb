@@ -8,24 +8,26 @@
 
 using namespace duckdb;
 
-static std::string uri_encode(std::string input, bool encodeSlash = false) {
+static std::string uri_encode(const std::string &input, bool encode_slash = false) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-	static auto hex_digt = "0123456789ABCDEF";
-	std::string result = "";
-	for (int i = 0; i < input.length(); i++) {
+	static const char *hex_digit = "0123456789ABCDEF";
+	std::string result;
+	result.reserve(input.size());
+	for (idx_t i = 0; i < input.length(); i++) {
 		char ch = input[i];
 		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
 		    ch == '-' || ch == '~' || ch == '.') {
 			result += ch;
 		} else if (ch == '/') {
-			if (encodeSlash) {
+			if (encode_slash) {
 				result += std::string("%2F");
 			} else {
 				result += ch;
 			}
 		} else {
-			result += std::string("%") + hex_digt[static_cast<unsigned char>(ch) >> 4] +
-			          hex_digt[static_cast<unsigned char>(ch) & 15];
+			result += std::string("%");
+			result += hex_digit[static_cast<unsigned char>(ch) >> 4];
+			result += hex_digit[static_cast<unsigned char>(ch) & 15];
 		}
 	}
 	return result;
