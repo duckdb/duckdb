@@ -80,7 +80,7 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path)
 }
 
 std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                     FileCompressionType compression) {
+                                                     FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
 	return duckdb::make_unique<HTTPFileHandle>(*this, path);
 }

@@ -46,8 +46,9 @@ public:
 
 class HTTPFileSystem : public FileSystem {
 public:
-	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
-	                                     FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
+	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
+	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
+	                                     FileOpener *opener = nullptr) override;
 
 	std::vector<std::string> Glob(const std::string &path) override {
 		return {path}; // FIXME

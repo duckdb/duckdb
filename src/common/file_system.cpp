@@ -137,7 +137,7 @@ string FileSystem::GetHomeDirectory() {
 
 // LCOV_EXCL_START
 unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                            FileCompressionType compression) {
+                                            FileCompressionType compression, FileOpener *opener) {
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
 }
 

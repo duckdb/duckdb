@@ -24,6 +24,7 @@
 namespace duckdb {
 class ClientContext;
 class DatabaseInstance;
+class FileOpener;
 class FileSystem;
 
 enum class FileType {
@@ -101,12 +102,14 @@ public:
 	}
 
 public:
+	static constexpr FileLockType DEFAULT_LOCK = FileLockType::NO_LOCK;
+	static constexpr FileCompressionType DEFAULT_COMPRESSION = FileCompressionType::UNCOMPRESSED;
 	static FileSystem &GetFileSystem(ClientContext &context);
 	static FileSystem &GetFileSystem(DatabaseInstance &db);
 
-	virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags,
-	                                        FileLockType lock = FileLockType::NO_LOCK,
-	                                        FileCompressionType compression = FileCompressionType::UNCOMPRESSED);
+	virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
+	                                        FileCompressionType compression = DEFAULT_COMPRESSION,
+	                                        FileOpener *opener = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().

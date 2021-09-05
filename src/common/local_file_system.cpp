@@ -74,7 +74,7 @@ public:
 };
 
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
-                                                 FileCompressionType compression) {
+                                                 FileCompressionType compression, FileOpener *opener) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
@@ -432,7 +432,7 @@ public:
 };
 
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
-                                                 FileCompressionType compression) {
+                                                 FileCompressionType compression, FileOpener *opener) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}

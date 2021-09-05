@@ -8,11 +8,11 @@ namespace duckdb {
 
 class ReadOnlyFileSystem : public LocalFileSystem {
 	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
-	                                FileCompressionType compression) override {
+	                                FileCompressionType compression, FileOpener *opener) override {
 		if (flags & FileFlags::FILE_FLAGS_WRITE) {
 			throw Exception("RO file system");
 		}
-		return LocalFileSystem::OpenFile(path, flags, lock_type, compression);
+		return LocalFileSystem::OpenFile(path, flags, lock_type, compression, opener);
 	}
 
 	std::string GetName() const override {
