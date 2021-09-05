@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 class CatalogEntry;
@@ -26,7 +27,7 @@ struct BoundCreateTableInfo {
 	//! The base CreateInfo object
 	unique_ptr<CreateInfo> base;
 	//! The map of column names -> column index, used during binding
-	unordered_map<string, column_t> name_map;
+	case_insensitive_map_t<column_t> name_map;
 	//! List of constraints on the table
 	vector<unique_ptr<Constraint>> constraints;
 	//! List of bound constraints on the table

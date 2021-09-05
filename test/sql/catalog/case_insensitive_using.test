@@ -1,0 +1,203 @@
+# name: test/sql/catalog/case_insensitive_using.test
+# description: Test case insensitivity in USING clauses and NATURAL joins
+# group: [catalog]
+
+statement ok
+create table A as select 1 as "X", 2 as "Y";
+
+statement ok
+create table B as select 1 as "X", 3 as "Z";
+
+query III
+select * from A join B using(X);
+----
+1	2	3
+
+query III
+select * from A join B using("X");
+----
+1	2	3
+
+# case mismatch in using clause
+statement ok
+DROP TABLE "A"
+
+statement ok
+DROP TABLE "B"
+
+statement ok
+create table A as select 1 as "X", 2 as "Y";
+
+statement ok
+create table B as select 1 as X, 3 as "Z";
+
+query III
+select * from A join B using(X);
+----
+1	2	3
+
+query III
+select * from A join B using(X);
+----
+1	2	3
+
+# using clause with many different case variations on the same name
+statement ok
+DROP TABLE "A"
+
+statement ok
+DROP TABLE "B"
+
+statement ok
+create table A as select 1 as "hello", 2 as x;
+
+statement ok
+create table B as select 1 as "HELLO", 3 as x2;
+
+statement ok
+create table C as select 1 as "hEllO", 4 as x3;
+
+statement ok
+create table D as select 1 as "HElLo", 5 as x4;
+
+statement ok
+create table E as select 1 as "heLLo", 6 as x5;
+
+query III
+SELECT * FROM a JOIN b USING (hello)
+----
+1	2	3
+
+query III
+SELECT * FROM a JOIN b USING (hello, "HELLO");
+----
+1	2	3
+
+query IIII
+SELECT * FROM a JOIN b USING (hello) JOIN c USING (hello)
+----
+1	2	3	4
+
+query IIII
+SELECT * FROM a JOIN b USING (hello) JOIN c USING ("HELLO")
+----
+1	2	3	4
+
+query IIIII
+SELECT * FROM a JOIN b USING (hello) JOIN c USING (hello) JOIN d USING (hello)
+----
+1	2	3	4	5
+
+query IIIII
+SELECT * FROM a JOIN b USING ("HELLO") JOIN c USING ("HeLLo") JOIN d USING (hello)
+----
+1	2	3	4	5
+
+# full outer join
+query IIIIII
+SELECT * FROM a JOIN b USING (hello) JOIN c USING (hello) JOIN d USING (hello) JOIN e USING (hello)
+----
+1	2	3	4	5	6
+
+query III
+SELECT * FROM a FULL OUTER JOIN b USING (hello)
+----
+1	2	3
+
+query IIII
+SELECT * FROM a FULL OUTER JOIN b USING (hello) FULL OUTER JOIN c USING (hello)
+----
+1	2	3	4
+
+query IIIII
+SELECT * FROM a FULL OUTER JOIN b USING (hello) FULL OUTER JOIN c USING (hello) FULL OUTER JOIN d USING (hello)
+----
+1	2	3	4	5
+
+query IIIIII
+SELECT * FROM a FULL OUTER JOIN b USING (hello) FULL OUTER JOIN c USING (hello) FULL OUTER JOIN d USING (hello) FULL OUTER JOIN e USING (hello)
+----
+1	2	3	4	5	6
+
+# natural join
+query III
+SELECT * FROM a NATURAL JOIN b
+----
+1	2	3
+
+query IIII
+SELECT * FROM a NATURAL JOIN b NATURAL JOIN c
+----
+1	2	3	4
+
+query IIIII
+SELECT * FROM a NATURAL JOIN b NATURAL JOIN c NATURAL JOIN d
+----
+1	2	3	4	5
+
+query IIIIII
+SELECT * FROM a NATURAL JOIN b NATURAL JOIN c NATURAL JOIN d NATURAL JOIN e
+----
+1	2	3	4	5	6
+
+query IIIIII
+SELECT * FROM (a NATURAL JOIN b NATURAL JOIN c) NATURAL JOIN (d NATURAL JOIN e)
+----
+1	2	3	4	5	6
+
+# natural full outer join
+query III
+SELECT * FROM a NATURAL FULL OUTER JOIN b
+----
+1	2	3
+
+query IIII
+SELECT * FROM a NATURAL FULL OUTER JOIN b NATURAL FULL OUTER JOIN c
+----
+1	2	3	4
+
+query IIIII
+SELECT * FROM a NATURAL FULL OUTER JOIN b NATURAL FULL OUTER JOIN c NATURAL FULL OUTER JOIN d
+----
+1	2	3	4	5
+
+query IIIIII
+SELECT * FROM a NATURAL FULL OUTER JOIN b NATURAL FULL OUTER JOIN c NATURAL FULL OUTER JOIN d NATURAL FULL OUTER JOIN e
+----
+1	2	3	4	5	6
+
+query IIIIII
+SELECT * FROM (a NATURAL FULL OUTER JOIN b NATURAL FULL OUTER JOIN c) NATURAL FULL OUTER JOIN (d NATURAL FULL OUTER JOIN e)
+----
+1	2	3	4	5	6
+
+# natural join with ambiguity
+query II
+SELECT * FROM (SELECT 1 "hello", 2 "hello") NATURAL JOIN (SELECT 1 "hello", 2 "hello")
+----
+1	2
+
+query II
+SELECT * FROM (SELECT 1 "hello", 2 "HeLlO") NATURAL JOIN (SELECT 1 "hello", 2 "HeLlO")
+----
+1	2
+
+query IIII
+SELECT * FROM (SELECT 1 "hello", 2 "hello") t1, (SELECT 1 "hello", 2 "hello") t2
+----
+1	2	1	2
+
+# using join with ambiguity
+query III
+SELECT * FROM (SELECT 1 "hello", 2 "hello") t1 JOIN (SELECT 1 "hello", 2 "hello") t2 USING (hello);
+----
+1	2	2
+
+query III
+SELECT * FROM (SELECT 1 "hello", 2 "HeLlO") t1 JOIN (SELECT 1 "hello", 2 "HeLlO") t2 USING (hello);
+----
+1	2	2
+
+# ambiguous using column reference
+statement error
+SELECT hello FROM (a JOIN b USING (hello)), (d JOIN e USING (hello))
