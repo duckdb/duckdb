@@ -15,7 +15,8 @@ using ValidityBytes = RowLayout::ValidityBytes;
 
 template <class T>
 static void TemplatedGatherLoop(Vector &rows, const SelectionVector &row_sel, Vector &col,
-                                const SelectionVector &col_sel, idx_t count, idx_t col_offset, idx_t col_no) {
+                                const SelectionVector &col_sel, idx_t count, idx_t col_offset, idx_t col_no,
+                                idx_t build_size) {
 	// Precompute mask indexes
 	idx_t entry_idx;
 	idx_t idx_in_entry;
@@ -32,9 +33,9 @@ static void TemplatedGatherLoop(Vector &rows, const SelectionVector &row_sel, Ve
 		data[col_idx] = Load<T>(row + col_offset);
 		ValidityBytes row_mask(row);
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
-			if (count > STANDARD_VECTOR_SIZE && col_mask.AllValid()) {
+			if (build_size > STANDARD_VECTOR_SIZE && col_mask.AllValid()) {
 				//! We need to initialize the mask with the vector size.
-				col_mask.Initialize(count);
+				col_mask.Initialize(build_size);
 			}
 			col_mask.SetInvalid(col_idx);
 		}
@@ -59,51 +60,51 @@ static void GatherNestedVector(Vector &rows, const SelectionVector &row_sel, Vec
 }
 
 void RowOperations::Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
-                           const idx_t count, const idx_t col_offset, const idx_t col_no) {
+                           const idx_t count, const idx_t col_offset, const idx_t col_no, const idx_t build_size) {
 	D_ASSERT(rows.GetVectorType() == VectorType::FLAT_VECTOR);
 	D_ASSERT(rows.GetType().id() == LogicalTypeId::POINTER); // "Cannot gather from non-pointer type!"
 
 	col.SetVectorType(VectorType::FLAT_VECTOR);
 	switch (col.GetType().InternalType()) {
 	case PhysicalType::UINT8:
-		TemplatedGatherLoop<uint8_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<uint8_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedGatherLoop<uint16_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<uint16_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedGatherLoop<uint32_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<uint32_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedGatherLoop<uint64_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<uint64_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		TemplatedGatherLoop<int8_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<int8_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::INT16:
-		TemplatedGatherLoop<int16_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<int16_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::INT32:
-		TemplatedGatherLoop<int32_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<int32_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::INT64:
-		TemplatedGatherLoop<int64_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<int64_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::INT128:
-		TemplatedGatherLoop<hugeint_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<hugeint_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedGatherLoop<float>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<float>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedGatherLoop<double>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<double>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::INTERVAL:
-		TemplatedGatherLoop<interval_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<interval_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedGatherLoop<string_t>(rows, row_sel, col, col_sel, count, col_offset, col_no);
+		TemplatedGatherLoop<string_t>(rows, row_sel, col, col_sel, count, col_offset, col_no, build_size);
 		break;
 	case PhysicalType::LIST:
 	case PhysicalType::MAP:

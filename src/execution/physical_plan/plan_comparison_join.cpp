@@ -61,7 +61,10 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 
 	// and when the build range is smaller than the threshold
 	auto stats_build = reinterpret_cast<NumericStatistics *>(op.join_stats[0].get()); // lhs stats
-	auto build_range = stats_build->max - stats_build->min;                           // Join Keys Range
+	if (stats_build->min.is_null || stats_build->max.is_null) {
+		return;
+	}
+	auto build_range = stats_build->max - stats_build->min; // Join Keys Range
 
 	// Fill join_stats for invisible join
 	auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
@@ -88,7 +91,6 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	} else {
 		join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
 	}
-	D_ASSERT(!stats_build->min.is_null && !stats_build->max.is_null);
 	if (stats_probe->max.is_null || stats_probe->min.is_null) {
 		return;
 	}

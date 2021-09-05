@@ -53,11 +53,13 @@ void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	keys_count = unique_keys; // do not consider keys out of the range
 	// Full scan the remaining build columns and fill the perfect hash table
 	for (idx_t i = 0; i < hash_table->build_types.size(); i++) {
+		auto build_size = perfect_join_statistics.build_range + 1;
 		auto &vector = perfect_hash_table[i];
 		D_ASSERT(vector.GetType() == hash_table->build_types[i]);
 		const auto col_no = hash_table->condition_types.size() + i;
 		const auto col_offset = hash_table->layout.GetOffsets()[col_no];
-		RowOperations::Gather(tuples_addresses, sel_tuples, vector, sel_build, keys_count, col_offset, col_no);
+		RowOperations::Gather(tuples_addresses, sel_tuples, vector, sel_build, keys_count, col_offset, col_no,
+		                      build_size);
 	}
 }
 
@@ -160,6 +162,7 @@ bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, D
 		}
 
 	} while (result.size() == 0);
+	result.Verify();
 	return true;
 }
 
