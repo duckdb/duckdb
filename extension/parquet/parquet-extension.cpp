@@ -130,7 +130,8 @@ public:
 			for (idx_t file_idx = 1; file_idx < bind_data.files.size(); file_idx++) {
 				auto &file_name = bind_data.files[file_idx];
 				auto metadata = std::dynamic_pointer_cast<ParquetFileMetadataCache>(cache.Get(file_name));
-				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+				auto handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+				                          FileSystem::DEFAULT_COMPRESSION, FileSystem::GetFileOpener(context));
 				// but we need to check if the metadata cache entries are current
 				if (!metadata || (fs.GetLastModifiedTime(*handle) >= metadata->read_time)) {
 					// missing or invalid metadata entry in cache, no usable stats overall
@@ -403,8 +404,9 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	auto &parquet_bind = (ParquetWriteBindData &)bind_data;
 
 	auto &fs = FileSystem::GetFileSystem(context);
-	global_state->writer = make_unique<ParquetWriter>(fs, parquet_bind.file_name, parquet_bind.sql_types,
-	                                                  parquet_bind.column_names, parquet_bind.codec);
+	global_state->writer =
+	    make_unique<ParquetWriter>(fs, parquet_bind.file_name, FileSystem::GetFileOpener(context),
+	                               parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec);
 	return move(global_state);
 }
 

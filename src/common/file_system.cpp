@@ -36,6 +36,10 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 	return *context.db->config.file_system;
 }
 
+FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
+	return context.file_opener.get();
+}
+
 #ifndef _WIN32
 string FileSystem::PathSeparator() {
 	return "/";

@@ -281,10 +281,11 @@ ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const vector<LogicalType> &expected_types_p,
                              const string &initial_filename_p)
-    : allocator(Allocator::Get(context_p)) {
+    : allocator(Allocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)) {
 	auto &fs = FileSystem::GetFileSystem(context_p);
 	file_name = move(file_name_p);
-	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+	                          FileSystem::DEFAULT_COMPRESSION, file_opener);
 	// If object cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
@@ -387,7 +388,9 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.group_idx_list = move(groups_to_read);
 	state.filters = filters;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
-	state.file_handle = file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ);
+	state.file_handle =
+	    file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+	                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
 	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle);
 	state.root_reader = CreateReader(*this, GetFileMetadata());
 

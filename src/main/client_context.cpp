@@ -1,4 +1,6 @@
 #include "duckdb/main/client_context.hpp"
+
+#include "duckdb/main/client_context_file_opener.hpp"
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
@@ -50,7 +52,8 @@ private:
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : profiler(make_unique<QueryProfiler>()), query_profiler_history(make_unique<QueryProfilerHistory>()),
       db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
-      temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)), open_result(nullptr) {
+      temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)),
+      file_opener(make_unique<ClientContextFileOpener>(*this)), open_result(nullptr) {
 	std::random_device rd;
 	random_engine.seed(rd());
 
@@ -517,7 +520,8 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 #ifdef DUCKDB_FORCE_QUERY_LOG
 		try {
 			string log_path(DUCKDB_FORCE_QUERY_LOG);
-			log_query_writer = make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(*this), log_path);
+			log_query_writer = make_unique<BufferedFileWriter>(
+			    FileSystem::GetFileSystem(*this), log_path, BufferedFileWriter::DEFAULT_OPEN_FLAGS, file_opener.get());
 		} catch (...) {
 			return;
 		}

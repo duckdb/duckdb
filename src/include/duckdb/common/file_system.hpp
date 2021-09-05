@@ -106,6 +106,7 @@ public:
 	static constexpr FileCompressionType DEFAULT_COMPRESSION = FileCompressionType::UNCOMPRESSED;
 	static FileSystem &GetFileSystem(ClientContext &context);
 	static FileSystem &GetFileSystem(DatabaseInstance &db);
+	static FileOpener *GetFileOpener(ClientContext &context);
 
 	virtual unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
 	                                        FileCompressionType compression = DEFAULT_COMPRESSION,

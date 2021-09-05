@@ -123,16 +123,17 @@ TextSearchShiftArray::TextSearchShiftArray(string search_term) : length(search_t
 	}
 }
 
-BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, BufferedCSVReaderOptions options_p,
+BufferedCSVReader::BufferedCSVReader(FileSystem &fs_p, FileOpener *opener_p, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : fs(fs_p), options(move(options_p)), buffer_size(0), position(0), start(0) {
+    : fs(fs_p), opener(opener_p), options(move(options_p)), buffer_size(0), position(0), start(0) {
 	file_handle = OpenCSV(options);
 	Initialize(requested_types);
 }
 
 BufferedCSVReader::BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options_p,
                                      const vector<LogicalType> &requested_types)
-    : BufferedCSVReader(FileSystem::GetFileSystem(context), move(options_p), requested_types) {
+    : BufferedCSVReader(FileSystem::GetFileSystem(context), FileSystem::GetFileOpener(context), move(options_p),
+                        requested_types) {
 }
 
 void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
@@ -164,8 +165,8 @@ unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(const BufferedCSVReaderOptions
 		this->compression = FileCompressionType::GZIP;
 	}
 
-	auto result =
-	    fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK, this->compression);
+	auto result = fs.OpenFile(options.file_path.c_str(), FileFlags::FILE_FLAGS_READ, FileLockType::NO_LOCK,
+	                          this->compression, this->opener);
 	plain_file_source = result->OnDiskFile() && result->CanSeek();
 	file_size = result->GetFileSize();
 	return result;
