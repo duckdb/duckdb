@@ -68,7 +68,9 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 
 	// Fill join_stats for invisible join
 	auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
-	join_state.is_build_small = true;
+
+	// The max size our build must have to run the perfect HJ
+	const idx_t MAX_BUILD_SIZE = 1000000;
 	join_state.probe_min = stats_probe->min;
 	join_state.probe_max = stats_probe->max;
 	join_state.build_min = stats_build->min;
@@ -91,13 +93,16 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	} else {
 		join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
 	}
+	if (join_state.build_range > MAX_BUILD_SIZE) {
+		return;
+	}
 	if (stats_probe->max.is_null || stats_probe->min.is_null) {
 		return;
 	}
 	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
 		join_state.is_probe_in_domain = true;
 	}
-
+	join_state.is_build_small = true;
 	return;
 }
 
