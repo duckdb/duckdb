@@ -112,7 +112,6 @@ public:
 		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));
 		merge_sorter.PerformInMergeRound();
 		// Finish task and act if all tasks are finished
-		lock_guard<mutex> state_guard(global_sort_state.lock);
 		idx_t finished_tasks = ++parent.finished_tasks;
 		if (finished_tasks == parent.total_tasks) {
 			global_sort_state.CompleteMergeRound();
