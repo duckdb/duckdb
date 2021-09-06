@@ -125,7 +125,7 @@ static void TemplatedFullScanLoop(Vector &rows, Vector &col, idx_t count, idx_t 
 
 	auto ptrs = FlatVector::GetData<data_ptr_t>(rows);
 	auto data = FlatVector::GetData<T>(col);
-	auto &col_mask = FlatVector::Validity(col);
+	//	auto &col_mask = FlatVector::Validity(col);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto row = ptrs[i];
