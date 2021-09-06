@@ -14,6 +14,7 @@
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -44,7 +45,7 @@ public:
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! A map of column name to column index
-	unordered_map<string, column_t> name_map;
+	case_insensitive_map_t<column_t> name_map;
 
 public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
@@ -56,9 +57,6 @@ public:
 	//! Returns a list of types of the table
 	vector<LogicalType> GetTypes();
 	string ToSQL() override;
-
-	//! Add lower case aliases to a name map (e.g. "Hello" -> "hello" is also acceptable)
-	static void AddLowerCaseAliases(unordered_map<string, column_t> &name_map);
 
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);

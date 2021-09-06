@@ -75,6 +75,8 @@ public:
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
 
+	unordered_map<string, Value> set_variables;
+
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
 	//! Enable the running of optimizers
@@ -163,6 +165,9 @@ public:
 	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
 	DUCKDB_API void RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
 	                                                 bool requires_valid_transaction = true);
+
+	//! Equivalent to CURRENT_SETTING(key) SQL function.
+	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
 private:
 	//! Parse statements from a query

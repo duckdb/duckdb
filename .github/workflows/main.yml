@@ -40,6 +40,7 @@ jobs:
     - name: Regression Post
       uses: ouzi-dev/commit-status-updater@v1.1.0
       with:
+        name: "Regression Test TPC-H SF 1"
         status: ${{env.REGRESSION_STATE}}
         description: ${{env.REGRESSION_DESCRIPTION}}
 

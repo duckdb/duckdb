@@ -78,6 +78,8 @@ public:
 	//! the two DataChunks have to match exactly. Throws an exception if there
 	//! is not enough space in the chunk.
 	DUCKDB_API void Append(const DataChunk &other);
+	//! Append a selection of the other DataChunk to this one
+	DUCKDB_API void Append(const DataChunk &other, const SelectionVector &sel, idx_t count);
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
 

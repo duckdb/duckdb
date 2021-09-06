@@ -34,14 +34,11 @@ INSERT INTO "table ""." ("col "".") VALUES ('quote_escaped_quote_''')
 statement ok
 CREATE TABLE "SAME_NAME"(i INTEGER, j INTEGER);
 
-statement ok
+statement error
 CREATE TABLE "same_name"(i INTEGER, j INTEGER);
 
 statement ok
 INSERT INTO "SAME_NAME" VALUES (1, 1), (2, 2)
-
-statement ok
-INSERT INTO "same_name" VALUES (3, 3), (4, 4)
 
 statement ok
 CREATE VIEW v1 AS SELECT * FROM integers WHERE i>3; --
@@ -122,12 +119,6 @@ SELECT * FROM "SAME_NAME" ORDER BY i
 ----
 1	1
 2	2
-
-query II
-SELECT * FROM "same_name" ORDER BY i
-----
-3	3
-4	4
 
 statement ok
 CREATE SCHEMA s1;
@@ -235,12 +226,6 @@ SELECT * FROM "SAME_NAME" ORDER BY i
 ----
 1	1
 2	2
-
-query II
-SELECT * FROM "same_name" ORDER BY i
-----
-3	3
-4	4
 
 query II
 SELECT * FROM table01 ORDER BY i;

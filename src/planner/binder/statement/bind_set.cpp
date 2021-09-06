@@ -10,7 +10,7 @@ BoundStatement Binder::Bind(SetStatement &stmt) {
 	result.types = {LogicalType::BOOLEAN};
 	result.names = {"Success"};
 
-	result.plan = make_unique<LogicalSet>(stmt.name, stmt.value);
+	result.plan = make_unique<LogicalSet>(stmt.name, stmt.value, stmt.scope);
 	return result;
 }
 

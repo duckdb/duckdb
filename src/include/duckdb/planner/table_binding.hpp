@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -37,7 +37,7 @@ struct Binding {
 	//! Column names of the subquery
 	vector<string> names;
 	//! Name -> index for the names
-	unordered_map<string, column_t> name_map;
+	case_insensitive_map_t<column_t> name_map;
 
 public:
 	bool TryGetBindingIndex(const string &column_name, column_t &column_index);

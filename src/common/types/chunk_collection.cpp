@@ -131,7 +131,18 @@ void ChunkCollection::Append(unique_ptr<DataChunk> new_chunk) {
 
 void ChunkCollection::Fuse(ChunkCollection &other) {
 	if (count == 0) {
-		Append(other);
+		chunks.reserve(other.ChunkCount());
+		for (idx_t chunk_idx = 0; chunk_idx < other.ChunkCount(); ++chunk_idx) {
+			auto lhs = make_unique<DataChunk>();
+			auto &rhs = other.GetChunk(chunk_idx);
+			lhs->data.reserve(rhs.data.size());
+			for (auto &v : rhs.data) {
+				lhs->data.emplace_back(Vector(v));
+			}
+			lhs->SetCardinality(rhs.size());
+			chunks.push_back(move(lhs));
+		}
+		count = other.Count();
 	} else {
 		D_ASSERT(this->ChunkCount() == other.ChunkCount());
 		for (idx_t chunk_idx = 0; chunk_idx < ChunkCount(); ++chunk_idx) {
@@ -142,8 +153,8 @@ void ChunkCollection::Fuse(ChunkCollection &other) {
 				lhs.data.emplace_back(Vector(v));
 			}
 		}
-		types.insert(types.end(), other.types.begin(), other.types.end());
 	}
+	types.insert(types.end(), other.types.begin(), other.types.end());
 }
 
 // returns an int similar to a C comparator:

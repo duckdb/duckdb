@@ -2,6 +2,8 @@
 #define ODBC_FETCH_HPP
 
 #include "duckdb.hpp"
+#include "duckdb/common/windows.hpp"
+
 #include <sqltypes.h>
 #include <sql.h>
 #include <sqlext.h>
