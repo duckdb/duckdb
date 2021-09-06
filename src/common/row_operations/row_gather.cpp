@@ -132,7 +132,8 @@ static void TemplatedFullScanLoop(Vector &rows, Vector &col, idx_t count, idx_t 
 		data[i] = Load<T>(row + col_offset);
 		ValidityBytes row_mask(row);
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntry(entry_idx), idx_in_entry)) {
-			col_mask.SetInvalid(i);
+			throw InternalException("Null value comparisons not implemented for perfect hash table yet");
+			//			col_mask.SetInvalid(i);
 		}
 	}
 }
