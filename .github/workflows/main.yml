@@ -10,6 +10,7 @@ env:
   AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
   AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+  REGRESSION_TOKEN: ${{ secrets.REGRESSION_TOKEN }}
 
 jobs:
    regression-test:
@@ -44,7 +45,7 @@ jobs:
         ignoreForks: "false"
         status: ${{env.REGRESSION_STATE}}
         description: ${{env.REGRESSION_DESCRIPTION}}
-        token: ${{ secrets.REGRESSION_TOKEN }}
+        token: ${{ env.REGRESSION_TOKEN }}
 
 #  linux-debug:
 #    name: Linux Debug
