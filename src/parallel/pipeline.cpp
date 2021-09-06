@@ -36,7 +36,7 @@ public:
 };
 
 Pipeline::Pipeline(Executor &executor_p, ProducerToken &token_p)
-    : executor(executor_p), token(token_p), finished_tasks(0), total_tasks(0), source(nullptr), sink(nullptr),
+    : executor(executor_p), token(token_p), finished_tasks(0), total_tasks(0), sink(nullptr),
       finished_dependencies(0), finished(false), recursive_cte(nullptr) {
 }
 
@@ -64,7 +64,7 @@ bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &cu
 
 bool Pipeline::GetProgress(int &current_percentage) {
 	auto &client = executor.context;
-	return GetProgress(client, source, current_percentage);
+	return GetProgress(client, operators[source_idx], current_percentage);
 }
 
 void Pipeline::FinishTask() {
@@ -98,11 +98,11 @@ bool Pipeline::ScheduleParallel() {
 	if (!sink->ParallelSink()) {
 		return false;
 	}
-	if (!source->ParallelSource()) {
+	if (!operators[source_idx]->ParallelSource()) {
 		return false;
 	}
-	for(auto &op : operators) {
-		if (!op->ParallelOperator()) {
+	for(idx_t i = source_idx + 1; i < operators.size(); i++) {
+		if (!operators[i]->ParallelOperator()) {
 			return false;
 		}
 	}
@@ -166,15 +166,15 @@ void Pipeline::Reset() {
 	if (sink) {
 		sink_state = sink->GetGlobalSinkState(GetClientContext());
 	}
-	source_state = source->GetGlobalSourceState(GetClientContext());
+	source_state = operators[source_idx]->GetGlobalSourceState(GetClientContext());
 	finished_tasks = 0;
 	total_tasks = 0;
 	finished = false;
 }
 
 void Pipeline::Ready() {
-	Reset();
 	std::reverse(operators.begin(), operators.end());
+	Reset();
 }
 
 void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
@@ -212,9 +212,8 @@ void Pipeline::Finish() {
 string Pipeline::ToString() const {
 	string str = PhysicalOperatorToString(sink->type);
 	for (auto &op : operators) {
-		str = PhysicalOperatorToString(op->type) + " -> " + str;
+		str += PhysicalOperatorToString(op->type) + " -> " + str;
 	}
-	str = PhysicalOperatorToString(source->type) + " -> " + str;
 	return str;
 }
 

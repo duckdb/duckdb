@@ -5,16 +5,15 @@ namespace duckdb {
 
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p) :
 	pipeline(pipeline_p), thread(context_p), context(context_p, thread) {
-	D_ASSERT(pipeline.source);
 	D_ASSERT(pipeline.source_state);
-	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
+	local_source_state = pipeline.operators[pipeline.source_idx]->GetLocalSourceState(context, *pipeline.source_state);
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
 	}
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
-	for(idx_t i = 0; i < pipeline.operators.size(); i++) {
-		auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
+	for(idx_t i = pipeline.source_idx + 1; i < pipeline.operators.size(); i++) {
+		auto prev_operator = pipeline.operators[i - 1];
 		auto chunk = make_unique<DataChunk>();
 		chunk->Initialize(prev_operator->GetTypes());
 		intermediate_chunks.push_back(move(chunk));
@@ -53,7 +52,7 @@ void PipelineExecutor::Execute() {
 
 void PipelineExecutor::GoToSource(idx_t &current_idx) {
 	// we go back to the first operator (the source)
-	current_idx = 0;
+	current_idx = pipeline.source_idx;
 	if (!in_process_operators.empty()) {
 		// ... UNLESS there is an in process operator
 		// if there is an in-process operator, we start executing at the latest one
@@ -74,31 +73,30 @@ void PipelineExecutor::Execute(DataChunk &result) {
 		// now figure out where to put the chunk
 		// if current_idx is the last possible index (>= operators.size()) we write to the result
 		// otherwise we write to an intermediate chunk
-		auto &current_chunk = current_idx >= intermediate_chunks.size() ? result : *intermediate_chunks[current_idx];
+		auto current_intermediate = current_idx - pipeline.source_idx;
+		auto &current_chunk = current_idx >= intermediate_chunks.size() ? result : *intermediate_chunks[current_intermediate];
 		current_chunk.Reset();
-		if (current_idx == 0) {
-			StartOperator(pipeline.source);
+		StartOperator(pipeline.operators[current_idx]);
+		if (current_idx == pipeline.source_idx) {
 			// if current_idx = 0 we fetch the data from the source
-			pipeline.source->GetData(
+			pipeline.operators[current_idx]->GetData(
 				context,
 				current_chunk,
 				*pipeline.source_state,
 				*local_source_state);
-			EndOperator(pipeline.source, &current_chunk);
 		} else {
-			// if current_idx > 0, we pass the previous' operators output through the Execute of the current operator
-			StartOperator(pipeline.operators[current_idx - 1]);
-			if (pipeline.operators[current_idx - 1]->Execute(
+			// if current_idx > source_idx, we pass the previous' operators output through the Execute of the current operator
+			if (pipeline.operators[current_idx]->Execute(
 				context,
-				*intermediate_chunks[current_idx - 1],
+				*intermediate_chunks[current_intermediate - 1],
 				current_chunk,
-				*intermediate_states[current_idx - 1])) {
+				*intermediate_states[current_intermediate - 1])) {
 				// more data remains in this operator
 				// push in-process marker
 				in_process_operators.push(current_idx);
 			}
-			EndOperator(pipeline.operators[current_idx - 1], &current_chunk);
 		}
+		EndOperator(pipeline.operators[current_idx], &current_chunk);
 		if (current_chunk.size() == 0) {
 			// no output from this operator!
 			if (current_idx == 0) {
@@ -113,7 +111,7 @@ void PipelineExecutor::Execute(DataChunk &result) {
 		} else {
 			// we got output! continue to the next operator
 			current_idx++;
-			if (current_idx > pipeline.operators.size()) {
+			if (current_idx >= pipeline.operators.size()) {
 				// if we got output and are at the last operator, we are finished executing for this output chunk
 				// return the data and push it into the chunk
 				break;
@@ -123,7 +121,8 @@ void PipelineExecutor::Execute(DataChunk &result) {
 }
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
-	PhysicalOperator *last_op = pipeline.operators.empty() ? pipeline.source : pipeline.operators.back();
+	D_ASSERT(!pipeline.operators.empty());
+	PhysicalOperator *last_op = pipeline.operators.back();
 	chunk.Initialize(last_op->GetTypes());
 }
 
@@ -132,9 +131,6 @@ void PipelineExecutor::StartOperator(PhysicalOperator *op) {
 		throw InterruptException();
 	}
 	context.thread.profiler.StartOperator(op);
-
-	// reset the chunk back to its initial state
-	// chunk.Reset();
 }
 
 void PipelineExecutor::EndOperator(PhysicalOperator *op, DataChunk *chunk) {

@@ -160,7 +160,7 @@ bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, uniq
 }
 
 //===--------------------------------------------------------------------===//
-// GetChunkInternal
+// Operator
 //===--------------------------------------------------------------------===//
 class PhysicalHashJoinState : public OperatorState {
 public:
@@ -183,23 +183,11 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &cont
 	return move(state);
 }
 
-bool PhysicalHashJoin::EmptyResultIfHTIsEmpty() const {
-	// empty hash table with INNER, RIGHT or SEMI join means empty result set
-	switch(join_type) {
-	case JoinType::INNER:
-	case JoinType::RIGHT:
-	case JoinType::SEMI:
-		return true;
-	default:
-		return false;
-	}
-}
-
 bool PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (PhysicalHashJoinState &) state_p;
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 
-	if (sink.hash_table->Count() == 0 && EmptyResultIfHTIsEmpty()) {
+	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return false;
 	}
 
@@ -226,6 +214,16 @@ bool PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, Data
 	state.scan_structure = sink.hash_table->Probe(state.join_keys);
 	state.scan_structure->Next(state.join_keys, input, chunk);
 	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	D_ASSERT(IsRightOuterJoin(join_type));
+	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
+	auto &sink = (HashJoinGlobalState &)*sink_state;
+	sink.hash_table->ScanFullOuter(chunk, sink.ht_scan_state);
 }
 
 } // namespace duckdb

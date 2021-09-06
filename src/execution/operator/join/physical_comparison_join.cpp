@@ -31,6 +31,18 @@ string PhysicalComparisonJoin::ParamsToString() const {
 	return extra_info;
 }
 
+bool PhysicalComparisonJoin::EmptyResultIfRHSIsEmpty() const {
+	// empty RHS with INNER, RIGHT or SEMI join means empty result set
+	switch(join_type) {
+	case JoinType::INNER:
+	case JoinType::RIGHT:
+	case JoinType::SEMI:
+		return true;
+	default:
+		return false;
+	}
+}
+
 void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool has_null, DataChunk &input,
                                                       DataChunk &result) {
 	// empty hash table, special case

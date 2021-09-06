@@ -75,8 +75,7 @@ public:
 	atomic<idx_t> total_tasks;
 
 private:
-	//! The source for data; this is e.g. a table scan or read from a parquet file
-	PhysicalOperator *source;
+	idx_t source_idx = 0;
 	//! The chain of intermediate operators
 	vector<PhysicalOperator *> operators;
 	//! The sink (i.e. destination) for data; this is e.g. a hash table to-be-built

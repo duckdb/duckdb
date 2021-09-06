@@ -37,7 +37,7 @@ public:
 		}
 	}
 
-	idx_t max_threads;
+	idx_t max_threads = 0;
 	unique_ptr<ParallelState> parallel_state;
 
 	idx_t MaxThreads() override{

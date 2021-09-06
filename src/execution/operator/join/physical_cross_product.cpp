@@ -18,6 +18,7 @@ class CrossProductGlobalState : public GlobalSinkState {
 public:
 	CrossProductGlobalState() {
 	}
+
 	ChunkCollection rhs_materialized;
 	mutex rhs_lock;
 };
@@ -39,10 +40,9 @@ void PhysicalCrossProduct::Sink(ExecutionContext &context, GlobalSinkState &stat
 class CrossProductOperatorState : public OperatorState {
 public:
 	CrossProductOperatorState()
-	    : left_position(0), right_position(0) {
+	    : right_position(0) {
 	}
 
-	idx_t left_position;
 	idx_t right_position;
 };
 

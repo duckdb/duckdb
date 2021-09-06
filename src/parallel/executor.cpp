@@ -119,6 +119,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		pipeline->sink = op;
 
 		// the current is dependent on this pipeline to complete
+		current->operators.push_back(op);
 		current->AddDependency(pipeline);
 		PhysicalOperator *pipeline_child;
 		switch (op->type) {
@@ -137,7 +138,6 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::EXPRESSION_SCAN:
 			// single operator:
 			// the operator becomes the data source of the current pipeline
-			current->source = op;
 			pipeline_child = op->children[0].get();
 			break;
 		case PhysicalOperatorType::NESTED_LOOP_JOIN:
@@ -148,7 +148,6 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			// regular join, create a pipeline with RHS source that sinks into this pipeline
 			pipeline_child = op->children[1].get();
 			// on the LHS (probe child), the operator becomes a regular operator
-			current->operators.push_back(op);
 			BuildPipelines(op->children[0].get(), current);
 			break;
 		case PhysicalOperatorType::DELIM_JOIN: {
@@ -265,7 +264,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			break;
 		}
 		if (op->children.empty()) {
-			current->source = op;
+			// source
+			current->operators.push_back(op);
 		} else {
 			if (op->children.size() != 1) {
 				throw InternalException("Operator not supported yet");

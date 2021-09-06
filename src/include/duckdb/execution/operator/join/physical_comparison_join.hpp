@@ -25,6 +25,8 @@ public:
 public:
 	string ParamsToString() const override;
 
+	bool EmptyResultIfRHSIsEmpty() const;
+
 	//! Construct the join result of a join with an empty RHS
 	static void ConstructEmptyJoinResult(JoinType type, bool has_null, DataChunk &input, DataChunk &result);
 	//! Construct the remainder of a Full Outer Join based on which tuples in the RHS found no match

@@ -40,11 +40,15 @@ public:
 	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
-		// hash join; FIXME: for now we can't safely parallelize right or full outer join probes
-		if (IsRightOuterJoin(join_type)) {
-			return false;
-		}
 		return true;
+	}
+
+public:
+	// Source interface
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return IsRightOuterJoin(join_type);
 	}
 
 public:
@@ -63,8 +67,6 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
-private:
-	bool EmptyResultIfHTIsEmpty() const;
 };
 
 } // namespace duckdb

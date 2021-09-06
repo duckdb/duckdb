@@ -97,15 +97,21 @@ public:
 	virtual bool ParallelOperator() const {
 		return false;
 	}
+
 public:
 	// Source interface
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
 	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const;
 
+	virtual bool IsSource() const {
+		return false;
+	}
+
 	virtual bool ParallelSource() const {
 		return false;
 	}
+
 public:
 	// Sink interface
 
