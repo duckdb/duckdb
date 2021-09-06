@@ -1,4 +1,4 @@
-on: [push, pull_request_target]
+on: [push,pull_request, pull_request_target]
 
 defaults:
   run:
