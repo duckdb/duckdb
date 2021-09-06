@@ -1,7 +1,4 @@
-on: 
-  pull_request_target:
-    types: [opened, edited, reopened]
-
+on: [push, pull_request_target]
 
 defaults:
   run:
