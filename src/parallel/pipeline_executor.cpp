@@ -56,21 +56,34 @@ void PipelineExecutor::Execute(DataChunk &result) {
 		return;
 	}
 
-	idx_t current_idx = 0;
+	idx_t current_idx;
+	current_idx = 0;
 	while(true) {
+		// we start executing at the source
 		if (!in_process_operators.empty()) {
+			// ... UNLESS there is an in process operator
+			// if there is an in-process operator, we start executing at the latest one
+			// for example, if we have a join operator that has tuples left, we first need to emit those tuples
 			current_idx = in_process_operators.top();
 			in_process_operators.pop();
 		}
+		// now figure out where to put the chunk
+		// if current_idx is the last possible index (>= operators.size()) we write to the result
+		// otherwise we write to an intermediate chunk
 		auto &current_chunk = current_idx >= intermediate_chunks.size() ? result : *intermediate_chunks[current_idx];
 		current_chunk.Reset();
 		if (current_idx == 0) {
+			StartOperator(pipeline.source);
+			// if current_idx = 0 we fetch the data from the source
 			pipeline.source->GetData(
 				context,
 				current_chunk,
 				*pipeline.source_state,
 				*local_source_state);
+			EndOperator(pipeline.source, &current_chunk);
 		} else {
+			// if current_idx > 0, we pass the previous' operators output through the Execute of the current operator
+			StartOperator(pipeline.operators[current_idx - 1]);
 			if (pipeline.operators[current_idx - 1]->Execute(
 				context,
 				*intermediate_chunks[current_idx - 1],
@@ -80,23 +93,29 @@ void PipelineExecutor::Execute(DataChunk &result) {
 				// push in-process marker
 				in_process_operators.push(current_idx);
 			}
+			EndOperator(pipeline.operators[current_idx - 1], &current_chunk);
 		}
 		if (current_chunk.size() == 0) {
+			// no output from this operator!
 			if (current_idx == 0) {
+				// if we got no output from the scan, we are done
 				break;
 			} else {
+				// if we got no output from an intermediate op, we go back and try to pull data from the scan again
 				current_idx = 0;
 				continue;
 			}
 		} else {
+			// we got output! continue to the next operator
 			current_idx++;
 			if (current_idx > pipeline.operators.size()) {
+				// if we got output and are at the last operator, we are finished executing for this output chunk
+				// return the data and push it into the chunk
 				break;
 			}
 		}
 	}
 }
-
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
 	PhysicalOperator *last_op = pipeline.operators.empty() ? pipeline.source : pipeline.operators.back();

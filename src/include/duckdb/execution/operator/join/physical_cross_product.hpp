@@ -19,11 +19,23 @@ public:
 	                     unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality);
 
 public:
-	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	// Operator Interface
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
 
+	bool ParallelOperator() const override {
+		return true;
+	}
+
+public:
+	// Sink Interface
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
 
+	bool IsSink() const override {
+		return true;
+	}
 	bool ParallelSink() const override {
 		return true;
 	}

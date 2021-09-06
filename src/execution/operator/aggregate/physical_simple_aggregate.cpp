@@ -189,6 +189,9 @@ unique_ptr<GlobalSourceState> PhysicalSimpleAggregate::GetGlobalSourceState(Clie
 void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
 	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
 	auto &state = (SimpleAggregateState &) gstate_p;
+	if (state.finished) {
+		return;
+	}
 
 	// initialize the result chunk with the aggregate values
 	chunk.SetCardinality(1);
