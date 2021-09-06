@@ -45,7 +45,7 @@ jobs:
         ignoreForks: "false"
         status: ${{env.REGRESSION_STATE}}
         description: ${{env.REGRESSION_DESCRIPTION}}
-        token: $REGRESSION_TOKEN
+        token: ${{ env.REGRESSION_TOKEN }}
 
 #  linux-debug:
 #    name: Linux Debug
