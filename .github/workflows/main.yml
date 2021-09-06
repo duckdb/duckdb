@@ -1396,6 +1396,12 @@ jobs:
     name: Regression Test
     runs-on: ubuntu-20.04
 
+    env:
+      CC: ccache gcc-10
+      CXX: ccache g++-10
+      TREAT_WARNINGS_AS_ERRORS: 1
+      GEN: ninja
+
     steps:
     - uses: actions/checkout@v2
       with:
@@ -1404,6 +1410,10 @@ jobs:
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+
 
     - name: Regression Test TPCH SF1
       run: python scripts/regression_test.py
