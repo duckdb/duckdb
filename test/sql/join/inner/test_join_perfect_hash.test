@@ -17,9 +17,11 @@ CREATE TABLE test2 (b INTEGER, c INTEGER);
 statement ok
 INSERT INTO test2 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30)
 
+foreach type <numeric> DECIMAL(4,0) DECIMAL(8,0) DECIMAL(16,0) DECIMAL(32,0)
+
 # simple inner join
 query III
-SELECT a, test1.b,c FROM test1, test2 WHERE test1.b = test2.b order by a, test1.b,c;
+SELECT a::INTEGER, t1.b::INTEGER,c::INTEGER FROM (select a::${type} as a,b::${type} as b from test1) t1, (select b::${type} as b,c::${type} as c from test2) t2 WHERE t1.b = t2.b order by a, t1.b,c;
 ----
 11	1	10
 11	1	10
@@ -37,6 +39,7 @@ SELECT a, test1.b,c FROM test1, test2 WHERE test1.b = test2.b order by a, test1.
 13	3	30
 13	3	30
 
+endloop
 
 statement ok
 CREATE TABLE test3 (a INTEGER, b INTEGER);
@@ -158,27 +161,22 @@ select test9.r, test10.r from test9,test10 where test9.r=test10.r order by test9
 ----
 20518 values hashing to 43cfa09ff243deb128dd2bbcbb30527c
 
-
+statement ok
+CREATE TABLE test11 (a INTEGER, b INTEGER);
 
 statement ok
-create table null_equal (i integer)
+INSERT INTO test11 VALUES (1, 1), (50000, 2), (13, 3), (NULL, NULL), (NULL, 20000), (20000, NULL)
 
 statement ok
-create table null_equal_sec (j integer)
+CREATE TABLE test12 (b INTEGER, c INTEGER);
 
 statement ok
-insert into null_equal values (1),(2),(3),(4),(5),(NULL)
+INSERT INTO test12 VALUES (1, 10), (2, 20), (50000, 30), (NULL, NULL), (20000, NULL), (NULL, 20000)
 
-statement ok
-insert into null_equal_sec values (4),(5),(NULL)
-
-#Unoptimized version can't handle this query
-statement ok
-PRAGMA disable_verification
-
-query I
-SELECT i FROM null_equal inner join null_equal_sec on (i IS NOT DISTINCT FROM j);
+# simple inner join
+query III
+SELECT a, test11.b,c FROM test11, test12 WHERE test11.b = test12.b order by a, test11.b,c;
 ----
-4
-5
-NULL
+NULL	20000	NULL
+1	1	10
+50000	2	20

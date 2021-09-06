@@ -85,8 +85,11 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 		case PhysicalType::INT64:
 			join_state.build_range = build_range.value_.bigint;
 			break;
+		case PhysicalType::INT128:
+			join_state.build_range = build_range.GetValue<idx_t>();
+			break;
 		default:
-			throw std::runtime_error("Invalid Physical Type for Decimals");
+			throw InternalException("Invalid Physical Type for Decimals");
 		}
 	} else {
 		join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
@@ -155,7 +158,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalComparison
 	bool has_inequality = false;
 	bool has_null_equal_conditions = false;
 	for (auto &cond : op.conditions) {
-		if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
+		if (cond.comparison == ExpressionType::COMPARE_EQUAL ||
+		    cond.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			has_equality = true;
 		}
 		if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL ||

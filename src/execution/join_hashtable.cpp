@@ -21,15 +21,18 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition
 	for (auto &condition : conditions) {
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
 		auto type = condition.left->return_type;
-		if (condition.comparison == ExpressionType::COMPARE_EQUAL) {
+		if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
+		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
 			// all equality conditions should be at the front
 			// all other conditions at the back
 			// this assert checks that
 			D_ASSERT(equality_types.size() == condition_types.size());
 			equality_types.push_back(type);
 		}
+
 		predicates.push_back(condition.comparison);
-		null_values_are_equal.push_back(condition.null_values_are_equal);
+		null_values_are_equal.push_back(condition.null_values_are_equal ||
+		                                condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM);
 		D_ASSERT(!condition.null_values_are_equal ||
 		         (condition.null_values_are_equal && condition.comparison == ExpressionType::COMPARE_EQUAL));
 
