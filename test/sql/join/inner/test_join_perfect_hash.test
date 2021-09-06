@@ -5,23 +5,24 @@
 statement ok
 PRAGMA enable_verification
 
+foreach type <numeric>
+
 statement ok
-CREATE TABLE test1 (a INTEGER, b INTEGER);
+CREATE TABLE test1 (a ${type}, b ${type});
 
 statement ok
 INSERT INTO test1 VALUES (11, 1), (12, 2), (13, 3)
 
 statement ok
-CREATE TABLE test2 (b INTEGER, c INTEGER);
+CREATE TABLE test2 (b ${type}, c ${type});
 
 statement ok
 INSERT INTO test2 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30)
 
-foreach type <numeric> DECIMAL(4,0) DECIMAL(8,0) DECIMAL(16,0) DECIMAL(32,0)
 
 # simple inner join
 query III
-SELECT a::INTEGER, t1.b::INTEGER,c::INTEGER FROM (select a::${type} as a,b::${type} as b from test1) t1, (select b::${type} as b,c::${type} as c from test2) t2 WHERE t1.b = t2.b order by a, t1.b,c;
+SELECT a, test1.b,c FROM test1, test2 WHERE test1.b = test2.b order by a, test1.b,c;
 ----
 11	1	10
 11	1	10
@@ -39,7 +40,14 @@ SELECT a::INTEGER, t1.b::INTEGER,c::INTEGER FROM (select a::${type} as a,b::${ty
 13	3	30
 13	3	30
 
+statement ok
+DROP TABLE test1;
+
+statement ok
+DROP TABLE test2;
+
 endloop
+
 
 statement ok
 CREATE TABLE test3 (a INTEGER, b INTEGER);

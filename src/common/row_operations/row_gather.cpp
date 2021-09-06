@@ -154,7 +154,6 @@ void RowOperations::FullScanColumn(const RowLayout &layout, Vector &rows, Vector
 	case PhysicalType::UINT64:
 		TemplatedFullScanLoop<uint64_t>(rows, col, count, col_offset, col_no);
 		break;
-	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		TemplatedFullScanLoop<int8_t>(rows, col, count, col_offset, col_no);
 		break;
@@ -166,21 +165,6 @@ void RowOperations::FullScanColumn(const RowLayout &layout, Vector &rows, Vector
 		break;
 	case PhysicalType::INT64:
 		TemplatedFullScanLoop<int64_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::INT128:
-		TemplatedFullScanLoop<hugeint_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedFullScanLoop<float>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedFullScanLoop<double>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::INTERVAL:
-		TemplatedFullScanLoop<interval_t>(rows, col, count, col_offset, col_no);
-		break;
-	case PhysicalType::VARCHAR:
-		TemplatedFullScanLoop<string_t>(rows, col, count, col_offset, col_no);
 		break;
 	default:
 		throw NotImplementedException("Unimplemented type for RowOperations::FullScanColumn");

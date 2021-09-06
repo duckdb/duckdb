@@ -749,6 +749,14 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::INTEGER((int32_t)value);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(value);
+	case LogicalTypeId::UTINYINT:
+		return Value::UTINYINT((uint8_t)value);
+	case LogicalTypeId::USMALLINT:
+		return Value::USMALLINT((uint16_t)value);
+	case LogicalTypeId::UINTEGER:
+		return Value::UINTEGER((uint32_t)value);
+	case LogicalTypeId::UBIGINT:
+		return Value::UBIGINT(value);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(value);
 	case LogicalTypeId::DECIMAL:
