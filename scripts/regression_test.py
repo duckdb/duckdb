@@ -66,7 +66,6 @@ def regression_test(threshold):
 
     # If the regression status is true, there was no regression
     regression_status = True
-    description = ''
     for i in range(len(master_time)):
         # Query Ok means that in all runs at least once it finished below the threshold
         query_ok = False
@@ -80,23 +79,11 @@ def regression_test(threshold):
 
         if not query_ok:
                 regression_status = False
-                description += "Q"+ str(i+1) + " slow ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). "
+                print("Q"+ str(i+1) + " slow ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ")
         if query_faster:
-                description += "Q"+ str(i+1) + " fast ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). "
+                print("Q"+ str(i+1) + " fast ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ")
 
-    if regression_status:
-        os.system("echo \"REGRESSION_STATE=success\" >> $GITHUB_ENV")
-    else:
-        os.system("echo \"REGRESSION_STATE=error\" >> $GITHUB_ENV")
+    if not regression_status:
+        assert(0)
 
-    if description == '':
-        description = "No Regression or Speed Up."
-        
-    os.system("echo \"REGRESSION_DESCRIPTION="+description+"\" >> $GITHUB_ENV")
-
-# regression_test(0.1)
-
-os.system("echo \"REGRESSION_STATE=success\" >> $GITHUB_ENV")
-description = "No Regression or Speed Up.."
-
-os.system("echo \"REGRESSION_DESCRIPTION="+description+"\" >> $GITHUB_ENV")
+regression_test(0.1)

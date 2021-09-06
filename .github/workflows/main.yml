@@ -1,4 +1,4 @@
-on: [push, pull_request_target]
+on: [push, pull_request]
 
 defaults:
   run:
@@ -36,17 +36,8 @@ jobs:
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
 
-    - name: Test
-      run: python scripts/regression_test.py
-
     - name: Regression Post
-      uses: ouzi-dev/commit-status-updater@v1.1.0
-      with:
-        name: "Regression Test TPC-H SF 1"
-        ignoreForks: "false"
-        status: ${{env.REGRESSION_STATE}}
-        description: ${{env.REGRESSION_DESCRIPTION}}
-        token: ${{env.GITHUB_TOKEN}}
+      run: python scripts/regression_test.py
 
 #  linux-debug:
 #    name: Linux Debug
