@@ -37,7 +37,8 @@ jobs:
     - name: Test
       run: python scripts/regression_test.py
 
-    - uses: ouzi-dev/commit-status-updater@v1.1.0
+    - name: Regression Post
+      uses: ouzi-dev/commit-status-updater@v1.1.0
       with:
         status: ${{env.REGRESSION_STATE}}
         description: ${{env.REGRESSION_DESCRIPTION}}
