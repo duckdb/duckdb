@@ -12,6 +12,9 @@ SegmentStatistics::SegmentStatistics(LogicalType type) : type(move(type)) {
 
 SegmentStatistics::SegmentStatistics(LogicalType type, unique_ptr<BaseStatistics> stats)
     : type(move(type)), statistics(move(stats)) {
+	if (!statistics) {
+		Reset();
+	}
 }
 
 void SegmentStatistics::Reset() {

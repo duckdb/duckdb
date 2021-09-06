@@ -8,6 +8,7 @@ imdb: third_party/imdb/data
 GENERATOR=
 FORCE_COLOR=
 WARNINGS_AS_ERRORS=
+FORCE_WARN_UNUSED_FLAG=
 DISABLE_UNITY_FLAG=
 DISABLE_SANITIZER_FLAG=
 ifeq ($(GEN),ninja)
@@ -16,6 +17,9 @@ ifeq ($(GEN),ninja)
 endif
 ifeq (${TREAT_WARNINGS_AS_ERRORS}, 1)
 	WARNINGS_AS_ERRORS=-DTREAT_WARNINGS_AS_ERRORS=1
+endif
+ifeq (${FORCE_WARN_UNUSED}, 1)
+	FORCE_WARN_UNUSED_FLAG=-DFORCE_WARN_UNUSED=1
 endif
 ifeq (${DISABLE_UNITY}, 1)
 	DISABLE_UNITY_FLAG=-DDISABLE_UNITY=1
@@ -78,6 +82,9 @@ endif
 ifeq (${BUILD_R}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_R=1
 endif
+ifeq (${CONFIGURE_R}, 1)
+	EXTENSIONS:=${EXTENSIONS} -DCONFIGURE_R=1
+endif
 ifeq (${BUILD_REST}, 1)
 	EXTENSIONS:=${EXTENSIONS} -DBUILD_REST=1
 endif
@@ -103,7 +110,7 @@ debug:
 release_expanded:
 	mkdir -p build/release_expanded && \
 	cd build/release_expanded && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 cldebug:
@@ -123,8 +130,12 @@ unittest: debug
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
-	build/debug/test/unittest
+	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+
+unittestarrow:
+	build/debug/test/unittest "[arrow]"
+
 
 allunit: release_expanded # uses release build because otherwise allunit takes forever
 	build/release_expanded/test/unittest "*"
@@ -139,7 +150,7 @@ doxygen: docs
 release:
 	mkdir -p build/release && \
 	cd build/release && \
-	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
+	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_WARN_UNUSED_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${EXTENSIONS} -DCMAKE_BUILD_TYPE=Release ../.. && \
 	cmake --build .
 
 reldebug:
@@ -188,6 +199,9 @@ format-fix:
 format-head:
 	python3 scripts/format.py HEAD --fix --noconfirm
 
+format-changes:
+	python3 scripts/format.py HEAD --fix --noconfirm
+
 format-master:
 	python3 scripts/format.py master --fix --noconfirm
 
@@ -203,3 +217,10 @@ sqlite: release_expanded | third_party/sqllogictest
 
 sqlsmith: debug
 	./build/debug/third_party/sqlsmith/sqlsmith --duckdb=:memory:
+
+clangd:
+	mkdir -p ./build/clangd && \
+	cd ./build/clangd && \
+	cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_EXPORT_COMPILE_COMMANDS=1 ../.. && \
+	cd ../.. && \
+	ln -sf ./build/clangd/compile_commands.json ./compile_commands.json

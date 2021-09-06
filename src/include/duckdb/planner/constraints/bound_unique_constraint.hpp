@@ -18,10 +18,12 @@ public:
 	BoundUniqueConstraint(vector<idx_t> keys, unordered_set<idx_t> key_set, bool is_primary_key)
 	    : BoundConstraint(ConstraintType::UNIQUE), keys(move(keys)), key_set(move(key_set)),
 	      is_primary_key(is_primary_key) {
+#ifdef DEBUG
 		D_ASSERT(keys.size() == key_set.size());
 		for (auto &key : keys) {
 			D_ASSERT(key_set.find(key) != key_set.end());
 		}
+#endif
 	}
 
 	//! The keys that define the unique constraint

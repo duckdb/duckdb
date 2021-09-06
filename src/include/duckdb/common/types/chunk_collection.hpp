@@ -48,11 +48,17 @@ public:
 	//! Append a new DataChunk directly to this ChunkCollection
 	DUCKDB_API void Append(DataChunk &new_chunk);
 
+	//! Append a new DataChunk directly to this ChunkCollection
+	DUCKDB_API void Append(unique_ptr<DataChunk> new_chunk);
+
 	//! Append another ChunkCollection directly to this ChunkCollection
 	DUCKDB_API void Append(ChunkCollection &other);
 
 	//! Merge is like Append but messes up the order and destroys the other collection
 	DUCKDB_API void Merge(ChunkCollection &other);
+
+	//! Fuse adds new columns to the right of the collection
+	DUCKDB_API void Fuse(ChunkCollection &other);
 
 	DUCKDB_API void Verify();
 
@@ -61,7 +67,8 @@ public:
 	//! Sets the value of the column at the specified index
 	DUCKDB_API void SetValue(idx_t column, idx_t index, const Value &value);
 
-	DUCKDB_API vector<Value> GetRow(idx_t index);
+	//! Copy a single cell to a target vector
+	DUCKDB_API void CopyCell(idx_t column, idx_t index, Vector &target, idx_t target_offset);
 
 	DUCKDB_API string ToString() const {
 		return chunks.size() == 0 ? "ChunkCollection [ 0 ]"
@@ -112,8 +119,6 @@ public:
 	//! Reorders the rows in the collection according to the given indices.
 	DUCKDB_API void Reorder(idx_t order[]);
 
-	DUCKDB_API void MaterializeSortedChunk(DataChunk &target, idx_t order[], idx_t start_offset);
-
 	//! Returns true if the ChunkCollections are equivalent
 	DUCKDB_API bool Equals(ChunkCollection &other);
 
@@ -123,9 +128,6 @@ public:
 		D_ASSERT(result < chunks.size());
 		return result;
 	}
-
-	DUCKDB_API void Heap(vector<OrderType> &desc, vector<OrderByNullType> &null_order, idx_t heap[], idx_t heap_size);
-	DUCKDB_API idx_t MaterializeHeapChunk(DataChunk &target, idx_t order[], idx_t start_offset, idx_t heap_size);
 
 private:
 	//! The total amount of elements in the collection

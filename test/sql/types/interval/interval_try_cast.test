@@ -1,0 +1,59 @@
+# name: test/sql/types/interval/interval_try_cast.test
+# description: Test interval try cast
+# group: [interval]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+SELECT cast('   ' as interval)
+
+statement error
+SELECT cast('AAAA' as interval)
+
+statement error
+SELECT cast('00:00:' as interval)
+
+statement error
+SELECT cast('3 doopiedoos' as interval)
+
+statement error
+SELECT cast('3 years 2 doy' as interval)
+
+statement error
+SELECT cast('3 yearweek' as interval)
+
+query I
+SELECT cast(NULL as interval)
+----
+NULL
+
+query I
+SELECT try_cast('   ' as interval)
+----
+NULL
+
+query I
+SELECT try_cast('AAAA' as interval)
+----
+NULL
+
+query I
+SELECT try_cast('00:00:' as interval)
+----
+NULL
+
+query I
+SELECT try_cast('3 doopiedoos' as interval)
+----
+NULL
+
+query I
+SELECT try_cast('3 years 2 doy' as interval)
+----
+NULL
+
+query I
+SELECT try_cast(NULL as interval)
+----
+NULL

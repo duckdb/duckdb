@@ -4,9 +4,9 @@
 
 namespace duckdb {
 
-BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p)
-    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, move(target_type_p)),
-      child(move(child_p)) {
+BoundCastExpression::BoundCastExpression(unique_ptr<Expression> child_p, LogicalType target_type_p, bool try_cast_p)
+    : Expression(ExpressionType::OPERATOR_CAST, ExpressionClass::BOUND_CAST, move(target_type_p)), child(move(child_p)),
+      try_cast(try_cast_p) {
 }
 
 unique_ptr<Expression> BoundCastExpression::AddCastToType(unique_ptr<Expression> expr, const LogicalType &target_type) {
@@ -58,20 +58,20 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		return true;
 	}
 	if (source_type.id() == LogicalTypeId::VARCHAR) {
-		return target_type.id() == LogicalTypeId::DATE || target_type.id() == LogicalTypeId::TIMESTAMP ||
-		       target_type.id() == LogicalTypeId::TIMESTAMP_NS || target_type.id() == LogicalTypeId::TIMESTAMP_MS ||
-		       target_type.id() == LogicalTypeId::TIMESTAMP_SEC;
+		return target_type.id() == LogicalTypeId::DATE || target_type.id() == LogicalTypeId::TIME ||
+		       target_type.id() == LogicalTypeId::TIMESTAMP || target_type.id() == LogicalTypeId::TIMESTAMP_NS ||
+		       target_type.id() == LogicalTypeId::TIMESTAMP_MS || target_type.id() == LogicalTypeId::TIMESTAMP_SEC;
 	}
 	if (target_type.id() == LogicalTypeId::VARCHAR) {
-		return source_type.id() == LogicalTypeId::DATE || source_type.id() == LogicalTypeId::TIMESTAMP ||
-		       source_type.id() == LogicalTypeId::TIMESTAMP_NS || source_type.id() == LogicalTypeId::TIMESTAMP_MS ||
-		       source_type.id() == LogicalTypeId::TIMESTAMP_SEC;
+		return source_type.id() == LogicalTypeId::DATE || source_type.id() == LogicalTypeId::TIME ||
+		       source_type.id() == LogicalTypeId::TIMESTAMP || source_type.id() == LogicalTypeId::TIMESTAMP_NS ||
+		       source_type.id() == LogicalTypeId::TIMESTAMP_MS || source_type.id() == LogicalTypeId::TIMESTAMP_SEC;
 	}
 	return true;
 }
 
 string BoundCastExpression::ToString() const {
-	return "CAST(" + child->GetName() + " AS " + return_type.ToString() + ")";
+	return (try_cast ? "TRY_CAST(" : "CAST(") + child->GetName() + " AS " + return_type.ToString() + ")";
 }
 
 bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
@@ -82,11 +82,14 @@ bool BoundCastExpression::Equals(const BaseExpression *other_p) const {
 	if (!Expression::Equals(child.get(), other->child.get())) {
 		return false;
 	}
+	if (try_cast != other->try_cast) {
+		return false;
+	}
 	return true;
 }
 
 unique_ptr<Expression> BoundCastExpression::Copy() {
-	auto copy = make_unique<BoundCastExpression>(child->Copy(), return_type);
+	auto copy = make_unique<BoundCastExpression>(child->Copy(), return_type, try_cast);
 	copy->CopyProperties(*this);
 	return move(copy);
 }

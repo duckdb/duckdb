@@ -1,0 +1,170 @@
+# name: test/sql/types/numeric/usmallint_try_cast.test
+# description: usmallint try cast
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+# smallint casts
+statement ok
+CREATE TABLE usmallints AS SELECT i::USMALLINT i FROM (VALUES (0), (65535)) tbl(i)
+
+# unsigned
+statement error
+SELECT i::UTINYINT FROM usmallints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS UTINYINT) FROM usmallints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT i::UINTEGER FROM usmallints ORDER BY i
+----
+0
+65535
+
+query I
+SELECT i::UBIGINT FROM usmallints ORDER BY i
+----
+0
+65535
+
+# signed
+statement error
+SELECT i::TINYINT FROM usmallints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS TINYINT) FROM usmallints ORDER BY i
+----
+0
+NULL
+
+statement error
+SELECT i::SMALLINT FROM usmallints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS SMALLINT) FROM usmallints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT i::INTEGER FROM usmallints ORDER BY i
+----
+0
+65535
+
+query I
+SELECT i::BIGINT FROM usmallints ORDER BY i
+----
+0
+65535
+
+query I
+SELECT i::HUGEINT::USMALLINT FROM usmallints ORDER BY i
+----
+0
+65535
+
+# -> float
+query I
+SELECT i::FLOAT FROM usmallints ORDER BY i
+----
+0
+65535
+
+query I
+SELECT i::DOUBLE FROM usmallints ORDER BY i
+----
+0
+65535
+
+# -> bool
+query I
+SELECT i::BOOL FROM usmallints ORDER BY i
+----
+False
+True
+
+# -> varchar
+query I
+SELECT i::VARCHAR FROM usmallints ORDER BY i
+----
+0
+65535
+
+# from string casts
+statement ok
+CREATE TABLE strings AS SELECT * FROM (VALUES ('   '), ('blablabla'), ('-1000'), ('-1'), ('-0'), ('0'), ('65535'), ('100000')) tbl(s)
+
+statement error
+SELECT s::USMALLINT FROM strings
+
+query I
+SELECT TRY_CAST(s AS USMALLINT) FROM strings
+----
+NULL
+NULL
+NULL
+NULL
+0
+0
+65535
+NULL
+
+# -> decimal casts
+statement error
+SELECT i::DECIMAL(3,0)::USMALLINT FROM usmallints ORDER BY i
+
+query I
+SELECT i::DECIMAL(9,0)::USMALLINT FROM usmallints ORDER BY i
+----
+0
+65535
+
+query I
+SELECT i::DECIMAL(18,0)::USMALLINT FROM usmallints ORDER BY i
+----
+0
+65535
+
+query I
+SELECT i::DECIMAL(38,0)::USMALLINT FROM usmallints ORDER BY i
+----
+0
+65535
+
+statement error
+SELECT i::DECIMAL(9,5)::USMALLINT FROM usmallints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(18,14)::USMALLINT FROM usmallints ORDER BY i
+
+statement error
+SELECT i::DECIMAL(38,34)::USMALLINT FROM usmallints ORDER BY i
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(3,0))::USMALLINT FROM usmallints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(9,5))::USMALLINT FROM usmallints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(18,14))::USMALLINT FROM usmallints ORDER BY i
+----
+0
+NULL
+
+query I
+SELECT TRY_CAST(i AS DECIMAL(38,34))::USMALLINT FROM usmallints ORDER BY i
+----
+0
+NULL

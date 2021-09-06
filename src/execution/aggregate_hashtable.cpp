@@ -1,17 +1,16 @@
 #include "duckdb/execution/aggregate_hashtable.hpp"
 
+#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
-#include "duckdb/common/row_operations/row_operations.hpp"
+#include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
-#include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
-#include "duckdb/common/vector_operations/unary_executor.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/algorithm.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 #include <cmath>
@@ -68,7 +67,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		break;
 	}
 	default:
-		throw NotImplementedException("Unknown HT entry width");
+		throw InternalException("Unknown HT entry width");
 	}
 
 	// create additional hash tables for distinct aggrs
@@ -90,7 +89,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
 		payload_idx += aggr.child_count;
 	}
 	predicates.resize(layout.ColumnCount() - 1, ExpressionType::COMPARE_EQUAL);
-	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1);
+	string_heap = make_unique<RowDataCollection>(buffer_manager, (idx_t)Storage::BLOCK_SIZE, 1, true);
 }
 
 GroupedAggregateHashTable::~GroupedAggregateHashTable() {
@@ -213,9 +212,7 @@ void GroupedAggregateHashTable::Resize(idx_t size) {
 	if (size <= capacity) {
 		throw InternalException("Cannot downsize a hash table!");
 	}
-	if (size < STANDARD_VECTOR_SIZE) {
-		size = STANDARD_VECTOR_SIZE;
-	}
+	D_ASSERT(size >= STANDARD_VECTOR_SIZE);
 
 	// size needs to be a power of 2
 	D_ASSERT((size & (size - 1)) == 0);
@@ -515,7 +512,7 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &g
 	case HtEntryType::HT_WIDTH_32:
 		return FindOrCreateGroupsInternal<aggr_ht_entry_32>(groups, group_hashes, addresses_out, new_groups_out);
 	default:
-		throw NotImplementedException("Unknown HT entry width");
+		throw InternalException("Unknown HT entry width");
 	}
 }
 

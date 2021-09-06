@@ -2,5 +2,5 @@ deadlock:LockClients
 deadlock:RollbackTransaction
 deadlock:Checkpoint
 race:NextInnerJoin
-race:~UncompressedSegment
-race:~TransientSegment
+race:~ColumnSegment
+race:duckdb_moodycamel

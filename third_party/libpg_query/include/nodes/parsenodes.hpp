@@ -1461,12 +1461,19 @@ typedef enum {
 	VAR_RESET_ALL    /* RESET ALL */
 } VariableSetKind;
 
+typedef enum {
+	VAR_SET_SCOPE_LOCAL,   /* SET LOCAL var */
+	VAR_SET_SCOPE_SESSION, /* SET SESSION var */
+	VAR_SET_SCOPE_GLOBAL,  /* SET GLOBAL var */
+	VAR_SET_SCOPE_DEFAULT  /* SET var (same as SET_SESSION) */
+} VariableSetScope;
+
 typedef struct PGVariableSetStmt {
 	PGNodeTag type;
 	VariableSetKind kind;
+	VariableSetScope scope;
 	char *name;    /* variable to be set */
 	PGList *args;  /* PGList of PGAConst nodes */
-	bool is_local; /* SET LOCAL? */
 } PGVariableSetStmt;
 
 /* ----------------------
@@ -1474,8 +1481,9 @@ typedef struct PGVariableSetStmt {
  * ----------------------
  */
 typedef struct PGVariableShowStmt {
-	PGNodeTag type;
-	char *name;
+	PGNodeTag   type;
+	char       *name;
+	int         is_summary; // whether or not this is a DESCRIBE or a SUMMARIZE
 } PGVariableShowStmt;
 
 /* ----------------------
@@ -1484,9 +1492,10 @@ typedef struct PGVariableShowStmt {
  */
 typedef struct PGVariableShowSelectStmt
 {
-	PGNodeTag		type;
-	PGNode	*stmt;
-	char	   *name;
+	PGNodeTag   type;
+	PGNode     *stmt;
+	char       *name;
+	int         is_summary; // whether or not this is a DESCRIBE or a SUMMARIZE
 } PGVariableShowSelectStmt;
 
 

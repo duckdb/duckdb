@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/expression_util.hpp"
 
 namespace duckdb {
 
@@ -43,13 +44,8 @@ bool BoundFunctionExpression::Equals(const BaseExpression *other_p) const {
 	if (other->function != function) {
 		return false;
 	}
-	if (children.size() != other->children.size()) {
+	if (!ExpressionUtil::ListEquals(children, other->children)) {
 		return false;
-	}
-	for (idx_t i = 0; i < children.size(); i++) {
-		if (!Expression::Equals(children[i].get(), other->children[i].get())) {
-			return false;
-		}
 	}
 	if (!FunctionData::Equals(bind_info.get(), other->bind_info.get())) {
 		return false;

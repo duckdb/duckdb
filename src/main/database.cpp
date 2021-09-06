@@ -8,12 +8,17 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/connection_manager.hpp"
+#include "duckdb/function/compression_function.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
 #endif
 
 namespace duckdb {
+
+DBConfig::DBConfig() {
+	compression_functions = make_unique<CompressionFunctionSet>();
+}
 
 DBConfig::~DBConfig() {
 }
@@ -22,7 +27,12 @@ DatabaseInstance::DatabaseInstance() {
 }
 
 DatabaseInstance::~DatabaseInstance() {
+	if (std::uncaught_exception()) {
+		return;
+	}
+
 	// shutting down: attempt to checkpoint the database
+	// but only if we are not cleaning up as part of an exception unwind
 	try {
 		auto &storage = StorageManager::GetStorageManager(*this);
 		if (!storage.InMemory()) {
@@ -173,20 +183,18 @@ Allocator &Allocator::Get(DatabaseInstance &db) {
 }
 
 void DatabaseInstance::Configure(DBConfig &new_config) {
+	config.access_mode = AccessMode::READ_WRITE;
 	if (new_config.access_mode != AccessMode::UNDEFINED) {
 		config.access_mode = new_config.access_mode;
-	} else {
-		config.access_mode = AccessMode::READ_WRITE;
 	}
 	if (new_config.file_system) {
 		config.file_system = move(new_config.file_system);
 	} else {
 		config.file_system = make_unique<VirtualFileSystem>();
 	}
-	if (new_config.maximum_memory == (idx_t)-1) {
+	config.maximum_memory = new_config.maximum_memory;
+	if (config.maximum_memory == (idx_t)-1) {
 		config.maximum_memory = config.file_system->GetAvailableMemory() * 8 / 10;
-	} else {
-		config.maximum_memory = new_config.maximum_memory;
 	}
 	if (new_config.maximum_threads == (idx_t)-1) {
 #ifndef DUCKDB_NO_THREADS
@@ -199,6 +207,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	} else {
 		config.maximum_threads = new_config.maximum_threads;
 	}
+	config.force_compression = new_config.force_compression;
 	config.allocator = move(new_config.allocator);
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
 	config.use_direct_io = new_config.use_direct_io;

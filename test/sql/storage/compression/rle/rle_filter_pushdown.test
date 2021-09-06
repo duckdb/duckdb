@@ -1,0 +1,33 @@
+# name: test/sql/storage/compression/rle/rle_filter_pushdown.test
+# description: Filter pushdown with RLE columns
+# group: [rle]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle.db
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+statement ok
+CREATE TABLE test (id VARCHAR, col INTEGER);
+
+statement ok
+INSERT INTO test SELECT i::VARCHAR id, 1 b FROM range(5000) tbl(i)
+
+statement ok
+INSERT INTO test SELECT (5000 + i)::VARCHAR id, 2 b FROM range(5000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+# filter on the RLE column
+query IIII
+SELECT SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE col=2
+----
+10000	2	2	5000
+
+# filter on non-rle column
+query IIIIII
+SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
+----
+5000	5000	2	2	2	1

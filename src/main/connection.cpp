@@ -107,7 +107,13 @@ unique_ptr<LogicalOperator> Connection::ExtractPlan(const string &query) {
 }
 
 void Connection::Append(TableDescription &description, DataChunk &chunk) {
-	context->Append(description, chunk);
+	ChunkCollection collection;
+	collection.Append(chunk);
+	Append(description, collection);
+}
+
+void Connection::Append(TableDescription &description, ChunkCollection &collection) {
+	context->Append(description, collection);
 }
 
 shared_ptr<Relation> Connection::Table(const string &table_name) {
@@ -161,6 +167,7 @@ shared_ptr<Relation> Connection::Values(const string &values, const vector<strin
 shared_ptr<Relation> Connection::ReadCSV(const string &csv_file) {
 	BufferedCSVReaderOptions options;
 	options.file_path = csv_file;
+	options.auto_detect = true;
 	BufferedCSVReader reader(*context, options);
 	vector<ColumnDefinition> column_list;
 	for (idx_t i = 0; i < reader.sql_types.size(); i++) {

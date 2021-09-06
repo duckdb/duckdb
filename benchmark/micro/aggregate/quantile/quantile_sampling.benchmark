@@ -5,9 +5,6 @@
 name Quantile With Sampling
 group quantile
 
-init
-PRAGMA threads=8
-
 load
 create table quantile as select range r, random() from range(10000000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
 

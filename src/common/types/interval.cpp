@@ -8,11 +8,13 @@
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
 bool Interval::FromString(const string &str, interval_t &result) {
-	return Interval::FromCString(str.c_str(), str.size(), result);
+	string error_message;
+	return Interval::FromCString(str.c_str(), str.size(), result, &error_message, false);
 }
 
 template <class T>
@@ -27,13 +29,14 @@ void IntervalTryAddition(T &target, int64_t input, int64_t multiplier) {
 	}
 }
 
-bool Interval::FromCString(const char *str, idx_t len, interval_t &result) {
+bool Interval::FromCString(const char *str, idx_t len, interval_t &result, string *error_message, bool strict) {
 	idx_t pos = 0;
 	idx_t start_pos;
 	bool negative;
 	bool found_any = false;
 	int64_t number;
 	DatePartSpecifier specifier;
+	string specifier_str;
 
 	result.days = 0;
 	result.micros = 0;
@@ -105,7 +108,11 @@ interval_parse_number:
 	goto end_of_string;
 interval_parse_time : {
 	// parse the remainder of the time as a Time type
-	dtime_t time = Time::FromCString(str + start_pos, len);
+	dtime_t time;
+	idx_t pos;
+	if (!Time::TryConvertTime(str + start_pos, len, pos, time)) {
+		return false;
+	}
 	result.micros += time.micros;
 	found_any = true;
 	goto end_of_string;
@@ -131,7 +138,12 @@ interval_parse_identifier:
 			break;
 		}
 	}
-	specifier = GetDatePartSpecifier(string(str + start_pos, pos - start_pos));
+	specifier_str = string(str + start_pos, pos - start_pos);
+	if (!TryGetDatePartSpecifier(specifier_str, specifier)) {
+		HandleCastError::AssignError(StringUtil::Format("extract specifier \"%s\" not recognized", specifier_str),
+		                             error_message);
+		return false;
+	}
 	// add the specifier to the interval
 	switch (specifier) {
 	case DatePartSpecifier::MILLENNIUM:
@@ -174,24 +186,24 @@ interval_parse_identifier:
 		IntervalTryAddition<int64_t>(result.micros, number, MICROS_PER_HOUR);
 		break;
 	default:
+		HandleCastError::AssignError(
+		    StringUtil::Format("extract specifier \"%s\" not supported for interval", specifier_str), error_message);
 		return false;
 	}
 	found_any = true;
 	goto standard_interval;
 interval_parse_ago:
-	// parse the "ago" string at the end of the
+	D_ASSERT(str[pos] == 'a' || str[pos] == 'A');
+	// parse the "ago" string at the end of the interval
 	if (len - pos < 3) {
 		return false;
 	}
-	if (!(str[pos] == 'a' || str[pos == 'A'])) {
+	pos++;
+	if (!(str[pos] == 'g' || str[pos] == 'G')) {
 		return false;
 	}
 	pos++;
-	if (!(str[pos] == 'g' || str[pos == 'G'])) {
-		return false;
-	}
-	pos++;
-	if (!(str[pos] == 'o' || str[pos == 'O'])) {
+	if (!(str[pos] == 'o' || str[pos] == 'O')) {
 		return false;
 	}
 	pos++;
@@ -294,6 +306,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	auto micros_diff = micros1 - micros2;
 
 	// flip sign if necessary
+	bool sign_flipped = false;
 	if (timestamp_1 < timestamp_2) {
 		year_diff = -year_diff;
 		month_diff = -month_diff;
@@ -302,6 +315,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 		min_diff = -min_diff;
 		sec_diff = -sec_diff;
 		micros_diff = -micros_diff;
+		sign_flipped = true;
 	}
 	// now propagate any negative field into the next higher field
 	while (micros_diff < 0) {
@@ -335,7 +349,7 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	}
 
 	// recover sign if necessary
-	if (timestamp_1 < timestamp_2 && (month_diff != 0 || day_diff != 0)) {
+	if (sign_flipped) {
 		year_diff = -year_diff;
 		month_diff = -month_diff;
 		day_diff = -day_diff;

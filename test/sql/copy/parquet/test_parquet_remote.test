@@ -22,7 +22,6 @@ SELECT * FROM PARQUET_SCAN('https://duckdb.org');
 statement error
 SELECT * FROM PARQUET_SCAN('https://duckdb.org/');
 
-
 # straightforward
 query IIII
 SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 10;

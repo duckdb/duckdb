@@ -7,20 +7,30 @@
 
 namespace duckdb {
 
+struct EpochSecOperator {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
+		return Timestamp::FromEpochSeconds(input);
+	}
+};
+
 static void EpochSecFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
-	string output_buffer;
-	UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, input.size(),
-	                                             [&](int64_t input) { return Timestamp::FromEpochSeconds(input); });
+	UnaryExecutor::Execute<int64_t, timestamp_t, EpochSecOperator>(input.data[0], result, input.size());
 }
+
+struct EpochMillisOperator {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input) {
+		return Timestamp::FromEpochMs(input);
+	}
+};
 
 static void EpochMillisFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() == 1);
 
-	string output_buffer;
-	UnaryExecutor::Execute<int64_t, timestamp_t>(input.data[0], result, input.size(),
-	                                             [&](int64_t input) { return Timestamp::FromEpochMs(input); });
+	UnaryExecutor::Execute<int64_t, timestamp_t, EpochMillisOperator>(input.data[0], result, input.size());
 }
 
 void EpochFun::RegisterFunction(BuiltinFunctions &set) {

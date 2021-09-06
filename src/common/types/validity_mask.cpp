@@ -37,6 +37,7 @@ void ValidityMask::Combine(const ValidityMask &other, idx_t count) {
 	}
 }
 
+// LCOV_EXCL_START
 string ValidityMask::ToString(idx_t count) const {
 	string result = "Validity Mask (" + to_string(count) + ") [";
 	for (idx_t i = 0; i < count; i++) {
@@ -45,14 +46,12 @@ string ValidityMask::ToString(idx_t count) const {
 	result += "]";
 	return result;
 }
+// LCOV_EXCL_STOP
 
 void ValidityMask::Resize(idx_t old_size, idx_t new_size) {
 	if (validity_mask) {
 		auto new_size_count = EntryCount(new_size);
 		auto old_size_count = EntryCount(old_size);
-		if (old_size_count == new_size_count) {
-			return;
-		}
 		auto new_owned_data = unique_ptr<validity_t[]>(new validity_t[new_size_count]);
 		for (idx_t entry_idx = 0; entry_idx < old_size_count; entry_idx++) {
 			new_owned_data[entry_idx] = validity_mask[entry_idx];
@@ -79,6 +78,12 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 	}
 	Initialize(STANDARD_VECTOR_SIZE);
 
+// FIXME THIS NEEDS FIXING!
+#if 1
+	for (idx_t i = offset; i < STANDARD_VECTOR_SIZE; i++) {
+		Set(i - offset, other.RowIsValid(i));
+	}
+#else
 	// first shift the "whole" units
 	idx_t entire_units = offset / BITS_PER_VALUE;
 	idx_t sub_units = offset - entire_units * BITS_PER_VALUE;
@@ -105,6 +110,12 @@ void ValidityMask::Slice(const ValidityMask &other, idx_t offset) {
 		}
 		validity_mask[validity_idx] >>= sub_units;
 	}
+#ifdef DEBUG
+	for (idx_t i = offset; i < STANDARD_VECTOR_SIZE; i++) {
+		D_ASSERT(RowIsValid(i - offset) == other.RowIsValid(i));
+	}
+#endif
+#endif
 }
 
 } // namespace duckdb

@@ -17,12 +17,7 @@ struct EntropyState {
 	EntropyState &operator=(const EntropyState &other) = delete;
 
 	EntropyState &Assign(const EntropyState &other) {
-		if (this == &other) {
-			return *this;
-		}
-		if (distinct) {
-			delete distinct;
-		}
+		D_ASSERT(!distinct);
 		distinct = new DistinctMap(*other.distinct);
 		count = other.count;
 		return *this;
@@ -147,7 +142,7 @@ AggregateFunction GetEntropyFunction(PhysicalType type) {
 		                                                                          LogicalType::DOUBLE);
 
 	default:
-		throw NotImplementedException("Unimplemented approximate_count aggregate");
+		throw InternalException("Unimplemented approximate_count aggregate");
 	}
 }
 

@@ -26,10 +26,12 @@ void PhysicalExpressionScan::GetChunkInternal(ExecutionContext &context, DataChu
 
 	if (state->expression_index == 0) {
 		// first run, fetch the chunk from the child
+		// the child chunk is either (1) a dummy scan, or (2) (uncorrelated) scalar subquery results
+		// as a result, the child operator should ALWAYS return exactly one row
 		D_ASSERT(children.size() == 1);
 		children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-		if (state->child_chunk.size() == 0) {
-			return;
+		if (state->child_chunk.size() != 1) {
+			throw InternalException("Expected expression scan child to have exactly one element");
 		}
 	}
 	// now execute the expressions of the nth expression list for the child chunk list

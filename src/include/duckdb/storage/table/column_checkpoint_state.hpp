@@ -12,6 +12,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/data_pointer.hpp"
 #include "duckdb/storage/statistics/segment_statistics.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -30,17 +31,12 @@ struct ColumnCheckpointState {
 	vector<DataPointer> data_pointers;
 	unique_ptr<BaseStatistics> global_stats;
 
-	unique_ptr<UncompressedSegment> current_segment;
-	unique_ptr<SegmentStatistics> segment_stats;
-
 public:
 	virtual unique_ptr<BaseStatistics> GetStatistics() {
 		return global_stats->Copy();
 	}
 
-	virtual void CreateEmptySegment();
-	virtual void FlushSegment();
-	virtual void AppendData(Vector &data, idx_t count);
+	virtual void FlushSegment(unique_ptr<ColumnSegment> segment, idx_t segment_size);
 	virtual void FlushToDisk();
 };
 

@@ -9,6 +9,9 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 
+	// prepare no statements
+	REQUIRE_FAIL(con.Prepare(""));
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (11), (12), (13)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR)"));
@@ -118,6 +121,11 @@ TEST_CASE("Alter table and prepared statements", "[api]") {
 	auto prepared = con->Prepare("SELECT * FROM a WHERE i=$1");
 	result = prepared->Execute(12);
 	REQUIRE(CHECK_COLUMN(result, 0, {12}));
+
+	REQUIRE(prepared->ColumnCount() == 1);
+	REQUIRE(prepared->GetStatementType() == StatementType::SELECT_STATEMENT);
+	REQUIRE(prepared->GetTypes()[0].id() == LogicalTypeId::TINYINT);
+	REQUIRE(prepared->GetNames()[0] == "i");
 
 	// we can alter the type of the column
 	REQUIRE_NO_FAIL(con2.Query("ALTER TABLE a ALTER i TYPE BIGINT USING i"));

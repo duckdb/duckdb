@@ -307,7 +307,7 @@ static idx_t DistinctSelectNotNull(VectorData &lvdata, VectorData &rvdata, const
 		const auto rnull = !rmask.RowIsValid(ridx);
 		if (lnull || rnull) {
 			// If either is NULL then we can major distinguish them
-			if (!OP::Operation(lnull, rnull, false, false)) {
+			if (!OP::Operation(false, false, lnull, rnull)) {
 				false_vec.Append(false_count, idx);
 			} else {
 				true_vec.Append(true_count, idx);
@@ -592,7 +592,7 @@ static idx_t DistinctSelectList(Vector &left, Vector &right, idx_t vcount, Vecto
 	return match_count;
 }
 
-template <class OP, bool DENSE>
+template <class OP, bool DENSE, class OPNESTED>
 static idx_t DistinctSelectNested(Vector &left, Vector &right, idx_t vcount, const SelectionVector *sel, idx_t count,
                                   SelectionVector *true_sel, SelectionVector *false_sel) {
 	// We need multiple, real selections
@@ -627,10 +627,11 @@ static idx_t DistinctSelectNested(Vector &left, Vector &right, idx_t vcount, con
 
 	idx_t true_count = 0;
 	if (PhysicalType::LIST == left.GetType().InternalType()) {
-		true_count = DistinctSelectList<OP>(left, right, vcount, lvdata, rvdata, count, maybe_vec, true_opt, false_opt);
+		true_count =
+		    DistinctSelectList<OPNESTED>(left, right, vcount, lvdata, rvdata, count, maybe_vec, true_opt, false_opt);
 	} else {
 		true_count =
-		    DistinctSelectStruct<OP>(left, right, vcount, lvdata, rvdata, count, maybe_vec, true_opt, false_opt);
+		    DistinctSelectStruct<OPNESTED>(left, right, vcount, lvdata, rvdata, count, maybe_vec, true_opt, false_opt);
 	}
 
 	auto false_count = count - true_count;
@@ -683,9 +684,6 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 	case PhysicalType::INT128:
 		TemplatedDistinctExecute<hugeint_t, OP>(left, right, result, count);
 		break;
-	case PhysicalType::POINTER:
-		TemplatedDistinctExecute<uintptr_t, OP>(left, right, result, count);
-		break;
 	case PhysicalType::FLOAT:
 		TemplatedDistinctExecute<float, OP>(left, right, result, count);
 		break;
@@ -704,11 +702,11 @@ static void ExecuteDistinct(Vector &left, Vector &right, Vector &result, idx_t c
 		NestedDistinctExecute<OP>(left, right, result, count);
 		break;
 	default:
-		throw InvalidTypeException(left.GetType(), "Invalid type for distinct comparison");
+		throw InternalException("Invalid type for distinct comparison");
 	}
 }
 
-template <class OP, bool DENSE>
+template <class OP, bool DENSE, class OPNESTED = OP>
 static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, idx_t vcount, const SelectionVector *sel,
                                               idx_t count, SelectionVector *true_sel, SelectionVector *false_sel) {
 	// the inplace loops take the result as the last parameter
@@ -732,8 +730,6 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, idx_t
 		return DistinctSelect<uint64_t, uint64_t, OP, DENSE>(left, right, vcount, sel, count, true_sel, false_sel);
 	case PhysicalType::INT128:
 		return DistinctSelect<hugeint_t, hugeint_t, OP, DENSE>(left, right, vcount, sel, count, true_sel, false_sel);
-	case PhysicalType::POINTER:
-		return DistinctSelect<uintptr_t, uintptr_t, OP, DENSE>(left, right, vcount, sel, count, true_sel, false_sel);
 	case PhysicalType::FLOAT:
 		return DistinctSelect<float, float, OP, DENSE>(left, right, vcount, sel, count, true_sel, false_sel);
 	case PhysicalType::DOUBLE:
@@ -745,9 +741,9 @@ static idx_t TemplatedDistinctSelectOperation(Vector &left, Vector &right, idx_t
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
-		return DistinctSelectNested<OP, DENSE>(left, right, vcount, sel, count, true_sel, false_sel);
+		return DistinctSelectNested<OP, DENSE, OPNESTED>(left, right, vcount, sel, count, true_sel, false_sel);
 	default:
-		throw InvalidTypeException(left.GetType(), "Invalid type for distinct selection");
+		throw InternalException("Invalid type for distinct selection");
 	}
 }
 
@@ -815,6 +811,14 @@ idx_t VectorOperations::DistinctGreaterThan(Vector &left, Vector &right, const S
 	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThan, true>(left, right, count, sel, count, true_sel,
 	                                                                           false_sel);
 }
+
+// true := A > B with nulls being minimal
+idx_t VectorOperations::DistinctGreaterThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel,
+                                                      idx_t count, SelectionVector *true_sel,
+                                                      SelectionVector *false_sel) {
+	return TemplatedDistinctSelectOperation<duckdb::DistinctGreaterThanNullsFirst, true, duckdb::DistinctGreaterThan>(
+	    left, right, count, sel, count, true_sel, false_sel);
+}
 // true := A >= B with nulls being maximal
 idx_t VectorOperations::DistinctGreaterThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                   SelectionVector *true_sel, SelectionVector *false_sel) {
@@ -827,6 +831,14 @@ idx_t VectorOperations::DistinctLessThan(Vector &left, Vector &right, const Sele
 	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThan, true>(left, right, count, sel, count, true_sel,
 	                                                                        false_sel);
 }
+
+// true := A < B with nulls being minimal
+idx_t VectorOperations::DistinctLessThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+                                                   SelectionVector *true_sel, SelectionVector *false_sel) {
+	return TemplatedDistinctSelectOperation<duckdb::DistinctLessThanNullsFirst, true, duckdb::DistinctLessThan>(
+	    left, right, count, sel, count, true_sel, false_sel);
+}
+
 // true := A <= B with nulls being maximal
 idx_t VectorOperations::DistinctLessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
                                                SelectionVector *true_sel, SelectionVector *false_sel) {

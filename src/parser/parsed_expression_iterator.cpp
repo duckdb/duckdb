@@ -71,6 +71,11 @@ void ParsedExpressionIterator::EnumerateChildren(
 		if (func_expr.filter) {
 			callback(func_expr.filter);
 		}
+		if (func_expr.order_bys) {
+			for (auto &order : func_expr.order_bys->orders) {
+				callback(order.expression);
+			}
+		}
 		break;
 	}
 	case ExpressionClass::LAMBDA: {

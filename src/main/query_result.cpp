@@ -28,7 +28,7 @@ unique_ptr<DataChunk> QueryResult::Fetch() {
 	return chunk;
 }
 
-bool QueryResult::Equals(QueryResult &other) {
+bool QueryResult::Equals(QueryResult &other) { // LCOV_EXCL_START
 	// first compare the success state of the results
 	if (success != other.success) {
 		return false;
@@ -72,7 +72,7 @@ bool QueryResult::Equals(QueryResult &other) {
 			}
 		}
 	}
-}
+} // LCOV_EXCL_STOP
 
 void QueryResult::Print() {
 	Printer::Print(ToString());
@@ -122,7 +122,6 @@ void InitializeChild(ArrowSchema &child, const string &name = "") {
 	child.name = name.c_str();
 	child.n_children = 0;
 	child.children = nullptr;
-	child.flags = 0;
 	child.metadata = nullptr;
 	child.dictionary = nullptr;
 }
@@ -255,6 +254,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		}
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		for (size_t type_idx = 0; type_idx < child_types.size(); type_idx++) {
+
 			InitializeChild(*child.children[type_idx]);
 
 			auto &struct_col_name = child_types[type_idx].first;
@@ -274,9 +274,8 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		SetArrowMapFormat(root_holder, child, type);
 		break;
 	}
-
 	default:
-		throw NotImplementedException("Unsupported Arrow type " + type.ToString());
+		throw InternalException("Unsupported Arrow type " + type.ToString());
 	}
 }
 
@@ -304,6 +303,7 @@ void QueryResult::ToArrowSchema(ArrowSchema *out_schema) {
 
 	// Configure all child schemas
 	for (idx_t col_idx = 0; col_idx < ColumnCount(); col_idx++) {
+
 		auto &child = root_holder->children[col_idx];
 		InitializeChild(child, names[col_idx]);
 		SetArrowFormat(*root_holder, child, types[col_idx]);

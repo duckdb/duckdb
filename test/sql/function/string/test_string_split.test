@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 # test unnesting of null values a bit
 query T
-SELECT UNNEST(string_split(NULL, NULL))
+SELECT string_split(NULL, NULL)
 ----
 NULL
 
@@ -30,7 +30,6 @@ SELECT UNNEST(string_split(s, 'b')) FROM strings_with_null
 ----
 a
 a
-NULL
 a
 a
 a
@@ -38,7 +37,6 @@ a
 query T
 SELECT UNNEST(string_split(NULL, ' ')) IS NULL LIMIT 5
 ----
-1
 
 query T
 SELECT UNNEST(string_split('üüüüü', '◌̈'))
@@ -350,3 +348,7 @@ select string_split()
 
 statement error
 select string_split('a')
+
+# incorrect regex
+statement error
+SELECT string_split_regex(a, '[') FROM test ORDER BY a;

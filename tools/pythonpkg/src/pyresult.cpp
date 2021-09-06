@@ -1,17 +1,20 @@
-#include "duckdb_python/array_wrapper.hpp"
 #include "duckdb_python/pyresult.hpp"
+
+#include "datetime.h" // from Python
+#include "duckdb/common/arrow.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/arrow.hpp"
+#include "duckdb_python/array_wrapper.hpp"
 
-#include "datetime.h" // from Python
+#include "duckdb/common/arrow_wrapper.hpp"
 
 namespace duckdb {
 
 void DuckDBPyResult::Initialize(py::handle &m) {
 	py::class_<DuckDBPyResult>(m, "DuckDBPyResult")
+	    .def("description", &DuckDBPyResult::Description)
 	    .def("close", &DuckDBPyResult::Close)
 	    .def("fetchone", &DuckDBPyResult::Fetchone)
 	    .def("fetchall", &DuckDBPyResult::Fetchall)
@@ -20,6 +23,8 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetch_df", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
 	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable)
+	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader)
+	    .def("fetch_arrow_chunk", &DuckDBPyResult::FetchArrowTableChunk)
 	    .def("arrow", &DuckDBPyResult::FetchArrowTable)
 	    .def("df", &DuckDBPyResult::FetchDF);
 
@@ -120,7 +125,7 @@ py::object GetValueToPython(Value &val, const LogicalType &type) {
 		return std::move(py_struct);
 	}
 	default:
-		throw std::runtime_error("unsupported type: " + type.ToString());
+		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
 }
 
@@ -161,8 +166,10 @@ py::list DuckDBPyResult::Fetchall() {
 	}
 	return res;
 }
-
-py::dict DuckDBPyResult::FetchNumpy(bool stream, idx_t vectors_per_chunk) {
+py::dict DuckDBPyResult::FetchNumpy() {
+	return FetchNumpyInternal();
+}
+py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
 		throw std::runtime_error("result closed");
 	}
@@ -178,21 +185,10 @@ py::dict DuckDBPyResult::FetchNumpy(bool stream, idx_t vectors_per_chunk) {
 	NumpyResultConversion conversion(result->types, initial_capacity);
 	if (result->type == QueryResultType::MATERIALIZED_RESULT) {
 		auto &materialized = (MaterializedQueryResult &)*result;
-		if (!stream) {
-			for (auto &chunk : materialized.collection.Chunks()) {
-				conversion.Append(*chunk);
-			}
-			materialized.collection.Reset();
-		} else {
-			for (idx_t count_vec = 0; count_vec < vectors_per_chunk; count_vec++) {
-				auto chunk = materialized.Fetch();
-				if (!chunk || chunk->size() == 0) {
-					//! finished
-					break;
-				}
-				conversion.Append(*chunk);
-			}
+		for (auto &chunk : materialized.collection.Chunks()) {
+			conversion.Append(*chunk);
 		}
+		materialized.collection.Reset();
 	} else {
 		if (!stream) {
 			while (true) {
@@ -228,14 +224,34 @@ py::dict DuckDBPyResult::FetchNumpy(bool stream, idx_t vectors_per_chunk) {
 }
 
 py::object DuckDBPyResult::FetchDF() {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpy());
+	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal());
 }
 
 py::object DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
-	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpy(true, num_of_vectors));
+	return py::module::import("pandas").attr("DataFrame").attr("from_dict")(FetchNumpyInternal(true, num_of_vectors));
 }
 
-py::object DuckDBPyResult::FetchArrowTable() {
+bool FetchArrowChunk(QueryResult *result, py::list &batches,
+                     pybind11::detail::accessor<pybind11::detail::accessor_policies::str_attr> &batch_import_func) {
+	if (result->type == QueryResultType::STREAM_RESULT) {
+		auto stream_result = (StreamQueryResult *)result;
+		if (!stream_result->is_open) {
+			return false;
+		}
+	}
+	auto data_chunk = result->Fetch();
+	if (!data_chunk || data_chunk->size() == 0) {
+		return false;
+	}
+	ArrowArray data;
+	data_chunk->ToArrowArray(&data);
+	ArrowSchema arrow_schema;
+	result->ToArrowSchema(&arrow_schema);
+	batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+	return true;
+}
+
+py::object DuckDBPyResult::FetchArrowTable(bool stream, idx_t num_of_vectors, bool return_table) {
 	if (!result) {
 		throw std::runtime_error("result closed");
 	}
@@ -250,18 +266,37 @@ py::object DuckDBPyResult::FetchArrowTable() {
 	auto schema_obj = schema_import_func((uint64_t)&schema);
 
 	py::list batches;
-	while (true) {
-		auto data_chunk = result->Fetch();
-		if (!data_chunk || data_chunk->size() == 0) {
-			break;
+	if (stream) {
+		for (idx_t i = 0; i < num_of_vectors; i++) {
+			if (!FetchArrowChunk(result.get(), batches, batch_import_func)) {
+				break;
+			}
 		}
-		ArrowArray data;
-		data_chunk->ToArrowArray(&data);
-		ArrowSchema arrow_schema;
-		result->ToArrowSchema(&arrow_schema);
-		batches.append(batch_import_func((uint64_t)&data, (uint64_t)&arrow_schema));
+	} else {
+		while (FetchArrowChunk(result.get(), batches, batch_import_func)) {
+		}
 	}
-	return from_batches_func(batches, schema_obj);
+	if (return_table) {
+		return from_batches_func(batches, schema_obj);
+	}
+	return std::move(batches);
+}
+
+py::object DuckDBPyResult::FetchRecordBatchReader() {
+	if (!result) {
+		throw std::runtime_error("There is no query result");
+	}
+	py::gil_scoped_acquire acquire;
+	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
+	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
+	//! We have to construct an Arrow Array Stream
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result));
+	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
+	return record_batch_reader;
+}
+
+py::object DuckDBPyResult::FetchArrowTableChunk(idx_t num_of_vectors, bool return_table) {
+	return FetchArrowTable(true, num_of_vectors, return_table);
 }
 
 py::str GetTypeToPython(const LogicalType &type) {
@@ -305,7 +340,7 @@ py::str GetTypeToPython(const LogicalType &type) {
 		return py::str("list");
 	}
 	default:
-		throw std::runtime_error("unsupported type: " + type.ToString());
+		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
 }
 

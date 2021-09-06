@@ -75,9 +75,7 @@ unique_ptr<ParsedExpression> Transformer::TransformBinaryOperator(const string &
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAExpr *root, idx_t depth) {
-	if (!root) {
-		return nullptr;
-	}
+	D_ASSERT(root);
 	auto name = string((reinterpret_cast<duckdb_libpgquery::PGValue *>(root->name->head->data.ptr_value))->val.str);
 
 	switch (root->kind) {
@@ -101,6 +99,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		subquery_expr->subquery_type = SubqueryType::ANY;
 		subquery_expr->child = move(left_expr);
 		subquery_expr->comparison_type = OperatorToExpressionType(name);
+		subquery_expr->query_location = root->location;
 
 		if (root->kind == duckdb_libpgquery::PG_AEXPR_OP_ALL) {
 			// ALL sublink is equivalent to NOT(ANY) with inverted comparison
@@ -123,7 +122,8 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 			operator_type = ExpressionType::COMPARE_IN;
 		}
 		auto result = make_unique<OperatorExpression>(operator_type, move(left_expr));
-		TransformExpressionList((duckdb_libpgquery::PGList *)root->rexpr, result->children, depth);
+		result->query_location = root->location;
+		TransformExpressionList(*((duckdb_libpgquery::PGList *)root->rexpr), result->children, depth);
 		return move(result);
 	}
 	// rewrite NULLIF(a, b) into CASE WHEN a=b THEN NULL ELSE a END
@@ -139,7 +139,7 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 	case duckdb_libpgquery::PG_AEXPR_NOT_BETWEEN: {
 		auto between_args = reinterpret_cast<duckdb_libpgquery::PGList *>(root->rexpr);
 		if (between_args->length != 2 || !between_args->head->data.ptr_value || !between_args->tail->data.ptr_value) {
-			throw Exception("(NOT) BETWEEN needs two args");
+			throw InternalException("(NOT) BETWEEN needs two args");
 		}
 
 		auto input = TransformExpression(root->lexpr, depth + 1);

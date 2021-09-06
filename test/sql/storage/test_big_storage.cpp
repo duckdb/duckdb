@@ -6,10 +6,12 @@
 using namespace duckdb;
 using namespace std;
 
-TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
+TEST_CASE("Test storage that exceeds a single block", "[storage]") {
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
+
+	config->force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
 
 	uint64_t integer_count = 3 * (Storage::BLOCK_SIZE / sizeof(int32_t));
 	uint64_t expected_sum;
@@ -54,10 +56,12 @@ TEST_CASE("Test storage that exceeds a single block", "[storage][.]") {
 	DeleteDatabase(storage_database);
 }
 
-TEST_CASE("Test storage that exceeds a single block with different types", "[storage][.]") {
+TEST_CASE("Test storage that exceeds a single block with different types", "[storage]") {
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
+
+	config->force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
 
 	uint64_t integer_count = 3 * (Storage::BLOCK_SIZE / sizeof(int32_t));
 	Value sum;
@@ -91,10 +95,12 @@ TEST_CASE("Test storage that exceeds a single block with different types", "[sto
 	DeleteDatabase(storage_database);
 }
 
-TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
+TEST_CASE("Test storing strings that exceed a single block", "[storage]") {
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
+
+	config->force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
 
 	uint64_t string_count = 3 * (Storage::BLOCK_SIZE / (sizeof(char) * 15));
 	Value sum;
@@ -153,10 +159,12 @@ TEST_CASE("Test storing strings that exceed a single block", "[storage][.]") {
 	DeleteDatabase(storage_database);
 }
 
-TEST_CASE("Test storing big strings", "[storage][.]") {
+TEST_CASE("Test storing big strings", "[storage]") {
 	unique_ptr<MaterializedQueryResult> result;
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
+
+	config->force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
 
 	uint64_t string_length = 64;
 	// make sure the database does not exist

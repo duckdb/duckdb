@@ -28,6 +28,58 @@ SELECT one(NULL)
 statement ok
 DROP MACRO one;
 
+# HAVING in a macro
+statement ok
+CREATE MACRO having_macro(x) AS (SELECT * FROM integers GROUP BY a HAVING a = x)
+
+query T
+SELECT having_macro(1)
+----
+1
+
+query T
+SELECT having_macro(6)
+----
+NULL
+
+# UNION in a macro
+statement ok
+CREATE MACRO union_macro(x, y, z) AS (SELECT x IN (SELECT y UNION ALL SELECT z))
+
+query T
+SELECT union_macro(1, 2, 3)
+----
+false
+
+query T
+SELECT union_macro(1, 2, 1)
+----
+true
+
+query T
+SELECT union_macro(1, 1, 2)
+----
+true
+
+# expression list
+statement ok
+CREATE MACRO in_expression_list(x, y, z) AS (SELECT x IN (VALUES (y), (z)))
+
+query T
+SELECT in_expression_list(1, 2, 3)
+----
+false
+
+query T
+SELECT in_expression_list(1, 2, 1)
+----
+true
+
+query T
+SELECT in_expression_list(1, 1, 2)
+----
+true
+
 # FUNCTION alias
 statement ok
 CREATE FUNCTION two() AS (SELECT 2);
@@ -82,6 +134,16 @@ true
 
 query T
 SELECT IFELSE(0,'true','false')
+----
+false
+
+query T
+SELECT IFELSE(a = 1, 'true', 'false') FROM integers
+----
+true
+
+query T
+SELECT IFELSE(a = 0, 'true', 'false') FROM integers
 ----
 false
 
@@ -154,10 +216,10 @@ CREATE MACRO star() AS *
 
 # macro's with default arguments
 statement error
-CREATE MACRO conflict(a, a=1) AS a + a
+CREATE MACRO conflict(a, a := 1) AS a + a
 
 statement ok
-CREATE MACRO add_default5(a, b=5) AS a + b
+CREATE MACRO add_default5(a, b := 5) AS a + b
 
 statement error
 SELECT add_default5(3, 6)
@@ -168,23 +230,50 @@ SELECT add_default5(3)
 8
 
 query T
-SELECT add_default5(3, b=6)
+SELECT add_default5(3, b := 6)
 ----
 9
 
 statement error
-SELECT add_default5(b=6, 3)
+SELECT add_default5(b := 6, 3)
 
 statement error
-CREATE MACRO wrong_order(a, b=3, c)
+CREATE MACRO wrong_order(a, b := 3, c)
 
 statement error
-CREATE MACRO wrong_order(a=3, b)
+CREATE MACRO wrong_order(a := 3, b)
 
 # only constant default values are allowed
 statement error
-CREATE MACRO select_plus_floats(a, f=b) AS (SELECT a + f FROM floats)
+CREATE MACRO select_plus_floats(a, f := b) AS (SELECT a + f FROM floats)
 
 # +(FLOAT, VARCHAR) does not work - constant types are checked at create time
 statement error
 CREATE MACRO wrong_type(s='not a float') AS (SELECT b + s FROM floats)
+
+statement error
+CREATE MACRO two_default_params(a := 4, a := 2) AS a + a
+
+statement ok
+CREATE MACRO two_default_params(a := 4, b := 2) AS a + b
+
+query T
+SELECT two_default_params()
+----
+6
+
+query T
+SELECT two_default_params(a := 5)
+----
+7
+
+query T
+SELECT two_default_params(b := 3)
+----
+7
+
+statement error
+SELECT two_default_params(a := 5, a := 3)
+
+statement error
+SELECT two_default_params(b := 5, b := 3)

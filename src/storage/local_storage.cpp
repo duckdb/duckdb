@@ -3,10 +3,11 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/storage/uncompressed_segment.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/planner/table_filter.hpp"
+
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 
@@ -141,8 +142,8 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 			if (column_filters != state.table_filters->filters.end()) {
 				//! We have filters to apply here
 				auto &mask = FlatVector::Validity(result.data[i]);
-				UncompressedSegment::FilterSelection(sel, result.data[i], *column_filters->second, approved_tuple_count,
-				                                     mask);
+				ColumnSegment::FilterSelection(sel, result.data[i], *column_filters->second, approved_tuple_count,
+				                               mask);
 				count = approved_tuple_count;
 			}
 		}
@@ -293,8 +294,11 @@ static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t co
 	case PhysicalType::DOUBLE:
 		TemplatedUpdateLoop<double>(data, updates, row_ids, count, base_index);
 		break;
+	case PhysicalType::VARCHAR:
+		TemplatedUpdateLoop<string_t>(data, updates, row_ids, count, base_index);
+		break;
 	default:
-		throw Exception("Unsupported type for in-place update");
+		throw Exception("Unsupported type for in-place update: " + TypeIdToString(data.GetType().InternalType()));
 	}
 }
 

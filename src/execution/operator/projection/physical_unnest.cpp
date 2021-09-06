@@ -117,14 +117,8 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 	case PhysicalType::DOUBLE:
 		TemplatedUnnest<double>(vdata, start, end, result);
 		break;
-	case PhysicalType::POINTER:
-		TemplatedUnnest<uintptr_t>(vdata, start, end, result);
-		break;
 	case PhysicalType::INTERVAL:
 		TemplatedUnnest<interval_t>(vdata, start, end, result);
-		break;
-	case PhysicalType::HASH:
-		TemplatedUnnest<hash_t>(vdata, start, end, result);
 		break;
 	case PhysicalType::VARCHAR:
 		TemplatedUnnest<string_t>(vdata, start, end, result);
@@ -148,7 +142,7 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for UNNEST");
+		throw InternalException("Unimplemented type for UNNEST");
 	}
 }
 
@@ -207,7 +201,7 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 				int64_t list_length;
 				// deal with NULL values
 				if (!vdata.validity.RowIsValid(current_idx)) {
-					list_length = 1;
+					list_length = 0;
 				} else {
 					auto list_data = (list_entry_t *)vdata.data;
 					auto list_entry = list_data[current_idx];

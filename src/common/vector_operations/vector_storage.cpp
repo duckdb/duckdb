@@ -54,12 +54,6 @@ void VectorOperations::WriteToStorage(Vector &source, idx_t count, data_ptr_t ta
 	case PhysicalType::INT128:
 		CopyToStorageLoop<hugeint_t>(vdata, count, target);
 		break;
-	case PhysicalType::HASH:
-		CopyToStorageLoop<hash_t>(vdata, count, target);
-		break;
-	case PhysicalType::POINTER:
-		CopyToStorageLoop<uintptr_t>(vdata, count, target);
-		break;
 	case PhysicalType::FLOAT:
 		CopyToStorageLoop<float>(vdata, count, target);
 		break;
@@ -113,12 +107,6 @@ void VectorOperations::ReadFromStorage(data_ptr_t source, idx_t count, Vector &r
 		break;
 	case PhysicalType::INT128:
 		ReadFromStorageLoop<hugeint_t>(source, count, result);
-		break;
-	case PhysicalType::HASH:
-		ReadFromStorageLoop<hash_t>(source, count, result);
-		break;
-	case PhysicalType::POINTER:
-		ReadFromStorageLoop<uintptr_t>(source, count, result);
 		break;
 	case PhysicalType::FLOAT:
 		ReadFromStorageLoop<float>(source, count, result);

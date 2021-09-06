@@ -1,0 +1,21 @@
+# name: test/sql/subquery/table/test_unnamed_subquery.test
+# description: Test unnamed subqueries
+# group: [table]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT a FROM (SELECT 42 a)
+----
+42
+
+query II
+SELECT * FROM (SELECT 42 a), (SELECT 43 b)
+----
+42	43
+
+query II
+SELECT * FROM (VALUES (42, 43))
+----
+42	43

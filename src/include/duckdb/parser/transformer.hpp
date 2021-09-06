@@ -108,7 +108,7 @@ private:
 	unique_ptr<PragmaStatement> TransformImport(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ExplainStatement> TransformExplain(duckdb_libpgquery::PGNode *node);
 	unique_ptr<VacuumStatement> TransformVacuum(duckdb_libpgquery::PGNode *node);
-	unique_ptr<PragmaStatement> TransformShow(duckdb_libpgquery::PGNode *node);
+	unique_ptr<SQLStatement> TransformShow(duckdb_libpgquery::PGNode *node);
 	unique_ptr<ShowStatement> TransformShowSelect(duckdb_libpgquery::PGNode *node);
 
 	unique_ptr<PrepareStatement> TransformPrepare(duckdb_libpgquery::PGNode *node);
@@ -226,7 +226,7 @@ private:
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
 
 	//! Transform a Postgres SELECT clause into a list of Expressions
-	bool TransformExpressionList(duckdb_libpgquery::PGList *list, vector<unique_ptr<ParsedExpression>> &result,
+	void TransformExpressionList(duckdb_libpgquery::PGList &list, vector<unique_ptr<ParsedExpression>> &result,
 	                             idx_t depth);
 
 	//! Transform a Postgres PARTITION BY/ORDER BY specification into lists of expressions

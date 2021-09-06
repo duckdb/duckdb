@@ -28,20 +28,31 @@ public:
 	static constexpr const int32_t SECS_PER_MINUTE = 60;
 	static constexpr const int32_t MINS_PER_HOUR = 60;
 	static constexpr const int32_t HOURS_PER_DAY = 24;
-	static constexpr const int32_t SECS_PER_DAY = SECS_PER_MINUTE * MINS_PER_HOUR * HOURS_PER_DAY;
+	static constexpr const int32_t SECS_PER_HOUR = SECS_PER_MINUTE * MINS_PER_HOUR;
+	static constexpr const int32_t SECS_PER_DAY = SECS_PER_HOUR * HOURS_PER_DAY;
+	static constexpr const int32_t SECS_PER_WEEK = SECS_PER_DAY * DAYS_PER_WEEK;
 
 	static constexpr const int64_t MICROS_PER_MSEC = 1000;
 	static constexpr const int64_t MICROS_PER_SEC = MICROS_PER_MSEC * MSECS_PER_SEC;
 	static constexpr const int64_t MICROS_PER_MINUTE = MICROS_PER_SEC * SECS_PER_MINUTE;
 	static constexpr const int64_t MICROS_PER_HOUR = MICROS_PER_MINUTE * MINS_PER_HOUR;
 	static constexpr const int64_t MICROS_PER_DAY = MICROS_PER_HOUR * HOURS_PER_DAY;
+	static constexpr const int64_t MICROS_PER_WEEK = MICROS_PER_DAY * DAYS_PER_WEEK;
 	static constexpr const int64_t MICROS_PER_MONTH = MICROS_PER_DAY * DAYS_PER_MONTH;
+
+	static constexpr const int64_t NANOS_PER_MICRO = 1000;
+	static constexpr const int64_t NANOS_PER_MSEC = NANOS_PER_MICRO * MICROS_PER_MSEC;
+	static constexpr const int64_t NANOS_PER_SEC = NANOS_PER_MSEC * MSECS_PER_SEC;
+	static constexpr const int64_t NANOS_PER_MINUTE = NANOS_PER_SEC * SECS_PER_MINUTE;
+	static constexpr const int64_t NANOS_PER_HOUR = NANOS_PER_MINUTE * MINS_PER_HOUR;
+	static constexpr const int64_t NANOS_PER_DAY = NANOS_PER_HOUR * HOURS_PER_DAY;
+	static constexpr const int64_t NANOS_PER_WEEK = NANOS_PER_DAY * DAYS_PER_WEEK;
 
 public:
 	//! Convert a string to an interval object
 	static bool FromString(const string &str, interval_t &result);
 	//! Convert a string to an interval object
-	static bool FromCString(const char *str, idx_t len, interval_t &result);
+	static bool FromCString(const char *str, idx_t len, interval_t &result, string *error_message, bool strict);
 	//! Convert an interval object to a string
 	static string ToString(interval_t date);
 

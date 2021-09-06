@@ -1,21 +1,21 @@
 #include "duckdb/common/types/data_chunk.hpp"
 
 #include "duckdb/common/array.hpp"
+#include "duckdb/common/arrow.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/date.hpp"
-#include "duckdb/common/types/timestamp.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/unordered_map.hpp"
-#include "duckdb/common/types/sel_cache.hpp"
-#include "duckdb/common/arrow.hpp"
-#include "duckdb/common/vector.hpp"
 #include "duckdb/common/to_string.hpp"
-#include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/types/sel_cache.hpp"
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/vector.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
 
 namespace duckdb {
 
@@ -110,18 +110,48 @@ void DataChunk::Copy(DataChunk &other, const SelectionVector &sel, const idx_t s
 	other.SetCardinality(source_count - offset);
 }
 
+void DataChunk::Split(DataChunk &other, idx_t split_idx) {
+	D_ASSERT(other.size() == 0);
+	D_ASSERT(other.data.empty());
+	D_ASSERT(split_idx < data.size());
+	const idx_t num_cols = data.size();
+	for (idx_t col_idx = split_idx; col_idx < num_cols; col_idx++) {
+		other.data.push_back(move(data[col_idx]));
+		other.vector_caches.push_back(move(vector_caches[col_idx]));
+	}
+	for (idx_t col_idx = split_idx; col_idx < num_cols; col_idx++) {
+		data.pop_back();
+		vector_caches.pop_back();
+	}
+	other.SetCardinality(*this);
+}
+
 void DataChunk::Append(const DataChunk &other) {
 	if (other.size() == 0) {
 		return;
 	}
 	if (ColumnCount() != other.ColumnCount()) {
-		throw OutOfRangeException("Column counts of appending chunk doesn't match!");
+		throw InternalException("Column counts of appending chunk doesn't match!");
 	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(data[i].GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(other.data[i], data[i], other.size(), 0, size());
 	}
 	SetCardinality(size() + other.size());
+}
+
+void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t count) {
+	if (other.size() == 0) {
+		return;
+	}
+	if (ColumnCount() != other.ColumnCount()) {
+		throw InternalException("Column counts of appending chunk doesn't match!");
+	}
+	for (idx_t i = 0; i < ColumnCount(); i++) {
+		D_ASSERT(data[i].GetVectorType() == VectorType::FLAT_VECTOR);
+		VectorOperations::Copy(other.data[i], data[i], sel, count, 0, size());
+	}
+	SetCardinality(size() + count);
 }
 
 void DataChunk::Normalify() {
@@ -271,6 +301,7 @@ void InitializeChild(DuckDBArrowArrayChildHolder &child_holder, idx_t size) {
 }
 
 void SetChildValidityMask(Vector &vector, ArrowArray &child) {
+	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto &mask = FlatVector::Validity(vector);
 	if (!mask.AllValid()) {
 		//! any bits are set: might have nulls
@@ -574,7 +605,8 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	default:
 		throw std::runtime_error("Unsupported type " + type.ToString());
 	}
-} // namespace duckdb
+}
+
 void DataChunk::ToArrowArray(ArrowArray *out_array) {
 	Normalify();
 	D_ASSERT(out_array);

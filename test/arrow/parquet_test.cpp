@@ -39,7 +39,8 @@ std::shared_ptr<arrow::Table> ReadParquetFile(const duckdb::string &path) {
 	return table;
 }
 
-std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow::Table &table) {
+std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow::Table &table,
+                                                 const std::string &query = "", const std::string &view_name = "") {
 	std::vector<std::shared_ptr<arrow::RecordBatch>> batches;
 
 	auto batch_reader = arrow::TableBatchReader(table);
@@ -52,7 +53,11 @@ std::unique_ptr<duckdb::QueryResult> ArrowToDuck(duckdb::Connection &conn, arrow
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&factory));
 	params.push_back(duckdb::Value::POINTER((uintptr_t)&SimpleFactory::CreateStream));
 	params.push_back(duckdb::Value::UBIGINT(1000000));
-	return conn.TableFunction("arrow_scan", params)->Execute();
+	if (query.empty()) {
+		return conn.TableFunction("arrow_scan", params)->Execute();
+	}
+	conn.TableFunction("arrow_scan", params)->CreateView(view_name);
+	return conn.Query(query);
 }
 
 bool RoundTrip(std::string &path, std::vector<std::string> &skip, duckdb::Connection &conn) {

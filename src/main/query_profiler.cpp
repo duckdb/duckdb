@@ -37,20 +37,16 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	case PhysicalOperatorType::STREAMING_SAMPLE:
 	case PhysicalOperatorType::LIMIT:
 	case PhysicalOperatorType::TOP_N:
-	case PhysicalOperatorType::AGGREGATE:
 	case PhysicalOperatorType::WINDOW:
 	case PhysicalOperatorType::UNNEST:
 	case PhysicalOperatorType::SIMPLE_AGGREGATE:
 	case PhysicalOperatorType::HASH_GROUP_BY:
-	case PhysicalOperatorType::SORT_GROUP_BY:
 	case PhysicalOperatorType::FILTER:
 	case PhysicalOperatorType::PROJECTION:
 	case PhysicalOperatorType::COPY_TO_FILE:
 	case PhysicalOperatorType::TABLE_SCAN:
 	case PhysicalOperatorType::CHUNK_SCAN:
 	case PhysicalOperatorType::DELIM_SCAN:
-	case PhysicalOperatorType::EXTERNAL_FILE_SCAN:
-	case PhysicalOperatorType::QUERY_DERIVED_SCAN:
 	case PhysicalOperatorType::EXPRESSION_SCAN:
 	case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
 	case PhysicalOperatorType::NESTED_LOOP_JOIN:
@@ -245,10 +241,11 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			if (!info) {
 				continue;
 			}
-			if (int(entry->second->info.executors_info.size()) <= info->id) {
-				entry->second->info.executors_info.resize(info->id + 1);
+			auto info_id = info->id;
+			if (int(entry->second->info.executors_info.size()) <= info_id) {
+				entry->second->info.executors_info.resize(info_id + 1);
 			}
-			entry->second->info.executors_info[info->id] = move(info);
+			entry->second->info.executors_info[info_id] = move(info);
 		}
 	}
 }

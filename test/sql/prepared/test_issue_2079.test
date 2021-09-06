@@ -1,0 +1,56 @@
+# name: test/sql/prepared/test_issue_2079.test
+# description: Issue 2079: Type inference for parameterized queries
+# group: [prepared]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PREPARE v1 AS SELECT ? + 1.0 AS a
+
+query I
+EXECUTE v1(2.0)
+----
+3.0
+
+statement ok
+PREPARE v2 AS SELECT ? * 2.0 AS a
+
+query I
+EXECUTE v2(2.0)
+----
+4.0
+
+statement ok
+PREPARE v3 AS SELECT ? = 2.0 AS a
+
+query I
+EXECUTE v3(2.0)
+----
+True
+
+statement ok
+PREPARE v4 AS SELECT 2.0 IN (1.0, 1.5, ?)
+
+query I
+EXECUTE v4(2.0)
+----
+True
+
+query I
+EXECUTE v4(2.5)
+----
+False
+
+statement ok
+PREPARE v5 AS SELECT ? IN (1.0, 1.5, 2.0)
+
+query I
+EXECUTE v5(2.0)
+----
+True
+
+query I
+EXECUTE v5(2.5)
+----
+False

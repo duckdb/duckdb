@@ -405,7 +405,7 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 			aggr.function.initialize(aggr_state.get());
 
 			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
-			aggr.function.finalize(state_vector, aggr.bind_info.get(), chunk.data[i], 1);
+			aggr.function.finalize(state_vector, aggr.bind_info.get(), chunk.data[i], 1, 0);
 			if (aggr.function.destructor) {
 				aggr.function.destructor(state_vector, 1);
 			}

@@ -4,7 +4,9 @@ namespace duckdb {
 
 void BuiltinFunctions::RegisterDateFunctions() {
 	Register<AgeFun>();
+	Register<DateDiffFun>();
 	Register<DatePartFun>();
+	Register<DateSubFun>();
 	Register<DateTruncFun>();
 	Register<CurrentTimeFun>();
 	Register<CurrentDateFun>();

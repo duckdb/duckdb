@@ -114,6 +114,13 @@ struct VectorOperations {
 	static idx_t DistinctLessThanEquals(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
 	                                    SelectionVector *true_sel, SelectionVector *false_sel);
 
+	// true := A > B with nulls being minimal
+	static idx_t DistinctGreaterThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                                           SelectionVector *true_sel, SelectionVector *false_sel);
+	// true := A < B with nulls being minimal
+	static idx_t DistinctLessThanNullsFirst(Vector &left, Vector &right, const SelectionVector *sel, idx_t count,
+	                                        SelectionVector *true_sel, SelectionVector *false_sel);
+
 	//===--------------------------------------------------------------------===//
 	// Nested Comparisons
 	//===--------------------------------------------------------------------===//
@@ -156,7 +163,11 @@ struct VectorOperations {
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
-	// Cast the data from the source type to the target type
+	//! Cast the data from the source type to the target type. Any elements that could not be converted are turned into
+	//! NULLs. If any elements cannot be converted, returns false and fills in the error_message. If no error message is
+	//! provided, an exception is thrown instead.
+	static bool TryCast(Vector &source, Vector &result, idx_t count, string *error_message, bool strict = false);
+	//! Cast the data from the source type to the target type. Throws an exception if the cast fails.
 	static void Cast(Vector &source, Vector &result, idx_t count, bool strict = false);
 
 	// Copy the data of <source> to the target vector

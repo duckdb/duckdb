@@ -3,6 +3,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_subquery_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
@@ -32,6 +33,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 		D_ASSERT(depth == 0);
 		// first bind the actual subquery in a new binder
 		auto subquery_binder = Binder::CreateBinder(context, &binder);
+		subquery_binder->can_contain_nulls = true;
 		auto bound_node = subquery_binder->BindNode(*expr.subquery->node);
 		// check the correlated columns of the subquery for correlated columns with depth > 1
 		for (idx_t i = 0; i < subquery_binder->correlated_columns.size(); i++) {
@@ -44,7 +46,8 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			}
 		}
 		if (expr.subquery_type != SubqueryType::EXISTS && bound_node->types.size() > 1) {
-			throw BinderException("Subquery returns %zu columns - expected 1", bound_node->types.size());
+			throw BinderException(binder.FormatError(
+			    expr, StringUtil::Format("Subquery returns %zu columns - expected 1", bound_node->types.size())));
 		}
 		auto prior_subquery = move(expr.subquery);
 		expr.subquery = make_unique<SelectStatement>();
@@ -67,9 +70,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 	auto bound_node = move(bound_subquery->bound_node);
 	LogicalType return_type =
 	    expr.subquery_type == SubqueryType::SCALAR ? bound_node->types[0] : LogicalType(LogicalTypeId::BOOLEAN);
-	if (return_type.id() == LogicalTypeId::UNKNOWN) {
-		throw BinderException("Could not determine type of parameters: try adding explicit type casts");
-	}
+	D_ASSERT(return_type.id() != LogicalTypeId::UNKNOWN);
 
 	auto result = make_unique<BoundSubqueryExpression>(return_type);
 	if (expr.subquery_type == SubqueryType::ANY) {

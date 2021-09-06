@@ -116,18 +116,19 @@ void Vector::Slice(Vector &other, idx_t offset) {
 
 	auto internal_type = GetType().InternalType();
 	if (internal_type == PhysicalType::STRUCT) {
-		Initialize();
-		auto &entries = StructVector::GetEntries(*this);
+		Vector new_vector(GetType());
+		auto &entries = StructVector::GetEntries(new_vector);
 		auto &other_entries = StructVector::GetEntries(other);
 		D_ASSERT(entries.size() == other_entries.size());
 		for (idx_t i = 0; i < entries.size(); i++) {
 			entries[i]->Slice(*other_entries[i], offset);
 		}
 		if (offset > 0) {
-			validity.Slice(other.validity, offset);
+			new_vector.validity.Slice(other.validity, offset);
 		} else {
-			validity = other.validity;
+			new_vector.validity = other.validity;
 		}
+		Reference(new_vector);
 	} else {
 		Reference(other);
 		if (offset > 0) {
@@ -350,7 +351,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 			((hugeint_t *)data)[index] = val.value_.hugeint;
 			break;
 		default:
-			throw NotImplementedException("Widths bigger than 38 are not supported");
+			throw InternalException("Widths bigger than 38 are not supported");
 		}
 		break;
 	case LogicalTypeId::FLOAT:
@@ -401,7 +402,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for Vector::SetValue");
+		throw InternalException("Unimplemented type for Vector::SetValue");
 	}
 }
 
@@ -424,7 +425,7 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::Numeric(GetType(), start + increment * index);
 	}
 	default:
-		throw NotImplementedException("Unimplemented vector type for Vector::GetValue");
+		throw InternalException("Unimplemented vector type for Vector::GetValue");
 	}
 
 	if (!validity.RowIsValid(index)) {
@@ -476,7 +477,7 @@ Value Vector::GetValue(idx_t index) const {
 		case PhysicalType::INT128:
 			return Value::DECIMAL(((hugeint_t *)data)[index], width, scale);
 		default:
-			throw NotImplementedException("Widths bigger than 38 are not supported");
+			throw InternalException("Widths bigger than 38 are not supported");
 		}
 	}
 	case LogicalTypeId::HASH:
@@ -519,10 +520,11 @@ Value Vector::GetValue(idx_t index) const {
 		return ret;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for value access");
+		throw InternalException("Unimplemented type for value access");
 	}
 }
 
+// LCOV_EXCL_START
 string VectorTypeToString(VectorType type) {
 	switch (type) {
 	case VectorType::FLAT_VECTOR:
@@ -594,6 +596,7 @@ string Vector::ToString() const {
 void Vector::Print() {
 	Printer::Print(ToString());
 }
+// LCOV_EXCL_STOP
 
 template <class T>
 static void TemplatedFlattenConstantVector(data_ptr_t data, data_ptr_t old_data, idx_t count) {
@@ -670,12 +673,6 @@ void Vector::Normalify(idx_t count) {
 		case PhysicalType::DOUBLE:
 			TemplatedFlattenConstantVector<double>(data, old_data, count);
 			break;
-		case PhysicalType::HASH:
-			TemplatedFlattenConstantVector<hash_t>(data, old_data, count);
-			break;
-		case PhysicalType::POINTER:
-			TemplatedFlattenConstantVector<uintptr_t>(data, old_data, count);
-			break;
 		case PhysicalType::INTERVAL:
 			TemplatedFlattenConstantVector<interval_t>(data, old_data, count);
 			break;
@@ -701,7 +698,7 @@ void Vector::Normalify(idx_t count) {
 			auxiliary = move(normalified_buffer);
 		} break;
 		default:
-			throw NotImplementedException("Unimplemented type for VectorOperations::Normalify");
+			throw InternalException("Unimplemented type for VectorOperations::Normalify");
 		}
 		break;
 	}
@@ -715,7 +712,7 @@ void Vector::Normalify(idx_t count) {
 		break;
 	}
 	default:
-		throw NotImplementedException("FIXME: unimplemented type for normalify");
+		throw InternalException("Unimplemented type for normalify");
 	}
 }
 
@@ -734,7 +731,7 @@ void Vector::Normalify(const SelectionVector &sel, idx_t count) {
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented type for normalify with selection vector");
+		throw InternalException("Unimplemented type for normalify with selection vector");
 	}
 }
 
@@ -847,7 +844,7 @@ void Vector::Serialize(idx_t count, Serializer &serializer) {
 			break;
 		}
 		default:
-			throw NotImplementedException("Unimplemented variable width type for Vector::Serialize!");
+			throw InternalException("Unimplemented variable width type for Vector::Serialize!");
 		}
 	}
 }
@@ -909,7 +906,7 @@ void Vector::Deserialize(idx_t count, Deserializer &source) {
 			break;
 		}
 		default:
-			throw NotImplementedException("Unimplemented variable width type for Vector::Deserialize!");
+			throw InternalException("Unimplemented variable width type for Vector::Deserialize!");
 		}
 	}
 }
@@ -1109,6 +1106,18 @@ void Vector::Verify(idx_t count) {
 	}
 }
 
+void FlatVector::SetNull(Vector &vector, idx_t idx, bool is_null) {
+	D_ASSERT(vector.GetVectorType() == VectorType::FLAT_VECTOR);
+	vector.validity.Set(idx, !is_null);
+	if (is_null && vector.GetType().InternalType() == PhysicalType::STRUCT) {
+		// set all child entries to null as well
+		auto &entries = StructVector::GetEntries(vector);
+		for (auto &entry : entries) {
+			FlatVector::SetNull(*entry, idx, is_null);
+		}
+	}
+}
+
 void ConstantVector::SetNull(Vector &vector, bool is_null) {
 	D_ASSERT(vector.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	vector.validity.Set(0, !is_null);
@@ -1265,6 +1274,7 @@ void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
 
 void StringVector::AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(buffer.get() != vector.auxiliary.get());
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
@@ -1283,13 +1293,7 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	if (!other.auxiliary) {
 		return;
 	}
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	D_ASSERT(other.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
-	string_buffer.AddHeapReference(other.auxiliary);
+	StringVector::AddBuffer(vector, other.auxiliary);
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {

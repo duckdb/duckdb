@@ -1,0 +1,30 @@
+comment: false
+coverage:
+  status:
+    project:
+      default:
+        # basic
+        # for now
+        target: auto
+        threshold: 0.5%
+        base: auto
+        paths:
+          - "src"
+       # advanced settings
+        if_not_found: failure
+        if_ci_failed: success #success, failure, error, ignore
+        informational: false
+        only_pulls: false
+    patch:
+      default:
+        # basic
+        target: number
+        threshold: 100%
+        base: auto
+        # advanced
+        branches:
+          - master
+        if_ci_failed: error #success, failure, error, ignore
+        only_pulls: true
+        paths:
+          - "src"

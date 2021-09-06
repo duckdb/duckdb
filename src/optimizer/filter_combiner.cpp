@@ -391,7 +391,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHAN ||
 			     constant_value.second[0].comparison_type == ExpressionType::COMPARE_LESSTHANOREQUALTO) &&
 			    (TypeIsNumeric(constant_value.second[0].constant.type().InternalType()) ||
-			     constant_value.second[0].constant.type().InternalType() == PhysicalType::VARCHAR)) {
+			     constant_value.second[0].constant.type().InternalType() == PhysicalType::VARCHAR ||
+			     constant_value.second[0].constant.type().InternalType() == PhysicalType::BOOL)) {
 				//! Here we check if these filters are column references
 				filter_exp = equivalence_map.find(constant_value.first);
 				if (filter_exp->second.size() == 1 && filter_exp->second[0]->type == ExpressionType::BOUND_COLUMN_REF) {
@@ -506,27 +507,36 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(vector<idx_t> &column_id
 				continue;
 			}
 			auto &fst_const_value_expr = (BoundConstantExpression &)*func.children[1].get();
+
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
+			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 			if (!fst_const_value_expr.value.type().IsIntegral()) {
 				continue;
 			}
 
+			bool can_simplify_in_clause = true;
 			for (idx_t i = 1; i < func.children.size(); i++) {
 				auto &const_value_expr = (BoundConstantExpression &)*func.children[i].get();
+				if (const_value_expr.value.is_null) {
+					can_simplify_in_clause = false;
+					break;
+				}
 				in_values.push_back(const_value_expr.value);
+			}
+			if (!can_simplify_in_clause || in_values.empty()) {
+				continue;
 			}
 			Value one(1);
 
 			sort(in_values.begin(), in_values.end());
 
-			bool is_consecutive = true;
 			for (idx_t in_val_idx = 1; in_val_idx < in_values.size(); in_val_idx++) {
 				if (in_values[in_val_idx] - in_values[in_val_idx - 1] > one || in_values[in_val_idx - 1].is_null) {
-					is_consecutive = false;
+					can_simplify_in_clause = false;
 					break;
 				}
 			}
-			if (!is_consecutive || in_values.empty()) {
+			if (!can_simplify_in_clause) {
 				continue;
 			}
 			auto lower_bound =

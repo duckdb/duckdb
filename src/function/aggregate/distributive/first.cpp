@@ -24,10 +24,11 @@ struct FirstFunctionBase {
 	}
 };
 
+template <bool LAST>
 struct FirstFunction : public FirstFunctionBase {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
+		if (LAST || !state->is_set) {
 			state->is_set = true;
 			if (!mask.RowIsValid(idx)) {
 				state->is_null = true;
@@ -61,6 +62,7 @@ struct FirstFunction : public FirstFunctionBase {
 	}
 };
 
+template <bool LAST>
 struct FirstFunctionString : public FirstFunctionBase {
 	template <class STATE>
 	static void SetValue(STATE *state, string_t value, bool is_null) {
@@ -83,7 +85,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data, INPUT_TYPE *input, ValidityMask &mask, idx_t idx) {
-		if (!state->is_set) {
+		if (LAST || !state->is_set) {
 			SetValue(state, input[idx], !mask.RowIsValid(idx));
 		}
 	}
@@ -96,7 +98,7 @@ struct FirstFunctionString : public FirstFunctionBase {
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE *target) {
-		if (source.is_set && !target->is_set) {
+		if (source.is_set && (LAST || !target->is_set)) {
 			SetValue(target, source.value, source.is_null);
 		}
 	}
@@ -118,11 +120,12 @@ struct FirstFunctionString : public FirstFunctionBase {
 	}
 };
 
-struct FirstStateValue {
-	Value *value;
+struct FirstStateVector {
+	Vector *value;
 };
 
-struct FirstValueFunction {
+template <bool LAST>
+struct FirstVectorFunction {
 	template <class STATE>
 	static void Initialize(STATE *state) {
 		state->value = nullptr;
@@ -138,33 +141,51 @@ struct FirstValueFunction {
 		return false;
 	}
 
+	template <class STATE>
+	static void SetValue(STATE *state, Vector &input, const idx_t idx) {
+		if (!state->value) {
+			state->value = new Vector(input.GetType());
+			state->value->SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+		sel_t selv = idx;
+		SelectionVector sel(&selv);
+		VectorOperations::Copy(input, *state->value, sel, 1, 0, 0);
+	}
+
 	static void Update(Vector inputs[], FunctionData *, idx_t input_count, Vector &state_vector, idx_t count) {
 		auto &input = inputs[0];
 		VectorData sdata;
 		state_vector.Orrify(count, sdata);
 
-		auto states = (FirstStateValue **)sdata.data;
+		auto states = (FirstStateVector **)sdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			auto state = states[sdata.sel->get_index(i)];
-			if (!state->value) {
-				state->value = new Value(input.GetValue(i));
+			if (LAST || !state->value) {
+				SetValue(state, input, i);
 			}
 		}
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE *target) {
-		if (source.value && !target->value) {
-			target->value = new Value(*source.value);
+		if (source.value && (LAST || !target->value)) {
+			SetValue(target, *source.value, 0);
 		}
 	}
 
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->value) {
-			mask.SetInvalid(idx);
+			// we need to use FlatVector::SetNull here
+			// since for STRUCT columns only setting the validity mask of the struct is incorrect
+			// as for a struct column, we need to also set ALL child columns to NULL
+			if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+				ConstantVector::SetNull(result, true);
+			} else {
+				FlatVector::SetNull(result, idx, true);
+			}
 		} else {
-			result.SetValue(idx, *state->value);
+			VectorOperations::Copy(*state->value, result, 1, 0, idx);
 		}
 	}
 
@@ -176,100 +197,120 @@ struct FirstValueFunction {
 	}
 };
 
-template <class T>
+template <class T, bool LAST>
 static AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
-	return AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction>(type, type);
+	auto agg = AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction<LAST>>(type, type);
+	agg.order_sensitive = true;
+	return agg;
 }
 
+template <bool LAST>
+static AggregateFunction GetFirstFunction(const LogicalType &type);
+
+template <bool LAST>
 AggregateFunction GetDecimalFirstFunction(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::DECIMAL);
 	switch (type.InternalType()) {
 	case PhysicalType::INT16:
-		return FirstFun::GetFunction(LogicalType::SMALLINT);
+		return GetFirstFunction<LAST>(LogicalType::SMALLINT);
 	case PhysicalType::INT32:
-		return FirstFun::GetFunction(LogicalType::INTEGER);
+		return GetFirstFunction<LAST>(LogicalType::INTEGER);
 	case PhysicalType::INT64:
-		return FirstFun::GetFunction(LogicalType::BIGINT);
+		return GetFirstFunction<LAST>(LogicalType::BIGINT);
 	default:
-		return FirstFun::GetFunction(LogicalType::HUGEINT);
+		return GetFirstFunction<LAST>(LogicalType::HUGEINT);
 	}
 }
 
-AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
+template <bool LAST>
+static AggregateFunction GetFirstFunction(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return GetFirstAggregateTemplated<int8_t>(type);
+		return GetFirstAggregateTemplated<int8_t, LAST>(type);
 	case LogicalTypeId::TINYINT:
-		return GetFirstAggregateTemplated<int8_t>(type);
+		return GetFirstAggregateTemplated<int8_t, LAST>(type);
 	case LogicalTypeId::SMALLINT:
-		return GetFirstAggregateTemplated<int16_t>(type);
+		return GetFirstAggregateTemplated<int16_t, LAST>(type);
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::DATE:
-		return GetFirstAggregateTemplated<int32_t>(type);
+		return GetFirstAggregateTemplated<int32_t, LAST>(type);
 	case LogicalTypeId::BIGINT:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP:
-		return GetFirstAggregateTemplated<int64_t>(type);
+		return GetFirstAggregateTemplated<int64_t, LAST>(type);
 	case LogicalTypeId::UTINYINT:
-		return GetFirstAggregateTemplated<uint8_t>(type);
+		return GetFirstAggregateTemplated<uint8_t, LAST>(type);
 	case LogicalTypeId::USMALLINT:
-		return GetFirstAggregateTemplated<uint16_t>(type);
+		return GetFirstAggregateTemplated<uint16_t, LAST>(type);
 	case LogicalTypeId::UINTEGER:
-		return GetFirstAggregateTemplated<uint32_t>(type);
+		return GetFirstAggregateTemplated<uint32_t, LAST>(type);
 	case LogicalTypeId::UBIGINT:
-		return GetFirstAggregateTemplated<uint64_t>(type);
+		return GetFirstAggregateTemplated<uint64_t, LAST>(type);
 	case LogicalTypeId::HUGEINT:
-		return GetFirstAggregateTemplated<hugeint_t>(type);
+		return GetFirstAggregateTemplated<hugeint_t, LAST>(type);
 	case LogicalTypeId::FLOAT:
-		return GetFirstAggregateTemplated<float>(type);
+		return GetFirstAggregateTemplated<float, LAST>(type);
 	case LogicalTypeId::DOUBLE:
-		return GetFirstAggregateTemplated<double>(type);
+		return GetFirstAggregateTemplated<double, LAST>(type);
 	case LogicalTypeId::INTERVAL:
-		return GetFirstAggregateTemplated<interval_t>(type);
+		return GetFirstAggregateTemplated<interval_t, LAST>(type);
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::BLOB:
-		return AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
-		                                                   FirstFunctionString>(type, type);
+	case LogicalTypeId::BLOB: {
+		auto agg = AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
+		                                                       FirstFunctionString<LAST>>(type, type);
+		agg.order_sensitive = true;
+		return agg;
+	}
 	case LogicalTypeId::DECIMAL: {
 		type.Verify();
-		AggregateFunction function = GetDecimalFirstFunction(type);
+		AggregateFunction function = GetDecimalFirstFunction<LAST>(type);
 		function.arguments[0] = type;
 		function.return_type = type;
 		return function;
 	}
-	default:
-		return AggregateFunction(
-		    {type}, type, AggregateFunction::StateSize<FirstStateValue>,
-		    AggregateFunction::StateInitialize<FirstStateValue, FirstValueFunction>, FirstValueFunction::Update,
-		    AggregateFunction::StateCombine<FirstStateValue, FirstValueFunction>,
-		    AggregateFunction::StateFinalize<FirstStateValue, void, FirstValueFunction>, nullptr,
-		    FirstValueFunction::Bind, AggregateFunction::StateDestroy<FirstStateValue, FirstValueFunction>);
+	default: {
+		using OP = FirstVectorFunction<LAST>;
+		return AggregateFunction({type}, type, AggregateFunction::StateSize<FirstStateVector>,
+		                         AggregateFunction::StateInitialize<FirstStateVector, OP>, OP::Update,
+		                         AggregateFunction::StateCombine<FirstStateVector, OP>,
+		                         AggregateFunction::StateFinalize<FirstStateVector, void, OP>, nullptr, OP::Bind,
+		                         AggregateFunction::StateDestroy<FirstStateVector, OP>, nullptr, nullptr, true);
+	}
 	}
 }
 
+AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
+	return GetFirstFunction<false>(type);
+}
+
+template <bool LAST>
 unique_ptr<FunctionData> BindDecimalFirst(ClientContext &context, AggregateFunction &function,
                                           vector<unique_ptr<Expression>> &arguments) {
 	auto decimal_type = arguments[0]->return_type;
-	function = FirstFun::GetFunction(decimal_type);
+	function = GetFirstFunction<LAST>(decimal_type);
+	function.return_type = decimal_type;
 	return nullptr;
 }
 
 void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	AggregateFunctionSet first("first");
+	AggregateFunctionSet last("last");
 	for (auto &type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                    BindDecimalFirst));
+			                                    BindDecimalFirst<false>, nullptr, nullptr, nullptr, true));
+			last.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+			                                   BindDecimalFirst<true>, nullptr, nullptr, nullptr, true));
 		} else {
-			first.AddFunction(FirstFun::GetFunction(type));
+			first.AddFunction(GetFirstFunction<false>(type));
+			last.AddFunction(GetFirstFunction<true>(type));
 		}
 	}
-	first.AddFunction(FirstFun::GetFunction(LogicalTypeId::LIST));
-	first.AddFunction(FirstFun::GetFunction(LogicalTypeId::STRUCT));
-	first.AddFunction(FirstFun::GetFunction(LogicalTypeId::MAP));
 	set.AddFunction(first);
 	first.name = "arbitrary";
 	set.AddFunction(first);
+
+	set.AddFunction(last);
 }
 
 } // namespace duckdb

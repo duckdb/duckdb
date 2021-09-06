@@ -27,6 +27,7 @@
 namespace duckdb {
 class Appender;
 class Catalog;
+class ChunkCollection;
 class DatabaseInstance;
 class LogicalOperator;
 class PreparedStatementData;
@@ -73,6 +74,8 @@ public:
 
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
+
+	unordered_map<string, Value> set_variables;
 
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
@@ -124,7 +127,7 @@ public:
 	//! Get the table info of a specific table, or nullptr if it cannot be found
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
 	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
-	DUCKDB_API void Append(TableDescription &description, DataChunk &chunk);
+	DUCKDB_API void Append(TableDescription &description, ChunkCollection &collection);
 	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
 	//! list with the set of returned columns
 	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
@@ -162,6 +165,9 @@ public:
 	//! Same as RunFunctionInTransaction, but does not obtain a lock on the client context or check for validation
 	DUCKDB_API void RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
 	                                                 bool requires_valid_transaction = true);
+
+	//! Equivalent to CURRENT_SETTING(key) SQL function.
+	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
 private:
 	//! Parse statements from a query

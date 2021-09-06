@@ -4,6 +4,7 @@
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/query_node/bound_recursive_cte_node.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 

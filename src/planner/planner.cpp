@@ -40,7 +40,7 @@ void Planner::CreatePlan(SQLStatement &statement) {
 	for (auto &expr : bound_parameters) {
 		// check if the type of the parameter could be resolved
 		if (expr->return_type.id() == LogicalTypeId::INVALID || expr->return_type.id() == LogicalTypeId::UNKNOWN) {
-			throw BinderException("Could not determine type of parameters: try adding explicit type casts");
+			throw InternalException("Could not determine type of parameters");
 		}
 		auto value = make_unique<Value>(expr->return_type);
 		expr->value = value.get();

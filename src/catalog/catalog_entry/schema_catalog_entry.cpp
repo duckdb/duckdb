@@ -154,7 +154,7 @@ CatalogEntry *SchemaCatalogEntry::CreateFunction(ClientContext &context, CreateF
 		                                                                          (CreateAggregateFunctionInfo *)info);
 		break;
 	default:
-		throw CatalogException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
+		throw InternalException("Unknown function type \"%s\"", CatalogTypeToString(info->type));
 	}
 	return AddEntry(context, move(function), info->on_conflict);
 }
@@ -259,7 +259,7 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	case CatalogType::ENUM_ENTRY:
 		return enums;
 	default:
-		throw CatalogException("Unsupported catalog type in schema");
+		throw InternalException("Unsupported catalog type in schema");
 	}
 }
 

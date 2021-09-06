@@ -16,8 +16,6 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 
-#include "re2/re2.h"
-
 #include <cctype>
 
 namespace duckdb {
@@ -122,7 +120,7 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 			len += sec >= 10;
 			break;
 		default:
-			break;
+			throw InternalException("Time specifier mismatch");
 		}
 		return len;
 	}
@@ -133,7 +131,7 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY:
 		return NumericHelper::UnsignedLength<uint32_t>(Date::ExtractYear(date) % 100);
 	default:
-		throw NotImplementedException("Unimplemented specifier for GetSpecifierLength");
+		throw InternalException("Unimplemented specifier for GetSpecifierLength");
 	}
 }
 
@@ -250,7 +248,7 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented date specifier for strftime");
+		throw InternalException("Unimplemented date specifier for strftime");
 	}
 	return target;
 }
@@ -273,7 +271,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		target = WritePadded2(target, data[1]);
 		break;
 	case StrTimeSpecifier::YEAR_WITHOUT_CENTURY_PADDED:
-		target = WritePadded2(target, data[0] % 100);
+		target = WritePadded2(target, AbsValue(data[0]) % 100);
 		break;
 	case StrTimeSpecifier::YEAR_DECIMAL:
 		if (data[0] >= 0 && data[0] <= 9999) {
@@ -360,7 +358,7 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		break;
 	}
 	default:
-		throw NotImplementedException("Unimplemented specifier for WriteStandardSpecifier in strftime");
+		throw InternalException("Unimplemented specifier for WriteStandardSpecifier in strftime");
 	}
 	return target;
 }
@@ -390,7 +388,20 @@ void StrfTimeFormat::FormatString(date_t date, dtime_t time, char *target) {
 	FormatString(date, data, target);
 }
 
-string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &format) {
+string StrfTimeFormat::Format(timestamp_t timestamp, const string &format_str) {
+	StrfTimeFormat format;
+	format.ParseFormatSpecifier(format_str, format);
+
+	auto date = Timestamp::GetDate(timestamp);
+	auto time = Timestamp::GetTime(timestamp);
+
+	auto len = format.GetLength(date, time);
+	auto result = unique_ptr<char[]>(new char[len]);
+	format.FormatString(date, time, result.get());
+	return string(result.get(), len);
+}
+
+string StrTimeFormat::ParseFormatSpecifier(const string &format_string, StrTimeFormat &format) {
 	format.specifiers.clear();
 	format.literals.clear();
 	format.numeric_width.clear();
@@ -442,7 +453,7 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 					specifier = StrTimeSpecifier::DAY_OF_YEAR_DECIMAL;
 					break;
 				default:
-					return "Unrecognized format for strftime/strptime: %-" + string(format_char, 1);
+					return "Unrecognized format for strftime/strptime: %-" + string(1, format_char);
 				}
 			} else {
 				switch (format_char) {
@@ -542,7 +553,7 @@ string StrTimeFormat::ParseFormatSpecifier(string format_string, StrTimeFormat &
 					continue;
 				}
 				default:
-					return "Unrecognized format for strftime/strptime: %" + string(format_char, 1);
+					return "Unrecognized format for strftime/strptime: %" + string(1, format_char);
 				}
 			}
 			format.AddFormatSpecifier(move(current_literal), specifier);
@@ -571,7 +582,7 @@ struct StrfTimeBindData : public FunctionData {
 
 static unique_ptr<FunctionData> StrfTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[1]->IsScalar()) {
+	if (!arguments[1]->IsFoldable()) {
 		throw InvalidInputException("strftime format must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
@@ -595,12 +606,11 @@ static void StrfTimeFunctionDate(DataChunk &args, ExpressionState &state, Vector
 		ConstantVector::SetNull(result, true);
 		return;
 	}
-
-	dtime_t time(0);
-	UnaryExecutor::Execute<date_t, string_t>(args.data[0], result, args.size(), [&](date_t date) {
-		idx_t len = info.format.GetLength(date, time);
+	UnaryExecutor::Execute<date_t, string_t>(args.data[0], result, args.size(), [&](date_t input) {
+		dtime_t time(0);
+		idx_t len = info.format.GetLength(input, time);
 		string_t target = StringVector::EmptyString(result, len);
-		info.format.FormatString(date, time, target.GetDataWriteable());
+		info.format.FormatString(input, time, target.GetDataWriteable());
 		target.Finalize();
 		return target;
 	});
@@ -616,10 +626,10 @@ static void StrfTimeFunctionTimestamp(DataChunk &args, ExpressionState &state, V
 		return;
 	}
 
-	UnaryExecutor::Execute<timestamp_t, string_t>(args.data[0], result, args.size(), [&](timestamp_t timestamp) {
+	UnaryExecutor::Execute<timestamp_t, string_t>(args.data[0], result, args.size(), [&](timestamp_t input) {
 		date_t date;
 		dtime_t time;
-		Timestamp::Convert(timestamp, date, time);
+		Timestamp::Convert(input, date, time);
 		idx_t len = info.format.GetLength(date, time);
 		string_t target = StringVector::EmptyString(result, len);
 		info.format.FormatString(date, time, target.GetDataWriteable());
@@ -851,20 +861,12 @@ bool StrpTimeFormat::Parse(string_t str, ParseResult &result) {
 				result_data[5] = number;
 				break;
 			case StrTimeSpecifier::MICROSECOND_PADDED:
-				if (number >= 1000000ULL) {
-					error_message = "Microseconds out of range, expected a value between 0 and 999999";
-					error_position = start_pos;
-					return false;
-				}
+				D_ASSERT(number < 1000000ULL); // enforced by the length of the number
 				// milliseconds
 				result_data[6] = number;
 				break;
 			case StrTimeSpecifier::MILLISECOND_PADDED:
-				if (number >= 1000ULL) {
-					error_message = "Milliseconds out of range, expected a value between 0 and 999";
-					error_position = start_pos;
-					return false;
-				}
+				D_ASSERT(number < 1000ULL); // enforced by the length of the number
 				// milliseconds
 				result_data[6] = number * 1000;
 				break;
@@ -1089,8 +1091,8 @@ struct StrpTimeBindData : public FunctionData {
 
 static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
-	if (!arguments[1]->IsScalar()) {
-		throw InvalidInputException("strftime format must be a constant");
+	if (!arguments[1]->IsFoldable()) {
+		throw InvalidInputException("strptime format must be a constant");
 	}
 	Value options_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 	StrpTimeFormat format;
@@ -1112,26 +1114,56 @@ string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) 
 	return input + "\n" + string(position, ' ') + "^";
 }
 
+date_t StrpTimeFormat::ParseResult::ToDate() {
+	return Date::FromDate(data[0], data[1], data[2]);
+}
+
+timestamp_t StrpTimeFormat::ParseResult::ToTimestamp() {
+	date_t date = Date::FromDate(data[0], data[1], data[2]);
+	dtime_t time = Time::FromTime(data[3], data[4], data[5], data[6]);
+	return Timestamp::FromDatetime(date, time);
+}
+
+string StrpTimeFormat::ParseResult::FormatError(string_t input, const string &format_specifier) {
+	return StringUtil::Format("Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s",
+	                          input.GetString(), format_specifier,
+	                          FormatStrpTimeError(input.GetString(), error_position), error_message);
+}
+
+bool StrpTimeFormat::TryParseDate(string_t input, date_t &result, string &error_message) {
+	ParseResult parse_result;
+	if (!Parse(input, parse_result)) {
+		error_message = parse_result.FormatError(input, format_specifier);
+		return false;
+	}
+	result = parse_result.ToDate();
+	return true;
+}
+
+bool StrpTimeFormat::TryParseTimestamp(string_t input, timestamp_t &result, string &error_message) {
+	ParseResult parse_result;
+	if (!Parse(input, parse_result)) {
+		error_message = parse_result.FormatError(input, format_specifier);
+		return false;
+	}
+	result = parse_result.ToTimestamp();
+	return true;
+}
+
 date_t StrpTimeFormat::ParseDate(string_t input) {
 	ParseResult result;
 	if (!Parse(input, result)) {
-		throw InvalidInputException(
-		    "Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetString(),
-		    format_specifier, FormatStrpTimeError(input.GetString(), result.error_position), result.error_message);
+		throw InvalidInputException(result.FormatError(input, format_specifier));
 	}
-	return Date::FromDate(result.data[0], result.data[1], result.data[2]);
+	return result.ToDate();
 }
 
 timestamp_t StrpTimeFormat::ParseTimestamp(string_t input) {
 	ParseResult result;
 	if (!Parse(input, result)) {
-		throw InvalidInputException(
-		    "Could not parse string \"%s\" according to format specifier \"%s\"\n%s\nError: %s", input.GetString(),
-		    format_specifier, FormatStrpTimeError(input.GetString(), result.error_position), result.error_message);
+		throw InvalidInputException(result.FormatError(input, format_specifier));
 	}
-	date_t date = Date::FromDate(result.data[0], result.data[1], result.data[2]);
-	dtime_t time = Time::FromTime(result.data[3], result.data[4], result.data[5], result.data[6]);
-	return Timestamp::FromDatetime(date, time);
+	return result.ToTimestamp();
 }
 
 static void StrpTimeFunction(DataChunk &args, ExpressionState &state, Vector &result) {

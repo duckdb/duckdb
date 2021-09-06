@@ -3,7 +3,6 @@
 #include "duckdb/transaction/update_info.hpp"
 
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/uncompressed_segment.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"

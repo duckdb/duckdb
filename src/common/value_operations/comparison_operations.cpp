@@ -127,10 +127,6 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 		return OP::Operation(left.value_.ubigint, right.value_.ubigint);
 	case PhysicalType::INT128:
 		return OP::Operation(left.value_.hugeint, right.value_.hugeint);
-	case PhysicalType::POINTER:
-		return OP::Operation(left.value_.pointer, right.value_.pointer);
-	case PhysicalType::HASH:
-		return OP::Operation(left.value_.hash, right.value_.hash);
 	case PhysicalType::FLOAT:
 		return OP::Operation(left.value_.float_, right.value_.float_);
 	case PhysicalType::DOUBLE:
@@ -173,11 +169,8 @@ static bool TemplatedBooleanOperation(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::Equals(const Value &left, const Value &right) {
-	if (left.is_null && right.is_null) {
-		return true;
-	}
-	if (left.is_null != right.is_null) {
-		return false;
+	if (left.is_null || right.is_null) {
+		throw InternalException("Comparison on NULL values");
 	}
 	return TemplatedBooleanOperation<duckdb::Equals>(left, right);
 }
@@ -187,23 +180,15 @@ bool ValueOperations::NotEquals(const Value &left, const Value &right) {
 }
 
 bool ValueOperations::GreaterThan(const Value &left, const Value &right) {
-	if (left.is_null && right.is_null) {
-		return false;
-	} else if (right.is_null) {
-		return true;
-	} else if (left.is_null) {
-		return false;
+	if (left.is_null || right.is_null) {
+		throw InternalException("Comparison on NULL values");
 	}
 	return TemplatedBooleanOperation<duckdb::GreaterThan>(left, right);
 }
 
 bool ValueOperations::GreaterThanEquals(const Value &left, const Value &right) {
-	if (left.is_null && right.is_null) {
-		return true;
-	} else if (right.is_null) {
-		return true;
-	} else if (left.is_null) {
-		return false;
+	if (left.is_null || right.is_null) {
+		throw InternalException("Comparison on NULL values");
 	}
 	return TemplatedBooleanOperation<duckdb::GreaterThanEquals>(left, right);
 }

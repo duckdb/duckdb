@@ -1,8 +1,9 @@
 #include "duckdb/optimizer/statistics_propagator.hpp"
-#include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/operator/logical_empty_result.hpp"
+
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
 
 namespace duckdb {
 
@@ -42,6 +43,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOper
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 		return PropagateStatistics((LogicalSetOperation &)node, node_ptr);
+	case LogicalOperatorType::LOGICAL_ORDER_BY:
+		return PropagateStatistics((LogicalOrder &)node, node_ptr);
+	case LogicalOperatorType::LOGICAL_WINDOW:
+		return PropagateStatistics((LogicalWindow &)node, node_ptr);
 	default:
 		return PropagateChildren(node, node_ptr);
 	}

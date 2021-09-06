@@ -43,17 +43,6 @@ bool CaseExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bind
 	return true;
 }
 
-bool CastExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
-	if (!ExpressionMatcher::Match(expr_p, bindings)) {
-		return false;
-	}
-	auto expr = (BoundCastExpression *)expr_p;
-	if (child && !child->Match(expr->child.get(), bindings)) {
-		return false;
-	}
-	return true;
-}
-
 bool ComparisonExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
@@ -68,6 +57,9 @@ bool InClauseExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &
 		return false;
 	}
 	auto expr = (BoundOperatorExpression *)expr_p;
+	if (expr->type != ExpressionType::COMPARE_IN || expr->type == ExpressionType::COMPARE_NOT_IN) {
+		return false;
+	}
 	return SetMatcher::Match(matchers, expr->children, bindings, policy);
 }
 
@@ -80,14 +72,6 @@ bool ConjunctionExpressionMatcher::Match(Expression *expr_p, vector<Expression *
 		return false;
 	}
 	return true;
-}
-
-bool OperatorExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
-	if (!ExpressionMatcher::Match(expr_p, bindings)) {
-		return false;
-	}
-	auto expr = (BoundOperatorExpression *)expr_p;
-	return SetMatcher::Match(matchers, expr->children, bindings, policy);
 }
 
 bool FunctionExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {

@@ -29,6 +29,11 @@ class SimpleFunction;
 
 struct MacroBinding;
 
+struct BoundColumnReferenceInfo {
+	string name;
+	idx_t query_location;
+};
+
 struct BindResult {
 	explicit BindResult(string error) : error(error) {
 	}
@@ -57,7 +62,10 @@ public:
 	                            bool root_expression = true);
 
 	//! Returns whether or not any columns have been bound by the expression binder
-	bool BoundColumns() {
+	bool HasBoundColumns() {
+		return !bound_columns.empty();
+	}
+	const vector<BoundColumnReferenceInfo> &GetBoundColumns() {
 		return bound_columns;
 	}
 
@@ -74,6 +82,14 @@ public:
 
 	void BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth, string &error);
 	static void ExtractCorrelatedExpressions(Binder &binder, Expression &expr);
+
+	static bool ContainsNullType(const LogicalType &type);
+	static LogicalType ExchangeNullType(const LogicalType &type);
+	static bool ContainsType(const LogicalType &type, LogicalTypeId target);
+	static LogicalType ExchangeType(const LogicalType &type, LogicalTypeId target, LogicalType new_type);
+
+	static void ResolveParameterType(LogicalType &type);
+	static void ResolveParameterType(unique_ptr<Expression> &expr);
 
 protected:
 	virtual BindResult BindExpression(unique_ptr<ParsedExpression> *expr_ptr, idx_t depth,
@@ -105,7 +121,6 @@ protected:
 	virtual void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, QueryNode &node);
 	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, TableRef &ref);
-	virtual void CheckForSideEffects(FunctionExpression &function, idx_t depth, string &error);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();
@@ -114,7 +129,7 @@ protected:
 	ClientContext &context;
 	ExpressionBinder *stored_binder;
 	MacroBinding *macro_binding;
-	bool bound_columns = false;
+	vector<BoundColumnReferenceInfo> bound_columns;
 };
 
 } // namespace duckdb

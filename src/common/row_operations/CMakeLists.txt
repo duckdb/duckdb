@@ -5,7 +5,10 @@ add_library_unity(
   row_scatter.cpp
   row_gather.cpp
   row_match.cpp
-  row_external.cpp)
+  row_external.cpp
+  row_radix_scatter.cpp
+  row_heap_scatter.cpp
+  row_heap_gather.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_row_operations>
     PARENT_SCOPE)

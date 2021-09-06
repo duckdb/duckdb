@@ -41,6 +41,7 @@
 #include "constants.h"
 #include "date.h"
 #include "decimal.h"
+#include "init.h"
 #include "genrand.h"
 #include "misc.h"
 #include "nulls.h"
@@ -76,14 +77,13 @@ int mk_w_catalog_page(void *info_arr, ds_key_t index) {
 	static date_t *dStartDate = &dStartDateStorage;
 	static int nCatalogPageMax;
 	int nDuration, nOffset, nType;
-	static int bInit = 0;
 	struct CATALOG_PAGE_TBL *r;
 	int nCatalogInterval;
 	tdef *pTdef = getSimpleTdefsByNumber(CATALOG_PAGE);
 
 	r = &g_w_catalog_page;
 
-	if (!bInit) {
+	if (!InitConstants::mk_w_catalog_page_init) {
 		nCatalogPageMax = ((int)get_rowcount(CATALOG_PAGE) / CP_CATALOGS_PER_YEAR) / (YEAR_MAXIMUM - YEAR_MINIMUM + 2);
 
 		strtodt(dStartDate, DATA_START_DATE);
@@ -91,7 +91,7 @@ int mk_w_catalog_page(void *info_arr, ds_key_t index) {
 		/* columns that still need to be populated */
 		strcpy(r->cp_department, "DEPARTMENT");
 
-		bInit = 1;
+		InitConstants::mk_w_catalog_page_init = 1;
 	}
 
 	nullSet(&pTdef->kNullBitMap, CP_NULLS);

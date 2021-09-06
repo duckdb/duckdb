@@ -133,11 +133,15 @@ string BaseStatistics::ToString() {
 	return StringUtil::Format("Base Statistics %s", validity_stats ? validity_stats->ToString() : "[]");
 }
 
-void BaseStatistics::Verify(Vector &vector, idx_t count) {
+void BaseStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
 	D_ASSERT(vector.GetType() == this->type);
 	if (validity_stats) {
-		validity_stats->Verify(vector, count);
+		validity_stats->Verify(vector, sel, count);
 	}
+}
+
+void BaseStatistics::Verify(Vector &vector, idx_t count) {
+	Verify(vector, FlatVector::INCREMENTAL_SELECTION_VECTOR, count);
 }
 
 } // namespace duckdb

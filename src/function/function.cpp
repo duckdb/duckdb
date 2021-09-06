@@ -320,8 +320,21 @@ void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> 
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
 		target_type.Verify();
-		if (target_type.id() != LogicalTypeId::ANY && children[i]->return_type != target_type) {
-			// type of child does not match type of function argument: add a cast
+		// check if the type of child matches the type of function argument
+		// if not we need to add a cast
+		bool require_cast = children[i]->return_type != target_type;
+		// except for one special case: if the function accepts ANY argument
+		// in that case we don't add a cast
+		if (target_type.id() == LogicalTypeId::ANY) {
+			if (children[i]->return_type.id() == LogicalTypeId::UNKNOWN) {
+				// UNLESS the child is a prepared statement parameter
+				// in that case we default the prepared statement parameter to VARCHAR
+				target_type = LogicalType::VARCHAR;
+			} else {
+				require_cast = false;
+			}
+		}
+		if (require_cast) {
 			children[i] = BoundCastExpression::AddCastToType(move(children[i]), target_type);
 		}
 	}
@@ -369,11 +382,10 @@ unique_ptr<BoundFunctionExpression> ScalarFunction::BindScalarFunction(ClientCon
 	                                            move(bind_info), is_operator);
 }
 
-unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(ClientContext &context,
-                                                                              AggregateFunction bound_function,
-                                                                              vector<unique_ptr<Expression>> children,
-                                                                              unique_ptr<Expression> filter,
-                                                                              bool is_distinct) {
+unique_ptr<BoundAggregateExpression>
+AggregateFunction::BindAggregateFunction(ClientContext &context, AggregateFunction bound_function,
+                                         vector<unique_ptr<Expression>> children, unique_ptr<Expression> filter,
+                                         bool is_distinct, unique_ptr<BoundOrderModifier> order_bys) {
 	unique_ptr<FunctionData> bind_info;
 	if (bound_function.bind) {
 		bind_info = bound_function.bind(context, bound_function, children);
@@ -383,6 +395,12 @@ unique_ptr<BoundAggregateExpression> AggregateFunction::BindAggregateFunction(Cl
 
 	// check if we need to add casts to the children
 	bound_function.CastToFunctionArguments(children);
+
+	// Special case: for ORDER BY aggregates, we wrap the aggregate function in a SortedAggregateFunction
+	// The children are the sort clauses and the binding contains the ordering data.
+	if (order_bys && !order_bys->orders.empty()) {
+		bind_info = BindSortedAggregate(bound_function, children, move(bind_info), move(order_bys));
+	}
 
 	return make_unique<BoundAggregateExpression>(move(bound_function), move(children), move(filter), move(bind_info),
 	                                             is_distinct);

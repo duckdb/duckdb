@@ -11,13 +11,21 @@
 
 namespace duckdb {
 
-static void CreateColumnMap(BoundCreateTableInfo &info) {
+static void CreateColumnMap(BoundCreateTableInfo &info, bool allow_duplicate_names) {
 	auto &base = (CreateTableInfo &)*info.base;
 
 	for (uint64_t oid = 0; oid < base.columns.size(); oid++) {
 		auto &col = base.columns[oid];
-		if (info.name_map.find(col.name) != info.name_map.end()) {
-			throw CatalogException("Column with name %s already exists!", col.name);
+		if (allow_duplicate_names) {
+			idx_t index = 1;
+			string base_name = col.name;
+			while (info.name_map.find(col.name) != info.name_map.end()) {
+				col.name = base_name + ":" + to_string(index++);
+			}
+		} else {
+			if (info.name_map.find(col.name) != info.name_map.end()) {
+				throw CatalogException("Column with name %s already exists!", col.name);
+			}
 		}
 
 		info.name_map[col.name] = oid;
@@ -143,10 +151,10 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 			base.columns.emplace_back(names[i], sql_types[i]);
 		}
 		// create the name map for the statement
-		CreateColumnMap(*result);
+		CreateColumnMap(*result, true);
 	} else {
 		// create the name map for the statement
-		CreateColumnMap(*result);
+		CreateColumnMap(*result, false);
 		// bind any constraints
 		BindConstraints(*this, *result);
 		// bind the default values
@@ -156,6 +164,7 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	for (auto &column : base.columns) {
 		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.type));
 	}
+	this->allow_stream_result = false;
 	return result;
 }
 

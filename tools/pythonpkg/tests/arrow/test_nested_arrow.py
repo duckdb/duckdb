@@ -165,9 +165,8 @@ class TestArrowNested(object):
         # Struct that is NULL entirely
         compare_results("SELECT * FROM (VALUES ({'i':1,'j':2}), (NULL), ({'i':1,'j':2}), (NULL)) as a")
 
-        # Null checks on lists with structs 
+        # Null checks on lists with structs
         compare_results("SELECT [{'i':1,'j':[2,3]},NULL,{'i':1,'j':[2,3]}]")
-        
-        # MAP that is NULL entirely 
-        compare_results("SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),(NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a")
 
+        # MAP that is NULL entirely
+        compare_results("SELECT * FROM (VALUES (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))),(NULL), (MAP(LIST_VALUE(1,2),LIST_VALUE(3,4))), (NULL)) as a")

@@ -8,6 +8,9 @@ load __TEST_DIR__/macro_storage.db
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
 # create a macro
 statement ok
 CREATE MACRO plus1(a) AS a+1
@@ -46,7 +49,7 @@ endloop
 
 # create a macro without deleting it this time
 statement ok
-CREATE MACRO plus2(a, b=2) AS a + b
+CREATE MACRO plus2(a, b := 2) AS a + b
 
 loop i 0 2
 

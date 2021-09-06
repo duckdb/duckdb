@@ -20,11 +20,15 @@ class LocalTableStorage;
 class Index;
 class RowGroup;
 class UpdateSegment;
-class PersistentSegment;
 class TableScanState;
-class TransientSegment;
+class ColumnSegment;
 class ValiditySegment;
 class TableFilterSet;
+
+struct SegmentScanState {
+	virtual ~SegmentScanState() {
+	}
+};
 
 struct IndexScanState {
 	virtual ~IndexScanState() {
@@ -38,13 +42,15 @@ struct ColumnScanState {
 	ColumnSegment *current;
 	//! The current row index of the scan
 	idx_t row_index;
-	//! The primary buffer handle
-	unique_ptr<BufferHandle> primary_handle;
+	//! The internal row index (i.e. the position of the SegmentScanState)
+	idx_t internal_index;
+	//! Segment scan state
+	unique_ptr<SegmentScanState> scan_state;
 	//! Child states of the vector
 	vector<ColumnScanState> child_states;
 	//! Whether or not InitializeState has been called for this segment
 	bool initialized = false;
-	//! If this segment has already been checked for skipping puorposes
+	//! If this segment has already been checked for skipping purposes
 	bool segment_checked = false;
 
 public:

@@ -21,9 +21,14 @@ struct RApi {
 
 	static SEXP Prepare(SEXP connsexp, SEXP querysexp);
 
-	static SEXP Bind(SEXP stmtsexp, SEXP paramsexp);
+	static SEXP Bind(SEXP stmtsexp, SEXP paramsexp, SEXP arrowsexp);
 
-	static SEXP Execute(SEXP stmtsexp);
+	static SEXP Execute(SEXP stmtsexp, SEXP arrowsexp);
+
+	static SEXP DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vector_per_chunksexp,
+	                               SEXP return_tablesexp);
+
+	static SEXP DuckDBRecordBatchR(SEXP query_resultsexp);
 
 	static SEXP Release(SEXP stmtsexp);
 
@@ -37,6 +42,9 @@ struct RApi {
 
 	static SEXP PointerToString(SEXP extptr);
 	static SEXP StringsToSexp(vector<string> s);
+
+	static SEXP REvalThrows(SEXP call, SEXP env = R_GlobalEnv);
+	static SEXP REvalRerror(SEXP call, SEXP env = R_GlobalEnv);
 };
 
 struct RProtector {
@@ -62,11 +70,27 @@ struct DataFrameScanFunction : public TableFunction {
 };
 
 struct RStrings {
-	SEXP secs;
+	SEXP secs; // Rf_mkChar
 	SEXP mins;
 	SEXP hours;
 	SEXP days;
 	SEXP weeks;
+	SEXP POSIXct;
+	SEXP POSIXt;
+	SEXP UTC_str; // Rf_mkString
+	SEXP Date_str;
+	SEXP difftime_str;
+	SEXP secs_str;
+	SEXP arrow_str; // StringsToSexp
+	SEXP POSIXct_POSIXt_str;
+	SEXP str_ref_type_names_rtypes_n_param_str;
+	SEXP tzone_sym; // Rf_install
+	SEXP units_sym;
+	SEXP getNamespace_sym;
+	SEXP Table__from_record_batches_sym;
+	SEXP ImportSchema_sym;
+	SEXP ImportRecordBatch_sym;
+	SEXP ImportRecordBatchReader_sym;
 
 	static const RStrings &get() {
 		// On demand

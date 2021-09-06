@@ -28,6 +28,7 @@ class Timestamp {
 public:
 	//! Convert a string in the format "YYYY-MM-DD hh:mm:ss" to a timestamp object
 	static timestamp_t FromString(const string &str);
+	static bool TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result);
 	static timestamp_t FromCString(const char *str, idx_t len);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
 	static string ToString(timestamp_t timestamp);
@@ -37,6 +38,8 @@ public:
 	static dtime_t GetTime(timestamp_t timestamp);
 	//! Create a Timestamp object from a specified (date, time) combination
 	static timestamp_t FromDatetime(date_t date, dtime_t time);
+	static bool TryFromDatetime(date_t date, dtime_t time, timestamp_t &result);
+
 	//! Extract the date and time from a given timestamp object
 	static void Convert(timestamp_t date, date_t &out_date, dtime_t &out_time);
 	//! Returns current timestamp
@@ -61,5 +64,8 @@ public:
 	static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
 
 	static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset, int &minute_offset);
+
+	static string ConversionError(const string &str);
+	static string ConversionError(string_t str);
 };
 } // namespace duckdb

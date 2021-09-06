@@ -1,9 +1,12 @@
 # name: test/sql/function/generic/test_set.test
-# description: Test stats function
+# description: Test SET function
 # group: [generic]
 
 statement ok
 PRAGMA enable_verification
+
+statement error
+SELECT CURRENT_SETTING('a');
 
 statement ok
 SET a = 42;
@@ -37,3 +40,39 @@ RESET a;
 
 statement error
 RESET ALL;
+
+statement error
+SELECT CURRENT_SETTING(i::VARCHAR) FROM range(1) tbl(i);
+
+statement error
+SELECT CURRENT_SETTING('')
+
+statement error
+SELECT CURRENT_SETTING(NULL)
+
+statement error
+SET LOCAL l = 42;
+
+statement ok
+SET SESSION s = 43;
+
+query I
+SELECT CURRENT_SETTING('s');
+----
+43
+
+statement ok
+SET SESSION shadowed = 42;
+
+query I
+SELECT CURRENT_SETTING('shadowed');
+----
+42
+
+statement ok
+SET GLOBAL shadowed = 43;
+
+query I
+SELECT CURRENT_SETTING('shadowed');
+----
+42

@@ -1,8 +1,37 @@
 #include "s3fs.hpp"
 #include "crypto.hpp"
 #include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/common/types/timestamp.hpp"
+#include "duckdb/function/scalar/strftime.hpp"
+#endif
 
 using namespace duckdb;
+
+static std::string uri_encode(const std::string &input, bool encode_slash = false) {
+	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
+	static const char *hex_digit = "0123456789ABCDEF";
+	std::string result;
+	result.reserve(input.size());
+	for (idx_t i = 0; i < input.length(); i++) {
+		char ch = input[i];
+		if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '_' ||
+		    ch == '-' || ch == '~' || ch == '.') {
+			result += ch;
+		} else if (ch == '/') {
+			if (encode_slash) {
+				result += std::string("%2F");
+			} else {
+				result += ch;
+			}
+		} else {
+			result += std::string("%");
+			result += hex_digit[static_cast<unsigned char>(ch) >> 4];
+			result += hex_digit[static_cast<unsigned char>(ch) & 15];
+		}
+	}
+	return result;
+}
 
 static HeaderMap create_s3_get_header(std::string url, std::string host, std::string region, std::string service,
                                       std::string method, std::string access_key_id, std::string secret_access_key,
@@ -12,13 +41,9 @@ static HeaderMap create_s3_get_header(std::string url, std::string host, std::st
 
 	// we can pass date/time but this is mostly useful in testing. normally we just get the current datetime here.
 	if (datetime_now.empty()) {
-		auto t = std::time(NULL);
-		auto tmp = std::gmtime(&t);
-		date_now.resize(8);
-		datetime_now.resize(16);
-
-		strftime((char *)date_now.c_str(), date_now.size(), "%Y%m%d", tmp);
-		strftime((char *)datetime_now.c_str(), datetime_now.size(), "%Y%m%dT%H%M%SZ", tmp);
+		auto timestamp = Timestamp::GetCurrentTimestamp();
+		date_now = StrfTimeFormat::Format(timestamp, "%Y%m%d");
+		datetime_now = StrfTimeFormat::Format(timestamp, "%Y%m%dT%H%M%SZ");
 	}
 
 	HeaderMap res;
@@ -29,9 +54,9 @@ static HeaderMap create_s3_get_header(std::string url, std::string host, std::st
 	// construct string to sign
 	hash_bytes canonical_request_hash;
 	hash_str canonical_request_hash_str;
-	auto canonical_request = method + "\n" + url + "\n\nhost:" + host + "\nx-amz-content-sha256:" + empty_payload_hash +
-	                         "\nx-amz-date:" + datetime_now + "\n\nhost;x-amz-content-sha256;x-amz-date\n" +
-	                         empty_payload_hash;
+	auto canonical_request = method + "\n" + uri_encode(url) + "\n\nhost:" + host +
+	                         "\nx-amz-content-sha256:" + empty_payload_hash + "\nx-amz-date:" + datetime_now +
+	                         "\n\nhost;x-amz-content-sha256;x-amz-date\n" + empty_payload_hash;
 	sha256(canonical_request.c_str(), canonical_request.length(), canonical_request_hash);
 	hex256(canonical_request_hash, canonical_request_hash_str);
 	auto string_to_sign = "AWS4-HMAC-SHA256\n" + datetime_now + "\n" + date_now + "/" + region + "/" + service +
@@ -71,7 +96,7 @@ unique_ptr<ResponseWrapper> S3FileSystem::Request(FileHandle &handle, string url
 	}
 	auto path = url.substr(slash_pos);
 	if (path.empty()) {
-		throw std::runtime_error("URL needs to contain a bucket name");
+		throw std::runtime_error("URL needs to contain key");
 	}
 	auto host = bucket + ".s3.amazonaws.com";
 	auto http_host = "https://" + host;
@@ -104,6 +129,17 @@ void S3FileSystem::Verify() {
 	    "AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20150915/us-east-1/s3/aws4_request, "
 	    "SignedHeaders=host;x-amz-content-sha256;x-amz-date, "
 	    "Signature=182072eb53d85c36b2d791a1fa46a12d23454ec1e921b02075c23aee40166d5a") {
+		throw std::runtime_error("test fail");
+	}
+
+	if (uri_encode("/category=Books/") != "/category%3DBooks/") {
+		throw std::runtime_error("test fail");
+	}
+	if (uri_encode("/?category=Books&title=Ducks Retreat/") != "/%3Fcategory%3DBooks%26title%3DDucks%20Retreat/") {
+		throw std::runtime_error("test fail");
+	}
+	if (uri_encode("/?category=Books&title=Ducks Retreat/", true) !=
+	    "%2F%3Fcategory%3DBooks%26title%3DDucks%20Retreat%2F") {
 		throw std::runtime_error("test fail");
 	}
 }

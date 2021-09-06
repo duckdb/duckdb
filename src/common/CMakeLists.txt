@@ -3,6 +3,7 @@ add_subdirectory(enums)
 add_subdirectory(operator)
 add_subdirectory(row_operations)
 add_subdirectory(serializer)
+add_subdirectory(sort)
 add_subdirectory(types)
 add_subdirectory(value_operations)
 add_subdirectory(vector_operations)
@@ -13,7 +14,7 @@ add_library_unity(
   allocator.cpp
   arrow_wrapper.cpp
   assert.cpp
-  bit_operations.cpp
+  radix.cpp
   constants.cpp
   checksum.cpp
   exception.cpp
@@ -30,7 +31,6 @@ add_library_unity(
   symbols.cpp
   tree_renderer.cpp
   types.cpp
-  fstream_util.cpp
   cycle_counter.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common>

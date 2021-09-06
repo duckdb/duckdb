@@ -39,10 +39,6 @@ public:
 	using Aggregates = vector<AggregateObject>;
 	using ValidityBytes = TemplatedValidityMask<uint8_t>;
 
-	static inline idx_t Align(idx_t n) {
-		return ((n + 7) / 8) * 8;
-	}
-
 	//! Creates an empty RowLayout
 	RowLayout();
 

@@ -379,7 +379,7 @@ hugeint_t Hugeint::Subtract(hugeint_t lhs, hugeint_t rhs) {
 //===--------------------------------------------------------------------===//
 // Hugeint Cast/Conversion
 //===--------------------------------------------------------------------===//
-template <class DST>
+template <class DST, bool SIGNED = true>
 bool HugeintTryCastInteger(hugeint_t input, DST &result) {
 	switch (input.upper) {
 	case 0:
@@ -390,9 +390,12 @@ bool HugeintTryCastInteger(hugeint_t input, DST &result) {
 		}
 		break;
 	case -1:
+		if (!SIGNED) {
+			return false;
+		}
 		// negative number: check if the negative number is in range
-		if (input.lower > NumericLimits<uint64_t>::Maximum() - uint64_t(NumericLimits<DST>::Maximum())) {
-			result = -DST(NumericLimits<uint64_t>::Maximum() - input.lower + 1);
+		if (input.lower >= NumericLimits<uint64_t>::Maximum() - uint64_t(NumericLimits<DST>::Maximum())) {
+			result = -DST(NumericLimits<uint64_t>::Maximum() - input.lower) - 1;
 			return true;
 		}
 		break;
@@ -424,22 +427,22 @@ bool Hugeint::TryCast(hugeint_t input, int64_t &result) {
 
 template <>
 bool Hugeint::TryCast(hugeint_t input, uint8_t &result) {
-	return HugeintTryCastInteger<uint8_t>(input, result);
+	return HugeintTryCastInteger<uint8_t, false>(input, result);
 }
 
 template <>
 bool Hugeint::TryCast(hugeint_t input, uint16_t &result) {
-	return HugeintTryCastInteger<uint16_t>(input, result);
+	return HugeintTryCastInteger<uint16_t, false>(input, result);
 }
 
 template <>
 bool Hugeint::TryCast(hugeint_t input, uint32_t &result) {
-	return HugeintTryCastInteger<uint32_t>(input, result);
+	return HugeintTryCastInteger<uint32_t, false>(input, result);
 }
 
 template <>
 bool Hugeint::TryCast(hugeint_t input, uint64_t &result) {
-	return HugeintTryCastInteger<uint64_t>(input, result);
+	return HugeintTryCastInteger<uint64_t, false>(input, result);
 }
 
 template <>
@@ -479,52 +482,59 @@ hugeint_t HugeintConvertInteger(DST input) {
 }
 
 template <>
-hugeint_t Hugeint::Convert(int8_t value) {
-	return HugeintConvertInteger<int8_t>(value);
+bool Hugeint::TryConvert(int8_t value, hugeint_t &result) {
+	result = HugeintConvertInteger<int8_t>(value);
+	return true;
 }
 
 template <>
-hugeint_t Hugeint::Convert(int16_t value) {
-	return HugeintConvertInteger<int16_t>(value);
+bool Hugeint::TryConvert(int16_t value, hugeint_t &result) {
+	result = HugeintConvertInteger<int16_t>(value);
+	return true;
 }
 
 template <>
-hugeint_t Hugeint::Convert(int32_t value) {
-	return HugeintConvertInteger<int32_t>(value);
+bool Hugeint::TryConvert(int32_t value, hugeint_t &result) {
+	result = HugeintConvertInteger<int32_t>(value);
+	return true;
 }
 
 template <>
-hugeint_t Hugeint::Convert(int64_t value) {
-	return HugeintConvertInteger<int64_t>(value);
+bool Hugeint::TryConvert(int64_t value, hugeint_t &result) {
+	result = HugeintConvertInteger<int64_t>(value);
+	return true;
 }
 template <>
-hugeint_t Hugeint::Convert(uint8_t value) {
-	return HugeintConvertInteger<uint8_t>(value);
+bool Hugeint::TryConvert(uint8_t value, hugeint_t &result) {
+	result = HugeintConvertInteger<uint8_t>(value);
+	return true;
 }
 template <>
-hugeint_t Hugeint::Convert(uint16_t value) {
-	return HugeintConvertInteger<uint16_t>(value);
+bool Hugeint::TryConvert(uint16_t value, hugeint_t &result) {
+	result = HugeintConvertInteger<uint16_t>(value);
+	return true;
 }
 template <>
-hugeint_t Hugeint::Convert(uint32_t value) {
-	return HugeintConvertInteger<uint32_t>(value);
+bool Hugeint::TryConvert(uint32_t value, hugeint_t &result) {
+	result = HugeintConvertInteger<uint32_t>(value);
+	return true;
 }
 template <>
-hugeint_t Hugeint::Convert(uint64_t value) {
-	return HugeintConvertInteger<uint64_t>(value);
+bool Hugeint::TryConvert(uint64_t value, hugeint_t &result) {
+	result = HugeintConvertInteger<uint64_t>(value);
+	return true;
 }
 
 template <>
-hugeint_t Hugeint::Convert(float value) {
-	return Hugeint::Convert<double>(value);
+bool Hugeint::TryConvert(float value, hugeint_t &result) {
+	return Hugeint::TryConvert(double(value), result);
 }
 
 template <>
-hugeint_t Hugeint::Convert(double value) {
+bool Hugeint::TryConvert(double value, hugeint_t &result) {
 	if (value <= -170141183460469231731687303715884105728.0 || value >= 170141183460469231731687303715884105727.0) {
-		throw OutOfRangeException("Double out of range of HUGEINT");
+		return false;
 	}
-	hugeint_t result;
 	bool negative = value < 0;
 	if (negative) {
 		value = -value;
@@ -534,7 +544,7 @@ hugeint_t Hugeint::Convert(double value) {
 	if (negative) {
 		NegateInPlace(result);
 	}
-	return result;
+	return true;
 }
 
 //===--------------------------------------------------------------------===//

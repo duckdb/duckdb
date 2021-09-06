@@ -1,0 +1,63 @@
+# name: test/sql/window/test_parallel_window.test_slow
+# description: Hashing and parallel execution
+# group: [window]
+
+require vector_size 512
+
+#statement ok
+#PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+statement ok
+PRAGMA enable_profiling
+
+statement ok
+PRAGMA profiling_output='__TEST_DIR__/test.json'
+
+statement ok
+PRAGMA profiling_mode = detailed
+
+# Create a table large enough to fill the partitions
+statement ok
+create table integers as select range i from range(0, 1000000);
+
+# Exact partition sizes
+query I
+select sum(s)from (
+    select max(i) over(partition by i % 1024 order by i / 1024) s from integers
+) q
+----
+499999500000
+
+# Slightly smaller partition sizes
+query I
+select sum(s)from (
+    select max(i) over(partition by i % 1023 order by i / 1023) s from integers
+) q
+----
+499999500000
+
+# Slightly larger partition sizes
+query I
+select sum(s)from (
+    select max(i) over(partition by i % 1025 order by i / 1025) s from integers
+) q
+----
+499999500000
+
+# Use strings as values to test copying dictionaries across segment boundaries
+statement ok
+create table strings as select i, i::varchar s, (i % 1023)::varchar ms, (i / 2023)::varchar ds from integers;
+
+query II
+select min(len(w)), max(len(w))from (
+    select max(s) over(partition by ms order by ds) w from strings
+) q
+----
+1
+6

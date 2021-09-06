@@ -3,7 +3,6 @@
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 
-#include "duckdb/storage/uncompressed_segment.hpp"
 #include "duckdb/storage/table/chunk_info.hpp"
 
 #include "duckdb/catalog/catalog_entry.hpp"
@@ -39,10 +38,10 @@ void RollbackState::RollbackEntry(UndoFlags type, data_ptr_t data) {
 		info->segment->RollbackUpdate(info);
 		break;
 	}
-	default:
+	default: // LCOV_EXCL_START
 		D_ASSERT(type == UndoFlags::EMPTY_ENTRY);
 		break;
-	}
+	} // LCOV_EXCL_STOP
 }
 
 } // namespace duckdb

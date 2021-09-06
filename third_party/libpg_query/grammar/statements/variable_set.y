@@ -10,19 +10,25 @@ VariableSetStmt:
 			SET set_rest
 				{
 					PGVariableSetStmt *n = $2;
-					n->is_local = false;
+					n->scope = VAR_SET_SCOPE_DEFAULT;
 					$$ = (PGNode *) n;
 				}
 			| SET LOCAL set_rest
 				{
 					PGVariableSetStmt *n = $3;
-					n->is_local = true;
+					n->scope = VAR_SET_SCOPE_LOCAL;
 					$$ = (PGNode *) n;
 				}
 			| SET SESSION set_rest
 				{
 					PGVariableSetStmt *n = $3;
-					n->is_local = false;
+					n->scope = VAR_SET_SCOPE_SESSION;
+					$$ = (PGNode *) n;
+				}
+			| SET GLOBAL set_rest
+				{
+					PGVariableSetStmt *n = $3;
+					n->scope = VAR_SET_SCOPE_GLOBAL;
 					$$ = (PGNode *) n;
 				}
 		;

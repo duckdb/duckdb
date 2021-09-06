@@ -32,10 +32,12 @@ if(AMALGAMATION_BUILD)
   endif()
 
   add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
+  target_link_libraries(duckdb ${CMAKE_DL_LIBS})
+  link_threads(duckdb)
+
   add_library(duckdb_static STATIC
               "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
-
-  link_threads(duckdb)
+  target_link_libraries(duckdb_static ${CMAKE_DL_LIBS})
   link_threads(duckdb_static)
 
   install(FILES "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
@@ -96,7 +98,9 @@ else()
 
 endif()
 
-if(BUILD_PYTHON OR BUILD_R)
+if(BUILD_PYTHON
+   OR BUILD_R
+   OR CONFIGURE_R)
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG}")
   elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -132,13 +136,26 @@ if(BUILD_PYTHON OR BUILD_R)
     endif()
     add_extension_dependencies(duckdb_python)
   endif()
+  if(CONFIGURE_R)
+    add_custom_target(
+      duckdb_configure_r ALL
+      COMMAND
+        DUCKDB_R_BINDIR=${CMAKE_BINARY_DIR}
+        DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
+        DUCKDB_R_LIBS=\"${duckdb_libs}\" python rconfigure.py
+      DEPENDS duckdb
+      WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
+      COMMENT Configure
+      R package)
+    add_extension_dependencies(duckdb_configure_r)
+  endif()
   if(BUILD_R)
     add_custom_target(
       duckdb_r ALL
       COMMAND
         DUCKDB_R_BINDIR=${CMAKE_BINARY_DIR}
         DUCKDB_R_CFLAGS=\"${ALL_COMPILE_FLAGS}\"
-        DUCKDB_R_LIBS=\"${duckdb_libs}\" R CMD INSTALL .
+        DUCKDB_R_LIBS=\"${duckdb_libs}\" DUCKDB_R_DEBUG= R CMD INSTALL .
       DEPENDS duckdb
       WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/tools/rpkg
       COMMENT Build

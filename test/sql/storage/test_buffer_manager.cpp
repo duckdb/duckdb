@@ -1,7 +1,8 @@
 #include "catch.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "test_helpers.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_info.hpp"
+#include "test_helpers.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -12,7 +13,8 @@ TEST_CASE("Test scanning a table and computing an aggregate over a table that ex
 	auto storage_database = TestCreatePath("storage_test");
 	auto config = GetTestConfig();
 
-	// set the maximum memory to 10MB
+	// set the maximum memory to 10MB and force uncompressed so we actually use the memory
+	config->force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
 	config->maximum_memory = 10000000;
 	config->maximum_threads = 1;
 
@@ -119,6 +121,7 @@ TEST_CASE("Test appending and checkpointing a table that exceeds buffer manager 
 	auto config = GetTestConfig();
 
 	// maximum memory is 10MB
+	config->force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
 	config->maximum_memory = 10000000;
 	config->maximum_threads = 1;
 
@@ -170,6 +173,7 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 	DuckDB db(nullptr);
 	Connection con(db);
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=1"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA force_compression='uncompressed'"));
 
 	// initialize an in-memory database of size 10MB
 	uint64_t table_size = (1000 * 1000) / sizeof(int);
@@ -225,4 +229,53 @@ TEST_CASE("Modifying the buffer manager limit at runtime for an in-memory databa
 	// but dropping the table allows us to set the memory limit to 1MB again
 	REQUIRE_NO_FAIL(con.Query("DROP TABLE test"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA memory_limit='1MB'"));
+}
+
+TEST_CASE("Test buffer reallocation", "[storage][.]") {
+	auto storage_database = TestCreatePath("storage_test");
+	auto config = GetTestConfig();
+	// make sure the database does not exist
+	DeleteDatabase(storage_database);
+	DuckDB db(storage_database, config.get());
+
+	// 1GB limit
+	Connection con(db);
+	const idx_t limit = 1000000000;
+	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
+
+	auto &buffer_manager = BufferManager::GetBufferManager(*con.context);
+	D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+
+	idx_t requested_size = Storage::BLOCK_SIZE;
+	auto block = buffer_manager.RegisterMemory(requested_size, false);
+	auto handle = buffer_manager.Pin(block);
+	D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
+
+	for (; requested_size < limit; requested_size *= 2) {
+		// increase size
+		buffer_manager.ReAllocate(block, requested_size);
+		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
+		// unpin and make sure it's evicted
+		handle.reset();
+		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
+		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+		// re-pin
+		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
+		handle = buffer_manager.Pin(block);
+		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
+	}
+	requested_size /= 2;
+	for (; requested_size > Storage::BLOCK_SIZE; requested_size /= 2) {
+		// decrease size
+		buffer_manager.ReAllocate(block, requested_size);
+		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
+		// unpin and make sure it's evicted
+		handle.reset();
+		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", requested_size)));
+		D_ASSERT(buffer_manager.GetUsedMemory() == 0);
+		// re-pin
+		REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", limit)));
+		handle = buffer_manager.Pin(block);
+		D_ASSERT(buffer_manager.GetUsedMemory() == requested_size + Storage::BLOCK_HEADER_SIZE);
+	}
 }

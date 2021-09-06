@@ -36,9 +36,10 @@ static scalar_function_t GetScalarIntegerUnaryFunctionFixedReturn(const LogicalT
 	return function;
 }
 
+template <class OP>
 struct UnaryDoubleWrapper {
-	template <class FUNC, class OP, class INPUT_TYPE, class RESULT_TYPE>
-	static inline RESULT_TYPE Operation(FUNC fun, INPUT_TYPE input, ValidityMask &mask, idx_t idx) {
+	template <class INPUT_TYPE, class RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, ValidityMask &mask, idx_t idx, void *dataptr) {
 		RESULT_TYPE result = OP::template Operation<INPUT_TYPE, RESULT_TYPE>(input);
 		if (std::isnan(result) || std::isinf(result) || errno != 0) {
 			errno = 0;
@@ -47,17 +48,13 @@ struct UnaryDoubleWrapper {
 		}
 		return result;
 	}
-
-	static bool AddsNulls() {
-		return true;
-	}
 };
 
 template <class T, class OP>
 static void UnaryDoubleFunctionWrapper(DataChunk &input, ExpressionState &state, Vector &result) {
 	D_ASSERT(input.ColumnCount() >= 1);
 	errno = 0;
-	UnaryExecutor::Execute<T, T, OP, UnaryDoubleWrapper>(input.data[0], result, input.size());
+	UnaryExecutor::GenericExecute<T, T, UnaryDoubleWrapper<OP>>(input.data[0], result, input.size(), nullptr, true);
 }
 
 struct BinaryDoubleWrapper {
@@ -110,8 +107,7 @@ unique_ptr<FunctionData> BindNextAfter(ClientContext &context, ScalarFunction &f
 	    (arguments[0]->return_type != LogicalType::FLOAT && arguments[0]->return_type != LogicalType::DOUBLE)) {
 		throw NotImplementedException("Unimplemented type for NextAfter Function");
 	}
-
-	return make_unique<FunctionData>();
+	return nullptr;
 }
 
 void NextAfterFun::RegisterFunction(BuiltinFunctions &set) {
@@ -312,7 +308,7 @@ void CeilFun::RegisterFunction(BuiltinFunctions &set) {
 			bind_func = BindGenericRoundFunctionDecimal<CeilDecimalOperator>;
 			break;
 		default:
-			throw NotImplementedException("Unimplemented numeric type for function \"ceil\"");
+			throw InternalException("Unimplemented numeric type for function \"ceil\"");
 		}
 		ceil.AddFunction(ScalarFunction({type}, type, func, false, bind_func));
 	}
@@ -368,7 +364,7 @@ void FloorFun::RegisterFunction(BuiltinFunctions &set) {
 			bind_func = BindGenericRoundFunctionDecimal<FloorDecimalOperator>;
 			break;
 		default:
-			throw NotImplementedException("Unimplemented numeric type for function \"floor\"");
+			throw InternalException("Unimplemented numeric type for function \"floor\"");
 		}
 		floor.AddFunction(ScalarFunction({type}, type, func, false, bind_func));
 	}
@@ -459,6 +455,7 @@ static void DecimalRoundNegativePrecisionFunction(DataChunk &input, ExpressionSt
 	T divide_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale + source_scale];
 	T multiply_power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[-info.target_scale];
 	T addition = divide_power_of_ten / 2;
+
 	UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
 		if (input < 0) {
 			input -= addition;
@@ -574,7 +571,7 @@ void RoundFun::RegisterFunction(BuiltinFunctions &set) {
 			bind_prec_func = BindDecimalRoundPrecision;
 			break;
 		default:
-			throw NotImplementedException("Unimplemented numeric type for function \"floor\"");
+			throw InternalException("Unimplemented numeric type for function \"floor\"");
 		}
 		round.AddFunction(ScalarFunction({type}, type, round_func, false, bind_func));
 		round.AddFunction(ScalarFunction({type, LogicalType::INTEGER}, type, round_prec_func, false, bind_prec_func));

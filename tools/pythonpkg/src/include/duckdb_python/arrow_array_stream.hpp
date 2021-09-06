@@ -8,36 +8,25 @@
 
 #pragma once
 
-#include <string>
+#include "duckdb/common/arrow_wrapper.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/constants.hpp"
-#include "duckdb/common/arrow_wrapper.hpp"
 #include "pybind_wrapper.hpp"
+
+#include "duckdb/function/table_function.hpp"
+#include <string>
+#include <vector>
 namespace duckdb {
 class PythonTableArrowArrayStreamFactory {
 public:
-	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table) : arrow_table(arrow_table) {};
-	static unique_ptr<ArrowArrayStreamWrapper> Produce(uintptr_t factory);
-	PyObject *arrow_table;
-};
-
-class PythonTableArrowArrayStream {
-public:
-	explicit PythonTableArrowArrayStream(PyObject *arrow_table, PythonTableArrowArrayStreamFactory *factory);
-
-	unique_ptr<ArrowArrayStreamWrapper> stream;
-	PythonTableArrowArrayStreamFactory *factory;
+	explicit PythonTableArrowArrayStreamFactory(PyObject *arrow_table) : arrow_object(arrow_table) {};
+	static unique_ptr<ArrowArrayStreamWrapper>
+	Produce(uintptr_t factory, std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
+	        TableFilterCollection *filters = nullptr);
+	PyObject *arrow_object;
 
 private:
-	static void InitializeFunctionPointers(ArrowArrayStream *stream);
-	static int GetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);
-	static int GetNext(struct ArrowArrayStream *stream, struct ArrowArray *out);
-	static void Release(struct ArrowArrayStream *stream);
-	static const char *GetLastError(struct ArrowArrayStream *stream);
-
-	std::string last_error;
-	PyObject *arrow_table;
-	py::list batches;
-	std::atomic<idx_t> chunk_idx;
+	//! We transform a TableFilterCollection to an Arrow Expression Object
+	static py::object TransformFilter(TableFilterCollection &filters, std::unordered_map<idx_t, string> &columns);
 };
 } // namespace duckdb

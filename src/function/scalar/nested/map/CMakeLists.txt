@@ -1,5 +1,0 @@
-add_library_unity(duckdb_func_map_nested OBJECT map.cpp cardinality.cpp)
-
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_map_nested>
-    PARENT_SCOPE)

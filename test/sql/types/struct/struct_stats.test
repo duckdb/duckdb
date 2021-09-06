@@ -1,0 +1,30 @@
+# name: test/sql/types/struct/struct_stats.test
+# description: Test stats propagation for structs
+# group: [struct]
+
+# struct stats
+query I
+SELECT STATS({'i': 3, 'j': 4})
+----
+<REGEX>:.*3.*4.*
+
+query I
+SELECT STATS(NULL::ROW(i INTEGER))
+----
+<REGEX>:.*Has Null: true.*
+
+statement ok
+CREATE TABLE integers AS SELECT 3 i, 4 j
+
+query I
+SELECT STATS({'i': i, 'j': j}) FROM integers
+----
+<REGEX>:.*3.*4.*
+
+statement ok
+CREATE TABLE structs AS SELECT {'i': 3, 'j': 4} s
+
+query I
+SELECT STATS(s['i']) FROM structs
+----
+<REGEX>:.*3.*3.*

@@ -1,0 +1,33 @@
+# name: test/sql/storage/compression/rle/rle_medium.test
+# description: Test medium storage with RLE (> vector size)
+# group: [rle]
+
+# load the DB from disk
+load __TEST_DIR__/test_rle.db
+
+statement ok
+PRAGMA force_compression = 'rle'
+
+# simple RLE with few values
+statement ok
+CREATE TABLE test (a INTEGER);
+
+statement ok
+INSERT INTO test SELECT * FROM repeat(1, 1000);
+INSERT INTO test SELECT * FROM repeat(2, 1000);
+INSERT INTO test SELECT * FROM repeat(3, 1000);
+INSERT INTO test SELECT * FROM repeat(4, 1000);
+INSERT INTO test SELECT * FROM repeat(5, 1000);
+INSERT INTO test SELECT * FROM repeat(6, 1000);
+
+query IIII
+SELECT SUM(a), MIN(a), MAX(a), COUNT(*) FROM test
+----
+21000	1	6	6000
+
+restart
+
+query IIII
+SELECT SUM(a), MIN(a), MAX(a), COUNT(*) FROM test
+----
+21000	1	6	6000

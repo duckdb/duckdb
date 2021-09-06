@@ -9,56 +9,68 @@
 
 namespace duckdb {
 
-DatePartSpecifier GetDatePartSpecifier(string specifier) {
-	specifier = StringUtil::Lower(specifier);
+bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &result) {
+	auto specifier = StringUtil::Lower(specifier_p);
 	if (specifier == "year" || specifier == "y" || specifier == "years") {
-		return DatePartSpecifier::YEAR;
+		result = DatePartSpecifier::YEAR;
 	} else if (specifier == "month" || specifier == "mon" || specifier == "months" || specifier == "mons") {
-		return DatePartSpecifier::MONTH;
+		result = DatePartSpecifier::MONTH;
 	} else if (specifier == "day" || specifier == "days" || specifier == "d") {
-		return DatePartSpecifier::DAY;
+		result = DatePartSpecifier::DAY;
 	} else if (specifier == "decade" || specifier == "decades") {
-		return DatePartSpecifier::DECADE;
+		result = DatePartSpecifier::DECADE;
 	} else if (specifier == "century" || specifier == "centuries") {
-		return DatePartSpecifier::CENTURY;
+		result = DatePartSpecifier::CENTURY;
 	} else if (specifier == "millennium" || specifier == "millenia") {
-		return DatePartSpecifier::MILLENNIUM;
+		result = DatePartSpecifier::MILLENNIUM;
 	} else if (specifier == "microseconds" || specifier == "microsecond") {
-		return DatePartSpecifier::MICROSECONDS;
+		result = DatePartSpecifier::MICROSECONDS;
 	} else if (specifier == "milliseconds" || specifier == "millisecond" || specifier == "ms" || specifier == "msec" ||
 	           specifier == "msecs") {
-		return DatePartSpecifier::MILLISECONDS;
+		result = DatePartSpecifier::MILLISECONDS;
 	} else if (specifier == "second" || specifier == "seconds" || specifier == "s") {
-		return DatePartSpecifier::SECOND;
+		result = DatePartSpecifier::SECOND;
 	} else if (specifier == "minute" || specifier == "minutes" || specifier == "m") {
-		return DatePartSpecifier::MINUTE;
+		result = DatePartSpecifier::MINUTE;
 	} else if (specifier == "hour" || specifier == "hours" || specifier == "h") {
-		return DatePartSpecifier::HOUR;
+		result = DatePartSpecifier::HOUR;
 	} else if (specifier == "epoch") {
 		// seconds since 1970-01-01
-		return DatePartSpecifier::EPOCH;
+		result = DatePartSpecifier::EPOCH;
 	} else if (specifier == "dow") {
 		// day of the week (Sunday = 0, Saturday = 6)
-		return DatePartSpecifier::DOW;
+		result = DatePartSpecifier::DOW;
 	} else if (specifier == "isodow") {
 		// isodow (Monday = 1, Sunday = 7)
-		return DatePartSpecifier::ISODOW;
+		result = DatePartSpecifier::ISODOW;
 	} else if (specifier == "week" || specifier == "weeks" || specifier == "w") {
 		// week number
-		return DatePartSpecifier::WEEK;
-	} else if (specifier == "doy") {
+		result = DatePartSpecifier::WEEK;
+	} else if (specifier == "doy" || specifier == "dayofyear") {
 		// day of the year (1-365/366)
-		return DatePartSpecifier::DOY;
-	} else if (specifier == "quarter") {
+		result = DatePartSpecifier::DOY;
+	} else if (specifier == "quarter" || specifier == "quarters") {
 		// quarter of the year (1-4)
-		return DatePartSpecifier::QUARTER;
+		result = DatePartSpecifier::QUARTER;
+	} else if (specifier == "yearweek") {
+		// Combined year and week YYYYWW
+		result = DatePartSpecifier::YEARWEEK;
 	} else {
+		return false;
+	}
+	return true;
+}
+
+DatePartSpecifier GetDatePartSpecifier(const string &specifier) {
+	DatePartSpecifier result;
+	if (!TryGetDatePartSpecifier(specifier, result)) {
 		throw ConversionException("extract specifier \"%s\" not recognized", specifier);
 	}
+	return result;
 }
 
 template <class T>
-static void LastYearOperator(DataChunk &args, ExpressionState &state, Vector &result) {
+static void LastYearFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	int32_t last_year = 0;
 	UnaryExecutor::Execute<T, int64_t>(args.data[0], result, args.size(),
 	                                   [&](T input) { return Date::ExtractYear(input, &last_year); });
@@ -103,7 +115,7 @@ static unique_ptr<BaseStatistics> PropagateSimpleDatePartStatistics(vector<uniqu
 	return move(result);
 }
 
-struct DateDatePart {
+struct DatePart {
 	struct YearOperator {
 		template <class TA, class TR>
 		static inline TR Operation(TA input) {
@@ -363,503 +375,329 @@ struct DateDatePart {
 	};
 };
 
-struct TimeDatePart {
-	struct YearOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"year\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, YearOperator>(child_stats);
-		}
-	};
-
-	struct MonthOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"month\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			// min/max of month operator is [1, 12]
-			return PropagateSimpleDatePartStatistics<1, 12>(child_stats);
-		}
-	};
-
-	struct DayOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"month\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			// min/max of day operator is [1, 31]
-			return PropagateSimpleDatePartStatistics<1, 31>(child_stats);
-		}
-	};
-
-	struct DecadeOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"decade\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, DecadeOperator>(child_stats);
-		}
-	};
-
-	struct CenturyOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"century\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, CenturyOperator>(child_stats);
-		}
-	};
-
-	struct MilleniumOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"millennium\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, MilleniumOperator>(child_stats);
-		}
-	};
-
-	struct QuarterOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"quarter\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			// min/max of quarter operator is [1, 4]
-			return PropagateSimpleDatePartStatistics<1, 4>(child_stats);
-		}
-	};
-
-	struct DayOfWeekOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			// day of the week (Sunday = 0, Saturday = 6)
-			// turn sunday into 0 by doing mod 7
-			throw NotImplementedException("\"time\" units \"dow\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 6>(child_stats);
-		}
-	};
-
-	struct ISODayOfWeekOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			// isodow (Monday = 1, Sunday = 7)
-			throw NotImplementedException("\"time\" units \"isodow\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<1, 7>(child_stats);
-		}
-	};
-
-	struct DayOfYearOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"doy\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<1, 366>(child_stats);
-		}
-	};
-
-	struct WeekOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"week\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<1, 54>(child_stats);
-		}
-	};
-
-	struct YearWeekOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			throw NotImplementedException("\"time\" units \"yearweek\" not recognized");
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateDatePartStatistics<T, YearWeekOperator>(child_stats);
-		}
-	};
-
-	struct MicrosecondsOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			// remove everything but the second & microsecond part
-			return input.micros % Interval::MICROS_PER_MINUTE;
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 60000000>(child_stats);
-		}
-	};
-
-	struct MillisecondsOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			return MicrosecondsOperator::Operation<TA, TR>(input) / Interval::MICROS_PER_MSEC;
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 60000>(child_stats);
-		}
-	};
-
-	struct SecondsOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			return MicrosecondsOperator::Operation<TA, TR>(input) / Interval::MICROS_PER_SEC;
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 60>(child_stats);
-		}
-	};
-
-	struct MinutesOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			return (input.micros % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 60>(child_stats);
-		}
-	};
-
-	struct HoursOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			return input.micros / Interval::MICROS_PER_HOUR;
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			return PropagateSimpleDatePartStatistics<0, 24>(child_stats);
-		}
-	};
-
-	struct EpochOperator {
-		template <class TA, class TR>
-		static inline TR Operation(TA input) {
-			return SecondsOperator::Operation<TA, TR>(input);
-		}
-
-		template <class T>
-		static unique_ptr<BaseStatistics> PropagateStatistics(ClientContext &context, BoundFunctionExpression &expr,
-		                                                      FunctionData *bind_data,
-		                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
-			// time seconds range over a single day
-			return PropagateSimpleDatePartStatistics<0, 86400>(child_stats);
-		}
-	};
-};
-
 template <>
-int64_t DateDatePart::YearOperator::Operation(timestamp_t input) {
+int64_t DatePart::YearOperator::Operation(timestamp_t input) {
 	return YearOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 template <>
-int64_t DateDatePart::YearOperator::Operation(interval_t input) {
+int64_t DatePart::YearOperator::Operation(interval_t input) {
 	return input.months / Interval::MONTHS_PER_YEAR;
 }
 
 template <>
-int64_t DateDatePart::MonthOperator::Operation(timestamp_t input) {
+int64_t DatePart::YearOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"year\" not recognized");
+}
+
+template <>
+int64_t DatePart::MonthOperator::Operation(timestamp_t input) {
 	return MonthOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 template <>
-int64_t DateDatePart::MonthOperator::Operation(interval_t input) {
+int64_t DatePart::MonthOperator::Operation(interval_t input) {
 	return input.months % Interval::MONTHS_PER_YEAR;
 }
 
 template <>
-unique_ptr<BaseStatistics>
-DateDatePart::MonthOperator::PropagateStatistics<interval_t>(ClientContext &context, BoundFunctionExpression &expr,
-                                                             FunctionData *bind_data,
-                                                             vector<unique_ptr<BaseStatistics>> &child_stats) {
-	// interval months range from 0-11
-	return PropagateSimpleDatePartStatistics<0, 11>(child_stats);
+int64_t DatePart::MonthOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"month\" not recognized");
 }
 
 template <>
-int64_t DateDatePart::DayOperator::Operation(timestamp_t input) {
+int64_t DatePart::DayOperator::Operation(timestamp_t input) {
 	return DayOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 template <>
-int64_t DateDatePart::DayOperator::Operation(interval_t input) {
+int64_t DatePart::DayOperator::Operation(interval_t input) {
 	return input.days;
 }
 
 template <>
-int64_t DateDatePart::DecadeOperator::Operation(interval_t input) {
+int64_t DatePart::DayOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"day\" not recognized");
+}
+
+template <>
+int64_t DatePart::DecadeOperator::Operation(interval_t input) {
 	return input.months / Interval::MONTHS_PER_DECADE;
 }
 
 template <>
-int64_t DateDatePart::CenturyOperator::Operation(interval_t input) {
+int64_t DatePart::DecadeOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"decade\" not recognized");
+}
+
+template <>
+int64_t DatePart::CenturyOperator::Operation(interval_t input) {
 	return input.months / Interval::MONTHS_PER_CENTURY;
 }
 
 template <>
-int64_t DateDatePart::MilleniumOperator::Operation(interval_t input) {
+int64_t DatePart::CenturyOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"century\" not recognized");
+}
+
+template <>
+int64_t DatePart::MilleniumOperator::Operation(interval_t input) {
 	return input.months / Interval::MONTHS_PER_MILLENIUM;
 }
 
 template <>
-int64_t DateDatePart::QuarterOperator::Operation(timestamp_t input) {
+int64_t DatePart::MilleniumOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"millennium\" not recognized");
+}
+
+template <>
+int64_t DatePart::QuarterOperator::Operation(timestamp_t input) {
 	return QuarterOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 template <>
-int64_t DateDatePart::QuarterOperator::Operation(interval_t input) {
+int64_t DatePart::QuarterOperator::Operation(interval_t input) {
 	return MonthOperator::Operation<interval_t, int64_t>(input) / Interval::MONTHS_PER_QUARTER + 1;
 }
 
 template <>
-unique_ptr<BaseStatistics>
-DateDatePart::QuarterOperator::PropagateStatistics<interval_t>(ClientContext &context, BoundFunctionExpression &expr,
-                                                               FunctionData *bind_data,
-                                                               vector<unique_ptr<BaseStatistics>> &child_stats) {
-	// negative interval quarters range from -2 to 4
-	return PropagateSimpleDatePartStatistics<-2, 4>(child_stats);
+int64_t DatePart::QuarterOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"quarter\" not recognized");
 }
 
 template <>
-int64_t DateDatePart::DayOfWeekOperator::Operation(timestamp_t input) {
+int64_t DatePart::DayOfWeekOperator::Operation(timestamp_t input) {
 	return DayOfWeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 template <>
-int64_t DateDatePart::DayOfWeekOperator::Operation(interval_t input) {
+int64_t DatePart::DayOfWeekOperator::Operation(interval_t input) {
 	throw NotImplementedException("interval units \"dow\" not recognized");
 }
 
 template <>
-int64_t DateDatePart::ISODayOfWeekOperator::Operation(timestamp_t input) {
+int64_t DatePart::DayOfWeekOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"dow\" not recognized");
+}
+
+template <>
+int64_t DatePart::ISODayOfWeekOperator::Operation(timestamp_t input) {
 	return ISODayOfWeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 template <>
-int64_t DateDatePart::ISODayOfWeekOperator::Operation(interval_t input) {
+int64_t DatePart::ISODayOfWeekOperator::Operation(interval_t input) {
 	throw NotImplementedException("interval units \"isodow\" not recognized");
 }
 
 template <>
-int64_t DateDatePart::DayOfYearOperator::Operation(timestamp_t input) {
+int64_t DatePart::ISODayOfWeekOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"isodow\" not recognized");
+}
+
+template <>
+int64_t DatePart::DayOfYearOperator::Operation(timestamp_t input) {
 	return DayOfYearOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 template <>
-int64_t DateDatePart::DayOfYearOperator::Operation(interval_t input) {
+int64_t DatePart::DayOfYearOperator::Operation(interval_t input) {
 	throw NotImplementedException("interval units \"doy\" not recognized");
 }
 
 template <>
-int64_t DateDatePart::WeekOperator::Operation(timestamp_t input) {
+int64_t DatePart::DayOfYearOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"doy\" not recognized");
+}
+
+template <>
+int64_t DatePart::WeekOperator::Operation(timestamp_t input) {
 	return WeekOperator::Operation<date_t, int64_t>(Timestamp::GetDate(input));
 }
 
 template <>
-int64_t DateDatePart::WeekOperator::Operation(interval_t input) {
+int64_t DatePart::WeekOperator::Operation(interval_t input) {
 	throw NotImplementedException("interval units \"week\" not recognized");
 }
 
 template <>
-int64_t DateDatePart::MicrosecondsOperator::Operation(timestamp_t input) {
+int64_t DatePart::WeekOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"week\" not recognized");
+}
+
+template <>
+int64_t DatePart::YearWeekOperator::Operation(dtime_t input) {
+	throw NotImplementedException("\"time\" units \"yearweek\" not recognized");
+}
+
+template <>
+int64_t DatePart::MicrosecondsOperator::Operation(timestamp_t input) {
 	auto time = Timestamp::GetTime(input);
 	// remove everything but the second & microsecond part
 	return time.micros % Interval::MICROS_PER_MINUTE;
 }
 
 template <>
-int64_t DateDatePart::MicrosecondsOperator::Operation(interval_t input) {
+int64_t DatePart::MicrosecondsOperator::Operation(interval_t input) {
 	// remove everything but the second & microsecond part
 	return input.micros;
 }
 
 template <>
-int64_t DateDatePart::MillisecondsOperator::Operation(timestamp_t input) {
+int64_t DatePart::MicrosecondsOperator::Operation(dtime_t input) {
+	// remove everything but the second & microsecond part
+	return input.micros % Interval::MICROS_PER_MINUTE;
+}
+
+template <>
+int64_t DatePart::MillisecondsOperator::Operation(timestamp_t input) {
 	return MicrosecondsOperator::Operation<timestamp_t, int64_t>(input) / Interval::MICROS_PER_MSEC;
 }
 
 template <>
-int64_t DateDatePart::MillisecondsOperator::Operation(interval_t input) {
+int64_t DatePart::MillisecondsOperator::Operation(interval_t input) {
 	return MicrosecondsOperator::Operation<interval_t, int64_t>(input) / Interval::MICROS_PER_MSEC;
 }
 
 template <>
-int64_t DateDatePart::SecondsOperator::Operation(timestamp_t input) {
+int64_t DatePart::MillisecondsOperator::Operation(dtime_t input) {
+	return MicrosecondsOperator::Operation<dtime_t, int64_t>(input) / Interval::MICROS_PER_MSEC;
+}
+
+template <>
+int64_t DatePart::SecondsOperator::Operation(timestamp_t input) {
 	return MicrosecondsOperator::Operation<timestamp_t, int64_t>(input) / Interval::MICROS_PER_SEC;
 }
 
 template <>
-int64_t DateDatePart::SecondsOperator::Operation(interval_t input) {
+int64_t DatePart::SecondsOperator::Operation(interval_t input) {
 	return MicrosecondsOperator::Operation<interval_t, int64_t>(input) / Interval::MICROS_PER_SEC;
 }
 
 template <>
-int64_t DateDatePart::MinutesOperator::Operation(timestamp_t input) {
+int64_t DatePart::SecondsOperator::Operation(dtime_t input) {
+	return MicrosecondsOperator::Operation<dtime_t, int64_t>(input) / Interval::MICROS_PER_SEC;
+}
+
+template <>
+int64_t DatePart::MinutesOperator::Operation(timestamp_t input) {
 	auto time = Timestamp::GetTime(input);
 	// remove the hour part, and truncate to minutes
 	return (time.micros % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
 }
 
 template <>
-int64_t DateDatePart::MinutesOperator::Operation(interval_t input) {
+int64_t DatePart::MinutesOperator::Operation(interval_t input) {
 	// remove the hour part, and truncate to minutes
 	return (input.micros % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
 }
 
 template <>
-int64_t DateDatePart::HoursOperator::Operation(timestamp_t input) {
+int64_t DatePart::MinutesOperator::Operation(dtime_t input) {
+	// remove the hour part, and truncate to minutes
+	return (input.micros % Interval::MICROS_PER_HOUR) / Interval::MICROS_PER_MINUTE;
+}
+
+template <>
+int64_t DatePart::HoursOperator::Operation(timestamp_t input) {
 	return Timestamp::GetTime(input).micros / Interval::MICROS_PER_HOUR;
 }
 
 template <>
-int64_t DateDatePart::HoursOperator::Operation(interval_t input) {
+int64_t DatePart::HoursOperator::Operation(interval_t input) {
 	return input.micros / Interval::MICROS_PER_HOUR;
 }
 
 template <>
-int64_t DateDatePart::EpochOperator::Operation(timestamp_t input) {
+int64_t DatePart::HoursOperator::Operation(dtime_t input) {
+	return input.micros / Interval::MICROS_PER_HOUR;
+}
+
+template <>
+int64_t DatePart::EpochOperator::Operation(timestamp_t input) {
 	return Timestamp::GetEpochSeconds(input);
 }
 
 template <>
-int64_t DateDatePart::EpochOperator::Operation(interval_t input) {
+int64_t DatePart::EpochOperator::Operation(interval_t input) {
 	auto secs = SecondsOperator::Operation<interval_t, int64_t>(input);
 	return (input.months * Interval::DAYS_PER_MONTH + input.days) * Interval::SECS_PER_DAY + secs;
 }
 
-template <class T, class OP>
+template <>
+int64_t DatePart::EpochOperator::Operation(dtime_t input) {
+	return SecondsOperator::Operation<dtime_t, int64_t>(input);
+}
+
+template <>
+unique_ptr<BaseStatistics>
+DatePart::EpochOperator::PropagateStatistics<dtime_t>(ClientContext &context, BoundFunctionExpression &expr,
+                                                      FunctionData *bind_data,
+                                                      vector<unique_ptr<BaseStatistics>> &child_stats) {
+	// time seconds range over a single day
+	return PropagateSimpleDatePartStatistics<0, 86400>(child_stats);
+}
+
+template <class T>
 static int64_t ExtractElement(DatePartSpecifier type, T element) {
 	switch (type) {
 	case DatePartSpecifier::YEAR:
-		return OP::YearOperator::template Operation<T, int64_t>(element);
+		return DatePart::YearOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MONTH:
-		return OP::MonthOperator::template Operation<T, int64_t>(element);
+		return DatePart::MonthOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::DAY:
-		return OP::DayOperator::template Operation<T, int64_t>(element);
+		return DatePart::DayOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::DECADE:
-		return OP::DecadeOperator::template Operation<T, int64_t>(element);
+		return DatePart::DecadeOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::CENTURY:
-		return OP::CenturyOperator::template Operation<T, int64_t>(element);
+		return DatePart::CenturyOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MILLENNIUM:
-		return OP::MilleniumOperator::template Operation<T, int64_t>(element);
+		return DatePart::MilleniumOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::QUARTER:
-		return OP::QuarterOperator::template Operation<T, int64_t>(element);
+		return DatePart::QuarterOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::DOW:
-		return OP::DayOfWeekOperator::template Operation<T, int64_t>(element);
+		return DatePart::DayOfWeekOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::ISODOW:
-		return OP::ISODayOfWeekOperator::template Operation<T, int64_t>(element);
+		return DatePart::ISODayOfWeekOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::DOY:
-		return OP::DayOfYearOperator::template Operation<T, int64_t>(element);
+		return DatePart::DayOfYearOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::WEEK:
-		return OP::WeekOperator::template Operation<T, int64_t>(element);
+		return DatePart::WeekOperator::template Operation<T, int64_t>(element);
+	case DatePartSpecifier::YEARWEEK:
+		return DatePart::YearWeekOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::EPOCH:
-		return OP::EpochOperator::template Operation<T, int64_t>(element);
+		return DatePart::EpochOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MICROSECONDS:
-		return OP::MicrosecondsOperator::template Operation<T, int64_t>(element);
+		return DatePart::MicrosecondsOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MILLISECONDS:
-		return OP::MillisecondsOperator::template Operation<T, int64_t>(element);
+		return DatePart::MillisecondsOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::SECOND:
-		return OP::SecondsOperator::template Operation<T, int64_t>(element);
+		return DatePart::SecondsOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::MINUTE:
-		return OP::MinutesOperator::template Operation<T, int64_t>(element);
+		return DatePart::MinutesOperator::template Operation<T, int64_t>(element);
 	case DatePartSpecifier::HOUR:
-		return OP::HoursOperator::template Operation<T, int64_t>(element);
+		return DatePart::HoursOperator::template Operation<T, int64_t>(element);
 	default:
-		throw NotImplementedException("Specifier type not implemented");
+		throw NotImplementedException("Specifier type not implemented for DATEPART");
 	}
 }
 
-struct DateDatePartOperator {
+struct DatePartBinaryOperator {
 	template <class TA, class TB, class TR>
 	static inline TR Operation(TA specifier, TB date) {
-		return ExtractElement<TB, DateDatePart>(GetDatePartSpecifier(specifier.GetString()), date);
+		return ExtractElement<TB>(GetDatePartSpecifier(specifier.GetString()), date);
 	}
 };
 
-struct TimeDatePartOperator {
-	template <class TA, class TB, class TR>
-	static inline TR Operation(TA specifier, TB date) {
-		return ExtractElement<TB, TimeDatePart>(GetDatePartSpecifier(specifier.GetString()), date);
-	}
-};
+template <typename T>
+static void DatePartFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 2);
+	auto &part_arg = args.data[0];
+	auto &date_arg = args.data[1];
+
+	BinaryExecutor::ExecuteStandard<string_t, T, int64_t, DatePartBinaryOperator>(part_arg, date_arg, result,
+	                                                                              args.size());
+}
 
 void AddGenericDatePartOperator(BuiltinFunctions &set, const string &name, scalar_function_t date_func,
                                 scalar_function_t ts_func, scalar_function_t interval_func,
@@ -896,14 +734,13 @@ void AddGenericTimePartOperator(BuiltinFunctions &set, const string &name, scala
 	set.AddFunction(operator_set);
 }
 
-template <class DOP, class TOP>
+template <class OP>
 static void AddTimePartOperator(BuiltinFunctions &set, string name) {
 	AddGenericTimePartOperator(
-	    set, name, ScalarFunction::UnaryFunction<date_t, int64_t, DOP>,
-	    ScalarFunction::UnaryFunction<timestamp_t, int64_t, DOP>,
-	    ScalarFunction::UnaryFunction<interval_t, int64_t, DOP>, ScalarFunction::UnaryFunction<dtime_t, int64_t, TOP>,
-	    DOP::template PropagateStatistics<date_t>, DOP::template PropagateStatistics<timestamp_t>,
-	    TOP::template PropagateStatistics<dtime_t>);
+	    set, name, ScalarFunction::UnaryFunction<date_t, int64_t, OP>,
+	    ScalarFunction::UnaryFunction<timestamp_t, int64_t, OP>, ScalarFunction::UnaryFunction<interval_t, int64_t, OP>,
+	    ScalarFunction::UnaryFunction<dtime_t, int64_t, OP>, OP::template PropagateStatistics<date_t>,
+	    OP::template PropagateStatistics<timestamp_t>, OP::template PropagateStatistics<dtime_t>);
 }
 
 struct LastDayOperator {
@@ -926,47 +763,47 @@ date_t LastDayOperator::Operation(timestamp_t input) {
 struct MonthNameOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return Date::MONTH_NAMES[DateDatePart::MonthOperator::Operation<TA, int64_t>(input) - 1];
+		return Date::MONTH_NAMES[DatePart::MonthOperator::Operation<TA, int64_t>(input) - 1];
 	}
 };
 
 struct DayNameOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA input) {
-		return Date::DAY_NAMES[DateDatePart::DayOfWeekOperator::Operation<TA, int64_t>(input)];
+		return Date::DAY_NAMES[DatePart::DayOfWeekOperator::Operation<TA, int64_t>(input)];
 	}
 };
 
 void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// register the individual operators
-	AddGenericDatePartOperator(set, "year", LastYearOperator<date_t>, LastYearOperator<timestamp_t>,
-	                           ScalarFunction::UnaryFunction<interval_t, int64_t, DateDatePart::YearOperator>,
-	                           DateDatePart::YearOperator::PropagateStatistics<date_t>,
-	                           DateDatePart::YearOperator::PropagateStatistics<timestamp_t>);
-	AddDatePartOperator<DateDatePart::MonthOperator>(set, "month");
-	AddDatePartOperator<DateDatePart::DayOperator>(set, "day");
-	AddDatePartOperator<DateDatePart::DecadeOperator>(set, "decade");
-	AddDatePartOperator<DateDatePart::CenturyOperator>(set, "century");
-	AddDatePartOperator<DateDatePart::MilleniumOperator>(set, "millenium");
-	AddDatePartOperator<DateDatePart::QuarterOperator>(set, "quarter");
-	AddDatePartOperator<DateDatePart::DayOfWeekOperator>(set, "dayofweek");
-	AddDatePartOperator<DateDatePart::ISODayOfWeekOperator>(set, "isodow");
-	AddDatePartOperator<DateDatePart::DayOfYearOperator>(set, "dayofyear");
-	AddDatePartOperator<DateDatePart::WeekOperator>(set, "week");
-	AddTimePartOperator<DateDatePart::EpochOperator, TimeDatePart::EpochOperator>(set, "epoch");
-	AddTimePartOperator<DateDatePart::MicrosecondsOperator, TimeDatePart::MicrosecondsOperator>(set, "microsecond");
-	AddTimePartOperator<DateDatePart::MillisecondsOperator, TimeDatePart::MillisecondsOperator>(set, "millisecond");
-	AddTimePartOperator<DateDatePart::SecondsOperator, TimeDatePart::SecondsOperator>(set, "second");
-	AddTimePartOperator<DateDatePart::MinutesOperator, TimeDatePart::MinutesOperator>(set, "minute");
-	AddTimePartOperator<DateDatePart::HoursOperator, TimeDatePart::HoursOperator>(set, "hour");
+	AddGenericDatePartOperator(set, "year", LastYearFunction<date_t>, LastYearFunction<timestamp_t>,
+	                           ScalarFunction::UnaryFunction<interval_t, int64_t, DatePart::YearOperator>,
+	                           DatePart::YearOperator::PropagateStatistics<date_t>,
+	                           DatePart::YearOperator::PropagateStatistics<timestamp_t>);
+	AddDatePartOperator<DatePart::MonthOperator>(set, "month");
+	AddDatePartOperator<DatePart::DayOperator>(set, "day");
+	AddDatePartOperator<DatePart::DecadeOperator>(set, "decade");
+	AddDatePartOperator<DatePart::CenturyOperator>(set, "century");
+	AddDatePartOperator<DatePart::MilleniumOperator>(set, "millenium");
+	AddDatePartOperator<DatePart::QuarterOperator>(set, "quarter");
+	AddDatePartOperator<DatePart::DayOfWeekOperator>(set, "dayofweek");
+	AddDatePartOperator<DatePart::ISODayOfWeekOperator>(set, "isodow");
+	AddDatePartOperator<DatePart::DayOfYearOperator>(set, "dayofyear");
+	AddDatePartOperator<DatePart::WeekOperator>(set, "week");
+	AddTimePartOperator<DatePart::EpochOperator>(set, "epoch");
+	AddTimePartOperator<DatePart::MicrosecondsOperator>(set, "microsecond");
+	AddTimePartOperator<DatePart::MillisecondsOperator>(set, "millisecond");
+	AddTimePartOperator<DatePart::SecondsOperator>(set, "second");
+	AddTimePartOperator<DatePart::MinutesOperator>(set, "minute");
+	AddTimePartOperator<DatePart::HoursOperator>(set, "hour");
 
 	//  register combinations
-	AddDatePartOperator<DateDatePart::YearWeekOperator>(set, "yearweek");
+	AddDatePartOperator<DatePart::YearWeekOperator>(set, "yearweek");
 
 	//  register various aliases
-	AddDatePartOperator<DateDatePart::DayOperator>(set, "dayofmonth");
-	AddDatePartOperator<DateDatePart::DayOfWeekOperator>(set, "weekday");
-	AddDatePartOperator<DateDatePart::WeekOperator>(set, "weekofyear"); //  Note that WeekOperator is ISO-8601, not US
+	AddDatePartOperator<DatePart::DayOperator>(set, "dayofmonth");
+	AddDatePartOperator<DatePart::DayOfWeekOperator>(set, "weekday");
+	AddDatePartOperator<DatePart::WeekOperator>(set, "weekofyear"); //  Note that WeekOperator is ISO-8601, not US
 
 	//  register the last_day function
 	ScalarFunctionSet last_day("last_day");
@@ -995,17 +832,13 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	// finally the actual date_part function
 	ScalarFunctionSet date_part("date_part");
 	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, date_t, int64_t, DateDatePartOperator>));
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::DATE}, LogicalType::BIGINT, DatePartFunction<date_t>));
+	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
+	                                     DatePartFunction<timestamp_t>));
 	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, timestamp_t, int64_t, DateDatePartOperator>));
-	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, dtime_t, int64_t, TimeDatePartOperator>));
-	date_part.AddFunction(
-	    ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::BIGINT,
-	                   ScalarFunction::BinaryFunction<string_t, interval_t, int64_t, DateDatePartOperator>));
+	    ScalarFunction({LogicalType::VARCHAR, LogicalType::TIME}, LogicalType::BIGINT, DatePartFunction<dtime_t>));
+	date_part.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTERVAL}, LogicalType::BIGINT,
+	                                     DatePartFunction<interval_t>));
 	set.AddFunction(date_part);
 	date_part.name = "datepart";
 	set.AddFunction(date_part);

@@ -1,148 +1,199 @@
-# Functions used to connect to Connections Pane in Rstudio
-# Implementing connections contract: https://rstudio.github.io/rstudio-extensions/connections-contract.html
-duckdb_ListObjectTypes <- function(con) {
-  object_types <- list(table = list(contains="data"))
+# adapted from sort-of reference at https://github.com/r-dbi/odbc/blob/main/R/Viewer.R
 
-  types <- dbGetQuery(con, "SELECT DISTINCT type FROM sqlite_master")[[1]]
-  if (any(types =="view")){
-    object_types <- c(object_types, view=list(contains="data"))
-  }
-  object_types
-}
+rs_list_object_types <- function(connection) {
+  # slurp all the objects in the database so we can determine the correct
+  # object hierarchy
 
-duckdb_ListObjects <- function(con, catalog = NULL, schema = NULL, name = NULL, type = NULL, ...) {
-  objects <- dbGetQuery(con, "SELECT name,type FROM sqlite_master")
-  objects <- objects[objects$type %in% c("table","view"),]
-  objects
-}
+  # all databases contain tables, at a minimum or so someone claims
+  obj_types <- list(table = list(contains = "data"))
 
-duckdb_ListColumns <- function(con, table = NULL, view = NULL,
-                                           catalog = NULL, schema = NULL, ...) {
-  if (is.null(table)){
-    table <- view
+  # see if we have views too
+  if (dbGetQuery(connection, "SELECT 'VIEW' IN (SELECT DISTINCT table_type FROM information_schema.tables) s")[[1]]) {
+    obj_types <- c(obj_types, list(view = list(contains = "data")))
   }
 
-  tb <- dbGetQuery(
-    con,
-    paste("SELECT * FROM",dbQuoteIdentifier(con, table),"WHERE FALSE")
-  )
+  # check for multiple schema or a named schema
+  if (dbGetQuery(connection, "SELECT COUNT(DISTINCT table_schema) > 0 FROM information_schema.tables")[[1]]) {
+    obj_types <- list(schema = list(contains = obj_types))
+  }
 
-  name <- names(tb)
-  type <- sapply(tb, class)
-
-  data.frame(
-    name = name,
-    type = type,
-    stringsAsFactors = FALSE
-  )
+  obj_types
 }
 
-duckdb_PreviewObject <- function(con, rowLimit, table = NULL, view = NULL, ...) {
-  # extract object name from arguments
-  name <- if (is.null(table)) view else table
-  dbGetQuery(con, paste("SELECT * FROM", dbQuoteIdentifier(con, name)), n = rowLimit)
+rs_list_objects <- function(connection, catalog = NULL, schema = NULL, name = NULL, type = NULL, ...) {
+
+  # if no schema was supplied but this database has schema, return a list of
+  # schema
+  if (is.null(schema)) {
+    dbGetQuery(connection, "SELECT DISTINCT table_schema \"name\", 'schema' \"type\" FROM information_schema.tables ORDER BY table_schema")
+  }
+
+  if (is.null(schema)) {
+    schema <- NA
+  }
+
+  if (is.null(name)) {
+    name <- NA
+  }
+
+  if (is.null(type)) {
+    type <- "%"
+  } else {
+    type <- paste0("%", type)
+  }
+  # behold
+  dbGetQuery(connection, '
+    SELECT table_name "name", 
+      CASE WHEN table_type LIKE \'%TABLE\' THEN \'table\' ELSE LOWER(table_type) END "type" 
+    FROM information_schema.tables 
+    WHERE (?::STRING IS NULL OR table_schema = ?) AND
+      (?::STRING IS NULL OR table_name = ?) AND
+      table_type ILIKE ?
+    ORDER BY table_schema, table_type, table_name',
+    list(schema, schema, name, name, type))
 }
 
-duckdb_ConnectionIcon <- function(con) {
-  system.file("icons/duckdb.png", package="duckdb")
+
+rs_list_columns <- function(connection, table, catalog = NULL, schema = NULL, ...) {
+
+  if (is.null(schema)) {
+    schema <- NA
+  }
+  dbGetQuery(connection, "
+    SELECT column_name \"name\", data_type \"field.type\" 
+    FROM information_schema.columns 
+    WHERE (?::STRING IS NULL OR table_schema = ?) AND
+      table_name = ?
+    ORDER BY ordinal_position", 
+    list(schema, schema, table))
 }
 
-duckdb_ConnectionActions <- function(con) {
-  actions <- list()
-  actions <- c(actions, list(
+rs_preview <- function(connection, rowLimit, table = NULL, view = NULL, schema = NULL, ...) {
+  # Error if both table and view are passed
+  if (!is.null(table) && !is.null(view)) {
+    stop("`table` and `view` can not both be used", call. = FALSE)
+  }
+
+  # Error if neither table and view are passed
+  if (is.null(table) && is.null(view)) {
+    stop("`table` and `view` can not both be `NULL`", call. = FALSE)
+  }
+
+  name <- if (!is.null(table)) {
+    table
+  } else {
+    view
+  }
+
+  # append schema if specified
+  if (!is.null(schema)) {
+    name <- paste(dbQuoteIdentifier(connection, schema), dbQuoteIdentifier(connection, name), sep = ".")
+  }
+
+  dbGetQuery(connection, paste("SELECT * FROM ", name, " LIMIT ?"), list(rowLimit))
+}
+
+rs_actions <- function(connection) {
+  list(
     Help = list(
+      # show README for this package as the help; we will update to a more
+      # helpful (and/or more driver-specific) website once one exists
       icon = "",
       callback = function() {
         utils::browseURL("https://duckdb.org/docs/api/r")
       }
     )
-  ))
-
-  actions
+  )
 }
 
-on_connection_closed <- function(con) {
+rs_check_disabled <- function(observer) {
+  if (getOption("duckdb.force_rstudio_connection_pane", FALSE)) {
+    return(FALSE)
+  }
+  is.null(observer) || !interactive() || !getOption("duckdb.enable_rstudio_connection_pane", FALSE)
+}
+
+rs_on_connection_closed <- function(connection) {
   # make sure we have an observer
   observer <- getOption("connectionObserver")
-  if (is.null(observer))
-    return(invisible(NULL))
+  if (rs_check_disabled(observer)) return(invisible(NULL))
 
-  host <- get_host(con)
-  observer$connectionClosed("duckdb", host)
+  type <- "DuckDB"
+  host <- connection@driver@dbdir
+  observer$connectionClosed(type, host)
 }
 
-get_host <- function(con){
-  con@driver@dbdir
-}
-
-on_connection_updated <- function(con, hint) {
+rs_on_connection_updated <- function(connection, hint) {
+  # make sure we have an observer
   observer <- getOption("connectionObserver")
-  if (is.null(observer))
-    return(invisible(NULL))
-  host <- get_host(con)
-  observer$connectionUpdated("duckdb", host, hint = hint)
+  if (rs_check_disabled(observer)) return(invisible(NULL))
+
+  type <- "DuckDB"
+  host <- connection@driver@dbdir
+  observer$connectionUpdated(type, host, hint = hint)
 }
 
-on_connection_opened <- function(con) {
-  code <- paste0(
-"library(duckdb)
-drv <- duckdb(\"", con@driver@dbdir,"\", read_only = ", con@driver@read_only ,")
-con <- dbConnect(drv)
-")
+rs_on_connection_opened <- function(connection, code="") {
+  # make sure we have an observer
   observer <- getOption("connectionObserver")
-  if (is.null(observer))
-    return(invisible(NULL))
+  if (rs_check_disabled(observer)) return(invisible(NULL))
 
-  icon <- duckdb_ConnectionIcon(con)
+  # use the database name as the display name
+  display_name <- "DuckDB"
+  server_name <- connection@driver@dbdir
 
-  host <- get_host(con)
+  # append the server name if we know it, and it isn't the same as the database name
+  # (this can happen for serverless, nameless databases such as SQLite)
+  if (!is.null(server_name) && nzchar(server_name) &&
+      !identical(server_name, display_name)) {
+    display_name <- paste(display_name, "-", server_name)
+  }
 
-    # let observer know that connection has opened
+  # let observer know that connection has opened
   observer$connectionOpened(
     # connection type
-    type = "duckdb",
+    type = "DuckDB",
 
-    # name displayed in connection pane (to be improved)
-    displayName = paste0("DuckDB "
-                        , '"' , host, '"'
-                        , if (con@driver@read_only) " (readonly)"
-                        ),
+    # name displayed in connection pane
+    displayName = display_name,
 
-    host = host,
+    # host key
+    host = connection@driver@dbdir,
 
-    icon = icon,
+    # icon for connection
+    icon = system.file("icons/duckdb.png", package="duckdb"),
 
     # connection code
     connectCode = code,
 
     # disconnection code
     disconnect = function() {
-      dbDisconnect(con, shutdown = TRUE)
+      dbDisconnect(connection)
     },
 
     listObjectTypes = function () {
-      duckdb_ListObjectTypes(con)
+      rs_list_object_types(connection)
     },
 
     # table enumeration code
     listObjects = function(...) {
-      duckdb_ListObjects(con, ...)
+      rs_list_objects(connection, ...)
     },
 
     # column enumeration code
     listColumns = function(...) {
-      duckdb_ListColumns(con, ...)
+      rs_list_columns(connection, ...)
     },
 
     # table preview code
     previewObject = function(rowLimit, ...) {
-      duckdb_PreviewObject(con, rowLimit, ...)
+      rs_preview(connection, rowLimit, ...)
     },
 
     # other actions that can be executed on this connection
-    actions = duckdb_ConnectionActions(con),
+    actions = rs_actions(connection),
 
     # raw connection object
-    connectionObject = con
+    connectionObject = connection
   )
 }

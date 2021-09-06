@@ -33,11 +33,13 @@ public:
 		}
 	};
 
+	unique_ptr<string_t[]> dict_strings;
+	idx_t fixed_width_string_length;
+
+public:
 	void Dictionary(shared_ptr<ByteBuffer> dictionary_data, idx_t num_entries) override;
 
-	unique_ptr<string_t[]> dict_strings;
 	uint32_t VerifyString(const char *str_data, uint32_t str_len);
-	idx_t fixed_width_string_length;
 
 protected:
 	void DictReference(Vector &result) override;

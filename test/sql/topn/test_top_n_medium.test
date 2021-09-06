@@ -1,0 +1,27 @@
+# name: test/sql/topn/test_top_n_medium.test
+# description: Test Top N with medium sized data
+# group: [topn]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl AS SELECT i, i % 1000 j FROM range(1000000) tbl(i)
+
+query II
+SELECT * FROM tbl ORDER BY j, i LIMIT 5
+----
+0	0
+1000	0
+2000	0
+3000	0
+4000	0
+
+query II
+SELECT * FROM tbl ORDER BY j DESC, i DESC LIMIT 5
+----
+999999	999
+998999	999
+997999	999
+996999	999
+995999	999

@@ -91,15 +91,22 @@ NumericStatistics::NumericStatistics(LogicalType type_p, Value min_p, Value max_
 void NumericStatistics::Merge(const BaseStatistics &other_p) {
 	BaseStatistics::Merge(other_p);
 	auto &other = (const NumericStatistics &)other_p;
-	if (other.min < min) {
+	if (other.min.is_null || min.is_null) {
+		min.is_null = true;
+	} else if (other.min < min) {
 		min = other.min;
 	}
-	if (other.max > max) {
+	if (other.max.is_null || max.is_null) {
+		max.is_null = true;
+	} else if (other.max > max) {
 		max = other.max;
 	}
 }
 
 FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
+	if (min.is_null || max.is_null) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
 		if (constant == min && constant == max) {
@@ -188,20 +195,21 @@ string NumericStatistics::ToString() {
 }
 
 template <class T>
-void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
+void NumericStatistics::TemplatedVerify(Vector &vector, const SelectionVector &sel, idx_t count) {
 	VectorData vdata;
 	vector.Orrify(count, vdata);
 
 	auto data = (T *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
-		auto index = vdata.sel->get_index(i);
+		auto idx = sel.get_index(i);
+		auto index = vdata.sel->get_index(idx);
 		if (!vdata.validity.RowIsValid(index)) {
 			continue;
 		}
-		if (!min.is_null && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) {
+		if (!min.is_null && LessThan::Operation(data[index], min.GetValueUnsafe<T>())) { // LCOV_EXCL_START
 			throw InternalException("Statistics mismatch: value is smaller than min.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
-		}
+		} // LCOV_EXCL_STOP
 		if (!max.is_null && GreaterThan::Operation(data[index], max.GetValueUnsafe<T>())) {
 			throw InternalException("Statistics mismatch: value is bigger than max.\nStatistics: %s\nVector: %s",
 			                        ToString(), vector.ToString(count));
@@ -209,32 +217,32 @@ void NumericStatistics::TemplatedVerify(Vector &vector, idx_t count) {
 	}
 }
 
-void NumericStatistics::Verify(Vector &vector, idx_t count) {
-	BaseStatistics::Verify(vector, count);
+void NumericStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t count) {
+	BaseStatistics::Verify(vector, sel, count);
 
 	switch (type.InternalType()) {
 	case PhysicalType::BOOL:
 		break;
 	case PhysicalType::INT8:
-		TemplatedVerify<int8_t>(vector, count);
+		TemplatedVerify<int8_t>(vector, sel, count);
 		break;
 	case PhysicalType::INT16:
-		TemplatedVerify<int16_t>(vector, count);
+		TemplatedVerify<int16_t>(vector, sel, count);
 		break;
 	case PhysicalType::INT32:
-		TemplatedVerify<int32_t>(vector, count);
+		TemplatedVerify<int32_t>(vector, sel, count);
 		break;
 	case PhysicalType::INT64:
-		TemplatedVerify<int64_t>(vector, count);
+		TemplatedVerify<int64_t>(vector, sel, count);
 		break;
 	case PhysicalType::INT128:
-		TemplatedVerify<hugeint_t>(vector, count);
+		TemplatedVerify<hugeint_t>(vector, sel, count);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedVerify<float>(vector, count);
+		TemplatedVerify<float>(vector, sel, count);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedVerify<double>(vector, count);
+		TemplatedVerify<double>(vector, sel, count);
 		break;
 	default:
 		throw InternalException("Unsupported type %s for numeric statistics verify", type.ToString());

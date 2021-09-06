@@ -30,6 +30,12 @@ public:
 	static bool CharacterIsDigit(char c) {
 		return c >= '0' && c <= '9';
 	}
+	static char CharacterToLower(char c) {
+		if (c >= 'A' && c <= 'Z') {
+			return c - ('A' - 'a');
+		}
+		return c;
+	}
 
 	//! Returns true if the needle string exists in the haystack
 	static bool Contains(const string &haystack, const string &needle);
@@ -70,11 +76,8 @@ public:
 		return result;
 	}
 
-	//! Append the prefix to the beginning of each line in str
-	static string Prefix(const string &str, const string &prefix);
-
 	//! Return a string that formats the give number of bytes
-	static string FormatSize(idx_t bytes);
+	static string BytesToHumanReadableString(idx_t bytes);
 
 	//! Convert a string to uppercase
 	static string Upper(const string &str);

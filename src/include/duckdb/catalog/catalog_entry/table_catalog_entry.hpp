@@ -14,6 +14,7 @@
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -44,7 +45,7 @@ public:
 	//! A list of constraints that are part of this table
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
 	//! A map of column name to column index
-	unordered_map<string, column_t> name_map;
+	case_insensitive_map_t<column_t> name_map;
 
 public:
 	unique_ptr<CatalogEntry> AlterEntry(ClientContext &context, AlterInfo *info) override;
@@ -55,12 +56,7 @@ public:
 	ColumnDefinition &GetColumn(const string &name);
 	//! Returns a list of types of the table
 	vector<LogicalType> GetTypes();
-	//! Returns a list of types of the specified columns of the table
-	vector<LogicalType> GetTypes(const vector<column_t> &column_ids);
 	string ToSQL() override;
-
-	//! Add lower case aliases to a name map (e.g. "Hello" -> "hello" is also acceptable)
-	static void AddLowerCaseAliases(unordered_map<string, column_t> &name_map);
 
 	//! Serialize the meta information of the TableCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
@@ -73,6 +69,12 @@ public:
 
 	void CommitAlter(AlterInfo &info);
 	void CommitDrop();
+
+	//! Returns the column index of the specified column name.
+	//! If the column does not exist:
+	//! If if_exists is true, returns INVALID_INDEX
+	//! If if_exists is false, throws an exception
+	idx_t GetColumnIndex(string &name, bool if_exists = false);
 
 private:
 	unique_ptr<CatalogEntry> RenameColumn(ClientContext &context, RenameColumnInfo &info);

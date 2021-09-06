@@ -135,6 +135,7 @@ BoundStatement Binder::Bind(ExportStatement &stmt) {
 	}
 
 	result.plan = move(export_node);
+	this->allow_stream_result = false;
 	return result;
 }
 

@@ -25,7 +25,7 @@ bool CatalogSet::CreateEntry(ClientContext &context, const string &name, unique_
 
 	// first check if the entry exists in the unordered set
 	idx_t entry_index;
-	auto mapping_value = GetMapping(context, name, false);
+	auto mapping_value = GetMapping(context, name);
 	if (mapping_value == nullptr || mapping_value->deleted) {
 		// if it does not: entry has never been created
 
@@ -91,7 +91,7 @@ bool CatalogSet::GetEntryInternal(ClientContext &context, idx_t entry_index, Cat
 
 bool CatalogSet::GetEntryInternal(ClientContext &context, const string &name, idx_t &entry_index,
                                   CatalogEntry *&catalog_entry) {
-	auto mapping_value = GetMapping(context, name, true);
+	auto mapping_value = GetMapping(context, name);
 	if (mapping_value == nullptr || mapping_value->deleted) {
 		// the entry does not exist, check if we can create a default entry
 		return false;
@@ -128,7 +128,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 		return true;
 	}
 	if (value->name != original_name) {
-		auto mapping_value = GetMapping(context, value->name, true);
+		auto mapping_value = GetMapping(context, value->name);
 		if (mapping_value && !mapping_value->deleted) {
 			auto entry = GetEntryForTransaction(context, entries[mapping_value->index].get());
 			if (!entry->deleted) {
@@ -219,43 +219,17 @@ void CatalogSet::CleanupEntry(CatalogEntry *catalog_entry) {
 	}
 }
 
-idx_t CatalogSet::GetEntryIndex(CatalogEntry *entry) {
-	D_ASSERT(mapping.find(entry->name) != mapping.end());
-	return mapping[entry->name]->index;
-}
-
 bool CatalogSet::HasConflict(ClientContext &context, transaction_t timestamp) {
 	auto &transaction = Transaction::GetTransaction(context);
 	return (timestamp >= TRANSACTION_ID_START && timestamp != transaction.transaction_id) ||
 	       (timestamp < TRANSACTION_ID_START && timestamp > transaction.start_time);
 }
 
-MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name, bool allow_lowercase_alias,
-                                     bool get_latest) {
+MappingValue *CatalogSet::GetMapping(ClientContext &context, const string &name, bool get_latest) {
 	MappingValue *mapping_value;
 	auto entry = mapping.find(name);
 	if (entry != mapping.end()) {
 		mapping_value = entry->second.get();
-	} else if (allow_lowercase_alias) {
-		// entry not found: check if we can find an entry that matches if we lowercase it
-		auto lowercase_needle = StringUtil::Lower(name);
-		mapping_value = nullptr;
-		for (auto &kv : mapping) {
-			auto lower = StringUtil::Lower(kv.first);
-			if (lowercase_needle == lower) {
-				if (mapping_value) {
-					// multiple candidates exist
-					// this happens if we have e.g. "AbC" and "ABC" and we search for "abc"
-					// in this case, there is ambiguity, so we just return null
-					return nullptr;
-				} else {
-					mapping_value = kv.second.get();
-				}
-			}
-		}
-		if (!mapping_value) {
-			return nullptr;
-		}
 	} else {
 		return nullptr;
 	}
@@ -339,7 +313,7 @@ string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 	string result;
 	idx_t current_score = (idx_t)-1;
 	for (auto &kv : mapping) {
-		auto mapping_value = GetMapping(context, kv.first, false);
+		auto mapping_value = GetMapping(context, kv.first);
 		if (mapping_value && !mapping_value->deleted) {
 			auto ldist = StringUtil::LevenshteinDistance(kv.first, name);
 			if (ldist < current_score) {
@@ -369,7 +343,7 @@ CatalogEntry *CatalogSet::CreateEntryInternal(ClientContext &context, unique_ptr
 
 CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 	unique_lock<mutex> lock(catalog_lock);
-	auto mapping_value = GetMapping(context, name, true);
+	auto mapping_value = GetMapping(context, name);
 	if (mapping_value != nullptr && !mapping_value->deleted) {
 		// we found an entry for this name
 		// check the version numbers
@@ -411,12 +385,6 @@ CatalogEntry *CatalogSet::GetEntry(ClientContext &context, const string &name) {
 void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
 	entry->timestamp = timestamp;
 	mapping[entry->name]->timestamp = timestamp;
-}
-
-CatalogEntry *CatalogSet::GetRootEntry(const string &name) {
-	lock_guard<mutex> lock(catalog_lock);
-	auto entry = mapping.find(name);
-	return entry == mapping.end() || entry->second->deleted ? nullptr : entries[entry->second->index].get();
 }
 
 void CatalogSet::Undo(CatalogEntry *entry) {

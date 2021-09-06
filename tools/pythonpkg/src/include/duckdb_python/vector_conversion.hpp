@@ -28,7 +28,8 @@ enum class PandasType : uint8_t {
 	DOUBLE,
 	TIMESTAMP,
 	INTERVAL,
-	VARCHAR
+	VARCHAR,
+	OBJECT
 };
 
 struct NumPyArrayWrapper {
@@ -41,6 +42,7 @@ struct NumPyArrayWrapper {
 struct PandasColumnBindData {
 	PandasType pandas_type;
 	py::array numpy_col;
+	idx_t numpy_stride;
 	unique_ptr<NumPyArrayWrapper> mask;
 };
 

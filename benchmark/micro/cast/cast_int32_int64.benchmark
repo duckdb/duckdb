@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_int32_int64.benchmark
+# description: Cast INTEGER to BIGINT
+# group: [cast]
+
+name Cast INTEGER -> BIGINT
+group cast
+
+load
+CREATE TABLE integers AS SELECT i::INTEGER i FROM range(0, 50000000) tbl(i);
+
+run
+SELECT MAX(CAST(i AS BIGINT)) FROM integers
+
+result I
+49999999

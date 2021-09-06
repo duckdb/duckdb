@@ -10,6 +10,8 @@
 
 namespace duckdb {
 
+bool CanCacheType(const LogicalType &type);
+
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map,
@@ -28,6 +30,13 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	// for ANTI, SEMI and MARK join, we only need to store the keys, so for these the build types are empty
 	if (join_type != JoinType::ANTI && join_type != JoinType::SEMI && join_type != JoinType::MARK) {
 		build_types = LogicalOperator::MapTypes(children[1]->GetTypes(), right_projection_map);
+	}
+	// we avoid caching lists, since lists can be very large caching can have very negative effects
+	can_cache = true;
+	for (auto &type : types) {
+		if (!CanCacheType(type)) {
+			can_cache = false;
+		}
 	}
 }
 
@@ -169,6 +178,25 @@ public:
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
 };
 
+bool CanCacheType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		return false;
+	case LogicalTypeId::STRUCT: {
+		auto &entries = StructType::GetChildTypes(type);
+		for (auto &entry : entries) {
+			if (!CanCacheType(entry.second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return true;
+	}
+}
+
 unique_ptr<PhysicalOperatorState> PhysicalHashJoin::GetOperatorState() {
 	auto state = make_unique<PhysicalHashJoinState>(*this, children[0].get(), children[1].get(), conditions);
 	state->cached_chunk.Initialize(types);
@@ -187,7 +215,7 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 	    (sink.hash_table->join_type == JoinType::INNER || sink.hash_table->join_type == JoinType::RIGHT ||
 	     sink.hash_table->join_type == JoinType::SEMI);
 
-	if (sink.hash_table->size() == 0 && join_is_inner_right_semi) {
+	if (sink.hash_table->Count() == 0 && join_is_inner_right_semi) {
 		// empty hash table with INNER, RIGHT or SEMI join means empty result set
 		return;
 	}
@@ -197,8 +225,8 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 #if STANDARD_VECTOR_SIZE >= 128
 			if (state->cached_chunk.size() > 0) {
 				// finished probing but cached data remains, return cached chunk
-				chunk.Reference(state->cached_chunk);
-				state->cached_chunk.SetCardinality(0);
+				chunk.Move(state->cached_chunk);
+				state->cached_chunk.Initialize(types);
 			} else
 #endif
 			    if (IsRightOuterJoin(join_type)) {
@@ -208,13 +236,13 @@ void PhysicalHashJoin::GetChunkInternal(ExecutionContext &context, DataChunk &ch
 			return;
 		} else {
 #if STANDARD_VECTOR_SIZE >= 128
-			if (chunk.size() < 64) {
+			if (can_cache && chunk.size() < 64) {
 				// small chunk: add it to chunk cache and continue
 				state->cached_chunk.Append(chunk);
 				if (state->cached_chunk.size() >= (STANDARD_VECTOR_SIZE - 64)) {
 					// chunk cache full: return it
-					chunk.Reference(state->cached_chunk);
-					state->cached_chunk.SetCardinality(0);
+					chunk.Move(state->cached_chunk);
+					state->cached_chunk.Initialize(types);
 					return;
 				} else {
 					// chunk cache not full: probe again
@@ -252,7 +280,7 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 		if (state->child_chunk.size() == 0) {
 			return;
 		}
-		if (sink.hash_table->size() == 0) {
+		if (sink.hash_table->Count() == 0) {
 			ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, state->child_chunk, chunk);
 			return;
 		}

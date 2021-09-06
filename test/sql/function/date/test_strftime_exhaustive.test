@@ -343,7 +343,6 @@ NULL
 00:00:00
 00:00:00
 
-
 query I
 SELECT strftime(d, 'XX%cXX%xXX%XXX') FROM dates ORDER BY d;
 ----
@@ -352,3 +351,28 @@ XX1992-01-01 00:00:00XX1992-01-01XX00:00:00XX
 XX1993-03-20 00:00:00XX1993-03-20XX00:00:00XX
 XX2020-08-09 00:00:00XX2020-08-09XX00:00:00XX
 XX2020-08-10 00:00:00XX2020-08-10XX00:00:00XX
+
+# large year
+query I
+SELECT strftime(date '-99999-01-01', '%Y')
+----
+-99999
+
+query I
+SELECT strftime(date '99999-01-01', '%Y')
+----
+99999
+
+query I
+SELECT strftime(date '99999-01-01', '%y')
+----
+99
+
+query I
+SELECT strftime(date '-99999-01-01', '%y')
+----
+99
+
+statement error
+SELECT strftime(date '-99999-01-01', random()::varchar)
+

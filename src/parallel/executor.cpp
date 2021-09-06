@@ -39,6 +39,9 @@ void Executor::Initialize(PhysicalOperator *plan) {
 
 		// schedule pipelines that do not have dependents
 		for (auto &pipeline : pipelines) {
+#ifdef DEBUG
+			D_ASSERT(!pipeline->ToString().empty());
+#endif
 			if (!pipeline->HasDependencies()) {
 				pipeline->Schedule();
 			}
@@ -64,11 +67,14 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		// then clearing our references to the pipelines
 		// and waiting until all pipelines have been destroyed
 		vector<weak_ptr<Pipeline>> weak_references;
-		weak_references.reserve(pipelines.size());
-		for (auto &pipeline : pipelines) {
-			weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+		{
+			lock_guard<mutex> elock(executor_lock);
+			weak_references.reserve(pipelines.size());
+			for (auto &pipeline : pipelines) {
+				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+			}
+			pipelines.clear();
 		}
-		pipelines.clear();
 		for (auto &weak_ref : weak_references) {
 			while (true) {
 				auto weak = weak_ref.lock();
@@ -80,14 +86,16 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		throw Exception(exception);
 	}
 
+	lock_guard<mutex> elock(executor_lock);
 	pipelines.clear();
-	if (!exceptions.empty()) {
+	if (!exceptions.empty()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
 		throw Exception(exceptions[0]);
-	}
+	} // LCOV_EXCL_STOP
 }
 
 void Executor::Reset() {
+	lock_guard<mutex> elock(executor_lock);
 	delim_join_dependencies.clear();
 	recursive_cte = nullptr;
 	physical_plan = nullptr;
@@ -273,7 +281,7 @@ void Executor::Flush(ThreadContext &tcontext) {
 	context.profiler->Flush(tcontext.profiler);
 }
 
-bool Executor::GetPipelinesProgress(int &current_progress) {
+bool Executor::GetPipelinesProgress(int &current_progress) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
 	if (!pipelines.empty()) {
@@ -282,7 +290,7 @@ bool Executor::GetPipelinesProgress(int &current_progress) {
 		current_progress = -1;
 		return true;
 	}
-}
+} // LCOV_EXCL_STOP
 
 unique_ptr<DataChunk> Executor::FetchChunk() {
 	D_ASSERT(physical_plan);
