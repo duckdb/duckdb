@@ -33,10 +33,12 @@ public:
 	vector<LogicalType> build_types;
 	//! Duplicate eliminated types; only used for delim_joins (i.e. correlated subqueries)
 	vector<LogicalType> delim_types;
-	//! Whether or not we can cache the chunk
-	bool can_cache;
 
 public:
+	// Operator Interface
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+
 	bool ParallelOperator() const override {
 		// hash join; FIXME: for now we can't safely parallelize right or full outer join probes
 		if (IsRightOuterJoin(join_type)) {
@@ -45,6 +47,8 @@ public:
 		return true;
 	}
 
+public:
+	// Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
@@ -53,11 +57,14 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
 	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate) override;
 
+	bool IsSink() const override {
+		return true;
+	}
 	bool ParallelSink() const override {
 		return true;
 	}
 private:
-	void ProbeHashTable(ExecutionContext &context, DataChunk &chunk, OperatorState *state_p) const;
+	bool EmptyResultIfHTIsEmpty() const;
 };
 
 } // namespace duckdb

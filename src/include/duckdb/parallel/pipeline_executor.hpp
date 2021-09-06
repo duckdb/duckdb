@@ -56,6 +56,8 @@ private:
 private:
 	void StartOperator(PhysicalOperator *op);
 	void EndOperator(PhysicalOperator *op, DataChunk *chunk);
+	//! Reset the operator index to the first operator
+	void GoToSource(idx_t &current_idx);
 };
 
 } // namespace duckdb

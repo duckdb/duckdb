@@ -51,22 +51,26 @@ void PipelineExecutor::Execute() {
 	executor.Flush(thread);
 }
 
+void PipelineExecutor::GoToSource(idx_t &current_idx) {
+	// we go back to the first operator (the source)
+	current_idx = 0;
+	if (!in_process_operators.empty()) {
+		// ... UNLESS there is an in process operator
+		// if there is an in-process operator, we start executing at the latest one
+		// for example, if we have a join operator that has tuples left, we first need to emit those tuples
+		current_idx = in_process_operators.top();
+		in_process_operators.pop();
+	}
+}
+
 void PipelineExecutor::Execute(DataChunk &result) {
 	if (context.client.interrupted) {
 		return;
 	}
 
 	idx_t current_idx;
-	current_idx = 0;
+	GoToSource(current_idx);
 	while(true) {
-		// we start executing at the source
-		if (!in_process_operators.empty()) {
-			// ... UNLESS there is an in process operator
-			// if there is an in-process operator, we start executing at the latest one
-			// for example, if we have a join operator that has tuples left, we first need to emit those tuples
-			current_idx = in_process_operators.top();
-			in_process_operators.pop();
-		}
 		// now figure out where to put the chunk
 		// if current_idx is the last possible index (>= operators.size()) we write to the result
 		// otherwise we write to an intermediate chunk
@@ -101,8 +105,9 @@ void PipelineExecutor::Execute(DataChunk &result) {
 				// if we got no output from the scan, we are done
 				break;
 			} else {
-				// if we got no output from an intermediate op, we go back and try to pull data from the scan again
-				current_idx = 0;
+				// if we got no output from an intermediate op
+				// we go back and try to pull data from the source again
+				GoToSource(current_idx);
 				continue;
 			}
 		} else {
