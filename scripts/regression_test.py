@@ -87,7 +87,7 @@ def regression_test(threshold):
     if regression_status:
         os.system("echo \"REGRESSION_STATE=success\" >> $GITHUB_ENV")
     else:
-        os.system("echo \"REGRESSION_STATE=failure\" >> $GITHUB_ENV")
+        os.system("echo \"REGRESSION_STATE=error\" >> $GITHUB_ENV")
 
     if description == '':
         description = "No Regression or Speed Up."

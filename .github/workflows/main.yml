@@ -37,11 +37,11 @@ jobs:
     - name: Test
       run: python scripts/regression_test.py
 
-    - uses: Sibz/github-status-action@v1.1.5
+    - uses: ouzi-dev/commit-status-updater@v1.1.0
       with:
-        authToken: ${{secrets.GH_TOKEN}}
+        status: ${{env.REGRESSION_STATE}}
         description: ${{env.REGRESSION_DESCRIPTION}}
-        state: ${{env.REGRESSION_STATE}}
+
 #  linux-debug:
 #    name: Linux Debug
 #    runs-on: ubuntu-20.04
