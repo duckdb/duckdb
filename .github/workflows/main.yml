@@ -1391,3 +1391,28 @@ jobs:
       run: |
         cd duckdb-web
         python3 scripts/generate_docs.py ..
+
+  regression-test:
+    name: Regression Test
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Regression Test TPCH SF1
+      run: python scripts/regression_test.py
