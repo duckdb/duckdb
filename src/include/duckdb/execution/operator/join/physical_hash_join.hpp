@@ -51,6 +51,9 @@ public:
 	bool IsSource() const override {
 		return IsRightOuterJoin(join_type);
 	}
+	bool ParallelSource() const override {
+		return true;
+	}
 
 public:
 	// Sink Interface

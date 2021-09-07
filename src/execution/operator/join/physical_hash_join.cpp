@@ -216,17 +216,21 @@ bool PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, Data
 //===--------------------------------------------------------------------===//
 class HashJoinScanState : public GlobalSourceState {
 public:
+	HashJoinScanState(const PhysicalHashJoin &op) :
+		op(op) {}
+
+	const PhysicalHashJoin &op;
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
 	JoinHTScanState ht_scan_state;
 
 	idx_t MaxThreads() override{
-		return 0;
+		auto &sink = (HashJoinGlobalState &)*op.sink_state;
+		return sink.hash_table->Count() / (STANDARD_VECTOR_SIZE * 10);
 	}
-
 };
 
 unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
-	return make_unique<HashJoinScanState>();
+	return make_unique<HashJoinScanState>(*this);
 }
 
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
