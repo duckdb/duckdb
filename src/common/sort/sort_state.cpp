@@ -88,7 +88,7 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 	// 8-byte alignment
 	if (entry_size % 8 != 0) {
 		// First assign more bytes to strings instead of aligning
-		idx_t bytes_to_fill = entry_size % 8;
+		idx_t bytes_to_fill = 1 - (entry_size % 8);
 		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 			if (bytes_to_fill == 0) {
 				break;

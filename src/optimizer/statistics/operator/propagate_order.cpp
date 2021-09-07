@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
