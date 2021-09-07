@@ -219,6 +219,7 @@ static void TemplatedMatch(DataChunk &columns, VectorData col_data[], const RowL
 		auto &col = col_data[col_no];
 		switch (predicates[col_no]) {
 		case ExpressionType::COMPARE_EQUAL:
+		case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 			TemplatedMatchOp<Equals, NO_MATCH_SEL>(vec, col, vcount, layout, rows, sel, count, col_no, no_match,
 			                                       no_match_count);
 			break;
