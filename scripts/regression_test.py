@@ -35,9 +35,9 @@ def uninstall_duck():
     
 
 def install_duck_current():
-    output = subprocess.run(["BUILD_PYTHON=1", "GEN=ninja", "make","release"], capture_output=True)
+    output = subprocess.run(["make","release","BUILD_PYTHON=1", "GEN=ninja"], capture_output=True)
     if output.stderr:
-        print ("BUILD_PYTHON=1 GEN=ninja make release FAILED")
+        print (" make release BUILD_PYTHON=1 GEN=ninja FAILED")
         assert(0)
 
 def run_tpch_query(duckdb_conn,query_number):
