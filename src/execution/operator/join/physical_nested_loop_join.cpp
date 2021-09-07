@@ -127,7 +127,7 @@ public:
 
 class NestedLoopJoinGlobalState : public GlobalSinkState {
 public:
-	NestedLoopJoinGlobalState() : has_null(false), right_outer_position(0) {
+	NestedLoopJoinGlobalState() : has_null(false) {
 	}
 
 	//! Materialized data of the RHS
@@ -138,8 +138,6 @@ public:
 	bool has_null;
 	//! A bool indicating for each tuple in the RHS if they found a match (only used in FULL OUTER JOIN)
 	unique_ptr<bool[]> right_found_match;
-	//! The position in the RHS in the final scan of the FULL OUTER JOIN
-	idx_t right_outer_position;
 };
 
 void PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -192,7 +190,7 @@ unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ExecutionCo
 //===--------------------------------------------------------------------===//
 class PhysicalNestedLoopJoinState : public OperatorState {
 public:
-	PhysicalNestedLoopJoinState(const vector<JoinCondition> &conditions)
+	PhysicalNestedLoopJoinState(const PhysicalNestedLoopJoin &op, const vector<JoinCondition> &conditions)
 	    : fetch_next_left(true), fetch_next_right(false), right_chunk(0),
 	      left_tuple(0), right_tuple(0) {
 		vector<LogicalType> condition_types;
@@ -201,6 +199,11 @@ public:
 			condition_types.push_back(cond.left->return_type);
 		}
 		left_condition.Initialize(condition_types);
+		if (IsLeftOuterJoin(op.join_type)) {
+			left_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
+			memset(left_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+		}
+
 	}
 
 	bool fetch_next_left;
@@ -222,7 +225,7 @@ public:
 };
 
 unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ClientContext &context) const {
-	return make_unique<PhysicalNestedLoopJoinState>(conditions);
+	return make_unique<PhysicalNestedLoopJoinState>(*this, conditions);
 }
 
 bool PhysicalNestedLoopJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
@@ -299,89 +302,113 @@ void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, b
 }
 
 bool PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
-	throw InternalException("FIMXE: resolve complex join");
-	// auto &state = (PhysicalNestedLoopJoinState &) state_p;
-	// auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
+	auto &state = (PhysicalNestedLoopJoinState &) state_p;
+	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
-	// if (state.fetch_next_right) {
-	// 	// we exhausted the chunk on the right: move to the next chunk on the right
-	// 	state.right_chunk++;
-	// 	state.left_tuple = 0;
-	// 	state.right_tuple = 0;
-	// 	// check if we exhausted all chunks on the RHS
-	// 	state.fetch_next_left = state.right_chunk >= gstate.right_chunks.ChunkCount();
-	// 	state.fetch_next_right = false;
-	// }
-	// if (state.fetch_next_left) {
-	// 	// we exhausted all chunks on the right: move to the next chunk on the left
-	// 	if (IsLeftOuterJoin(join_type)) {
-	// 		// left join: before we move to the next chunk, see if we need to output any vectors that didn't
-	// 		// have a match found
-	// 		if (state.left_found_match) {
-	// 			PhysicalJoin::ConstructLeftJoinResult(input, chunk, state.left_found_match.get());
-	// 			state.left_found_match.reset();
-	// 			if (chunk.size() > 0) {
-	// 				return false;
-	// 			}
-	// 		}
-	// 		state.left_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
-	// 		memset(state.left_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
-	// 	}
-	// 	children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-	// 	if (state->child_chunk.size() == 0) {
-	// 		if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
-	// 			// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we
-	// 			// still need to output
-	// 			ConstructFullOuterJoinResult(gstate.right_found_match.get(), gstate.right_data, chunk,
-	// 											gstate.right_outer_position);
-	// 		}
-	// 		return;
-	// 	}
-	// 	// resolve the left join condition for the current chunk
-	// 	state->lhs_executor.Execute(state->child_chunk, state->left_condition);
+	idx_t match_count;
+	do {
+		if (state.fetch_next_right) {
+			// we exhausted the chunk on the right: move to the next chunk on the right
+			state.right_chunk++;
+			state.left_tuple = 0;
+			state.right_tuple = 0;
+			state.fetch_next_right = false;
+			// check if we exhausted all chunks on the RHS
+			if (state.right_chunk >= gstate.right_chunks.ChunkCount()) {
+				state.fetch_next_left = true;
+				// we exhausted all chunks on the right: move to the next chunk on the left
+				if (IsLeftOuterJoin(join_type)) {
+					// left join: before we move to the next chunk, see if we need to output any vectors that didn't
+					// have a match found
+					PhysicalJoin::ConstructLeftJoinResult(input, chunk, state.left_found_match.get());
+					memset(state.left_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
+				}
+				return false;
+			}
+		}
+		if (state.fetch_next_left) {
+			// resolve the left join condition for the current chunk
+			state.lhs_executor.Execute(input, state.left_condition);
 
-	// 	state->left_tuple = 0;
-	// 	state->right_tuple = 0;
-	// 	state->right_chunk = 0;
-	// 	state->fetch_next_left = false;
-	// }
-	// // now we have a left and a right chunk that we can join together
-	// // note that we only get here in the case of a LEFT, INNER or FULL join
-	// auto &left_chunk = state->child_chunk;
-	// auto &right_chunk = gstate.right_chunks.GetChunk(state->right_chunk);
-	// auto &right_data = gstate.right_data.GetChunk(state->right_chunk);
+			state.left_tuple = 0;
+			state.right_tuple = 0;
+			state.right_chunk = 0;
+			state.fetch_next_left = false;
+		}
+		// now we have a left and a right chunk that we can join together
+		// note that we only get here in the case of a LEFT, INNER or FULL join
+		auto &left_chunk = input;
+		auto &right_chunk = gstate.right_chunks.GetChunk(state.right_chunk);
+		auto &right_data = gstate.right_data.GetChunk(state.right_chunk);
 
-	// // sanity check
-	// left_chunk.Verify();
-	// right_chunk.Verify();
-	// right_data.Verify();
+		// sanity check
+		left_chunk.Verify();
+		right_chunk.Verify();
+		right_data.Verify();
 
-	// // now perform the join
-	// SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);
-	// idx_t match_count = NestedLoopJoinInner::Perform(state->left_tuple, state->right_tuple, state->left_condition,
-	// 													right_chunk, lvector, rvector, conditions);
-	// // we have finished resolving the join conditions
-	// if (match_count > 0) {
-	// 	// we have matching tuples!
-	// 	// construct the result
-	// 	if (state->left_found_match) {
-	// 		for (idx_t i = 0; i < match_count; i++) {
-	// 			state->left_found_match[lvector.get_index(i)] = true;
-	// 		}
-	// 	}
-	// 	if (gstate.right_found_match) {
-	// 		for (idx_t i = 0; i < match_count; i++) {
-	// 			gstate.right_found_match[state->right_chunk * STANDARD_VECTOR_SIZE + rvector.get_index(i)] = true;
-	// 		}
-	// 	}
-	// 	chunk.Slice(state->child_chunk, lvector, match_count);
-	// 	chunk.Slice(right_data, rvector, match_count, state->child_chunk.ColumnCount());
-	// }
+		// now perform the join
+		SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);
+		match_count = NestedLoopJoinInner::Perform(state.left_tuple, state.right_tuple, state.left_condition,
+															right_chunk, lvector, rvector, conditions);
+		// we have finished resolving the join conditions
+		if (match_count > 0) {
+			// we have matching tuples!
+			// construct the result
+			if (state.left_found_match) {
+				for (idx_t i = 0; i < match_count; i++) {
+					state.left_found_match[lvector.get_index(i)] = true;
+				}
+			}
+			if (gstate.right_found_match) {
+				for (idx_t i = 0; i < match_count; i++) {
+					gstate.right_found_match[state.right_chunk * STANDARD_VECTOR_SIZE + rvector.get_index(i)] = true;
+				}
+			}
+			chunk.Slice(input, lvector, match_count);
+			chunk.Slice(right_data, rvector, match_count, input.ColumnCount());
+		}
 
-	// // check if we exhausted the RHS, if we did we need to move to the next right chunk in the next iteration
-	// if (state->right_tuple >= right_chunk.size()) {
-	// 	state->fetch_next_right = true;
-	// }
+		// check if we exhausted the RHS, if we did we need to move to the next right chunk in the next iteration
+		if (state.right_tuple >= right_chunk.size()) {
+			state.fetch_next_right = true;
+		}
+	} while(match_count == 0);
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class NestedLoopJoinScanState : public GlobalSourceState {
+public:
+	NestedLoopJoinScanState(const PhysicalNestedLoopJoin &op) :
+		op(op), right_outer_position(0) {}
+
+	mutex lock;
+	const PhysicalNestedLoopJoin &op;
+	idx_t right_outer_position;
+
+public:
+	idx_t MaxThreads() override{
+		auto &sink = (NestedLoopJoinGlobalState &)*op.sink_state;
+		return sink.right_chunks.Count() / (STANDARD_VECTOR_SIZE * 10);
+	}
+};
+
+unique_ptr<GlobalSourceState> PhysicalNestedLoopJoin::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<NestedLoopJoinScanState>(*this);
+}
+
+void PhysicalNestedLoopJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+	D_ASSERT(IsRightOuterJoin(join_type));
+	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
+	auto &sink = (NestedLoopJoinGlobalState &)*sink_state;
+	auto &state = (NestedLoopJoinScanState &) gstate;
+
+	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we
+	// still need to output
+	lock_guard<mutex> l(state.lock);
+	ConstructFullOuterJoinResult(sink.right_found_match.get(), sink.right_data, chunk, state.right_outer_position);
 }
 
 } // namespace duckdb
