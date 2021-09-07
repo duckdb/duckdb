@@ -64,8 +64,8 @@ static HeaderMap create_s3_get_header(std::string url, std::string query, std::s
 	}
 	auto canonical_request = method + "\n" + uri_encode(url) + "\n" + query + "\nhost:" + host +
 	                         "\nx-amz-content-sha256:" + empty_payload_hash + "\nx-amz-date:" + datetime_now;
-	if (access_token.length() > 0) {
-		canonical_request += "\nx-amz-security-token:" + access_token;
+	if (session_token.length() > 0) {
+		canonical_request += "\nx-amz-security-token:" + session_token;
 	}
 	canonical_request += "\n\n" + signed_headers + "\n" + empty_payload_hash;
 	sha256(canonical_request.c_str(), canonical_request.length(), canonical_request_hash);
