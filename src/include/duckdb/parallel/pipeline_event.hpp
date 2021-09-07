@@ -15,10 +15,10 @@ namespace duckdb {
 
 class PipelineEvent : public Event {
 public:
-	PipelineEvent(shared_ptr<Pipeline> pipeline);
+	PipelineEvent(const shared_ptr<Pipeline> &pipeline);
 
 	//! The pipeline that this event belongs to
-	shared_ptr<Pipeline> pipeline;
+	weak_ptr<Pipeline> pipeline_w;
 public:
 	void Schedule() override;
 	void FinishEvent() override;

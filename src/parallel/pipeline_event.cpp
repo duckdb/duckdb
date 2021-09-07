@@ -2,15 +2,23 @@
 
 namespace duckdb {
 
-PipelineEvent::PipelineEvent(shared_ptr<Pipeline> pipeline_p) :
-	Event(pipeline_p->executor), pipeline(move(pipeline_p)) {}
+PipelineEvent::PipelineEvent(const shared_ptr<Pipeline> &pipeline_p) :
+	Event(pipeline_p->executor), pipeline_w(weak_ptr<Pipeline>(pipeline_p)) {}
 
 void PipelineEvent::Schedule() {
 	auto event = shared_from_this();
+	auto pipeline = pipeline_w.lock();
+	if (!pipeline) {
+		return;
+	}
 	pipeline->Schedule(event);
 }
 
 void PipelineEvent::FinishEvent() {
+	auto pipeline = pipeline_w.lock();
+	if (!pipeline) {
+		return;
+	}
 	// check if there are more sources to schedule within this pipeline
 	for(idx_t i = pipeline->source_idx + 1; i < pipeline->operators.size(); i++) {
 		if (pipeline->operators[i]->IsSource()) {
