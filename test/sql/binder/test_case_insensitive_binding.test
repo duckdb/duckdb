@@ -71,50 +71,11 @@ UPDATE test SET HeLlO=3
 statement ok
 DROP TABLE test
 
-# if the reference is ambiguous (e.g. hello -> HeLlO, HELLO) the name must match exactly
-statement ok
+# this counts as a duplicate column error
+statement error
 CREATE TABLE test("HeLlO" INTEGER, "HELLO" INTEGER)
 
-statement error
-SELECT HeLlO FROM test
-
-statement error
-SELECT hello FROM test
-
-statement ok
-SELECT "HeLlO" FROM test
-
-statement ok
-SELECT "HELLO" FROM test
-
-statement error
-SELECT "HELLo" FROM test
-
-statement error
-UPDATE test SET hello = 3
-
-statement ok
-UPDATE test SET "HeLlO" = 3
-
-statement ok
-UPDATE test SET "HELLO" = 3
-
-statement error
-SELECT test.HeLlO FROM test
-
-statement error
-SELECT test.hello FROM test
-
-statement ok
-SELECT test."HeLlO" FROM test
-
-statement ok
-SELECT test."HELLO" FROM test
-
-statement error
-SELECT test."HELLo" FROM test
-
-# conflicts can also come from different sources!
+# conflicts can come from different sources!
 statement ok
 CREATE TABLE test1("HeLlO" INTEGER)
 

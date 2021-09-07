@@ -260,6 +260,14 @@ vector<ExpressionBinder *> &Binder::GetActiveBinders() {
 	return active_binders;
 }
 
+void Binder::AddUsingBindingSet(unique_ptr<UsingColumnSet> set) {
+	if (parent) {
+		parent->AddUsingBindingSet(move(set));
+		return;
+	}
+	bind_context.AddUsingBindingSet(move(set));
+}
+
 void Binder::MoveCorrelatedExpressions(Binder &other) {
 	MergeCorrelatedColumns(other.correlated_columns);
 	other.correlated_columns.clear();

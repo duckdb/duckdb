@@ -294,8 +294,11 @@ static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t co
 	case PhysicalType::DOUBLE:
 		TemplatedUpdateLoop<double>(data, updates, row_ids, count, base_index);
 		break;
+	case PhysicalType::VARCHAR:
+		TemplatedUpdateLoop<string_t>(data, updates, row_ids, count, base_index);
+		break;
 	default:
-		throw Exception("Unsupported type for in-place update");
+		throw Exception("Unsupported type for in-place update: " + TypeIdToString(data.GetType().InternalType()));
 	}
 }
 
