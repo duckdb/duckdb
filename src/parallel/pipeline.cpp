@@ -124,6 +124,10 @@ void Pipeline::Reset() {
 	if (sink) {
 		sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
 	}
+	ResetSource();
+}
+
+void Pipeline::ResetSource() {
 	source_state = operators[source_idx]->GetGlobalSourceState(GetClientContext());
 }
 

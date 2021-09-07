@@ -21,6 +21,7 @@ public:
 	shared_ptr<Pipeline> pipeline;
 public:
 	void Schedule() override;
+	void FinishEvent() override;
 };
 
 }

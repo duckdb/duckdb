@@ -99,7 +99,7 @@ void PipelineExecutor::Execute(DataChunk &result) {
 		EndOperator(pipeline.operators[current_idx], &current_chunk);
 		if (current_chunk.size() == 0) {
 			// no output from this operator!
-			if (current_idx == 0) {
+			if (current_idx == pipeline.source_idx) {
 				// if we got no output from the scan, we are done
 				break;
 			} else {

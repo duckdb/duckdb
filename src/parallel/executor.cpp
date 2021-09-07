@@ -25,18 +25,38 @@ Executor::Executor(ClientContext &context) : context(context) {
 Executor::~Executor() {
 }
 
-void Executor::ScheduleEvents() {
-	D_ASSERT(event_map.empty());
-	// create all the required pipeline events
-	for(auto &pipeline : pipelines) {
-		auto event_stack = make_unique<PipelineEventStack>();
-		event_stack->pipeline_event = make_shared<PipelineEvent>(pipeline);
-		event_stack->pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
-		event_stack->pipeline_complete_event = make_shared<PipelineCompleteEvent>(pipeline->executor);
+void Executor::AddEvent(shared_ptr<Event> event) {
+	lock_guard<mutex> elock(executor_lock);
+	events.push_back(move(event));
+}
 
-		event_stack->pipeline_finish_event->AddDependency(*event_stack->pipeline_event);
-		event_stack->pipeline_complete_event->AddDependency(*event_stack->pipeline_finish_event);
-		event_map[pipeline.get()] = move(event_stack);
+struct PipelineEventStack {
+	Event *pipeline_event;
+	Event *pipeline_finish_event;
+	Event *pipeline_complete_event;
+};
+
+void Executor::ScheduleEvents() {
+	D_ASSERT(events.empty());
+	// create all the required pipeline events
+	unordered_map<Pipeline *, PipelineEventStack> event_map;
+	for(auto &pipeline : pipelines) {
+		auto pipeline_event = make_shared<PipelineEvent>(pipeline);
+		auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
+		auto pipeline_complete_event = make_shared<PipelineCompleteEvent>(pipeline->executor);
+
+		PipelineEventStack stack;
+		stack.pipeline_event = pipeline_event.get();
+		stack.pipeline_finish_event = pipeline_finish_event.get();
+		stack.pipeline_complete_event = pipeline_complete_event.get();
+
+		pipeline_finish_event->AddDependency(*pipeline_event);
+		pipeline_complete_event->AddDependency(*pipeline_finish_event);
+
+		events.push_back(move(pipeline_event));
+		events.push_back(move(pipeline_finish_event));
+		events.push_back(move(pipeline_complete_event));
+		event_map.insert(make_pair(pipeline.get(), stack));
 	}
 	// set up the dependencies between pipeline events
 	for(auto &pipeline : pipelines) {
@@ -45,14 +65,14 @@ void Executor::ScheduleEvents() {
 			auto dep = dependency.lock();
 			D_ASSERT(dep);
 			auto &dep_entry = event_map[dep.get()];
-			entry->pipeline_event->AddDependency(*dep_entry->pipeline_complete_event);
+			entry.pipeline_event->AddDependency(*dep_entry.pipeline_complete_event);
 		}
 	}
 	// schedule the pipelines that do not have dependencies
 	for(auto &pipeline : pipelines) {
 		auto &entry = event_map[pipeline.get()];
 		if (!pipeline->HasDependencies()) {
-			entry->pipeline_event->Schedule();
+			entry.pipeline_event->Schedule();
 		}
 	}
 }
@@ -143,7 +163,7 @@ void Executor::Reset() {
 	total_pipelines = 0;
 	exceptions.clear();
 	pipelines.clear();
-	event_map.clear();
+	events.clear();
 }
 
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {

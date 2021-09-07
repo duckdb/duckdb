@@ -24,12 +24,6 @@ class OperatorState;
 class ThreadContext;
 class Task;
 
-struct PipelineEventStack {
-	shared_ptr<Event> pipeline_event;
-	shared_ptr<Event> pipeline_finish_event;
-	shared_ptr<Event> pipeline_complete_event;
-};
-
 struct ProducerToken;
 
 class Executor {
@@ -68,6 +62,7 @@ public:
 	ProducerToken &GetToken() {
 		return *producer;
 	}
+	void AddEvent(shared_ptr<Event> event);
 
 private:
 	void ScheduleEvents();
@@ -86,8 +81,8 @@ private:
 	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
 	vector<string> exceptions;
-	//! Pipeline event map
-	unordered_map<Pipeline *, unique_ptr<PipelineEventStack>> event_map;
+	//! List of events
+	vector<shared_ptr<Event>> events;
 
 	//! The amount of completed pipelines of the query
 	atomic<idx_t> completed_pipelines;

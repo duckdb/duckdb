@@ -51,7 +51,9 @@ void Event::FinishTask() {
 }
 
 void Event::InsertEvent(shared_ptr<Event> replacement_event) {
-	throw InternalException("FIXME: insert event");
+	replacement_event->parents = move(parents);
+	replacement_event->AddDependency(*this);
+	executor.AddEvent(move(replacement_event));
 }
 
 void Event::SetTasks(vector<unique_ptr<Task>> tasks) {
