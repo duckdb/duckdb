@@ -36,7 +36,7 @@ def uninstall_duck():
         try:
             import duckdb
         except:
-            duck_installed = True
+            duck_installed = False
 
 
 def install_duck_current():
