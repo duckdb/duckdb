@@ -70,7 +70,6 @@ def run_benchmark(install_function,repetitions):
 
 # We want to run the regression tests 3x if a query fails (i.e., is slower than the one in the master these 3 times then it fails)
 def regression_test(threshold):
-    uninstall_duck()
     repetitions = 3
     master_time = run_benchmark(install_duck_master,repetitions)
     current_time = run_benchmark(install_duck_current,repetitions)
