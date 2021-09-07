@@ -70,7 +70,7 @@ void PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalSinkState &state_p
 	distinct->Sink(context, *state.distinct_state, lstate, input);
 }
 
-bool PhysicalDelimJoin::Finalize(Pipeline &pipeline, ClientContext &client, unique_ptr<GlobalSinkState> state) {
+void PhysicalDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client, GlobalSinkState &gstate) const {
 	// auto &dstate = (DelimJoinGlobalState &)*state;
 	// // finalize the distinct HT
 	// D_ASSERT(distinct);
@@ -89,9 +89,6 @@ bool PhysicalDelimJoin::Finalize(Pipeline &pipeline, ClientContext &client, uniq
 	// 	}
 	// 	dstate.delim_data.Append(delim_chunk);
 	// }
-	// PhysicalOperator::Finalize(pipeline, client, move(state));
-	// return true;
-	return true;
 }
 
 void PhysicalDelimJoin::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {

@@ -35,11 +35,11 @@ void PipelineExecutor::Execute() {
 			final_chunk.Reset();
 			Execute(final_chunk);
 			if (final_chunk.size() == 0) {
-				pipeline.sink->Combine(context, *pipeline.sink_state, *local_sink_state);
+				pipeline.sink->Combine(context, *pipeline.sink->sink_state, *local_sink_state);
 				break;
 			}
 			StartOperator(pipeline.sink);
-			pipeline.sink->Sink(context, *pipeline.sink_state, *local_sink_state, final_chunk);
+			pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, final_chunk);
 			EndOperator(pipeline.sink, nullptr);
 		}
 	} catch (std::exception &ex) {

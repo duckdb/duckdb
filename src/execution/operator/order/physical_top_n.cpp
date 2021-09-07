@@ -439,13 +439,10 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, Lo
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-bool PhysicalTopN::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> state) {
-	auto &gstate = (TopNGlobalState &)*state;
+void PhysicalTopN::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate_p) const {
+	auto &gstate = (TopNGlobalState &) gstate_p;
 	// global finalize: compute the final top N
 	gstate.heap.Finalize();
-
-	PhysicalOperator::Finalize(pipeline, context, move(state));
-	return true;
 }
 
 //===--------------------------------------------------------------------===//

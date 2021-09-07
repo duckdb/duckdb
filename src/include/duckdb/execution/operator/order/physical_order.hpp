@@ -37,7 +37,7 @@ public:
 	void Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
 	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const override;
-	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate_p) override;
+	void Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const override;
 
 	bool IsSink() const override {
 		return true;
@@ -49,7 +49,7 @@ public:
 	string ParamsToString() const override;
 
 	//! Schedules tasks to merge the data during the Finalize phase
-	static void ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state);
+	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGlobalState &state);
 };
 
 } // namespace duckdb

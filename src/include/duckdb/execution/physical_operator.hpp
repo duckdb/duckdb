@@ -16,6 +16,7 @@
 #include "duckdb/execution/execution_context.hpp"
 
 namespace duckdb {
+class Event;
 class PhysicalOperator;
 class Pipeline;
 
@@ -125,7 +126,7 @@ public:
 	virtual void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
-	virtual bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate);
+	virtual void Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;

@@ -68,9 +68,7 @@ void PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState &gstate, 
 void PhysicalOperator::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 }
 
-bool PhysicalOperator::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate) {
-	this->sink_state = move(gstate);
-	return true;
+void PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const {
 }
 
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {

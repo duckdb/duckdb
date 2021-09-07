@@ -17,6 +17,7 @@
 
 namespace duckdb {
 class Executor;
+class Event;
 
 //! The Pipeline class represents an execution pipeline
 class Pipeline : public std::enable_shared_from_this<Pipeline> {
@@ -24,57 +25,33 @@ class Pipeline : public std::enable_shared_from_this<Pipeline> {
 	friend class PipelineExecutor;
 
 public:
-	Pipeline(Executor &execution_context, ProducerToken &token);
+	Pipeline(Executor &execution_context);
 
 	Executor &executor;
-	ProducerToken &token;
 
 public:
 	ClientContext &GetClientContext();
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
-	void CompleteDependency();
 	bool HasDependencies() {
 		return !dependencies.empty();
 	}
 
 	void Ready();
 	void Reset();
-	void Schedule();
+	void Schedule(shared_ptr<Event> &event);
 
-	//! Finish a single task of this pipeline
-	void FinishTask();
-	//! Finish executing this pipeline
-	void Finish();
+	//! Finalize this pipeline
+	void Finalize(Event &event);
 
 	string ToString() const;
 	void Print() const;
 
-	void SetRecursiveCTE(PhysicalOperator *op) {
-		this->recursive_cte = op;
-	}
-	PhysicalOperator *GetRecursiveCTE() {
-		return recursive_cte;
-	}
-	void ClearParents();
-
-	void IncrementTasks(idx_t amount) {
-		this->total_tasks += amount;
-	}
-
-	bool IsFinished() {
-		return finished;
-	}
 	//! Returns query progress
 	bool GetProgress(int &current_percentage);
 
-public:
-	//! The current threads working on the pipeline
-	atomic<idx_t> finished_tasks;
-	//! The maximum amount of threads that can work on the pipeline
-	atomic<idx_t> total_tasks;
-
 private:
+	//! The current source index
 	idx_t source_idx = 0;
 	//! The chain of intermediate operators
 	vector<PhysicalOperator *> operators;
@@ -83,28 +60,18 @@ private:
 
 	//! The global source state
 	unique_ptr<GlobalSourceState> source_state;
-	//! The global sink state
-	unique_ptr<GlobalSinkState> sink_state;
 
 	//! The parent pipelines (i.e. pipelines that are dependent on this pipeline to finish)
-	unordered_map<Pipeline *, weak_ptr<Pipeline>> parents;
+	vector<weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline
-	unordered_map<Pipeline *, weak_ptr<Pipeline>> dependencies;
-	//! The amount of completed dependencies (the pipeline can only be started after the dependencies have finished
-	//! executing)
-	atomic<idx_t> finished_dependencies;
-
-	//! Whether or not the pipeline is finished executing
-	bool finished;
-	//! The recursive CTE node that this pipeline belongs to, and may be executed multiple times
-	PhysicalOperator *recursive_cte;
+	vector<weak_ptr<Pipeline>> dependencies;
 
 private:
 	bool GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage);
-	void ScheduleSequentialTask();
-	bool LaunchScanTasks(idx_t max_threads);
+	void ScheduleSequentialTask(shared_ptr<Event> &event);
+	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 
-	bool ScheduleParallel();
+	bool ScheduleParallel(shared_ptr<Event> &event);
 };
 
 } // namespace duckdb

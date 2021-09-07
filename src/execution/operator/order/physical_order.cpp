@@ -5,6 +5,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include "duckdb/parallel/event.hpp"
+
 namespace duckdb {
 
 PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality)
@@ -101,8 +103,8 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p
 
 class PhysicalOrderMergeTask : public Task {
 public:
-	PhysicalOrderMergeTask(Pipeline &parent, ClientContext &context, OrderGlobalState &state)
-	    : parent(parent), context(context), state(state) {
+	PhysicalOrderMergeTask(Event &event_p, ClientContext &context, OrderGlobalState &state)
+	    : event(event_p), context(context), state(state) {
 	}
 
 	void Execute() override {
@@ -110,35 +112,56 @@ public:
 		auto &global_sort_state = state.global_sort_state;
 		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));
 		merge_sorter.PerformInMergeRound();
-		// Finish task and act if all tasks are finished
-		lock_guard<mutex> state_guard(global_sort_state.lock);
-		parent.finished_tasks++;
-		if (parent.finished_tasks == parent.total_tasks) {
-			global_sort_state.CompleteMergeRound();
-			if (global_sort_state.sorted_blocks.size() == 1) {
-				// Only one block left: Done!
-				parent.Finish();
-			} else {
-				// Schedule the next round
-				PhysicalOrder::ScheduleMergeTasks(parent, context, state);
-			}
-		}
+		event.FinishTask();
 	}
 
 private:
-	Pipeline &parent;
+	Event &event;
 	ClientContext &context;
 	OrderGlobalState &state;
 };
 
-bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> state_p) {
-	this->sink_state = move(state_p);
-	auto &state = (OrderGlobalState &)*this->sink_state;
+class OrderMergeEvent : public Event {
+public:
+	OrderMergeEvent(OrderGlobalState &gstate_p, Pipeline &pipeline_p) :
+	    Event(pipeline_p.executor), gstate(gstate_p), pipeline(pipeline_p) {}
+
+	OrderGlobalState &gstate;
+	Pipeline &pipeline;
+
+public:
+	void Schedule() override {
+		auto &context = pipeline.GetClientContext();
+
+		// Schedule tasks equal to the number of threads, which will each merge multiple partitions
+		auto &ts = TaskScheduler::GetScheduler(context);
+		idx_t num_threads = ts.NumberOfThreads();
+
+		vector<unique_ptr<Task>> merge_tasks;
+		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
+			merge_tasks.push_back(make_unique<PhysicalOrderMergeTask>(*this, context, gstate));
+		}
+		SetTasks(move(merge_tasks));
+	}
+
+	void FinishEvent() override {
+		auto &global_sort_state = gstate.global_sort_state;
+
+		global_sort_state.CompleteMergeRound();
+		if (global_sort_state.sorted_blocks.size() > 1) {
+			// Multiple blocks remaining: Schedule the next round
+			PhysicalOrder::ScheduleMergeTasks(pipeline, *this, gstate);
+		}
+	}
+};
+
+void PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate_p) const {
+	auto &state = (OrderGlobalState &)gstate_p;
 	auto &global_sort_state = state.global_sort_state;
 
 	if (global_sort_state.sorted_blocks.empty()) {
 		// Empty input!
-		return true;
+		return;
 	}
 
 	// Prepare for merge sort phase
@@ -146,24 +169,15 @@ bool PhysicalOrder::Finalize(Pipeline &pipeline, ClientContext &context, unique_
 
 	// Start the merge phase or finish if a merge is not necessary
 	if (global_sort_state.sorted_blocks.size() > 1) {
-		PhysicalOrder::ScheduleMergeTasks(pipeline, context, state);
-		return false;
-	} else {
-		return true;
+		PhysicalOrder::ScheduleMergeTasks(pipeline, event, state);
 	}
 }
 
-void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state) {
+void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGlobalState &state) {
 	// Initialize global sort state for a round of merging
 	state.global_sort_state.InitializeMergeRound();
-	// Schedule tasks equal to the number of threads, which will each merge multiple partitions
-	auto &ts = TaskScheduler::GetScheduler(context);
-	idx_t num_threads = ts.NumberOfThreads();
-	pipeline.total_tasks += num_threads;
-	for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-		auto new_task = make_unique<PhysicalOrderMergeTask>(pipeline, context, state);
-		ts.ScheduleTask(pipeline.token, move(new_task));
-	}
+	auto new_event = make_shared<OrderMergeEvent>(state, pipeline);
+	event.InsertEvent(move(new_event));
 }
 
 //===--------------------------------------------------------------------===//

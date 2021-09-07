@@ -103,9 +103,9 @@ void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkSt
 //===--------------------------------------------------------------------===//
 static void OrderVector(Vector &vector, idx_t count, MergeOrder &order);
 
-bool PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, ClientContext &context,
-                                          unique_ptr<GlobalSinkState> state) {
-	auto &gstate = (MergeJoinGlobalState &)*state;
+void PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                          GlobalSinkState &gstate_p) const {
+	auto &gstate = (MergeJoinGlobalState &) gstate_p;
 	if (gstate.right_conditions.ChunkCount() > 0) {
 		// now order all the chunks
 		gstate.right_orders.resize(gstate.right_conditions.ChunkCount());
@@ -128,8 +128,6 @@ bool PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, ClientContext &con
 		gstate.right_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.Count()]);
 		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.Count());
 	}
-	PhysicalOperator::Finalize(pipeline, context, move(state));
-	return true;
 }
 
 //===--------------------------------------------------------------------===//

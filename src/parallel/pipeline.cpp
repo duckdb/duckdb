@@ -14,6 +14,7 @@
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
+#include "duckdb/parallel/pipeline_event.hpp"
 
 #include "duckdb/common/algorithm.hpp"
 
@@ -21,23 +22,22 @@ namespace duckdb {
 
 class PipelineTask : public Task {
 public:
-	explicit PipelineTask(shared_ptr<Pipeline> pipeline_p)
-	    : pipeline(move(pipeline_p)), executor(pipeline->GetClientContext(), *pipeline) {
+	explicit PipelineTask(Pipeline &pipeline, shared_ptr<Event> event_p)
+	    : event(move(event_p)), executor(pipeline.GetClientContext(), pipeline) {
 	}
 
-	shared_ptr<Pipeline> pipeline;
+	shared_ptr<Event> event;
 	PipelineExecutor executor;
 
 public:
 	void Execute() override {
 		executor.Execute();
-		pipeline->FinishTask();
+		event->FinishTask();
 	}
 };
 
-Pipeline::Pipeline(Executor &executor_p, ProducerToken &token_p)
-    : executor(executor_p), token(token_p), finished_tasks(0), total_tasks(0), sink(nullptr),
-      finished_dependencies(0), finished(false), recursive_cte(nullptr) {
+Pipeline::Pipeline(Executor &executor_p)
+    : executor(executor_p), sink(nullptr) {
 }
 
 ClientContext &Pipeline::GetClientContext() {
@@ -45,6 +45,7 @@ ClientContext &Pipeline::GetClientContext() {
 }
 
 bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage) {
+	current_percentage = -1;
 	switch (op->type) {
 	case PhysicalOperatorType::TABLE_SCAN: {
 		auto &get = (PhysicalTableScan &)*op;
@@ -54,7 +55,6 @@ bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &cu
 		}
 		//! If the table_scan_progress is not implemented it means we don't support this function yet in the progress
 		//! bar
-		current_percentage = -1;
 		return false;
 	}
 	default:
@@ -67,34 +67,13 @@ bool Pipeline::GetProgress(int &current_percentage) {
 	return GetProgress(client, operators[source_idx], current_percentage);
 }
 
-void Pipeline::FinishTask() {
-	D_ASSERT(finished_tasks < total_tasks);
-	idx_t current_tasks = total_tasks;
-	idx_t current_finished = ++finished_tasks;
-	if (current_finished == current_tasks) {
-		bool finish_pipeline = false;
-		try {
-			finish_pipeline = sink->Finalize(*this, executor.context, move(sink_state));
-		} catch (std::exception &ex) {
-			executor.PushError(ex.what());
-		} catch (...) { // LCOV_EXCL_START
-			executor.PushError("Unknown exception in Finalize!");
-		} // LCOV_EXCL_STOP
-		if (finish_pipeline) {
-			Finish();
-		}
-	}
+void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
+	vector<unique_ptr<Task>> tasks;
+	tasks.push_back(make_unique<PipelineTask>(*this, event));
+	event->SetTasks(move(tasks));
 }
 
-void Pipeline::ScheduleSequentialTask() {
-	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	auto task = make_unique<PipelineTask>(shared_from_this());
-
-	this->total_tasks = 1;
-	scheduler.ScheduleTask(*executor.producer, move(task));
-}
-
-bool Pipeline::ScheduleParallel() {
+bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (!sink->ParallelSink()) {
 		return false;
 	}
@@ -107,27 +86,25 @@ bool Pipeline::ScheduleParallel() {
 		}
 	}
 	idx_t max_threads = source_state->MaxThreads();
-	return LaunchScanTasks(max_threads);
+	return LaunchScanTasks(event, max_threads);
 }
 
-void Pipeline::Schedule() {
-	D_ASSERT(finished_tasks == 0);
-	D_ASSERT(total_tasks == 0);
-	D_ASSERT(finished_dependencies == dependencies.size());
+void Pipeline::Schedule(shared_ptr<Event> &event) {
 	if (!sink) {
 		return;
 	}
-	if (!ScheduleParallel()) {
+	if (!ScheduleParallel(event)) {
 		// could not parallelize this pipeline: push a sequential task instead
-		ScheduleSequentialTask();
+		ScheduleSequentialTask(event);
 	}
 }
 
-bool Pipeline::LaunchScanTasks(idx_t max_threads) {
+bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 	// split the scan up into parts and schedule the parts
 	auto &scheduler = TaskScheduler::GetScheduler(executor.context);
-	if (max_threads > executor.context.db->NumberOfThreads()) {
-		max_threads = executor.context.db->NumberOfThreads();
+	idx_t active_threads = scheduler.NumberOfThreads();
+	if (max_threads > active_threads) {
+		max_threads = active_threads;
 	}
 	if (max_threads <= 1) {
 		// too small to parallelize
@@ -135,41 +112,19 @@ bool Pipeline::LaunchScanTasks(idx_t max_threads) {
 	}
 
 	// launch a task for every thread
-	this->total_tasks = max_threads;
+	vector<unique_ptr<Task>> tasks;
 	for (idx_t i = 0; i < max_threads; i++) {
-		auto task = make_unique<PipelineTask>(shared_from_this());
-		scheduler.ScheduleTask(*executor.producer, move(task));
+		tasks.push_back(make_unique<PipelineTask>(*this, event));
 	}
+	event->SetTasks(move(tasks));
 	return true;
-}
-
-void Pipeline::ClearParents() {
-	for (auto &parent_entry : parents) {
-		auto parent = parent_entry.second.lock();
-		if (!parent) {
-			continue;
-		}
-		parent->dependencies.erase(this);
-	}
-	for (auto &dep_entry : dependencies) {
-		auto dep = dep_entry.second.lock();
-		if (!dep) {
-			continue;
-		}
-		dep->parents.erase(this);
-	}
-	parents.clear();
-	dependencies.clear();
 }
 
 void Pipeline::Reset() {
 	if (sink) {
-		sink_state = sink->GetGlobalSinkState(GetClientContext());
+		sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
 	}
 	source_state = operators[source_idx]->GetGlobalSourceState(GetClientContext());
-	finished_tasks = 0;
-	total_tasks = 0;
-	finished = false;
 }
 
 void Pipeline::Ready() {
@@ -177,36 +132,22 @@ void Pipeline::Ready() {
 	Reset();
 }
 
+void Pipeline::Finalize(Event &event) {
+	try {
+		sink->Finalize(*this, event, executor.context, *sink->sink_state);
+	} catch (std::exception &ex) {
+		executor.PushError(ex.what());
+	} catch (...) { // LCOV_EXCL_START
+		executor.PushError("Unknown exception in Finalize!");
+	} // LCOV_EXCL_STOP
+}
+
 void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 	if (!pipeline) {
 		return;
 	}
-	dependencies[pipeline.get()] = weak_ptr<Pipeline>(pipeline);
-	pipeline->parents[this] = weak_ptr<Pipeline>(shared_from_this());
-}
-
-void Pipeline::CompleteDependency() {
-	idx_t current_finished = ++finished_dependencies;
-	D_ASSERT(current_finished <= dependencies.size());
-	if (current_finished == dependencies.size()) {
-		// all dependencies have been completed: schedule the pipeline
-		Schedule();
-	}
-}
-
-void Pipeline::Finish() {
-	D_ASSERT(!finished);
-	finished = true;
-	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
-	for (auto &parent_entry : parents) {
-		auto parent = parent_entry.second.lock();
-		if (!parent) {
-			continue;
-		}
-		// mark a dependency as completed for each of the parents
-		parent->CompleteDependency();
-	}
-	executor.completed_pipelines++;
+	dependencies.push_back(weak_ptr<Pipeline>(pipeline));
+	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
 }
 
 string Pipeline::ToString() const {

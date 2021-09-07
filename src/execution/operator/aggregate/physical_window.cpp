@@ -1345,15 +1345,6 @@ void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_
 	}
 }
 
-bool PhysicalWindow::FinalizeInternal(ClientContext &context, unique_ptr<GlobalSinkState> gstate_p) {
-	this->sink_state = move(gstate_p);
-	return true;
-}
-
-bool PhysicalWindow::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> gstate_p) {
-	return FinalizeInternal(context, move(gstate_p));
-}
-
 unique_ptr<LocalSinkState> PhysicalWindow::GetLocalSinkState(ExecutionContext &context) const {
 	return make_unique<WindowLocalState>(*this);
 }

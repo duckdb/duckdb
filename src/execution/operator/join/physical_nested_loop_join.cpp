@@ -169,16 +169,14 @@ void PhysicalNestedLoopJoin::Combine(ExecutionContext &context, GlobalSinkState 
 	context.client.profiler->Flush(context.thread.profiler);
 }
 
-bool PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, ClientContext &context,
-                                      unique_ptr<GlobalSinkState> state) {
-	auto &gstate = (NestedLoopJoinGlobalState &)*state;
+void PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                      GlobalSinkState &gstate_p) const {
+	auto &gstate = (NestedLoopJoinGlobalState &)gstate_p;
 	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		gstate.right_found_match = unique_ptr<bool[]>(new bool[gstate.right_data.Count()]);
 		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_data.Count());
 	}
-	PhysicalOperator::Finalize(pipeline, context, move(state));
-	return true;
 }
 
 unique_ptr<GlobalSinkState> PhysicalNestedLoopJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -228,7 +226,6 @@ unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ClientContext
 }
 
 bool PhysicalNestedLoopJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
-	auto &state = (PhysicalNestedLoopJoinState &) state_p;
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.Count() == 0) {

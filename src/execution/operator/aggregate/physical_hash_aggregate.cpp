@@ -9,6 +9,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/parallel/event.hpp"
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
@@ -256,8 +257,8 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 // folds them into the global ht finally.
 class PhysicalHashAggregateFinalizeTask : public Task {
 public:
-	PhysicalHashAggregateFinalizeTask(Pipeline &parent_p, HashAggregateGlobalState &state_p, idx_t radix_p)
-	    : parent(parent_p), state(state_p), radix(radix_p) {
+	PhysicalHashAggregateFinalizeTask(Event &event_p, HashAggregateGlobalState &state_p, idx_t radix_p)
+	    : event(event_p), state(state_p), radix(radix_p) {
 	}
 	static void FinalizeHT(HashAggregateGlobalState &gstate, idx_t radix) {
 		D_ASSERT(gstate.finalized_hts[radix]);
@@ -272,33 +273,44 @@ public:
 
 	void Execute() override {
 		FinalizeHT(state, radix);
-		auto total_tasks = parent.total_tasks.load();
-		auto finished_tasks = ++parent.finished_tasks;
-		// finish the whole pipeline
-		if (total_tasks == finished_tasks) {
-			parent.Finish();
-		}
+		event.FinishTask();
 	}
 
 private:
-	Pipeline &parent;
+	Event &event;
 	HashAggregateGlobalState &state;
 	idx_t radix;
 };
 
-bool PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
-                                     unique_ptr<GlobalSinkState> state) {
-	return FinalizeInternal(context, move(state), false, &pipeline);
+class HashAggregateFinalizeEvent : public Event {
+public:
+	HashAggregateFinalizeEvent(HashAggregateGlobalState &gstate_p, Pipeline *pipeline_p) :
+	    Event(pipeline->executor), gstate(gstate_p), pipeline(pipeline_p) {}
+
+	HashAggregateGlobalState &gstate;
+	Pipeline *pipeline;
+public:
+	void Schedule() override {
+		vector<unique_ptr<Task>> tasks;
+		for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
+			tasks.push_back(make_unique<PhysicalHashAggregateFinalizeTask>(*this, gstate, r));
+		}
+		SetTasks(move(tasks));
+	}
+};
+
+void PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                     GlobalSinkState &gstate) const {
+	FinalizeInternal(context, gstate, false, &pipeline, &event);
 }
 
-void PhysicalHashAggregate::FinalizeImmediate(ClientContext &context, unique_ptr<GlobalSinkState> state) {
-	FinalizeInternal(context, move(state), true, nullptr);
+void PhysicalHashAggregate::FinalizeImmediate(ClientContext &context, GlobalSinkState &gstate) const {
+	FinalizeInternal(context, gstate, true, nullptr, nullptr);
 }
 
-bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<GlobalSinkState> state,
-                                             bool immediate, Pipeline *pipeline) {
-	this->sink_state = move(state);
-	auto &gstate = (HashAggregateGlobalState &)*this->sink_state;
+bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, GlobalSinkState &gstate_p,
+                                             bool immediate, Pipeline *pipeline, Event *event) const {
+	auto &gstate = (HashAggregateGlobalState &) gstate_p;
 
 	// special case if we have non-combinable aggregates
 	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
@@ -327,22 +339,21 @@ bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 			}
 		}
 		// schedule additional tasks to combine the partial HTs
-		if (!immediate) {
-			D_ASSERT(pipeline);
-			pipeline->total_tasks += gstate.partition_info.n_partitions;
-		}
 		gstate.finalized_hts.resize(gstate.partition_info.n_partitions);
 		for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
 			gstate.finalized_hts[r] =
 			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context), group_types,
 			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64);
-			if (immediate) {
+		}
+		if (immediate) {
+			for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
 				PhysicalHashAggregateFinalizeTask::FinalizeHT(gstate, r);
-			} else {
-				D_ASSERT(pipeline);
-				auto new_task = make_unique<PhysicalHashAggregateFinalizeTask>(*pipeline, gstate, r);
-				TaskScheduler::GetScheduler(context).ScheduleTask(pipeline->token, move(new_task));
 			}
+		} else {
+			D_ASSERT(event);
+			D_ASSERT(pipeline);
+			auto new_event = make_shared<HashAggregateFinalizeEvent>(gstate, pipeline);
+			event->InsertEvent(move(new_event));
 		}
 		return immediate;
 	} else { // in the non-partitioned case we immediately combine all the unpartitioned hts created by the threads.

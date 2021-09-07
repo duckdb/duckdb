@@ -24,6 +24,12 @@ class OperatorState;
 class ThreadContext;
 class Task;
 
+struct PipelineEventStack {
+	shared_ptr<Event> pipeline_event;
+	shared_ptr<Event> pipeline_finish_event;
+	shared_ptr<Event> pipeline_complete_event;
+};
+
 struct ProducerToken;
 
 class Executor {
@@ -56,6 +62,16 @@ public:
 	//! Returns the progress of the pipelines
 	bool GetPipelinesProgress(int &current_progress);
 
+	void CompletePipeline() {
+		completed_pipelines++;
+	}
+	ProducerToken &GetToken() {
+		return *producer;
+	}
+
+private:
+	void ScheduleEvents();
+
 private:
 	PhysicalOperator *physical_plan;
 
@@ -70,6 +86,8 @@ private:
 	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
 	vector<string> exceptions;
+	//! Pipeline event map
+	unordered_map<Pipeline *, unique_ptr<PipelineEventStack>> event_map;
 
 	//! The amount of completed pipelines of the query
 	atomic<idx_t> completed_pipelines;

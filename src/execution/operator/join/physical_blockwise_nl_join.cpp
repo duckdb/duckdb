@@ -57,15 +57,13 @@ void PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalSinkState &s
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-bool PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, ClientContext &context,
-                                       unique_ptr<GlobalSinkState> state) {
-	auto &gstate = (BlockwiseNLJoinGlobalState &)*state;
+void PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                       GlobalSinkState &gstate_p) const {
+	auto &gstate = (BlockwiseNLJoinGlobalState &)gstate_p;
 	if (IsRightOuterJoin(join_type)) {
 		gstate.rhs_found_match = unique_ptr<bool[]>(new bool[gstate.right_chunks.Count()]);
 		memset(gstate.rhs_found_match.get(), 0, sizeof(bool) * gstate.right_chunks.Count());
 	}
-	PhysicalOperator::Finalize(pipeline, context, move(state));
-	return true;
 }
 
 //===--------------------------------------------------------------------===//

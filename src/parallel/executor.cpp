@@ -11,6 +11,10 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 
+#include "duckdb/parallel/pipeline_event.hpp"
+#include "duckdb/parallel/pipeline_finish_event.hpp"
+#include "duckdb/parallel/pipeline_complete_event.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
@@ -19,6 +23,38 @@ Executor::Executor(ClientContext &context) : context(context) {
 }
 
 Executor::~Executor() {
+}
+
+void Executor::ScheduleEvents() {
+	D_ASSERT(event_map.empty());
+	// create all the required pipeline events
+	for(auto &pipeline : pipelines) {
+		auto event_stack = make_unique<PipelineEventStack>();
+		event_stack->pipeline_event = make_shared<PipelineEvent>(pipeline);
+		event_stack->pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
+		event_stack->pipeline_complete_event = make_shared<PipelineCompleteEvent>(pipeline->executor);
+
+		event_stack->pipeline_finish_event->AddDependency(*event_stack->pipeline_event);
+		event_stack->pipeline_complete_event->AddDependency(*event_stack->pipeline_finish_event);
+		event_map[pipeline.get()] = move(event_stack);
+	}
+	// set up the dependencies between pipeline events
+	for(auto &pipeline : pipelines) {
+		auto &entry = event_map[pipeline.get()];
+		for(auto &dependency : pipeline->dependencies) {
+			auto dep = dependency.lock();
+			D_ASSERT(dep);
+			auto &dep_entry = event_map[dep.get()];
+			entry->pipeline_event->AddDependency(*dep_entry->pipeline_complete_event);
+		}
+	}
+	// schedule the pipelines that do not have dependencies
+	for(auto &pipeline : pipelines) {
+		auto &entry = event_map[pipeline.get()];
+		if (!pipeline->HasDependencies()) {
+			entry->pipeline_event->Schedule();
+		}
+	}
 }
 
 void Executor::Initialize(PhysicalOperator *plan) {
@@ -32,23 +68,21 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		context.profiler->Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
 
-		root_pipeline = make_shared<Pipeline>(*this, *producer);
+		root_pipeline = make_shared<Pipeline>(*this);
 		root_pipeline->sink = nullptr;
 		BuildPipelines(physical_plan, root_pipeline.get());
 
 		this->total_pipelines = pipelines.size();
 
-		// schedule pipelines that do not have dependents
+		// ready all the pipelines
 		root_pipeline->Ready();
 		for (auto &pipeline : pipelines) {
 #ifdef DEBUG
 			D_ASSERT(!pipeline->ToString().empty());
 #endif
 			pipeline->Ready();
-			if (!pipeline->HasDependencies()) {
-				pipeline->Schedule();
-			}
 		}
+		ScheduleEvents();
 		root_executor = make_unique<PipelineExecutor>(context, *root_pipeline);
 	}
 
@@ -109,13 +143,14 @@ void Executor::Reset() {
 	total_pipelines = 0;
 	exceptions.clear();
 	pipelines.clear();
+	event_map.clear();
 }
 
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 	D_ASSERT(current);
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
-		auto pipeline = make_shared<Pipeline>(*this, *producer);
+		auto pipeline = make_shared<Pipeline>(*this);
 		pipeline->sink = op;
 
 		// the current is dependent on this pipeline to complete
@@ -162,14 +197,14 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		}
 		// recurse into the pipeline child
 		BuildPipelines(pipeline_child, pipeline.get());
-		for (auto &entry : pipeline->dependencies) {
-			auto dependency = entry.second.lock();
-			auto dependency_cte = dependency->GetRecursiveCTE();
-			if (dependency_cte) {
-				throw InternalException("FIXME: recursive CTEs");
-				// pipeline->SetRecursiveCTE(dependency_cte);
-			}
-		}
+		// for (auto &entry : pipeline->dependencies) {
+		// 	auto dependency = entry.second.lock();
+		// 	auto dependency_cte = dependency->GetRecursiveCTE();
+		// 	if (dependency_cte) {
+		// 		throw InternalException("FIXME: recursive CTEs");
+		// 		// pipeline->SetRecursiveCTE(dependency_cte);
+		// 	}
+		// }
 		if (op->type == PhysicalOperatorType::DELIM_JOIN) {
 			throw InternalException("FIXME: delim join");
 			// // for delim joins, recurse into the actual join
@@ -182,16 +217,16 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			// }
 			// BuildPipelines(delim_join.join.get(), parent);
 		}
-		auto pipeline_cte = pipeline->GetRecursiveCTE();
-		if (!pipeline_cte) {
-			// regular pipeline: schedule it
-			pipelines.push_back(move(pipeline));
-		} else {
-			throw InternalException("FIXME: recursive CTEs");
-			// // add it to the set of dependent pipelines in the CTE
-			// auto &cte = (PhysicalRecursiveCTE &)*pipeline_cte;
-			// cte.pipelines.push_back(move(pipeline));
-		}
+		// regular pipeline: schedule it
+		pipelines.push_back(move(pipeline));
+		// auto pipeline_cte = pipeline->GetRecursiveCTE();
+		// if (!pipeline_cte) {
+		// } else {
+		// 	throw InternalException("FIXME: recursive CTEs");
+		// 	// // add it to the set of dependent pipelines in the CTE
+		// 	// auto &cte = (PhysicalRecursiveCTE &)*pipeline_cte;
+		// 	// cte.pipelines.push_back(move(pipeline));
+		// }
 	} else {
 		// operator is not a sink! recurse in children
 		// first check if there is any additional action we need to do depending on the type

@@ -149,12 +149,9 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-bool PhysicalHashJoin::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalSinkState> state) {
-	auto &sink = (HashJoinGlobalState &)*state;
+void PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const {
+	auto &sink = (HashJoinGlobalState &) gstate;
 	sink.hash_table->Finalize();
-
-	PhysicalOperator::Finalize(pipeline, context, move(state));
-	return true;
 }
 
 //===--------------------------------------------------------------------===//
