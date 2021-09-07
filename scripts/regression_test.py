@@ -74,8 +74,6 @@ def regression_test(threshold):
     master_time = run_benchmark(install_duck_master,repetitions)
     current_time = run_benchmark(install_duck_current,repetitions)
 
-    print (master_time)
-    print(current_time)
     # If the regression status is true, there was no regression
     regression_status = True
     for i in range(len(master_time)):
