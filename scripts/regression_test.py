@@ -30,14 +30,8 @@ def install_duck_master():
         assert(0)
 
 def uninstall_duck():
-    duck_installed = True
-    while (duck_installed):
-        os.system("pip uninstall -y duckdb")
-        try:
-            import duckdb
-        except:
-            duck_installed = False
-
+    os.system("pip uninstall -y duckdb")
+    
 
 def install_duck_current():
     os.system("BUILD_PYTHON=1 GEN=ninja make release")
