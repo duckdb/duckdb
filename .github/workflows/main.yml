@@ -1395,6 +1395,7 @@ jobs:
   regression-test:
     name: Regression Test
     runs-on: ubuntu-20.04
+    needs: linux-debug
 
     env:
       CC: gcc-10
