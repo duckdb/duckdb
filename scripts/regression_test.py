@@ -22,13 +22,31 @@ def truncate(number, decimals=0):
     return math.trunc(number * factor) / factor
 
 def install_duck_master():
-    assert(os.system("pip install duckdb --pre"))
+    os.system("pip install duckdb --pre")
+    try:
+        import duckdb
+    except:
+        print ("pip install duckdb --pre FAILED")
+        assert(0)
 
 def uninstall_duck():
-    assert(os.system("pip uninstall -y duckdb"))
+    os.system("pip uninstall -y duckdb")
+    no_duck = False
+    try:
+        import duckdb
+    except:
+        no_duck = True
+    if not no_duck:
+        assert(0)
+        print ("pip uninstall -y duckdb FAILED")
 
 def install_duck_current():
-    assert(os.system("BUILD_PYTHON=1 GEN=ninja make release"))
+    os.system("BUILD_PYTHON=1 GEN=ninja make release")
+    try:
+        import duckdb
+    except:
+        print ("BUILD_PYTHON=1 GEN=ninja make release FAILED")
+        assert(0)
 
 def run_tpch_query(duckdb_conn,query_number):
     query_result = []
