@@ -24,23 +24,47 @@ public:
 	vector<LogicalType> join_key_types;
 
 public:
-	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	// Operator Interface
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
 
+	bool ParallelOperator() const override {
+		return true;
+	}
+
+public:
+	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return IsRightOuterJoin(join_type);
+	}
+	bool ParallelSource() const override {
+		return true;
+	}
+
+public:
+	// Sink Interface
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
 	void Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const override;
 
-	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
-	// unique_ptr<OperatorState> GetOperatorState() override;
-	// void FinalizeOperatorState(OperatorState &state, ExecutionContext &context) override;
+	bool IsSink() const override {
+		return true;
+	}
+	bool ParallelSink() const override {
+		return true;
+	}
 
 private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
-	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const;
+	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
-	void ResolveComplexJoin(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const;
+	bool ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
 };
 
 } // namespace duckdb
