@@ -74,7 +74,7 @@ void PipelineExecutor::Execute(DataChunk &result) {
 		// if current_idx is the last possible index (>= operators.size()) we write to the result
 		// otherwise we write to an intermediate chunk
 		auto current_intermediate = current_idx - pipeline.source_idx;
-		auto &current_chunk = current_idx >= intermediate_chunks.size() ? result : *intermediate_chunks[current_intermediate];
+		auto &current_chunk = current_intermediate >= intermediate_chunks.size() ? result : *intermediate_chunks[current_intermediate];
 		current_chunk.Reset();
 		StartOperator(pipeline.operators[current_idx]);
 		if (current_idx == pipeline.source_idx) {

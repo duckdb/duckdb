@@ -23,10 +23,26 @@ public:
 
 	unique_ptr<Expression> condition;
 
-// public:
-// 	// Operator interface
-// 	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
-// 	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+public:
+	// Operator Interface
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+
+	bool ParallelOperator() const override {
+		return true;
+	}
+
+public:
+	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
+
+	bool IsSource() const override {
+		return IsRightOuterJoin(join_type);
+	}
+	bool ParallelSource() const override {
+		return true;
+	}
 
 public:
 	// Sink interface
@@ -37,6 +53,14 @@ public:
 	          DataChunk &input) const override;
 	void Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const override;
 
+	bool IsSink() const override {
+		return true;
+	}
+	bool ParallelSink() const override {
+		return true;
+	}
+
+public:
 	string ParamsToString() const override;
 };
 

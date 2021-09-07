@@ -21,6 +21,8 @@ public:
 	JoinType join_type;
 
 public:
+	bool EmptyResultIfRHSIsEmpty() const;
+
 	static void ConstructSemiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
 	static void ConstructAntiJoinResult(DataChunk &left, DataChunk &result, bool found_match[]);
 	static void ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &left, DataChunk &result, bool found_match[],
