@@ -54,8 +54,6 @@ public:
 
 	//! The HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
-	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
-	JoinHTScanState ht_scan_state;
 };
 
 unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -219,11 +217,27 @@ bool PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, Data
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
+class HashJoinScanState : public GlobalSourceState {
+public:
+	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
+	JoinHTScanState ht_scan_state;
+
+	idx_t MaxThreads() override{
+		return 0;
+	}
+
+};
+
+unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<HashJoinScanState>();
+}
+
 void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = (HashJoinGlobalState &)*sink_state;
-	sink.hash_table->ScanFullOuter(chunk, sink.ht_scan_state);
+	auto &state = (HashJoinScanState &) gstate;
+	sink.hash_table->ScanFullOuter(chunk, state.ht_scan_state);
 }
 
 } // namespace duckdb

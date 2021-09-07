@@ -45,6 +45,7 @@ public:
 
 public:
 	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
 
 	bool IsSource() const override {

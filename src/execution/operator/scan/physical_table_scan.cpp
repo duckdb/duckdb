@@ -43,7 +43,6 @@ public:
 	idx_t MaxThreads() override{
 		return max_threads;
 	}
-
 };
 
 class TableScanLocalState : public LocalSourceState {
