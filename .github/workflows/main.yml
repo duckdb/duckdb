@@ -12,1386 +12,1386 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
-  linux-debug:
-    name: Linux Debug
-    runs-on: ubuntu-20.04
-
-    env:
-      CC: ccache gcc-10
-      CXX: ccache g++-10
-      TREAT_WARNINGS_AS_ERRORS: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
-
-    - name: Build
-      run:  make debug
-
-    - name: Test
-      run: make unittestci
-
-  format-check:
-    name: Format Check
-    runs-on: ubuntu-20.04
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
-
-    - name: Format Check
-      run: |
-        clang-format --version
-        clang-format --dump-config
-        make format-check-silent
-
-  tidy-check:
-    name: Tidy Check
-    runs-on: ubuntu-20.04
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      TIDY_THREADS: 4
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
-
-    - name: Tidy Check
-      run: make tidy-check
-
-  win-release-64:
-    name: Windows (64 Bit)
-    runs-on: windows-latest
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Build
-      run: |
-        python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1
-        cmake --build . --config Release
-
-    - name: Test
-      run: test/Release/unittest.exe
-
-    - name: Tools Test
-      run: |
-        python tools/shell/shell-test.py Release/duckdb.exe
-        java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
-
-    - name: Deploy
-      run: |
-        python scripts/amalgamation.py
-        choco install zip -y --force
-        zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
-        zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-binaries-windows
-        path: |
-          libduckdb-windows-amd64.zip
-          duckdb_cli-windows-amd64.zip
-          tools/jdbc/duckdb_jdbc.jar
-
-    - uses: ilammy/msvc-dev-cmd@v1
-    - name: Duckdb.dll export symbols with C++ on Windows
-      run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
-
-  win-release-32:
-    name: Windows (32 Bit)
-    runs-on: windows-latest
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Build
-      run: |
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
-        cmake --build . --config Release
-
-    - name: Test
-      run: test/Release/unittest.exe
-
-    - name: Tools Test
-      run: |
-        python tools/shell/shell-test.py Release/duckdb.exe
-
-    - name: Deploy
-      run: |
-        python scripts/amalgamation.py
-        choco install zip -y --force
-        zip -j duckdb_cli-windows-i386.zip Release/duckdb.exe
-        zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-binaries-windows
-        path: |
-          libduckdb-windows-i386.zip
-          duckdb_cli-windows-i386.zip
-          tools/jdbc/duckdb_jdbc.jar
-
-  mingw:
-     name: MingW (64 Bit)
-     runs-on: windows-latest
-     needs: linux-debug
-     defaults:
-       run:
-         shell: msys2 {0}
-     steps:
-       - uses: actions/checkout@v2
-       - uses: msys2/setup-msys2@v2
-         with:
-           msystem: MINGW64
-           update: true
-           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
-       # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
-       - name: Put MSYS2_MinGW64 on PATH
-         # there is not yet an environment variable for this path from msys2/setup-msys2
-         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
-
-       - name: Build
-         run: |
-           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_PARQUET_EXTENSION=1
-           cmake --build . --config Release
-
-       - name: Test
-         run: |
-           cp src/libduckdb.dll .
-           test/unittest.exe
-
-  xcode-release:
-    name: OSX Release
-    runs-on: macos-latest
-    needs: linux-debug
-
-    env:
-      BUILD_VISUALIZER: 1
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_REST: 1
-      BUILD_JDBC: 1
-      BUILD_HTTPFS: 1
-      OPENSSL_ROOT_DIR: /usr/local/opt/openssl/
-
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Build
-      run: make
-
-    - name: Unit Test
-      run: make allunit
-
-    - name: Tools Tests
-      run: |
-        python tools/shell/shell-test.py build/release/duckdb
-        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
-
-    - name: Examples
-      run: |
-        (cd examples/embedded-c; make)
-        (cd examples/embedded-c++; make)
-        (cd examples/jdbc; make; make maven)
-
-    - name: Deploy
-      run: |
-        python scripts/amalgamation.py
-        zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
-        zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-binaries-osx
-        path: |
-          libduckdb-osx-amd64.zip
-          duckdb_cli-osx-amd64.zip
-          build/release/tools/jdbc/duckdb_jdbc.jar
-
-
-  xcode-debug:
-    name: OSX Debug
-    runs-on: macos-latest
-    needs: linux-debug
-
-    env:
-      TREAT_WARNINGS_AS_ERRORS: 1
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Build
-      run: make debug
-
-    - name: Test
-      run: make unittestci
-
-    - name: Amalgamation
-      run: |
-        python scripts/amalgamation.py --extended
-        python scripts/parquet_amalgamation.py
-        cd src/amalgamation
-        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
-        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
-        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
-
-  linux-release-64:
-    name: Linux (64 Bit)
-    runs-on: ubuntu-16.04
-    needs: linux-debug
-
-    env:
-      GEN: ninja
-      BUILD_VISUALIZER: 1
-      BUILD_BENCHMARK: 1
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_REST: 1
-      BUILD_JDBC: 1
-      BUILD_HTTPFS: 1
-      TREAT_WARNINGS_AS_ERRORS: 1
-      FORCE_WARN_UNUSED: 1
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Build
-      run: STATIC_LIBCPP=1 make
-
-    - name: Test
-      run: make allunit
-
-    - name: Symbol Leakage Test
-      run: python scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
-    - name: Tools Tests
-      run: |
-        python tools/shell/shell-test.py build/release/duckdb
-        pip install requests
-        python tools/rest/test_the_rest.py build/release/tools/rest
-        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
-
-    - name: Examples
-      run: |
-        (cd examples/embedded-c; make)
-        (cd examples/embedded-c++; make)
-        (cd examples/jdbc; make; make maven)
-        build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
-
-    - name: Deploy
-      run: |
-        python scripts/amalgamation.py
-        zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
-        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
-        zip -j duckdb_rest-linux-amd64.zip build/release/tools/rest/duckdb_rest_server
-        python scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-binaries-linux
-        path: |
-          libduckdb-linux-amd64.zip
-          duckdb_cli-linux-amd64.zip
-          build/release/tools/jdbc/duckdb_jdbc.jar
-
-
-
-  linux-release-32:
-    name: Linux (32 Bit)
-    runs-on: ubuntu-16.04
-    needs: linux-debug
-
-    env:
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
-
-    - name: Build
-      run: |
-        mkdir -p build/release
-        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
-
-    - name: Test
-      run: build/release/test/unittest "*"
-
-    - name: Deploy
-      run: |
-        python scripts/amalgamation.py
-        zip -j duckdb_cli-linux-i386.zip build/release/duckdb
-        zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-binaries-linux
-        path: |
-          libduckdb-linux-i386.zip
-          duckdb_cli-linux-i386.zip
-          build/release/tools/jdbc/duckdb_jdbc.jar
-
-
-  linux-rpi:
-    name: Linux (Raspberry Pi)
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
-
-    - name: Build
-      run: |
-        export TOOLCHAIN=`pwd`/rpi-tools
-        mkdir -p build/release
-        cd build/release
-        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
-        cmake --build .
-        file duckdb
-
-    - name: Deploy
-      run: |
-        python scripts/amalgamation.py
-        zip -j duckdb_cli-linux-rpi.zip build/release/duckdb
-        zip -j libduckdb-linux-rpi.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-linux-rpi.zip duckdb_cli-linux-rpi.zip
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-binaries-rpi
-        path: |
-          libduckdb-linux-rpi.zip
-          duckdb_cli-linux-rpi.zip
-
-  linux-arrow:
-      name: Linux Debug (Arrow Tests)
-      runs-on: ubuntu-20.04
-      needs: linux-debug
-
-      env:
-        CC: gcc-10
-        CXX: g++-10
-        TREAT_WARNINGS_AS_ERRORS: 1
-        GEN: ninja
-
-      steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Build
-        run: BUILD_ARROW_ABI_TEST=1 make debug
-
-      - name: Test
-        run: make unittestarrow
-
-  old-gcc:
-    name: GCC 4.8
-    runs-on: ubuntu-18.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-4.8
-      CXX: g++-4.8
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
-
-    - name: Build
-      run: make release
-
-    - name: Test
-      run: make allunit
-
-
-  centos:
-    name: CentOS 7
-    runs-on: ubuntu-latest
-    container: centos:7
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: yum install -y gcc gcc-c++ git cmake make
-
-    - name: Build
-      run: make release
-
-    - name: Test
-      run: ./build/release/test/unittest
-
-
-  release-assert:
-    name: Release Assertions
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
-      DISABLE_SANITIZER: 1
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Build
-      run: make relassert
-
-    - name: Test
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
-
-  force-storage:
-    name: Force Storage
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_ICU: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Build
-      run: make reldebug
-
-    - name: Test
-      run: build/reldebug/test/unittest "*" --force-storage
-
-
-  threadsan:
-    name: Thread Sanitizer
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
-      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Build
-      run: THREADSAN=1 make reldebug
-
-    - name: Test
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]"
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]"
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
-
-  valgrind:
-    name: Valgrind
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      DISABLE_SANITIZER: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
-
-    - name: Build
-      run: make debug
-
-    - name: Test
-      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
-
-  codecov:
-    name: CodeCov
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      GEN: ninja
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov
-
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.9'
-
-      - name: Before Install
-        run: |
-          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow>=5.0" pytest
-          sudo apt-get install g++
-
-      - name: Coverage Reset
-        run: |
-          lcov --config-file .github/workflows/lcovrc --zerocounters --directory .
-          lcov --config-file .github/workflows/lcovrc --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
-
-      - name: Run Tests
-        run: |
-          mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
-          (cd tools/pythonpkg/tests && python3 -m pytest)
-          build/coverage/test/unittest
-          build/coverage/test/unittest "[intraquery]"
-          build/coverage/test/unittest "[interquery]"
-          python3 scripts/try_timeout.py --timeout=1200 --retry=3 build/coverage/test/unittest "[coverage]"
-          build/coverage/test/unittest "[detailed_profiler]"
-          build/coverage/test/unittest "[tpch]"
-          build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
-          python tools/shell/shell-test.py build/coverage/duckdb
-
-
-      - name: Generate Coverage
-        run: |
-          lcov --config-file .github/workflows/lcovrc --directory . --base-directory . --no-external --capture --output-file coverage.info
-          lcov --config-file .github/workflows/lcovrc --remove coverage.info $(< .github/workflows/lcov_exclude) -o lcov.info
-
-      - name: CodeCov Upload
-        uses: codecov/codecov-action@v1
-        with:
-          files: lcov.info
-          fail_ci_if_error: true
-
-  vector-sizes:
-    name: Vector Sizes
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Test
-      run: python scripts/test_vector_sizes.py
-
-
-  sqllogic:
-    name: Sqllogic tests
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Test
-      run: make sqlite
-
-
-  expanded:
-    name: Expanded
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      TREAT_WARNINGS_AS_ERRORS: 1
-      DISABLE_UNITY: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Build
-      run: make debug
-
-
-  sqlancer:
-    name: SQLancer
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      BUILD_JDBC: 1
-      FORCE_QUERY_LOG: sqlancer_log.tmp
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/hannesmuehleisen/sqlancer
-        cd sqlancer
-        git checkout persistent
-        mvn package -q -DskipTests
-
-    - name: Build
-      run: make reldebug
-
-    - name: Test
-      run: |
-        cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        python3 scripts/run_sqlancer.py
-
-
-  sqlancer_persistent:
-    name: SQLancer (Persistent)
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      BUILD_JDBC: 1
-      FORCE_QUERY_LOG: sqlancer_log.tmp
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/hannesmuehleisen/sqlancer
-        cd sqlancer
-        git checkout persistent
-        mvn package -q -DskipTests
-
-    - name: Build
-      run: make reldebug
-
-    - name: Test
-      run: |
-        cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        python3 scripts/run_sqlancer.py --persistent
-
-
-  jdbc:
-    name: JDBC Compliance
-    runs-on: ubuntu-18.04
-    needs: linux-debug
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      BUILD_JDBC: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/cwida/jdbccts.git
-
-    - name: Build
-      run: make release
-
-    - name: Test
-      run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
-
-
-  odbc:
-    name: ODBC
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      BUILD_ODBC: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Dependencies
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3 python3-pyodbc python3-pip julia
-        pip3 install pyodbc
-
-    - name: Install nanodbc
-      run: |
-        wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
-        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
-
-    - name: Install psqlodbc
-      run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && make debug)
-
-    - name: Build
-      run: DISABLE_SANITIZER=1 make debug
-
-    - name: Test nanodbc
-      run: ./tools/odbc/test/run_nanodbc_tests.sh
-
-    - name: Test psqlodbc
-      run: ./tools/odbc/test/run_psqlodbc_tests.sh
-
-    - name: Test isql
-      run: ./tools/odbc/test/run_isql_tests.sh
-
-    - name: Test R ODBC
-      run: R -f tools/odbc/test/rodbc.R
-
-    - name: Test Python ODBC
-      run: ./tools/odbc/test/run_pyodbc_tests.sh
-
-    - name: Test Julia ODBC
-      run: |
-        export ASAN_OPTIONS=verify_asan_link_order=0
-        julia tools/odbc/test/julia-test.jl
-
-
-  linux-python3:
-    name: Python 3 Linux
-    runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        arch: [auto, aarch64]
-    needs: linux-debug
-
-    env:
-      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-      CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests && python -m pytest {project}/tests_slow'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - uses: docker/setup-qemu-action@v1
-      if: ${{ matrix.arch == 'aarch64' }}
-      name: Set up QEMU
-
-    - name: Install
-      run: pip install cibuildwheel twine
-
-    - name: Build
-      run: |
-        cd tools/pythonpkg
-        python setup.py sdist
-        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cibuildwheel --output-dir wheelhouse duckdb_tarball
-
-    - name: Deploy aarch64
-      if: ${{ matrix.arch == 'aarch64' }}
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
-          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-        fi
-
-    - name: Deploy regular
-      if: ${{ matrix.arch != 'aarch64' }}
-      run: |
-        python scripts/asset-upload-gha.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
-          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
-        fi
-
-  linux-python3-httpfs:
-    name: Python 3 Linux with HTTPFS support
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-      CIBW_BEFORE_BUILD: 'yum install -y openssl-devel && pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-      CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=0.24"  && (pip install --prefer-binary "pyarrow>=5.0" || true)'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      CIBW_ENVIRONMENT: 'BUILD_HTTPFS=1'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
-
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-python@v2
-        with:
-          python-version: '3.7'
-
-      - name: Install
-        run: pip install cibuildwheel twine
-
-      - name: Build
-        run: |
-          cd tools/pythonpkg
-          BUILD_HTTPFS=1 python setup.py sdist
-          mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-          cibuildwheel --output-dir wheelhouse duckdb_tarball
-
-  osx-python3:
-    name: Python 3 OSX
-    runs-on: macos-latest
-    needs: linux-debug
-
-    env:
-      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-      CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: pip install cibuildwheel twine
-
-    - name: Build
-      run: |
-        cd tools/pythonpkg
-        python setup.py sdist
-        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cibuildwheel --output-dir wheelhouse duckdb_tarball
-
-    - name: Deploy
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
-          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-        fi
-
-  win-python3:
-    name: Python 3 Windows
-    runs-on: windows-latest
-    needs: linux-debug
-
-    env:
-      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-      CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: pip install cibuildwheel twine
-
-    - name: Build
-      run: |
-        cd tools/pythonpkg
-        python setup.py sdist
-        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cibuildwheel --output-dir wheelhouse duckdb_tarball
-
-    - name: Deploy
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
-          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-        fi
-
-
-  rstats-linux:
-    name: R Package Linux
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    env:
-      LIBARROW_BINARY : 'true'
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - uses: r-lib/actions/setup-r@v1
-      with:
-        r-version: 'devel'
-
-    - name: Install
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind
-        mkdir -p $HOME/.R
-        R -f tools/rpkg/dependencies.R
-
-    - name: Prepare
-      run: |
-        cd tools/rpkg
-        ./configure
-        R CMD build .
-
-    - name: Tests
-      run: |
-        cd tools/rpkg
-        R CMD INSTALL -d duckdb_*.tar.gz
-        (cd tests && R -f testthat.R)
-
-    - name: R CMD check
-      run: |
-        cd tools/rpkg
-        R CMD check --as-cran -o /tmp duckdb_*.tar.gz
-        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
-
-    - name: Valgrind
-      run: |
-        cd tools/rpkg
-        R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
-
-    - name: Print R log on failure
-      if: ${{ failure() }}
-      run: |
-        ls -R /tmp/duckdb.Rcheck
-        cat /tmp/duckdb.Rcheck/00check.log
-        cat /tmp/duckdb.Rcheck/tests/testthat.Rout.fail
-
-    - name: Deploy
-      run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
-
-
-  rstats-windows:
-    name: R Package Windows
-    runs-on: windows-latest
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - uses: r-lib/actions/setup-r@v1
-      with:
-        r-version: 'devel'
-
-    - name: Install
-      run: |
-        R -f tools/rpkg/dependencies.R
-
-    - name: Build
-      run: |
-        cd tools/rpkg
-        ./configure
-        R CMD build .
-        R CMD INSTALL duckdb_*.tar.gz
-        (cd tests && R -f testthat.R)
-        R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
-        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
-
-
-  rubsan:
-    name: R UBSAN
-    runs-on: ubuntu-latest
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Run
-      run: |
-        (cd tools/rpkg && ./configure && R CMD build .)
-        docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c "mkdir -p ~/.R && echo -e \"PKG_CFLAGS=-fno-sanitize-recover=all\\nPKG_CXXFLAGS=-fno-sanitize-recover=all\" > ~/.R/Makevars && export CMAKE_UNITY_BUILD=OFF ARROW_R_DEV=TRUE LIBARROW_BINARY=true && cd /duckdb/tools/rpkg/ && RDsan -f dependencies.R && RDsan CMD INSTALL duckdb_*.tar.gz && cd tests && UBSAN_OPTIONS=print_stacktrace=1 RDsan -f testthat.R"
-
-    - name: Print R log on failure
-      if: ${{ failure() }}
-      run: |
-        cat duckdb.Rcheck/00check.log
-        cat duckdb.Rcheck/tests/testthat.Rout.fail
-
-
-  linux-tarball-v2:
-    name: Python 2 Tarball
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '2.7'
-
-    - name: Install
-      run: |
-        pip install setuptools-scm==5.0.2
-        pip install numpy pytest pandas
-
-    - name: Build
-      run: |
-        python --version
-        git archive --format zip --output test-tarball.zip HEAD
-        mkdir duckdb-test-tarball
-        mv test-tarball.zip duckdb-test-tarball
-        cd duckdb-test-tarball
-        unzip test-tarball.zip
-        cd tools/pythonpkg
-        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-        python setup.py install --user
-        (cd tests/ && python -m pytest)
-
-  linux-tarball:
-    name: Python 3 Tarball
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: pip install numpy pytest pandas
-
-    - name: Build
-      run: |
-        python --version
-        git archive --format zip --output test-tarball.zip HEAD
-        mkdir duckdb-test-tarball
-        mv test-tarball.zip duckdb-test-tarball
-        cd duckdb-test-tarball
-        unzip test-tarball.zip
-        cd tools/pythonpkg
-        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-        python setup.py install --user
-        (cd tests/ && python -m pytest)
-
-  linux-nodejs:
-    name: node.js Linux
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Setup
-      run: ./scripts/node_version.sh upload
-
-    - name: Node 10
-      run: ./scripts/node_build.sh 10
-
-    - name: Node 12
-      run: ./scripts/node_build.sh 12
-
-    - name: Node 14
-      run: ./scripts/node_build.sh 14
-
-    - name: Node 15
-      run: ./scripts/node_build.sh 15
-
-
-  osx-nodejs:
-    name: node.js OSX
-    runs-on: macos-latest
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Setup
-      run: ./scripts/node_version.sh
-
-    - name: Node 10
-      run: ./scripts/node_build.sh 10
-
-    - name: Node 12
-      run: ./scripts/node_build.sh 12
-
-    - name: Node 14
-      run: ./scripts/node_build.sh 14
-
-    - name: Node 15
-      run: ./scripts/node_build.sh 15
-
-  win-nodejs:
-    name: node.js Windows
-    runs-on: windows-latest
-    needs: linux-debug
-
-    strategy:
-      matrix:
-        node: [ '10', '12', '14', '15' ]
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Setup Node
-      uses: actions/setup-node@v2
-      with:
-        node-version: ${{ matrix.node }}
-
-    - name: Node Version
-      run: ./scripts/node_version.sh
-
-    - name: Node
-      run: ./scripts/node_build_win.sh
-
-  linux-wasm-release:
-    name: WebAssembly Release
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Build Amalgamation
-      run: python scripts/amalgamation.py
-
-    - name: Setup
-      run: ./scripts/wasm_configure.sh
-
-    - name: Build Library Module
-      run: ./scripts/wasm_build_lib.sh Release
-
-    - name: Build Test Module
-      run: ./scripts/wasm_build_test.sh Release
-
-    - name: Test WASM Module
-      run: node ./test/wasm/hello_wasm_test.js
-
-    - name: Package
-      run: |
-        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
-        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
-
-    - uses: actions/upload-artifact@v2
-      with:
-        name: duckdb-wasm32-nothreads
-        path: |
-          duckdb-wasm32-nothreads.zip
-
-  docs:
-    name: Website Docs
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Clone Website
-      run: git clone https://github.com/duckdb/duckdb-web
-
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.9'
-
-    - name: Package
-      run: |
-        cd duckdb-web
-        python3 scripts/generate_docs.py ..
-
+#  linux-debug:
+#    name: Linux Debug
+#    runs-on: ubuntu-20.04
+#
+#    env:
+#      CC: ccache gcc-10
+#      CXX: ccache g++-10
+#      TREAT_WARNINGS_AS_ERRORS: 1
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+#
+#    - name: Build
+#      run:  make debug
+#
+#    - name: Test
+#      run: make unittestci
+#
+#  format-check:
+#    name: Format Check
+#    runs-on: ubuntu-20.04
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
+#
+#    - name: Format Check
+#      run: |
+#        clang-format --version
+#        clang-format --dump-config
+#        make format-check-silent
+#
+#  tidy-check:
+#    name: Tidy Check
+#    runs-on: ubuntu-20.04
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#      TIDY_THREADS: 4
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
+#
+#    - name: Tidy Check
+#      run: make tidy-check
+#
+#  win-release-64:
+#    name: Windows (64 Bit)
+#    runs-on: windows-latest
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Build
+#      run: |
+#        python scripts/windows_ci.py
+#        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1
+#        cmake --build . --config Release
+#
+#    - name: Test
+#      run: test/Release/unittest.exe
+#
+#    - name: Tools Test
+#      run: |
+#        python tools/shell/shell-test.py Release/duckdb.exe
+#        java -cp tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+#
+#    - name: Deploy
+#      run: |
+#        python scripts/amalgamation.py
+#        choco install zip -y --force
+#        zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
+#        zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
+#        python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
+#
+#    - uses: actions/upload-artifact@v2
+#      with:
+#        name: duckdb-binaries-windows
+#        path: |
+#          libduckdb-windows-amd64.zip
+#          duckdb_cli-windows-amd64.zip
+#          tools/jdbc/duckdb_jdbc.jar
+#
+#    - uses: ilammy/msvc-dev-cmd@v1
+#    - name: Duckdb.dll export symbols with C++ on Windows
+#      run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
+#
+#  win-release-32:
+#    name: Windows (32 Bit)
+#    runs-on: windows-latest
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Build
+#      run: |
+#        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=Win32 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1
+#        cmake --build . --config Release
+#
+#    - name: Test
+#      run: test/Release/unittest.exe
+#
+#    - name: Tools Test
+#      run: |
+#        python tools/shell/shell-test.py Release/duckdb.exe
+#
+#    - name: Deploy
+#      run: |
+#        python scripts/amalgamation.py
+#        choco install zip -y --force
+#        zip -j duckdb_cli-windows-i386.zip Release/duckdb.exe
+#        zip -j libduckdb-windows-i386.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
+#        python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
+#
+#    - uses: actions/upload-artifact@v2
+#      with:
+#        name: duckdb-binaries-windows
+#        path: |
+#          libduckdb-windows-i386.zip
+#          duckdb_cli-windows-i386.zip
+#          tools/jdbc/duckdb_jdbc.jar
+#
+#  mingw:
+#     name: MingW (64 Bit)
+#     runs-on: windows-latest
+#     needs: linux-debug
+#     defaults:
+#       run:
+#         shell: msys2 {0}
+#     steps:
+#       - uses: actions/checkout@v2
+#       - uses: msys2/setup-msys2@v2
+#         with:
+#           msystem: MINGW64
+#           update: true
+#           install: git mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja git
+#       # see here: https://gist.github.com/scivision/1de4fd6abea9ba6b2d87dc1e86b5d2ce
+#       - name: Put MSYS2_MinGW64 on PATH
+#         # there is not yet an environment variable for this path from msys2/setup-msys2
+#         run: export PATH=D:/a/_temp/msys/msys64/mingw64/bin:$PATH
+#
+#       - name: Build
+#         run: |
+#           cmake -G "Ninja" -DCMAKE_BUILD_TYPE=Release -DBUILD_PARQUET_EXTENSION=1
+#           cmake --build . --config Release
+#
+#       - name: Test
+#         run: |
+#           cp src/libduckdb.dll .
+#           test/unittest.exe
+#
+#  xcode-release:
+#    name: OSX Release
+#    runs-on: macos-latest
+#    needs: linux-debug
+#
+#    env:
+#      BUILD_VISUALIZER: 1
+#      BUILD_ICU: 1
+#      BUILD_TPCH: 1
+#      BUILD_TPCDS: 1
+#      BUILD_FTS: 1
+#      BUILD_REST: 1
+#      BUILD_JDBC: 1
+#      BUILD_HTTPFS: 1
+#      OPENSSL_ROOT_DIR: /usr/local/opt/openssl/
+#
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Build
+#      run: make
+#
+#    - name: Unit Test
+#      run: make allunit
+#
+#    - name: Tools Tests
+#      run: |
+#        python tools/shell/shell-test.py build/release/duckdb
+#        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+#
+#    - name: Examples
+#      run: |
+#        (cd examples/embedded-c; make)
+#        (cd examples/embedded-c++; make)
+#        (cd examples/jdbc; make; make maven)
+#
+#    - name: Deploy
+#      run: |
+#        python scripts/amalgamation.py
+#        zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
+#        zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+#        python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+#
+#    - uses: actions/upload-artifact@v2
+#      with:
+#        name: duckdb-binaries-osx
+#        path: |
+#          libduckdb-osx-amd64.zip
+#          duckdb_cli-osx-amd64.zip
+#          build/release/tools/jdbc/duckdb_jdbc.jar
+#
+#
+#  xcode-debug:
+#    name: OSX Debug
+#    runs-on: macos-latest
+#    needs: linux-debug
+#
+#    env:
+#      TREAT_WARNINGS_AS_ERRORS: 1
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Build
+#      run: make debug
+#
+#    - name: Test
+#      run: make unittestci
+#
+#    - name: Amalgamation
+#      run: |
+#        python scripts/amalgamation.py --extended
+#        python scripts/parquet_amalgamation.py
+#        cd src/amalgamation
+#        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+#        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+#        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+#
+#  linux-release-64:
+#    name: Linux (64 Bit)
+#    runs-on: ubuntu-16.04
+#    needs: linux-debug
+#
+#    env:
+#      GEN: ninja
+#      BUILD_VISUALIZER: 1
+#      BUILD_BENCHMARK: 1
+#      BUILD_ICU: 1
+#      BUILD_TPCH: 1
+#      BUILD_TPCDS: 1
+#      BUILD_FTS: 1
+#      BUILD_REST: 1
+#      BUILD_JDBC: 1
+#      BUILD_HTTPFS: 1
+#      TREAT_WARNINGS_AS_ERRORS: 1
+#      FORCE_WARN_UNUSED: 1
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#
+#    - name: Build
+#      run: STATIC_LIBCPP=1 make
+#
+#    - name: Test
+#      run: make allunit
+#
+#    - name: Symbol Leakage Test
+#      run: python scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+#
+#    - name: Tools Tests
+#      run: |
+#        python tools/shell/shell-test.py build/release/duckdb
+#        pip install requests
+#        python tools/rest/test_the_rest.py build/release/tools/rest
+#        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+#
+#    - name: Examples
+#      run: |
+#        (cd examples/embedded-c; make)
+#        (cd examples/embedded-c++; make)
+#        (cd examples/jdbc; make; make maven)
+#        build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
+#
+#    - name: Deploy
+#      run: |
+#        python scripts/amalgamation.py
+#        zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
+#        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+#        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
+#        zip -j duckdb_rest-linux-amd64.zip build/release/tools/rest/duckdb_rest_server
+#        python scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+#
+#    - uses: actions/upload-artifact@v2
+#      with:
+#        name: duckdb-binaries-linux
+#        path: |
+#          libduckdb-linux-amd64.zip
+#          duckdb_cli-linux-amd64.zip
+#          build/release/tools/jdbc/duckdb_jdbc.jar
+#
+#
+#
+#  linux-release-32:
+#    name: Linux (32 Bit)
+#    runs-on: ubuntu-16.04
+#    needs: linux-debug
+#
+#    env:
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
+#
+#    - name: Build
+#      run: |
+#        mkdir -p build/release
+#        (cd build/release && cmake -DSTATIC_LIBCPP=1 -DJDBC_DRIVER=1 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
+#
+#    - name: Test
+#      run: build/release/test/unittest "*"
+#
+#    - name: Deploy
+#      run: |
+#        python scripts/amalgamation.py
+#        zip -j duckdb_cli-linux-i386.zip build/release/duckdb
+#        zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+#        python scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+#
+#    - uses: actions/upload-artifact@v2
+#      with:
+#        name: duckdb-binaries-linux
+#        path: |
+#          libduckdb-linux-i386.zip
+#          duckdb_cli-linux-i386.zip
+#          build/release/tools/jdbc/duckdb_jdbc.jar
+#
+#
+#  linux-rpi:
+#    name: Linux (Raspberry Pi)
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Install
+#      run: |
+#        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#        git clone https://github.com/raspberrypi/tools --depth=1 rpi-tools
+#
+#    - name: Build
+#      run: |
+#        export TOOLCHAIN=`pwd`/rpi-tools
+#        mkdir -p build/release
+#        cd build/release
+#        cmake -G Ninja -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DDUCKDB_RPI_TOOLCHAIN_PREFIX=$TOOLCHAIN -DBUILD_UNITTESTS=0 -DCMAKE_TOOLCHAIN_FILE=../../scripts/raspberry-pi-cmake-toolchain.cmake ../../
+#        cmake --build .
+#        file duckdb
+#
+#    - name: Deploy
+#      run: |
+#        python scripts/amalgamation.py
+#        zip -j duckdb_cli-linux-rpi.zip build/release/duckdb
+#        zip -j libduckdb-linux-rpi.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
+#        python scripts/asset-upload-gha.py libduckdb-linux-rpi.zip duckdb_cli-linux-rpi.zip
+#
+#    - uses: actions/upload-artifact@v2
+#      with:
+#        name: duckdb-binaries-rpi
+#        path: |
+#          libduckdb-linux-rpi.zip
+#          duckdb_cli-linux-rpi.zip
+#
+#  linux-arrow:
+#      name: Linux Debug (Arrow Tests)
+#      runs-on: ubuntu-20.04
+#      needs: linux-debug
+#
+#      env:
+#        CC: gcc-10
+#        CXX: g++-10
+#        TREAT_WARNINGS_AS_ERRORS: 1
+#        GEN: ninja
+#
+#      steps:
+#      - uses: actions/checkout@v2
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Install
+#        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#
+#      - name: Build
+#        run: BUILD_ARROW_ABI_TEST=1 make debug
+#
+#      - name: Test
+#        run: make unittestarrow
+#
+#  old-gcc:
+#    name: GCC 4.8
+#    runs-on: ubuntu-18.04
+#    needs: linux-debug
+#
+#    env:
+#      CC: gcc-4.8
+#      CXX: g++-4.8
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq g++-4.8 binutils
+#
+#    - name: Build
+#      run: make release
+#
+#    - name: Test
+#      run: make allunit
+#
+#
+#  centos:
+#    name: CentOS 7
+#    runs-on: ubuntu-latest
+#    container: centos:7
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: yum install -y gcc gcc-c++ git cmake make
+#
+#    - name: Build
+#      run: make release
+#
+#    - name: Test
+#      run: ./build/release/test/unittest
+#
+#
+#  release-assert:
+#    name: Release Assertions
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#      BUILD_ICU: 1
+#      BUILD_TPCH: 1
+#      BUILD_TPCDS: 1
+#      BUILD_FTS: 1
+#      BUILD_VISUALIZER: 1
+#      DISABLE_SANITIZER: 1
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#
+#    - name: Build
+#      run: make relassert
+#
+#    - name: Test
+#      run: |
+#          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
+#
+#  force-storage:
+#    name: Force Storage
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#      BUILD_ICU: 1
+#      BUILD_PARQUET: 1
+#      BUILD_TPCH: 1
+#      BUILD_TPCDS: 1
+#      BUILD_FTS: 1
+#      BUILD_VISUALIZER: 1
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#
+#    - name: Build
+#      run: make reldebug
+#
+#    - name: Test
+#      run: build/reldebug/test/unittest "*" --force-storage
+#
+#
+#  threadsan:
+#    name: Thread Sanitizer
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#      BUILD_ICU: 1
+#      BUILD_TPCH: 1
+#      BUILD_TPCDS: 1
+#      BUILD_FTS: 1
+#      BUILD_VISUALIZER: 1
+#      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#
+#    - name: Build
+#      run: THREADSAN=1 make reldebug
+#
+#    - name: Test
+#      run: |
+#          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest
+#          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]"
+#          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]"
+#          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
+#          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
+#
+#  valgrind:
+#    name: Valgrind
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      DISABLE_SANITIZER: 1
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+#
+#    - name: Build
+#      run: make debug
+#
+#    - name: Test
+#      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+#
+#  codecov:
+#    name: CodeCov
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    env:
+#      GEN: ninja
+#    steps:
+#      - uses: actions/checkout@v2
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Install
+#        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov
+#
+#      - name: Set up Python 3.9
+#        uses: actions/setup-python@v2
+#        with:
+#          python-version: '3.9'
+#
+#      - name: Before Install
+#        run: |
+#          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow>=5.0" pytest
+#          sudo apt-get install g++
+#
+#      - name: Coverage Reset
+#        run: |
+#          lcov --config-file .github/workflows/lcovrc --zerocounters --directory .
+#          lcov --config-file .github/workflows/lcovrc --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
+#
+#      - name: Run Tests
+#        run: |
+#          mkdir -p build/coverage
+#          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+#          (cd tools/pythonpkg/tests && python3 -m pytest)
+#          build/coverage/test/unittest
+#          build/coverage/test/unittest "[intraquery]"
+#          build/coverage/test/unittest "[interquery]"
+#          python3 scripts/try_timeout.py --timeout=1200 --retry=3 build/coverage/test/unittest "[coverage]"
+#          build/coverage/test/unittest "[detailed_profiler]"
+#          build/coverage/test/unittest "[tpch]"
+#          build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+#          python tools/shell/shell-test.py build/coverage/duckdb
+#
+#
+#      - name: Generate Coverage
+#        run: |
+#          lcov --config-file .github/workflows/lcovrc --directory . --base-directory . --no-external --capture --output-file coverage.info
+#          lcov --config-file .github/workflows/lcovrc --remove coverage.info $(< .github/workflows/lcov_exclude) -o lcov.info
+#
+#      - name: CodeCov Upload
+#        uses: codecov/codecov-action@v1
+#        with:
+#          files: lcov.info
+#          fail_ci_if_error: true
+#
+#  vector-sizes:
+#    name: Vector Sizes
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Test
+#      run: python scripts/test_vector_sizes.py
+#
+#
+#  sqllogic:
+#    name: Sqllogic tests
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Test
+#      run: make sqlite
+#
+#
+#  expanded:
+#    name: Expanded
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      TREAT_WARNINGS_AS_ERRORS: 1
+#      DISABLE_UNITY: 1
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#
+#    - name: Build
+#      run: make debug
+#
+#
+#  sqlancer:
+#    name: SQLancer
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      BUILD_JDBC: 1
+#      FORCE_QUERY_LOG: sqlancer_log.tmp
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: |
+#        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#        git clone https://github.com/hannesmuehleisen/sqlancer
+#        cd sqlancer
+#        git checkout persistent
+#        mvn package -q -DskipTests
+#
+#    - name: Build
+#      run: make reldebug
+#
+#    - name: Test
+#      run: |
+#        cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
+#        python3 scripts/run_sqlancer.py
+#
+#
+#  sqlancer_persistent:
+#    name: SQLancer (Persistent)
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      BUILD_JDBC: 1
+#      FORCE_QUERY_LOG: sqlancer_log.tmp
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: |
+#        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#        git clone https://github.com/hannesmuehleisen/sqlancer
+#        cd sqlancer
+#        git checkout persistent
+#        mvn package -q -DskipTests
+#
+#    - name: Build
+#      run: make reldebug
+#
+#    - name: Test
+#      run: |
+#        cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
+#        python3 scripts/run_sqlancer.py --persistent
+#
+#
+#  jdbc:
+#    name: JDBC Compliance
+#    runs-on: ubuntu-18.04
+#    needs: linux-debug
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      BUILD_JDBC: 1
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: |
+#        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#        git clone https://github.com/cwida/jdbccts.git
+#
+#    - name: Build
+#      run: make release
+#
+#    - name: Test
+#      run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
+#
+#
+#  odbc:
+#    name: ODBC
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      BUILD_ODBC: 1
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Dependencies
+#      run: |
+#        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3 python3-pyodbc python3-pip julia
+#        pip3 install pyodbc
+#
+#    - name: Install nanodbc
+#      run: |
+#        wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
+#        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
+#
+#    - name: Install psqlodbc
+#      run: |
+#        git clone https://github.com/Mytherin/psqlodbc.git
+#        (cd psqlodbc && make debug)
+#
+#    - name: Build
+#      run: DISABLE_SANITIZER=1 make debug
+#
+#    - name: Test nanodbc
+#      run: ./tools/odbc/test/run_nanodbc_tests.sh
+#
+#    - name: Test psqlodbc
+#      run: ./tools/odbc/test/run_psqlodbc_tests.sh
+#
+#    - name: Test isql
+#      run: ./tools/odbc/test/run_isql_tests.sh
+#
+#    - name: Test R ODBC
+#      run: R -f tools/odbc/test/rodbc.R
+#
+#    - name: Test Python ODBC
+#      run: ./tools/odbc/test/run_pyodbc_tests.sh
+#
+#    - name: Test Julia ODBC
+#      run: |
+#        export ASAN_OPTIONS=verify_asan_link_order=0
+#        julia tools/odbc/test/julia-test.jl
+#
+#
+#  linux-python3:
+#    name: Python 3 Linux
+#    runs-on: ubuntu-20.04
+#    strategy:
+#      matrix:
+#        arch: [auto, aarch64]
+#    needs: linux-debug
+#
+#    env:
+#      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+#      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+#      CIBW_TEST_REQUIRES: 'pytest'
+#      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
+#      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests && python -m pytest {project}/tests_slow'
+#      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+#      TWINE_USERNAME: 'hfmuehleisen'
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - uses: docker/setup-qemu-action@v1
+#      if: ${{ matrix.arch == 'aarch64' }}
+#      name: Set up QEMU
+#
+#    - name: Install
+#      run: pip install cibuildwheel twine
+#
+#    - name: Build
+#      run: |
+#        cd tools/pythonpkg
+#        python setup.py sdist
+#        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+#        cibuildwheel --output-dir wheelhouse duckdb_tarball
+#
+#    - name: Deploy aarch64
+#      if: ${{ matrix.arch == 'aarch64' }}
+#      run: |
+#        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+#          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+#        fi
+#
+#    - name: Deploy regular
+#      if: ${{ matrix.arch != 'aarch64' }}
+#      run: |
+#        python scripts/asset-upload-gha.py duckdb_python_src.tar.gz=tools/pythonpkg/dist/duckdb-*.tar.gz
+#        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+#          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
+#        fi
+#
+#  linux-python3-httpfs:
+#    name: Python 3 Linux with HTTPFS support
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+#      CIBW_BEFORE_BUILD: 'yum install -y openssl-devel && pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+#      CIBW_TEST_REQUIRES: 'pytest'
+#      CIBW_BEFORE_TEST: 'yum install -y openssl && pip install --prefer-binary "pandas>=0.24"  && (pip install --prefer-binary "pyarrow>=5.0" || true)'
+#      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+#      CIBW_ENVIRONMENT: 'BUILD_HTTPFS=1'
+#      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+#      TWINE_USERNAME: 'hfmuehleisen'
+#
+#    steps:
+#      - uses: actions/checkout@v2
+#        with:
+#          fetch-depth: 0
+#
+#      - uses: actions/setup-python@v2
+#        with:
+#          python-version: '3.7'
+#
+#      - name: Install
+#        run: pip install cibuildwheel twine
+#
+#      - name: Build
+#        run: |
+#          cd tools/pythonpkg
+#          BUILD_HTTPFS=1 python setup.py sdist
+#          mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+#          cibuildwheel --output-dir wheelhouse duckdb_tarball
+#
+#  osx-python3:
+#    name: Python 3 OSX
+#    runs-on: macos-latest
+#    needs: linux-debug
+#
+#    env:
+#      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+#      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+#      CIBW_TEST_REQUIRES: 'pytest'
+#      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
+#      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+#      CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
+#      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+#      TWINE_USERNAME: 'hfmuehleisen'
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Install
+#      run: pip install cibuildwheel twine
+#
+#    - name: Build
+#      run: |
+#        cd tools/pythonpkg
+#        python setup.py sdist
+#        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+#        cibuildwheel --output-dir wheelhouse duckdb_tarball
+#
+#    - name: Deploy
+#      run: |
+#        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+#          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+#        fi
+#
+#  win-python3:
+#    name: Python 3 Windows
+#    runs-on: windows-latest
+#    needs: linux-debug
+#
+#    env:
+#      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+#      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+#      CIBW_TEST_REQUIRES: 'pytest'
+#      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
+#      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+#      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+#      TWINE_USERNAME: 'hfmuehleisen'
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Install
+#      run: pip install cibuildwheel twine
+#
+#    - name: Build
+#      run: |
+#        cd tools/pythonpkg
+#        python setup.py sdist
+#        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+#        cibuildwheel --output-dir wheelhouse duckdb_tarball
+#
+#    - name: Deploy
+#      run: |
+#        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+#          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+#        fi
+#
+#
+#  rstats-linux:
+#    name: R Package Linux
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    env:
+#      LIBARROW_BINARY : 'true'
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - uses: r-lib/actions/setup-r@v1
+#      with:
+#        r-version: 'devel'
+#
+#    - name: Install
+#      run: |
+#        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind
+#        mkdir -p $HOME/.R
+#        R -f tools/rpkg/dependencies.R
+#
+#    - name: Prepare
+#      run: |
+#        cd tools/rpkg
+#        ./configure
+#        R CMD build .
+#
+#    - name: Tests
+#      run: |
+#        cd tools/rpkg
+#        R CMD INSTALL -d duckdb_*.tar.gz
+#        (cd tests && R -f testthat.R)
+#
+#    - name: R CMD check
+#      run: |
+#        cd tools/rpkg
+#        R CMD check --as-cran -o /tmp duckdb_*.tar.gz
+#        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+#
+#    - name: Valgrind
+#      run: |
+#        cd tools/rpkg
+#        R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
+#
+#    - name: Print R log on failure
+#      if: ${{ failure() }}
+#      run: |
+#        ls -R /tmp/duckdb.Rcheck
+#        cat /tmp/duckdb.Rcheck/00check.log
+#        cat /tmp/duckdb.Rcheck/tests/testthat.Rout.fail
+#
+#    - name: Deploy
+#      run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
+#
+#
+#  rstats-windows:
+#    name: R Package Windows
+#    runs-on: windows-latest
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - uses: r-lib/actions/setup-r@v1
+#      with:
+#        r-version: 'devel'
+#
+#    - name: Install
+#      run: |
+#        R -f tools/rpkg/dependencies.R
+#
+#    - name: Build
+#      run: |
+#        cd tools/rpkg
+#        ./configure
+#        R CMD build .
+#        R CMD INSTALL duckdb_*.tar.gz
+#        (cd tests && R -f testthat.R)
+#        R CMD check --as-cran --no-manual -o /tmp duckdb_*.tar.gz
+#        if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
+#
+#
+#  rubsan:
+#    name: R UBSAN
+#    runs-on: ubuntu-latest
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Run
+#      run: |
+#        (cd tools/rpkg && ./configure && R CMD build .)
+#        docker run -v `pwd`:/duckdb --cap-add SYS_PTRACE wch1/r-debug:latest bash -c "mkdir -p ~/.R && echo -e \"PKG_CFLAGS=-fno-sanitize-recover=all\\nPKG_CXXFLAGS=-fno-sanitize-recover=all\" > ~/.R/Makevars && export CMAKE_UNITY_BUILD=OFF ARROW_R_DEV=TRUE LIBARROW_BINARY=true && cd /duckdb/tools/rpkg/ && RDsan -f dependencies.R && RDsan CMD INSTALL duckdb_*.tar.gz && cd tests && UBSAN_OPTIONS=print_stacktrace=1 RDsan -f testthat.R"
+#
+#    - name: Print R log on failure
+#      if: ${{ failure() }}
+#      run: |
+#        cat duckdb.Rcheck/00check.log
+#        cat duckdb.Rcheck/tests/testthat.Rout.fail
+#
+#
+#  linux-tarball-v2:
+#    name: Python 2 Tarball
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '2.7'
+#
+#    - name: Install
+#      run: |
+#        pip install setuptools-scm==5.0.2
+#        pip install numpy pytest pandas
+#
+#    - name: Build
+#      run: |
+#        python --version
+#        git archive --format zip --output test-tarball.zip HEAD
+#        mkdir duckdb-test-tarball
+#        mv test-tarball.zip duckdb-test-tarball
+#        cd duckdb-test-tarball
+#        unzip test-tarball.zip
+#        cd tools/pythonpkg
+#        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+#        python setup.py install --user
+#        (cd tests/ && python -m pytest)
+#
+#  linux-tarball:
+#    name: Python 3 Tarball
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Install
+#      run: pip install numpy pytest pandas
+#
+#    - name: Build
+#      run: |
+#        python --version
+#        git archive --format zip --output test-tarball.zip HEAD
+#        mkdir duckdb-test-tarball
+#        mv test-tarball.zip duckdb-test-tarball
+#        cd duckdb-test-tarball
+#        unzip test-tarball.zip
+#        cd tools/pythonpkg
+#        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+#        python setup.py install --user
+#        (cd tests/ && python -m pytest)
+#
+#  linux-nodejs:
+#    name: node.js Linux
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Setup
+#      run: ./scripts/node_version.sh upload
+#
+#    - name: Node 10
+#      run: ./scripts/node_build.sh 10
+#
+#    - name: Node 12
+#      run: ./scripts/node_build.sh 12
+#
+#    - name: Node 14
+#      run: ./scripts/node_build.sh 14
+#
+#    - name: Node 15
+#      run: ./scripts/node_build.sh 15
+#
+#
+#  osx-nodejs:
+#    name: node.js OSX
+#    runs-on: macos-latest
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Setup
+#      run: ./scripts/node_version.sh
+#
+#    - name: Node 10
+#      run: ./scripts/node_build.sh 10
+#
+#    - name: Node 12
+#      run: ./scripts/node_build.sh 12
+#
+#    - name: Node 14
+#      run: ./scripts/node_build.sh 14
+#
+#    - name: Node 15
+#      run: ./scripts/node_build.sh 15
+#
+#  win-nodejs:
+#    name: node.js Windows
+#    runs-on: windows-latest
+#    needs: linux-debug
+#
+#    strategy:
+#      matrix:
+#        node: [ '10', '12', '14', '15' ]
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Setup Node
+#      uses: actions/setup-node@v2
+#      with:
+#        node-version: ${{ matrix.node }}
+#
+#    - name: Node Version
+#      run: ./scripts/node_version.sh
+#
+#    - name: Node
+#      run: ./scripts/node_build_win.sh
+#
+#  linux-wasm-release:
+#    name: WebAssembly Release
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Build Amalgamation
+#      run: python scripts/amalgamation.py
+#
+#    - name: Setup
+#      run: ./scripts/wasm_configure.sh
+#
+#    - name: Build Library Module
+#      run: ./scripts/wasm_build_lib.sh Release
+#
+#    - name: Build Test Module
+#      run: ./scripts/wasm_build_test.sh Release
+#
+#    - name: Test WASM Module
+#      run: node ./test/wasm/hello_wasm_test.js
+#
+#    - name: Package
+#      run: |
+#        zip -j duckdb-wasm32-nothreads.zip ./.wasm/build/duckdb.wasm
+#        python scripts/asset-upload-gha.py duckdb-wasm32-nothreads.zip
+#
+#    - uses: actions/upload-artifact@v2
+#      with:
+#        name: duckdb-wasm32-nothreads
+#        path: |
+#          duckdb-wasm32-nothreads.zip
+#
+#  docs:
+#    name: Website Docs
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Clone Website
+#      run: git clone https://github.com/duckdb/duckdb-web
+#
+#    - name: Set up Python 3.9
+#      uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.9'
+#
+#    - name: Package
+#      run: |
+#        cd duckdb-web
+#        python3 scripts/generate_docs.py ..
+#
   regression-test:
     name: Regression Test
     runs-on: ubuntu-20.04
@@ -1399,7 +1399,6 @@ jobs:
     env:
       CC: ccache gcc-10
       CXX: ccache g++-10
-      TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
 
     steps:

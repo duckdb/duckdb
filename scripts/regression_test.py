@@ -22,13 +22,13 @@ def truncate(number, decimals=0):
     return math.trunc(number * factor) / factor
 
 def install_duck_master():
-    os.system("pip install duckdb --pre")
+    assert(os.system("pip install duckdb --pre"))
 
 def uninstall_duck():
-    os.system("pip uninstall -y duckdb")
+    assert(os.system("pip uninstall -y duckdb"))
 
 def install_duck_current():
-    os.system("BUILD_PYTHON=1 GEN=ninja make release")
+    assert(os.system("BUILD_PYTHON=1 GEN=ninja make release"))
 
 def run_tpch_query(duckdb_conn,query_number):
     query_result = []
@@ -64,6 +64,8 @@ def regression_test(threshold):
     master_time = run_benchmark(install_duck_master,repetitions)
     current_time = run_benchmark(install_duck_current,repetitions)
 
+    print (master_time)
+    print(current_time)
     # If the regression status is true, there was no regression
     regression_status = True
     for i in range(len(master_time)):
