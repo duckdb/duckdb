@@ -1397,8 +1397,8 @@ jobs:
     runs-on: ubuntu-20.04
 
     env:
-      CC: ccache gcc-10
-      CXX: ccache g++-10
+      CC: gcc-10
+      CXX: g++-10
       GEN: ninja
 
     steps:
@@ -1411,8 +1411,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
-
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Regression Test TPCH SF1
       run: python scripts/regression_test.py

@@ -1,7 +1,6 @@
 # This script runs in the Regression Test CI.
 # We build the current commit and compare it with the Master branch.
 # If there is a diference of 10% in regression on any query the build breaks.
-import os
 import statistics
 import time
 import subprocess
@@ -22,22 +21,22 @@ def truncate(number, decimals=0):
     return math.trunc(number * factor) / factor
 
 def install_duck_master():
-    os.system("pip install duckdb --pre")
-    try:
-        import duckdb
-    except:
+    output = subprocess.run(["pip", "install", "duckdb","--pre"], capture_output=True)
+    if output.stderr:
         print ("pip install duckdb --pre FAILED")
         assert(0)
 
+
 def uninstall_duck():
-    os.system("pip uninstall -y duckdb")
+    output = subprocess.run(["pip", "uninstall", "-y","duckdb"], capture_output=True)
+    if output.stderr:
+        print ("pip uninstall -y duckdb FAILED")
+        assert(0)
     
 
 def install_duck_current():
-    os.system("BUILD_PYTHON=1 GEN=ninja make release")
-    try:
-        import duckdb
-    except:
+    output = subprocess.run(["BUILD_PYTHON=1", "GEN=ninja", "make","release"], capture_output=True)
+    if output.stderr:
         print ("BUILD_PYTHON=1 GEN=ninja make release FAILED")
         assert(0)
 
