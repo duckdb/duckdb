@@ -30,15 +30,14 @@ def install_duck_master():
         assert(0)
 
 def uninstall_duck():
-    os.system("pip uninstall -y duckdb")
-    try:
-        import duckdb
-        no_duck = False
-    except:
-        no_duck = True
-    if not no_duck:
-        print ("pip uninstall -y duckdb FAILED")
-        assert(0)
+    duck_installed = True
+    while (duck_installed):
+        os.system("pip uninstall -y duckdb")
+        try:
+            import duckdb
+        except:
+            duck_installed = True
+
 
 def install_duck_current():
     os.system("BUILD_PYTHON=1 GEN=ninja make release")
@@ -78,6 +77,7 @@ def run_benchmark(install_function,repetitions):
 
 # We want to run the regression tests 3x if a query fails (i.e., is slower than the one in the master these 3 times then it fails)
 def regression_test(threshold):
+    uninstall_duck()
     repetitions = 3
     master_time = run_benchmark(install_duck_master,repetitions)
     current_time = run_benchmark(install_duck_current,repetitions)
