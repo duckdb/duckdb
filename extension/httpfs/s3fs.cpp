@@ -8,7 +8,6 @@
 
 using namespace duckdb;
 
-<<<<<<< HEAD
 static std::string uri_encode(const std::string &input, bool encode_slash = false) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 	static const char *hex_digit = "0123456789ABCDEF";
@@ -34,16 +33,10 @@ static std::string uri_encode(const std::string &input, bool encode_slash = fals
 	return result;
 }
 
-static HeaderMap create_s3_get_header(std::string url, std::string host, std::string region, std::string service,
-                                      std::string method, std::string access_key_id, std::string secret_access_key,
-                                      std::string access_token, std::string date_now = "",
-                                      std::string datetime_now = "") {
-=======
 static HeaderMap create_s3_get_header(std::string url, std::string query, std::string host, std::string region,
                                       std::string service, std::string method, std::string access_key_id,
                                       std::string secret_access_key, std::string session_token,
                                       std::string date_now = "", std::string datetime_now = "") {
->>>>>>> b431b742d (successful test, renam to session token)
 	// this is the sha256 of the empty string, its useful since we have no payload for GET requests
 	auto empty_payload_hash = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
@@ -69,17 +62,10 @@ static HeaderMap create_s3_get_header(std::string url, std::string query, std::s
 	if (session_token.length() > 0) {
 		signed_headers += ";x-amz-security-token";
 	}
-<<<<<<< HEAD
-	auto canonical_request = method + "\n" + uri_encode(url) + "\n\nhost:" + host + "\nx-amz-content-sha256:" + 
-							 empty_payload_hash + "\nx-amz-date:" + datetime_now;
+	auto canonical_request = method + "\n" + uri_encode(url) + "\n" + query + "\nhost:" + host +
+	                         "\nx-amz-content-sha256:" + empty_payload_hash + "\nx-amz-date:" + datetime_now;
 	if (access_token.length() > 0) {
 		canonical_request += "\nx-amz-security-token:" + access_token;
-=======
-	auto canonical_request = method + "\n" + url + "\n" + query + "\nhost:" + host +
-	                         "\nx-amz-content-sha256:" + empty_payload_hash + "\nx-amz-date:" + datetime_now;
-	if (session_token.length() > 0) {
-		canonical_request += "\nx-amz-security-token:" + session_token;
->>>>>>> b431b742d (successful test, renam to session token)
 	}
 	canonical_request += "\n\n" + signed_headers + "\n" + empty_payload_hash;
 	sha256(canonical_request.c_str(), canonical_request.length(), canonical_request_hash);
@@ -169,22 +155,25 @@ void S3FileSystem::Verify() {
 	    "%2F%3Fcategory%3DBooks%26title%3DDucks%20Retreat%2F") {
 		throw std::runtime_error("test fail");
 	}
-
-	auto test_header2 = create_s3_get_header(
-	    "/", "delimiter=%2F&encoding-type=url&list-type=2&prefix=", "my-precious-bucket.s3.eu-west-1.amazonaws.com",
-	    "eu-west-1", "s3", "GET", "ASIAYSPIOYDTHTBIITVC", "vs1BZPxSL2qVARBSg5vCMKJsavCoEPlo/HSHRaVe",
-	    "IQoJb3JpZ2luX2VjENX//////////wEaCWV1LXdlc3QtMSJHMEUCIQDfjzs9BYHrEXDMU/"
-	    "NR+PHV1uSTr7CSVSQdjKSfiPRLdgIgCCztF0VMbi9+"
-	    "uHHAfBVKhV4t9MlUrQg3VAOIsLxrWyoqlAIIHRAAGgw1ODk0MzQ4OTY2MTQiDOGl2DsYxENcKCbh+irxARe91faI+"
-	    "hwUhT60sMGRFg0GWefKnPclH4uRFzczrDOcJlAAaQRJ7KOsT8BrJlrY1jSgjkO7PkVjPp92vi6lJX77bg99MkUTJA"
-	    "ctiOKmd84XvAE5bFc/jFbqechtBjXzopAPkKsGuaqAhCenXnFt6cwq+LZikv/"
-	    "NJGVw7TRphLV+"
-	    "Aq9PSL9XwdzIgsW2qXwe1c3rxDNj53yStRZHVggdxJ0OgHx5v040c98gFphzSULHyg0OY6wmCMTYcswpb4kO2IIi6"
-	    "AiD9cY25TlwPKRKPi5CdBsTPnyTeW62u7PvwK0fTSy4ZuJUuGKQnH2cKmCXquEwoOHEiQY6nQH9fzY/"
-	    "EDGHMRxWWhxu0HiqIfsuFqC7GS0p0ToKQE+pzNsvVwMjZc+KILIDDQpdCWRIwu53I5PZy2Cvk+"
-	    "3y4XLvdZKQCsAKqeOc4c94UAS4NmUT7mCDOuRV0cLBVM8F0JYBGrUxyI+"
-	    "YoIvHhQWmnRLuKgTb5PkF7ZWrXBHFWG5/tZDOvBbbaCWTlRCL9b0Vpg5+BM/81xd8jChP4w83",
-	    "20210904", "20210904T121746Z");
+	// AWS_SECRET_ACCESS_KEY="vs1BZPxSL2qVARBSg5vCMKJsavCoEPlo/HSHRaVe" AWS_ACCESS_KEY_ID="ASIAYSPIOYDTHTBIITVC"
+	// AWS_SESSION_TOKEN="IQoJb3JpZ2luX2VjENX//////////wEaCWV1LXdlc3QtMSJHMEUCIQDfjzs9BYHrEXDMU/NR+PHV1uSTr7CSVSQdjKSfiPRLdgIgCCztF0VMbi9+uHHAfBVKhV4t9MlUrQg3VAOIsLxrWyoqlAIIHRAAGgw1ODk0MzQ4OTY2MTQiDOGl2DsYxENcKCbh+irxARe91faI+hwUhT60sMGRFg0GWefKnPclH4uRFzczrDOcJlAAaQRJ7KOsT8BrJlrY1jSgjkO7PkVjPp92vi6lJX77bg99MkUTJActiOKmd84XvAE5bFc/jFbqechtBjXzopAPkKsGuaqAhCenXnFt6cwq+LZikv/NJGVw7TRphLV+Aq9PSL9XwdzIgsW2qXwe1c3rxDNj53yStRZHVggdxJ0OgHx5v040c98gFphzSULHyg0OY6wmCMTYcswpb4kO2IIi6AiD9cY25TlwPKRKPi5CdBsTPnyTeW62u7PvwK0fTSy4ZuJUuGKQnH2cKmCXquEwoOHEiQY6nQH9fzY/EDGHMRxWWhxu0HiqIfsuFqC7GS0p0ToKQE+pzNsvVwMjZc+KILIDDQpdCWRIwu53I5PZy2Cvk+3y4XLvdZKQCsAKqeOc4c94UAS4NmUT7mCDOuRV0cLBVM8F0JYBGrUxyI+YoIvHhQWmnRLuKgTb5PkF7ZWrXBHFWG5/tZDOvBbbaCWTlRCL9b0Vpg5+BM/81xd8jChP4w83"
+	// aws --region eu-west-1 --debug s3 ls my-precious-bucket 2>&1 | less
+	std::string canonical_query_string = "delimiter=%2F&encoding-type=url&list-type=2&prefix="; // aws s3 ls <bucket>
+	auto test_header2 =
+	    create_s3_get_header("/", canonical_query_string, "my-precious-bucket.s3.eu-west-1.amazonaws.com", "eu-west-1",
+	                         "s3", "GET", "ASIAYSPIOYDTHTBIITVC", "vs1BZPxSL2qVARBSg5vCMKJsavCoEPlo/HSHRaVe",
+	                         "IQoJb3JpZ2luX2VjENX//////////wEaCWV1LXdlc3QtMSJHMEUCIQDfjzs9BYHrEXDMU/"
+	                         "NR+PHV1uSTr7CSVSQdjKSfiPRLdgIgCCztF0VMbi9+"
+	                         "uHHAfBVKhV4t9MlUrQg3VAOIsLxrWyoqlAIIHRAAGgw1ODk0MzQ4OTY2MTQiDOGl2DsYxENcKCbh+irxARe91faI+"
+	                         "hwUhT60sMGRFg0GWefKnPclH4uRFzczrDOcJlAAaQRJ7KOsT8BrJlrY1jSgjkO7PkVjPp92vi6lJX77bg99MkUTJA"
+	                         "ctiOKmd84XvAE5bFc/jFbqechtBjXzopAPkKsGuaqAhCenXnFt6cwq+LZikv/"
+	                         "NJGVw7TRphLV+"
+	                         "Aq9PSL9XwdzIgsW2qXwe1c3rxDNj53yStRZHVggdxJ0OgHx5v040c98gFphzSULHyg0OY6wmCMTYcswpb4kO2IIi6"
+	                         "AiD9cY25TlwPKRKPi5CdBsTPnyTeW62u7PvwK0fTSy4ZuJUuGKQnH2cKmCXquEwoOHEiQY6nQH9fzY/"
+	                         "EDGHMRxWWhxu0HiqIfsuFqC7GS0p0ToKQE+pzNsvVwMjZc+KILIDDQpdCWRIwu53I5PZy2Cvk+"
+	                         "3y4XLvdZKQCsAKqeOc4c94UAS4NmUT7mCDOuRV0cLBVM8F0JYBGrUxyI+"
+	                         "YoIvHhQWmnRLuKgTb5PkF7ZWrXBHFWG5/tZDOvBbbaCWTlRCL9b0Vpg5+BM/81xd8jChP4w83",
+	                         "20210904", "20210904T121746Z");
 	if (test_header2["Authorization"] !=
 	    "AWS4-HMAC-SHA256 Credential=ASIAYSPIOYDTHTBIITVC/20210904/eu-west-1/s3/aws4_request, "
 	    "SignedHeaders=host;x-amz-content-sha256;x-amz-date;x-amz-security-token, "
