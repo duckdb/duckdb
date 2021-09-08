@@ -67,7 +67,6 @@ public:
 	bool CanSeek();
 	bool OnDiskFile();
 	idx_t GetFileSize();
-	FileType GetType();
 
 protected:
 	virtual void Close() = 0;
@@ -124,8 +123,6 @@ public:
 	virtual int64_t GetFileSize(FileHandle &handle);
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
 	virtual time_t GetLastModifiedTime(FileHandle &handle);
-	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
-	virtual FileType GetFileType(FileHandle &handle);
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of
 	//! the file
 	virtual void Truncate(FileHandle &handle, int64_t new_size);
@@ -192,6 +189,11 @@ public:
 	virtual bool OnDiskFile(FileHandle &handle);
 
 private:
+	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
+	FileType GetOsFileType(FileHandle &handle);
+	//! Opens the raw OS file handle.
+	unique_ptr<FileHandle> OpenOsFile(const string &path, uint8_t flags, FileLockType lock);
+
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);
 	virtual idx_t GetFilePointer(FileHandle &handle);
@@ -224,9 +226,6 @@ public:
 	}
 	time_t GetLastModifiedTime(FileHandle &handle) override {
 		return handle.file_system.GetLastModifiedTime(handle);
-	}
-	FileType GetFileType(FileHandle &handle) override {
-		return handle.file_system.GetFileType(handle);
 	}
 
 	void Truncate(FileHandle &handle, int64_t new_size) override {

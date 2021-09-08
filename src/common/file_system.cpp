@@ -79,14 +79,7 @@ public:
 	int fd;
 };
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
-                                            FileCompressionType compression) {
-	if (compression != FileCompressionType::UNCOMPRESSED) {
-		throw NotImplementedException("Unsupported compression type for default file system");
-	}
-
-	AssertValidFileFlags(flags);
-
+unique_ptr<FileHandle> FileSystem::OpenOsFile(const string &path, uint8_t flags, FileLockType lock_type) {
 	int open_flags = 0;
 	int rc;
 	if (flags & FileFlags::FILE_FLAGS_READ) {
@@ -222,7 +215,7 @@ time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return s.st_mtime;
 }
 
-FileType FileSystem::GetFileType(FileHandle &handle) {
+FileType FileSystem::GetOsFileType(FileHandle &handle) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
@@ -464,13 +457,7 @@ public:
 	HANDLE fd;
 };
 
-unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
-                                            FileCompressionType compression) {
-	if (compression != FileCompressionType::UNCOMPRESSED) {
-		throw NotImplementedException("Unsupported compression type for default file system");
-	}
-	AssertValidFileFlags(flags);
-
+unique_ptr<FileHandle> FileSystem::OpenOsFile(const string &path, uint8_t flags, FileLockType lock_type) {
 	DWORD desired_access;
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
@@ -789,7 +776,7 @@ string FileSystem::GetWorkingDirectory() {
 	return string(buffer.get(), ret);
 }
 
-FileType FileSystem::GetFileType(FileHandle &handle) {
+FileType FileSystem::GetOsFileType(FileHandle &handle) {
 	auto path = ((WindowsFileHandle &)handle).path;
 	// pipes in windows are just files in '\\.\pipe\' folder
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
@@ -931,10 +918,6 @@ void FileHandle::Truncate(int64_t new_size) {
 	file_system.Truncate(*this, new_size);
 }
 
-FileType FileHandle::GetType() {
-	return file_system.GetFileType(*this);
-}
-
 static bool HasGlob(const string &str) {
 	for (idx_t i = 0; i < str.size(); i++) {
 		switch (str[i]) {
@@ -1053,6 +1036,22 @@ vector<string> FileSystem::Glob(const string &path) {
 	return vector<string>();
 }
 
+unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
+                                            FileCompressionType compression) {
+	if (compression != FileCompressionType::UNCOMPRESSED) {
+		throw NotImplementedException("Unsupported compression type for default file system");
+	}
+
+	AssertValidFileFlags(flags);
+
+	auto handle = OpenOsFile(path, flags, lock);
+	if (GetOsFileType(*handle) == FileType::FILE_TYPE_FIFO) {
+		handle = PipeFileSystem::OpenPipe(move(handle));
+	}
+
+	return handle;
+}
+
 unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                    FileCompressionType compression) {
 	if (compression == FileCompressionType::AUTO_DETECT) {
@@ -1064,11 +1063,10 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 			compression = FileCompressionType::UNCOMPRESSED;
 		}
 	}
+
 	// open the base file handle
 	auto file_handle = FindFileSystem(path)->OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED);
-	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
-		file_handle = PipeFileSystem::OpenPipe(move(file_handle));
-	} else if (compression != FileCompressionType::UNCOMPRESSED) {
+	if (compression != FileCompressionType::UNCOMPRESSED) {
 		switch (compression) {
 		case FileCompressionType::GZIP:
 			file_handle = GZipFileSystem::OpenCompressedFile(move(file_handle));
