@@ -23,8 +23,12 @@ public:
 	vector<unique_ptr<Expression>> select_list;
 
 public:
-	// unique_ptr<OperatorState> GetOperatorState() override;
-	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+
+	bool ParallelOperator() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb
