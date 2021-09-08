@@ -53,7 +53,7 @@ public:
 			// parallel scan init
 			operator_data = op.function.parallel_init(context.client, op.bind_data.get(), gstate.parallel_state.get(),
 			                                          op.column_ids, &filters);
-		} else {
+		} else if (op.function.init) {
 			// sequential scan init
 			operator_data = op.function.init(context.client, op.bind_data.get(), op.column_ids, &filters);
 		}

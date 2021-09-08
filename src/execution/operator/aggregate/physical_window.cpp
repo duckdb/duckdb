@@ -20,30 +20,6 @@ namespace duckdb {
 
 using counts_t = std::vector<size_t>;
 
-// Per-thread read state
-class PhysicalWindowOperatorState : public LocalSourceState {
-public:
-	PhysicalWindowOperatorState() : parallel_state(nullptr), initialized(false) {
-	}
-
-	ParallelState *parallel_state;
-	bool initialized;
-
-	//! The number of partitions to process (0 if there is no partitioning)
-	size_t partitions;
-	//! The output read position.
-	size_t next_part;
-	//! The generated input chunks
-	ChunkCollection chunks;
-	//! The generated output chunks
-	ChunkCollection window_results;
-	//! The read cursor
-	idx_t position;
-
-	BufferManager *buffer_manager;
-	unique_ptr<GlobalSortState> global_sort_state;
-};
-
 //	Global sink state
 class WindowGlobalState : public GlobalSinkState {
 public:
@@ -73,6 +49,32 @@ public:
 	ChunkCollection hash_collection;
 	const size_t partition_count;
 	counts_t counts;
+};
+
+// Per-thread read state
+class WindowOperatorState : public LocalSourceState {
+public:
+	WindowOperatorState(const PhysicalWindow &op, ExecutionContext &context) :
+		buffer_manager(BufferManager::GetBufferManager(context.client)) {
+		auto &gstate = (WindowGlobalState &) *op.sink_state;
+		// initialize thread-local operator state
+		partitions = gstate.counts.size();
+		next_part = 0;
+	}
+
+	//! The number of partitions to process (0 if there is no partitioning)
+	size_t partitions;
+	//! The output read position.
+	size_t next_part;
+	//! The generated input chunks
+	ChunkCollection chunks;
+	//! The generated output chunks
+	ChunkCollection window_results;
+	//! The read cursor
+	idx_t position;
+
+	BufferManager &buffer_manager;
+	unique_ptr<GlobalSortState> global_sort_state;
 };
 
 // this implements a sorted window functions variant
@@ -420,7 +422,7 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static void SortCollectionForPartition(PhysicalWindowOperatorState &state, BoundWindowExpression *wexpr,
+static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowExpression *wexpr,
                                        ChunkCollection &input, ChunkCollection &sort_collection) {
 	if (input.Count() == 0) {
 		return;
@@ -452,10 +454,10 @@ static void SortCollectionForPartition(PhysicalWindowOperatorState &state, Bound
 	payload_layout.Initialize(payload_types);
 
 	// initialize sorting states
-	state.global_sort_state = make_unique<GlobalSortState>(*state.buffer_manager, orders, payload_layout);
+	state.global_sort_state = make_unique<GlobalSortState>(state.buffer_manager, orders, payload_layout);
 	auto &global_sort_state = *state.global_sort_state;
 	LocalSortState local_sort_state;
-	local_sort_state.Initialize(global_sort_state, *state.buffer_manager);
+	local_sort_state.Initialize(global_sort_state, state.buffer_manager);
 
 	// sink collection chunks into row format
 	const idx_t chunk_count = sort_collection.ChunkCount();
@@ -1120,7 +1122,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 using WindowExpressions = vector<BoundWindowExpression *>;
 
-static void ComputeWindowExpressions(PhysicalWindowOperatorState &state, WindowExpressions &window_exprs,
+static void ComputeWindowExpressions(WindowOperatorState &state, WindowExpressions &window_exprs,
                                      ChunkCollection &input, ChunkCollection &window_results, ChunkCollection &over) {
 	//	Idempotency
 	if (input.Count() == 0) {
@@ -1199,43 +1201,7 @@ static void ExtractPartition(WindowGlobalState &gstate, ChunkCollection &chunks,
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-idx_t PhysicalWindow::MaxThreads(ClientContext &context) {
-	// Recursive CTE can cause us to be called befor Finalize,
-	// so we have to check and fall back to the cardinality estimate
-	// in that case
-	if (!this->sink_state.get()) {
-		return (estimated_cardinality + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE + 1;
-	}
-	auto &state = (WindowGlobalState &)*this->sink_state;
-
-	// If there is only one partition, we have to process it on one thread.
-	if (state.counts.empty()) {
-		return 1;
-	}
-
-	idx_t max_threads = 0;
-	for (const auto count : state.counts) {
-		max_threads += int(count > 0);
-	}
-
-	return max_threads;
-}
-
-//	Global read state
-class WindowParallelState : public ParallelState {
-public:
-	WindowParallelState() : next_part(0) {
-	}
-	//! The output read position.
-	atomic<idx_t> next_part;
-};
-
-unique_ptr<ParallelState> PhysicalWindow::GetParallelState() {
-	auto result = make_unique<WindowParallelState>();
-	return move(result);
-}
-
-static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalState &gstate, const idx_t hash_bin) {
+static void GeneratePartition(WindowOperatorState &state, WindowGlobalState &gstate, const idx_t hash_bin) {
 	auto &op = (PhysicalWindow &)gstate.op;
 	WindowExpressions window_exprs;
 	for (idx_t expr_idx = 0; expr_idx < op.select_list.size(); ++expr_idx) {
@@ -1269,7 +1235,7 @@ static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalSt
 	}
 }
 
-static void Scan(PhysicalWindowOperatorState &state, DataChunk &chunk) {
+static void Scan(WindowOperatorState &state, DataChunk &chunk) {
 	ChunkCollection &big_data = state.chunks;
 	ChunkCollection &window_results = state.window_results;
 
@@ -1356,72 +1322,69 @@ unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &co
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
+class WindowGlobalSourceState : public GlobalSourceState {
+public:
+	WindowGlobalSourceState(const PhysicalWindow &op) :
+		op(op), next_part(0) {
+	}
+
+	const PhysicalWindow &op;
+	//! The output read position.
+	atomic<idx_t> next_part;
+
+public:
+	idx_t MaxThreads() override {
+		auto &state = (WindowGlobalState &)*op.sink_state;
+
+		// If there is only one partition, we have to process it on one thread.
+		if (state.counts.empty()) {
+			return 1;
+		}
+
+		idx_t max_threads = 0;
+		for (const auto count : state.counts) {
+			if (count > 0) {
+				max_threads++;
+			}
+		}
+
+		return max_threads;
+	}
+};
+
 unique_ptr<LocalSourceState> PhysicalWindow::GetLocalSourceState(ExecutionContext &context,
                                                                  GlobalSourceState &gstate) const {
-	return make_unique<PhysicalWindowOperatorState>();
+	return make_unique<WindowOperatorState>(*this, context);
+}
+
+unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<WindowGlobalSourceState>(*this);
 }
 
 void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                              LocalSourceState &lstate_p) const {
-	throw InternalException("FIXME: window scan!");
-	// auto &state = (PhysicalWindowOperatorState &) lstate_p;
-	// auto &gstate = (WindowGlobalState &)*sink_state;
+	auto &state = (WindowOperatorState &) lstate_p;
+	auto &global_source = (WindowGlobalSourceState &) gstate_p;
+	auto &gstate = (WindowGlobalState &)*sink_state;
 
-	// if (!state.initialized) {
-	// 	// initialize thread-local operator state
-	// 	state.partitions = gstate.counts.size();
-	// 	state.next_part = 0;
-	// 	// record parallel state (if any)
-	// 	state.parallel_state = nullptr;
-	// 	auto &task = context.task;
-	// 	// check if there is any parallel state to fetch
-	// 	state.parallel_state = nullptr;
-	// 	auto task_info = task.task_info.find(this);
-	// 	if (task_info != task.task_info.end()) {
-	// 		// parallel scan init
-	// 		state.parallel_state = task_info->second;
-	// 	}
-	// 	state.buffer_manager = &BufferManager::GetBufferManager(context.client);
-	// 	state.initialized = true;
-	// }
-
-	// if (!state.parallel_state) {
-	// 	// sequential scan
-	// 	if (state.position >= state.chunks.Count()) {
-	// 		auto hash_bin = state.next_part++;
-	// 		for (; hash_bin < state.partitions; hash_bin = state.next_part++) {
-	// 			if (gstate.counts[hash_bin] > 0) {
-	// 				break;
-	// 			}
-	// 		}
-	// 		GeneratePartition(state, gstate, hash_bin);
-	// 	}
-	// 	Scan(state, chunk);
-	// 	if (chunk.size() != 0) {
-	// 		return;
-	// 	}
-	// } else {
-	// 	// parallel scan
-	// 	auto &parallel_state = *reinterpret_cast<WindowParallelState *>(state.parallel_state);
-	// 	do {
-	// 		if (state.position >= state.chunks.Count()) {
-	// 			auto hash_bin = parallel_state.next_part++;
-	// 			for (; hash_bin < state.partitions; hash_bin = parallel_state.next_part++) {
-	// 				if (gstate.counts[hash_bin] > 0) {
-	// 					break;
-	// 				}
-	// 			}
-	// 			GeneratePartition(state, gstate, hash_bin);
-	// 		}
-	// 		Scan(state, chunk);
-	// 		if (chunk.size() != 0) {
-	// 			return;
-	// 		} else {
-	// 			break;
-	// 		}
-	// 	} while (true);
-	// }
-	// D_ASSERT(chunk.size() == 0);
+	do {
+		if (state.position >= state.chunks.Count()) {
+			auto hash_bin = global_source.next_part++;
+			for (; hash_bin < state.partitions; hash_bin = global_source.next_part++) {
+				if (gstate.counts[hash_bin] > 0) {
+					break;
+				}
+			}
+			GeneratePartition(state, gstate, hash_bin);
+		}
+		Scan(state, chunk);
+		if (chunk.size() != 0) {
+			return;
+		} else {
+			break;
+		}
+	} while (true);
+	D_ASSERT(chunk.size() == 0);
 }
 
 string PhysicalWindow::ParamsToString() const {
