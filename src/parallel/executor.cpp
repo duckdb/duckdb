@@ -315,6 +315,14 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			// }
 			// break;
 		}
+		case PhysicalOperatorType::INDEX_JOIN: {
+			// index join: we only continue into the LHS
+			// the right side is probed by the index join
+			// so we don't need to do anything in the pipeline with this child
+			current->operators.push_back(op);
+			BuildPipelines(op->children[0].get(), current);
+			return;
+		}
 		default:
 			break;
 		}

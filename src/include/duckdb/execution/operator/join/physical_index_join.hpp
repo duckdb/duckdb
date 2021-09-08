@@ -41,7 +41,7 @@ public:
 	//! The types of all conditions
 	vector<LogicalType> build_types;
 	//! Index used for join
-	Index *index {};
+	Index *index;
 
 	vector<JoinCondition> conditions;
 
@@ -50,14 +50,17 @@ public:
 	bool lhs_first = true;
 
 public:
-	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
-	// unique_ptr<OperatorState> GetOperatorState() override;
-	// void FinalizeOperatorState(OperatorState &state, ExecutionContext &context) override;
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+
+	bool ParallelOperator() const override {
+		return true;
+	}
 
 private:
-	void GetRHSMatches(ExecutionContext &context, OperatorState *state_p) const;
+	void GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const;
 	//! Fills result chunk
-	void Output(ExecutionContext &context, DataChunk &chunk, OperatorState *state_p) const;
+	void Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const;
 };
 
 } // namespace duckdb

@@ -70,6 +70,9 @@ void PipelineExecutor::Execute(DataChunk &result) {
 	idx_t current_idx;
 	GoToSource(current_idx);
 	while(true) {
+		if (context.client.interrupted) {
+			throw InterruptException();
+		}
 		// now figure out where to put the chunk
 		// if current_idx is the last possible index (>= operators.size()) we write to the result
 		// otherwise we write to an intermediate chunk
@@ -97,6 +100,8 @@ void PipelineExecutor::Execute(DataChunk &result) {
 			}
 		}
 		EndOperator(pipeline.operators[current_idx], &current_chunk);
+		current_chunk.Verify();
+
 		if (current_chunk.size() == 0) {
 			// no output from this operator!
 			if (current_idx == pipeline.source_idx) {
