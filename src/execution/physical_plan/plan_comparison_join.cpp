@@ -70,7 +70,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	auto stats_probe = reinterpret_cast<NumericStatistics *>(op.join_stats[1].get()); // rhs stats
 
 	// The max size our build must have to run the perfect HJ
-	const idx_t MAX_BUILD_SIZE = 1000;
+	const idx_t MAX_BUILD_SIZE = 1000000;
 	join_state.probe_min = stats_probe->min;
 	join_state.probe_max = stats_probe->max;
 	join_state.build_min = stats_build->min;
