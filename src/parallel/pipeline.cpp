@@ -136,6 +136,19 @@ void Pipeline::Ready() {
 	Reset();
 }
 
+bool Pipeline::NextSource() {
+	// check if there are more sources to schedule within this pipeline
+	for(idx_t i = source_idx + 1; i < operators.size(); i++) {
+		if (operators[i]->IsSource()) {
+			// there is another source! schedule it instead of finishing this event
+			source_idx = i;
+			ResetSource();
+			return true;
+		}
+	}
+	return false;
+}
+
 void Pipeline::Finalize(Event &event) {
 	try {
 		sink->Finalize(*this, event, executor.context, *sink->sink_state);

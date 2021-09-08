@@ -382,7 +382,19 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 
 	auto chunk = make_unique<DataChunk>();
 	root_executor->InitializeChunk(*chunk);
-	root_executor->Execute(*chunk);
+	while(true) {
+		root_executor->Execute(*chunk);
+		if (chunk->size() == 0) {
+			if (root_pipeline->NextSource()) {
+				root_executor = make_unique<PipelineExecutor>(context, *root_pipeline);
+				chunk->Reset();
+				continue;
+			}
+			break;
+		} else {
+			break;
+		}
+	}
 	return chunk;
 }
 

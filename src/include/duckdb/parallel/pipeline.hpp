@@ -43,6 +43,9 @@ public:
 	void ResetSource();
 	void Schedule(shared_ptr<Event> &event);
 
+	//! Move the pipeline to the next source (if any)
+	//! Returns true if there is another source, or false if not
+	bool NextSource();
 	//! Finalize this pipeline
 	void Finalize(Event &event);
 
