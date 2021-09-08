@@ -88,7 +88,7 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 	// 8-byte alignment
 	if (entry_size % 8 != 0) {
 		// First assign more bytes to strings instead of aligning
-		idx_t bytes_to_fill = 1 - (entry_size % 8);
+		idx_t bytes_to_fill = 8 - (entry_size % 8);
 		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 			if (bytes_to_fill == 0) {
 				break;
@@ -171,7 +171,7 @@ void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
 		DataChunk blob_chunk;
 		blob_chunk.SetCardinality(sort.size());
 		for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
-			if (!TypeIsConstantSize(sort.data[sort_col].GetType().InternalType())) {
+			if (!sort_layout->constant_size[sort_col]) {
 				blob_chunk.data.emplace_back(sort.data[sort_col]);
 			}
 		}
