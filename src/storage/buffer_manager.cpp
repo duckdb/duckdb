@@ -274,7 +274,8 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 	} else if (required_memory > 0) {
 		// evict blocks until we have space to resize this block
 		if (!EvictBlocks(required_memory, maximum_memory)) {
-			throw OutOfMemoryException("failed to resize block from %lld to %lld%s", handle->memory_usage, alloc_size, InMemoryWarning());
+			throw OutOfMemoryException("failed to resize block from %lld to %lld%s", handle->memory_usage, alloc_size,
+			                           InMemoryWarning());
 		}
 	} else {
 		// no need to evict blocks
@@ -433,7 +434,8 @@ void BufferManager::SetLimit(idx_t limit) {
 	// try to evict until the limit is reached
 	if (!EvictBlocks(0, limit)) {
 		throw OutOfMemoryException(
-		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit, InMemoryWarning());
+		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
+		    InMemoryWarning());
 	}
 	idx_t old_limit = maximum_memory;
 	// set the global maximum memory to the new limit if successful
@@ -443,7 +445,8 @@ void BufferManager::SetLimit(idx_t limit) {
 		// failed: go back to old limit
 		maximum_memory = old_limit;
 		throw OutOfMemoryException(
-		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit, InMemoryWarning());
+		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit,
+		    InMemoryWarning());
 	}
 }
 
@@ -514,9 +517,8 @@ string BufferManager::InMemoryWarning() {
 	}
 	return "\nDatabase is launched in in-memory mode and no temporary directory is specified."
 	       "\nUnused blocks cannot be offloaded to disk currently."
-		   "\n\nLaunch the database with a persistent storage back-end"
-		   "\nOr set PRAGMA temp_directory='/path/to/tmp.tmp'";
-
+	       "\n\nLaunch the database with a persistent storage back-end"
+	       "\nOr set PRAGMA temp_directory='/path/to/tmp.tmp'";
 }
 
 } // namespace duckdb

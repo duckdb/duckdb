@@ -101,6 +101,7 @@ private:
 	void VerifyCurrentMemory();
 
 	string InMemoryWarning();
+
 private:
 	//! The database instance
 	DatabaseInstance &db;
