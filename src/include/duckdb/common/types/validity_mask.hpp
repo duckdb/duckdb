@@ -195,7 +195,7 @@ public:
 		SetInvalidUnsafe(row_idx);
 	}
 
-	//! Mark the entrry at the specified index as either valid or invalid (non-null or null)
+	//! Mark the entry at the specified index as either valid or invalid (non-null or null)
 	inline void Set(idx_t row_idx, bool valid) {
 		if (valid) {
 			SetValid(row_idx);
