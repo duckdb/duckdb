@@ -236,7 +236,7 @@ shared_ptr<BlockHandle> BufferManager::RegisterMemory(idx_t block_size, bool can
 #endif
 	// first evict blocks until we have enough memory to store this buffer
 	if (!EvictBlocks(alloc_size, maximum_memory)) {
-		throw OutOfMemoryException("could not allocate block of %lld bytes", alloc_size);
+		throw OutOfMemoryException("could not allocate block of %lld bytes%s", alloc_size, InMemoryWarning());
 	}
 
 #ifdef DEBUG
@@ -274,7 +274,7 @@ void BufferManager::ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size
 	} else if (required_memory > 0) {
 		// evict blocks until we have space to resize this block
 		if (!EvictBlocks(required_memory, maximum_memory)) {
-			throw OutOfMemoryException("failed to resize block from %lld to %lld", handle->memory_usage, alloc_size);
+			throw OutOfMemoryException("failed to resize block from %lld to %lld%s", handle->memory_usage, alloc_size, InMemoryWarning());
 		}
 	} else {
 		// no need to evict blocks
@@ -306,7 +306,7 @@ unique_ptr<BufferHandle> BufferManager::Pin(shared_ptr<BlockHandle> &handle) {
 #endif
 	// evict blocks until we have space for the current block
 	if (!EvictBlocks(required_memory, maximum_memory)) {
-		throw OutOfMemoryException("failed to pin block of size %lld", required_memory);
+		throw OutOfMemoryException("failed to pin block of size %lld%s", required_memory, InMemoryWarning());
 	}
 	// lock the handle again and repeat the check (in case anybody loaded in the mean time)
 	lock_guard<mutex> lock(handle->lock);
@@ -433,7 +433,7 @@ void BufferManager::SetLimit(idx_t limit) {
 	// try to evict until the limit is reached
 	if (!EvictBlocks(0, limit)) {
 		throw OutOfMemoryException(
-		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit", limit);
+		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit, InMemoryWarning());
 	}
 	idx_t old_limit = maximum_memory;
 	// set the global maximum memory to the new limit if successful
@@ -443,7 +443,7 @@ void BufferManager::SetLimit(idx_t limit) {
 		// failed: go back to old limit
 		maximum_memory = old_limit;
 		throw OutOfMemoryException(
-		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit", limit);
+		    "Failed to change memory limit to %lld: could not free up enough memory for the new limit%s", limit, InMemoryWarning());
 	}
 }
 
@@ -506,6 +506,17 @@ void BufferManager::DeleteTemporaryFile(block_id_t id) {
 	if (fs.FileExists(path)) {
 		fs.RemoveFile(path);
 	}
+}
+
+string BufferManager::InMemoryWarning() {
+	if (!temp_directory.empty()) {
+		return "";
+	}
+	return "\nDatabase is launched in in-memory mode and no temporary directory is specified."
+	       "\nUnused blocks cannot be offloaded to disk currently."
+		   "\n\nLaunch the database with a persistent storage back-end"
+		   "\nOr set PRAGMA temp_directory='/path/to/tmp.tmp'";
+
 }
 
 } // namespace duckdb

@@ -100,6 +100,7 @@ private:
 	//! Asserts that current_memory is equal to the sum of loaded blocks (used for verification)
 	void VerifyCurrentMemory();
 
+	string InMemoryWarning();
 private:
 	//! The database instance
 	DatabaseInstance &db;
