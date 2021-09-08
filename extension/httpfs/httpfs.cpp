@@ -75,14 +75,20 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path)
     : FileHandle(fs, path), length(0), buffer_available(0), buffer_idx(0), file_offset(0), buffer_start(0),
       buffer_end(0) {
 	buffer = std::unique_ptr<data_t[]>(new data_t[BUFFER_LEN]);
+}
 
-	IntializeMetadata();
+std::unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+                                                             FileCompressionType compression, FileOpener *opener) {
+	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
+	return duckdb::make_unique<HTTPFileHandle>(*this, path);
 }
 
 std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                                      FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_unique<HTTPFileHandle>(*this, path);
+	auto handle = CreateHandle(path, flags, lock, compression, opener);
+	handle->InitializeMetadata();
+	return handle;
 }
 
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -169,12 +175,13 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 	sfh.file_offset = location;
 }
 
-void HTTPFileHandle::IntializeMetadata() {
+void HTTPFileHandle::InitializeMetadata() {
 	// get length using HEAD
 	auto &hfs = (HTTPFileSystem &)file_system;
 	auto res = hfs.Request(*this, path, "HEAD");
 	if (res->code != 200) {
-		throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + res->error);
+		throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + std::to_string(res->code) + " (" +
+		                         res->error + ")");
 	}
 	length = std::atoll(res->headers["Content-Length"].c_str());
 

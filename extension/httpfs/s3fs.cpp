@@ -8,6 +8,54 @@
 
 using namespace duckdb;
 
+namespace {
+
+struct S3AuthParams {
+	const std::string region;
+	const std::string access_key_id;
+	const std::string secret_access_key;
+	const std::string session_token;
+
+	static S3AuthParams ReadFrom(FileOpener *opener);
+};
+
+S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
+	std::string region;
+	std::string access_key_id;
+	std::string secret_access_key;
+	std::string session_token;
+	Value value;
+
+	if (opener->TryGetCurrentSetting("s3_region", value)) {
+		region = value.str_value;
+	}
+
+	if (opener->TryGetCurrentSetting("s3_access_key_id", value)) {
+		access_key_id = value.str_value;
+	}
+
+	if (opener->TryGetCurrentSetting("s3_secret_access_key", value)) {
+		secret_access_key = value.str_value;
+	}
+
+	if (opener->TryGetCurrentSetting("s3_session_token", value)) {
+		session_token = value.str_value;
+	}
+
+	return {region, access_key_id, secret_access_key, session_token};
+}
+
+class S3FileHandle : public HTTPFileHandle {
+public:
+	S3FileHandle(FileSystem &file_system, string path, const S3AuthParams &auth_params_p)
+	    : HTTPFileHandle(file_system, path), auth_params(auth_params_p) {
+	}
+
+	const S3AuthParams auth_params;
+};
+
+} // namespace
+
 static std::string uri_encode(const std::string &input, bool encode_slash = false) {
 	// https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
 	static const char *hex_digit = "0123456789ABCDEF";
@@ -111,26 +159,15 @@ unique_ptr<ResponseWrapper> S3FileSystem::Request(FileHandle &handle, string url
 	auto host = bucket + ".s3.amazonaws.com";
 	auto http_host = "https://" + host;
 	// actual request
-
-	return HTTPFileSystem::Request(handle, http_host + path, method, CreateAuthHeaders(host, path, method), file_offset,
-	                               buffer_out, buffer_len);
+	const auto &auth_params = static_cast<S3FileHandle &>(handle).auth_params;
+	auto headers = create_s3_get_header(path, "", host, auth_params.region, "s3", method, auth_params.access_key_id,
+	                                    auth_params.secret_access_key, auth_params.session_token);
+	return HTTPFileSystem::Request(handle, http_host + path, method, headers, file_offset, buffer_out, buffer_len);
 }
 
-HeaderMap S3FileSystem::CreateAuthHeaders(string host, string path, string method) {
-	auto region = database_instance.config.set_variables["s3_region"].str_value;
-	auto access_key_id = database_instance.config.set_variables["s3_access_key_id"].str_value;
-	auto secret_access_key = database_instance.config.set_variables["s3_secret_access_key"].str_value;
-	// With STS credentials the session token must be provided
-	//   See: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-query-string-auth.html
-	auto session_token = database_instance.config.set_variables["s3_session_token"].str_value;
-
-	return create_s3_get_header(path, "", host, region, "s3", method, access_key_id, secret_access_key, session_token);
-}
-
-std::unique_ptr<FileHandle> S3FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                   FileCompressionType compression, FileOpener *opener) {
-	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_unique<HTTPFileHandle>(*this, path);
+std::unique_ptr<HTTPFileHandle> S3FileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+                                                           FileCompressionType compression, FileOpener *opener) {
+	return duckdb::make_unique<S3FileHandle>(*this, path, opener ? S3AuthParams::ReadFrom(opener) : S3AuthParams());
 }
 
 // this computes the signature from https://czak.pl/2015/09/15/s3-rest-api-with-curl.html
