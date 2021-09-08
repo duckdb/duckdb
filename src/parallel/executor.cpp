@@ -266,7 +266,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			// EXECUTE statement: build pipeline on child
 			auto &execute = (PhysicalExecute &)*op;
 			BuildPipelines(execute.plan, current);
-			break;
+			return;
 		}
 		case PhysicalOperatorType::RECURSIVE_CTE: {
 			throw InternalException("FIXME: recursive CTEs");
