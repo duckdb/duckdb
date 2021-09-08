@@ -16,7 +16,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 			over_expr->partitions_stats.push_back(PropagateExpression(expr));
 		}
 		for (auto &bound_order : over_expr->orders) {
-			PropagateBoundOrder(bound_order);
+			bound_order.stats = PropagateExpression(bound_order.expression);
 		}
 	}
 	return move(node_stats);

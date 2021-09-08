@@ -129,12 +129,11 @@ unique_ptr<Expression> CastToSmallestType(unique_ptr<Expression> expr, NumericSt
 	}
 }
 
-void StatisticsPropagator::PropagateBoundOrder(BoundOrderByNode &bound_order) {
-	bound_order.stats = PropagateExpression(bound_order.expression);
-	if (bound_order.stats) {
-		if (bound_order.expression->return_type.IsIntegral()) {
-			bound_order.expression =
-			    CastToSmallestType(move(bound_order.expression), (NumericStatistics &)*bound_order.stats);
+void StatisticsPropagator::PropagateAndCompress(unique_ptr<Expression> &expr, unique_ptr<BaseStatistics> &stats) {
+	stats = PropagateExpression(expr);
+	if (stats) {
+		if (expr->return_type.IsIntegral()) {
+			expr = CastToSmallestType(move(expr), (NumericStatistics &)*stats);
 		}
 	}
 }
