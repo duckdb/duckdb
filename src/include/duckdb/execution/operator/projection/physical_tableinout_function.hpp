@@ -21,10 +21,9 @@ public:
 	                           unique_ptr<FunctionData> bind_data_p, vector<column_t> column_ids_p,
 	                           idx_t estimated_cardinality);
 
-// 	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
-
-// public:
-// 	unique_ptr<OperatorState> GetOperatorState() override;
+public:
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
 		return true;

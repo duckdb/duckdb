@@ -63,10 +63,6 @@ void PipelineExecutor::GoToSource(idx_t &current_idx) {
 }
 
 void PipelineExecutor::Execute(DataChunk &result) {
-	if (context.client.interrupted) {
-		return;
-	}
-
 	idx_t current_idx;
 	GoToSource(current_idx);
 	while(true) {
