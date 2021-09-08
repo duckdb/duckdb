@@ -17,6 +17,12 @@ cd tools/rpkg
 R CMD INSTALL .
 ```
 
+Optional extensions can be enabled by passing them (comma-separated, if there is more than one) to the environment variable `DUCKDB_R_EXTENSIONS`:
+
+```sh
+DUCKDB_R_EXTENSIONS=tpch R CMD INSTALL .
+```
+
 ## Development
 
 For development, setting the `DUCKDB_R_DEBUG` environment variable enables incremental debugging builds for the R package.

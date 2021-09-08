@@ -4,6 +4,11 @@ import shutil
 import subprocess
 
 extensions = ['parquet']
+
+# check if there are any additional extensions being requested
+if 'DUCKDB_R_EXTENSIONS' in os.environ:
+    extensions = extensions + os.environ['DUCKDB_R_EXTENSIONS'].split(",")
+
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'scripts'))
 import package_build
 
