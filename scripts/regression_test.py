@@ -104,7 +104,7 @@ def regression_check(master_time,current_time,benchmark_name,threshold):
 
 # We want to run the regression tests 3x if a query fails (i.e., is slower than the one in the master these 3 times then it fails)
 def regression_test(threshold):
-    repetitions = 10
+    repetitions = 1
     master_time = run_benchmark(install_duck_master,repetitions)
     current_time = run_benchmark(install_duck_current,repetitions)
     regression_status_tpch = regression_check(master_time[0],current_time[0],"TPC-H",threshold)
