@@ -93,6 +93,8 @@ def regression_test(threshold):
         if query_faster:
                 print("Q"+ str(i+1) + " fast ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ")
 
+        if query_ok and not query_faster:
+            print("Q"+ str(i+1) + " same ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ")
     if not regression_status:
         assert(0)
 
