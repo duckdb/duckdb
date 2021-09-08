@@ -178,12 +178,12 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &cont
 	return move(state);
 }
 
-bool PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (PhysicalHashJoinState &) state_p;
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
-		return false;
+		return OperatorResultType::FINISHED;
 	}
 
 	if (state.scan_structure) {
@@ -191,16 +191,16 @@ bool PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, Data
 		// >1024 elements in the previous probe)
 		state.scan_structure->Next(state.join_keys, input, chunk);
 		if (chunk.size() > 0) {
-			return true;
+			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 		state.scan_structure = nullptr;
-		return false;
+		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	// probe the HT
 	if (sink.hash_table->Count() == 0) {
 		ConstructEmptyJoinResult(sink.hash_table->join_type, sink.hash_table->has_null, input, chunk);
-		return false;
+		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	// resolve the join keys for the left chunk
 	state.probe_executor.Execute(input, state.join_keys);
@@ -208,7 +208,7 @@ bool PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, Data
 	// perform the actual probe
 	state.scan_structure = sink.hash_table->Probe(state.join_keys);
 	state.scan_structure->Next(state.join_keys, input, chunk);
-	return true;
+	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
 //===--------------------------------------------------------------------===//

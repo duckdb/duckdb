@@ -50,20 +50,20 @@ unique_ptr<OperatorState> PhysicalCrossProduct::GetOperatorState(ClientContext &
 	return make_unique<CrossProductOperatorState>();
 }
 
-bool PhysicalCrossProduct::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalCrossProduct::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (CrossProductOperatorState &) state_p;
 	auto &sink = (CrossProductGlobalState &)*sink_state;
 	auto &right_collection = sink.rhs_materialized;
 
 	if (sink.rhs_materialized.Count() == 0) {
 		// no RHS: empty result
-		return false;
+		return OperatorResultType::FINISHED;
 	}
 	if (state.right_position >= right_collection.Count()) {
 		// ran out of entries on the RHS
 		// reset the RHS and move to the next chunk on the LHS
 		state.right_position = 0;
-		return false;
+		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
 	auto &left_chunk = input;
@@ -84,7 +84,7 @@ bool PhysicalCrossProduct::Execute(ExecutionContext &context, DataChunk &input, 
 
 	// for the next iteration, move to the next position on the right side
 	state.right_position++;
-	return true;
+	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

@@ -28,7 +28,7 @@ public:
 public:
 	// Operator interface
 	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
-	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
 };
 
 } // namespace duckdb

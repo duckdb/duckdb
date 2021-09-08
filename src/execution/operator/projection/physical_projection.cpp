@@ -24,10 +24,10 @@ PhysicalProjection::PhysicalProjection(vector<LogicalType> types, vector<unique_
 		select_list(move(select_list)) {
 }
 
-bool PhysicalProjection::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalProjection::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (ProjectionState &) state_p;
 	state.executor.Execute(input, chunk);
-	return false;
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 unique_ptr<OperatorState> PhysicalProjection::GetOperatorState(ClientContext &context) const {

@@ -215,7 +215,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	}
 }
 
-bool PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                     OperatorState &state_p) const {
 	auto &state = (PiecewiseMergeJoinState &) state_p;
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
@@ -238,7 +238,7 @@ bool PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, D
 			}
 			state.first_fetch = true;
 			state.finished = false;
-			return false;
+			return OperatorResultType::NEED_MORE_INPUT;
 		}
 
 		auto &right_chunk = gstate.right_chunks.GetChunk(state.right_chunk_index);
@@ -276,18 +276,20 @@ bool PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, D
 			chunk.Slice(right_chunk, right_info.result, result_count, input.ColumnCount());
 		}
 	} while (chunk.size() == 0);
-	return true;
+	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-bool PhysicalPiecewiseMergeJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const {
+OperatorResultType PhysicalPiecewiseMergeJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const {
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.Count() == 0) {
 		// empty RHS
 		if (!EmptyResultIfRHSIsEmpty()) {
 			ConstructEmptyJoinResult(join_type, gstate.has_null, input, chunk);
+			return OperatorResultType::NEED_MORE_INPUT;
+		} else {
+			return OperatorResultType::FINISHED;
 		}
-		return false;
 	}
 
 	switch (join_type) {
@@ -296,7 +298,7 @@ bool PhysicalPiecewiseMergeJoin::Execute(ExecutionContext &context, DataChunk &i
 	case JoinType::MARK:
 		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
 		ResolveSimpleJoin(context, input, chunk, state);
-		return false;
+		return OperatorResultType::NEED_MORE_INPUT;
 	case JoinType::LEFT:
 	case JoinType::INNER:
 	case JoinType::RIGHT:

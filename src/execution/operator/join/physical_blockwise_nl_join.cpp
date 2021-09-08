@@ -85,7 +85,7 @@ unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ClientContex
 	return make_unique<BlockwiseNLJoinState>(*this);
 }
 
-bool PhysicalBlockwiseNLJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalBlockwiseNLJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	D_ASSERT(input.size() > 0);
 	auto &state = (BlockwiseNLJoinState &) state_p;
 	auto &gstate = (BlockwiseNLJoinGlobalState &)*sink_state;
@@ -94,8 +94,10 @@ bool PhysicalBlockwiseNLJoin::Execute(ExecutionContext &context, DataChunk &inpu
 		// empty RHS
 		if (!EmptyResultIfRHSIsEmpty()) {
 			PhysicalComparisonJoin::ConstructEmptyJoinResult(join_type, false, input, chunk);
+			return OperatorResultType::NEED_MORE_INPUT;
+		} else {
+			return OperatorResultType::FINISHED;
 		}
-		return false;
 	}
 
 	// now perform the actual join
@@ -115,7 +117,7 @@ bool PhysicalBlockwiseNLJoin::Execute(ExecutionContext &context, DataChunk &inpu
 			}
 			state.left_position = 0;
 			state.right_position = 0;
-			return false;
+			return OperatorResultType::NEED_MORE_INPUT;
 		}
 		auto &lchunk = input;
 		auto &rchunk = gstate.right_chunks.GetChunk(state.right_position);
@@ -163,7 +165,7 @@ bool PhysicalBlockwiseNLJoin::Execute(ExecutionContext &context, DataChunk &inpu
 			}
 		}
 	} while (result_count == 0);
-	return true;
+	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
 string PhysicalBlockwiseNLJoin::ParamsToString() const {

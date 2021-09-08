@@ -42,7 +42,7 @@ unique_ptr<OperatorState> PhysicalLimit::GetOperatorState(ClientContext &context
 	return make_unique<PhysicalLimitOperatorState>(*this);
 }
 
-bool PhysicalLimit::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalLimit::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	D_ASSERT(input.size() > 0);
 	auto &state = (PhysicalLimitOperatorState &) state_p;
 	auto &limit = state.limit;
@@ -51,7 +51,7 @@ bool PhysicalLimit::Execute(ExecutionContext &context, DataChunk &input, DataChu
 	if (limit != INVALID_INDEX && offset != INVALID_INDEX) {
 		idx_t max_element = limit + offset;
 		if ((limit == 0 || state.current_offset >= max_element) && !(limit_expression || offset_expression)) {
-			return false;
+			return OperatorResultType::FINISHED;
 		}
 	}
 
@@ -64,7 +64,7 @@ bool PhysicalLimit::Execute(ExecutionContext &context, DataChunk &input, DataChu
 	}
 	idx_t max_element = limit + offset;
 	if (limit == 0 || state.current_offset >= max_element) {
-		return false;
+		return OperatorResultType::FINISHED;
 	}
 	if (state.current_offset < offset) {
 		// we are not yet at the offset point
@@ -96,7 +96,7 @@ bool PhysicalLimit::Execute(ExecutionContext &context, DataChunk &input, DataChu
 	}
 
 	state.current_offset += input.size();
-	return false;
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 } // namespace duckdb

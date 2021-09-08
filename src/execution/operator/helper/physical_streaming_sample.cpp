@@ -54,7 +54,7 @@ unique_ptr<OperatorState> PhysicalStreamingSample::GetOperatorState(ClientContex
 	return make_unique<StreamingSampleOperatorState>(seed);
 }
 
-bool PhysicalStreamingSample::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const {
+OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const {
 	switch (method) {
 	case SampleMethod::BERNOULLI_SAMPLE:
 		BernoulliSample(input, chunk, state);
@@ -65,7 +65,7 @@ bool PhysicalStreamingSample::Execute(ExecutionContext &context, DataChunk &inpu
 	default:
 		throw InternalException("Unsupported sample method for streaming sample");
 	}
-	return false;
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 string PhysicalStreamingSample::ParamsToString() const {

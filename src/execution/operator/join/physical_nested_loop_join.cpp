@@ -228,15 +228,17 @@ unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ClientContext
 	return make_unique<PhysicalNestedLoopJoinState>(*this, conditions);
 }
 
-bool PhysicalNestedLoopJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalNestedLoopJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.Count() == 0) {
 		// empty RHS
 		if (!EmptyResultIfRHSIsEmpty()) {
 			ConstructEmptyJoinResult(join_type, gstate.has_null, input, chunk);
+			return OperatorResultType::NEED_MORE_INPUT;
+		} else {
+			return OperatorResultType::FINISHED;
 		}
-		return false;
 	}
 
 	switch (join_type) {
@@ -245,7 +247,7 @@ bool PhysicalNestedLoopJoin::Execute(ExecutionContext &context, DataChunk &input
 	case JoinType::MARK:
 		// simple joins can have max STANDARD_VECTOR_SIZE matches per chunk
 		ResolveSimpleJoin(context, input, chunk, state_p);
-		return false;
+		return OperatorResultType::NEED_MORE_INPUT;
 	case JoinType::LEFT:
 	case JoinType::INNER:
 	case JoinType::OUTER:
@@ -301,7 +303,7 @@ void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, b
 	}
 }
 
-bool PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (PhysicalNestedLoopJoinState &) state_p;
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
@@ -323,7 +325,7 @@ bool PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 					PhysicalJoin::ConstructLeftJoinResult(input, chunk, state.left_found_match.get());
 					memset(state.left_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 				}
-				return false;
+				return OperatorResultType::NEED_MORE_INPUT;
 			}
 		}
 		if (state.fetch_next_left) {
@@ -373,7 +375,7 @@ bool PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataC
 			state.fetch_next_right = true;
 		}
 	} while(match_count == 0);
-	return true;
+	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
 //===--------------------------------------------------------------------===//

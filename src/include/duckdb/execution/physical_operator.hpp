@@ -14,6 +14,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/execution/execution_context.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
 
 namespace duckdb {
 class Event;
@@ -93,7 +94,7 @@ public:
 public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const;
-	virtual bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
+	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
 
 	virtual bool ParallelOperator() const {
 		return false;

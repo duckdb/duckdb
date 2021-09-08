@@ -85,14 +85,18 @@ void PipelineExecutor::Execute(DataChunk &result) {
 				*local_source_state);
 		} else {
 			// if current_idx > source_idx, we pass the previous' operators output through the Execute of the current operator
-			if (pipeline.operators[current_idx]->Execute(
+			auto result = pipeline.operators[current_idx]->Execute(
 				context,
 				*intermediate_chunks[current_intermediate - 1],
 				current_chunk,
-				*intermediate_states[current_intermediate - 1])) {
+				*intermediate_states[current_intermediate - 1]);
+			if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
 				// more data remains in this operator
 				// push in-process marker
 				in_process_operators.push(current_idx);
+			} else if (result == OperatorResultType::FINISHED) {
+				D_ASSERT(current_chunk.size() == 0);
+				return;
 			}
 		}
 		EndOperator(pipeline.operators[current_idx], &current_chunk);

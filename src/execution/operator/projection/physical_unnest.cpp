@@ -150,7 +150,7 @@ unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ClientContext &contex
 	return make_unique<UnnestOperatorState>();
 }
 
-bool PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (UnnestOperatorState &) state_p;
 	do {
 		if (state.first_fetch) {
@@ -191,7 +191,7 @@ bool PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataCh
 			state.list_position = 0;
 			state.list_length = -1;
 			state.first_fetch = true;
-			return false;
+			return OperatorResultType::NEED_MORE_INPUT;
 		}
 
 		// need to figure out how many times we need to repeat for current row
@@ -270,7 +270,7 @@ bool PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataCh
 
 		chunk.Verify();
 	} while (chunk.size() == 0);
-	return true;
+	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

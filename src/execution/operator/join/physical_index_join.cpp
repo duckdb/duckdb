@@ -172,7 +172,7 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 	}
 }
 
-bool PhysicalIndexJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalIndexJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (IndexJoinOperatorState &) state_p;
 
 	state.result_size = 0;
@@ -188,13 +188,13 @@ bool PhysicalIndexJoin::Execute(ExecutionContext &context, DataChunk &input, Dat
 		state.lhs_idx = 0;
 		state.rhs_idx = 0;
 		state.first_fetch = true;
-		return false;
+		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	//! Output vectors
 	if (state.lhs_idx < input.size()) {
 		Output(context, input, chunk, state_p);
 	}
-	return true;
+	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

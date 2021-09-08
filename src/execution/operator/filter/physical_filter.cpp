@@ -39,16 +39,16 @@ unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ClientContext &contex
 	return make_unique<FilterState>(*expression);
 }
 
-bool PhysicalFilter::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalFilter::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (FilterState &) state_p;
 	idx_t result_count = state.executor.SelectExpression(input, state.sel);
 	if (result_count == input.size()) {
 		// nothing was filtered: skip adding any selection vectors
 		chunk.Reference(input);
-		return false;
+	} else {
+		chunk.Slice(input, state.sel, result_count);
 	}
-	chunk.Slice(input, state.sel, result_count);
-	return false;
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 string PhysicalFilter::ParamsToString() const {

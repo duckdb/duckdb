@@ -23,7 +23,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(ClientCon
 	return make_unique<TableInOutFunctionState>();
 }
 
-bool PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (TableInOutFunctionState &)state_p;
 
 	if (!state.initialized) {
@@ -34,7 +34,7 @@ bool PhysicalTableInOutFunction::Execute(ExecutionContext &context, DataChunk &i
 	}
 
 	function.function(context.client, bind_data.get(), state.operator_data.get(), &input, chunk);
-	return false;
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 } // namespace duckdb

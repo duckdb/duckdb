@@ -33,7 +33,7 @@ unique_ptr<OperatorState> PhysicalOperator::GetOperatorState(ClientContext &cont
 }
 
 // LCOV_EXCL_START
-bool PhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const {
+OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const {
 	throw InternalException("Calling Execute on a node that is not an operator!");
 }
 // LCOV_EXCL_STOP

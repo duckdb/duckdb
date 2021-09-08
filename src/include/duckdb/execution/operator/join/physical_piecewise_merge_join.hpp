@@ -26,7 +26,7 @@ public:
 public:
 	// Operator Interface
 	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
-	bool Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
 		return true;
@@ -64,7 +64,7 @@ private:
 	// resolve joins that output max N elements (SEMI, ANTI, MARK)
 	void ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
 	// resolve joins that can potentially output N*M elements (INNER, LEFT, FULL)
-	bool ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
+	OperatorResultType ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
 };
 
 } // namespace duckdb
