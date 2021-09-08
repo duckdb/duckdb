@@ -516,7 +516,7 @@ string BufferManager::InMemoryWarning() {
 		return "";
 	}
 	return "\nDatabase is launched in in-memory mode and no temporary directory is specified."
-	       "\nUnused blocks cannot be offloaded to disk currently."
+	       "\nUnused blocks cannot be offloaded to disk."
 	       "\n\nLaunch the database with a persistent storage back-end"
 	       "\nOr set PRAGMA temp_directory='/path/to/tmp.tmp'";
 }
