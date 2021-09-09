@@ -103,7 +103,7 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalOperatorState &gsta
 class PhysicalOrderMergeTask : public Task {
 public:
 	PhysicalOrderMergeTask(Pipeline &parent, ClientContext &context, OrderGlobalState &state)
-	    : parent(parent), context(context), state(state) {
+	    : parent(parent.shared_from_this()), context(context), state(state) {
 	}
 
 	void Execute() override {
@@ -112,21 +112,21 @@ public:
 		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));
 		merge_sorter.PerformInMergeRound();
 		// Finish task and act if all tasks are finished
-		idx_t finished_tasks = ++parent.finished_tasks;
-		if (finished_tasks == parent.total_tasks) {
+		idx_t finished_tasks = ++parent->finished_tasks;
+		if (finished_tasks == parent->total_tasks) {
 			global_sort_state.CompleteMergeRound();
 			if (global_sort_state.sorted_blocks.size() == 1) {
 				// Only one block left: Done!
-				parent.Finish();
+				parent->Finish();
 			} else {
 				// Schedule the next round
-				PhysicalOrder::ScheduleMergeTasks(parent, context, state);
+				PhysicalOrder::ScheduleMergeTasks(*parent, context, state);
 			}
 		}
 	}
 
 private:
-	Pipeline &parent;
+	shared_ptr<Pipeline> parent;
 	ClientContext &context;
 	OrderGlobalState &state;
 };
