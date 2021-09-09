@@ -125,6 +125,7 @@ void PhysicalHashJoin::Sink(ExecutionContext &context, GlobalOperatorState &stat
 	auto &sink = (HashJoinGlobalState &)state;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
 	// resolve the join keys for the right chunk
+	lstate.join_keys.Reset();
 	lstate.build_executor.Execute(input, lstate.join_keys);
 	// TODO: add statement to check for possible per
 	// build the HT
@@ -290,6 +291,7 @@ void PhysicalHashJoin::ProbeHashTable(ExecutionContext &context, DataChunk &chun
 			return;
 		}
 		// resolve the join keys for the left chunk
+		state->join_keys.Reset();
 		state->probe_executor.Execute(state->child_chunk, state->join_keys);
 
 		// perform the actual probe

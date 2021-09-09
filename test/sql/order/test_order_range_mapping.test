@@ -1,0 +1,111 @@
+# name: test/sql/order/test_order_range_mapping.test
+# description: Test ORDER BY range mapping of order expressions using statistics
+# group: [order]
+
+statement ok
+pragma enable_verification
+
+# cast to utinyint
+foreach type <integral>
+
+statement ok
+create table test (i ${type})
+
+statement ok
+insert into test values (100), (25), (75), (50);
+
+query T
+select * from test order by i
+----
+25
+50
+75
+100
+
+statement ok
+drop table test
+
+endloop
+
+# cast to usmallint
+foreach type smallint usmallint integer uinteger bigint ubigint hugeint
+
+statement ok
+create table test (i ${type})
+
+statement ok
+insert into test values (10000), (2500), (7500), (5000)
+
+query T
+select * from test order by i
+----
+2500
+5000
+7500
+10000
+
+statement ok
+drop table test
+
+endloop
+
+# cast to uint
+foreach type integer uinteger bigint ubigint hugeint
+
+statement ok
+create table test (i ${type})
+
+statement ok
+insert into test values (1000000), (250000), (750000), (500000)
+
+query T
+select * from test order by i
+----
+250000
+500000
+750000
+1000000
+
+statement ok
+drop table test
+
+endloop
+
+# cast to ubigint
+foreach type bigint ubigint hugeint
+
+statement ok
+create table test (i ${type})
+
+statement ok
+insert into test values (1000000000), (250000000), (750000000), (500000000)
+
+query T
+select * from test order by i
+----
+250000000
+500000000
+750000000
+1000000000
+
+statement ok
+drop table test
+
+endloop
+
+statement ok
+create table test (i hugeint)
+
+statement ok
+insert into test values (295147905179352825856), (73786976294838206464), (147573952589676412928), (36893488147419103232)
+
+query T
+select * from test order by i
+----
+36893488147419103232
+73786976294838206464
+147573952589676412928
+295147905179352825856
+
+statement ok
+drop table test

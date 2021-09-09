@@ -44,15 +44,15 @@ public:
 unique_ptr<GlobalOperatorState> PhysicalOrder::GetGlobalState(ClientContext &context) {
 	// Get the payload layout from the return types
 	RowLayout payload_layout;
-	payload_layout.Initialize(types, false);
+	payload_layout.Initialize(types);
 	auto state = make_unique<OrderGlobalState>(BufferManager::GetBufferManager(context), *this, payload_layout);
 	// Set external (can be force with the PRAGMA)
 	state->global_sort_state.external = context.force_external;
 	// Memory usage per thread should scale with max mem / num threads
-	// We take 1/5th of this, to be conservative
+	// We take 1/4th of this, to be conservative
 	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
 	idx_t num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-	state->memory_per_thread = (max_memory / num_threads) / 5;
+	state->memory_per_thread = (max_memory / num_threads) / 4;
 	return move(state);
 }
 
@@ -83,6 +83,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 
 	// Obtain sorting columns
 	auto &sort = lstate.sort;
+	sort.Reset();
 	lstate.executor.Execute(input, sort);
 
 	// Sink the data into the local sort state
@@ -90,7 +91,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalOperatorState &gstate_
 
 	// When sorting data reaches a certain size, we sort it
 	if (local_sort_state.SizeInBytes() >= gstate.memory_per_thread) {
-		local_sort_state.Sort(global_sort_state);
+		local_sort_state.Sort(global_sort_state, true);
 	}
 }
 

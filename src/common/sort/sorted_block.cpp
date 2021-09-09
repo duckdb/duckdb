@@ -9,7 +9,7 @@
 namespace duckdb {
 
 SortedData::SortedData(const RowLayout &layout, BufferManager &buffer_manager, GlobalSortState &state)
-    : layout(layout), block_idx(0), entry_idx(0), buffer_manager(buffer_manager), state(state) {
+    : layout(layout), block_idx(0), entry_idx(0), swizzled(false), buffer_manager(buffer_manager), state(state) {
 }
 
 idx_t SortedData::Count() {
@@ -96,7 +96,7 @@ unique_ptr<SortedData> SortedData::CreateSlice(idx_t start_block_index, idx_t st
 }
 
 void SortedData::Unswizzle() {
-	if (layout.AllConstant()) {
+	if (layout.AllConstant() || !swizzled) {
 		return;
 	}
 	for (idx_t i = 0; i < data_blocks.size(); i++) {
