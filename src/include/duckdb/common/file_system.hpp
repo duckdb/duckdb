@@ -169,14 +169,10 @@ public:
 	virtual vector<string> Glob(const string &path);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
-	virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
-		throw NotImplementedException("Can't register a sub system on a non-virtual file system");
-	}
+	virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
 
-	virtual bool CanHandleFile(const string &fpath) {
-		//! Whether or not a sub-system can handle a specific file path
-		return false;
-	}
+	//! Whether or not a sub-system can handle a specific file path
+	virtual bool CanHandleFile(const string &fpath);
 
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	virtual void Seek(FileHandle &handle, idx_t location);
@@ -192,11 +188,6 @@ public:
 
 	//! Create a LocalFileSystem.
 	static unique_ptr<FileSystem> CreateLocal();
-
-private:
-	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
-	void SetFilePointer(FileHandle &handle, idx_t location);
-	virtual idx_t GetFilePointer(FileHandle &handle);
 };
 
 } // namespace duckdb
