@@ -1392,7 +1392,7 @@ jobs:
        cd duckdb-web
        python3 scripts/generate_docs.py ..
 
-  regression-test:
+ regression-test:
     name: Regression Test
     runs-on: ubuntu-20.04
     needs: linux-debug
