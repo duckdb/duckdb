@@ -1,0 +1,28 @@
+# name: test/sql/copy/parquet/decimal_filter.test
+# description: Decimal filter pushdown into Parquet
+# group: [parquet]
+
+require parquet
+
+statement ok
+pragma enable_verification
+
+query IIII
+select * from 'data/parquet-testing/decimals.parquet'
+----
+0.1	0.1	0.1	0.1
+-0.1	-0.1	-0.1	-0.1
+
+loop i 1 5
+
+query IIII
+select * from 'data/parquet-testing/decimals.parquet' WHERE l${i}=0.1
+----
+0.1	0.1	0.1	0.1
+
+query IIII
+select * from 'data/parquet-testing/decimals.parquet' WHERE l${i}=-0.1
+----
+-0.1	-0.1	-0.1	-0.1
+
+endloop
