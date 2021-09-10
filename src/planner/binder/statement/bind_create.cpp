@@ -174,6 +174,17 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
+		// We first check if there are any enum types, otherwise we throw an error
+		auto& create_table_info = (CreateTableInfo& ) *stmt.info;
+		for (auto& column: create_table_info.columns){
+			if (column.type.id() == LogicalTypeId::ENUM){
+				auto &enum_info = (EnumTypeInfo&) *column.type.AuxInfo();
+				auto enum_catalog =  context.db->GetCatalog().GetEntry(context,CatalogType::ENUM_ENTRY,stmt.info->schema,enum_info.enum_name,true);
+				if (!enum_catalog){
+					throw NotImplementedException("DataType %s not supported yet...\n", enum_info.enum_name);
+				}
+			}
+		}
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);
 

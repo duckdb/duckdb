@@ -359,7 +359,8 @@ enum class LogicalTypeId : uint8_t {
 	STRUCT = 100,
 	LIST = 101,
 	MAP = 102,
-	TABLE = 103
+	TABLE = 103,
+	ENUM = 104
 };
 
 struct ExtraTypeInfo;
@@ -466,7 +467,7 @@ public:
 	DUCKDB_API static LogicalType LIST(LogicalType child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);       // NOLINT
-
+	DUCKDB_API static LogicalType ENUM(string &enum_name);
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
 	//! A list of all INTEGRAL types
@@ -494,6 +495,8 @@ struct StructType {
 	DUCKDB_API static const string &GetChildName(const LogicalType &type, idx_t index);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
 };
+
+EnumType::GetName();
 
 
 string LogicalTypeIdToString(LogicalTypeId type);

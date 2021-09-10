@@ -102,6 +102,8 @@ PhysicalType LogicalType::GetInternalType() {
 		// LCOV_EXCL_STOP
 	case LogicalTypeId::VALIDITY:
 		return PhysicalType::BIT;
+	case LogicalTypeId::ENUM:
+		return PhysicalType::UINT64;
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
@@ -488,7 +490,8 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 	} else if (lower_str == "ubigint" || lower_str == "uint64") {
 		return LogicalTypeId::UBIGINT;
 	} else {
-		throw NotImplementedException("DataType %s not supported yet...\n", str);
+		// We assume that this type is an Enum Custom Type.
+		return LogicalTypeId::ENUM;
 	}
 }
 
@@ -666,7 +669,9 @@ enum class ExtraTypeInfoType : uint8_t {
 	DECIMAL_TYPE_INFO = 1,
 	STRING_TYPE_INFO = 2,
 	LIST_TYPE_INFO = 3,
-	STRUCT_TYPE_INFO = 4
+	STRUCT_TYPE_INFO = 4,
+	ENUM_TYPE_INFO = 5,
+	UNDEFINED_TYPE_INFO = 6
 };
 
 struct ExtraTypeInfo {
@@ -902,6 +907,44 @@ LogicalType LogicalType::MAP(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::MAP, move(info));
 }
 
+
+//===--------------------------------------------------------------------===//
+// Enum Type
+//===--------------------------------------------------------------------===//
+struct EnumTypeInfo : public ExtraTypeInfo {
+	explicit EnumTypeInfo(string enum_name_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)) {
+	}
+
+	string enum_name;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (EnumTypeInfo &)*other_p;
+		return  other.enum_name == enum_name;
+	}
+
+	void Serialize(Serializer &serializer) const override {
+		serializer.WriteString(enum_name);
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
+		auto enum_name = source.Read<string>();
+		return make_shared<EnumTypeInfo>(move(enum_name));
+	}
+};
+
+LogicalType LogicalType::ENUM(string &enum_name) {
+	auto info = make_shared<EnumTypeInfo>(enum_name);
+	return LogicalType(LogicalTypeId::ENUM, move(info));
+}
+
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
@@ -913,7 +956,6 @@ void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, Serializer &serializer) {
 		info->Serialize(serializer);
 	}
 }
-
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 	auto type = source.Read<ExtraTypeInfoType>();
 	switch (type) {

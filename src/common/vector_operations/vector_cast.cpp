@@ -168,10 +168,21 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 	}
 }
 
+bool CheckEnumCatalog(Vector &source, Vector &result, idx_t count){
+	return true;
+}
+
 static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, bool strict,
                                           string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
+	case LogicalTypeId::ENUM:{
+		D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
+		// check if this
+		return (source,result,count);
+	}
+
+
 	case LogicalTypeId::BOOLEAN:
 		return VectorTryCastStrictLoop<string_t, bool, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::TINYINT:
@@ -549,7 +560,6 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}
-	return true;
 }
 
 void VectorOperations::Cast(Vector &source, Vector &result, idx_t count, bool strict) {
