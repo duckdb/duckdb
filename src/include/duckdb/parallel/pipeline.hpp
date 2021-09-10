@@ -34,9 +34,6 @@ public:
 	ClientContext &GetClientContext();
 
 	void AddDependency(shared_ptr<Pipeline> &pipeline);
-	bool HasDependencies() {
-		return !dependencies.empty();
-	}
 
 	void Ready();
 	void Reset();
@@ -70,6 +67,9 @@ private:
 	vector<weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline
 	vector<weak_ptr<Pipeline>> dependencies;
+	//! The adjacent union pipelines of this pipeline
+	//! These pipelines share the same sink
+	vector<shared_ptr<Pipeline>> union_pipelines;
 
 private:
 	bool GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage);
@@ -77,6 +77,9 @@ private:
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 
 	bool ScheduleParallel(shared_ptr<Event> &event);
+
+	//! Add a pipeline to this pipeline with the same sink
+	void AddUnionPipeline(shared_ptr<Pipeline> pipeline);
 };
 
 } // namespace duckdb

@@ -19,6 +19,7 @@ public:
 
 	//! The pipeline that this event belongs to
 	weak_ptr<Pipeline> pipeline_w;
+
 public:
 	void Schedule() override;
 	void FinishEvent() override;

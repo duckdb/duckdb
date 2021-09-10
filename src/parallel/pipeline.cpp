@@ -160,15 +160,19 @@ void Pipeline::Finalize(Event &event) {
 }
 
 void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
-	if (!pipeline) {
-		return;
-	}
+	D_ASSERT(pipeline);
 	dependencies.push_back(weak_ptr<Pipeline>(pipeline));
 	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
 }
 
+void Pipeline::AddUnionPipeline(shared_ptr<Pipeline> pipeline) {
+	D_ASSERT(pipeline);
+	pipeline->operators = operators;
+	union_pipelines.push_back(pipeline);
+}
+
 string Pipeline::ToString() const {
-	string str = PhysicalOperatorToString(sink->type);
+	string str = sink ? PhysicalOperatorToString(sink->type) : string();
 	for (auto &op : operators) {
 		str += PhysicalOperatorToString(op->type) + " -> " + str;
 	}

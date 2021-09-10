@@ -1,0 +1,21 @@
+# name: test/sql/setops/union_pipeline.test
+# description: Test union pipelines
+# group: [setops]
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM range(1000000) tbl(i) UNION ALL SELECT * FROM range(1000000) tbl(i)) tbl(i)
+----
+2000000
+
+statement ok
+CREATE TABLE t1 AS SELECT COUNT(*) FROM (SELECT * FROM range(1000000) tbl(i) UNION ALL SELECT * FROM range(1000000) tbl(i)) tbl(i)
+
+query I
+SELECT * FROM t1
+----
+2000000
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM range(1000000) tbl(i) UNION ALL SELECT * FROM range(1000000) tbl(i) UNION ALL SELECT * FROM range(1000000) tbl(i) UNION ALL SELECT * FROM range(1000000) tbl(i) UNION ALL SELECT * FROM range(1000000) tbl(i)) tbl(i)
+----
+5000000

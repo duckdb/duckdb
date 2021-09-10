@@ -32,6 +32,9 @@ public:
 	void Finish();
 
 	void AddDependency(Event &event);
+	bool HasDependencies() {
+		return total_dependencies != 0;
+	}
 	void CompleteDependency();
 
 	void SetTasks(vector<unique_ptr<Task>> tasks);

@@ -24,6 +24,7 @@ class OperatorState;
 class ThreadContext;
 class Task;
 
+struct PipelineEventStack;
 struct ProducerToken;
 
 class Executor {
@@ -66,7 +67,8 @@ public:
 
 private:
 	void ScheduleEvents();
-
+	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map);
+	void ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &stack, unordered_map<Pipeline *, PipelineEventStack> &event_map);
 private:
 	PhysicalOperator *physical_plan;
 
