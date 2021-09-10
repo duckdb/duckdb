@@ -6,6 +6,8 @@ import time
 import subprocess
 import math
 
+PRINT_DEBUG = False
+
 def truncate(number, decimals=0):
     """
     Returns a value truncated to a specific number of decimal places.
@@ -21,7 +23,8 @@ def truncate(number, decimals=0):
     return math.trunc(number * factor) / factor
 
 def run_command(command):
-    print(command, flush=True)
+    if PRINT_DEBUG:
+        print(command, flush=True)
     output = subprocess.run(command, capture_output=True)
     if output.stderr:
         print (output.stderr)
@@ -59,7 +62,8 @@ def run_tpc(repetitions,load_data_call,num_queries,get_query_sql,skip_queries=se
                 query_result_list.append(run_tpc_query(duckdb_conn,i,get_query_sql))
             result_list.append(query_result_list)
         total_time = time.time() - start_time
-        print ("Running " + str(i) + " of "+ get_query_sql + ". Time: "+ str(truncate(total_time,2)), flush=True)
+        if PRINT_DEBUG:
+            print ("Running " + str(i) + " of "+ get_query_sql + ". Time: "+ str(truncate(total_time,2)), flush=True)
     return result_list
 
 def run_benchmark(install_function,repetitions):
@@ -73,7 +77,7 @@ def run_benchmark(install_function,repetitions):
     return results
 
 def regression_check(master_time,current_time,benchmark_name,threshold):
-    print ("######## Status " + benchmark_name + " Benchmark Regression #######")
+    print ("######## Status " + benchmark_name + " Benchmark Regression #######", flush=True)
     # If the regression status is true, there was no regression
     regression_status = True
     for i in range(len(master_time)):
@@ -97,19 +101,19 @@ def regression_check(master_time,current_time,benchmark_name,threshold):
         query_num
         if not query_ok:
                 regression_status = False
-                print("Q"+ str(query_num) + " slow ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ")
+                print("Q"+ str(query_num) + " slow ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ", flush=True)
         if query_faster:
-                print("Q"+ str(query_num) + " fast ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ")
+                print("Q"+ str(query_num) + " fast ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ", flush=True)
 
         if query_ok and not query_faster:
-            print("Q"+ str(query_num) + " same ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ")
-    print ("######## End " + benchmark_name + " Benchmark Regression #######")
+            print("Q"+ str(query_num) + " same ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ", flush=True)
+    print ("######## End " + benchmark_name + " Benchmark Regression #######", flush=True)
     return regression_status
 
 
 # We want to run the regression tests 3x if a query fails (i.e., is slower than the one in the master these 3 times then it fails)
 def regression_test(threshold):
-    repetitions = 1
+    repetitions = 5 # Should aim for 1:00 - 1:30 run.
     master_time = run_benchmark(install_duck_master,repetitions)
     current_time = run_benchmark(install_duck_current,repetitions)
     regression_status_tpch = regression_check(master_time[0],current_time[0],"TPC-H",threshold)
