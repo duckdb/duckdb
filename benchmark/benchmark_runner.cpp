@@ -329,8 +329,7 @@ void print_error_message(const ConfigurationError &error) {
 }
 
 int main(int argc, char **argv) {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	fs->SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
+	FileSystem::SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
 	// load interpreted benchmarks before doing anything else
 	LoadInterpretedBenchmarks();
 	parse_arguments(argc, argv);

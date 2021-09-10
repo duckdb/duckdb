@@ -145,26 +145,25 @@ public:
 	virtual bool FileExists(const string &filename);
 	//! Remove a file from disk
 	virtual void RemoveFile(const string &filename);
-	//! Path separator for the current file system
-	virtual string PathSeparator();
-	//! Join two paths together
-	virtual string JoinPath(const string &a, const string &path);
-	//! Convert separators in a path to the local separators (e.g. convert "/" into \\ on windows)
-	virtual string ConvertSeparators(const string &path);
-	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is example)
-	virtual string ExtractBaseName(const string &path);
 	//! Sync a file handle to disk
 	virtual void FileSync(FileHandle &handle);
 
-	// TODO(omo): Consider making them static. These aren't actually a FS concept but process properties.
 	//! Sets the working directory
-	virtual void SetWorkingDirectory(const string &path);
+	static void SetWorkingDirectory(const string &path);
 	//! Gets the working directory
-	virtual string GetWorkingDirectory();
+	static string GetWorkingDirectory();
 	//! Gets the users home directory
-	virtual string GetHomeDirectory();
+	static string GetHomeDirectory();
 	//! Returns the system-available memory in bytes
-	virtual idx_t GetAvailableMemory();
+	static idx_t GetAvailableMemory();
+	//! Path separator for the current file system
+	static string PathSeparator();
+	//! Join two paths together
+	static string JoinPath(const string &a, const string &path);
+	//! Convert separators in a path to the local separators (e.g. convert "/" into \\ on windows)
+	static string ConvertSeparators(const string &path);
+	//! Extract the base name of a file (e.g. if the input is lib/example.dll the base name is example)
+	static string ExtractBaseName(const string &path);
 
 	//! Runs a glob on the file system, returning a list of matching files
 	virtual vector<string> Glob(const string &path);

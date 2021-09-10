@@ -1141,9 +1141,8 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
-	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", fs->GetWorkingDirectory());
+	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
 	return input;
 }
@@ -1722,8 +1721,8 @@ struct AutoRegTests {
 		    "random/expr/slt_good_47.test", "random/expr/slt_good_11.test", "random/expr/slt_good_40.test",
 		    "random/expr/slt_good_42.test", "random/expr/slt_good_27.test", "random/expr/slt_good_103.test",
 		    "random/expr/slt_good_75.test"};
+		FileSystem::SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
 		unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-		fs->SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
 		listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"),
 		          [excludes](const string &path) {
 			          if (endsWith(path, ".test")) {

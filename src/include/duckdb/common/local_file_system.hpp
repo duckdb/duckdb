@@ -12,8 +12,6 @@
 
 namespace duckdb {
 
-class LocalFileSystem : public FileSystem {
-
-};
+class LocalFileSystem : public FileSystem {};
 
 } // namespace duckdb

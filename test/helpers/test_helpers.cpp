@@ -45,8 +45,7 @@ void TestDeleteFile(string path) {
 
 void TestChangeDirectory(string path) {
 	// set the base path for the tests
-	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	fs->SetWorkingDirectory(path);
+	FileSystem::SetWorkingDirectory(path);
 }
 
 void DeleteDatabase(string path) {

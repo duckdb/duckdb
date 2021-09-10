@@ -86,23 +86,6 @@ public:
 		return FindFileSystem(path)->Glob(path);
 	}
 
-	// these goes to the default fs
-	void SetWorkingDirectory(const string &path) override {
-		default_fs->SetWorkingDirectory(path);
-	}
-
-	string GetWorkingDirectory() override {
-		return default_fs->GetWorkingDirectory();
-	}
-
-	string GetHomeDirectory() override {
-		return default_fs->GetWorkingDirectory();
-	}
-
-	idx_t GetAvailableMemory() override {
-		return default_fs->GetAvailableMemory();
-	}
-
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override {
 		sub_systems.push_back(move(fs));
 	}
