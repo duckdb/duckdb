@@ -30,8 +30,8 @@ int main(int argc, const char **argv) {
 	options.compression = "none";
 	options.auto_detect = true;
 
-	FileSystem fs;
-	BufferedCSVReader reader(fs, move(options));
+	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	BufferedCSVReader reader(*fs, move(options));
 
 	if (reader.sql_types.empty()) {
 		throw std::runtime_error("Failed to auto-detect types for CSV file");

@@ -1,7 +1,7 @@
 #include "duckdb/main/database.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/storage_manager.hpp"

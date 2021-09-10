@@ -1141,9 +1141,9 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
-	FileSystem fs;
+	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
-	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", fs.GetWorkingDirectory());
+	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", fs->GetWorkingDirectory());
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
 	return input;
 }
@@ -1722,19 +1722,20 @@ struct AutoRegTests {
 		    "random/expr/slt_good_47.test", "random/expr/slt_good_11.test", "random/expr/slt_good_40.test",
 		    "random/expr/slt_good_42.test", "random/expr/slt_good_27.test", "random/expr/slt_good_103.test",
 		    "random/expr/slt_good_75.test"};
-		FileSystem fs;
-		fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
-		listFiles(fs, fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test"), [excludes](const string &path) {
-			if (endsWith(path, ".test")) {
-				for (auto excl : excludes) {
-					if (path.find(excl) != string::npos) {
-						return;
-					}
-				}
-				REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
-			}
-		});
-		listFiles(fs, "test", [excludes](const string &path) {
+		unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+		fs->SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
+		listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"),
+		          [excludes](const string &path) {
+			          if (endsWith(path, ".test")) {
+				          for (auto excl : excludes) {
+					          if (path.find(excl) != string::npos) {
+						          return;
+					          }
+				          }
+				          REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
+			          }
+		          });
+		listFiles(*fs, "test", [excludes](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 				for (auto excl : excludes) {
 					if (path.find(excl) != string::npos) {

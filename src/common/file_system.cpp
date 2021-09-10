@@ -2,8 +2,6 @@
 
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/gzip_file_system.hpp"
-#include "duckdb/common/pipe_file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/windows.hpp"
@@ -665,7 +663,7 @@ void FileSystem::CreateDirectory(const string &directory) {
 	}
 }
 
-static void delete_dir_special_snowflake_windows(string directory) {
+static void delete_dir_special_snowflake_windows(FileSystem &fs, string directory) {
 	if (directory.size() + 3 > MAX_PATH) {
 		throw IOException("Pathname too long");
 	}
@@ -685,8 +683,7 @@ static void delete_dir_special_snowflake_windows(string directory) {
 		}
 		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 			// recurse to zap directory contents
-			FileSystem fs;
-			delete_dir_special_snowflake_windows(fs.JoinPath(directory, ffd.cFileName));
+			delete_dir_special_snowflake_windows(fs, fs.JoinPath(directory, ffd.cFileName));
 		} else {
 			if (strlen(ffd.cFileName) + directory.size() + 1 > MAX_PATH) {
 				throw IOException("Pathname too long");
@@ -712,7 +709,7 @@ static void delete_dir_special_snowflake_windows(string directory) {
 }
 
 void FileSystem::RemoveDirectory(const string &directory) {
-	delete_dir_special_snowflake_windows(directory.c_str());
+	delete_dir_special_snowflake_windows(*this, directory.c_str());
 }
 
 void FileSystem::RemoveFile(const string &filename) {
@@ -1051,33 +1048,6 @@ vector<string> FileSystem::Glob(const string &path) {
 		previous_directories = move(result);
 	}
 	return vector<string>();
-}
-
-unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                   FileCompressionType compression) {
-	if (compression == FileCompressionType::AUTO_DETECT) {
-		// auto detect compression settings based on file name
-		auto lower_path = StringUtil::Lower(path);
-		if (StringUtil::EndsWith(lower_path, ".gz")) {
-			compression = FileCompressionType::GZIP;
-		} else {
-			compression = FileCompressionType::UNCOMPRESSED;
-		}
-	}
-	// open the base file handle
-	auto file_handle = FindFileSystem(path)->OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED);
-	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
-		file_handle = PipeFileSystem::OpenPipe(move(file_handle));
-	} else if (compression != FileCompressionType::UNCOMPRESSED) {
-		switch (compression) {
-		case FileCompressionType::GZIP:
-			file_handle = GZipFileSystem::OpenCompressedFile(move(file_handle));
-			break;
-		default:
-			throw NotImplementedException("Unimplemented compression type");
-		}
-	}
-	return file_handle;
 }
 
 } // namespace duckdb

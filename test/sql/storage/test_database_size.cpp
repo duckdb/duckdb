@@ -9,7 +9,7 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 	constexpr idx_t VALUE_COUNT = 10000;
 	idx_t expected_sum = 0;
 
-	FileSystem fs;
+	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto config = GetTestConfig();
 	unique_ptr<DuckDB> database;
 	unique_ptr<QueryResult> result;
@@ -40,8 +40,8 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 	// get the size of the database
 	int64_t size;
 	{
-		auto handle = fs.OpenFile(storage_database, FileFlags::FILE_FLAGS_READ);
-		size = fs.GetFileSize(*handle);
+		auto handle = fs->OpenFile(storage_database, FileFlags::FILE_FLAGS_READ);
+		size = fs->GetFileSize(*handle);
 		REQUIRE(size >= 0);
 	}
 	// now reload the database a bunch of times, and everytime we reload update all the values
@@ -61,8 +61,8 @@ TEST_CASE("Test that database size does not grow after many checkpoints", "[stor
 	// get the new file size
 	int64_t new_size;
 	{
-		auto handle = fs.OpenFile(storage_database, FileFlags::FILE_FLAGS_READ);
-		new_size = fs.GetFileSize(*handle);
+		auto handle = fs->OpenFile(storage_database, FileFlags::FILE_FLAGS_READ);
+		new_size = fs->GetFileSize(*handle);
 		REQUIRE(new_size >= 0);
 	}
 	// require that the size did not grow more than factor 3
