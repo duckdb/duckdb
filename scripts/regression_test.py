@@ -51,13 +51,15 @@ def run_tpc(repetitions,load_data_call,num_queries,get_query_sql,skip_queries=se
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute(load_data_call)
     result_list = []
-    for i in range (1,num_queries):
-        print ("Running " + str(i) + " of "+ get_query_sql, flush=True)
+    for i in range (1,num_queries):      
+        start_time = time.time()
         if i not in skip_queries:    
             query_result_list = []
             for j in range(repetitions):
                 query_result_list.append(run_tpc_query(duckdb_conn,i,get_query_sql))
             result_list.append(query_result_list)
+        total_time = time.time() - start_time
+        print ("Running " + str(i) + " of "+ get_query_sql + ". Time: "+ str(truncate(total_time,2)), flush=True)
     return result_list
 
 def run_benchmark(install_function,repetitions):
@@ -66,7 +68,7 @@ def run_benchmark(install_function,repetitions):
     # Run TPC-H
     results.append(run_tpc(repetitions,"CALL dbgen(sf=1);",21,"tpch_queries"))
     # Run TPC-DS
-    results.append(run_tpc(repetitions,"CALL dsdgen(sf=1);",99,"tpcds_queries",set([64,85])))
+    results.append(run_tpc(repetitions,"CALL dsdgen(sf=1);",99,"tpcds_queries",set([64,72,85])))
     uninstall_duck()
     return results
 
@@ -88,8 +90,10 @@ def regression_check(master_time,current_time,benchmark_name,threshold):
         # YUCK, This is hacky! clean it up, just to print correct query numbers for tpc-ds
         if i > 63:
             query_num = i+2
-        if i > 83:
+        if i > 71:
             query_num = i+3
+        if i > 83:
+            query_num = i+4
         query_num
         if not query_ok:
                 regression_status = False
