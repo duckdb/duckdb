@@ -21,7 +21,7 @@ def truncate(number, decimals=0):
     return math.trunc(number * factor) / factor
 
 def run_command(command):
-    print(command)
+    print(command, flush=True)
     output = subprocess.run(command, capture_output=True)
     if output.stderr:
         print (output.stderr)
@@ -52,7 +52,7 @@ def run_tpc(repetitions,load_data_call,num_queries,get_query_sql,skip_queries=se
     duckdb_conn.execute(load_data_call)
     result_list = []
     for i in range (1,num_queries):
-        print ("Running " + str(i) + " of "+ get_query_sql)
+        print ("Running " + str(i) + " of "+ get_query_sql, flush=True)
         if i not in skip_queries:    
             query_result_list = []
             for j in range(repetitions):
