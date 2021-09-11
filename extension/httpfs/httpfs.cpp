@@ -137,22 +137,6 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 	return nr_bytes;
 }
 
-void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw std::runtime_error("Cannot write to HTTPFS directly");
-}
-
-int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	throw std::runtime_error("Cannot write to HTTPFS directly");
-}
-
-void HTTPFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	throw std::runtime_error("Cannot truncate a file from HTTPFS");
-}
-
-void HTTPFileSystem::FileSync(FileHandle &handle) {
-	throw std::runtime_error("Cannot sync a file on HTTPFS");
-}
-
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
 	auto &sfh = (HTTPFileHandle &)handle;
 	return sfh.length;

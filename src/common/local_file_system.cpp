@@ -757,10 +757,6 @@ void LocalFileSystem::Seek(FileHandle &handle, idx_t location) {
 	SetFilePointer(handle, location);
 }
 
-void LocalFileSystem::Reset(FileHandle &handle) {
-	Seek(handle, 0);
-}
-
 idx_t LocalFileSystem::SeekPosition(FileHandle &handle) {
 	if (!CanSeek()) {
 		throw IOException("Cannot seek in files of this type");

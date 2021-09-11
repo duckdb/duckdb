@@ -166,7 +166,7 @@ time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 }
 
 FileType FileSystem::GetFileType(FileHandle &handle) {
-	throw NotImplementedException("GetFileType is not implemented!");
+	return FileType::FILE_TYPE_INVALID;
 }
 
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -222,7 +222,7 @@ void FileSystem::Seek(FileHandle &handle, idx_t location) {
 }
 
 void FileSystem::Reset(FileHandle &handle) {
-	throw NotImplementedException("Reset is not implemented!");
+	handle.Seek(0);
 }
 
 idx_t FileSystem::SeekPosition(FileHandle &handle) {

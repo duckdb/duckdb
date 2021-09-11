@@ -61,12 +61,6 @@ public:
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
-	// unsupported operations
-	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
-	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
-	void Truncate(FileHandle &handle, int64_t new_size) override;
-	void FileSync(FileHandle &handle) override;
-
 	int64_t GetFileSize(FileHandle &handle) override;
 
 	time_t GetLastModifiedTime(FileHandle &handle) override;
@@ -74,6 +68,10 @@ public:
 	bool FileExists(const string &filename) override;
 
 	static void Verify();
+
+	bool CanSeek() override {
+		return true;
+	}
 
 	void Seek(FileHandle &handle, idx_t location) override;
 
