@@ -42,7 +42,6 @@ def run_tpc(repetitions,load_data_call,num_queries,get_query_sql,benchmark_name,
     duckdb_current_conn.execute(load_data_call)
 
     for i in range (1,num_queries):      
-        start_time = time.time()
         if i not in skip_queries:    
             query_result_list = []
             j = 0
@@ -71,7 +70,7 @@ def run_tpc(repetitions,load_data_call,num_queries,get_query_sql,benchmark_name,
     return regression_status
 
 def regression_test(threshold):
-    repetitions = 100 
+    repetitions = 200 
     # Run TPC-H
     regression_status_tpch = run_tpc(repetitions,"CALL dbgen(sf=1);",22,"tpch_queries","TPC-H",threshold)
     # Run TPC-DS
