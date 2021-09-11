@@ -5,8 +5,8 @@ import statistics
 import time
 import subprocess
 import math
-
-PRINT_DEBUG = False
+import duckdb
+import duckcurrent
 
 def truncate(number, decimals=0):
     """
@@ -22,23 +22,6 @@ def truncate(number, decimals=0):
     factor = 10.0 ** decimals
     return math.trunc(number * factor) / factor
 
-def run_command(command):
-    if PRINT_DEBUG:
-        print(command, flush=True)
-    output = subprocess.run(command, capture_output=True)
-    if output.stderr:
-        print (output.stderr)
-        assert(0)
-
-def install_duck_master():
-    run_command(["pip", "install", "duckdb","--pre"])
-
-def uninstall_duck():
-    run_command(["pip", "uninstall", "-y","duckdb"])    
-
-def install_duck_current():
-    run_command(["make","release","BUILD_PYTHON=1", "GEN=ninja"])   
-
 def run_tpc_query(duckdb_conn,query_number,get_query_sql):
     query_result = []
     for i in range(5):
@@ -49,75 +32,53 @@ def run_tpc_query(duckdb_conn,query_number,get_query_sql):
         query_result.append(total_time)
     return statistics.median(query_result)
 
-def run_tpc(repetitions,load_data_call,num_queries,get_query_sql,skip_queries=set([])):
-    import duckdb
+def run_tpc(repetitions,load_data_call,num_queries,get_query_sql,benchmark_name,threshold,skip_queries=set([])):
+    print ("######## Status " + benchmark_name + " Benchmark Regression #######", flush=True)
+    regression_status = True
+    
+    # Master Branch
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute(load_data_call)
-    result_list = []
+
+    # This Branch
+    duckdb_current_conn = duckcurrent.connect()
+    duckdb_current_conn.execute(load_data_call)
+
     for i in range (1,num_queries):      
         start_time = time.time()
         if i not in skip_queries:    
             query_result_list = []
-            for j in range(repetitions):
-                query_result_list.append(run_tpc_query(duckdb_conn,i,get_query_sql))
-            result_list.append(query_result_list)
-        total_time = time.time() - start_time
-        if PRINT_DEBUG:
-            print ("Running " + str(i) + " of "+ get_query_sql + ". Time: "+ str(truncate(total_time,2)), flush=True)
-    return result_list
-
-def run_benchmark(install_function,repetitions):
-    results = []
-    install_function()
-    # Run TPC-H
-    results.append(run_tpc(repetitions,"CALL dbgen(sf=1);",21,"tpch_queries"))
-    # Run TPC-DS
-    results.append(run_tpc(repetitions,"CALL dsdgen(sf=1);",99,"tpcds_queries",set([64,72,85])))
-    uninstall_duck()
-    return results
-
-def regression_check(master_time,current_time,benchmark_name,threshold):
-    print ("######## Status " + benchmark_name + " Benchmark Regression #######", flush=True)
-    # If the regression status is true, there was no regression
-    regression_status = True
-    for i in range(len(master_time)):
-        # Query Ok means that in all runs at least once it finished below the threshold
-        query_ok = False
-        # Query Faster means that is always finished faster than the master (using threshold)
-        query_faster = True
-        for j in range (len(current_time[i])):
-            if current_time[i][j] <= master_time[i][j] * (1+threshold):
-                query_ok = True
-            if current_time[i][j] > master_time[i][j] * (1-threshold):
-                query_faster = False
-        query_num = i+1
-        # YUCK, This is hacky! clean it up, just to print correct query numbers for tpc-ds
-        if i > 63:
-            query_num = i+2
-        if i > 71:
-            query_num = i+3
-        if i > 83:
-            query_num = i+4
-        query_num
-        if not query_ok:
+            j = 0
+            query_faster = True
+            query_ok = False
+            master_time = 0
+            current_time = 0
+            # We only repeat the query (up to repetitions), if its not the same result.
+            while (j < repetitions and (query_ok is False or query_faster is True)):
+                j+=1
+                master_time = run_tpc_query(duckdb_conn,i,get_query_sql)
+                current_time = run_tpc_query(duckdb_current_conn,i,get_query_sql)
+                if current_time <= master_time * (1+threshold):
+                    query_ok = True
+                if current_time > master_time * (1-threshold):
+                    query_faster = False
+            if query_ok is False:
                 regression_status = False
-                print("Q"+ str(query_num) + " slow ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ", flush=True)
-        if query_faster:
-                print("Q"+ str(query_num) + " fast ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ", flush=True)
-
-        if query_ok and not query_faster:
-            print("Q"+ str(query_num) + " same ("+ str(truncate(current_time[i][0],2)) + " vs " + str(truncate(master_time[i][0],2)) + "). ", flush=True)
+                print("Q"+ str(i) + " slow ("+ str(truncate(current_time,2)) + " vs " + str(truncate(master_time,2)) + "). ", flush=True)
+            if query_faster:
+                print("Q"+ str(i) + " fast ("+ str(truncate(current_time,2)) + " vs " + str(truncate(master_time,2)) + "). ", flush=True)
+            if query_ok and not query_faster:
+                print("Q"+ str(i) + " same ("+ str(truncate(current_time,2)) + " vs " + str(truncate(master_time,2)) + "). ", flush=True)
+   
     print ("######## End " + benchmark_name + " Benchmark Regression #######", flush=True)
     return regression_status
 
-
-# We want to run the regression tests 3x if a query fails (i.e., is slower than the one in the master these 3 times then it fails)
 def regression_test(threshold):
-    repetitions = 5 # Should aim for 1:00 - 1:30 run.
-    master_time = run_benchmark(install_duck_master,repetitions)
-    current_time = run_benchmark(install_duck_current,repetitions)
-    regression_status_tpch = regression_check(master_time[0],current_time[0],"TPC-H",threshold)
-    regression_status_tpcds = regression_check(master_time[1],current_time[1],"TPC-DS",threshold)
+    repetitions = 10 
+    # Run TPC-H
+    regression_status_tpch = run_tpc(repetitions,"CALL dbgen(sf=1);",22,"tpch_queries","TPC-H",threshold)
+    # Run TPC-DS
+    regression_status_tpcds = run_tpc(repetitions,"CALL dsdgen(sf=1);",100,"tpcds_queries","TPC-DS",threshold,set([64,72,85]))
     regression_status = regression_status_tpch and regression_status_tpcds
     if not regression_status:
         assert(0)
