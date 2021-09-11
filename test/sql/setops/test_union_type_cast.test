@@ -2,20 +2,42 @@
 # description: Test UNION type casting
 # group: [setops]
 
+statement ok
+PRAGMA enable_verification
+
 # type casting in single union
 query R
 SELECT 1 UNION SELECT 1.0
 ----
-1.000000
+1
+
+query R
+SELECT 1 UNION ALL SELECT 1.0
+----
+1
+1
 
 # type casting in nested union
 query R
+SELECT 1 UNION (SELECT 1 UNION SELECT 1 UNION SELECT 1)
+----
+1
+
+query R
 SELECT 1 UNION (SELECT 1.0 UNION SELECT 1.0 UNION SELECT 1.0) UNION SELECT 1;
 ----
-1.000000
+1
+
+query R
+SELECT 1 UNION ALL (SELECT 1.0 UNION ALL SELECT 1.0 UNION ALL SELECT 1.0) UNION ALL SELECT 1;
+----
+1
+1
+1
+1
+1
 
 query T
 SELECT 1 UNION (SELECT '1' UNION SELECT '1' UNION SELECT '1') UNION SELECT 1;
 ----
 1
-

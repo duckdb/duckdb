@@ -110,6 +110,8 @@ public:
 	//! a counter to determine if we should switch over to p
 	atomic<idx_t> total_groups;
 
+	bool is_finalized = false;
+
 	RadixPartitionInfo partition_info;
 };
 
@@ -151,6 +153,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &sta
                                  DataChunk &input) const {
 	auto &llstate = (HashAggregateLocalState &)lstate;
 	auto &gstate = (HashAggregateGlobalState &)state;
+	D_ASSERT(!gstate.is_finalized);
 
 	DataChunk &group_chunk = llstate.group_chunk;
 	DataChunk &aggregate_input_chunk = llstate.aggregate_input_chunk;
@@ -197,6 +200,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &sta
 			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64));
 		}
 		D_ASSERT(gstate.finalized_hts.size() == 1);
+		D_ASSERT(gstate.finalized_hts[0]);
 		gstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, aggregate_input_chunk);
 		return;
 	}
@@ -221,6 +225,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &sta
 void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
 	auto &gstate = (HashAggregateGlobalState &)state;
 	auto &llstate = (HashAggregateLocalState &)lstate;
+	D_ASSERT(!gstate.is_finalized);
 
 	// this actually does not do a lot but just pushes the local HTs into the global state so we can later combine them
 	// in parallel
@@ -285,10 +290,11 @@ private:
 class HashAggregateFinalizeEvent : public Event {
 public:
 	HashAggregateFinalizeEvent(HashAggregateGlobalState &gstate_p, Pipeline *pipeline_p) :
-	    Event(pipeline->executor), gstate(gstate_p), pipeline(pipeline_p) {}
+	    Event(pipeline_p->executor), gstate(gstate_p), pipeline(pipeline_p) {}
 
 	HashAggregateGlobalState &gstate;
 	Pipeline *pipeline;
+
 public:
 	void Schedule() override {
 		vector<unique_ptr<Task>> tasks;
@@ -311,7 +317,7 @@ void PhysicalHashAggregate::FinalizeImmediate(ClientContext &context, GlobalSink
 bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, GlobalSinkState &gstate_p,
                                              bool immediate, Pipeline *pipeline, Event *event) const {
 	auto &gstate = (HashAggregateGlobalState &) gstate_p;
-
+	gstate.is_finalized = true;
 	// special case if we have non-combinable aggregates
 	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
 	if (ForceSingleHT(gstate)) {
@@ -371,6 +377,7 @@ bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, GlobalSinkS
 			}
 			unpartitioned.clear();
 		}
+		D_ASSERT(gstate.finalized_hts[0]);
 		gstate.finalized_hts[0]->Finalize();
 		return true;
 	}
@@ -406,6 +413,7 @@ unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(Client
 void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
 	auto &state = (PhysicalHashAggregateState &) gstate_p;
+	D_ASSERT(gstate.is_finalized);
 	if (state.finished) {
 		return;
 	}

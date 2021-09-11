@@ -33,3 +33,9 @@ query I
 SELECT COUNT(*) FROM (SELECT * FROM integers UNION ALL SELECT * FROM integers) tbl(i) WHERE i < 500000
 ----
 1000000
+
+# multiple unions
+query I
+SELECT COUNT(*) FROM (SELECT * FROM integers UNION ALL SELECT * FROM integers UNION ALL SELECT * FROM integers UNION ALL SELECT * FROM integers) tbl(i)
+----
+4000000

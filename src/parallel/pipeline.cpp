@@ -121,7 +121,7 @@ bool Pipeline::LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads) {
 }
 
 void Pipeline::Reset() {
-	if (sink) {
+	if (sink && !sink->sink_state) {
 		sink->sink_state = sink->GetGlobalSinkState(GetClientContext());
 	}
 	ResetSource();
@@ -172,9 +172,12 @@ void Pipeline::AddUnionPipeline(shared_ptr<Pipeline> pipeline) {
 }
 
 string Pipeline::ToString() const {
-	string str = sink ? PhysicalOperatorToString(sink->type) : string();
+	string str;
 	for (auto &op : operators) {
-		str += PhysicalOperatorToString(op->type) + " -> " + str;
+		str += PhysicalOperatorToString(op->type) + " -> ";
+	}
+	if (sink) {
+		str += " -> " + PhysicalOperatorToString(sink->type);
 	}
 	return str;
 }

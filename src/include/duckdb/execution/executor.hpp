@@ -69,6 +69,8 @@ private:
 	void ScheduleEvents();
 	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map);
 	void ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &stack, unordered_map<Pipeline *, PipelineEventStack> &event_map);
+	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);
+	bool NextExecutor();
 private:
 	PhysicalOperator *physical_plan;
 
@@ -76,9 +78,11 @@ private:
 	//! The pipelines of the current query
 	vector<shared_ptr<Pipeline>> pipelines;
 	//! The root pipeline of the query
-	shared_ptr<Pipeline> root_pipeline;
+	vector<shared_ptr<Pipeline>> root_pipelines;
 	//! The pipeline executor for the root pipeline
 	unique_ptr<PipelineExecutor> root_executor;
+	//! The current root pipeline index
+	idx_t root_pipeline_idx;
 	//! The producer of this query
 	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query

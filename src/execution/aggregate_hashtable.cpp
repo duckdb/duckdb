@@ -366,7 +366,6 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 template <class ENTRY>
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes, Vector &addresses,
                                                             SelectionVector &new_groups_out) {
-
 	D_ASSERT(!is_finalized);
 
 	if (entries + groups.size() > MaxCapacity()) {

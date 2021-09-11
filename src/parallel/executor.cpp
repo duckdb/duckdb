@@ -95,14 +95,14 @@ void Executor::ScheduleEvents() {
 		SchedulePipeline(pipeline, event_map);
 	}
 	// set up the dependencies between pipeline events
-	for(auto &pipeline : pipelines) {
-		auto &entry = event_map[pipeline.get()];
+	for(auto &entry : event_map) {
+		auto pipeline = entry.first;
 		for(auto &dependency : pipeline->dependencies) {
 			auto dep = dependency.lock();
 			D_ASSERT(dep);
 			auto &dep_entry = event_map[dep.get()];
 			D_ASSERT(dep_entry.pipeline_complete_event);
-			entry.pipeline_event->AddDependency(*dep_entry.pipeline_complete_event);
+			entry.second.pipeline_event->AddDependency(*dep_entry.pipeline_complete_event);
 		}
 	}
 	// schedule the pipelines that do not have dependencies
@@ -111,6 +111,24 @@ void Executor::ScheduleEvents() {
 			event->Schedule();
 		}
 	}
+}
+
+void Executor::ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result) {
+	auto pipeline_ptr = pipeline.get();
+	result.push_back(move(pipeline));
+	for(auto &union_pipeline : pipeline_ptr->union_pipelines) {
+		ExtractPipelines(union_pipeline, result);
+	}
+	pipeline_ptr->union_pipelines.clear();
+}
+
+bool Executor::NextExecutor() {
+	if (root_pipeline_idx >= root_pipelines.size()) {
+		return false;
+	}
+	root_executor = make_unique<PipelineExecutor>(context, *root_pipelines[root_pipeline_idx]);
+	root_pipeline_idx++;
+	return true;
 }
 
 void Executor::Initialize(PhysicalOperator *plan) {
@@ -124,21 +142,25 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		context.profiler->Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
 
-		root_pipeline = make_shared<Pipeline>(*this);
+		auto root_pipeline = make_shared<Pipeline>(*this);
 		root_pipeline->sink = nullptr;
 		BuildPipelines(physical_plan, root_pipeline.get());
 
 		this->total_pipelines = pipelines.size();
 
 		// ready all the pipelines
-		root_pipeline->Ready();
+		root_pipeline_idx = 0;
+		ExtractPipelines(root_pipeline, root_pipelines);
+		for(auto &pipeline : root_pipelines) {
+			pipeline->Ready();
+		}
 		for (auto &pipeline : pipelines) {
 #ifdef DEBUG
 			D_ASSERT(!pipeline->ToString().empty());
 #endif
 		}
 		ScheduleEvents();
-		root_executor = make_unique<PipelineExecutor>(context, *root_pipeline);
+		NextExecutor();
 	}
 
 	// now execute tasks from this producer until all pipelines are completed
@@ -193,7 +215,8 @@ void Executor::Reset() {
 	recursive_cte = nullptr;
 	physical_plan = nullptr;
 	root_executor.reset();
-	root_pipeline.reset();
+	root_pipelines.clear();
+	root_pipeline_idx = 0;
 	completed_pipelines = 0;
 	total_pipelines = 0;
 	exceptions.clear();
@@ -352,9 +375,12 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	while(true) {
 		root_executor->Execute(*chunk);
 		if (chunk->size() == 0) {
-			if (root_pipeline->NextSource()) {
-				root_executor = make_unique<PipelineExecutor>(context, *root_pipeline);
+			auto &current_pipeline = root_pipelines[root_pipeline_idx - 1];
+			if (current_pipeline->NextSource()) {
+				root_executor = make_unique<PipelineExecutor>(context, *current_pipeline);
 				chunk->Reset();
+				continue;
+			} else if (NextExecutor()) {
 				continue;
 			}
 			break;
