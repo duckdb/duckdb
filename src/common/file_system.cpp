@@ -138,31 +138,31 @@ string FileSystem::GetHomeDirectory() {
 // LCOV_EXCL_START
 unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
                                             FileCompressionType compression) {
-	throw NotImplementedException("OpenFile is not implemented!");
+	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
 }
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw NotImplementedException("Read (with location) is not implemented!");
+	throw NotImplementedException("%s: Read (with location) is not implemented!", GetName());
 }
 
 void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw NotImplementedException("Write (with location) is not implemented!");
+	throw NotImplementedException("%s: Write (with location) is not implemented!", GetName());
 }
 
 int64_t FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	throw NotImplementedException("Read is not implemented!");
+	throw NotImplementedException("%s: Read is not implemented!", GetName());
 }
 
 int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	throw NotImplementedException("Write is not implemented!");
+	throw NotImplementedException("%s: Write is not implemented!", GetName());
 }
 
 int64_t FileSystem::GetFileSize(FileHandle &handle) {
-	throw NotImplementedException("GetFileSize is not implemented!");
+	throw NotImplementedException("%s: GetFileSize is not implemented!", GetName());
 }
 
 time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
-	throw NotImplementedException("GetLastModifiedTime is not implemented!");
+	throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
 }
 
 FileType FileSystem::GetFileType(FileHandle &handle) {
@@ -170,55 +170,55 @@ FileType FileSystem::GetFileType(FileHandle &handle) {
 }
 
 void FileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	throw NotImplementedException("Truncate is not implemented!");
+	throw NotImplementedException("%s: Truncate is not implemented!", GetName());
 }
 
 bool FileSystem::DirectoryExists(const string &directory) {
-	throw NotImplementedException("DirectoryExists is not implemented!");
+	throw NotImplementedException("%s: DirectoryExists is not implemented!", GetName());
 }
 
 void FileSystem::CreateDirectory(const string &directory) {
-	throw NotImplementedException("CreateDirectory is not implemented!");
+	throw NotImplementedException("%s: CreateDirectory is not implemented!", GetName());
 }
 
 void FileSystem::RemoveDirectory(const string &directory) {
-	throw NotImplementedException("RemoveDirectory is not implemented!");
+	throw NotImplementedException("%s: RemoveDirectory is not implemented!", GetName());
 }
 
 bool FileSystem::ListFiles(const string &directory, const std::function<void(string, bool)> &callback) {
-	throw NotImplementedException("ListFiles is not implemented!");
+	throw NotImplementedException("%s: ListFiles is not implemented!", GetName());
 }
 
 void FileSystem::MoveFile(const string &source, const string &target) {
-	throw NotImplementedException("MoveFile is not implemented!");
+	throw NotImplementedException("%s: MoveFile is not implemented!", GetName());
 }
 
 bool FileSystem::FileExists(const string &filename) {
-	throw NotImplementedException("FileExists is not implemented!");
+	throw NotImplementedException("%s: FileExists is not implemented!", GetName());
 }
 
 void FileSystem::RemoveFile(const string &filename) {
-	throw NotImplementedException("RemoveFile is not implemented!");
+	throw NotImplementedException("%s: RemoveFile is not implemented!", GetName());
 }
 
 void FileSystem::FileSync(FileHandle &handle) {
-	throw NotImplementedException("FileSync is not implemented!");
+	throw NotImplementedException("%s: FileSync is not implemented!", GetName());
 }
 
 vector<string> FileSystem::Glob(const string &path) {
-	throw NotImplementedException("Glob is not implemented!");
+	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
 void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
-	throw NotImplementedException("Can't register a sub system on a non-virtual file system");
+	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
 
 bool FileSystem::CanHandleFile(const string &fpath) {
-	throw NotImplementedException("CanHandleFile is not implemented!");
+	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
 
 void FileSystem::Seek(FileHandle &handle, idx_t location) {
-	throw NotImplementedException("Seek is not implemented!");
+	throw NotImplementedException("%s: Seek is not implemented!", GetName());
 }
 
 void FileSystem::Reset(FileHandle &handle) {
@@ -226,15 +226,15 @@ void FileSystem::Reset(FileHandle &handle) {
 }
 
 idx_t FileSystem::SeekPosition(FileHandle &handle) {
-	throw NotImplementedException("SeekPosition is not implemented!");
+	throw NotImplementedException("%s: SeekPosition is not implemented!", GetName());
 }
 
 bool FileSystem::CanSeek() {
-	throw NotImplementedException("CanSeek is not implemented!");
+	throw NotImplementedException("%s: CanSeek is not implemented!", GetName());
 }
 
 bool FileSystem::OnDiskFile(FileHandle &handle) {
-	throw NotImplementedException("OnDiskFile is not implemented!");
+	throw NotImplementedException("%s: OnDiskFile is not implemented!", GetName());
 }
 // LCOV_EXCL_STOP
 

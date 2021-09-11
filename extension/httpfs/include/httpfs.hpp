@@ -79,6 +79,10 @@ public:
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}
+
+	std::string GetName() const override {
+		return "HTTPFileSystem";
+	}
 };
 
 } // namespace duckdb

@@ -76,6 +76,10 @@ public:
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	bool OnDiskFile(FileHandle &handle) override;
 
+	std::string GetName() const override {
+		return "LocalFileSystem";
+	}
+
 private:
 	//! Set the file pointer of a file handle to a specified location. Reads and writes will happen from this location
 	void SetFilePointer(FileHandle &handle, idx_t location);

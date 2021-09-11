@@ -20,11 +20,11 @@ public:
 	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
 	                                FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
 
-	virtual void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		handle.file_system.Read(handle, buffer, nr_bytes, location);
 	};
 
-	virtual void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
+	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		handle.file_system.Write(handle, buffer, nr_bytes, location);
 	}
 
@@ -88,6 +88,10 @@ public:
 
 	void RegisterSubSystem(unique_ptr<FileSystem> fs) override {
 		sub_systems.push_back(move(fs));
+	}
+
+	std::string GetName() const override {
+		return "VirtualFileSystem";
 	}
 
 private:

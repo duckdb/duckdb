@@ -37,31 +37,6 @@ int64_t PipeFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes
 	return pipe.WriteChunk(buffer, nr_bytes);
 }
 
-// LCOV_EXCL_START
-void PipeFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw NotImplementedException("Unsupported: Random read from pipe/stream");
-}
-
-void PipeFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw NotImplementedException("Unsupported: Random write to pipe/stream");
-}
-void PipeFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	throw NotImplementedException("Unsupported: Truncate pipe/stream");
-}
-
-void PipeFileSystem::FileSync(FileHandle &handle) {
-	throw NotImplementedException("Unsupported: Sync pipe/stream");
-}
-
-void PipeFileSystem::Seek(FileHandle &handle, idx_t location) {
-	throw NotImplementedException("Unsupported: Seek within pipe/stream");
-}
-
-void PipeFileSystem::Reset(FileHandle &handle) {
-	throw NotImplementedException("Unsupported: Reset pipe/stream");
-}
-// LCOV_EXCL_STOP
-
 int64_t PipeFileSystem::GetFileSize(FileHandle &handle) {
 	return 0;
 }

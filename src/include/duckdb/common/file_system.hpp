@@ -188,6 +188,10 @@ public:
 
 	//! Create a LocalFileSystem.
 	static unique_ptr<FileSystem> CreateLocal();
+
+protected:
+	//! Return the name of the filesytem. Used for forming diagnosis messages.
+	virtual std::string GetName() const = 0;
 };
 
 } // namespace duckdb
