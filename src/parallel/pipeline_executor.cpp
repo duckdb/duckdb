@@ -39,6 +39,8 @@ void PipelineExecutor::Execute() {
 				break;
 			}
 			StartOperator(pipeline.sink);
+			D_ASSERT(pipeline.sink);
+			D_ASSERT(pipeline.sink->sink_state);
 			pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, final_chunk);
 			EndOperator(pipeline.sink, nullptr);
 		}

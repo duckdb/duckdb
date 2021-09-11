@@ -17,7 +17,6 @@ class PipelineCompleteEvent : public Event {
 public:
 	PipelineCompleteEvent(Executor &executor);
 
-	idx_t total_pipelines;
 public:
 	void Schedule() override;
 	void FinalizeFinish() override;

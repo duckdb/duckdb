@@ -48,8 +48,6 @@ void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, Pipel
 	stack.pipeline_complete_event = nullptr;
 
 	parent_stack.pipeline_finish_event->AddDependency(*pipeline_event);
-	auto &complete_event = (PipelineCompleteEvent &) *parent_stack.pipeline_complete_event;
-	complete_event.total_pipelines++;
 
 	events.push_back(move(pipeline_event));
 

@@ -4,16 +4,15 @@
 namespace duckdb {
 
 PipelineCompleteEvent::PipelineCompleteEvent(Executor &executor) :
-	Event(executor), total_pipelines(1) {}
+	Event(executor) {}
 
 void PipelineCompleteEvent::Schedule() {
 	Finish();
+
 }
 
 void PipelineCompleteEvent::FinalizeFinish() {
-	for(idx_t i = 0; i < total_pipelines; i++) {
-		executor.CompletePipeline();
-	}
+	executor.CompletePipeline();
 }
 
 }
