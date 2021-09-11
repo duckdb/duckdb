@@ -1,0 +1,77 @@
+# name: test/sql/join/full_outer/full_outer_join_union.test
+# description: Test FULL OUTER JOIN with unions
+# group: [full_outer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1, 1), (3, 3);
+
+statement ok
+CREATE TABLE integers2(k INTEGER, l INTEGER);
+
+statement ok
+INSERT INTO integers2 VALUES (1, 10), (2, 20);
+
+# equality join
+query IIII
+SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+UNION ALL
+SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+ORDER BY i
+----
+NULL	NULL	2	20
+NULL	NULL	2	20
+1	1	1	10
+1	1	1	10
+3	3	NULL	NULL
+3	3	NULL	NULL
+
+query IIII
+SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+UNION
+SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+ORDER BY i
+----
+NULL	NULL	2	20
+1	1	1	10
+3	3	NULL	NULL
+
+query IIII
+SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+UNION
+SELECT i+1, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+UNION
+SELECT i+2, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+UNION
+SELECT i+3, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+UNION
+SELECT i+4, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+ORDER BY i
+----
+NULL	NULL	2	20
+1	1	1	10
+2	1	1	10
+3	1	1	10
+3	3	NULL	NULL
+4	1	1	10
+4	3	NULL	NULL
+5	1	1	10
+5	3	NULL	NULL
+6	3	NULL	NULL
+7	3	NULL	NULL
+
+query IIII
+SELECT DISTINCT * FROM (
+SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
+UNION ALL
+SELECT i, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k) tbl
+ORDER BY i
+----
+NULL	NULL	2	20
+1	1	1	10
+3	3	NULL	NULL
