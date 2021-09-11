@@ -9,9 +9,6 @@ import duckdb
 import duckcurrent
 
 def truncate(number, decimals=0):
-    """
-    Returns a value truncated to a specific number of decimal places.
-    """
     if not isinstance(decimals, int):
         raise TypeError("decimal places must be an integer.")
     elif decimals < 0:
@@ -74,7 +71,7 @@ def run_tpc(repetitions,load_data_call,num_queries,get_query_sql,benchmark_name,
     return regression_status
 
 def regression_test(threshold):
-    repetitions = 10 
+    repetitions = 25 
     # Run TPC-H
     regression_status_tpch = run_tpc(repetitions,"CALL dbgen(sf=1);",22,"tpch_queries","TPC-H",threshold)
     # Run TPC-DS
@@ -83,4 +80,4 @@ def regression_test(threshold):
     if not regression_status:
         assert(0)
 
-regression_test(0.1)
+regression_test(0.15)

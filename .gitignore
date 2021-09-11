@@ -332,6 +332,9 @@ ub_*.cpp
 tools/pythonpkg/tests/unsigned.parquet
 tools/pythonpkg/tests/userdata1.parquet
 
+# header with the definition on the python package name
+tools/pythonpkg/lib_name.hpp
+
 # node tests
 __nvm
 
