@@ -51,7 +51,7 @@ def run_tpc(repetitions,load_data_call,num_queries,get_query_sql,benchmark_name,
             master_time = 0
             current_time = 0
             # We only repeat the query (up to repetitions), if its not the same result.
-            while (j < repetitions and (query_ok is False or query_faster is True)):
+            while (j < repetitions and query_ok is False):
                 j+=1
                 master_time = run_tpc_query(duckdb_conn,i,get_query_sql)
                 current_time = run_tpc_query(duckdb_current_conn,i,get_query_sql)
@@ -71,7 +71,7 @@ def run_tpc(repetitions,load_data_call,num_queries,get_query_sql,benchmark_name,
     return regression_status
 
 def regression_test(threshold):
-    repetitions = 25 
+    repetitions = 100 
     # Run TPC-H
     regression_status_tpch = run_tpc(repetitions,"CALL dbgen(sf=1);",22,"tpch_queries","TPC-H",threshold)
     # Run TPC-DS
