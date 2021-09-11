@@ -21,6 +21,7 @@ namespace duckdb {
 class ClientContext;
 class LogicalOperator;
 class TableFilter;
+struct BoundOrderByNode;
 
 class StatisticsPropagator {
 public:
@@ -86,6 +87,8 @@ private:
 	unique_ptr<BaseStatistics> PropagateExpression(BoundConstantExpression &expr, unique_ptr<Expression> *expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr);
+
+	void PropagateAndCompress(unique_ptr<Expression> &expr, unique_ptr<BaseStatistics> &stats);
 
 	void ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node);
 

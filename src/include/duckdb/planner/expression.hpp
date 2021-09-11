@@ -22,8 +22,8 @@ public:
 
 	//! The return type of the expression
 	LogicalType return_type;
-	//! Expression statistics (if any)
-	unique_ptr<BaseStatistics> stats;
+	//! Expression statistics (if any) - ONLY USED FOR VERIFICATION
+	unique_ptr<BaseStatistics> verification_stats;
 
 public:
 	bool IsAggregate() const override;

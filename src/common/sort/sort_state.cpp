@@ -1,26 +1,35 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/sort/sort.hpp"
 #include "duckdb/common/sort/sorted_block.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
 
 #include <numeric>
 
 namespace duckdb {
 
-static idx_t GetSortingColSize(const LogicalType &type) {
+idx_t GetNestedSortingColSize(idx_t &col_size, const LogicalType &type) {
 	auto physical_type = type.InternalType();
 	if (TypeIsConstantSize(physical_type)) {
-		return GetTypeIdSize(physical_type);
+		col_size += GetTypeIdSize(physical_type);
+		return 0;
 	} else {
 		switch (physical_type) {
-		case PhysicalType::VARCHAR:
-			// TODO: make use of statistics
-			return string_t::INLINE_LENGTH;
+		case PhysicalType::VARCHAR: {
+			// Nested strings are between 4 and 11 chars long for alignment
+			auto size_before_str = col_size;
+			col_size += 11;
+			col_size -= (col_size - 12) % 8;
+			return col_size - size_before_str;
+		}
 		case PhysicalType::LIST:
-			// Lists get another byte to denote the empty list
-			return 2 + GetSortingColSize(ListType::GetChildType(type));
+			// Lists get 2 bytes (null and empty list)
+			col_size += 2;
+			return GetNestedSortingColSize(col_size, ListType::GetChildType(type));
 		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
-			return 1 + GetSortingColSize(StructType::GetChildType(type, 0));
+			// Structs get 1 bytes (null)
+			col_size++;
+			return GetNestedSortingColSize(col_size, StructType::GetChildType(type, 0));
 		default:
 			throw NotImplementedException("Unable to order column with type %s", type.ToString());
 		}
@@ -30,7 +39,7 @@ static idx_t GetSortingColSize(const LogicalType &type) {
 SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
     : column_count(orders.size()), all_constant(true), comparison_size(0), entry_size(0) {
 	vector<LogicalType> blob_layout_types;
-	for (idx_t i = 0; i < orders.size(); i++) {
+	for (idx_t i = 0; i < column_count; i++) {
 		const auto &order = orders[i];
 
 		order_types.push_back(order.type);
@@ -39,10 +48,7 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 		logical_types.push_back(expr.return_type);
 
 		auto physical_type = expr.return_type.InternalType();
-		all_constant = all_constant && TypeIsConstantSize(physical_type);
 		constant_size.push_back(TypeIsConstantSize(physical_type));
-		column_sizes.push_back(0);
-		auto &col_size = column_sizes.back();
 
 		if (order.stats) {
 			stats.push_back(order.stats.get());
@@ -52,18 +58,68 @@ SortLayout::SortLayout(const vector<BoundOrderByNode> &orders)
 			has_null.push_back(true);
 		}
 
-		col_size += has_null.back() ? 1 : 0;
-		if (TypeIsConstantSize(physical_type)) {
-			col_size += GetTypeIdSize(physical_type);
+		idx_t col_size = has_null.back() ? 1 : 0;
+		prefix_lengths.push_back(0);
+		if (!TypeIsConstantSize(physical_type) && physical_type != PhysicalType::VARCHAR) {
+			prefix_lengths.back() = GetNestedSortingColSize(col_size, expr.return_type);
+		} else if (physical_type == PhysicalType::VARCHAR) {
+			idx_t size_before = col_size;
+			if (stats.back()) {
+				auto &str_stats = (StringStatistics &)*stats.back();
+				col_size += str_stats.max_string_length;
+				if (col_size > 12) {
+					col_size = 12;
+				} else {
+					constant_size.back() = true;
+				}
+			} else {
+				col_size = 12;
+			}
+			prefix_lengths.back() = col_size - size_before;
 		} else {
-			col_size += GetSortingColSize(expr.return_type);
-			sorting_to_blob_col[i] = blob_layout_types.size();
-			blob_layout_types.push_back(expr.return_type);
+			col_size += GetTypeIdSize(physical_type);
 		}
+
 		comparison_size += col_size;
+		column_sizes.push_back(col_size);
 	}
-	entry_size = comparison_size + sizeof(idx_t);
-	blob_layout.Initialize(blob_layout_types, false);
+	entry_size = comparison_size + sizeof(uint32_t);
+
+	// 8-byte alignment
+	if (entry_size % 8 != 0) {
+		// First assign more bytes to strings instead of aligning
+		idx_t bytes_to_fill = 8 - (entry_size % 8);
+		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+			if (bytes_to_fill == 0) {
+				break;
+			}
+			if (logical_types[col_idx].InternalType() == PhysicalType::VARCHAR && stats[col_idx]) {
+				auto &str_stats = (StringStatistics &)*stats[col_idx];
+				idx_t diff = str_stats.max_string_length - prefix_lengths[col_idx];
+				if (diff > 0) {
+					// Increase all sizes accordingly
+					idx_t increase = MinValue(bytes_to_fill, diff);
+					column_sizes[col_idx] += increase;
+					prefix_lengths[col_idx] += increase;
+					constant_size[col_idx] = increase == diff;
+					comparison_size += increase;
+					entry_size += increase;
+					bytes_to_fill -= increase;
+				}
+			}
+		}
+		entry_size = AlignValue(entry_size);
+	}
+
+	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
+		all_constant = all_constant && constant_size[col_idx];
+		if (!constant_size[col_idx]) {
+			sorting_to_blob_col[col_idx] = blob_layout_types.size();
+			blob_layout_types.push_back(logical_types[col_idx]);
+		}
+	}
+
+	blob_layout.Initialize(blob_layout_types);
 }
 
 LocalSortState::LocalSortState() : initialized(false) {
@@ -105,9 +161,8 @@ void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
 		bool has_null = sort_layout->has_null[sort_col];
 		bool nulls_first = sort_layout->order_by_null_types[sort_col] == OrderByNullType::NULLS_FIRST;
 		bool desc = sort_layout->order_types[sort_col] == OrderType::DESCENDING;
-		// TODO: use actual string statistics
 		RowOperations::RadixScatter(sort.data[sort_col], sort.size(), sel_ptr, sort.size(), data_pointers, desc,
-		                            has_null, nulls_first, string_t::INLINE_LENGTH,
+		                            has_null, nulls_first, sort_layout->prefix_lengths[sort_col],
 		                            sort_layout->column_sizes[sort_col]);
 	}
 
@@ -116,7 +171,7 @@ void LocalSortState::SinkChunk(DataChunk &sort, DataChunk &payload) {
 		DataChunk blob_chunk;
 		blob_chunk.SetCardinality(sort.size());
 		for (idx_t sort_col = 0; sort_col < sort.ColumnCount(); sort_col++) {
-			if (!TypeIsConstantSize(sort.data[sort_col].GetType().InternalType())) {
+			if (!sort_layout->constant_size[sort_col]) {
 				blob_chunk.data.emplace_back(sort.data[sort_col]);
 			}
 		}
@@ -144,7 +199,7 @@ idx_t LocalSortState::SizeInBytes() const {
 	return size_in_bytes;
 }
 
-void LocalSortState::Sort(GlobalSortState &global_sort_state) {
+void LocalSortState::Sort(GlobalSortState &global_sort_state, bool reorder_heap) {
 	D_ASSERT(radix_sorting_data->count == payload_data->count);
 	if (radix_sorting_data->count == 0) {
 		return;
@@ -167,7 +222,7 @@ void LocalSortState::Sort(GlobalSortState &global_sort_state) {
 	// Now perform the actual sort
 	SortInMemory();
 	// Re-order before the merge sort
-	ReOrder(global_sort_state);
+	ReOrder(global_sort_state, reorder_heap);
 }
 
 RowDataBlock LocalSortState::ConcatenateBlocks(RowDataCollection &row_data) {
@@ -189,7 +244,9 @@ RowDataBlock LocalSortState::ConcatenateBlocks(RowDataCollection &row_data) {
 	return new_block;
 }
 
-void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap, GlobalSortState &gstate) {
+void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap, GlobalSortState &gstate,
+                             bool reorder_heap) {
+	sd.swizzled = reorder_heap;
 	auto &unordered_data_block = sd.data_blocks.back();
 	const idx_t &count = unordered_data_block.count;
 	auto unordered_data_handle = buffer_manager->Pin(unordered_data_block.block);
@@ -203,7 +260,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	const idx_t row_width = sd.layout.GetRowWidth();
 	const idx_t sorting_entry_size = gstate.sort_layout.entry_size;
 	for (idx_t i = 0; i < count; i++) {
-		idx_t index = Load<idx_t>(sorting_ptr);
+		auto index = Load<uint32_t>(sorting_ptr);
 		memcpy(ordered_data_ptr, unordered_data_ptr + index * row_width, row_width);
 		ordered_data_ptr += row_width;
 		sorting_ptr += sorting_entry_size;
@@ -212,7 +269,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	sd.data_blocks.clear();
 	sd.data_blocks.push_back(move(ordered_data_block));
 	// Deal with the heap (if necessary)
-	if (!sd.layout.AllConstant()) {
+	if (!sd.layout.AllConstant() && reorder_heap) {
 		// Swizzle the column pointers to offsets
 		RowOperations::SwizzleColumns(sd.layout, ordered_data_handle->Ptr(), count);
 		// Create a single heap block to store the ordered heap
@@ -229,7 +286,7 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 		const idx_t heap_pointer_offset = sd.layout.GetHeapPointerOffset();
 		for (idx_t i = 0; i < count; i++) {
 			auto heap_row_ptr = Load<data_ptr_t>(ordered_data_ptr + heap_pointer_offset);
-			auto heap_row_size = Load<idx_t>(heap_row_ptr);
+			auto heap_row_size = Load<uint32_t>(heap_row_ptr);
 			memcpy(ordered_heap_ptr, heap_row_ptr, heap_row_size);
 			ordered_heap_ptr += heap_row_size;
 			ordered_data_ptr += row_width;
@@ -244,16 +301,16 @@ void LocalSortState::ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataColl
 	}
 }
 
-void LocalSortState::ReOrder(GlobalSortState &gstate) {
+void LocalSortState::ReOrder(GlobalSortState &gstate, bool reorder_heap) {
 	auto &sb = *sorted_blocks.back();
 	auto sorting_handle = buffer_manager->Pin(sb.radix_sorting_data.back().block);
 	const data_ptr_t sorting_ptr = sorting_handle->Ptr() + gstate.sort_layout.comparison_size;
 	// Re-order variable size sorting columns
 	if (!gstate.sort_layout.all_constant) {
-		ReOrder(*sb.blob_sorting_data, sorting_ptr, *blob_sorting_heap, gstate);
+		ReOrder(*sb.blob_sorting_data, sorting_ptr, *blob_sorting_heap, gstate, reorder_heap);
 	}
 	// And the payload
-	ReOrder(*sb.payload_data, sorting_ptr, *payload_heap, gstate);
+	ReOrder(*sb.payload_data, sorting_ptr, *payload_heap, gstate, reorder_heap);
 }
 
 GlobalSortState::GlobalSortState(BufferManager &buffer_manager, const vector<BoundOrderByNode> &orders,
@@ -268,12 +325,24 @@ void GlobalSortState::AddLocalState(LocalSortState &local_sort_state) {
 	}
 
 	// Sort accumulated data
-	local_sort_state.Sort(*this);
+	local_sort_state.Sort(*this, external || !sorted_blocks.empty());
 
 	// Append local state sorted data to this global state
 	lock_guard<mutex> append_guard(lock);
 	for (auto &sb : local_sort_state.sorted_blocks) {
 		sorted_blocks.push_back(move(sb));
+	}
+	auto &payload_heap = local_sort_state.payload_heap;
+	for (idx_t i = 0; i < payload_heap->blocks.size(); i++) {
+		heap_blocks.push_back(move(payload_heap->blocks[i]));
+		pinned_blocks.push_back(move(payload_heap->pinned_blocks[i]));
+	}
+	if (!sort_layout.all_constant) {
+		auto &blob_heap = local_sort_state.blob_sorting_heap;
+		for (idx_t i = 0; i < blob_heap->blocks.size(); i++) {
+			heap_blocks.push_back(move(blob_heap->blocks[i]));
+			pinned_blocks.push_back(move(blob_heap->pinned_blocks[i]));
+		}
 	}
 }
 
@@ -282,11 +351,11 @@ void GlobalSortState::PrepareMergePhase() {
 	idx_t total_heap_size =
 	    std::accumulate(sorted_blocks.begin(), sorted_blocks.end(), (idx_t)0,
 	                    [](idx_t a, const unique_ptr<SortedBlock> &b) { return a + b->HeapSize(); });
-	if (external || total_heap_size > 0.25 * buffer_manager.GetMaxMemory()) {
+	if (external || (pinned_blocks.empty() && total_heap_size > 0.25 * buffer_manager.GetMaxMemory())) {
 		external = true;
 	}
 	// Use the data that we have to determine which partition size to use during the merge
-	if (total_heap_size > 0) {
+	if (external && total_heap_size > 0) {
 		// If we have variable size data we need to be conservative, as there might be skew
 		idx_t max_block_size = 0;
 		for (auto &sb : sorted_blocks) {

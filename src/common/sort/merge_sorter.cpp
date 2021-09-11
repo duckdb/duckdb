@@ -522,8 +522,9 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 					const bool &l_smaller = left_smaller[copied + i];
 					const bool r_smaller = !l_smaller;
 					auto &entry_size = next_entry_sizes[copied + i];
-					entry_size = l_smaller * Load<idx_t>(l_heap_ptr_copy) + r_smaller * Load<idx_t>(r_heap_ptr_copy);
-					D_ASSERT(entry_size >= sizeof(idx_t));
+					entry_size =
+					    l_smaller * Load<uint32_t>(l_heap_ptr_copy) + r_smaller * Load<uint32_t>(r_heap_ptr_copy);
+					D_ASSERT(entry_size >= sizeof(uint32_t));
 					D_ASSERT(l_heap_ptr_copy - l_data.heap_handle->Ptr() + l_smaller * entry_size <=
 					         l_data.heap_blocks[l_data.block_idx].byte_offset);
 					D_ASSERT(r_heap_ptr_copy - r_data.heap_handle->Ptr() + r_smaller * entry_size <=
@@ -547,7 +548,7 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 					const auto &entry_size = next_entry_sizes[copied + i];
 					memcpy(result_heap_ptr, l_heap_ptr, l_smaller * entry_size);
 					memcpy(result_heap_ptr, r_heap_ptr, r_smaller * entry_size);
-					D_ASSERT(Load<idx_t>(result_heap_ptr) == entry_size);
+					D_ASSERT(Load<uint32_t>(result_heap_ptr) == entry_size);
 					result_heap_ptr += entry_size;
 					l_heap_ptr += l_smaller * entry_size;
 					r_heap_ptr += r_smaller * entry_size;
@@ -635,8 +636,8 @@ void MergeSorter::FlushBlobs(const RowLayout &layout, const idx_t &source_count,
 		Store<idx_t>(target_heap_block->byte_offset + copy_bytes, target_data_ptr + heap_pointer_offset);
 		target_data_ptr += row_width;
 		// Compute entry size and add to total
-		auto entry_size = Load<idx_t>(source_heap_ptr_copy);
-		D_ASSERT(entry_size >= sizeof(idx_t));
+		auto entry_size = Load<uint32_t>(source_heap_ptr_copy);
+		D_ASSERT(entry_size >= sizeof(uint32_t));
 		source_heap_ptr_copy += entry_size;
 		copy_bytes += entry_size;
 	}

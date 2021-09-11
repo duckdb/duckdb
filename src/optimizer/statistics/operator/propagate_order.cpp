@@ -1,6 +1,6 @@
+
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
-#include "duckdb/storage/statistics/base_statistics.hpp"
 
 namespace duckdb {
 
@@ -11,13 +11,7 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalOrde
 
 	// then propagate to each of the order expressions
 	for (auto &bound_order : order.orders) {
-		auto &expr = bound_order.expression;
-		PropagateExpression(expr);
-		if (expr->stats) {
-			bound_order.stats = expr->stats->Copy();
-		} else {
-			bound_order.stats = nullptr;
-		}
+		PropagateAndCompress(bound_order.expression, bound_order.stats);
 	}
 	return move(node_stats);
 }
