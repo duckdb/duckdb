@@ -5,7 +5,6 @@ import os
 import sys
 import platform
 import multiprocessing.pool
-import getopt
 
 from setuptools import setup, Extension
 
