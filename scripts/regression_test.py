@@ -58,7 +58,7 @@ def run_all_queries(duckdb_conn,duckdb_current_conn,benchmark_name,repetitions,n
             master_time = 0
             current_time = 0
             # We only repeat the query (up to repetitions), if its not the same result.
-            while (j < repetitions and query_ok is False):
+            while (j < repetitions and (query_ok is False or query_faster is True)):
                 j+=1
                 master_time = query_fun(duckdb_conn,i,queries)
                 current_time = query_fun(duckdb_current_conn,i,queries)
