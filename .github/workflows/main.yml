@@ -1442,7 +1442,7 @@ jobs:
         python-version: '3.7'
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
 
     - name: Build
       run: |
