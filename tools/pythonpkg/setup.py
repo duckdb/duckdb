@@ -77,11 +77,7 @@ for i in range(len(sys.argv)):
     else:
         new_sys_args.append(sys.argv[i])
 sys.argv = new_sys_args
-
-file_path = os.path.abspath(os.path.dirname(__file__))
-lib_name_file = open(os.path.join(file_path,"lib_name.hpp"),"w")
-lib_name_file.write("#define NAME "+lib_name)
-lib_name_file.close()
+toolchain_args.append('-DDUCKDB_PYTHON_LIB_NAME='+lib_name)
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])

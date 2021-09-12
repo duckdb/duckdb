@@ -10,13 +10,16 @@
 #include "duckdb_python/pyrelation.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "lib_name.hpp"
 
 #include "datetime.h" // from Python
 
 #include "duckdb.hpp"
 #include <random>
 #include <stdlib.h>
+
+#ifndef DUCKDB_PYTHON_LIB_NAME
+#define DUCKDB_PYTHON_LIB_NAME duckdb
+#endif
 
 namespace py = pybind11;
 
@@ -62,7 +65,7 @@ static py::object PyTokenize(const string &query) {
 	return move(result);
 }
 
-PYBIND11_MODULE(NAME, m) {
+PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyResult::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
