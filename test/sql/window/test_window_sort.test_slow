@@ -11,7 +11,7 @@ statement ok
 CALL dbgen(sf=1);
 
 statement ok
-pragma force_parallelism
+pragma verify_parallelism
 
 # derive table from lineitem that has a deterministic sorting order on l_extendedprice
 statement ok
