@@ -21,13 +21,14 @@ class EnumCatalogEntry : public StandardEntry {
 public:
 	//! Create a real EnumCatalogEntry and initialize storage for it
 	EnumCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateEnumInfo *info);
-	//! For now I'm duplicating the data for fast access
-	unordered_map<string, idx_t> values;
-	vector<string> string_values;
+
+	unordered_map<string, uint16_t> values;
+	vector<string> values_insert_order;
+
 public:
-	//! Serialize the meta information of the SequenceCatalogEntry a serializer
+	//! Serialize the meta information of the EnumCatalogEntry a serializer
 	virtual void Serialize(Serializer &serializer);
-	//! Deserializes to a CreateTableInfo
+	//! Deserializes to a CreateEnumInfo
 	static unique_ptr<CreateEnumInfo> Deserialize(Deserializer &source);
 
 	string ToSQL() override;

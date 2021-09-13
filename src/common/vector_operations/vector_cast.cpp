@@ -168,21 +168,61 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 	}
 }
 
-bool CheckEnumCatalog(Vector &source, Vector &result, idx_t count){
+bool TransformEnum(Vector &source, Vector &result, idx_t count) {
+	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
+	auto enum_values = EnumType::GetTypeValues(result.GetType());
+	auto enum_name = EnumType::GetTypeName(result.GetType());
+	switch (source.GetVectorType()) {
+	case VectorType::CONSTANT_VECTOR: {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		auto source_data = ConstantVector::GetData<string_t>(source);
+		auto result_data = ConstantVector::GetData<uint16_t>(result);
+		auto ldata = ConstantVector::GetData<string_t>(result);
+
+		if (ConstantVector::IsNull(source)) {
+			ConstantVector::SetNull(result, true);
+		} else {
+			ConstantVector::SetNull(result, false);
+			auto string_value = source_data[0].GetString();
+			auto it = enum_values.find(source_data[0].GetString());
+			if (it == enum_values.end()) {
+				throw std::runtime_error("The value: " + string_value +
+				                         " does not exist in the ENUM type: " + enum_name);
+			}
+			result_data[0] = it->second;
+		}
+		break;
+	}
+	case VectorType::FLAT_VECTOR: {
+		//			result.SetVectorType(VectorType::FLAT_VECTOR);
+		//			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+		//			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
+		//
+		//			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count,
+		//FlatVector::Validity(input), 			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
+		break;
+	}
+	default: {
+		//			VectorData vdata;
+		//			source.Orrify(count, vdata);
+		//
+		//			result.SetVectorType(VectorType::FLAT_VECTOR);
+		//			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+		//			auto ldata = (INPUT_TYPE *)vdata.data;
+		//
+		//			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel,
+		//vdata.validity, 			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
+		break;
+	}
+	}
 	return true;
 }
-
 static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, bool strict,
                                           string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
-	case LogicalTypeId::ENUM:{
-		D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
-		// check if this
-		return (source,result,count);
-	}
-
-
+	case LogicalTypeId::ENUM:
+		return TransformEnum(source, result, count);
 	case LogicalTypeId::BOOLEAN:
 		return VectorTryCastStrictLoop<string_t, bool, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::TINYINT:

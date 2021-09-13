@@ -62,7 +62,7 @@ Vector::Vector(Vector &&other) noexcept
 }
 
 void Vector::Reference(const Value &value) {
-	D_ASSERT(GetType() == value.type());
+	D_ASSERT(GetType().InternalType() == value.type().InternalType());
 	this->vector_type = VectorType::CONSTANT_VECTOR;
 	buffer = VectorBuffer::CreateConstantVector(value.type());
 	auto internal_type = value.type().InternalType();
@@ -282,7 +282,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
-	if (val.type() != GetType()) {
+	if (val.type().InternalType() != GetType().InternalType()) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
@@ -321,6 +321,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case LogicalTypeId::UTINYINT:
 		((uint8_t *)data)[index] = val.value_.utinyint;
 		break;
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::USMALLINT:
 		((uint16_t *)data)[index] = val.value_.usmallint;
 		break;
@@ -447,6 +448,7 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::BIGINT(((int64_t *)data)[index]);
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(((uint8_t *)data)[index]);
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::USMALLINT:
 		return Value::USMALLINT(((uint16_t *)data)[index]);
 	case LogicalTypeId::UINTEGER:

@@ -70,7 +70,7 @@ void ExpressionExecutor::ExecuteExpression(Vector &result) {
 
 void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 	D_ASSERT(expr_idx < expressions.size());
-	D_ASSERT(result.GetType() == expressions[expr_idx]->return_type);
+	D_ASSERT(result.GetType().InternalType() == expressions[expr_idx]->return_type.InternalType());
 	states[expr_idx]->profiler.BeginSample();
 	Execute(*expressions[expr_idx], states[expr_idx]->root_state.get(), nullptr, chunk ? chunk->size() : 1, result);
 	states[expr_idx]->profiler.EndSample(chunk ? chunk->size() : 0);
@@ -86,12 +86,12 @@ Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {
 
 	D_ASSERT(result.GetVectorType() == VectorType::CONSTANT_VECTOR);
 	auto result_value = result.GetValue(0);
-	D_ASSERT(result_value.type() == expr.return_type);
+	D_ASSERT(result_value.type().InternalType() == expr.return_type.InternalType());
 	return result_value;
 }
 
 void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t count) {
-	D_ASSERT(expr.return_type == vector.GetType());
+	D_ASSERT(expr.return_type.InternalType() == vector.GetType().InternalType());
 	vector.Verify(count);
 	if (expr.verification_stats) {
 		expr.verification_stats->Verify(vector, count);

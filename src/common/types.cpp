@@ -6,8 +6,10 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
+#include "duckdb/catalog/catalog_entry/enum_catalog_entry.hpp"
 
 #include <cmath>
+#include <utility>
 
 namespace duckdb {
 
@@ -103,12 +105,14 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::VALIDITY:
 		return PhysicalType::BIT;
 	case LogicalTypeId::ENUM:
-		return PhysicalType::UINT64;
+		return PhysicalType::UINT16;
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
 		return PhysicalType::INVALID;
+	case LogicalTypeId::USER:
+		return PhysicalType::UNKNOWN;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -490,8 +494,9 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 	} else if (lower_str == "ubigint" || lower_str == "uint64") {
 		return LogicalTypeId::UBIGINT;
 	} else {
-		// We assume that this type is an Enum Custom Type.
-		return LogicalTypeId::ENUM;
+		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
+		// It is checked in the binder
+		return LogicalTypeId::USER;
 	}
 }
 
@@ -671,7 +676,7 @@ enum class ExtraTypeInfoType : uint8_t {
 	LIST_TYPE_INFO = 3,
 	STRUCT_TYPE_INFO = 4,
 	ENUM_TYPE_INFO = 5,
-	UNDEFINED_TYPE_INFO = 6
+	USER_TYPE_INFO = 6
 };
 
 struct ExtraTypeInfo {
@@ -907,16 +912,63 @@ LogicalType LogicalType::MAP(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::MAP, move(info));
 }
 
+//===--------------------------------------------------------------------===//
+// User Type
+//===--------------------------------------------------------------------===//
+struct UserTypeInfo : public ExtraTypeInfo {
+	explicit UserTypeInfo(string name_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(move(name_p)) {
+	}
+
+	string user_type_name;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (UserTypeInfo &)*other_p;
+		return other.user_type_name == user_type_name;
+	}
+
+	void Serialize(Serializer &serializer) const override {
+		serializer.WriteString(user_type_name);
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
+		auto enum_name = source.Read<string>();
+		return make_shared<UserTypeInfo>(move(enum_name));
+	}
+};
+
+const string &UserType::GetTypeName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::USER);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((UserTypeInfo &)*info).user_type_name;
+}
+
+LogicalType LogicalType::USER(string &user_type_name) {
+	auto info = make_shared<UserTypeInfo>(user_type_name);
+	return LogicalType(LogicalTypeId::USER, move(info));
+}
 
 //===--------------------------------------------------------------------===//
 // Enum Type
 //===--------------------------------------------------------------------===//
 struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(string enum_name_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)) {
+	explicit EnumTypeInfo(string enum_name_p, unordered_map<string, uint16_t> values_p,
+	                      vector<string> values_insert_order_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)), values(std::move(values_p)),
+	      values_insert_order(std::move(values_insert_order_p)) {
 	}
 
 	string enum_name;
+	unordered_map<string, uint16_t> values;
+	vector<string> values_insert_order;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) override {
@@ -927,22 +979,43 @@ public:
 			return false;
 		}
 		auto &other = (EnumTypeInfo &)*other_p;
-		return  other.enum_name == enum_name;
+		return other.enum_name == enum_name && other.values == values;
 	}
 
 	void Serialize(Serializer &serializer) const override {
 		serializer.WriteString(enum_name);
+		serializer.Write<vector<string>>(values_insert_order);
 	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
 		auto enum_name = source.Read<string>();
-		return make_shared<EnumTypeInfo>(move(enum_name));
+		auto values_insert_order = source.Read<vector<string>>();
+		unordered_map<string, uint16_t> enum_values;
+		idx_t counter = 0;
+		for (auto &value : values_insert_order) {
+			enum_values[value] = counter++;
+		}
+		return make_shared<EnumTypeInfo>(move(enum_name), move(enum_values), move(values_insert_order));
 	}
 };
 
-LogicalType LogicalType::ENUM(string &enum_name) {
-	auto info = make_shared<EnumTypeInfo>(enum_name);
+LogicalType LogicalType::ENUM(const string &enum_name, EnumCatalogEntry &enum_catalog_entry) {
+	auto info = make_shared<EnumTypeInfo>(enum_name, enum_catalog_entry.values, enum_catalog_entry.values_insert_order);
 	return LogicalType(LogicalTypeId::ENUM, move(info));
+}
+
+const string &EnumType::GetTypeName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((EnumTypeInfo &)*info).enum_name;
+}
+
+const unordered_map<string, uint16_t> &EnumType::GetTypeValues(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((EnumTypeInfo &)*info).values;
 }
 
 //===--------------------------------------------------------------------===//

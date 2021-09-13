@@ -119,9 +119,9 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			width = 0;
 			result_type = LogicalType::INTERVAL;
 			break;
-		case LogicalTypeId::ENUM:{
-			string enum_name{name};
-			result_type = LogicalType::ENUM(enum_name);
+		case LogicalTypeId::USER: {
+			string user_type_name {name};
+			result_type = LogicalType::USER(user_type_name);
 			break;
 		}
 		default:

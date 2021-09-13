@@ -83,11 +83,11 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Minimum());
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::USMALLINT:
 		return Value::USMALLINT(NumericLimits<uint16_t>::Minimum());
 	case LogicalTypeId::UINTEGER:
 		return Value::UINTEGER(NumericLimits<uint32_t>::Minimum());
-	case LogicalTypeId::ENUM:
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Minimum());
 	case LogicalTypeId::DATE:
@@ -149,11 +149,11 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Maximum());
+	case LogicalTypeId::ENUM:
 	case LogicalTypeId::USMALLINT:
 		return Value::USMALLINT(NumericLimits<uint16_t>::Maximum());
 	case LogicalTypeId::UINTEGER:
 		return Value::UINTEGER(NumericLimits<uint32_t>::Maximum());
-	case LogicalTypeId::ENUM:
 	case LogicalTypeId::UBIGINT:
 		return Value::UBIGINT(NumericLimits<uint64_t>::Maximum());
 	case LogicalTypeId::DATE:

@@ -13,11 +13,13 @@
 #include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
 class Serializer;
 class Deserializer;
+class EnumCatalogEntry;
 
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t {
@@ -308,10 +310,10 @@ enum class PhysicalType : uint8_t {
 	/// Like LIST, but with 64-bit offsets
 	LARGE_LIST = 33,
 
-	// DuckDB Extensions
+	/// DuckDB Extensions
 	VARCHAR = 200, // our own string representation, different from STRING and LARGE_STRING above
 	INT128 = 204, // 128-bit integers
-
+	UNKNOWN = 205, // Unknown physical type of user defined types
 	/// Boolean as 1 bit, LSB bit-packed ordering
 	BIT = 205,
 
@@ -326,7 +328,7 @@ enum class LogicalTypeId : uint8_t {
 	SQLNULL = 1, /* NULL type, used for constant NULL */
 	UNKNOWN = 2, /* unknown type, used for parameter expressions */
 	ANY = 3,     /* ANY type, used for functions that accept any type as parameter */
-
+	USER = 4, /* A User Defined Type (e.g., ENUMs before the binder) */
 	BOOLEAN = 10,
 	TINYINT = 11,
 	SMALLINT = 12,
@@ -467,7 +469,8 @@ public:
 	DUCKDB_API static LogicalType LIST(LogicalType child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);       // NOLINT
-	DUCKDB_API static LogicalType ENUM(string &enum_name);
+	DUCKDB_API static LogicalType ENUM(const string &enum_name, EnumCatalogEntry& enum_catalog_entry); // NOLINT
+	DUCKDB_API static LogicalType USER(string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
 	//! A list of all INTEGRAL types
@@ -489,14 +492,21 @@ struct ListType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
 };
 
+struct UserType{
+	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
+};
+
+struct EnumType{
+	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
+	DUCKDB_API static const unordered_map<string,uint16_t> &GetTypeValues(const LogicalType &type);
+};
+
 struct StructType {
 	DUCKDB_API static const child_list_t<LogicalType> &GetChildTypes(const LogicalType &type);
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetChildName(const LogicalType &type, idx_t index);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);
 };
-
-EnumType::GetName();
 
 
 string LogicalTypeIdToString(LogicalTypeId type);

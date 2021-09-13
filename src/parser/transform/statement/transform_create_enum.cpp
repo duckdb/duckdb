@@ -5,7 +5,7 @@ namespace duckdb {
 
 vector<string> ReadPgListToString(duckdb_libpgquery::PGList *column_list) {
 	vector<string> result;
-	if (!column_list){
+	if (!column_list) {
 		return result;
 	}
 	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {

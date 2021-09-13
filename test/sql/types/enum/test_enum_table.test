@@ -9,11 +9,11 @@ statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
 # Test with non existent enum type
-statement error
-CREATE TABLE person (
-    name text,
-    current_car car
-);
+#statement error
+#CREATE TABLE person (
+#    name text,
+#    current_car car
+#);
 
 statement ok
 CREATE TABLE person (
@@ -25,4 +25,6 @@ statement ok
 INSERT INTO person VALUES ('Moe', 'happy');
 
 query TT
-Moe happy
+select * from person
+----
+Moe	happy

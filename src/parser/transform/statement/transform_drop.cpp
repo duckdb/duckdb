@@ -41,7 +41,7 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGNode *n
 	case duckdb_libpgquery::PG_OBJECT_SCHEMA:
 		info.name = ((duckdb_libpgquery::PGValue *)stmt->objects->head->data.ptr_value)->val.str;
 		break;
-	case duckdb_libpgquery::PG_OBJECT_TYPE:{
+	case duckdb_libpgquery::PG_OBJECT_TYPE: {
 		auto view_list = (duckdb_libpgquery::PGList *)stmt->objects;
 		auto target = (duckdb_libpgquery::PGTypeName *)(view_list->head->data.ptr_value);
 		info.name = (reinterpret_cast<duckdb_libpgquery::PGValue *>(target->names->tail->data.ptr_value)->val.str);
