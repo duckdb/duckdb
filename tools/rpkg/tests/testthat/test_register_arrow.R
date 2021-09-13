@@ -42,7 +42,7 @@ test_that("duckdb_register_arrow() works with datasets", {
     duckdb::duckdb_unregister_arrow(con, "mydatasetreader")
 
     dbDisconnect(con, shutdown = T)
-  
+
 })
 
 
@@ -137,7 +137,7 @@ test_that("duckdb_register_arrow() performs selection pushdown hugeint type", {
 
     for (data_type in numeric_types)
         expect_error(numeric_operators(data_type))
-        
+
 
 })
 
@@ -282,7 +282,7 @@ test_that("duckdb_register_arrow() performs selection pushdown date type", {
     dbExecute(con, "INSERT INTO  test VALUES ('2000-01-01','2000-01-01','2000-01-01'),('2000-10-01','2000-10-01','2000-10-01'),('2010-01-01','2000-10-01','2010-01-01'),(NULL,NULL,NULL)")
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
-    
+
     # Try ==
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='2000-01-01'")[[1]], 1)
     # Try >
@@ -314,7 +314,7 @@ test_that("duckdb_register_arrow() under many threads", {
     ds <- arrow::InMemoryDataset$create(mtcars)
     duckdb::duckdb_register_arrow(con, "mtcars_arrow", ds)
     DBI::dbExecute(con, "PRAGMA threads=32")
-    DBI::dbExecute(con, "PRAGMA force_parallelism")
+    DBI::dbExecute(con, "PRAGMA verify_parallelism")
     expect_error(DBI::dbGetQuery(con, "SELECT cyl, COUNT(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
 
     expect_error(DBI::dbGetQuery(con, "SELECT cyl, SUM(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)

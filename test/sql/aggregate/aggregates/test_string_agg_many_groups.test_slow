@@ -3,7 +3,7 @@
 # group: [aggregates]
 
 statement ok
-PRAGMA force_parallelism
+PRAGMA verify_parallelism
 
 # generate a table
 statement ok

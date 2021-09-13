@@ -1,4 +1,4 @@
-# name: test/sql/parallelism/intraquery/test_force_parallelism.test
+# name: test/sql/parallelism/intraquery/test_verify_parallelism.test
 # description: Test force parallelism on small-ish tables (few thousand rows)
 # group: [intraquery]
 
@@ -9,7 +9,7 @@ statement ok
 PRAGMA threads=4
 
 statement ok
-PRAGMA force_parallelism
+PRAGMA verify_parallelism
 
 statement ok
 PRAGMA enable_profiling

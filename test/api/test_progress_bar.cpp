@@ -87,7 +87,7 @@ TEST_CASE("Test Progress Bar Fast", "[api]") {
 
 	//! Test Multiple threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=2"));
-	REQUIRE_NO_FAIL(con.Query("PRAGMA force_parallelism"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 
 	//! Simple Aggregation
 	test_progress.Start();
@@ -151,7 +151,7 @@ TEST_CASE("Test Progress Bar", "[api][.]") {
 
 	//! Test Multiple threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
-	REQUIRE_NO_FAIL(con.Query("PRAGMA force_parallelism"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 
 	//! Simple Aggregation
 	test_progress.Start();
@@ -221,7 +221,7 @@ TEST_CASE("Test Progress Bar CSV", "[api][.]") {
 
 	//! Test Multiple threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
-	REQUIRE_NO_FAIL(con.Query("PRAGMA force_parallelism"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 	//! Create Tables From CSVs
 	test_progress.Start();
 	REQUIRE_NO_FAIL(
