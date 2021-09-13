@@ -210,8 +210,8 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count) {
 		//			auto ldata = (INPUT_TYPE *)vdata.data;
 		//
 		//			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel,
-		// vdata.validity, 			                                                    FlatVector::Validity(result), dataptr,
-		// adds_nulls);
+		// vdata.validity, 			                                                    FlatVector::Validity(result),
+		// dataptr, adds_nulls);
 		break;
 	}
 	}
