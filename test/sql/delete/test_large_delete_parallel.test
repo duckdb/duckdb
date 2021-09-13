@@ -6,7 +6,7 @@ statement ok
 pragma threads=2
 
 statement ok
-pragma force_parallelism
+pragma verify_parallelism
 
 statement ok
 CREATE TABLE a AS SELECT * FROM range(0, 10000, 1) t1(i);

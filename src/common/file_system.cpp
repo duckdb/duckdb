@@ -187,7 +187,7 @@ void FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t
 	int fd = ((UnixFileHandle &)handle).fd;
 	int64_t bytes_written = pwrite(fd, buffer, nr_bytes, location);
 	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
+		throw IOException("Could not write file \"%s\" (nr_bytes: %lld, location: %llu): %s", handle.path, nr_bytes, location, strerror(errno));
 	}
 	if (bytes_written != nr_bytes) {
 		throw IOException("Could not write all bytes to file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
@@ -199,7 +199,7 @@ int64_t FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	int fd = ((UnixFileHandle &)handle).fd;
 	int64_t bytes_written = write(fd, buffer, nr_bytes);
 	if (bytes_written == -1) {
-		throw IOException("Could not write file \"%s\": %s", handle.path, strerror(errno));
+		throw IOException("Could not write file \"%s\" (nr_bytes: %lld): %s", handle.path, nr_bytes, strerror(errno));
 	}
 	return bytes_written;
 }
