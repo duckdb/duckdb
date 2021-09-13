@@ -57,7 +57,7 @@ public:
 	}
 
 	idx_t GroupRowsAvailable() override {
-		for(idx_t i = 0; i < child_readers.size(); i++) {
+		for (idx_t i = 0; i < child_readers.size(); i++) {
 			if (child_readers[i]->Type().id() != LogicalTypeId::LIST) {
 				return child_readers[i]->GroupRowsAvailable();
 			}
