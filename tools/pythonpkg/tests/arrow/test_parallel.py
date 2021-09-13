@@ -15,7 +15,7 @@ class TestArrowParallel(object):
             return
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
-        duckdb_conn.execute("PRAGMA force_parallelism")
+        duckdb_conn.execute("PRAGMA verify_parallelism")
         data = (pyarrow.array(np.random.randint(800, size=1000000), type=pyarrow.int32()))
         tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data],['a']).to_batches(10000))
         rel = duckdb_conn.from_arrow_table(tbl)
@@ -28,7 +28,7 @@ class TestArrowParallel(object):
             return
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
-        duckdb_conn.execute("PRAGMA force_parallelism")
+        duckdb_conn.execute("PRAGMA verify_parallelism")
 
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','userdata1.parquet')
         cols = 'id, first_name, last_name, email, gender, ip_address, cc, country, birthdate, salary, title, comments'
@@ -48,7 +48,7 @@ class TestArrowParallel(object):
             return
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
-        duckdb_conn.execute("PRAGMA force_parallelism")
+        duckdb_conn.execute("PRAGMA verify_parallelism")
 
         data = (pyarrow.array(np.random.randint(800, size=1000), type=pyarrow.int32()))
         tbl = pyarrow.Table.from_batches(pyarrow.Table.from_arrays([data],['a']).to_batches(2))

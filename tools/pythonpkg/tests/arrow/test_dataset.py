@@ -18,7 +18,7 @@ class TestArrowDataset(object):
 
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
-        duckdb_conn.execute("PRAGMA force_parallelism")
+        duckdb_conn.execute("PRAGMA verify_parallelism")
 
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','userdata1.parquet')
 
@@ -39,7 +39,7 @@ class TestArrowDataset(object):
 
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
-        duckdb_conn.execute("PRAGMA force_parallelism")
+        duckdb_conn.execute("PRAGMA verify_parallelism")
 
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','userdata1.parquet')
 
