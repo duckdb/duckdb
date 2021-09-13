@@ -51,7 +51,6 @@ def run_all_queries(duckdb_conn,duckdb_current_conn,benchmark_name,repetitions,n
     regression_status = True
     for i in range (1,num_queries):      
         if i not in skip_queries:    
-            query_result_list = []
             j = 0
             query_faster = True
             query_ok = False
@@ -80,11 +79,11 @@ def run_tpc(benchmark_name,repetitions,load_data_call,num_queries,get_query_sql,
     # Master Branch
     duckdb_conn = duckdb.connect()
     duckdb_conn.execute(load_data_call)
-
+    duckdb_conn.execute('PRAGMA threads=2')
     # This Branch
     duckdb_current_conn = duckcurrent.connect()
     duckdb_current_conn.execute(load_data_call)
-
+    duckdb_current_conn.execute('PRAGMA threads=2')
     return run_all_queries(duckdb_conn,duckdb_current_conn,benchmark_name,repetitions,num_queries,threshold,run_tpc_query,get_query_sql,skip_queries)
 
 def download_h2oai():
@@ -133,10 +132,11 @@ def run_h2oai_join(duckdb_conn,duckdb_current_conn,repetitions,threshold):
 def run_h2oai(repetitions, threshold):    
     # Master Branch
     duckdb_conn = duckdb.connect()
+    duckdb_conn.execute('PRAGMA threads=2')
 
     # This Branch
     duckdb_current_conn = duckcurrent.connect()
-
+    duckdb_current_conn.execute('PRAGMA threads=2')
     # Download H2OAI data
     download_h2oai()
 
