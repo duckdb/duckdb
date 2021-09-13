@@ -11,7 +11,6 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 	if (star->except_list) {
 		for (auto head = star->except_list->head; head; head = head->next) {
 			auto value = (duckdb_libpgquery::PGValue *)head->data.ptr_value;
-			D_ASSERT(value->type == duckdb_libpgquery::T_PGString);
 			string exclude_entry = value->val.str;
 			if (result->exclude_list.find(exclude_entry) != result->exclude_list.end()) {
 				throw ParserException("Duplicate entry \"%s\" in EXCLUDE list", exclude_entry);

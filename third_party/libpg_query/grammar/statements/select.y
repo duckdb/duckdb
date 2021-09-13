@@ -3193,7 +3193,9 @@ target_el:	a_expr AS ColLabelOrString
 				}
 		;
 
-except_list: EXCLUDE '(' name_list ')'					{ $$ = $3; };
+except_list: EXCLUDE '(' name_list ')'					{ $$ = $3; }
+			| EXCLUDE ColId								{ $$ = list_make1($2); }
+		;
 
 opt_except_list: except_list						{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }
@@ -3208,6 +3210,7 @@ replace_list:
 		;
 
 opt_replace_list: REPLACE '(' replace_list ')'		{ $$ = $3; }
+			| REPLACE replace_list_el				{ $$ = list_make1($2); }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
