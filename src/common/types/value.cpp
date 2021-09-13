@@ -635,6 +635,9 @@ T Value::GetValueInternal() const {
 		return Cast::Operation<uint16_t, T>(value_.usmallint);
 	case LogicalTypeId::UINTEGER:
 		return Cast::Operation<uint32_t, T>(value_.uinteger);
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::UBIGINT:
 		return Cast::Operation<uint64_t, T>(value_.ubigint);
 	case LogicalTypeId::FLOAT:
@@ -748,6 +751,14 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::INTEGER((int32_t)value);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(value);
+	case LogicalTypeId::UTINYINT:
+		return Value::UTINYINT((uint8_t)value);
+	case LogicalTypeId::USMALLINT:
+		return Value::USMALLINT((uint16_t)value);
+	case LogicalTypeId::UINTEGER:
+		return Value::UINTEGER((uint32_t)value);
+	case LogicalTypeId::UBIGINT:
+		return Value::UBIGINT(value);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(value);
 	case LogicalTypeId::DECIMAL:

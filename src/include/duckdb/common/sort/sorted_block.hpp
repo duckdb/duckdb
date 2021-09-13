@@ -52,6 +52,8 @@ public:
 	//! Read indices
 	idx_t block_idx;
 	idx_t entry_idx;
+	//! Whether the pointers in this sorted data are swizzled
+	bool swizzled;
 
 private:
 	//! Pin fixed-size row data

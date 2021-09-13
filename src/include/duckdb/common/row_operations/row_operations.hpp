@@ -48,7 +48,9 @@ struct RowOperations {
 	                    RowDataCollection &string_heap, const SelectionVector &sel, idx_t count);
 	//! Gather a single column.
 	static void Gather(Vector &rows, const SelectionVector &row_sel, Vector &col, const SelectionVector &col_sel,
-	                   const idx_t count, const idx_t col_offset, const idx_t col_no);
+	                   const idx_t count, const idx_t col_offset, const idx_t col_no, const idx_t build_size = 0);
+	//! Full Scan an entire columns
+	static void FullScanColumn(const RowLayout &layout, Vector &rows, Vector &col, idx_t count, idx_t col_idx);
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators

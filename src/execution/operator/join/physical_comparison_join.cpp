@@ -12,8 +12,9 @@ PhysicalComparisonJoin::PhysicalComparisonJoin(LogicalOperator &op, PhysicalOper
 	idx_t equal_position = 0;
 	idx_t other_position = conditions_p.size() - 1;
 	for (idx_t i = 0; i < conditions_p.size(); i++) {
-		if (conditions_p[i].comparison == ExpressionType::COMPARE_EQUAL) {
-			// COMPARE_EQUAL, move to the start
+		if (conditions_p[i].comparison == ExpressionType::COMPARE_EQUAL ||
+		    conditions_p[i].comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {
+			// COMPARE_EQUAL and COMPARE_NOT_DISTINCT_FROM, move to the start
 			conditions[equal_position++] = std::move(conditions_p[i]);
 		} else {
 			// other expression, move to the end

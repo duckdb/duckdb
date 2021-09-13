@@ -27,7 +27,7 @@ namespace duckdb {
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
-	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection")
+	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
 	    .def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("duplicate", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
 	    .def("execute", &DuckDBPyConnection::Execute,

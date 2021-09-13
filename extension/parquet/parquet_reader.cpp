@@ -478,6 +478,24 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 	case LogicalTypeId::VARCHAR:
 		TemplatedFilterOperation<string_t, OP>(v, string_t(constant.str_value), filter_mask, count);
 		break;
+	case LogicalTypeId::DECIMAL:
+		switch (v.GetType().InternalType()) {
+		case PhysicalType::INT16:
+			TemplatedFilterOperation<int16_t, OP>(v, constant.value_.smallint, filter_mask, count);
+			break;
+		case PhysicalType::INT32:
+			TemplatedFilterOperation<int32_t, OP>(v, constant.value_.integer, filter_mask, count);
+			break;
+		case PhysicalType::INT64:
+			TemplatedFilterOperation<int64_t, OP>(v, constant.value_.bigint, filter_mask, count);
+			break;
+		case PhysicalType::INT128:
+			TemplatedFilterOperation<hugeint_t, OP>(v, constant.value_.hugeint, filter_mask, count);
+			break;
+		default:
+			throw InternalException("Unsupported internal type for decimal");
+		}
+		break;
 	default:
 		throw NotImplementedException("Unsupported type for filter %s", v.ToString());
 	}

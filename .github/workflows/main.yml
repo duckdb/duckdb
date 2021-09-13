@@ -12,7 +12,7 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
-  linux-debug:
+ linux-debug:
     name: Linux Debug
     runs-on: ubuntu-20.04
 
@@ -36,7 +36,7 @@ jobs:
     - name: Test
       run: make unittestci
 
-  format-check:
+ format-check:
     name: Format Check
     runs-on: ubuntu-20.04
 
@@ -59,7 +59,7 @@ jobs:
         clang-format --dump-config
         make format-check-silent
 
-  tidy-check:
+ tidy-check:
     name: Tidy Check
     runs-on: ubuntu-20.04
 
@@ -80,7 +80,7 @@ jobs:
     - name: Tidy Check
       run: make tidy-check
 
-  win-release-64:
+ win-release-64:
     name: Windows (64 Bit)
     runs-on: windows-latest
     needs: linux-debug
@@ -128,7 +128,7 @@ jobs:
     - name: Duckdb.dll export symbols with C++ on Windows
       run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
 
-  win-release-32:
+ win-release-32:
     name: Windows (32 Bit)
     runs-on: windows-latest
     needs: linux-debug
@@ -170,7 +170,7 @@ jobs:
           duckdb_cli-windows-i386.zip
           tools/jdbc/duckdb_jdbc.jar
 
-  mingw:
+ mingw:
      name: MingW (64 Bit)
      runs-on: windows-latest
      needs: linux-debug
@@ -199,7 +199,7 @@ jobs:
            cp src/libduckdb.dll .
            test/unittest.exe
 
-  xcode-release:
+ xcode-release:
     name: OSX Release
     runs-on: macos-latest
     needs: linux-debug
@@ -258,7 +258,7 @@ jobs:
           build/release/tools/jdbc/duckdb_jdbc.jar
 
 
-  xcode-debug:
+ xcode-debug:
     name: OSX Debug
     runs-on: macos-latest
     needs: linux-debug
@@ -286,7 +286,7 @@ jobs:
         clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
         clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
 
-  linux-release-64:
+ linux-release-64:
     name: Linux (64 Bit)
     runs-on: ubuntu-16.04
     needs: linux-debug
@@ -359,7 +359,7 @@ jobs:
 
 
 
-  linux-release-32:
+ linux-release-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-16.04
     needs: linux-debug
@@ -403,7 +403,7 @@ jobs:
           build/release/tools/jdbc/duckdb_jdbc.jar
 
 
-  linux-rpi:
+ linux-rpi:
     name: Linux (Raspberry Pi)
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -445,7 +445,7 @@ jobs:
           libduckdb-linux-rpi.zip
           duckdb_cli-linux-rpi.zip
 
-  linux-arrow:
+ linux-arrow:
       name: Linux Debug (Arrow Tests)
       runs-on: ubuntu-20.04
       needs: linux-debug
@@ -470,7 +470,7 @@ jobs:
       - name: Test
         run: make unittestarrow
 
-  old-gcc:
+ old-gcc:
     name: GCC 4.8
     runs-on: ubuntu-18.04
     needs: linux-debug
@@ -498,7 +498,7 @@ jobs:
       run: make allunit
 
 
-  centos:
+ centos:
     name: CentOS 7
     runs-on: ubuntu-latest
     container: centos:7
@@ -519,7 +519,7 @@ jobs:
       run: ./build/release/test/unittest
 
 
-  release-assert:
+ release-assert:
     name: Release Assertions
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -550,7 +550,7 @@ jobs:
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
 
-  force-storage:
+ force-storage:
     name: Force Storage
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -581,7 +581,7 @@ jobs:
       run: build/reldebug/test/unittest "*" --force-storage
 
 
-  threadsan:
+ threadsan:
     name: Thread Sanitizer
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -616,7 +616,7 @@ jobs:
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
 
-  valgrind:
+ valgrind:
     name: Valgrind
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -641,7 +641,7 @@ jobs:
     - name: Test
       run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
-  codecov:
+ codecov:
     name: CodeCov
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -696,7 +696,7 @@ jobs:
           files: lcov.info
           fail_ci_if_error: true
 
-  vector-sizes:
+ vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -718,7 +718,7 @@ jobs:
       run: python scripts/test_vector_sizes.py
 
 
-  sqllogic:
+ sqllogic:
     name: Sqllogic tests
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -736,7 +736,7 @@ jobs:
       run: make sqlite
 
 
-  expanded:
+ expanded:
     name: Expanded
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -760,7 +760,7 @@ jobs:
       run: make debug
 
 
-  sqlancer:
+ sqlancer:
     name: SQLancer
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -792,7 +792,7 @@ jobs:
         python3 scripts/run_sqlancer.py
 
 
-  sqlancer_persistent:
+ sqlancer_persistent:
     name: SQLancer (Persistent)
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -824,7 +824,7 @@ jobs:
         python3 scripts/run_sqlancer.py --persistent
 
 
-  jdbc:
+ jdbc:
     name: JDBC Compliance
     runs-on: ubuntu-18.04
     needs: linux-debug
@@ -852,7 +852,7 @@ jobs:
       run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
 
 
-  odbc:
+ odbc:
     name: ODBC
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -909,7 +909,7 @@ jobs:
         julia tools/odbc/test/julia-test.jl
 
 
-  linux-python3:
+ linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
     strategy:
@@ -964,7 +964,7 @@ jobs:
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
         fi
 
-  linux-python3-httpfs:
+ linux-python3-httpfs:
     name: Python 3 Linux with HTTPFS support
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -998,7 +998,7 @@ jobs:
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
           cibuildwheel --output-dir wheelhouse duckdb_tarball
 
-  osx-python3:
+ osx-python3:
     name: Python 3 OSX
     runs-on: macos-latest
     needs: linux-debug
@@ -1038,7 +1038,7 @@ jobs:
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
         fi
 
-  win-python3:
+ win-python3:
     name: Python 3 Windows
     runs-on: windows-latest
     needs: linux-debug
@@ -1078,7 +1078,7 @@ jobs:
         fi
 
 
-  rstats-linux:
+ rstats-linux:
     name: R Package Linux
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -1139,7 +1139,7 @@ jobs:
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
 
-  rstats-windows:
+ rstats-windows:
     name: R Package Windows
     runs-on: windows-latest
     needs: linux-debug
@@ -1172,7 +1172,7 @@ jobs:
         if grep WARNING /tmp/duckdb.Rcheck/00check.log ; then exit 1; fi
 
 
-  rubsan:
+ rubsan:
     name: R UBSAN
     runs-on: ubuntu-latest
     needs: linux-debug
@@ -1194,7 +1194,7 @@ jobs:
         cat duckdb.Rcheck/tests/testthat.Rout.fail
 
 
-  linux-tarball-v2:
+ linux-tarball-v2:
     name: Python 2 Tarball
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -1226,7 +1226,7 @@ jobs:
         python setup.py install --user
         (cd tests/ && python -m pytest)
 
-  linux-tarball:
+ linux-tarball:
     name: Python 3 Tarball
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -1256,7 +1256,7 @@ jobs:
         python setup.py install --user
         (cd tests/ && python -m pytest)
 
-  linux-nodejs:
+ linux-nodejs:
     name: node.js Linux
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -1283,7 +1283,7 @@ jobs:
       run: ./scripts/node_build.sh 15
 
 
-  osx-nodejs:
+ osx-nodejs:
     name: node.js OSX
     runs-on: macos-latest
     needs: linux-debug
@@ -1308,7 +1308,7 @@ jobs:
     - name: Node 15
       run: ./scripts/node_build.sh 15
 
-  win-nodejs:
+ win-nodejs:
     name: node.js Windows
     runs-on: windows-latest
     needs: linux-debug
@@ -1333,7 +1333,7 @@ jobs:
     - name: Node
       run: ./scripts/node_build_win.sh
 
-  linux-wasm-release:
+ linux-wasm-release:
     name: WebAssembly Release
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -1369,7 +1369,7 @@ jobs:
         path: |
           duckdb-wasm32-nothreads.zip
 
-  docs:
+ docs:
     name: Website Docs
     runs-on: ubuntu-20.04
     needs: linux-debug
@@ -1391,3 +1391,102 @@ jobs:
       run: |
         cd duckdb-web
         python3 scripts/generate_docs.py ..
+
+ regression-test-tpch:
+    name: Regression Test (TPC-H)
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
+
+    - name: Build
+      run: |
+        git clone https://github.com/duckdb/duckdb.git
+        cd duckdb/tools/pythonpkg
+        python setup.py install
+        cd ../../../tools/pythonpkg
+        python setup.py --package_name=duckcurrent install
+
+    - name: Regression Test TPC-H SF1
+      run: python scripts/regression_test.py --benchmark=tpch
+
+ regression-test-tpcds:
+    name: Regression Test (TPC-DS)
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
+
+    - name: Build
+      run: |
+        git clone https://github.com/duckdb/duckdb.git
+        cd duckdb/tools/pythonpkg
+        python setup.py install
+        cd ../../../tools/pythonpkg
+        python setup.py --package_name=duckcurrent install
+
+    - name: Regression Test TPC-DS SF1
+      run: python scripts/regression_test.py --benchmark=tpcds
+
+ regression-test-h20ai:
+    name: Regression Test (H2OAI)
+    runs-on: ubuntu-20.04
+    needs: linux-debug
+
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
+
+    - name: Build
+      run: |
+        git clone https://github.com/duckdb/duckdb.git
+        cd duckdb/tools/pythonpkg
+        python setup.py install
+        cd ../../../tools/pythonpkg
+        python setup.py --package_name=duckcurrent install
+
+    - name: Regression Test H2OAI
+      run: python scripts/regression_test.py --benchmark=h2oai

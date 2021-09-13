@@ -92,7 +92,7 @@ TopNSortState::TopNSortState(TopNHeap &heap) : heap(heap), count(0), is_sorted(f
 
 void TopNSortState::Initialize() {
 	RowLayout layout;
-	layout.Initialize(heap.payload_types, false);
+	layout.Initialize(heap.payload_types);
 	auto &buffer_manager = BufferManager::GetBufferManager(heap.context);
 	global_state = make_unique<GlobalSortState>(buffer_manager, heap.orders, layout);
 	local_state = make_unique<LocalSortState>();
@@ -113,6 +113,7 @@ void TopNSortState::Append(DataChunk &sort_chunk, DataChunk &payload) {
 
 void TopNSortState::Sink(DataChunk &input) {
 	// compute the ordering values for the new chunk
+	heap.sort_chunk.Reset();
 	heap.executor.Execute(input, heap.sort_chunk);
 
 	// append the new chunk to what we have already
@@ -293,6 +294,7 @@ void TopNHeap::ExtractBoundaryValues(DataChunk &current_chunk, DataChunk &prev_c
 		                          prev_chunk.size());
 	}
 	current_chunk.SetCardinality(1);
+	sort_chunk.Reset();
 	executor.Execute(&current_chunk, sort_chunk);
 
 	boundary_values.Reset();

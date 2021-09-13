@@ -13,7 +13,7 @@
 namespace duckdb {
 
 void DuckDBPyResult::Initialize(py::handle &m) {
-	py::class_<DuckDBPyResult>(m, "DuckDBPyResult")
+	py::class_<DuckDBPyResult>(m, "DuckDBPyResult", py::module_local())
 	    .def("description", &DuckDBPyResult::Description)
 	    .def("close", &DuckDBPyResult::Close)
 	    .def("fetchone", &DuckDBPyResult::Fetchone)

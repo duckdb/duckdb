@@ -127,7 +127,7 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 	data_ptr_t data_locations[STANDARD_VECTOR_SIZE];
 	if (!layout.AllConstant()) {
 		idx_t entry_sizes[STANDARD_VECTOR_SIZE];
-		std::fill_n(entry_sizes, count, sizeof(idx_t));
+		std::fill_n(entry_sizes, count, sizeof(uint32_t));
 		for (idx_t col_no = 0; col_no < types.size(); col_no++) {
 			if (TypeIsConstantSize(types[col_no].InternalType())) {
 				continue;
@@ -160,8 +160,8 @@ void RowOperations::Scatter(DataChunk &columns, VectorData col_data[], const Row
 			// Pointer to this row in the heap block
 			Store<data_ptr_t>(data_locations[i], row + heap_pointer_offset);
 			// Row size is stored in the heap in front of each row
-			Store<idx_t>(entry_sizes[i], data_locations[i]);
-			data_locations[i] += sizeof(idx_t);
+			Store<uint32_t>(entry_sizes[i], data_locations[i]);
+			data_locations[i] += sizeof(uint32_t);
 		}
 	}
 
