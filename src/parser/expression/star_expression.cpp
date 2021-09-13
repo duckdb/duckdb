@@ -12,7 +12,7 @@ StarExpression::StarExpression(string relation_name_p)
 string StarExpression::ToString() const {
 	string result = relation_name.empty() ? "*" : relation_name + ".*";
 	if (!exclude_list.empty()) {
-		result += "EXCEPT (";
+		result += " EXCEPT (";
 		bool first_entry = true;
 		for (auto &entry : exclude_list) {
 			if (!first_entry) {
@@ -24,7 +24,7 @@ string StarExpression::ToString() const {
 		result += ")";
 	}
 	if (!replace_list.empty()) {
-		result += "REPLACE (";
+		result += " REPLACE (";
 		bool first_entry = true;
 		for (auto &entry : replace_list) {
 			if (!first_entry) {
