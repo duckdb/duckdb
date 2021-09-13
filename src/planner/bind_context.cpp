@@ -6,6 +6,7 @@
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
@@ -222,17 +223,38 @@ BindResult BindContext::BindColumn(PositionalReferenceExpression &ref, idx_t dep
 	return BindColumn(*column_ref, depth);
 }
 
-void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
-                                               const string &relation_name) {
+bool BindContext::CheckExclusionList(StarExpression &expr, Binding *binding, const string &column_name,
+                                     vector<unique_ptr<ParsedExpression>> &new_select_list,
+                                     case_insensitive_set_t &excluded_columns) {
+	if (expr.exclude_list.find(column_name) != expr.exclude_list.end()) {
+		excluded_columns.insert(column_name);
+		return true;
+	}
+	auto entry = expr.replace_list.find(column_name);
+	if (entry != expr.replace_list.end()) {
+		excluded_columns.insert(entry->first);
+		new_select_list.push_back(entry->second->Copy());
+		return true;
+	}
+	return false;
+}
+
+void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
+                                               vector<unique_ptr<ParsedExpression>> &new_select_list) {
 	if (bindings_list.empty()) {
 		throw BinderException("SELECT * expression without FROM clause!");
 	}
-	if (relation_name.empty()) { // SELECT * case
+	case_insensitive_set_t excluded_columns;
+	if (expr.relation_name.empty()) {
+		// SELECT * case
 		// bind all expressions of each table in-order
 		unordered_set<UsingColumnSet *> handled_using_columns;
 		for (auto &entry : bindings_list) {
 			auto binding = entry.second;
 			for (auto &column_name : binding->names) {
+				if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
+					continue;
+				}
 				// check if this column is a USING column
 				auto using_binding = GetUsingBinding(column_name, binding->alias);
 				if (using_binding) {
@@ -262,14 +284,30 @@ void BindContext::GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpressio
 				new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
 			}
 		}
-	} else { // SELECT tbl.* case
+	} else {
+		// SELECT tbl.* case
 		string error;
-		auto binding = GetBinding(relation_name, error);
+		auto binding = GetBinding(expr.relation_name, error);
 		if (!binding) {
 			throw BinderException(error);
 		}
 		for (auto &column_name : binding->names) {
+			if (CheckExclusionList(expr, binding, column_name, new_select_list, excluded_columns)) {
+				continue;
+			}
 			new_select_list.push_back(make_unique<ColumnRefExpression>(column_name, binding->alias));
+		}
+	}
+	for (auto &excluded : expr.exclude_list) {
+		if (excluded_columns.find(excluded) == excluded_columns.end()) {
+			throw BinderException("Column \"%s\" in EXCLUDE list not found in %s", excluded,
+			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
+		}
+	}
+	for (auto &entry : expr.replace_list) {
+		if (excluded_columns.find(entry.first) == excluded_columns.end()) {
+			throw BinderException("Column \"%s\" in REPLACE list not found in %s", entry.first,
+			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
 		}
 	}
 }
