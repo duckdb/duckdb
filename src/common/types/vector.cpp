@@ -448,7 +448,6 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::BIGINT(((int64_t *)data)[index]);
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(((uint8_t *)data)[index]);
-	case LogicalTypeId::ENUM:
 	case LogicalTypeId::USMALLINT:
 		return Value::USMALLINT(((uint16_t *)data)[index]);
 	case LogicalTypeId::UINTEGER:
@@ -481,6 +480,8 @@ Value Vector::GetValue(idx_t index) const {
 			throw InternalException("Widths bigger than 38 are not supported");
 		}
 	}
+	case LogicalTypeId::ENUM:
+		return Value::ENUM(((uint16_t *)data)[index], GetType());
 	case LogicalTypeId::HASH:
 		return Value::HASH(((hash_t *)data)[index]);
 	case LogicalTypeId::POINTER:

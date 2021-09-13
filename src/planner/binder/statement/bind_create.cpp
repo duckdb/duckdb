@@ -21,6 +21,7 @@
 #include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
+#include "duckdb/catalog/catalog_entry/enum_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -184,7 +185,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				if (!enum_catalog) {
 					throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
 				}
-				column.type = LogicalType::ENUM(user_type_name, *enum_catalog);
+				auto values_insert_order = make_shared<vector<string>>();
+				*values_insert_order = enum_catalog->values_insert_order;
+				auto enum_values = make_shared<unordered_map<string, uint16_t>>();
+				*enum_values = enum_catalog->values;
+				column.type = LogicalType::ENUM(user_type_name, enum_values, values_insert_order);
 			}
 		}
 		auto bound_info = BindCreateTableInfo(move(stmt.info));

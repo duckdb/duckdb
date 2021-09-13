@@ -381,6 +381,10 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "INVALID";
 	case LogicalTypeId::UNKNOWN:
 		return "UNKNOWN";
+	case LogicalTypeId::ENUM:
+		return "ENUM";
+	case LogicalTypeId::USER:
+		return "USER";
 	}
 	return "UNDEFINED";
 }
@@ -960,15 +964,15 @@ LogicalType LogicalType::USER(string &user_type_name) {
 // Enum Type
 //===--------------------------------------------------------------------===//
 struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(string enum_name_p, unordered_map<string, uint16_t> values_p,
-	                      vector<string> values_insert_order_p)
+	explicit EnumTypeInfo(string enum_name_p, shared_ptr<unordered_map<string, uint16_t>> values_p,
+	                      shared_ptr<vector<string>> values_insert_order_p)
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)), values(std::move(values_p)),
 	      values_insert_order(std::move(values_insert_order_p)) {
 	}
 
 	string enum_name;
-	unordered_map<string, uint16_t> values;
-	vector<string> values_insert_order;
+	shared_ptr<unordered_map<string, uint16_t>> values;
+	shared_ptr<vector<string>> values_insert_order;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) override {
@@ -984,23 +988,26 @@ public:
 
 	void Serialize(Serializer &serializer) const override {
 		serializer.WriteString(enum_name);
-		serializer.Write<vector<string>>(values_insert_order);
+		serializer.Write<vector<string>>(*values_insert_order);
 	}
 
 	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
 		auto enum_name = source.Read<string>();
-		auto values_insert_order = source.Read<vector<string>>();
-		unordered_map<string, uint16_t> enum_values;
+
+		auto values_insert_order = make_shared<vector<string>>();
+		*values_insert_order = source.Read<vector<string>>();
+		auto enum_values = make_shared<unordered_map<string, uint16_t>>();
 		idx_t counter = 0;
-		for (auto &value : values_insert_order) {
-			enum_values[value] = counter++;
+		for (auto &value : *values_insert_order) {
+			(*enum_values)[value] = counter++;
 		}
 		return make_shared<EnumTypeInfo>(move(enum_name), move(enum_values), move(values_insert_order));
 	}
 };
 
-LogicalType LogicalType::ENUM(const string &enum_name, EnumCatalogEntry &enum_catalog_entry) {
-	auto info = make_shared<EnumTypeInfo>(enum_name, enum_catalog_entry.values, enum_catalog_entry.values_insert_order);
+LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint16_t>> enum_values,
+                              shared_ptr<vector<string>> values_insert_order) {
+	auto info = make_shared<EnumTypeInfo>(enum_name, enum_values, values_insert_order);
 	return LogicalType(LogicalTypeId::ENUM, move(info));
 }
 
@@ -1015,7 +1022,28 @@ const unordered_map<string, uint16_t> &EnumType::GetTypeValues(const LogicalType
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
+	return *((EnumTypeInfo &)*info).values;
+}
+
+const vector<string> &EnumType::GetValuesInsertOrder(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return *((EnumTypeInfo &)*info).values_insert_order;
+}
+
+const shared_ptr<unordered_map<string, uint16_t>> EnumType::GetSharedTypeValues(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
 	return ((EnumTypeInfo &)*info).values;
+}
+
+const shared_ptr<vector<string>> EnumType::GetSharedValuesInsertOrder(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((EnumTypeInfo &)*info).values_insert_order;
 }
 
 //===--------------------------------------------------------------------===//

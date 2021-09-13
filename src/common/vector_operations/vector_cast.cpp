@@ -177,7 +177,6 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		auto source_data = ConstantVector::GetData<string_t>(source);
 		auto result_data = ConstantVector::GetData<uint16_t>(result);
-		auto ldata = ConstantVector::GetData<string_t>(result);
 
 		if (ConstantVector::IsNull(source)) {
 			ConstantVector::SetNull(result, true);
@@ -199,7 +198,7 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count) {
 		//			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
 		//
 		//			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count,
-		//FlatVector::Validity(input), 			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
+		// FlatVector::Validity(input), FlatVector::Validity(result), dataptr, adds_nulls);
 		break;
 	}
 	default: {
@@ -211,7 +210,8 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count) {
 		//			auto ldata = (INPUT_TYPE *)vdata.data;
 		//
 		//			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel,
-		//vdata.validity, 			                                                    FlatVector::Validity(result), dataptr, adds_nulls);
+		// vdata.validity, 			                                                    FlatVector::Validity(result), dataptr,
+		// adds_nulls);
 		break;
 	}
 	}

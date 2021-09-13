@@ -9,11 +9,11 @@ statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
 # Test with non existent enum type
-#statement error
-#CREATE TABLE person (
-#    name text,
-#    current_car car
-#);
+statement error
+CREATE TABLE person (
+    name text,
+    current_car car
+);
 
 statement ok
 CREATE TABLE person (
@@ -24,7 +24,45 @@ CREATE TABLE person (
 statement ok
 INSERT INTO person VALUES ('Moe', 'happy');
 
+statement error
+INSERT INTO person VALUES ('Moe', 'diego');
+
 query TT
 select * from person
 ----
 Moe	happy
+
+statement ok
+INSERT INTO person VALUES ('Pedro', 'ok');
+
+statement ok
+INSERT INTO person VALUES ('Mark', 'sad');
+
+query TT
+select * from person where current_mood = 'sad'
+----
+Mark	sad
+
+query TT
+select * from person where current_mood > 'sad'
+----
+Moe	happy
+Pedro	ok
+
+statement ok
+CREATE TABLE pets (
+    name text,
+    current_mood mood
+);
+
+statement ok
+INSERT INTO pets VALUES ('Oogie', 'happy');
+
+statement ok
+INSERT INTO pets VALUES ('Anne', 'ok');
+
+#query TT
+#select person.name, pets.name from person inner join pets on  (person.current_mood = pets.current_mood)
+#----
+#Moe	happy
+#Pedro	ok

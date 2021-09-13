@@ -100,6 +100,9 @@ public:
 	DUCKDB_API static Value INTERVAL(int32_t months, int32_t days, int64_t micros);
 	DUCKDB_API static Value INTERVAL(interval_t interval);
 
+	//! Create a enum Value from a specified uint16_t
+	DUCKDB_API static Value ENUM(uint16_t value, const LogicalType &original_type);
+
 	// Decimal values
 	DUCKDB_API static Value DECIMAL(int16_t value, uint8_t width, uint8_t scale);
 	DUCKDB_API static Value DECIMAL(int32_t value, uint8_t width, uint8_t scale);

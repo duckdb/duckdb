@@ -83,7 +83,6 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Minimum());
-	case LogicalTypeId::ENUM:
 	case LogicalTypeId::USMALLINT:
 		return Value::USMALLINT(NumericLimits<uint16_t>::Minimum());
 	case LogicalTypeId::UINTEGER:
@@ -127,6 +126,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 		result.type_ = type;
 		return result;
 	}
+	case LogicalTypeId::ENUM:
+		return Value::ENUM(NumericLimits<uint16_t>::Minimum(), type);
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
@@ -149,7 +150,6 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Maximum());
-	case LogicalTypeId::ENUM:
 	case LogicalTypeId::USMALLINT:
 		return Value::USMALLINT(NumericLimits<uint16_t>::Maximum());
 	case LogicalTypeId::UINTEGER:
@@ -193,6 +193,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 		result.type_ = type;
 		return result;
 	}
+	case LogicalTypeId::ENUM:
+		return Value::ENUM(NumericLimits<uint16_t>::Maximum(), type);
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}
@@ -249,6 +251,15 @@ Value Value::UTINYINT(uint8_t value) {
 
 Value Value::USMALLINT(uint16_t value) {
 	Value result(LogicalType::USMALLINT);
+	result.value_.usmallint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::ENUM(uint16_t value, const LogicalType &original_type) {
+	auto values = EnumType::GetSharedTypeValues(original_type);
+	auto values_insert_order = EnumType::GetSharedValuesInsertOrder(original_type);
+	Value result(LogicalType::ENUM(EnumType::GetTypeName(original_type), values, values_insert_order));
 	result.value_.usmallint = value;
 	result.is_null = false;
 	return result;
@@ -1000,6 +1011,10 @@ string Value::ToString() const {
 		}
 		ret += "}";
 		return ret;
+	}
+	case LogicalTypeId::ENUM: {
+		auto values_insert_order = EnumType::GetValuesInsertOrder(type_);
+		return values_insert_order[value_.usmallint];
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());
