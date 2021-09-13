@@ -1126,6 +1126,7 @@ jobs:
     - name: Valgrind
       run: |
         cd tools/rpkg
+        export NOT_CRAN='false'
         R CMD check --use-valgrind -o /tmp duckdb_*.tar.gz
 
     - name: Print R log on failure
