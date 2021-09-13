@@ -25,6 +25,16 @@ static void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vect
 	result.Reference(info.value);
 }
 
+static string NormalizeSettingName(const string &name) {
+	if (CaseInsensitiveStringEquality()(name, "schema")) {
+		// The PG doc says:
+		// >  SET SCHEMA 'value' is an alias for SET search_path TO value.
+		return "search_path";
+	}
+
+	return name;
+}
+
 unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
 
@@ -40,7 +50,7 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 		throw ParserException("Key name for struct_extract needs to be neither NULL nor empty");
 	}
 
-	const auto &key = key_val.str_value;
+	const auto &key = NormalizeSettingName(key_val.str_value);
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
 		throw InvalidInputException("Variable '%s' was not SET in this context", key);

@@ -2,6 +2,7 @@
 #include "duckdb/catalog/catalog_set.hpp"
 
 #include "duckdb/catalog/catalog_entry/list.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -178,12 +179,10 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string
                                 bool if_exists, QueryErrorContext error_context) {
 	if (schema_name.empty()) {
 		// no schema provided: check the catalog search path in order
-		if (context.catalog_search_path.empty()) {
-			throw InternalException("Empty catalog search path");
-		}
 		schema_name = DEFAULT_SCHEMA;
-		for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
-			auto entry = GetEntry(context, type, context.catalog_search_path[i], name, true);
+		const auto &paths = context.catalog_search_path->Get();
+		for (idx_t i = 0; i < paths.size(); i++) {
+			auto entry = GetEntry(context, type, paths[i], name, true);
 			if (entry) {
 				return entry;
 			}
@@ -258,11 +257,12 @@ void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 		auto catalog_type = info->GetCatalogType();
 		// invalid schema: search the catalog search path
 		info->schema = DEFAULT_SCHEMA;
-		for (idx_t i = 0; i < context.catalog_search_path.size(); i++) {
-			auto entry = GetEntry(context, catalog_type, context.catalog_search_path[i], info->name, true);
+		const auto &paths = context.catalog_search_path->Get();
+		for (idx_t i = 0; i < paths.size(); i++) {
+			auto entry = GetEntry(context, catalog_type, paths[i], info->name, true);
 			if (entry) {
 				// entry exists in this schema: alter there
-				info->schema = context.catalog_search_path[i];
+				info->schema = paths[i];
 				break;
 			}
 		}

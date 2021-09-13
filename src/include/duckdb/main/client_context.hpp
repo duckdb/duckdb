@@ -28,6 +28,7 @@
 namespace duckdb {
 class Appender;
 class Catalog;
+class CatalogSearchPath;
 class ChunkCollection;
 class DatabaseInstance;
 class FileOpener;
@@ -99,8 +100,7 @@ public:
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
-	//! The schema search path, in order by which entries are searched if no schema entry is provided
-	vector<string> catalog_search_path = {TEMP_SCHEMA, DEFAULT_SCHEMA, "pg_catalog"};
+	const unique_ptr<CatalogSearchPath> catalog_search_path;
 
 	unique_ptr<FileOpener> file_opener;
 

@@ -1,0 +1,97 @@
+# name: test/sql/catalog/test_set_search_path.test
+# description: Default schema name changes
+# group: [catalog]
+
+# create a couple of schemas with a table each
+statement ok
+CREATE SCHEMA test;
+
+statement ok
+CREATE TABLE test.hello(i INTEGER);
+
+statement ok
+CREATE SCHEMA test2;
+
+statement ok
+CREATE SCHEMA test3;
+
+statement ok
+CREATE TABLE test2.bye(i INTEGER);
+
+# Setting the default value.
+statement ok
+SET SEARCH_PATH = 'test';
+
+statement ok
+SET SEARCH_PATH = 'test,test2';
+
+statement ok
+SET SEARCH_PATH = '"test","test2"';
+
+statement ok
+SET SEARCH_PATH = '"test","test2"';
+
+statement error
+SET SEARCH_PATH = 'does_not_exist';
+
+# Setting the default value through 'schema'
+
+statement ok
+SET SCHEMA = 'test';
+
+statement error
+SET SCHEMA = 'test,test2';
+
+statement error
+SET SCHEMA = 'does_not_exist';
+
+# Reading out to see how aliasing works.
+
+statement ok
+SET SEARCH_PATH = 'test,test2';
+
+statement error
+SET SEARCH_PATH = '"invalid quoted string list';
+
+query I
+SELECT CURRENT_SETTING('search_path');
+----
+test,test2
+
+query I
+SELECT CURRENT_SETTING('schema');
+----
+test,test2
+
+statement ok
+SET SCHEMA = 'test';
+
+query I
+SELECT CURRENT_SETTING('search_path');
+----
+test
+
+query I
+SELECT CURRENT_SETTING('schema');
+----
+test
+
+# Case insensitivity
+
+statement ok
+SET schema = 'test2';
+
+query I
+SELECT CURRENT_SETTING('search_path');
+----
+test2
+
+statement ok
+SET search_path = 'test3';
+
+query I
+SELECT CURRENT_SETTING('search_path');
+----
+test3
+
+# TODO(omo): Test side effects here.
