@@ -15,5 +15,4 @@
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/parser/expression/table_star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"

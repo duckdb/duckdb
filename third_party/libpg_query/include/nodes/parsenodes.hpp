@@ -192,8 +192,8 @@ typedef struct PGTypeName {
  */
 typedef struct PGColumnRef {
 	PGNodeTag type;
-	PGList *fields; /* field names (PGValue strings) or PGAStar */
-	int location;   /* token location, or -1 if unknown */
+	PGList *fields;       /* field names (PGValue strings) or PGAStar */
+	int location;         /* token location, or -1 if unknown */
 } PGColumnRef;
 
 /*
@@ -303,6 +303,9 @@ typedef struct PGFuncCall {
  */
 typedef struct PGAStar {
 	PGNodeTag type;
+	char *relation;       /* relation name (optional) */
+	PGList *except_list;  /* optional: EXCLUDE list */
+	PGList *replace_list; /* optional: REPLACE list */
 } PGAStar;
 
 /*

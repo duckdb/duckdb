@@ -163,7 +163,6 @@ enum class ExpressionClass : uint8_t {
 	FUNCTION = 9,
 	OPERATOR = 10,
 	STAR = 11,
-	TABLE_STAR = 12,
 	SUBQUERY = 13,
 	WINDOW = 14,
 	PARAMETER = 15,

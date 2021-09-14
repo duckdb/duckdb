@@ -26,6 +26,8 @@ class Binder;
 class LogicalGet;
 class BoundQueryNode;
 
+class StarExpression;
+
 struct UsingColumnSet {
 	string primary_binding;
 	unordered_set<string> bindings;
@@ -59,8 +61,13 @@ public:
 	//! Generate column expressions for all columns that are present in the
 	//! referenced tables. This is used to resolve the * expression in a
 	//! selection list.
-	void GenerateAllColumnExpressions(vector<unique_ptr<ParsedExpression>> &new_select_list,
-	                                  const string &relation_name = "");
+	void GenerateAllColumnExpressions(StarExpression &expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
+	//! Check if the given (binding, column_name) is in the exclusion/replacement lists.
+	//! Returns true if it is in one of these lists, and should therefore be skipped.
+	bool CheckExclusionList(StarExpression &expr, Binding *binding, const string &column_name,
+	                        vector<unique_ptr<ParsedExpression>> &new_select_list,
+	                        case_insensitive_set_t &excluded_columns);
+
 	const vector<std::pair<string, Binding *>> &GetBindingsList() {
 		return bindings_list;
 	}
