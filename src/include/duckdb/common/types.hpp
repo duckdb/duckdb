@@ -474,7 +474,7 @@ public:
 	DUCKDB_API template <class T>  static LogicalType ENUM(const string &enum_name, shared_ptr<unordered_map<string, T>> enum_values,
 	                      shared_ptr<vector<string>> values_insert_order){
 	    throw std::runtime_error("Invalid Physical type for ENUM");
-	}; // NOLINT
+	} // NOLINT
 	DUCKDB_API static LogicalType USER(string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
