@@ -22192,7 +22192,7 @@ yyreduce:
 
   case 996:
 #line 3197 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.list) = list_make1((yyvsp[(2) - (2)].str)); ;}
+    { (yyval.list) = list_make1(makeString((yyvsp[(2) - (2)].str))); ;}
     break;
 
   case 997:
@@ -22207,7 +22207,7 @@ yyreduce:
 
   case 999:
 #line 3204 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.list) = list_make2((yyvsp[(1) - (3)].node), (yyvsp[(3) - (3)].str)); ;}
+    { (yyval.list) = list_make2((yyvsp[(1) - (3)].node), makeString((yyvsp[(3) - (3)].str))); ;}
     break;
 
   case 1000:

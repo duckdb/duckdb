@@ -3194,14 +3194,14 @@ target_el:	a_expr AS ColLabelOrString
 		;
 
 except_list: EXCLUDE '(' name_list ')'					{ $$ = $3; }
-			| EXCLUDE ColId								{ $$ = list_make1($2); }
+			| EXCLUDE ColId								{ $$ = list_make1(makeString($2)); }
 		;
 
 opt_except_list: except_list						{ $$ = $1; }
 			| /*EMPTY*/								{ $$ = NULL; }
 		;
 
-replace_list_el: a_expr AS ColId					{ $$ = list_make2($1, $3); }
+replace_list_el: a_expr AS ColId					{ $$ = list_make2($1, makeString($3)); }
 		;
 
 replace_list:

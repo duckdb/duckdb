@@ -25,8 +25,9 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			D_ASSERT(list->length == 2);
 			auto replace_expression =
 			    TransformExpression((duckdb_libpgquery::PGNode *)list->head->data.ptr_value, depth + 1);
-			auto value = (char *)list->tail->data.ptr_value;
-			string exclude_entry = value;
+			auto value = (duckdb_libpgquery::PGValue *)list->tail->data.ptr_value;
+			D_ASSERT(value->type == duckdb_libpgquery::T_PGString);
+			string exclude_entry = value->val.str;
 			if (result->replace_list.find(exclude_entry) != result->replace_list.end()) {
 				throw ParserException("Duplicate entry \"%s\" in REPLACE list", exclude_entry);
 			}
