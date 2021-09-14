@@ -288,15 +288,6 @@ Value Value::USMALLINT(uint16_t value) {
 	return result;
 }
 
-template <class T> Value Value::ENUM(T value, const LogicalType &original_type) {
-	auto values = EnumType::GetSharedTypeValues<T>(original_type);
-	auto values_insert_order = EnumType::GetSharedValuesInsertOrder(original_type);
-	Value result(LogicalType::ENUM(EnumType::GetTypeName(original_type), values, values_insert_order));
-	result.value_.usmallint = value;
-	result.is_null = false;
-	return result;
-}
-
 Value Value::UINTEGER(uint32_t value) {
 	Value result(LogicalType::UINTEGER);
 	result.value_.uinteger = value;

@@ -20,7 +20,7 @@ class Deserializer;
 class EnumCatalogEntry : public StandardEntry {
 public:
 	//! Create a real EnumCatalogEntry and initialize storage for it
-	 EnumCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateEnumInfo *info);
+	EnumCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateEnumInfo *info);
 
 	vector<string> values_insert_order;
 

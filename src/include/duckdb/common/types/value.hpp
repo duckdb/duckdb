@@ -101,7 +101,15 @@ public:
 	DUCKDB_API static Value INTERVAL(interval_t interval);
 
 	//! Create a enum Value from a specified uint value
-	DUCKDB_API template <class T> static Value ENUM(T value, const LogicalType &original_type);
+	DUCKDB_API template <class T>
+	static Value ENUM(T value, const LogicalType &original_type) {
+		auto values = EnumType::GetSharedTypeValues<T>(original_type);
+		auto values_insert_order = EnumType::GetSharedValuesInsertOrder(original_type);
+		Value result(LogicalType::ENUM(EnumType::GetTypeName(original_type), values, values_insert_order));
+		result.value_.usmallint = value;
+		result.is_null = false;
+		return result;
+	}
 
 	// Decimal values
 	DUCKDB_API static Value DECIMAL(int16_t value, uint8_t width, uint8_t scale);

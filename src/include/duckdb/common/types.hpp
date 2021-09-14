@@ -11,9 +11,9 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/single_thread_ptr.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
@@ -371,6 +371,8 @@ struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	DUCKDB_API LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info);
+	DUCKDB_API LogicalType(LogicalTypeId id,PhysicalType internal_type, shared_ptr<ExtraTypeInfo> type_info);
+
 	DUCKDB_API LogicalType(const LogicalType &other) :
 		id_(other.id_), physical_type_(other.physical_type_), type_info_(other.type_info_) {}
 
@@ -469,8 +471,10 @@ public:
 	DUCKDB_API static LogicalType LIST(LogicalType child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);       // NOLINT
-	template <class T> DUCKDB_API static LogicalType ENUM(const string &enum_name, shared_ptr<unordered_map<string, T>> enum_values,
-	                      shared_ptr<vector<string>> values_insert_order); // NOLINT
+	DUCKDB_API template <class T>  static LogicalType ENUM(const string &enum_name, shared_ptr<unordered_map<string, T>> enum_values,
+	                      shared_ptr<vector<string>> values_insert_order){
+	    throw std::runtime_error("Invalid Physical type for ENUM");
+	}; // NOLINT
 	DUCKDB_API static LogicalType USER(string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
@@ -479,6 +483,18 @@ public:
 	//! A list of ALL SQL types
 	DUCKDB_API static const vector<LogicalType> ALL_TYPES;
 };
+
+template <>
+LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint8_t>> enum_values,
+	                      shared_ptr<vector<string>> values_insert_order);
+
+template <>
+LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint16_t>> enum_values,
+	                      shared_ptr<vector<string>> values_insert_order);
+
+template <>
+LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint32_t>> enum_values,
+	                      shared_ptr<vector<string>> values_insert_order);
 
 struct DecimalType {
 	DUCKDB_API static uint8_t GetWidth(const LogicalType &type);
@@ -499,12 +515,30 @@ struct UserType{
 
 struct EnumType{
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
-	template <class T>  DUCKDB_API static const unordered_map<string,T> &GetTypeValues(const LogicalType &type);
+	DUCKDB_API template <class T> static const unordered_map<string,T> &GetTypeValues(const LogicalType &type);
 	DUCKDB_API static const vector<string> &GetValuesInsertOrder(const LogicalType &type);
-	template <class T>  DUCKDB_API static const shared_ptr<unordered_map<string, T>> GetSharedTypeValues(const LogicalType &type);
+	DUCKDB_API template <class T> static const shared_ptr<unordered_map<string, T>> GetSharedTypeValues(const LogicalType &type);
 	DUCKDB_API static const shared_ptr<vector<string>> GetSharedValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 };
+
+template <>
+const unordered_map<string,uint8_t> &EnumType::GetTypeValues(const LogicalType &type);
+
+template <>
+const unordered_map<string,uint16_t> &EnumType::GetTypeValues(const LogicalType &type);
+
+template <>
+const unordered_map<string,uint32_t> &EnumType::GetTypeValues(const LogicalType &type);
+
+template <>
+const shared_ptr<unordered_map<string, uint8_t>> EnumType::GetSharedTypeValues(const LogicalType &type);
+
+template <>
+const shared_ptr<unordered_map<string, uint16_t>> EnumType::GetSharedTypeValues(const LogicalType &type);
+
+template <>
+const shared_ptr<unordered_map<string, uint32_t>> EnumType::GetSharedTypeValues(const LogicalType &type);
 
 struct StructType {
 	DUCKDB_API static const child_list_t<LogicalType> &GetChildTypes(const LogicalType &type);
