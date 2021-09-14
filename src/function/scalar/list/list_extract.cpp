@@ -13,7 +13,8 @@
 namespace duckdb {
 
 template <class T, bool HEAP_REF = false, bool VALIDITY_ONLY = false>
-void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets_data, Vector &child_vector, idx_t list_size, Vector &result) {
+void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets_data, Vector &child_vector,
+                         idx_t list_size, Vector &result) {
 	VectorData child_data;
 	child_vector.Orrify(list_size, child_data);
 
@@ -67,7 +68,8 @@ void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
-static void ExecuteListExtractInternal(const idx_t count, VectorData &list, VectorData &offsets, Vector &child_vector, idx_t list_size, Vector &result) {
+static void ExecuteListExtractInternal(const idx_t count, VectorData &list, VectorData &offsets, Vector &child_vector,
+                                       idx_t list_size, Vector &result) {
 	D_ASSERT(child_vector.GetType() == result.GetType());
 	switch (result.GetType().id()) {
 	case LogicalTypeId::UTINYINT:
@@ -124,7 +126,7 @@ static void ExecuteListExtractInternal(const idx_t count, VectorData &list, Vect
 		auto &result_entries = StructVector::GetEntries(result);
 		D_ASSERT(entries.size() == result_entries.size());
 		// extract the child entries of the struct
-		for(idx_t i = 0; i < entries.size(); i++) {
+		for (idx_t i = 0; i < entries.size(); i++) {
 			ExecuteListExtractInternal(count, list, offsets, *entries[i], list_size, *result_entries[i]);
 		}
 		// extract the validity mask
@@ -152,7 +154,8 @@ static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, co
 
 	list.Orrify(count, list_data);
 	offsets.Orrify(count, offsets_data);
-	ExecuteListExtractInternal(count, list_data, offsets_data, ListVector::GetEntry(list), ListVector::GetListSize(list), result);
+	ExecuteListExtractInternal(count, list_data, offsets_data, ListVector::GetEntry(list),
+	                           ListVector::GetListSize(list), result);
 	result.Verify(count);
 }
 
