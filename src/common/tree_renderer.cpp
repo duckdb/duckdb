@@ -4,6 +4,8 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
@@ -344,9 +346,41 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string ex
 	return result;
 }
 
+class TreeChildrenIterator {
+public:
+	template<class T>
+	static bool HasChildren(const T &op) {
+		return !op.children.empty();
+	}
+	template<class T>
+	static void Iterate(const T &op, const std::function<void(const T &child)> &callback) {
+		for (auto &child : op.children) {
+			callback(*child);
+		}
+	}
+
+};
+template<>
+bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
+	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
+		return true;
+	}
+	return !op.children.empty();
+}
+template<>
+void TreeChildrenIterator::Iterate(const PhysicalOperator &op, const std::function<void(const PhysicalOperator &child)> &callback) {
+	for (auto &child : op.children) {
+		callback(*child);
+	}
+	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
+		auto &delim = (PhysicalDelimJoin &) op;
+		callback(*delim.join);
+	}
+}
+
 template <class T>
 static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
-	if (op.children.empty()) {
+	if (!TreeChildrenIterator::HasChildren(op)) {
 		width = 1;
 		height = 1;
 		return;
@@ -354,12 +388,12 @@ static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
 	width = 0;
 	height = 0;
 
-	for (auto &child : op.children) {
+	TreeChildrenIterator::Iterate<T>(op, [&](const T &child) {
 		idx_t child_width, child_height;
-		GetTreeWidthHeight<T>(*child, child_width, child_height);
+		GetTreeWidthHeight<T>(child, child_width, child_height);
 		width += child_width;
 		height = MaxValue<idx_t>(height, child_height);
-	}
+	});
 	height++;
 }
 
@@ -368,14 +402,14 @@ idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, i
 	auto node = TreeRenderer::CreateNode(op);
 	result.SetNode(x, y, move(node));
 
-	if (op.children.empty()) {
+	if (!TreeChildrenIterator::HasChildren(op)) {
 		return 1;
 	}
 	idx_t width = 0;
 	// render the children of this node
-	for (auto &child : op.children) {
-		width += CreateRenderTreeRecursive<T>(result, *child, x + width, y + 1);
-	}
+	TreeChildrenIterator::Iterate<T>(op, [&](const T &child) {
+		width += CreateRenderTreeRecursive<T>(result, child, x + width, y + 1);
+	});
 	return width;
 }
 

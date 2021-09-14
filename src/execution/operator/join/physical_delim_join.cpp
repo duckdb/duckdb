@@ -29,7 +29,6 @@ PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<Physi
 	auto cached_chunk_scan = make_unique<PhysicalChunkScan>(children[0]->GetTypes(), PhysicalOperatorType::CHUNK_SCAN,
 	                                                        estimated_cardinality);
 	join->children[0] = move(cached_chunk_scan);
-	throw InternalException("FIXME: delim join");
 }
 
 class DelimJoinGlobalState : public GlobalSinkState {
