@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/allocator.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/file_system.hpp"
@@ -93,7 +94,7 @@ public:
 	//! Whether or not object cache is used
 	bool object_cache_enable = false;
 	//! Database configuration variables as controlled by SET
-	unordered_map<std::string, Value> set_variables;
+	case_insensitive_map_t<Value> set_variables;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind

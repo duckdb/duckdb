@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/pair.hpp"
@@ -76,7 +77,7 @@ public:
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
 
-	unordered_map<string, Value> set_variables;
+	case_insensitive_map_t<Value> set_variables;
 
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
