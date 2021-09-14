@@ -198,8 +198,8 @@ enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };
 
 void LoadInterpretedBenchmarks() {
 	// load interpreted benchmarks
-	FileSystem fs;
-	listFiles(fs, "benchmark", [](string path) {
+	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	listFiles(*fs, "benchmark", [](string path) {
 		if (endsWith(path, ".benchmark")) {
 			new InterpretedBenchmark(path);
 		}
@@ -329,8 +329,7 @@ void print_error_message(const ConfigurationError &error) {
 }
 
 int main(int argc, char **argv) {
-	FileSystem fs;
-	fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
+	FileSystem::SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
 	// load interpreted benchmarks before doing anything else
 	LoadInterpretedBenchmarks();
 	parse_arguments(argc, argv);
