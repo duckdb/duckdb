@@ -12,21 +12,22 @@
 
 namespace duckdb {
 
-template <class T, bool HEAP_REF = false>
-void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &result) {
-	VectorData list_data, offsets_data, child_data;
+template <class T, bool HEAP_REF = false, bool VALIDITY_ONLY = false>
+void ListExtractTemplate(idx_t count, VectorData &list_data, VectorData &offsets_data, Vector &child_vector, idx_t list_size, Vector &result) {
+	VectorData child_data;
+	child_vector.Orrify(list_size, child_data);
 
-	list.Orrify(count, list_data);
-	offsets.Orrify(count, offsets_data);
+	T *result_data;
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<T>(result);
+	if (!VALIDITY_ONLY) {
+		result_data = FlatVector::GetData<T>(result);
+	}
 	auto &result_mask = FlatVector::Validity(result);
 
-	auto &vec = ListVector::GetEntry(list);
 	// heap-ref once
 	if (HEAP_REF) {
-		StringVector::AddHeapReference(result, vec);
+		StringVector::AddHeapReference(result, child_vector);
 	}
 
 	// this is lifted from ExecuteGenericLoop because we can't push the list child data into this otherwise
@@ -51,9 +52,10 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 				}
 				child_offset = list_entry.offset + offsets_entry;
 			}
-			vec.Orrify(ListVector::GetListSize(list), child_data);
 			if (child_data.validity.RowIsValid(child_offset)) {
-				result_data[i] = ((T *)child_data.data)[child_offset];
+				if (!VALIDITY_ONLY) {
+					result_data[i] = ((T *)child_data.data)[child_offset];
+				}
 			} else {
 				result_mask.SetInvalid(i);
 			}
@@ -65,74 +67,92 @@ void ListExtractTemplate(idx_t count, Vector &list, Vector &offsets, Vector &res
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 	}
 }
-
-static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
-	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
-
+static void ExecuteListExtractInternal(const idx_t count, VectorData &list, VectorData &offsets, Vector &child_vector, idx_t list_size, Vector &result) {
+	D_ASSERT(child_vector.GetType() == result.GetType());
 	switch (result.GetType().id()) {
 	case LogicalTypeId::UTINYINT:
-		ListExtractTemplate<uint8_t>(count, list, offsets, result);
+		ListExtractTemplate<uint8_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::TINYINT:
-		ListExtractTemplate<int8_t>(count, list, offsets, result);
+		ListExtractTemplate<int8_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::USMALLINT:
-		ListExtractTemplate<uint16_t>(count, list, offsets, result);
+		ListExtractTemplate<uint16_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::SMALLINT:
-		ListExtractTemplate<int16_t>(count, list, offsets, result);
+		ListExtractTemplate<int16_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::UINTEGER:
-		ListExtractTemplate<uint32_t>(count, list, offsets, result);
+		ListExtractTemplate<uint32_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::INTEGER:
-		ListExtractTemplate<int32_t>(count, list, offsets, result);
+		ListExtractTemplate<int32_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::UBIGINT:
-		ListExtractTemplate<uint64_t>(count, list, offsets, result);
+		ListExtractTemplate<uint64_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::BIGINT:
-		ListExtractTemplate<int64_t>(count, list, offsets, result);
+		ListExtractTemplate<int64_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::HUGEINT:
-		ListExtractTemplate<hugeint_t>(count, list, offsets, result);
+		ListExtractTemplate<hugeint_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::FLOAT:
-		ListExtractTemplate<float>(count, list, offsets, result);
+		ListExtractTemplate<float>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::DOUBLE:
-		ListExtractTemplate<double>(count, list, offsets, result);
+		ListExtractTemplate<double>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::DATE:
-		ListExtractTemplate<date_t>(count, list, offsets, result);
+		ListExtractTemplate<date_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::TIME:
-		ListExtractTemplate<dtime_t>(count, list, offsets, result);
+		ListExtractTemplate<dtime_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::TIMESTAMP:
-		ListExtractTemplate<timestamp_t>(count, list, offsets, result);
+		ListExtractTemplate<timestamp_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		ListExtractTemplate<string_t, true>(count, list, offsets, result);
+		ListExtractTemplate<string_t, true>(count, list, offsets, child_vector, list_size, result);
 		break;
 	case LogicalTypeId::SQLNULL:
 		result.Reference(Value());
 		break;
+	case LogicalTypeId::STRUCT: {
+		auto &entries = StructVector::GetEntries(child_vector);
+		auto &result_entries = StructVector::GetEntries(result);
+		D_ASSERT(entries.size() == result_entries.size());
+		// extract the child entries of the struct
+		for(idx_t i = 0; i < entries.size(); i++) {
+			ExecuteListExtractInternal(count, list, offsets, *entries[i], list_size, *result_entries[i]);
+		}
+		// extract the validity mask
+		ListExtractTemplate<bool, false, true>(count, list, offsets, child_vector, list_size, result);
+		break;
+	}
 	case LogicalTypeId::LIST: {
 		// nested list: we have to reference the child
-		auto &child_list = ListVector::GetEntry(list);
-		auto &child_child_list = ListVector::GetEntry(child_list);
+		auto &child_child_list = ListVector::GetEntry(child_vector);
 
 		ListVector::GetEntry(result).Reference(child_child_list);
-		ListVector::SetListSize(result, ListVector::GetListSize(child_list));
-		ListExtractTemplate<list_entry_t>(count, list, offsets, result);
+		ListVector::SetListSize(result, ListVector::GetListSize(child_vector));
+		ListExtractTemplate<list_entry_t>(count, list, offsets, child_vector, list_size, result);
 		break;
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for LIST_EXTRACT");
 	}
+}
 
+static void ExecuteListExtract(Vector &result, Vector &list, Vector &offsets, const idx_t count) {
+	D_ASSERT(list.GetType().id() == LogicalTypeId::LIST);
+	VectorData list_data;
+	VectorData offsets_data;
+
+	list.Orrify(count, list_data);
+	offsets.Orrify(count, offsets_data);
+	ExecuteListExtractInternal(count, list_data, offsets_data, ListVector::GetEntry(list), ListVector::GetListSize(list), result);
 	result.Verify(count);
 }
 
