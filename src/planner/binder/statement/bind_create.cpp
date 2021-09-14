@@ -22,6 +22,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/catalog/catalog_entry/enum_catalog_entry.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -112,6 +113,32 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindSchema(info);
 }
 
+
+
+template <class T> void FillEnumHashtable(vector<string> &catalog_values_insert_order, ColumnDefinition& column, const string& user_type_name){
+	auto values_insert_order = make_shared<vector<string>>();
+	*values_insert_order = catalog_values_insert_order;
+	auto enum_values = make_shared<unordered_map<string, T>>();
+	idx_t count = 0;
+	for (auto& value: catalog_values_insert_order){
+        (*enum_values)[value] = count++;
+	}
+	column.type = LogicalType::ENUM(user_type_name, enum_values, values_insert_order);
+}
+
+void CreateEnumType(EnumCatalogEntry * enum_catalog, ColumnDefinition& column, const string& user_type_name){
+	auto size = enum_catalog->values_insert_order.size();
+	if (size <= NumericLimits<uint8_t>::Maximum()) {
+		FillEnumHashtable<uint8_t>(enum_catalog->values_insert_order,column,user_type_name);
+	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+		FillEnumHashtable<uint16_t>(enum_catalog->values_insert_order,column,user_type_name);
+	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+		FillEnumHashtable<uint32_t>(enum_catalog->values_insert_order,column,user_type_name);
+	} else {
+		throw std::runtime_error("Enum size must be lower than " + std::to_string( NumericLimits<uint32_t>::Maximum()));
+	}
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -175,7 +202,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
-		// We first check if there are any user types, if yes we check to which custom types they refeer.
+		// We first check if there are any user types, if yes we check to which custom types they refer.
 		auto &create_table_info = (CreateTableInfo &)*stmt.info;
 		for (auto &column : create_table_info.columns) {
 			if (column.type.id() == LogicalTypeId::USER) {
@@ -185,11 +212,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				if (!enum_catalog) {
 					throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
 				}
-				auto values_insert_order = make_shared<vector<string>>();
-				*values_insert_order = enum_catalog->values_insert_order;
-				auto enum_values = make_shared<unordered_map<string, uint16_t>>();
-				*enum_values = enum_catalog->values;
-				column.type = LogicalType::ENUM(user_type_name, enum_values, values_insert_order);
+				CreateEnumType(enum_catalog,column,user_type_name);
+
 			}
 		}
 		auto bound_info = BindCreateTableInfo(move(stmt.info));

@@ -145,6 +145,18 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 		return VectorTryCastLoop<SRC, int64_t, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::UTINYINT:
 		return VectorTryCastLoop<SRC, uint8_t, duckdb::NumericTryCast>(source, result, count, error_message);
+	case LogicalTypeId::ENUM: {
+		switch (result.GetType().InternalType()) {
+		case PhysicalType::UINT8:
+			return VectorTryCastLoop<SRC, uint8_t, duckdb::NumericTryCast>(source, result, count, error_message);
+		case PhysicalType::UINT16:
+			return VectorTryCastLoop<SRC, uint16_t, duckdb::NumericTryCast>(source, result, count, error_message);
+		case PhysicalType::UINT32:
+			return VectorTryCastLoop<SRC, uint32_t, duckdb::NumericTryCast>(source, result, count, error_message);
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+	}
 	case LogicalTypeId::USMALLINT:
 		return VectorTryCastLoop<SRC, uint16_t, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::UINTEGER:
@@ -168,15 +180,16 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 	}
 }
 
+template <class T>
 bool TransformEnum(Vector &source, Vector &result, idx_t count) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
-	auto enum_values = EnumType::GetTypeValues(result.GetType());
+	auto enum_values = EnumType::GetTypeValues<T>(result.GetType());
 	auto enum_name = EnumType::GetTypeName(result.GetType());
 	switch (source.GetVectorType()) {
 	case VectorType::CONSTANT_VECTOR: {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		auto source_data = ConstantVector::GetData<string_t>(source);
-		auto result_data = ConstantVector::GetData<uint16_t>(result);
+		auto result_data = ConstantVector::GetData<T>(result);
 
 		if (ConstantVector::IsNull(source)) {
 			ConstantVector::SetNull(result, true);
@@ -221,8 +234,18 @@ static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t 
                                           string *error_message) {
 	// now switch on the result type
 	switch (result.GetType().id()) {
-	case LogicalTypeId::ENUM:
-		return TransformEnum(source, result, count);
+	case LogicalTypeId::ENUM: {
+		switch (result.GetType().InternalType()) {
+		case PhysicalType::UINT8:
+			return TransformEnum<uint8_t>(source, result, count);
+		case PhysicalType::UINT16:
+			return TransformEnum<uint16_t>(source, result, count);
+		case PhysicalType::UINT32:
+			return TransformEnum<uint32_t>(source, result, count);
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+	}
 	case LogicalTypeId::BOOLEAN:
 		return VectorTryCastStrictLoop<string_t, bool, duckdb::TryCast>(source, result, count, strict, error_message);
 	case LogicalTypeId::TINYINT:
@@ -597,6 +620,18 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 		return StructCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::LIST:
 		return ListCastSwitch(source, result, count, error_message);
+	case LogicalTypeId::ENUM: {
+		switch (result.GetType().InternalType()) {
+		case PhysicalType::UINT8:
+			return NumericCastSwitch<uint8_t>(source, result, count, error_message);
+		case PhysicalType::UINT16:
+			return NumericCastSwitch<uint16_t>(source, result, count, error_message);
+		case PhysicalType::UINT32:
+			return NumericCastSwitch<uint32_t>(source, result, count, error_message);
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+	}
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}

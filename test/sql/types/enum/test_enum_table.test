@@ -56,13 +56,13 @@ CREATE TABLE pets (
 );
 
 statement ok
-INSERT INTO pets VALUES ('Oogie', 'happy');
+INSERT INTO pets VALUES ('Anne', 'happy');
 
 statement ok
-INSERT INTO pets VALUES ('Anne', 'ok');
+INSERT INTO pets VALUES ('Oogie Boogie', 'ok');
 
-#query TT
-#select person.name, pets.name from person inner join pets on  (person.current_mood = pets.current_mood)
-#----
-#Moe	happy
-#Pedro	ok
+query TT
+select person.name, pets.name from person inner join pets on  (person.current_mood = pets.current_mood)
+----
+Moe	Anne
+Pedro	Oogie Boogie

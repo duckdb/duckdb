@@ -469,7 +469,7 @@ public:
 	DUCKDB_API static LogicalType LIST(LogicalType child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);       // NOLINT
-	DUCKDB_API static LogicalType ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint16_t>> enum_values,
+	template <class T> DUCKDB_API static LogicalType ENUM(const string &enum_name, shared_ptr<unordered_map<string, T>> enum_values,
 	                      shared_ptr<vector<string>> values_insert_order); // NOLINT
 	DUCKDB_API static LogicalType USER(string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
@@ -499,10 +499,11 @@ struct UserType{
 
 struct EnumType{
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
-	DUCKDB_API static const unordered_map<string,uint16_t> &GetTypeValues(const LogicalType &type);
+	template <class T>  DUCKDB_API static const unordered_map<string,T> &GetTypeValues(const LogicalType &type);
 	DUCKDB_API static const vector<string> &GetValuesInsertOrder(const LogicalType &type);
-	DUCKDB_API static const shared_ptr<unordered_map<string, uint16_t>> GetSharedTypeValues(const LogicalType &type);
+	template <class T>  DUCKDB_API static const shared_ptr<unordered_map<string, T>> GetSharedTypeValues(const LogicalType &type);
 	DUCKDB_API static const shared_ptr<vector<string>> GetSharedValuesInsertOrder(const LogicalType &type);
+	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 };
 
 struct StructType {

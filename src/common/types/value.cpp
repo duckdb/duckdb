@@ -126,8 +126,24 @@ Value Value::MinimumValue(const LogicalType &type) {
 		result.type_ = type;
 		return result;
 	}
-	case LogicalTypeId::ENUM:
-		return Value::ENUM(NumericLimits<uint16_t>::Minimum(), type);
+	case LogicalTypeId::ENUM: {
+		Value result;
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			result = Value::MinimumValue(LogicalType::UTINYINT);
+			break;
+		case PhysicalType::UINT16:
+			result = Value::MinimumValue(LogicalType::USMALLINT);
+			break;
+		case PhysicalType::UINT32:
+			result = Value::MinimumValue(LogicalType::UINTEGER);
+			break;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+		result.type_ = type;
+		return result;
+	}
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
@@ -193,8 +209,24 @@ Value Value::MaximumValue(const LogicalType &type) {
 		result.type_ = type;
 		return result;
 	}
-	case LogicalTypeId::ENUM:
-		return Value::ENUM(NumericLimits<uint16_t>::Maximum(), type);
+	case LogicalTypeId::ENUM: {
+		Value result;
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			result = Value::MaximumValue(LogicalType::UTINYINT);
+			break;
+		case PhysicalType::UINT16:
+			result = Value::MaximumValue(LogicalType::USMALLINT);
+			break;
+		case PhysicalType::UINT32:
+			result = Value::MaximumValue(LogicalType::UINTEGER);
+			break;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+		result.type_ = type;
+		return result;
+	}
 	default:
 		throw InvalidTypeException(type, "MaximumValue requires numeric type");
 	}
@@ -256,8 +288,8 @@ Value Value::USMALLINT(uint16_t value) {
 	return result;
 }
 
-Value Value::ENUM(uint16_t value, const LogicalType &original_type) {
-	auto values = EnumType::GetSharedTypeValues(original_type);
+template <class T> Value Value::ENUM(T value, const LogicalType &original_type) {
+	auto values = EnumType::GetSharedTypeValues<T>(original_type);
 	auto values_insert_order = EnumType::GetSharedValuesInsertOrder(original_type);
 	Value result(LogicalType::ENUM(EnumType::GetTypeName(original_type), values, values_insert_order));
 	result.value_.usmallint = value;
@@ -1014,7 +1046,16 @@ string Value::ToString() const {
 	}
 	case LogicalTypeId::ENUM: {
 		auto values_insert_order = EnumType::GetValuesInsertOrder(type_);
-		return values_insert_order[value_.usmallint];
+		switch (type_.InternalType()) {
+		case PhysicalType::UINT8:
+			return values_insert_order[value_.utinyint];
+		case PhysicalType::UINT16:
+			return values_insert_order[value_.usmallint];
+		case PhysicalType::UINT32:
+			return values_insert_order[value_.uinteger];
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());

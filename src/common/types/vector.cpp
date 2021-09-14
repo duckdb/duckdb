@@ -321,7 +321,6 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case LogicalTypeId::UTINYINT:
 		((uint8_t *)data)[index] = val.value_.utinyint;
 		break;
-	case LogicalTypeId::ENUM:
 	case LogicalTypeId::USMALLINT:
 		((uint16_t *)data)[index] = val.value_.usmallint;
 		break;
@@ -399,6 +398,22 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &entry = ((list_entry_t *)data)[index];
 		entry.length = val.list_value.size();
 		entry.offset = offset;
+		break;
+	}
+	case LogicalTypeId::ENUM: {
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			((uint8_t *)data)[index] = val.value_.utinyint;
+			break;
+		case PhysicalType::UINT16:
+			((uint16_t *)data)[index] = val.value_.usmallint;
+			break;
+		case PhysicalType::UINT32:
+			((uint32_t *)data)[index] = val.value_.uinteger;
+			break;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
 		break;
 	}
 	default:
@@ -480,8 +495,18 @@ Value Vector::GetValue(idx_t index) const {
 			throw InternalException("Widths bigger than 38 are not supported");
 		}
 	}
-	case LogicalTypeId::ENUM:
-		return Value::ENUM(((uint16_t *)data)[index], GetType());
+	case LogicalTypeId::ENUM: {
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			return Value::ENUM(((uint8_t *)data)[index], GetType());
+		case PhysicalType::UINT16:
+			return Value::ENUM(((uint16_t *)data)[index], GetType());
+		case PhysicalType::UINT32:
+			return Value::ENUM(((uint32_t *)data)[index], GetType());
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+	}
 	case LogicalTypeId::HASH:
 		return Value::HASH(((hash_t *)data)[index]);
 	case LogicalTypeId::POINTER:

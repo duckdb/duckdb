@@ -12,15 +12,15 @@ namespace duckdb {
 
 EnumCatalogEntry::EnumCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateEnumInfo *info)
     : StandardEntry(CatalogType::ENUM_ENTRY, schema, catalog, info->name) {
-	if (info->values.size() > NumericLimits<uint16_t>::Maximum()) {
-		throw NotImplementedException("We only support up to 65,535 values for ENUMs");
+	if (info->values.size() > NumericLimits<uint32_t>::Maximum()) {
+		throw NotImplementedException("We only support up to 4,294,967,295 values for ENUMs");
 	}
-	idx_t counter = 0;
+	unordered_set<string> values;
 	for (auto &value : info->values) {
 		if (values.find(value) != values.end()) {
 			throw std::runtime_error("Duplicate value violates ENUM's unique constraint");
 		}
-		values[value] = counter++;
+		values.insert(value);
 		values_insert_order.push_back(value);
 	}
 	this->temporary = info->temporary;
@@ -45,13 +45,10 @@ string EnumCatalogEntry::ToSQL() {
 	ss << "CREATE TYPE ";
 	ss << name;
 	ss << " AS ENUM ( ";
-	vector<string> string_values(values.size());
-	for (auto &value : values) {
-		string_values[value.second] = value.first;
-	}
-	for (idx_t i = 0; i < string_values.size(); i++) {
-		ss << "'" << string_values[i] << "'";
-		if (i != string_values.size() - 1) {
+
+	for (idx_t i = 0; i < values_insert_order.size(); i++) {
+		ss << "'" << values_insert_order[i] << "'";
+		if (i != values_insert_order.size() - 1) {
 			ss << ", ";
 		}
 	}

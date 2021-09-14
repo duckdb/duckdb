@@ -104,8 +104,21 @@ PhysicalType LogicalType::GetInternalType() {
 		// LCOV_EXCL_STOP
 	case LogicalTypeId::VALIDITY:
 		return PhysicalType::BIT;
-	case LogicalTypeId::ENUM:
-		return PhysicalType::UINT16;
+	case LogicalTypeId::ENUM: {
+		if (!type_info_) {
+			return PhysicalType::INVALID;
+		}
+		auto size = EnumType::GetSize(*this);
+		if (size <= NumericLimits<uint8_t>::Maximum()) {
+			return PhysicalType::UINT8;
+		} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+			return PhysicalType::UINT16;
+		} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+			return PhysicalType::UINT32;
+		} else {
+			throw std::runtime_error("Enum size must be lower than " + std::to_string( NumericLimits<uint32_t>::Maximum()));
+		}
+	}
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
@@ -963,15 +976,16 @@ LogicalType LogicalType::USER(string &user_type_name) {
 //===--------------------------------------------------------------------===//
 // Enum Type
 //===--------------------------------------------------------------------===//
+template <class T>
 struct EnumTypeInfo : public ExtraTypeInfo {
-	explicit EnumTypeInfo(string enum_name_p, shared_ptr<unordered_map<string, uint16_t>> values_p,
+	 explicit EnumTypeInfo(string enum_name_p, shared_ptr<unordered_map<string, T>> values_p,
 	                      shared_ptr<vector<string>> values_insert_order_p)
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)), values(std::move(values_p)),
 	      values_insert_order(std::move(values_insert_order_p)) {
 	}
 
 	string enum_name;
-	shared_ptr<unordered_map<string, uint16_t>> values;
+	shared_ptr<unordered_map<string, T>> values;
 	shared_ptr<vector<string>> values_insert_order;
 
 public:
@@ -1005,9 +1019,10 @@ public:
 	}
 };
 
-LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint16_t>> enum_values,
+template <class T>
+LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, T>> enum_values,
                               shared_ptr<vector<string>> values_insert_order) {
-	auto info = make_shared<EnumTypeInfo>(enum_name, enum_values, values_insert_order);
+	auto info = make_shared<EnumTypeInfo<T>>(enum_name, enum_values, values_insert_order);
 	return LogicalType(LogicalTypeId::ENUM, move(info));
 }
 
@@ -1015,35 +1030,83 @@ const string &EnumType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).enum_name;
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			return ((EnumTypeInfo<uint8_t>&)*info).enum_name;
+		case PhysicalType::UINT16:
+			return ((EnumTypeInfo<uint16_t>&)*info).enum_name;
+		case PhysicalType::UINT32:
+			return ((EnumTypeInfo<uint32_t>&)*info).enum_name;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+
 }
 
-const unordered_map<string, uint16_t> &EnumType::GetTypeValues(const LogicalType &type) {
+template <class T>
+const unordered_map<string, T> &EnumType::GetTypeValues(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return *((EnumTypeInfo &)*info).values;
+	return *((EnumTypeInfo<T> &)*info).values;
 }
 
 const vector<string> &EnumType::GetValuesInsertOrder(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return *((EnumTypeInfo &)*info).values_insert_order;
+			switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			return *((EnumTypeInfo<uint8_t> &)*info).values_insert_order;
+		case PhysicalType::UINT16:
+			return *((EnumTypeInfo<uint16_t> &)*info).values_insert_order;
+		case PhysicalType::UINT32:
+			return *((EnumTypeInfo<uint32_t> &)*info).values_insert_order;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+
 }
 
-const shared_ptr<unordered_map<string, uint16_t>> EnumType::GetSharedTypeValues(const LogicalType &type) {
+template <class T>
+const shared_ptr<unordered_map<string, T>> EnumType::GetSharedTypeValues(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).values;
+	return ((EnumTypeInfo<T> &)*info).values;
 }
 
 const shared_ptr<vector<string>> EnumType::GetSharedValuesInsertOrder(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
-	return ((EnumTypeInfo &)*info).values_insert_order;
+			switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			return ((EnumTypeInfo<uint8_t> &)*info).values_insert_order;
+		case PhysicalType::UINT16:
+			return ((EnumTypeInfo<uint16_t> &)*info).values_insert_order;
+		case PhysicalType::UINT32:
+			return ((EnumTypeInfo<uint32_t>&)*info).values_insert_order;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+}
+
+idx_t EnumType::GetSize(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+			switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			return ((EnumTypeInfo<uint8_t>&)*info).values_insert_order->size();
+		case PhysicalType::UINT16:
+			return ((EnumTypeInfo<uint16_t> &)*info).values_insert_order->size();
+		case PhysicalType::UINT32:
+			return ((EnumTypeInfo<uint32_t> &)*info).values_insert_order->size();
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+
 }
 
 //===--------------------------------------------------------------------===//
