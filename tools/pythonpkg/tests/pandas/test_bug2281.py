@@ -8,7 +8,7 @@ import io
 
 class TestPandasStringNull(object):
     def test_pandas_string_null(self, duckdb_cursor):
-        csv = '''what,is_control,is_test
+        csv = u'''what,is_control,is_test
 ,0,0
 foo,1,0'''
         df = pd.read_csv(io.StringIO(csv))
