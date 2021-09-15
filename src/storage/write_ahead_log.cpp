@@ -8,6 +8,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 #include <cstring>
+#include "duckdb/catalog/catalog_entry/enum_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -136,6 +137,26 @@ void WriteAheadLog::WriteDropMacro(MacroCatalogEntry *entry) {
 		return;
 	}
 	writer->Write<WALType>(WALType::DROP_MACRO);
+	writer->WriteString(entry->schema->name);
+	writer->WriteString(entry->name);
+}
+
+//===--------------------------------------------------------------------===//
+// ENUM'S
+//===--------------------------------------------------------------------===//
+void WriteAheadLog::WriteCreateEnum(EnumCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::CREATE_ENUM);
+	entry->Serialize(*writer);
+}
+
+void WriteAheadLog::WriteDropEnum(EnumCatalogEntry *entry) {
+	if (skip_writing) {
+		return;
+	}
+	writer->Write<WALType>(WALType::DROP_ENUM);
 	writer->WriteString(entry->schema->name);
 	writer->WriteString(entry->name);
 }

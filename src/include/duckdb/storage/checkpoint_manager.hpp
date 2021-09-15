@@ -24,6 +24,7 @@ class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
+class EnumCatalogEntry;
 
 struct PartialColumnSegment {
 	ColumnSegment *segment;
@@ -79,12 +80,14 @@ private:
 	void WriteTable(TableCatalogEntry &table);
 	void WriteView(ViewCatalogEntry &table);
 	void WriteSequence(SequenceCatalogEntry &table);
+	void WriteEnum(EnumCatalogEntry &table);
 	void WriteMacro(MacroCatalogEntry &table);
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);
 	void ReadView(ClientContext &context, MetaBlockReader &reader);
 	void ReadSequence(ClientContext &context, MetaBlockReader &reader);
+	void ReadEnum(ClientContext &context, MetaBlockReader &reader);
 	void ReadMacro(ClientContext &context, MetaBlockReader &reader);
 
 private:

@@ -12,6 +12,7 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/enum_catalog_entry.hpp"
 
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
@@ -149,6 +150,12 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		sequences.push_back((SequenceCatalogEntry *)entry);
 	});
 
+	vector<EnumCatalogEntry *> enums;
+	schema.Scan(CatalogType::ENUM_ENTRY, [&](CatalogEntry *entry) {
+		D_ASSERT(!entry->internal);
+		enums.push_back((EnumCatalogEntry *)entry);
+	});
+
 	vector<MacroCatalogEntry *> macros;
 	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
@@ -174,6 +181,12 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	for (auto &view : views) {
 		WriteView(*view);
 	}
+	// write the enums
+	metadata_writer->Write<uint32_t>(enums.size());
+	for (auto &enum_value : enums) {
+		WriteEnum(*enum_value);
+	}
+
 	// finally write the macro's
 	metadata_writer->Write<uint32_t>(macros.size());
 	for (auto &macro : macros) {
@@ -205,6 +218,13 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	for (uint32_t i = 0; i < view_count; i++) {
 		ReadView(context, reader);
 	}
+
+	// now read the enums
+	uint32_t enum_count = reader.Read<uint32_t>();
+	for (uint32_t i = 0; i < enum_count; i++) {
+		ReadEnum(context, reader);
+	}
+
 	// finally read the macro's
 	uint32_t macro_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < macro_count; i++) {
@@ -238,6 +258,20 @@ void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &re
 
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateSequence(context, info.get());
+}
+
+//===--------------------------------------------------------------------===//
+// Sequences
+//===--------------------------------------------------------------------===//
+void CheckpointManager::WriteEnum(EnumCatalogEntry &seq) {
+	seq.Serialize(*metadata_writer);
+}
+
+void CheckpointManager::ReadEnum(ClientContext &context, MetaBlockReader &reader) {
+	auto info = EnumCatalogEntry::Deserialize(reader);
+
+	auto &catalog = Catalog::GetCatalog(db);
+	catalog.CreateEnum(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//

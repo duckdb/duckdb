@@ -66,3 +66,30 @@ select person.name, pets.name from person inner join pets on  (person.current_mo
 ----
 Moe	Anne
 Pedro	Oogie Boogie
+
+statement ok
+DROP TYPE mood;
+
+# Tables should still function
+
+query TT
+select person.name, pets.name from person inner join pets on  (person.current_mood = pets.current_mood)
+----
+Moe	Anne
+Pedro	Oogie Boogie
+
+# Creating a new table should not
+statement error
+CREATE TABLE aliens (
+    name text,
+    current_mood mood
+);
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE aliens (
+    name text,
+    current_mood mood
+);

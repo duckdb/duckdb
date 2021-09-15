@@ -1,18 +1,19 @@
 #include "duckdb/transaction/commit_state.hpp"
+
+#include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/serializer/buffered_deserializer.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/table/chunk_info.hpp"
+#include "duckdb/storage/table/column_data.hpp"
+#include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
 
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/storage/write_ahead_log.hpp"
-#include "duckdb/catalog/catalog_set.hpp"
-#include "duckdb/common/serializer/buffered_deserializer.hpp"
-#include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/storage/table/update_segment.hpp"
-#include "duckdb/storage/table/column_data.hpp"
-#include "duckdb/storage/table/row_group.hpp"
-
-#include "duckdb/storage/table/chunk_info.hpp"
+#include "duckdb/catalog/catalog_entry/enum_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -80,6 +81,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::MACRO_ENTRY:
 		log->WriteCreateMacro((MacroCatalogEntry *)parent);
 		break;
+	case CatalogType::ENUM_ENTRY:
+		log->WriteCreateEnum((EnumCatalogEntry *)parent);
+		break;
 	case CatalogType::DELETED_ENTRY:
 		switch (entry->type) {
 		case CatalogType::TABLE_ENTRY: {
@@ -99,6 +103,9 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			break;
 		case CatalogType::MACRO_ENTRY:
 			log->WriteDropMacro((MacroCatalogEntry *)entry);
+			break;
+		case CatalogType::ENUM_ENTRY:
+			log->WriteDropEnum((EnumCatalogEntry *)parent);
 			break;
 		case CatalogType::INDEX_ENTRY:
 		case CatalogType::PREPARED_STATEMENT:

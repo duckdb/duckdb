@@ -29,14 +29,14 @@ EnumCatalogEntry::EnumCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 void EnumCatalogEntry::Serialize(Serializer &serializer) {
 	serializer.WriteString(schema->name);
 	serializer.WriteString(name);
-	serializer.Write<vector<string>>(values_insert_order);
+	serializer.WriteStringVector(values_insert_order);
 }
 
 unique_ptr<CreateEnumInfo> EnumCatalogEntry::Deserialize(Deserializer &source) {
 	auto info = make_unique<CreateEnumInfo>();
 	info->schema = source.Read<string>();
 	info->name = source.Read<string>();
-	info->values = source.Read<vector<string>>();
+	source.ReadStringVector(info->values);
 	return info;
 }
 

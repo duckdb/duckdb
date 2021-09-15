@@ -26,6 +26,7 @@ class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class MacroCatalogEntry;
 class ViewCatalogEntry;
+class EnumCatalogEntry;
 class TableCatalogEntry;
 class Transaction;
 class TransactionManager;
@@ -70,6 +71,8 @@ public:
 	void WriteCreateMacro(MacroCatalogEntry *entry);
 	void WriteDropMacro(MacroCatalogEntry *entry);
 
+	void WriteCreateEnum(EnumCatalogEntry *entry);
+	void WriteDropEnum(EnumCatalogEntry *entry);
 	//! Sets the table used for subsequent insert/delete/update commands
 	void WriteSetTable(string &schema, string &table);
 
