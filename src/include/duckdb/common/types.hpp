@@ -470,7 +470,7 @@ public:
 	DUCKDB_API static LogicalType LIST(LogicalType child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);       // NOLINT
-	DUCKDB_API template <class T>  static LogicalType ENUM(const string &enum_name, const shared_ptr<unordered_map<string, T>> &enum_values,
+	template <class T> DUCKDB_API static LogicalType ENUM(const string &enum_name, const shared_ptr<unordered_map<string, T>> &enum_values,
                               const shared_ptr<vector<string>> &values_insert_order){
 	    throw std::runtime_error("Invalid Physical type for ENUM");
 	} // NOLINT
@@ -514,9 +514,9 @@ struct UserType{
 
 struct EnumType{
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
-	DUCKDB_API template <class T> static const unordered_map<string,T> &GetTypeValues(const LogicalType &type);
+	template <class T> DUCKDB_API  static const unordered_map<string,T> &GetTypeValues(const LogicalType &type);
 	DUCKDB_API static const vector<string> &GetValuesInsertOrder(const LogicalType &type);
-	DUCKDB_API template <class T> static const shared_ptr<unordered_map<string, T>> GetSharedTypeValues(const LogicalType &type);
+	template <class T> DUCKDB_API  static const shared_ptr<unordered_map<string, T>> GetSharedTypeValues(const LogicalType &type);
 	DUCKDB_API static const shared_ptr<vector<string>> GetSharedValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 };
