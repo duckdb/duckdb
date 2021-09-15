@@ -105,7 +105,7 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 			log->WriteDropMacro((MacroCatalogEntry *)entry);
 			break;
 		case CatalogType::ENUM_ENTRY:
-			log->WriteDropEnum((EnumCatalogEntry *)parent);
+			log->WriteDropEnum((EnumCatalogEntry *)entry);
 			break;
 		case CatalogType::INDEX_ENTRY:
 		case CatalogType::PREPARED_STATEMENT:
