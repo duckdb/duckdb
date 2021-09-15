@@ -177,19 +177,22 @@ void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntr
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, string schema_name, const string &name,
                                 bool if_exists, QueryErrorContext error_context) {
-	if (schema_name.empty()) {
-		// no schema provided: check the catalog search path in order
-		schema_name = DEFAULT_SCHEMA;
-		const auto &paths = context.catalog_search_path->Get();
-		for (idx_t i = 0; i < paths.size(); i++) {
-			auto entry = GetEntry(context, type, paths[i], name, true);
-			if (entry) {
-				return entry;
-			}
+	if (!schema_name.empty()) {
+		auto schema = GetSchema(context, schema_name, error_context);
+		return schema->GetEntry(context, type, name, if_exists, error_context);
+	}
+
+	const auto &paths = context.catalog_search_path->Get();
+	for (const auto &path : paths) {
+		auto entry = GetEntry(context, type, path, name, true);
+		if (entry) {
+			return entry;
 		}
 	}
-	auto schema = GetSchema(context, schema_name, error_context);
-	return schema->GetEntry(context, type, name, if_exists, error_context);
+
+	// TODO: Support "did you mean"
+	throw CatalogException(
+	    error_context.FormatError("%s is not found in the search path %s", name, StringUtil::Join(paths, ",")));
 }
 
 template <>
@@ -258,11 +261,11 @@ void Catalog::Alter(ClientContext &context, AlterInfo *info) {
 		// invalid schema: search the catalog search path
 		info->schema = DEFAULT_SCHEMA;
 		const auto &paths = context.catalog_search_path->Get();
-		for (idx_t i = 0; i < paths.size(); i++) {
-			auto entry = GetEntry(context, catalog_type, paths[i], info->name, true);
+		for (const auto &path : paths) {
+			auto entry = GetEntry(context, catalog_type, path, info->name, true);
 			if (entry) {
 				// entry exists in this schema: alter there
-				info->schema = paths[i];
+				info->schema = path;
 				break;
 			}
 		}

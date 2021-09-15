@@ -21,6 +21,13 @@ const vector<string> &CatalogSearchPath::Get() {
 	return paths;
 }
 
+const string &CatalogSearchPath::GetDefault() {
+	const auto &paths = Get();
+	D_ASSERT(paths.size() >= 2);
+	D_ASSERT(paths[0] == TEMP_SCHEMA);
+	return paths[1];
+}
+
 vector<string> CatalogSearchPath::ParsePaths(const string &value) {
 	vector<string> paths;
 	paths.emplace_back(TEMP_SCHEMA);

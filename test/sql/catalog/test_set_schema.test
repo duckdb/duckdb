@@ -1,0 +1,164 @@
+# name: test/sql/catalog/test_set_schema.test
+# description: Default schema name changes
+# group: [catalog]
+
+# This test focuses on actual name lookup.
+# See also test_set_search_path.test
+
+statement ok
+CREATE SCHEMA test;
+
+statement ok
+CREATE SCHEMA out_of_path;
+
+statement ok
+SET SESSION schema = 'test';
+
+# Testing CREATE TABLE
+
+statement ok
+CREATE TABLE main.main_table(j INTEGER);
+
+statement ok
+CREATE TABLE test_table(i INTEGER);
+
+statement ok
+CREATE TABLE out_of_path.oop_table(k INTEGER);
+
+statement ok
+SELECT * FROM test.test_table;
+
+statement ok
+SELECT * FROM test_table;
+
+statement ok
+SELECT * FROM main_table;
+
+statement ok
+SELECT * FROM out_of_path.oop_table;
+
+statement error
+SELECT * FROM out_of_path.test_table;
+
+statement error
+SELECT * FROM main.test_table;
+
+# Testing INSERT, UPDATE and DELETE
+
+statement error
+INSERT INTO main.test_table (i) VALUES (1);
+
+statement ok
+INSERT INTO test_table (i) VALUES (1);
+
+statement ok
+INSERT INTO test.test_table (i) VALUES (2), (3);
+
+statement ok
+INSERT INTO main_table (j) VALUES (4);
+
+statement ok
+INSERT INTO main.main_table (j) VALUES (5), (6);
+
+statement error
+INSERT INTO oop_table (k) VALUES (7);
+
+statement ok
+INSERT INTO out_of_path.oop_table (k) VALUES (8), (9);
+
+statement error
+DELETE FROM main.test_table WHERE i=3;
+
+statement error
+DELETE FROM test.main_table WHERE i=5;
+
+statement error
+DELETE FROM oop_table WHERE k=8;
+
+statement ok
+DELETE FROM test.test_table WHERE i=1;
+
+statement ok
+DELETE FROM test_table WHERE i=2;
+
+statement ok
+DELETE FROM main.main_table WHERE j=4;
+
+statement ok
+DELETE FROM main_table WHERE j=5;
+
+statement ok
+DELETE FROM out_of_path.oop_table WHERE k=8;
+
+query I
+SELECT i FROM test_table;
+----
+3
+
+query I
+SELECT j FROM main.main_table;
+----
+6
+
+query I
+SELECT k FROM out_of_path.oop_table;
+----
+9
+
+statement error
+UPDATE main.test_table SET i=10 WHERE i=1;
+
+statement ok
+UPDATE test_table SET i=30 WHERE i=3;
+
+statement ok
+UPDATE test.test_table SET i=300 WHERE i=30;
+
+statement ok
+UPDATE main_table SET j=60 WHERE j=6;
+
+statement ok
+UPDATE main.main_table SET j=600 WHERE j=60;
+
+query I
+SELECT i FROM test_table;
+----
+300
+
+query I
+SELECT j FROM main_table;
+----
+600
+
+# Testing temp table.
+# test_temp_table should *not* be created in the test schema, but in the temp schema
+
+statement ok
+CREATE TEMP TABLE test_temp_table(i INTEGER);
+
+statement error
+SELECT * FROM main.test_temp_table;
+
+statement error
+SELECT * FROM test.test_temp_table;
+
+statement ok
+SELECT * FROM test_temp_table;
+
+# Testing functions and aggregates
+query I
+SELECT abs(i) FROM test_table;
+----
+300
+
+# aggregates should work as expected
+query I
+SELECT sum(i) FROM test_table;
+----
+300
+
+# TODO(omo):
+# - Test VIEW
+# - Test MACRO
+# - Test SEQUENCE
+# - Test ALTER and DROP

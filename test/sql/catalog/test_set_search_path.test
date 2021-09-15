@@ -1,22 +1,42 @@
 # name: test/sql/catalog/test_set_search_path.test
-# description: Default schema name changes
+# description: SET schema and SET search_path
 # group: [catalog]
 
 # create a couple of schemas with a table each
 statement ok
+CREATE TABLE main_table(i INTEGER);
+
+statement ok
 CREATE SCHEMA test;
 
 statement ok
-CREATE TABLE test.hello(i INTEGER);
+CREATE TABLE test.test_table(i INTEGER);
 
 statement ok
 CREATE SCHEMA test2;
 
 statement ok
+CREATE TABLE test2.bye(i INTEGER);
+CREATE TABLE test2.test2_table(i INTEGER);
+
+statement ok
 CREATE SCHEMA test3;
 
 statement ok
-CREATE TABLE test2.bye(i INTEGER);
+CREATE SCHEMA test4;
+
+statement ok
+CREATE SCHEMA test5;
+
+statement ok
+CREATE TABLE test5.test5_table(i INTEGER);
+
+# Reading the config - It should be empty for now.
+statement error
+SELECT CURRENT_SETTING('search_path');
+
+statement error
+SELECT CURRENT_SETTING('schema');
 
 # Setting the default value.
 statement ok
@@ -54,12 +74,12 @@ statement error
 SET SEARCH_PATH = '"invalid quoted string list';
 
 query I
-SELECT CURRENT_SETTING('search_path');
+SELECT MAIN.CURRENT_SETTING('search_path');
 ----
 test,test2
 
 query I
-SELECT CURRENT_SETTING('schema');
+SELECT MAIN.CURRENT_SETTING('schema');
 ----
 test,test2
 
@@ -67,12 +87,12 @@ statement ok
 SET SCHEMA = 'test';
 
 query I
-SELECT CURRENT_SETTING('search_path');
+SELECT MAIN.CURRENT_SETTING('search_path');
 ----
 test
 
 query I
-SELECT CURRENT_SETTING('schema');
+SELECT MAIN.CURRENT_SETTING('schema');
 ----
 test
 
@@ -94,4 +114,91 @@ SELECT CURRENT_SETTING('search_path');
 ----
 test3
 
-# TODO(omo): Test side effects here.
+# Looking up from multiple schemas
+
+statement ok
+SET SEARCH_PATH = 'test,test2';
+
+statement ok
+SELECT i FROM test_table;
+
+statement ok
+SELECT i FROM test2_table;
+
+statement ok
+SELECT i FROM main_table;
+
+statement ok
+CREATE TABLE main.table_with_same_name(in_main INTEGER);
+
+statement ok
+CREATE TABLE test.table_with_same_name(in_test INTEGER);
+
+statement ok
+CREATE TABLE test2.table_with_same_name(in_test2 INTEGER);
+
+statement error
+---
+SELECT in_main FROM table_with_same_name;
+
+statement error
+---
+SELECT in_test2 FROM table_with_same_name;
+
+statement ok
+---
+SELECT in_test FROM table_with_same_name;
+
+
+# Or even more schemas
+
+statement ok
+SET SEARCH_PATH = 'test,test2,test3,test4,test5';
+
+statement ok
+---
+SELECT i FROM test5_table;
+
+statement ok
+SELECT i FROM test_table;
+
+statement ok
+SELECT i FROM test2_table;
+
+statement ok
+SELECT i FROM main_table;
+
+# Duplicate entry in the path (is allowed)
+
+statement ok
+SET SEARCH_PATH = 'test,test,test2';
+
+statement ok
+SELECT i FROM test_table;
+
+statement ok
+SELECT i FROM test2_table;
+
+statement ok
+SELECT i FROM main_table;
+
+# Multiple connections
+
+statement ok con1
+SET schema = 'test';
+
+statement ok con2
+SET schema = 'test2';
+
+statement ok con1
+SELECT i FROM test_table;
+
+statement error con2
+SELECT i FROM test_table;
+
+statement error con1
+SELECT i FROM test2_table;
+
+statement ok con2
+SELECT i FROM test2_table;
+

@@ -25,6 +25,7 @@ public:
 	CatalogSearchPath(const CatalogSearchPath &other) = delete;
 
 	const vector<string> &Get();
+	const string &GetDefault();
 
 private:
 	static vector<string> ParsePaths(const string &value);
