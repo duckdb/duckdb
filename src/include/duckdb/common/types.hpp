@@ -19,7 +19,6 @@ namespace duckdb {
 
 class Serializer;
 class Deserializer;
-class EnumCatalogEntry;
 
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t {
@@ -471,8 +470,8 @@ public:
 	DUCKDB_API static LogicalType LIST(LogicalType child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);       // NOLINT
-	DUCKDB_API template <class T>  static LogicalType ENUM(const string &enum_name, shared_ptr<unordered_map<string, T>> enum_values,
-	                      shared_ptr<vector<string>> values_insert_order){
+	DUCKDB_API template <class T>  static LogicalType ENUM(const string &enum_name, const shared_ptr<unordered_map<string, T>> &enum_values,
+                              const shared_ptr<vector<string>> &values_insert_order){
 	    throw std::runtime_error("Invalid Physical type for ENUM");
 	} // NOLINT
 	DUCKDB_API static LogicalType USER(string &user_type_name); // NOLINT
@@ -485,16 +484,16 @@ public:
 };
 
 template <>
-LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint8_t>> enum_values,
-	                      shared_ptr<vector<string>> values_insert_order);
+LogicalType LogicalType::ENUM(const string &enum_name, const shared_ptr<unordered_map<string, uint8_t>> &enum_values,
+                              const shared_ptr<vector<string>> &values_insert_order);
 
 template <>
-LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint16_t>> enum_values,
-	                      shared_ptr<vector<string>> values_insert_order);
+LogicalType LogicalType::ENUM(const string &enum_name, const shared_ptr<unordered_map<string, uint16_t>> &enum_values,
+                              const shared_ptr<vector<string>> &values_insert_order);
 
 template <>
-LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint32_t>> enum_values,
-	                      shared_ptr<vector<string>> values_insert_order);
+LogicalType LogicalType::ENUM(const string &enum_name, const shared_ptr<unordered_map<string, uint32_t>> &enum_values,
+                              const shared_ptr<vector<string>> &values_insert_order);
 
 struct DecimalType {
 	DUCKDB_API static uint8_t GetWidth(const LogicalType &type);

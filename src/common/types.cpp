@@ -6,7 +6,8 @@
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
-#include "duckdb/catalog/catalog_entry/enum_catalog_entry.hpp"
+
+#include "duckdb/common/limits.hpp"
 
 #include <cmath>
 #include <utility>
@@ -985,7 +986,7 @@ template <class T>
 struct EnumTypeInfo : public ExtraTypeInfo {
 	explicit EnumTypeInfo(string enum_name_p, shared_ptr<unordered_map<string, T>> values_p,
 	                      shared_ptr<vector<string>> values_insert_order_p)
-	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)), values(std::move(values_p)),
+	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)), values(move(values_p)),
 	      values_insert_order(std::move(values_insert_order_p)) {
 	}
 
@@ -1025,22 +1026,22 @@ public:
 };
 
 template <>
-LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint8_t>> enum_values,
-                              shared_ptr<vector<string>> values_insert_order) {
+LogicalType LogicalType::ENUM(const string &enum_name, const shared_ptr<unordered_map<string, uint8_t>> &enum_values,
+                              const shared_ptr<vector<string>> &values_insert_order) {
 	auto info = make_shared<EnumTypeInfo<uint8_t>>(enum_name, enum_values, values_insert_order);
 	return LogicalType(LogicalTypeId::ENUM, PhysicalType::UINT8, move(info));
 }
 
 template <>
-LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint16_t>> enum_values,
-                              shared_ptr<vector<string>> values_insert_order) {
+LogicalType LogicalType::ENUM(const string &enum_name, const shared_ptr<unordered_map<string, uint16_t>> &enum_values,
+                              const shared_ptr<vector<string>> &values_insert_order) {
 	auto info = make_shared<EnumTypeInfo<uint16_t>>(enum_name, enum_values, values_insert_order);
 	return LogicalType(LogicalTypeId::ENUM, PhysicalType::UINT16, move(info));
 }
 
 template <>
-LogicalType LogicalType::ENUM(const string &enum_name, shared_ptr<unordered_map<string, uint32_t>> enum_values,
-                              shared_ptr<vector<string>> values_insert_order) {
+LogicalType LogicalType::ENUM(const string &enum_name, const shared_ptr<unordered_map<string, uint32_t>> &enum_values,
+                              const shared_ptr<vector<string>> &values_insert_order) {
 	auto info = make_shared<EnumTypeInfo<uint32_t>>(enum_name, enum_values, values_insert_order);
 	return LogicalType(LogicalTypeId::ENUM, PhysicalType::UINT32, move(info));
 }
