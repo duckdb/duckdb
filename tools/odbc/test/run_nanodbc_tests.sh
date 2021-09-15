@@ -24,6 +24,7 @@ SUPPORTED_TESTS[13]=test_while_not_end_iteration
 SUPPORTED_TESTS[14]=test_while_next_iteration
 SUPPORTED_TESTS[15]=test_catalog_list_schemas
 SUPPORTED_TESTS[16]=test_catalog_list_catalogs
+SUPPORTED_TESTS[17]=test_blob
 
 for test in ${SUPPORTED_TESTS[@]}
 do
