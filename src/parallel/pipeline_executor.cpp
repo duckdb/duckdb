@@ -6,14 +6,14 @@ namespace duckdb {
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p) :
 	pipeline(pipeline_p), thread(context_p), context(context_p, thread) {
 	D_ASSERT(pipeline.source_state);
-	local_source_state = pipeline.operators[pipeline.source_idx]->GetLocalSourceState(context, *pipeline.source_state);
+	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
 	if (pipeline.sink) {
 		local_sink_state = pipeline.sink->GetLocalSinkState(context);
 	}
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
-	for(idx_t i = pipeline.source_idx + 1; i < pipeline.operators.size(); i++) {
-		auto prev_operator = pipeline.operators[i - 1];
+	for(idx_t i = 0; i < pipeline.operators.size(); i++) {
+		auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
 		auto chunk = make_unique<DataChunk>();
 		chunk->Initialize(prev_operator->GetTypes());
 		intermediate_chunks.push_back(move(chunk));
@@ -54,7 +54,7 @@ void PipelineExecutor::Execute() {
 
 void PipelineExecutor::GoToSource(idx_t &current_idx) {
 	// we go back to the first operator (the source)
-	current_idx = pipeline.source_idx;
+	current_idx = 0;
 	if (!in_process_operators.empty()) {
 		// ... UNLESS there is an in process operator
 		// if there is an in-process operator, we start executing at the latest one
@@ -74,24 +74,28 @@ void PipelineExecutor::Execute(DataChunk &result) {
 		// now figure out where to put the chunk
 		// if current_idx is the last possible index (>= operators.size()) we write to the result
 		// otherwise we write to an intermediate chunk
-		auto current_intermediate = current_idx - pipeline.source_idx;
+		auto current_intermediate = current_idx;
 		auto &current_chunk = current_intermediate >= intermediate_chunks.size() ? result : *intermediate_chunks[current_intermediate];
 		current_chunk.Reset();
-		StartOperator(pipeline.operators[current_idx]);
-		if (current_idx == pipeline.source_idx) {
+		if (current_idx == 0) {
 			// if current_idx = 0 we fetch the data from the source
-			pipeline.operators[current_idx]->GetData(
+			StartOperator(pipeline.source);
+			pipeline.source->GetData(
 				context,
 				current_chunk,
 				*pipeline.source_state,
 				*local_source_state);
+			EndOperator(pipeline.source, &current_chunk);
 		} else {
+			auto current_operator = current_idx - 1;
+			StartOperator(pipeline.operators[current_operator]);
 			// if current_idx > source_idx, we pass the previous' operators output through the Execute of the current operator
-			auto result = pipeline.operators[current_idx]->Execute(
+			auto result = pipeline.operators[current_operator]->Execute(
 				context,
 				*intermediate_chunks[current_intermediate - 1],
 				current_chunk,
 				*intermediate_states[current_intermediate - 1]);
+			EndOperator(pipeline.operators[current_operator], &current_chunk);
 			if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
 				// more data remains in this operator
 				// push in-process marker
@@ -101,12 +105,11 @@ void PipelineExecutor::Execute(DataChunk &result) {
 				return;
 			}
 		}
-		EndOperator(pipeline.operators[current_idx], &current_chunk);
 		current_chunk.Verify();
 
 		if (current_chunk.size() == 0) {
 			// no output from this operator!
-			if (current_idx == pipeline.source_idx) {
+			if (current_idx == 0) {
 				// if we got no output from the scan, we are done
 				break;
 			} else {
@@ -118,7 +121,7 @@ void PipelineExecutor::Execute(DataChunk &result) {
 		} else {
 			// we got output! continue to the next operator
 			current_idx++;
-			if (current_idx >= pipeline.operators.size()) {
+			if (current_idx > pipeline.operators.size()) {
 				// if we got output and are at the last operator, we are finished executing for this output chunk
 				// return the data and push it into the chunk
 				break;
@@ -128,8 +131,7 @@ void PipelineExecutor::Execute(DataChunk &result) {
 }
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
-	D_ASSERT(!pipeline.operators.empty());
-	PhysicalOperator *last_op = pipeline.operators.back();
+	PhysicalOperator *last_op = pipeline.operators.empty() ? pipeline.source : pipeline.operators.back();
 	chunk.Initialize(last_op->GetTypes());
 }
 

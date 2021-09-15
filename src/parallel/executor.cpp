@@ -118,6 +118,10 @@ void Executor::ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_pt
 		ExtractPipelines(union_pipeline, result);
 	}
 	pipeline_ptr->union_pipelines.clear();
+	for(auto &child_pipeline : pipeline_ptr->child_pipelines) {
+		ExtractPipelines(child_pipeline, result);
+	}
+	pipeline_ptr->child_pipelines.clear();
 }
 
 bool Executor::NextExecutor() {
@@ -187,6 +191,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
 			}
 			pipelines.clear();
+			events.clear();
 		}
 		for (auto &weak_ref : weak_references) {
 			while (true) {
@@ -228,9 +233,9 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		// operator is a sink, build a pipeline
 		auto pipeline = make_shared<Pipeline>(*this);
 		pipeline->sink = op;
+		op->sink_state.reset();
 
 		// the current is dependent on this pipeline to complete
-		current->operators.push_back(op);
 		current->AddDependency(pipeline);
 		PhysicalOperator *pipeline_child;
 		switch (op->type) {
@@ -249,6 +254,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::EXPRESSION_SCAN:
 			// single operator:
 			// the operator becomes the data source of the current pipeline
+			current->source = op;
+			// we create a new pipeline starting from the child
 			pipeline_child = op->children[0].get();
 			break;
 		case PhysicalOperatorType::NESTED_LOOP_JOIN:
@@ -259,6 +266,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			// regular join, create a pipeline with RHS source that sinks into this pipeline
 			pipeline_child = op->children[1].get();
 			// on the LHS (probe child), the operator becomes a regular operator
+			current->operators.push_back(op);
 			BuildPipelines(op->children[0].get(), current);
 			break;
 		case PhysicalOperatorType::DELIM_JOIN: {
@@ -316,7 +324,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		}
 		if (op->children.empty()) {
 			// source
-			current->operators.push_back(op);
+			current->source = op;
 		} else {
 			if (op->children.size() != 1) {
 				throw InternalException("Operator not supported yet");
@@ -373,12 +381,7 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	while(true) {
 		root_executor->Execute(*chunk);
 		if (chunk->size() == 0) {
-			auto &current_pipeline = root_pipelines[root_pipeline_idx - 1];
-			if (current_pipeline->NextSource()) {
-				root_executor = make_unique<PipelineExecutor>(context, *current_pipeline);
-				chunk->Reset();
-				continue;
-			} else if (NextExecutor()) {
+			if (NextExecutor()) {
 				continue;
 			}
 			break;

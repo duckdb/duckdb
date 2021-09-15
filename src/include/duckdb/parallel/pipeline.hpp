@@ -40,9 +40,6 @@ public:
 	void ResetSource();
 	void Schedule(shared_ptr<Event> &event);
 
-	//! Move the pipeline to the next source (if any)
-	//! Returns true if there is another source, or false if not
-	bool NextSource();
 	//! Finalize this pipeline
 	void Finalize(Event &event);
 
@@ -53,8 +50,8 @@ public:
 	bool GetProgress(int &current_percentage);
 
 private:
-	//! The current source index
-	idx_t source_idx = 0;
+	//! The source of this pipeline
+	PhysicalOperator *source;
 	//! The chain of intermediate operators
 	vector<PhysicalOperator *> operators;
 	//! The sink (i.e. destination) for data; this is e.g. a hash table to-be-built
@@ -68,11 +65,15 @@ private:
 	//! The dependencies of this pipeline
 	vector<weak_ptr<Pipeline>> dependencies;
 	//! The adjacent union pipelines of this pipeline
-	//! These pipelines share the same sink
+	//! Union pipelines have the same sink, but can be run concurrently along with this pipeline
 	vector<shared_ptr<Pipeline>> union_pipelines;
+	//! Child pipelines of this pipeline
+	//! Child pipelines should be run AFTER this pipeline is completed, but share the same sink
+	//! i.e. they should be run after this pipeline is completed, but before the finalize is called
+	vector<shared_ptr<Pipeline>> child_pipelines;
 
 private:
-	bool GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage);
+	bool GetProgressInternal(ClientContext &context, PhysicalOperator *op, int &current_percentage);
 	void ScheduleSequentialTask(shared_ptr<Event> &event);
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 

@@ -46,3 +46,25 @@ ORDER BY
 ----
 <FILE>:extension/tpch/dbgen/answers/sf0.01/q01.csv
 
+query I
+SELECT sum(l_quantity) AS sum FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT sum(l_extendedprice) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT sum(l_extendedprice * (1 - l_discount)) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT avg(l_quantity) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT avg(l_extendedprice) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT count(*) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+----
+1513678
+59307
+35760
+25
+2096391169
+2015354671
+2120830299

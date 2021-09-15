@@ -37,14 +37,14 @@ public:
 };
 
 Pipeline::Pipeline(Executor &executor_p)
-    : executor(executor_p), sink(nullptr) {
+    : executor(executor_p), source(nullptr), sink(nullptr) {
 }
 
 ClientContext &Pipeline::GetClientContext() {
 	return executor.context;
 }
 
-bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &current_percentage) {
+bool Pipeline::GetProgressInternal(ClientContext &context, PhysicalOperator *op, int &current_percentage) {
 	current_percentage = -1;
 	switch (op->type) {
 	case PhysicalOperatorType::TABLE_SCAN: {
@@ -64,7 +64,11 @@ bool Pipeline::GetProgress(ClientContext &context, PhysicalOperator *op, int &cu
 
 bool Pipeline::GetProgress(int &current_percentage) {
 	auto &client = executor.context;
-	return GetProgress(client, operators[source_idx], current_percentage);
+
+	if (!child_pipelines.empty()) {
+		return false;
+	}
+	return GetProgressInternal(client, source, current_percentage);
 }
 
 void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
@@ -77,11 +81,11 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (!sink->ParallelSink()) {
 		return false;
 	}
-	if (!operators[source_idx]->ParallelSource()) {
+	if (!source->ParallelSource()) {
 		return false;
 	}
-	for(idx_t i = source_idx + 1; i < operators.size(); i++) {
-		if (!operators[i]->ParallelOperator()) {
+	for(auto &op : operators) {
+		if (!op->ParallelOperator()) {
 			return false;
 		}
 	}
@@ -128,25 +132,31 @@ void Pipeline::Reset() {
 }
 
 void Pipeline::ResetSource() {
-	source_state = operators[source_idx]->GetGlobalSourceState(GetClientContext());
+	source_state = source->GetGlobalSourceState(GetClientContext());
 }
 
 void Pipeline::Ready() {
 	std::reverse(operators.begin(), operators.end());
-	Reset();
-}
-
-bool Pipeline::NextSource() {
-	// check if there are more sources to schedule within this pipeline
-	for(idx_t i = source_idx + 1; i < operators.size(); i++) {
+	// schedule child pipelines, if any
+	auto current_pipeline = this;
+	for(idx_t i = 0; i < operators.size(); i++) {
 		if (operators[i]->IsSource()) {
-			// there is another source! schedule it instead of finishing this event
-			source_idx = i;
-			ResetSource();
-			return true;
+			// found another operator that is a source
+			// schedule a child pipeline
+			auto new_pipeline = make_shared<Pipeline>(executor);
+			new_pipeline->sink = sink;
+			new_pipeline->source = operators[i];
+			for(idx_t k = i + 1; k < operators.size(); k++) {
+				new_pipeline->operators.push_back(operators[k]);
+			}
+			new_pipeline->Reset();
+
+			auto next_pipeline = new_pipeline.get();
+			current_pipeline->child_pipelines.push_back(move(new_pipeline));
+			current_pipeline = next_pipeline;
 		}
 	}
-	return false;
+	Reset();
 }
 
 void Pipeline::Finalize(Event &event) {
@@ -173,8 +183,9 @@ void Pipeline::AddUnionPipeline(shared_ptr<Pipeline> pipeline) {
 
 string Pipeline::ToString() const {
 	string str;
+	str = PhysicalOperatorToString(source->type);
 	for (auto &op : operators) {
-		str += PhysicalOperatorToString(op->type) + " -> ";
+		str += " -> " + PhysicalOperatorToString(op->type);
 	}
 	if (sink) {
 		str += " -> " + PhysicalOperatorToString(sink->type);

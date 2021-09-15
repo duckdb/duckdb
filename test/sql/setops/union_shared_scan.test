@@ -1,0 +1,27 @@
+# name: test/sql/setops/union_shared_scan.test
+# description: Test shared scan over a union
+# group: [setops]
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA force_parallelism
+
+statement ok
+CREATE TABLE tbl AS SELECT * FROM range(10000) tbl(i) UNION ALL SELECT NULL
+
+query I
+SELECT SUM(i) FROM tbl
+UNION ALL
+SELECT COUNT(i) FROM tbl
+UNION ALL
+SELECT AVG(i) FROM tbl
+UNION ALL
+SELECT AVG(i) + SUM(i) FROM tbl
+ORDER BY 1
+----
+4999
+10000
+49995000
+49999999
