@@ -1,6 +1,7 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
 #include "altrepstring.hpp"
+#include "altreplistentry.hpp"
 
 using namespace duckdb;
 
@@ -106,4 +107,43 @@ void AltrepString::Finalize(SEXP x) {
 		R_ClearExternalPtr(x);
 		delete wrapper;
 	}
+}
+
+DuckDBAltrepListEntryWrapper::DuckDBAltrepListEntryWrapper(idx_t max_length) {
+	data = unique_ptr<data_t[]>(new data_t[max_length * sizeof(int32_t)]);
+}
+void DuckDBAltrepListEntryWrapper::Reset(idx_t offset_p, idx_t length_p) {
+	length = length_p;
+	auto int_ptr = (int32_t *)data.get();
+	for (idx_t i = 0; i < length; i++) {
+		int_ptr[i] = offset_p + i + 1;
+	}
+}
+
+R_altrep_class_t AltrepListEntry::rclass;
+
+void AltrepListEntry::Initialize(DllInfo *dll) {
+	rclass = R_make_altinteger_class("duckdb_list_entry", "duckdb", dll);
+
+	/* override ALTREP methods */
+	R_set_altrep_Length_method(rclass, Length);
+
+	/* override ALTVEC methods */
+	R_set_altvec_Dataptr_method(rclass, Dataptr);
+}
+
+static DuckDBAltrepListEntryWrapper *duckdb_altrep_list_entry_wrapper(SEXP x) {
+	auto wrapper = (DuckDBAltrepListEntryWrapper *)R_ExternalPtrAddr(R_altrep_data1(x));
+	if (!wrapper) {
+		Rf_error("This looks like it has been freed");
+	}
+	return wrapper;
+}
+
+R_xlen_t AltrepListEntry::Length(SEXP x) {
+	return duckdb_altrep_list_entry_wrapper(x)->length;
+}
+
+void *AltrepListEntry::Dataptr(SEXP x, Rboolean writeable) {
+	return duckdb_altrep_list_entry_wrapper(x)->data.get();
 }

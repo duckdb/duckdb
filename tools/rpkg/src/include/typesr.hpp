@@ -7,6 +7,13 @@ struct DuckDBAltrepStringWrapper {
 	idx_t length;
 };
 
+struct DuckDBAltrepListEntryWrapper {
+	DuckDBAltrepListEntryWrapper(idx_t max_length);
+	void Reset(idx_t offset_p, idx_t length_p);
+	idx_t length;
+	std::unique_ptr<data_t[]> data;
+};
+
 enum class RType {
 	UNKNOWN,
 	LOGICAL,
