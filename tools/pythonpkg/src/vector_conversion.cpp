@@ -169,18 +169,15 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 			PyObject *val = src_ptr[source_idx];
 #if PY_MAJOR_VERSION >= 3
 			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
-				py::handle object_handle = val;
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
 					continue;
 				}
-				if (py::isinstance<py::float_>(val)) {
-					bool is_nan = py::cast<bool>(object_handle.attr("__ne__")(object_handle));
-					if (is_nan) {
-						out_mask.SetInvalid(row);
-						continue;
-					}
+				if (py::isinstance<py::float_>(val) && std::isnan(PyFloat_AsDouble(val))) {
+					out_mask.SetInvalid(row);
+					continue;
 				}
+				py::handle object_handle = val;
 				str_val = py::str(object_handle);
 				val = str_val.ptr();
 			}
