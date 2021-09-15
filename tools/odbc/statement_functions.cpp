@@ -177,7 +177,7 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
                                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
 	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		if (!target_value_ptr && !IsSQLVarcharType(target_type)) {
+		if (!target_value_ptr && !IsSQLVariableLengthType(target_type)) {
 			return SQL_ERROR;
 		}
 
@@ -268,15 +268,27 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 
 			// threating binary values as BLOB type
 			string blob = duckdb::Blob::ToBlob(duckdb::string_t(val.GetValue<string>().c_str()));
-			auto out_len = duckdb::MinValue(blob.size(), (size_t)buffer_length);
-			memcpy((char *)target_value_ptr, blob.c_str(), out_len);
-			if (out_len == (size_t)buffer_length) {
-				out_len = buffer_length - 1;
-				ret = SQL_SUCCESS_WITH_INFO;
-				stmt->error_messages.emplace_back("SQLGetData returned with info.");
+			if (!target_value_ptr) {
+				return SetStringValueLength(blob, str_len_or_ind_ptr);
 			}
-			// null terminator char
-			((char *)target_value_ptr)[out_len] = '\0';
+
+			auto last_len = stmt->odbc_fetcher->last_fetched_len;
+			if(last_len > blob.size()) {
+				last_len = 0;
+			}
+			auto out_len = duckdb::MinValue(blob.size() - last_len, (size_t)buffer_length);
+			memcpy((char *)target_value_ptr, blob.c_str() + last_len, out_len);
+			if (out_len == (size_t)buffer_length) {
+				ret = SQL_SUCCESS_WITH_INFO;
+				last_len += out_len;
+				stmt->error_messages.emplace_back("SQLGetData returned with info.");
+			} else {
+				last_len = 0;
+				// null terminator char
+				((char *)target_value_ptr)[out_len] = '\0';
+			}
+
+			stmt->odbc_fetcher->last_fetched_len = last_len;
 
 			if (str_len_or_ind_ptr) {
 				*str_len_or_ind_ptr = out_len;
@@ -770,4 +782,18 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 
 		} // end switch "(target_type)": SQL_C_TYPE_TIMESTAMP
 	});
+}
+
+
+SQLRETURN duckdb::ExecDirectStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
+	auto prepare_status = duckdb::PrepareStmt(statement_handle, statement_text, text_length);
+	if (prepare_status != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
+
+	auto execute_status = duckdb::BatchExecuteStmt(statement_handle);
+	if (execute_status != SQL_SUCCESS) {
+		return SQL_ERROR;
+	}
+	return SQL_SUCCESS;
 }

@@ -81,16 +81,7 @@ SQLRETURN SQLCancel(SQLHSTMT statement_handle) {
 }
 
 SQLRETURN SQLExecDirect(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
-	auto prepare_status = duckdb::PrepareStmt(statement_handle, statement_text, text_length);
-	if (prepare_status != SQL_SUCCESS) {
-		return SQL_ERROR;
-	}
-
-	auto execute_status = duckdb::BatchExecuteStmt(statement_handle);
-	if (execute_status != SQL_SUCCESS) {
-		return SQL_ERROR;
-	}
-	return SQL_SUCCESS;
+	return duckdb::ExecDirectStmt(statement_handle, statement_text, text_length);
 }
 
 // https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqltables-function
@@ -105,7 +96,7 @@ SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLIN
 
 	// special cases
 	if (catalog_n == std::string(SQL_ALL_CATALOGS) && name_length2 == 0 && name_length2 == 0) {
-		if (!SQL_SUCCEEDED(SQLExecDirect(statement_handle,
+		if (!SQL_SUCCEEDED(duckdb::ExecDirectStmt(statement_handle,
 		                                 (SQLCHAR *)"SELECT '' \"TABLE_CAT\", NULL \"TABLE_SCHEM\", NULL "
 		                                            "\"TABLE_NAME\", NULL \"TABLE_TYPE\" , NULL \"REMARKS\"",
 		                                 SQL_NTS))) {
@@ -116,7 +107,7 @@ SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLIN
 
 	if (schema_n == std::string(SQL_ALL_SCHEMAS) && name_length1 == 0 && name_length3 == 0) {
 		if (!SQL_SUCCEEDED(
-		        SQLExecDirect(statement_handle,
+		        duckdb::ExecDirectStmt(statement_handle,
 		                      (SQLCHAR *)"SELECT '' \"TABLE_CAT\", schema_name \"TABLE_SCHEM\", NULL \"TABLE_NAME\", "
 		                                 "NULL \"TABLE_TYPE\" , NULL \"REMARKS\" FROM information_schema.schemata",
 		                      SQL_NTS))) {
@@ -130,7 +121,7 @@ SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLIN
 	}
 
 	// TODO make this a nice template? also going to use this for SQLColumns etc.
-	if (!SQL_SUCCEEDED(SQLPrepare(
+	if (!SQL_SUCCEEDED(duckdb::PrepareStmt(
 	        statement_handle,
 	        (SQLCHAR
 	             *)"SELECT table_catalog \"TABLE_CAT\", table_schema \"TABLE_SCHEM\", table_name \"TABLE_NAME\", CASE "

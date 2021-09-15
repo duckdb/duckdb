@@ -29,6 +29,8 @@ public:
 	SQLULEN cursor_type;
 	SQLLEN row_count;
 
+	size_t last_fetched_len;
+
 private:
 	// main structure to hold the fetched chunks
 	std::vector<unique_ptr<DataChunk>> chunks;
@@ -45,7 +47,7 @@ private:
 public:
 	OdbcFetch()
 	    : bind_orientation(FetchBindingOrientation::COLUMN), rowset_size(SINGLE_VALUE_FETCH), row_status_buff(nullptr),
-	      cursor_type(SQL_CURSOR_FORWARD_ONLY), row_count(0), resultset_end(false) {
+	      cursor_type(SQL_CURSOR_FORWARD_ONLY), row_count(0), last_fetched_len(0), resultset_end(false) {
 	}
 	~OdbcFetch();
 
