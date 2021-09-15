@@ -173,6 +173,44 @@ SQLRETURN SetStringValueLength(const std::string &val_str, SQLLEN *str_len_or_in
 	return SQL_ERROR;
 }
 
+SQLRETURN GetVariableValue(const std::string &val_str, SQLUSMALLINT col_idx, duckdb::OdbcHandleStmt *stmt,
+                           SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
+	if (!target_value_ptr) {
+		return SetStringValueLength(val_str, str_len_or_ind_ptr);
+	}
+
+	SQLRETURN ret = SQL_SUCCESS;
+	stmt->odbc_fetcher->SetLastFetchedVariableVal((duckdb::row_t)col_idx);
+
+	auto last_len = stmt->odbc_fetcher->GetLastFetchedLength();
+	// case already reached the end of the current variable value, reset the length
+	if (last_len >= val_str.size()) {
+		last_len = 0;
+	}
+
+	auto out_len = duckdb::MinValue(val_str.size() - last_len, (size_t)buffer_length);
+	memcpy((char *)target_value_ptr, val_str.c_str() + last_len, out_len);
+
+	if (out_len == (size_t)buffer_length) {
+		ret = SQL_SUCCESS_WITH_INFO;
+		out_len = buffer_length - 1;
+		last_len += out_len;
+		stmt->error_messages.emplace_back("SQLGetData returned with info.");
+	} else {
+		last_len = 0;
+	}
+
+	// null terminator char
+	((char *)target_value_ptr)[out_len] = '\0';
+	stmt->odbc_fetcher->SetLastFetchedLength(last_len);
+
+	if (str_len_or_ind_ptr) {
+		*str_len_or_ind_ptr = out_len;
+	}
+
+	return ret;
+}
+
 SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
@@ -264,59 +302,14 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		}
 		// case SQL_C_VARBOOKMARK: // same ODBC type (\\TODO we don't support bookmark types)
 		case SQL_C_BINARY: {
-			SQLRETURN ret = SQL_SUCCESS;
-
 			// threating binary values as BLOB type
 			string blob = duckdb::Blob::ToBlob(duckdb::string_t(val.GetValue<string>().c_str()));
-			if (!target_value_ptr) {
-				return SetStringValueLength(blob, str_len_or_ind_ptr);
-			}
-
-			auto last_len = stmt->odbc_fetcher->last_fetched_len;
-			if(last_len > blob.size()) {
-				last_len = 0;
-			}
-			auto out_len = duckdb::MinValue(blob.size() - last_len, (size_t)buffer_length);
-			memcpy((char *)target_value_ptr, blob.c_str() + last_len, out_len);
-			if (out_len == (size_t)buffer_length) {
-				ret = SQL_SUCCESS_WITH_INFO;
-				last_len += out_len;
-				stmt->error_messages.emplace_back("SQLGetData returned with info.");
-			} else {
-				last_len = 0;
-				// null terminator char
-				((char *)target_value_ptr)[out_len] = '\0';
-			}
-
-			stmt->odbc_fetcher->last_fetched_len = last_len;
-
-			if (str_len_or_ind_ptr) {
-				*str_len_or_ind_ptr = out_len;
-			}
-			return ret;
+			return GetVariableValue(blob, col_or_param_num, stmt, target_value_ptr, buffer_length, str_len_or_ind_ptr);
 		}
 		case SQL_C_CHAR: {
 			std::string val_str = val.GetValue<std::string>();
-			if (!target_value_ptr) {
-				return SetStringValueLength(val_str, str_len_or_ind_ptr);
-			}
-
-			SQLRETURN ret = SQL_SUCCESS;
-
-			auto out_len = duckdb::MinValue(val_str.size(), (size_t)buffer_length);
-			memcpy((char *)target_value_ptr, val_str.c_str(), out_len);
-			if (out_len == (size_t)buffer_length) {
-				out_len = buffer_length - 1;
-				ret = SQL_SUCCESS_WITH_INFO;
-				stmt->error_messages.emplace_back("SQLGetData returned with info.");
-			}
-			// null terminator char
-			((char *)target_value_ptr)[out_len] = '\0';
-
-			if (str_len_or_ind_ptr) {
-				*str_len_or_ind_ptr = out_len;
-			}
-			return ret;
+			return GetVariableValue(val_str, col_or_param_num, stmt, target_value_ptr, buffer_length,
+			                        str_len_or_ind_ptr);
 		}
 		case SQL_C_NUMERIC: {
 			if (!ValidateType(val.type().id(), LogicalTypeId::DECIMAL, stmt)) {
@@ -783,7 +776,6 @@ SQLRETURN duckdb::GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_
 		} // end switch "(target_type)": SQL_C_TYPE_TIMESTAMP
 	});
 }
-
 
 SQLRETURN duckdb::ExecDirectStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
 	auto prepare_status = duckdb::PrepareStmt(statement_handle, statement_text, text_length);
