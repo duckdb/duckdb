@@ -3,7 +3,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "rapi.hpp"
 #include "typesr.hpp"
-#include "altreplistentry.hpp"
 
 #include "duckdb/common/arrow_wrapper.hpp"
 
@@ -371,63 +370,29 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		break;
 	}
 	case LogicalTypeId::LIST: {
-		// black magic follows
-
-		/*
-		 * We need to transform the DuckDB LIST vector to a R list() of multiple SEXPs.
-		 * Allocating and converting separate SEXPs for this is pretty horrid (and slow) though.
-		 * So we convert all elements in the DuckDB List child vector into a single SEXP
-		 * Then, for each row, we call R's subset method to create a SEXP that only contains values for the row
-		 * However, a complication is that `Rf_ExtractSubset` needs a sequence vector as a parameter.
-		 * To avoid allocating that sequence over and over we use ALTREP to fake a sequence vector that does not need
-		 * to be allocated. This will make use of the ALTREP vectors created by `transform` because Rf_ExtractSubset
-		 * calls ALTVEC_EXTRACT_SUBSET. For primitive vectors such as integer and numeric it still allocates :/
-		 * */
-		// TODO: implement subset extract for duckdb's altrep string wrapper
-		// TODO: make all vectors altreps?
-
 		RProtector list_prot;
-
 		// figure out the total and max element length of the list vector child
-		auto &mask = FlatVector::Validity(src_vec);
 		auto src_data = ListVector::GetData(src_vec);
-		idx_t total_length = 0;
-		idx_t max_length = 0;
-		for (size_t row_idx = 0; row_idx < n; row_idx++) {
-			if (!mask.RowIsValid(row_idx)) {
-				continue;
-			}
-			total_length += src_data[row_idx].length;
-			if (src_data[row_idx].length > max_length) {
-				max_length = src_data[row_idx].length;
-			}
-		}
-
-		// transform the list child vector to a single R SEXP
-		auto list_entries = allocate(ListType::GetChildType(src_vec.GetType()), list_prot, total_length);
-		transform(ListVector::GetEntry(src_vec), list_entries, 0, total_length);
-
-		// create the ALTREP list index SEXP that we can reconfigure for new offsets/lengths without re-allocating below
-		auto list_index_wrapper = make_unique<DuckDBAltrepListEntryWrapper>(max_length);
-		auto list_index_extptr =
-		    list_prot.Protect(R_MakeExternalPtr((void *)list_index_wrapper.get(), R_NilValue, R_NilValue));
-		auto list_index_sexp = list_prot.Protect(R_new_altrep(AltrepListEntry::rclass, list_index_extptr, R_NilValue));
+		auto &child_type = ListType::GetChildType(src_vec.GetType());
+		Vector child_vector(child_type, nullptr);
 
 		// actual loop over rows
 		for (size_t row_idx = 0; row_idx < n; row_idx++) {
-			if (!mask.RowIsValid(row_idx)) {
+			if (!FlatVector::Validity(src_vec).RowIsValid(row_idx)) {
 				SET_ELEMENT(dest, dest_offset + row_idx, Rf_ScalarLogical(NA_LOGICAL));
 			} else {
+				child_vector.Slice(ListVector::GetEntry(src_vec), src_data[row_idx].offset);
+
 				RProtector ele_prot;
-				// update the fake index SEXP with the offset and length into list_entries SEXP
-				list_index_wrapper->Reset(src_data[row_idx].offset, src_data[row_idx].length);
+				// transform the list child vector to a single R SEXP
+				auto list_element =
+				    allocate(ListType::GetChildType(src_vec.GetType()), ele_prot, src_data[row_idx].length);
+				transform(child_vector, list_element, 0, src_data[row_idx].length);
 
 				// call R's own extract subset method
-				auto list_element = ele_prot.Protect(Rf_ExtractSubset(list_entries, list_index_sexp, R_NilValue));
 				SET_ELEMENT(dest, dest_offset + row_idx, list_element);
 			}
 		}
-		R_ClearExternalPtr(list_index_extptr);
 		break;
 	}
 	case LogicalTypeId::BLOB: {
