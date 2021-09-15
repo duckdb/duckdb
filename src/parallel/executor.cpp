@@ -112,6 +112,8 @@ void Executor::ScheduleEvents() {
 }
 
 void Executor::ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result) {
+	pipeline->Ready();
+
 	auto pipeline_ptr = pipeline.get();
 	result.push_back(move(pipeline));
 	for(auto &union_pipeline : pipeline_ptr->union_pipelines) {
@@ -153,9 +155,6 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		// ready all the pipelines
 		root_pipeline_idx = 0;
 		ExtractPipelines(root_pipeline, root_pipelines);
-		for(auto &pipeline : root_pipelines) {
-			pipeline->Ready();
-		}
 		for (auto &pipeline : pipelines) {
 #ifdef DEBUG
 			D_ASSERT(!pipeline->ToString().empty());
