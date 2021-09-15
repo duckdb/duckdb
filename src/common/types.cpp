@@ -1181,6 +1181,8 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 		return ListTypeInfo::Deserialize(source);
 	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
 		return StructTypeInfo::Deserialize(source);
+	case ExtraTypeInfoType::USER_TYPE_INFO:
+		return UserTypeInfo::Deserialize(source);
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
