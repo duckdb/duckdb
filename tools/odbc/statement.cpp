@@ -97,20 +97,20 @@ SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLIN
 	// special cases
 	if (catalog_n == std::string(SQL_ALL_CATALOGS) && name_length2 == 0 && name_length2 == 0) {
 		if (!SQL_SUCCEEDED(duckdb::ExecDirectStmt(statement_handle,
-		                                 (SQLCHAR *)"SELECT '' \"TABLE_CAT\", NULL \"TABLE_SCHEM\", NULL "
-		                                            "\"TABLE_NAME\", NULL \"TABLE_TYPE\" , NULL \"REMARKS\"",
-		                                 SQL_NTS))) {
+		                                          (SQLCHAR *)"SELECT '' \"TABLE_CAT\", NULL \"TABLE_SCHEM\", NULL "
+		                                                     "\"TABLE_NAME\", NULL \"TABLE_TYPE\" , NULL \"REMARKS\"",
+		                                          SQL_NTS))) {
 			return SQL_ERROR;
 		}
 		return SQL_SUCCESS;
 	}
 
 	if (schema_n == std::string(SQL_ALL_SCHEMAS) && name_length1 == 0 && name_length3 == 0) {
-		if (!SQL_SUCCEEDED(
-		        duckdb::ExecDirectStmt(statement_handle,
-		                      (SQLCHAR *)"SELECT '' \"TABLE_CAT\", schema_name \"TABLE_SCHEM\", NULL \"TABLE_NAME\", "
-		                                 "NULL \"TABLE_TYPE\" , NULL \"REMARKS\" FROM information_schema.schemata",
-		                      SQL_NTS))) {
+		if (!SQL_SUCCEEDED(duckdb::ExecDirectStmt(
+		        statement_handle,
+		        (SQLCHAR *)"SELECT '' \"TABLE_CAT\", schema_name \"TABLE_SCHEM\", NULL \"TABLE_NAME\", "
+		                   "NULL \"TABLE_TYPE\" , NULL \"REMARKS\" FROM information_schema.schemata",
+		        SQL_NTS))) {
 			return SQL_ERROR;
 		}
 		return SQL_SUCCESS;
