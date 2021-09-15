@@ -8,6 +8,7 @@ PipelineEvent::PipelineEvent(shared_ptr<Pipeline> pipeline_p) :
 void PipelineEvent::Schedule() {
 	auto event = shared_from_this();
 	pipeline->Schedule(event);
+	D_ASSERT(total_tasks > 0);
 }
 
 void PipelineEvent::FinishEvent() {

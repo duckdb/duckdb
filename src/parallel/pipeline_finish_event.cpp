@@ -7,7 +7,6 @@ PipelineFinishEvent::PipelineFinishEvent(shared_ptr<Pipeline> pipeline_p) :
 	Event(pipeline_p->executor), pipeline(move(pipeline_p)) {}
 
 void PipelineFinishEvent::Schedule() {
-	Finish();
 }
 
 void PipelineFinishEvent::FinishEvent() {

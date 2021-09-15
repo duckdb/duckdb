@@ -7,8 +7,6 @@ PipelineCompleteEvent::PipelineCompleteEvent(Executor &executor) :
 	Event(executor) {}
 
 void PipelineCompleteEvent::Schedule() {
-	Finish();
-
 }
 
 void PipelineCompleteEvent::FinalizeFinish() {

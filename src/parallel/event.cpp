@@ -15,7 +15,11 @@ void Event::CompleteDependency() {
 	D_ASSERT(current_finished <= total_dependencies);
 	if (current_finished == total_dependencies) {
 		// all dependencies have been completed: schedule the event
+		D_ASSERT(total_tasks == 0);
 		Schedule();
+		if (total_tasks == 0) {
+			Finish();
+		}
 	}
 }
 

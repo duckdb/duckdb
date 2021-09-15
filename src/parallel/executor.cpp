@@ -315,8 +315,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			auto pipeline_ptr = union_pipeline.get();
 			current->AddUnionPipeline(move(union_pipeline));
 			BuildPipelines(op->children[0].get(), current);
-			BuildPipelines(op->children[1].get(), pipeline_ptr);
 			pipeline_ptr->sink = current->sink;
+			BuildPipelines(op->children[1].get(), pipeline_ptr);
 			return;
 		}
 		default:
