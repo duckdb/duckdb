@@ -1,5 +1,6 @@
 #include "rapi.hpp"
 #include "altrepstring.hpp"
+
 using namespace duckdb;
 
 static const R_CallMethodDef R_CallDef[] = {{"duckdb_startup_R", (DL_FUNC)RApi::Startup, 3},
@@ -25,6 +26,7 @@ void R_init_duckdb(DllInfo *dll) {
 	R_useDynamicSymbols(dll, FALSE);
 
 	AltrepString::Initialize(dll);
+
 	// TODO implement SEXP (*R_altvec_Extract_subset_method_t)(SEXP, SEXP, SEXP);
 }
 } // extern "C"
