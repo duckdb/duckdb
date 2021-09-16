@@ -16,32 +16,49 @@
 namespace duckdb {
 
 static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const vector<LogicalType> &child_types) {
-	if (window_type == ExpressionType::WINDOW_NTH_VALUE) {
-		if (child_types.size() != 2) {
-			throw BinderException("%s needs two parameters, got %d", ExpressionTypeToString(window_type), child_types.size());
-		}
+
+	idx_t param_count;
+	switch (window_type) {
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+		param_count = 0;
+		break;
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_CUME_DIST:
+	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+		param_count = 1;
+		break;
+	case ExpressionType::WINDOW_NTH_VALUE:
+		param_count = 2;
+		break;
+	default:
+		throw InternalException("Unrecognized window expression type " + ExpressionTypeToString(window_type));
+	}
+	if (child_types.size() != param_count) {
+		throw BinderException("%s needs %d parameter%s, got %d", ExpressionTypeToString(window_type), param_count, param_count == 1 ? "" : "s", child_types.size());
+	}
+	switch (window_type) {
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_CUME_DIST:
+		return LogicalType(LogicalTypeId::DOUBLE);
+	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_NTILE:
+		return LogicalType::BIGINT;
+	case ExpressionType::WINDOW_NTH_VALUE:
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
 		return child_types[0];
-	} else {
-		if (child_types.size() != 1) {
-			throw BinderException("%s needs one parameter, got %d", ExpressionTypeToString(window_type), child_types.size());
-		}
-		switch (window_type) {
-		case ExpressionType::WINDOW_PERCENT_RANK:
-		case ExpressionType::WINDOW_CUME_DIST:
-			return LogicalType(LogicalTypeId::DOUBLE);
-		case ExpressionType::WINDOW_ROW_NUMBER:
-		case ExpressionType::WINDOW_RANK:
-		case ExpressionType::WINDOW_RANK_DENSE:
-		case ExpressionType::WINDOW_NTILE:
-			return LogicalType::BIGINT;
-		case ExpressionType::WINDOW_FIRST_VALUE:
-		case ExpressionType::WINDOW_LAST_VALUE:
-		case ExpressionType::WINDOW_LEAD:
-		case ExpressionType::WINDOW_LAG:
-			return child_types[0];
-		default:
-			throw InternalException("Unrecognized window expression type " + ExpressionTypeToString(window_type));
-		}
+	default:
+		throw InternalException("Unrecognized window expression type " + ExpressionTypeToString(window_type));
 	}
 }
 

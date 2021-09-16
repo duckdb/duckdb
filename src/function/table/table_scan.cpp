@@ -86,7 +86,7 @@ idx_t TableScanMaxThreads(ClientContext &context, const FunctionData *bind_data_
 unique_ptr<ParallelState> TableScanInitParallelState(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto result = make_unique<ParallelTableFunctionScanState>();
-	bind_data.table->storage->InitializeParallelScan(result->state);
+	bind_data.table->storage->InitializeParallelScan(context, result->state);
 	return move(result);
 }
 
