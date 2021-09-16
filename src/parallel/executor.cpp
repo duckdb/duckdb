@@ -236,7 +236,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 
 		// the current is dependent on this pipeline to complete
 		current->AddDependency(pipeline);
-		PhysicalOperator *pipeline_child;
+		PhysicalOperator *pipeline_child = nullptr;
 		switch (op->type) {
 		case PhysicalOperatorType::CREATE_TABLE_AS:
 		case PhysicalOperatorType::INSERT:
@@ -251,11 +251,20 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
 		case PhysicalOperatorType::EXPRESSION_SCAN:
-		case PhysicalOperatorType::EXPORT:
+			D_ASSERT(op->children.size() == 1);
 			// single operator:
 			// the operator becomes the data source of the current pipeline
 			current->source = op;
 			// we create a new pipeline starting from the child
+			pipeline_child = op->children[0].get();
+		case PhysicalOperatorType::EXPORT:
+			// EXPORT has an optional child
+			// we only need to schedule child pipelines if there is a child
+			current->source = op;
+			if (op->children.empty()) {
+				return;
+			}
+			D_ASSERT(op->children.size() == 1);
 			pipeline_child = op->children[0].get();
 			break;
 		case PhysicalOperatorType::NESTED_LOOP_JOIN:
@@ -276,6 +285,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		default:
 			throw InternalException("Unimplemented sink type!");
 		}
+		D_ASSERT(pipeline_child);
 		// recurse into the pipeline child
 		BuildPipelines(pipeline_child, pipeline.get());
 		if (op->type == PhysicalOperatorType::DELIM_JOIN) {
