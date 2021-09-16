@@ -22,9 +22,9 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 	case ExpressionType::WINDOW_RANK:
 	case ExpressionType::WINDOW_RANK_DENSE:
 	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_PERCENT_RANK:
 		param_count = 0;
 		break;
-	case ExpressionType::WINDOW_PERCENT_RANK:
 	case ExpressionType::WINDOW_CUME_DIST:
 	case ExpressionType::WINDOW_NTILE:
 	case ExpressionType::WINDOW_FIRST_VALUE:
