@@ -37,7 +37,7 @@ public:
 };
 
 Pipeline::Pipeline(Executor &executor_p)
-    : executor(executor_p), source(nullptr), sink(nullptr) {
+    : executor(executor_p), ready(false), source(nullptr), sink(nullptr) {
 }
 
 ClientContext &Pipeline::GetClientContext() {
@@ -94,6 +94,7 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 }
 
 void Pipeline::Schedule(shared_ptr<Event> &event) {
+	D_ASSERT(ready);
 	if (!sink) {
 		return;
 	}
@@ -136,6 +137,10 @@ void Pipeline::ResetSource() {
 }
 
 void Pipeline::Ready() {
+	if (ready) {
+		return;
+	}
+	ready = true;
 	std::reverse(operators.begin(), operators.end());
 	// schedule child pipelines, if any
 	auto current_pipeline = this;
@@ -149,6 +154,7 @@ void Pipeline::Ready() {
 			for(idx_t k = i + 1; k < operators.size(); k++) {
 				new_pipeline->operators.push_back(operators[k]);
 			}
+			new_pipeline->ready = true;
 			new_pipeline->Reset();
 
 			auto next_pipeline = new_pipeline.get();
@@ -160,6 +166,7 @@ void Pipeline::Ready() {
 }
 
 void Pipeline::Finalize(Event &event) {
+	D_ASSERT(ready);
 	try {
 		sink->Finalize(*this, event, executor.context, *sink->sink_state);
 	} catch (std::exception &ex) {

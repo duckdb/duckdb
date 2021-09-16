@@ -50,6 +50,8 @@ public:
 	bool GetProgress(int &current_percentage);
 
 private:
+	//! Whether or not the pipeline has been readied
+	bool ready;
 	//! The source of this pipeline
 	PhysicalOperator *source;
 	//! The chain of intermediate operators
