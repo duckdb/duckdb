@@ -15,26 +15,33 @@
 
 namespace duckdb {
 
-static LogicalType ResolveWindowExpressionType(ExpressionType window_type, LogicalType child_type) {
-	switch (window_type) {
-	case ExpressionType::WINDOW_PERCENT_RANK:
-	case ExpressionType::WINDOW_CUME_DIST:
-		return LogicalType(LogicalTypeId::DOUBLE);
-	case ExpressionType::WINDOW_ROW_NUMBER:
-	case ExpressionType::WINDOW_RANK:
-	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_NTILE:
-		return LogicalType::BIGINT;
-	case ExpressionType::WINDOW_FIRST_VALUE:
-	case ExpressionType::WINDOW_LAST_VALUE:
-	case ExpressionType::WINDOW_NTH_VALUE:
-		D_ASSERT(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
-		return child_type;
-	case ExpressionType::WINDOW_LEAD:
-	default:
-		D_ASSERT(window_type == ExpressionType::WINDOW_LAG || window_type == ExpressionType::WINDOW_LEAD);
-		D_ASSERT(child_type.id() != LogicalTypeId::INVALID); // "Window function needs an expression"
-		return child_type;
+static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const vector<LogicalType> &child_types) {
+	if (window_type == ExpressionType::WINDOW_NTH_VALUE) {
+		if (child_types.size() != 2) {
+			throw BinderException("%s needs two parameters, got %d", ExpressionTypeToString(window_type), child_types.size());
+		}
+		return child_types[0];
+	} else {
+		if (child_types.size() != 1) {
+			throw BinderException("%s needs one parameter, got %d", ExpressionTypeToString(window_type), child_types.size());
+		}
+		switch (window_type) {
+		case ExpressionType::WINDOW_PERCENT_RANK:
+		case ExpressionType::WINDOW_CUME_DIST:
+			return LogicalType(LogicalTypeId::DOUBLE);
+		case ExpressionType::WINDOW_ROW_NUMBER:
+		case ExpressionType::WINDOW_RANK:
+		case ExpressionType::WINDOW_RANK_DENSE:
+		case ExpressionType::WINDOW_NTILE:
+			return LogicalType::BIGINT;
+		case ExpressionType::WINDOW_FIRST_VALUE:
+		case ExpressionType::WINDOW_LAST_VALUE:
+		case ExpressionType::WINDOW_LEAD:
+		case ExpressionType::WINDOW_LAG:
+			return child_types[0];
+		default:
+			throw InternalException("Unrecognized window expression type " + ExpressionTypeToString(window_type));
+		}
 	}
 }
 
@@ -183,7 +190,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		sql_type = bound_aggregate->return_type;
 	} else {
 		// fetch the child of the non-aggregate window function (if any)
-		sql_type = ResolveWindowExpressionType(window.type, types.empty() ? LogicalType() : types[0]);
+		sql_type = ResolveWindowExpressionType(window.type, types);
 	}
 	auto result = make_unique<BoundWindowExpression>(window.type, sql_type, move(aggregate), move(bind_info));
 	result->children = move(children);

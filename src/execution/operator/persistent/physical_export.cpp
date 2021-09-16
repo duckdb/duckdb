@@ -74,7 +74,6 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEnt
 	ss << ");" << std::endl;
 }
 
-
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//

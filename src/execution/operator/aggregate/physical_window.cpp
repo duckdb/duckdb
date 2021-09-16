@@ -1093,9 +1093,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			payload_collection.CopyCell(0, bounds.window_end - 1, result, output_offset);
 			break;
 		case ExpressionType::WINDOW_NTH_VALUE: {
-			if (payload_collection.ColumnCount() != 2) {
-				throw BinderException("NTH_VALUE needs a parameter");
-			}
+			D_ASSERT(payload_collection.ColumnCount() == 2);
 			// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
 			// returns NULL if there is no such row.
 			if (CellIsNull(payload_collection, 1, row_idx)) {
