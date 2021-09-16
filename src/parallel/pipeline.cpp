@@ -177,7 +177,6 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 
 void Pipeline::AddUnionPipeline(shared_ptr<Pipeline> pipeline) {
 	D_ASSERT(pipeline);
-	pipeline->operators = operators;
 	union_pipelines.push_back(pipeline);
 }
 

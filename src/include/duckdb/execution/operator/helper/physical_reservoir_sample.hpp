@@ -37,6 +37,10 @@ public:
 		return true;
 	}
 
+	bool IsSink() const override {
+		return true;
+	}
+
 	string ParamsToString() const override;
 };
 

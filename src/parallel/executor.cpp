@@ -251,6 +251,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
 		case PhysicalOperatorType::EXPRESSION_SCAN:
+		case PhysicalOperatorType::EXPORT:
 			// single operator:
 			// the operator becomes the data source of the current pipeline
 			current->source = op;
@@ -312,8 +313,9 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::UNION: {
 			auto union_pipeline = make_shared<Pipeline>(*this);
 			auto pipeline_ptr = union_pipeline.get();
-			current->AddUnionPipeline(move(union_pipeline));
+			union_pipeline->operators = current->operators;
 			BuildPipelines(op->children[0].get(), current);
+			current->AddUnionPipeline(move(union_pipeline));
 			pipeline_ptr->sink = current->sink;
 			BuildPipelines(op->children[1].get(), pipeline_ptr);
 			return;
