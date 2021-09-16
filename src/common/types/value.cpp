@@ -519,7 +519,24 @@ Value Value::BLOB(const string &data) {
 	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
-
+Value Value::ENUM(uint8_t value, const LogicalType &original_type) {
+	Value result(LogicalType::ENUM(original_type.GetExtraTypeInfo(), EnumType::GetSize(original_type)));
+	result.value_.utinyint = value;
+	result.is_null = false;
+	return result;
+}
+Value Value::ENUM(uint16_t value, const LogicalType &original_type) {
+	Value result(LogicalType::ENUM(original_type.GetExtraTypeInfo(), EnumType::GetSize(original_type)));
+	result.value_.usmallint = value;
+	result.is_null = false;
+	return result;
+}
+Value Value::ENUM(uint32_t value, const LogicalType &original_type) {
+	Value result(LogicalType::ENUM(original_type.GetExtraTypeInfo(), EnumType::GetSize(original_type)));
+	result.value_.uinteger = value;
+	result.is_null = false;
+	return result;
+}
 Value Value::INTERVAL(int32_t months, int32_t days, int64_t micros) {
 	Value result(LogicalType::INTERVAL);
 	result.is_null = false;

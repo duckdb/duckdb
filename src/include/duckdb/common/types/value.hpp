@@ -100,14 +100,10 @@ public:
 	DUCKDB_API static Value INTERVAL(int32_t months, int32_t days, int64_t micros);
 	DUCKDB_API static Value INTERVAL(interval_t interval);
 
-	//! Create a enum Value from a specified uint value
-	template <class T>
-	DUCKDB_API static Value ENUM(T value, const LogicalType &original_type) {
-		Value result(LogicalType::ENUM(original_type.GetExtraTypeInfo(), EnumType::GetSize(original_type)));
-		result.value_.usmallint = value;
-		result.is_null = false;
-		return result;
-	}
+	// Create a enum Value from a specified uint value
+	DUCKDB_API static Value ENUM(uint8_t value, const LogicalType &original_type);
+	DUCKDB_API static Value ENUM(uint16_t value, const LogicalType &original_type);
+	DUCKDB_API static Value ENUM(uint32_t value, const LogicalType &original_type);
 
 	// Decimal values
 	DUCKDB_API static Value DECIMAL(int16_t value, uint8_t width, uint8_t scale);
