@@ -181,53 +181,27 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 }
 
 template <class T>
-bool TransformEnum(Vector &source, Vector &result, idx_t count) {
+bool TransformEnum(Vector &source, Vector &result) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
-	auto enum_values = EnumType::GetTypeValues<T>(result.GetType());
-	auto enum_name = EnumType::GetTypeName(result.GetType());
-	switch (source.GetVectorType()) {
-	case VectorType::CONSTANT_VECTOR: {
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		auto source_data = ConstantVector::GetData<string_t>(source);
-		auto result_data = ConstantVector::GetData<T>(result);
+	D_ASSERT(source.GetVectorType() == VectorType::CONSTANT_VECTOR);
 
-		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result, true);
-		} else {
-			ConstantVector::SetNull(result, false);
-			auto string_value = source_data[0].GetString();
-			auto it = enum_values.find(source_data[0].GetString());
-			if (it == enum_values.end()) {
-				throw std::runtime_error("The value: " + string_value +
-				                         " does not exist in the ENUM type: " + enum_name);
-			}
-			result_data[0] = it->second;
+	auto enum_name = EnumType::GetTypeName(result.GetType());
+	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	auto source_data = ConstantVector::GetData<string_t>(source);
+	auto result_data = ConstantVector::GetData<T>(result);
+
+	if (ConstantVector::IsNull(source)) {
+		ConstantVector::SetNull(result, true);
+	} else {
+		ConstantVector::SetNull(result, false);
+		auto string_value = source_data[0].GetString();
+		auto pos = EnumType::GetPos(result.GetType(), source_data[0].GetString());
+		if (pos == -1) {
+			throw std::runtime_error("The value: " + string_value + " does not exist in the ENUM type: " + enum_name);
 		}
-		break;
+		result_data[0] = pos;
 	}
-	case VectorType::FLAT_VECTOR: {
-		//			result.SetVectorType(VectorType::FLAT_VECTOR);
-		//			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
-		//			auto ldata = FlatVector::GetData<INPUT_TYPE>(input);
-		//
-		//			ExecuteFlat<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count,
-		// FlatVector::Validity(input), FlatVector::Validity(result), dataptr, adds_nulls);
-		break;
-	}
-	default: {
-		//			VectorData vdata;
-		//			source.Orrify(count, vdata);
-		//
-		//			result.SetVectorType(VectorType::FLAT_VECTOR);
-		//			auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
-		//			auto ldata = (INPUT_TYPE *)vdata.data;
-		//
-		//			ExecuteLoop<INPUT_TYPE, RESULT_TYPE, OPWRAPPER, OP>(ldata, result_data, count, vdata.sel,
-		// vdata.validity, 			                                                    FlatVector::Validity(result),
-		// dataptr, adds_nulls);
-		break;
-	}
-	}
+
 	return true;
 }
 static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, bool strict,
@@ -237,11 +211,11 @@ static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t 
 	case LogicalTypeId::ENUM: {
 		switch (result.GetType().InternalType()) {
 		case PhysicalType::UINT8:
-			return TransformEnum<uint8_t>(source, result, count);
+			return TransformEnum<uint8_t>(source, result);
 		case PhysicalType::UINT16:
-			return TransformEnum<uint16_t>(source, result, count);
+			return TransformEnum<uint16_t>(source, result);
 		case PhysicalType::UINT32:
-			return TransformEnum<uint32_t>(source, result, count);
+			return TransformEnum<uint32_t>(source, result);
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}

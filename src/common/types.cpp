@@ -1026,27 +1026,6 @@ public:
 	}
 };
 
-template <>
-LogicalType LogicalType::ENUM(const string &enum_name, const shared_ptr<unordered_map<string, uint8_t>> &enum_values,
-                              const shared_ptr<vector<string>> &values_insert_order) {
-	auto info = make_shared<EnumTypeInfo<uint8_t>>(enum_name, enum_values, values_insert_order);
-	return LogicalType(LogicalTypeId::ENUM, PhysicalType::UINT8, move(info));
-}
-
-template <>
-LogicalType LogicalType::ENUM(const string &enum_name, const shared_ptr<unordered_map<string, uint16_t>> &enum_values,
-                              const shared_ptr<vector<string>> &values_insert_order) {
-	auto info = make_shared<EnumTypeInfo<uint16_t>>(enum_name, enum_values, values_insert_order);
-	return LogicalType(LogicalTypeId::ENUM, PhysicalType::UINT16, move(info));
-}
-
-template <>
-LogicalType LogicalType::ENUM(const string &enum_name, const shared_ptr<unordered_map<string, uint32_t>> &enum_values,
-                              const shared_ptr<vector<string>> &values_insert_order) {
-	auto info = make_shared<EnumTypeInfo<uint32_t>>(enum_name, enum_values, values_insert_order);
-	return LogicalType(LogicalTypeId::ENUM, PhysicalType::UINT32, move(info));
-}
-
 const string &EnumType::GetTypeName(const LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::ENUM);
 	auto info = type.AuxInfo();
@@ -1063,52 +1042,38 @@ const string &EnumType::GetTypeName(const LogicalType &type) {
 	}
 }
 
-template <>
-const unordered_map<string, uint8_t> &EnumType::GetTypeValues(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return *((EnumTypeInfo<uint8_t> &)*info).values;
+LogicalType LogicalType::ENUM(const shared_ptr<ExtraTypeInfo> &info, size_t size) {
+	if (size <= NumericLimits<uint8_t>::Maximum()) {
+		return LogicalType(LogicalTypeId::ENUM, PhysicalType::UINT8, info);
+	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+		return LogicalType(LogicalTypeId::ENUM, PhysicalType::UINT16, info);
+	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+		return LogicalType(LogicalTypeId::ENUM, PhysicalType::UINT32, info);
+	} else {
+		throw std::runtime_error("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+	}
 }
 
-template <>
-const unordered_map<string, uint16_t> &EnumType::GetTypeValues(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return *((EnumTypeInfo<uint16_t> &)*info).values;
+template <class T>
+int64_t TemplatedGetPos(unordered_map<string, T> &map, const string &key) {
+	auto it = map.find(key);
+	if (it == map.end()) {
+		return -1;
+	}
+	return it->second;
 }
-
-template <>
-const unordered_map<string, uint32_t> &EnumType::GetTypeValues(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+int64_t EnumType::GetPos(const LogicalType &type, const string &key) {
 	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return *((EnumTypeInfo<uint32_t> &)*info).values;
-}
-
-template <>
-const shared_ptr<unordered_map<string, uint8_t>> EnumType::GetSharedTypeValues(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return ((EnumTypeInfo<uint8_t> &)*info).values;
-}
-
-template <>
-const shared_ptr<unordered_map<string, uint16_t>> EnumType::GetSharedTypeValues(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return ((EnumTypeInfo<uint16_t> &)*info).values;
-}
-
-template <>
-const shared_ptr<unordered_map<string, uint32_t>> EnumType::GetSharedTypeValues(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	return ((EnumTypeInfo<uint32_t> &)*info).values;
+	switch (type.InternalType()) {
+	case PhysicalType::UINT8:
+		return TemplatedGetPos(*((EnumTypeInfo<uint8_t> &)*info).values, key);
+	case PhysicalType::UINT16:
+		return TemplatedGetPos(*((EnumTypeInfo<uint8_t> &)*info).values, key);
+	case PhysicalType::UINT32:
+		return TemplatedGetPos(*((EnumTypeInfo<uint8_t> &)*info).values, key);
+	default:
+		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+	}
 }
 
 const vector<string> &EnumType::GetValuesInsertOrder(const LogicalType &type) {
@@ -1127,19 +1092,28 @@ const vector<string> &EnumType::GetValuesInsertOrder(const LogicalType &type) {
 	}
 }
 
-const shared_ptr<vector<string>> EnumType::GetSharedValuesInsertOrder(const LogicalType &type) {
-	D_ASSERT(type.id() == LogicalTypeId::ENUM);
-	auto info = type.AuxInfo();
-	D_ASSERT(info);
-	switch (type.InternalType()) {
-	case PhysicalType::UINT8:
-		return ((EnumTypeInfo<uint8_t> &)*info).values_insert_order;
-	case PhysicalType::UINT16:
-		return ((EnumTypeInfo<uint16_t> &)*info).values_insert_order;
-	case PhysicalType::UINT32:
-		return ((EnumTypeInfo<uint32_t> &)*info).values_insert_order;
-	default:
-		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+template <class T>
+shared_ptr<ExtraTypeInfo> TemplatedCreateEnumInfo(const string &enum_name,
+                                                  const shared_ptr<vector<string>> &ordered_data) {
+	auto enum_values = make_shared<unordered_map<string, T>>();
+	idx_t count = 0;
+	for (auto &value : *ordered_data) {
+		(*enum_values)[value] = count++;
+	}
+	return make_shared<EnumTypeInfo<T>>(enum_name, enum_values, ordered_data);
+}
+
+shared_ptr<ExtraTypeInfo> EnumType::CreateEnumInfo(const string &enum_name,
+                                                   const shared_ptr<vector<string>> &ordered_data) {
+	auto size = ordered_data->size();
+	if (size <= NumericLimits<uint8_t>::Maximum()) {
+		return TemplatedCreateEnumInfo<uint8_t>(enum_name, ordered_data);
+	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+		return TemplatedCreateEnumInfo<uint16_t>(enum_name, ordered_data);
+	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+		return TemplatedCreateEnumInfo<uint32_t>(enum_name, ordered_data);
+	} else {
+		throw std::runtime_error("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
 	}
 }
 

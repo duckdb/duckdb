@@ -103,9 +103,7 @@ public:
 	//! Create a enum Value from a specified uint value
 	template <class T>
 	DUCKDB_API static Value ENUM(T value, const LogicalType &original_type) {
-		auto values = EnumType::GetSharedTypeValues<T>(original_type);
-		auto values_insert_order = EnumType::GetSharedValuesInsertOrder(original_type);
-		Value result(LogicalType::ENUM(EnumType::GetTypeName(original_type), values, values_insert_order));
+		Value result(LogicalType::ENUM(original_type.GetExtraTypeInfo(), EnumType::GetSize(original_type)));
 		result.value_.usmallint = value;
 		result.is_null = false;
 		return result;

@@ -113,32 +113,6 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindSchema(info);
 }
 
-template <class T>
-void FillEnumHashtable(vector<string> &catalog_values_insert_order, ColumnDefinition &column,
-                       const string &user_type_name) {
-	auto values_insert_order = make_shared<vector<string>>();
-	*values_insert_order = catalog_values_insert_order;
-	auto enum_values = make_shared<unordered_map<string, T>>();
-	idx_t count = 0;
-	for (auto &value : catalog_values_insert_order) {
-		(*enum_values)[value] = count++;
-	}
-	column.type = LogicalType::ENUM(user_type_name, enum_values, values_insert_order);
-}
-
-void CreateEnumType(EnumCatalogEntry *enum_catalog, ColumnDefinition &column, const string &user_type_name) {
-	auto size = enum_catalog->values_insert_order.size();
-	if (size <= NumericLimits<uint8_t>::Maximum()) {
-		FillEnumHashtable<uint8_t>(enum_catalog->values_insert_order, column, user_type_name);
-	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
-		FillEnumHashtable<uint16_t>(enum_catalog->values_insert_order, column, user_type_name);
-	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
-		FillEnumHashtable<uint32_t>(enum_catalog->values_insert_order, column, user_type_name);
-	} else {
-		throw std::runtime_error("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
-	}
-}
-
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -212,7 +186,10 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				if (!enum_catalog) {
 					throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
 				}
-				CreateEnumType(enum_catalog, column, user_type_name);
+				auto values_insert_order = make_shared<vector<string>>();
+				*values_insert_order = enum_catalog->values_insert_order;
+				column.type = LogicalType::ENUM(EnumType::CreateEnumInfo(user_type_name, values_insert_order),
+				                                values_insert_order->size());
 			}
 		}
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
