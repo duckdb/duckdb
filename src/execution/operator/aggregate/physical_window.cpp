@@ -60,6 +60,7 @@ public:
 		// initialize thread-local operator state
 		partitions = gstate.counts.size();
 		next_part = 0;
+		position = 0;
 	}
 
 	//! The number of partitions to process (0 if there is no partitioning)

@@ -66,6 +66,11 @@ SELECT approx_count_distinct(a) from t group by a %2;
 require vector_size 512
 
 query I
+SELECT count(*) from t where a < 10;
+----
+10
+
+query I
 SELECT approx_count_distinct(a) over (partition by a%2) from t where a < 10;
 ----
 5

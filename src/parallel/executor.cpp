@@ -161,7 +161,6 @@ void Executor::Initialize(PhysicalOperator *plan) {
 #endif
 		}
 		ScheduleEvents();
-		NextExecutor();
 	}
 
 	// now execute tasks from this producer until all pipelines are completed
@@ -205,6 +204,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 
 	lock_guard<mutex> elock(executor_lock);
 	pipelines.clear();
+	NextExecutor();
 	if (!exceptions.empty()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
 		throw Exception(exceptions[0]);
