@@ -157,8 +157,56 @@ SELECT sum(i) FROM test_table;
 ----
 300
 
+# Testing CREATE VIEW
+statement ok
+CREATE VIEW test_view AS SELECT * FROM test_table;
+
+statement ok
+CREATE VIEW main.main_view AS SELECT * FROM main.main_table;
+
+statement ok
+CREATE VIEW out_of_path.oop_view AS SELECT * FROM out_of_path.oop_table;
+
+statement error
+SELECT * FROM main.test_view;
+
+statement ok
+SELECT * FROM test.test_view;
+
+statement ok
+SELECT * FROM test_view;
+
+statement ok
+SELECT * FROM main.main_view;
+
+statement ok
+SELECT * FROM main_view;
+
+statement error
+SELECT * FROM oop_view;
+
+statement ok
+SELECT * FROM out_of_path.oop_view;
+
+statement ok
+SET SESSION schema = 'main';
+
+# Test view's schema being bound on definition.
+statement error
+CREATE VIEW bad_test_view AS SELECT * FROM test_table;
+
 # TODO(omo):
-# - Test VIEW
+#   Currenly this fails because we bind the table name
+#   when the view is actually used vs. defined.
+#   This behavior is incompatible with PG.
+# statement ok
+# SELECT * FROM test.test_view;
+
+statement ok
+SET SESSION schema = 'test';
+
+
+# TODO(omo):
 # - Test MACRO
 # - Test SEQUENCE
 # - Test ALTER and DROP

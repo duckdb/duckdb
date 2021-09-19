@@ -14,7 +14,7 @@
 namespace duckdb {
 
 struct CreateViewInfo : public CreateInfo {
-	CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY) {
+	CreateViewInfo() : CreateInfo(CatalogType::VIEW_ENTRY, INVALID_SCHEMA) {
 	}
 	CreateViewInfo(string schema, string view_name)
 	    : CreateInfo(CatalogType::VIEW_ENTRY, schema), view_name(view_name) {
