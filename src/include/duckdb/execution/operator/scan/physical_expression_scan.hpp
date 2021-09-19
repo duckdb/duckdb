@@ -31,7 +31,7 @@ public:
 
 public:
 	// Sink interface
-	void Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
 	                  DataChunk &input) const override;
 
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;

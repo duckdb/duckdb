@@ -33,7 +33,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateTableAs::GetGlobalSinkState(ClientCont
 	return move(sink);
 }
 
-void PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
+SinkResultType PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                  DataChunk &input) const {
 	auto &sink = (CreateTableAsGlobalState &)state;
 	if (sink.table) {
@@ -41,6 +41,7 @@ void PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalSinkState &sta
 		sink.table->storage->Append(*sink.table, context.client, input);
 		sink.inserted_count += input.size();
 	}
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 //===--------------------------------------------------------------------===//

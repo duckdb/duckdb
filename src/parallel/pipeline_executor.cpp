@@ -41,8 +41,12 @@ void PipelineExecutor::Execute() {
 			StartOperator(pipeline.sink);
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
-			pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, final_chunk);
+			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, final_chunk);
 			EndOperator(pipeline.sink, nullptr);
+			if (sink_result == SinkResultType::FINISHED) {
+				pipeline.sink->Combine(context, *pipeline.sink->sink_state, *local_sink_state);
+				break;
+			}
 		}
 	} catch (std::exception &ex) {
 		executor.PushError(ex.what());

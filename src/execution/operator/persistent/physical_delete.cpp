@@ -18,13 +18,14 @@ public:
 	atomic<idx_t> deleted_count;
 };
 
-void PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                           DataChunk &input) const {
 	auto &gstate = (DeleteGlobalState &)state;
 
 	// delete data in the base table
 	// the row ids are given to us as the last column of the child chunk
 	gstate.deleted_count += table.Delete(tableref, context.client, input.data[row_id_index], input.size());
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &context) const {

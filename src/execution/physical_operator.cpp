@@ -59,7 +59,7 @@ void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 // Sink
 //===--------------------------------------------------------------------===//
 // LCOV_EXCL_START
-void PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
 					DataChunk &input) const {
 	throw InternalException("Calling Sink on a node that is not a sink!");
 }

@@ -1260,7 +1260,7 @@ static void Scan(WindowOperatorState &state, DataChunk &chunk) {
 	state.position += STANDARD_VECTOR_SIZE;
 }
 
-void PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
+SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                           DataChunk &input) const {
 	auto &lstate = (WindowLocalState &)lstate_p;
 	lstate.chunks.Append(input);
@@ -1288,6 +1288,7 @@ void PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &state, Loc
 		lstate.over_collection.Append(over_chunk);
 		D_ASSERT(lstate.chunks.Count() == lstate.over_collection.Count());
 	}
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalWindow::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {

@@ -34,7 +34,7 @@ public:
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
-	void Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
 	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const override;
 	void Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const override;

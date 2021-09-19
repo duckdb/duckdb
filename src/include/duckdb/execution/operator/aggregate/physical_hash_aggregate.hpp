@@ -56,7 +56,7 @@ public:
 
 public:
 	// Sink interface
-	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	          DataChunk &input) const override;
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
 	void Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const override;

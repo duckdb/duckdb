@@ -27,4 +27,9 @@ enum class OperatorResultType : uint8_t {
 	FINISHED
 };
 
+enum class SinkResultType : uint8_t {
+	NEED_MORE_INPUT,
+	FINISHED
+};
+
 } // namespace duckdb

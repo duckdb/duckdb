@@ -47,7 +47,7 @@ void PhysicalExpressionScan::GetData(ExecutionContext &context, DataChunk &chunk
 	state.expression_index++;
 }
 
-void PhysicalExpressionScan::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate,
+SinkResultType PhysicalExpressionScan::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate,
 					DataChunk &input) const {
 	auto &gstate = (ExpressionSinkState &) gstate_p;
 
@@ -57,6 +57,7 @@ void PhysicalExpressionScan::Sink(ExecutionContext &context, GlobalSinkState &gs
 		throw InternalException("Expected expression scan child to have exactly one element");
 	}
 	gstate.child_chunk.Move(input);
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 unique_ptr<GlobalSinkState> PhysicalExpressionScan::GetGlobalSinkState(ClientContext &context) const {

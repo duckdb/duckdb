@@ -114,7 +114,7 @@ unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(Execu
 	return make_unique<PerfectHashAggregateLocalState>(*this, context.client);
 }
 
-void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
+SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
                                         DataChunk &input) const {
 	auto &lstate = (PerfectHashAggregateLocalState &)lstate_p;
 	DataChunk &group_chunk = lstate.group_chunk;
@@ -153,6 +153,7 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalSinkSta
 	D_ASSERT(aggregate_input_chunk.ColumnCount() == 0 || group_chunk.size() == aggregate_input_chunk.size());
 
 	lstate.ht->AddChunk(group_chunk, aggregate_input_chunk);
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 //===--------------------------------------------------------------------===//

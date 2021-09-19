@@ -39,7 +39,7 @@ public:
 
 public:
 	// Sink interface
-	void Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate, DataChunk &input) const override;
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate, DataChunk &input) const override;
 
 	bool ParallelSink() const override {
 		return true;

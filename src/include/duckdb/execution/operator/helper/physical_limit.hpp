@@ -26,9 +26,19 @@ public:
 	unique_ptr<Expression> offset_expression;
 
 public:
-	// Operator interface
-	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
-	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
+
+public:
+	// Sink Interface
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	          DataChunk &input) const override;
+
+	bool IsSink() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

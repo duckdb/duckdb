@@ -34,17 +34,18 @@ unique_ptr<GlobalSinkState> PhysicalReservoirSample::GetGlobalSinkState(ClientCo
 	return make_unique<SampleGlobalSinkState>(*options);
 }
 
-void PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+SinkResultType PhysicalReservoirSample::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                    DataChunk &input) const {
 	auto &gstate = (SampleGlobalSinkState &)state;
 	if (!gstate.sample) {
-		return;
+		return SinkResultType::FINISHED;
 	}
 	// we implement reservoir sampling without replacement and exponential jumps here
 	// the algorithm is adopted from the paper Weighted random sampling with a reservoir by Pavlos S. Efraimidis et al.
 	// note that the original algorithm is about weighted sampling; this is a simplified approach for uniform sampling
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.sample->AddToReservoir(input);
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 //===--------------------------------------------------------------------===//

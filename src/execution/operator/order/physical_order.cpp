@@ -69,7 +69,7 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 	return move(result);
 }
 
-void PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
+SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
                          DataChunk &input) const {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
@@ -93,6 +93,7 @@ void PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, L
 	if (local_sort_state.SizeInBytes() >= gstate.memory_per_thread) {
 		local_sort_state.Sort(global_sort_state);
 	}
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const {

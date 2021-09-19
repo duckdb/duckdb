@@ -32,7 +32,7 @@ public:
 	ExpressionExecutor default_executor;
 };
 
-void PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                           DataChunk &chunk) const {
 	auto &gstate = (InsertGlobalState &)state;
 	auto &istate = (InsertLocalState &)lstate;
@@ -66,6 +66,7 @@ void PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, Loc
 	lock_guard<mutex> glock(gstate.lock);
 	table->storage->Append(*table, context.client, istate.insert_chunk);
 	gstate.insert_count += chunk.size();
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 unique_ptr<GlobalSinkState> PhysicalInsert::GetGlobalSinkState(ClientContext &context) const {

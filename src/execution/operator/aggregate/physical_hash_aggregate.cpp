@@ -149,7 +149,7 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionCon
 	return make_unique<HashAggregateLocalState>(*this);
 }
 
-void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                  DataChunk &input) const {
 	auto &llstate = (HashAggregateLocalState &)lstate;
 	auto &gstate = (HashAggregateGlobalState &)state;
@@ -202,7 +202,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &sta
 		D_ASSERT(gstate.finalized_hts.size() == 1);
 		D_ASSERT(gstate.finalized_hts[0]);
 		gstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, aggregate_input_chunk);
-		return;
+		return SinkResultType::NEED_MORE_INPUT;
 	}
 
 	D_ASSERT(all_combinable);
@@ -220,6 +220,7 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &sta
 	gstate.total_groups +=
 	    llstate.ht->AddChunk(group_chunk, aggregate_input_chunk,
 	                         gstate.total_groups > radix_limit && gstate.partition_info.n_partitions > 1);
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {

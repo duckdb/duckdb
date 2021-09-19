@@ -31,13 +31,14 @@ PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction f
 		bind_data(move(bind_data)) {
 }
 
-void PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
                               DataChunk &input) const {
 	auto &g = (CopyToFunctionGlobalState &)gstate;
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
 	g.rows_copied += input.size();
 	function.copy_to_sink(context.client, *bind_data, *g.global_state, *l.local_state, input);
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {

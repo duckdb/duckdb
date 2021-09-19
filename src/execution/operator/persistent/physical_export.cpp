@@ -152,8 +152,9 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-void PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate, DataChunk &input) const {
+SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate, DataChunk &input) const {
 	// nop
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 } // namespace duckdb

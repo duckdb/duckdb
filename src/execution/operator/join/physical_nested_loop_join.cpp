@@ -140,7 +140,7 @@ public:
 	unique_ptr<bool[]> right_found_match;
 };
 
-void PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                   DataChunk &input) const {
 	auto &gstate = (NestedLoopJoinGlobalState &)state;
 	auto &nlj_state = (NestedLoopJoinLocalState &)lstate;
@@ -159,6 +159,7 @@ void PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalSinkState &st
 	// append the data and the
 	gstate.right_data.Append(input);
 	gstate.right_chunks.Append(nlj_state.right_condition);
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalNestedLoopJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {

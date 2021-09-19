@@ -72,7 +72,7 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 	return make_unique<MergeJoinLocalState>(conditions);
 }
 
-void PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                       DataChunk &input) const {
 	auto &gstate = (MergeJoinGlobalState &)state;
 	auto &mj_state = (MergeJoinLocalState &)lstate;
@@ -89,6 +89,7 @@ void PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState
 	// append the join keys and the chunk to the chunk collection
 	gstate.right_chunks.Append(input);
 	gstate.right_conditions.Append(mj_state.join_keys);
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 void PhysicalPiecewiseMergeJoin::Combine(ExecutionContext &context, GlobalSinkState &gstate,

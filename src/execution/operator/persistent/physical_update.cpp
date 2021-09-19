@@ -43,7 +43,7 @@ public:
 	ExpressionExecutor default_executor;
 };
 
-void PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                           DataChunk &chunk) const {
 	auto &gstate = (UpdateGlobalState &)state;
 	auto &ustate = (UpdateLocalState &)lstate;
@@ -102,6 +102,7 @@ void PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &state, Loc
 		table.Update(tableref, context.client, row_ids, columns, update_chunk);
 	}
 	gstate.updated_count += chunk.size();
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 unique_ptr<GlobalSinkState> PhysicalUpdate::GetGlobalSinkState(ClientContext &context) const {
