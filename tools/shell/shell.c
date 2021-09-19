@@ -20332,8 +20332,8 @@ static void main_init(ShellState *data) {
   sqlite3_config(SQLITE_CONFIG_URI, 1);
   sqlite3_config(SQLITE_CONFIG_LOG, shellLog, data);
   sqlite3_config(SQLITE_CONFIG_MULTITHREAD);
-  sqlite3_snprintf(sizeof(mainPrompt), mainPrompt,"D ");
-  sqlite3_snprintf(sizeof(continuePrompt), continuePrompt,"   ...> ");
+  sqlite3_snprintf(sizeof(mainPrompt), mainPrompt, "D ");
+  sqlite3_snprintf(sizeof(continuePrompt), continuePrompt, "> ");
 }
 
 /*
