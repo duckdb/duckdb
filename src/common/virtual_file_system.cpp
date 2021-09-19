@@ -10,7 +10,7 @@ VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
 }
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                   FileCompressionType compression) {
+                                                   FileCompressionType compression, FileOpener *opener) {
 	if (compression == FileCompressionType::AUTO_DETECT) {
 		// auto detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
@@ -21,7 +21,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 		}
 	}
 	// open the base file handle
-	auto file_handle = FindFileSystem(path)->OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED);
+	auto file_handle = FindFileSystem(path)->OpenFile(path, flags, lock, FileCompressionType::UNCOMPRESSED, opener);
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
 		file_handle = PipeFileSystem::OpenPipe(move(file_handle));
 	} else if (compression != FileCompressionType::UNCOMPRESSED) {

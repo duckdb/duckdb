@@ -23,14 +23,14 @@ public:
 class HTTPFileHandle : public FileHandle {
 public:
 	HTTPFileHandle(FileSystem &fs, std::string path);
+	// This two-phase construction allows subclasses more flexible setup.
+	virtual void InitializeMetadata();
 
 protected:
 	void Close() override {
 	}
 
 private:
-	virtual void IntializeMetadata();
-
 public:
 	idx_t length;
 	time_t last_modified;
@@ -46,8 +46,9 @@ public:
 
 class HTTPFileSystem : public FileSystem {
 public:
-	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
-	                                     FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
+	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
+	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
+	                                     FileOpener *opener = nullptr) override final;
 
 	std::vector<std::string> Glob(const std::string &path) override {
 		return {path}; // FIXME
@@ -83,6 +84,10 @@ public:
 	std::string GetName() const override {
 		return "HTTPFileSystem";
 	}
+
+protected:
+	virtual std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+	                                                     FileCompressionType compression, FileOpener *opener);
 };
 
 } // namespace duckdb

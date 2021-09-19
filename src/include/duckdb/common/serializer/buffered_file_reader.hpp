@@ -14,7 +14,7 @@ namespace duckdb {
 
 class BufferedFileReader : public Deserializer {
 public:
-	BufferedFileReader(FileSystem &fs, const char *path);
+	BufferedFileReader(FileSystem &fs, const char *path, FileOpener *opener = nullptr);
 
 	FileSystem &fs;
 	unique_ptr<data_t[]> data;

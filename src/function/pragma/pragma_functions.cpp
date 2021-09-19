@@ -193,7 +193,9 @@ static void PragmaLogQueryPath(ClientContext &context, const FunctionParameters 
 		// empty path: clean up query writer
 		context.log_query_writer = nullptr;
 	} else {
-		context.log_query_writer = make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), str_val);
+		context.log_query_writer =
+		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), str_val,
+		                                    BufferedFileWriter::DEFAULT_OPEN_FLAGS, context.file_opener.get());
 	}
 }
 

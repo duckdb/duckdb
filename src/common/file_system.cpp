@@ -36,6 +36,10 @@ FileSystem &FileSystem::GetFileSystem(ClientContext &context) {
 	return *context.db->config.file_system;
 }
 
+FileOpener *FileSystem::GetFileOpener(ClientContext &context) {
+	return context.file_opener.get();
+}
+
 #ifndef _WIN32
 string FileSystem::PathSeparator() {
 	return "/";
@@ -137,7 +141,7 @@ string FileSystem::GetHomeDirectory() {
 
 // LCOV_EXCL_START
 unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                            FileCompressionType compression) {
+                                            FileCompressionType compression, FileOpener *opener) {
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
 }
 
