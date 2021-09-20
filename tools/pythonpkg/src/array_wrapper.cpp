@@ -358,14 +358,8 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 		type_width = sizeof(int64_t);
 		break;
 	case LogicalTypeId::HUGEINT:
-		type_width = sizeof(double);
-		break;
 	case LogicalTypeId::FLOAT:
-		type_width = sizeof(float);
-		break;
 	case LogicalTypeId::DOUBLE:
-		type_width = sizeof(double);
-		break;
 	case LogicalTypeId::DECIMAL:
 		type_width = sizeof(double);
 		break;
@@ -378,12 +372,9 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 		type_width = sizeof(int64_t);
 		break;
 	case LogicalTypeId::TIME:
-		type_width = sizeof(PyObject *);
-		break;
 	case LogicalTypeId::VARCHAR:
-		type_width = sizeof(PyObject *);
-		break;
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::ENUM:
 		type_width = sizeof(PyObject *);
 		break;
 	default:
@@ -444,6 +435,20 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	case LogicalTypeId::BLOB:
 		dtype = "object";
 		break;
+	case LogicalTypeId::ENUM: {
+		auto size = EnumType::GetSize(type);
+		if (size <= NumericLimits<int8_t>::Maximum()) {
+			dtype = "int8";
+		} else if (size <= NumericLimits<int16_t>::Maximum()) {
+			dtype = "int16";
+		} else if (size <= NumericLimits<int32_t>::Maximum()) {
+			dtype = "int32";
+		} else if (size <= NumericLimits<int64_t>::Maximum()) {
+			dtype = "int64";
+		} else {
+			throw InternalException("Size not supported on ENUM types");
+		}
+	} break;
 	default:
 		throw std::runtime_error("unsupported type " + type.ToString());
 	}
@@ -559,6 +564,21 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(current_offset, dataptr,
 		                                                                                    maskptr, idata, count);
 		break;
+	case LogicalTypeId::ENUM: {
+		auto size = EnumType::GetSize(input.GetType());
+		if (size <= NumericLimits<int8_t>::Maximum()) {
+			may_have_null = ConvertColumnRegular<int8_t>(current_offset, dataptr, maskptr, idata, count);
+		} else if (size <= NumericLimits<int16_t>::Maximum()) {
+			may_have_null = ConvertColumnRegular<int16_t>(current_offset, dataptr, maskptr, idata, count);
+		} else if (size <= NumericLimits<int32_t>::Maximum()) {
+			may_have_null = ConvertColumnRegular<int32_t>(current_offset, dataptr, maskptr, idata, count);
+		} else if (size <= NumericLimits<int64_t>::Maximum()) {
+			may_have_null = ConvertColumnRegular<int64_t>(current_offset, dataptr, maskptr, idata, count);
+		} else {
+			throw InternalException("Size not supported on ENUM types");
+		}
+		break;
+	}
 	default:
 		throw std::runtime_error("unsupported type " + input.GetType().ToString());
 	}

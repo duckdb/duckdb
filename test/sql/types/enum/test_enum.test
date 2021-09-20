@@ -68,3 +68,10 @@ DROP TYPE IF EXISTS mood;
 # We can create mood again
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+DROP TYPE IF EXISTS mood;
+
+# We shouldn't be able to add NULL values to ENUMs
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', NULL);

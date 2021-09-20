@@ -18,6 +18,38 @@ void ScanPandasColumn(py::array &numpy_col, idx_t stride, idx_t offset, Vector &
 	}
 }
 
+template <class T, class V>
+void ScanPandasCategoryTemplated(py::array &column, idx_t offset, Vector &out, idx_t count) {
+	auto src_ptr = (T *)column.data();
+	auto tgt_ptr = (V *)FlatVector::GetData(out);
+	auto &tgt_mask = FlatVector::Validity(out);
+	for (idx_t i = 0; i < count; i++) {
+		if (src_ptr[i + offset] == -1) {
+			// Null value
+			tgt_mask.SetInvalid(i);
+		} else {
+			tgt_ptr[i] = src_ptr[i + offset];
+		}
+	}
+}
+
+template <class T>
+void ScanPandasCategory(py::array &column, idx_t count, idx_t offset, Vector &out) {
+	switch (out.GetType().InternalType()) {
+	case PhysicalType::UINT8:
+		ScanPandasCategoryTemplated<T, uint8_t>(column, offset, out, count);
+		break;
+	case PhysicalType::UINT16:
+		ScanPandasCategoryTemplated<T, uint16_t>(column, offset, out, count);
+		break;
+	case PhysicalType::UINT32:
+		ScanPandasCategoryTemplated<T, uint32_t>(column, offset, out, count);
+		break;
+	default:
+		throw InternalException("Invalid Physical Type for ENUMs");
+	}
+}
+
 template <class T>
 void ScanPandasNumeric(PandasColumnBindData &bind_data, idx_t count, idx_t offset, Vector &out) {
 	ScanPandasColumn<T>(bind_data.numpy_col, bind_data.numpy_stride, offset, out, count);
@@ -249,6 +281,24 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		}
 		break;
 	}
+	case PandasType::CATEGORY: {
+		D_ASSERT(py::hasattr(numpy_col, "dtype"));
+		auto src_type = string(py::str(numpy_col.attr("dtype")));
+		if (src_type == "int8") {
+			ScanPandasCategory<int8_t>(numpy_col, count, offset, out);
+		} else if (src_type == "int16") {
+			ScanPandasCategory<int16_t>(numpy_col, count, offset, out);
+		} else if (src_type == "int32") {
+			ScanPandasCategory<int32_t>(numpy_col, count, offset, out);
+		} else if (src_type == "int64") {
+			ScanPandasCategory<int64_t>(numpy_col, count, offset, out);
+		} else {
+			throw NotImplementedException("The Pandas type " + src_type +
+			                              " for categorical types is not implemented yet");
+		}
+		break;
+	}
+
 	default:
 		throw std::runtime_error("Unsupported type " + out.GetType().ToString());
 	}
@@ -352,14 +402,34 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 		} else {
 			// regular type
 			auto column = get_fun(df_columns[col_idx]);
-			bind_data.numpy_col = py::array(column.attr("to_numpy")());
-			bind_data.mask = nullptr;
 			if (col_type == "category") {
-				// for category types, we use the converted numpy type
-				auto numpy_type = bind_data.numpy_col.attr("dtype");
-				auto category_type = string(py::str(numpy_type));
-				ConvertPandasType(category_type, duckdb_col_type, bind_data.pandas_type);
+				// for category types, we create an ENUM type for string or use the converted numpy type for the rest
+				D_ASSERT(py::hasattr(column, "cat"));
+				D_ASSERT(py::hasattr(column.attr("cat"), "categories"));
+				auto categories = py::array(column.attr("cat").attr("categories"));
+				auto category_type = string(py::str(categories.attr("dtype")));
+				if (category_type == "object") {
+					// Let's hope the object type is a string.
+					bind_data.pandas_type = PandasType::CATEGORY;
+					auto enum_name = string(py::str(df_columns[col_idx]));
+					auto enum_entries = make_shared<vector<string>>();
+					for (auto &enum_value : categories) {
+						enum_entries->push_back(py::str(enum_value));
+					}
+					auto enum_info = EnumType::CreateEnumInfo(enum_name, enum_entries);
+					auto size = py::len(categories);
+					D_ASSERT(py::hasattr(column.attr("cat"), "codes"));
+					duckdb_col_type = LogicalType::ENUM(enum_info, size);
+					bind_data.numpy_col = py::array(column.attr("cat").attr("codes"));
+					bind_data.mask = nullptr;
+				} else {
+					bind_data.numpy_col = py::array(column.attr("to_numpy")());
+					bind_data.mask = nullptr;
+					ConvertPandasType(category_type, duckdb_col_type, bind_data.pandas_type);
+				}
 			} else {
+				bind_data.numpy_col = py::array(column.attr("to_numpy")());
+				bind_data.mask = nullptr;
 				ConvertPandasType(col_type, duckdb_col_type, bind_data.pandas_type);
 			}
 		}

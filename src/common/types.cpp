@@ -1003,7 +1003,7 @@ public:
 			return false;
 		}
 		auto &other = (EnumTypeInfo &)*other_p;
-		return other.enum_name == enum_name && other.values == values;
+		return other.enum_name == enum_name && *other.values_insert_order == *values_insert_order;
 	}
 
 	void Serialize(Serializer &serializer) const override {
