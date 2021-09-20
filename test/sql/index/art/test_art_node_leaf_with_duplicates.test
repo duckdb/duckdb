@@ -86,11 +86,19 @@ SELECT COUNT(*) FROM integers
 ----
 0
 
-# insert 3000 elements
+# insert 3000 elements: 1
 loop i 0 3000
 
 statement ok
 INSERT INTO integers VALUES (1);
+
+endloop
+
+# insert 1024 elements: 2
+loop i 0 1024
+
+statement ok
+INSERT INTO integers VALUES (2);
 
 endloop
 
@@ -101,14 +109,41 @@ SELECT COUNT(*) FROM integers WHERE i = 1
 ----
 3000
 
+query I
+SELECT COUNT(*) FROM integers WHERE i = 2
+----
+1024
+
+query I
+SELECT COUNT(*) FROM integers WHERE i <= 2
+----
+4024
+
 # verify sums
 
 query I
 SELECT sum(i) FROM integers WHERE i <= 2
 ----
+5048
+
+# now delete all elements: 2
+
+statement ok
+DELETE FROM integers WHERE i = 2
+
+# verify counts
+
+query I
+SELECT COUNT(*) FROM integers WHERE i = 1
+----
 3000
 
-# now delete all elements
+query I
+SELECT COUNT(*) FROM integers
+----
+3000
+
+# now delete all elements: 1
 
 statement ok
 DELETE FROM integers WHERE i = 1
