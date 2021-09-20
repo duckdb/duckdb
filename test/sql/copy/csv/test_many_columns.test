@@ -1,0 +1,12 @@
+# name: test/sql/copy/csv/test_many_columns.test
+# description: Test read CSV function with many (>100) auto-generated columns
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE t AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/manycolumns.csv');
+
+statement ok
+PRAGMA SHOW('t');

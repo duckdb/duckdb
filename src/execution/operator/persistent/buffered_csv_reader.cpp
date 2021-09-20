@@ -176,7 +176,7 @@ unique_ptr<FileHandle> BufferedCSVReader::OpenCSV(const BufferedCSVReaderOptions
 static string GenerateColumnName(const idx_t total_cols, const idx_t col_number, const string &prefix = "column") {
 	int max_digits = NumericHelper::UnsignedLength(total_cols - 1);
 	int digits = NumericHelper::UnsignedLength(col_number);
-	string leading_zeros = string("0", max_digits - digits);
+	string leading_zeros = string(max_digits - digits, '0');
 	string value = to_string(col_number);
 	return string(prefix + leading_zeros + value);
 }
