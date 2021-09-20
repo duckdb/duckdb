@@ -77,7 +77,6 @@ public:
 	int fd;
 };
 
-
 static FileType GetFileTypeInternal(int fd) {
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
