@@ -539,3 +539,15 @@ if os.name != 'nt':
      input_file='test/sql/copy/csv/data/test/test.csv',
      out='''foo,bar,baz
 0,0," test"''')
+
+     test('''
+     COPY (SELECT 42) TO '/dev/stdout' WITH (FORMAT 'csv');
+     ''',
+     extra_commands=['-csv', ':memory:'],
+     out='''42''')
+
+     test('''
+     COPY (SELECT 42) TO '/dev/stderr' WITH (FORMAT 'csv');
+     ''',
+     extra_commands=['-csv', ':memory:'],
+     err='''42''')

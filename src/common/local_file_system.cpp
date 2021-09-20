@@ -33,14 +33,18 @@ extern "C" WINBASEAPI BOOL WINAPI GetPhysicallyInstalledSystemMemory(PULONGLONG)
 namespace duckdb {
 
 static void AssertValidFileFlags(uint8_t flags) {
-	// cannot combine Read and Write flags
-	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_WRITE));
-	// cannot combine Read and CREATE/Append flags
-	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_APPEND));
-	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE));
-	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_READ && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+#ifdef DEBUG
+	bool is_read = flags & FileFlags::FILE_FLAGS_READ;
+	bool is_write = flags & FileFlags::FILE_FLAGS_WRITE;
+	// require either READ or WRITE (or both)
+	D_ASSERT(is_read || is_write);
+	// CREATE/Append flags require writing
+	D_ASSERT(is_write || !(flags & FileFlags::FILE_FLAGS_APPEND));
+	D_ASSERT(is_write || !(flags & FileFlags::FILE_FLAGS_FILE_CREATE));
+	D_ASSERT(is_write || !(flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
 	// cannot combine CREATE and CREATE_NEW flags
 	D_ASSERT(!(flags & FileFlags::FILE_FLAGS_FILE_CREATE && flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW));
+#endif
 }
 
 #ifndef _WIN32
@@ -73,6 +77,31 @@ public:
 	int fd;
 };
 
+static FileType GetFileTypeInternal(int fd) {
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		return FileType::FILE_TYPE_INVALID;
+	}
+	switch (s.st_mode & S_IFMT) {
+	case S_IFBLK:
+		return FileType::FILE_TYPE_BLOCKDEV;
+	case S_IFCHR:
+		return FileType::FILE_TYPE_CHARDEV;
+	case S_IFIFO:
+		return FileType::FILE_TYPE_FIFO;
+	case S_IFDIR:
+		return FileType::FILE_TYPE_DIR;
+	case S_IFLNK:
+		return FileType::FILE_TYPE_LINK;
+	case S_IFREG:
+		return FileType::FILE_TYPE_REGULAR;
+	case S_IFSOCK:
+		return FileType::FILE_TYPE_SOCKET;
+	default:
+		return FileType::FILE_TYPE_INVALID;
+	}
+}
+
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {
 	if (compression != FileCompressionType::UNCOMPRESSED) {
@@ -83,12 +112,21 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 
 	int open_flags = 0;
 	int rc;
-	if (flags & FileFlags::FILE_FLAGS_READ) {
+	bool open_read = flags & FileFlags::FILE_FLAGS_READ;
+	bool open_write = flags & FileFlags::FILE_FLAGS_WRITE;
+	if (open_read && open_write) {
+		open_flags = O_RDWR;
+	} else if (open_read) {
 		open_flags = O_RDONLY;
+	} else if (open_write) {
+		open_flags = O_WRONLY;
 	} else {
+		throw InternalException("READ, WRITE or both should be specified when opening a file");
+	}
+	if (open_write) {
 		// need Read or Write
 		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
-		open_flags = O_RDWR | O_CLOEXEC;
+		open_flags |= O_CLOEXEC;
 		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
 			open_flags |= O_CREAT;
 		} else if (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW) {
@@ -124,15 +162,19 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	// #endif
 	if (lock_type != FileLockType::NO_LOCK) {
 		// set lock on file
-		struct flock fl;
-		memset(&fl, 0, sizeof fl);
-		fl.l_type = lock_type == FileLockType::READ_LOCK ? F_RDLCK : F_WRLCK;
-		fl.l_whence = SEEK_SET;
-		fl.l_start = 0;
-		fl.l_len = 0;
-		rc = fcntl(fd, F_SETLK, &fl);
-		if (rc == -1) {
-			throw IOException("Could not set lock on file \"%s\": %s", path, strerror(errno));
+		// but only if it is not an input/output stream
+		auto file_type = GetFileTypeInternal(fd);
+		if (file_type != FileType::FILE_TYPE_FIFO && file_type != FileType::FILE_TYPE_SOCKET) {
+			struct flock fl;
+			memset(&fl, 0, sizeof fl);
+			fl.l_type = lock_type == FileLockType::READ_LOCK ? F_RDLCK : F_WRLCK;
+			fl.l_whence = SEEK_SET;
+			fl.l_start = 0;
+			fl.l_len = 0;
+			rc = fcntl(fd, F_SETLK, &fl);
+			if (rc == -1) {
+				throw IOException("Could not set lock on file \"%s\": %s", path, strerror(errno));
+			}
 		}
 	}
 	return make_unique<UnixFileHandle>(*this, path, fd);
@@ -218,28 +260,7 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	int fd = ((UnixFileHandle &)handle).fd;
-	struct stat s;
-	if (fstat(fd, &s) == -1) {
-		return FileType::FILE_TYPE_INVALID;
-	}
-	switch (s.st_mode & S_IFMT) {
-	case S_IFBLK:
-		return FileType::FILE_TYPE_BLOCKDEV;
-	case S_IFCHR:
-		return FileType::FILE_TYPE_CHARDEV;
-	case S_IFIFO:
-		return FileType::FILE_TYPE_FIFO;
-	case S_IFDIR:
-		return FileType::FILE_TYPE_DIR;
-	case S_IFLNK:
-		return FileType::FILE_TYPE_LINK;
-	case S_IFREG:
-		return FileType::FILE_TYPE_REGULAR;
-	case S_IFSOCK:
-		return FileType::FILE_TYPE_SOCKET;
-	default:
-		return FileType::FILE_TYPE_INVALID;
-	}
+	return GetFileTypeInternal(fd);
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
@@ -442,14 +463,21 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
 	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED;
-	if (flags & FileFlags::FILE_FLAGS_READ) {
-		desired_access = GENERIC_READ;
-		share_mode = FILE_SHARE_READ;
-	} else {
-		// need Read or Write
-		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
+	bool open_read = flags & FileFlags::FILE_FLAGS_READ;
+	bool open_write = flags & FileFlags::FILE_FLAGS_WRITE;
+	if (open_read && open_write) {
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
+	} else if (open_read) {
+		desired_access = GENERIC_READ;
+		share_mode = FILE_SHARE_READ;
+	} else if (open_write) {
+		desired_access = GENERIC_WRITE;
+		share_mode = 0;
+	} else {
+		throw InternalException("READ, WRITE or both should be specified when opening a file");
+	}
+	if (open_write) {
 		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
 			creation_disposition = OPEN_ALWAYS;
 		} else if (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW) {
