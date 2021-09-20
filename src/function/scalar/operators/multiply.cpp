@@ -3,6 +3,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 #include <limits>
 #include <algorithm>
