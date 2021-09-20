@@ -39,12 +39,8 @@ void Leaf::Remove(row_t row_id) {
     if (capacity > 2 && num_elements < capacity / 2) {
         // Shrink array, if less than half full
         auto new_row_id = unique_ptr<row_t[]>(new row_t[capacity / 2]);
-        for (idx_t j = 0; j < entry_offset; j++) {
-            new_row_id[j] = row_ids[j];
-        }
-        for (idx_t j = entry_offset; j < num_elements; j++) {
-            new_row_id[j] = row_ids[j + 1];
-        }
+        memcpy(new_row_id.get(), row_ids.get(), entry_offset * sizeof(row_t));
+        memcpy(new_row_id.get() + entry_offset, row_ids.get() + entry_offset + 1, (num_elements - entry_offset) * sizeof(row_t));
         capacity /= 2;
         row_ids = move(new_row_id);
     } else {
