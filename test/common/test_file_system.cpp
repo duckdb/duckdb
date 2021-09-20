@@ -113,7 +113,7 @@ TEST_CASE("Test file buffers for reading/writing to file", "[file_system]") {
 
 	// open file for writing
 	REQUIRE_NOTHROW(handle = fs->OpenFile(fname,
-	                                      FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
+	                                      FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                                          FileFlags::FILE_FLAGS_DIRECT_IO,
 	                                      FileLockType::WRITE_LOCK));
 	// write the buffer
