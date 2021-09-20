@@ -123,7 +123,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	} else {
 		throw InternalException("READ, WRITE or both should be specified when opening a file");
 	}
-	if (flags & FileFlags::FILE_FLAGS_WRITE) {
+	if (open_write) {
 		// need Read or Write
 		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
 		open_flags |= O_CLOEXEC;
@@ -463,14 +463,21 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
 	DWORD flags_and_attributes = FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED;
-	if (flags & FileFlags::FILE_FLAGS_READ) {
-		desired_access = GENERIC_READ;
-		share_mode = FILE_SHARE_READ;
-	} else {
-		// need Read or Write
-		D_ASSERT(flags & FileFlags::FILE_FLAGS_WRITE);
+	bool open_read = flags & FileFlags::FILE_FLAGS_READ;
+	bool open_write = flags & FileFlags::FILE_FLAGS_WRITE;
+	if (open_read && open_write) {
 		desired_access = GENERIC_READ | GENERIC_WRITE;
 		share_mode = 0;
+	} else if (open_read) {
+		desired_access = GENERIC_READ;
+		share_mode = FILE_SHARE_READ;
+	} else if (open_write) {
+		desired_access = GENERIC_WRITE;
+		share_mode = 0;
+	} else {
+		throw InternalException("READ, WRITE or both should be specified when opening a file");
+	}
+	if (open_write) {
 		if (flags & FileFlags::FILE_FLAGS_FILE_CREATE) {
 			creation_disposition = OPEN_ALWAYS;
 		} else if (flags & FileFlags::FILE_FLAGS_FILE_CREATE_NEW) {
