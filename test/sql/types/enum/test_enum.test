@@ -73,5 +73,5 @@ statement ok
 DROP TYPE IF EXISTS mood;
 
 # We shouldn't be able to add NULL values to ENUMs
-statement ok
+statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', NULL);
