@@ -388,7 +388,7 @@ static string JSONSanitize(const string &text) {
 
 // Print a row
 static void PrintRow(std::ostream &ss, const string &annotation, int id, const string &name, double time,
-                     int sample_counter, int tuple_counter, string extra_info, int depth) {
+                     int sample_counter, int tuple_counter, const string &extra_info, int depth) {
 	ss << string(depth * 3, ' ') << " {\n";
 	ss << string(depth * 3, ' ') << "   \"annotation\": \"" + JSONSanitize(annotation) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"id\": " + to_string(id) + ",\n";
