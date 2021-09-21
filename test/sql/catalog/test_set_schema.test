@@ -205,8 +205,69 @@ CREATE VIEW bad_test_view AS SELECT * FROM test_table;
 statement ok
 SET SESSION schema = 'test';
 
+# Testing Macros
+
+statement ok
+CREATE MACRO test_macro(a, b) AS a + b;
+
+statement ok
+CREATE MACRO main.main_macro(a, b) AS a - b;
+
+statement ok
+CREATE MACRO out_of_path.oop_macro(a, b) AS a * b;
+
+statement error
+SELECT main.test_macro(1, 2);
+
+statement error
+SELECT oop_macro(1, 2);
+
+statement ok
+SELECT main_macro(1, 2);
+
+statement ok
+SELECT main.main_macro(1, 2);
+
+statement ok
+SELECT test.test_macro(1, 2);
+
+statement ok
+SELECT test_macro(1, 2);
+
+statement ok
+SELECT out_of_path.oop_macro(1, 2);
+
+# Testing sequences.
+
+statement ok
+CREATE SEQUENCE test_sequence;
+
+statement ok
+CREATE SEQUENCE main.main_sequence;
+
+statement ok
+CREATE SEQUENCE out_of_path.oop_sequence;
+
+statement error
+SELECT main.nextval('main.test_sequence');
+
+statement ok
+SELECT main.nextval('test.test_sequence');
+
+statement ok
+SELECT main.nextval('test_sequence');
+
+statement ok
+SELECT main.nextval('main.main_sequence');
+
+statement ok
+SELECT main.nextval('main_sequence');
+
+statement error
+SELECT main.nextval('oop_sequence');
+
+statement ok
+SELECT main.nextval('out_of_path.oop_sequence');
 
 # TODO(omo):
-# - Test MACRO
-# - Test SEQUENCE
 # - Test ALTER and DROP
