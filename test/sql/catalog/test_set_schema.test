@@ -157,7 +157,7 @@ SELECT sum(i) FROM test_table;
 ----
 300
 
-# Testing CREATE VIEW
+# Testing Views
 statement ok
 CREATE VIEW test_view AS SELECT * FROM test_table;
 
@@ -205,10 +205,28 @@ CREATE VIEW bad_test_view AS SELECT * FROM test_table;
 statement ok
 SET SESSION schema = 'test';
 
+statement error
+DROP VIEW main.test_view
+
+statement ok
+DROP VIEW test_view
+
+statement ok
+DROP VIEW main_view
+
+statement error
+DROP VIEW oop_view
+
+statement ok
+DROP VIEW out_of_path.oop_view
+
 # Testing Macros
 
 statement ok
 CREATE MACRO test_macro(a, b) AS a + b;
+
+statement ok
+CREATE MACRO test_macro2(c, d) AS c * d;
 
 statement ok
 CREATE MACRO main.main_macro(a, b) AS a - b;
@@ -237,10 +255,31 @@ SELECT test_macro(1, 2);
 statement ok
 SELECT out_of_path.oop_macro(1, 2);
 
+statement error
+DROP MACRO main.test_macro;
+
+statement ok
+DROP MACRO test_macro;
+
+statement ok
+DROP MACRO test.test_macro2;
+
+statement ok
+DROP MACRO main_macro;
+
+statement error
+DROP MACRO oop_macro;
+
+statement ok
+DROP MACRO out_of_path.oop_macro;
+
 # Testing sequences.
 
 statement ok
 CREATE SEQUENCE test_sequence;
+
+statement ok
+CREATE SEQUENCE test_sequence2;
 
 statement ok
 CREATE SEQUENCE main.main_sequence;
@@ -269,5 +308,96 @@ SELECT main.nextval('oop_sequence');
 statement ok
 SELECT main.nextval('out_of_path.oop_sequence');
 
-# TODO(omo):
-# - Test ALTER and DROP
+statement error
+DROP SEQUENCE main.test_sequence;
+
+statement ok
+DROP SEQUENCE test_sequence;
+
+statement ok
+DROP SEQUENCE test.test_sequence2;
+
+statement ok
+DROP SEQUENCE main_sequence;
+
+statement error
+DROP SEQUENCE oop_sequence;
+
+statement ok
+DROP SEQUENCE out_of_path.oop_sequence;
+
+# Testing ALTER TABLE
+
+statement error
+ALTER TABLE main.test_table ADD COLUMN k INTEGER;
+
+statement ok
+ALTER TABLE main.main_table ADD COLUMN k INTEGER;
+
+statement ok
+ALTER TABLE main_table ADD COLUMN l INTEGER;
+
+statement ok
+ALTER TABLE test_table ADD COLUMN m INTEGER;
+
+statement ok
+ALTER TABLE test.test_table ADD COLUMN n INTEGER;
+
+statement error
+ALTER TABLE oop_table ADD COLUMN o INTEGER;
+
+statement ok
+ALTER TABLE out_of_path.oop_table ADD COLUMN p INTEGER;
+
+# Testing DROP TABLE
+
+statement error
+DROP TABLE main.test_table;
+
+statement error
+DROP TABLE test.main_table;
+
+statement ok
+DROP TABLE test_table;
+
+statement ok
+DROP TABLE main_table;
+
+statement error
+DROP TABLE oop_table;
+
+statement ok
+DROP TABLE out_of_path.oop_table;
+
+statement ok
+CREATE TABLE test_table2(i INTEGER);
+
+statement ok
+DROP TABLE test.test_table2;
+
+statement ok
+CREATE TABLE test_table3(i INTEGER);
+
+statement ok
+DROP TABLE IF EXISTS test_table3;
+
+statement ok
+DROP TABLE IF EXISTS test_table3;
+
+statement ok
+CREATE TABLE test_table4(i INTEGER);
+
+statement ok
+DROP TABLE IF EXISTS test.test_table4;
+
+statement ok
+DROP TABLE IF EXISTS test.test_table4;
+
+statement ok
+CREATE TABLE main.main_table2(i INTEGER);
+
+statement ok
+DROP TABLE IF EXISTS main.main_table2;
+
+statement ok
+DROP TABLE IF EXISTS main.main_table2;

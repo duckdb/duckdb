@@ -31,12 +31,10 @@ string PhysicalSet::ValidateInput(ExecutionContext &context) const {
 			throw CatalogException("SET schema can set only 1 schema. This has %d", paths.size());
 		}
 
-		try {
-			for (const auto &path : paths) {
-				context.client.db->GetCatalog().GetSchema(context.client, StringUtil::Lower(path));
+		for (const auto &path : paths) {
+			if (!context.client.db->GetCatalog().GetSchema(context.client, StringUtil::Lower(path), true)) {
+				throw CatalogException("SET %s: No schema named %s found.", name, path);
 			}
-		} catch (const CatalogException &e) {
-			throw CatalogException("SET error: %s", e.what());
 		}
 
 		return "search_path";
