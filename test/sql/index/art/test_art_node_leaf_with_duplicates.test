@@ -1,4 +1,4 @@
-# name: test/sql/index/art/test_art_node_duplicates.test
+# name: test/sql/index/art/test_art_node_leaf_with_duplicates.test
 # description: ART Node Leaf with removing duplicated keys
 # group: [art]
 

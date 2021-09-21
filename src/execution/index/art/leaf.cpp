@@ -36,19 +36,20 @@ void Leaf::Remove(row_t row_id) {
 		return;
 	}
 	num_elements--;
-    if (capacity > 2 && num_elements < capacity / 2) {
-        // Shrink array, if less than half full
-        auto new_row_id = unique_ptr<row_t[]>(new row_t[capacity / 2]);
-        memcpy(new_row_id.get(), row_ids.get(), entry_offset * sizeof(row_t));
-        memcpy(new_row_id.get() + entry_offset, row_ids.get() + entry_offset + 1, (num_elements - entry_offset) * sizeof(row_t));
-        capacity /= 2;
-        row_ids = move(new_row_id);
-    } else {
+	if (capacity > 2 && num_elements < capacity / 2) {
+		// Shrink array, if less than half full
+		auto new_row_id = unique_ptr<row_t[]>(new row_t[capacity / 2]);
+		memcpy(new_row_id.get(), row_ids.get(), entry_offset * sizeof(row_t));
+		memcpy(new_row_id.get() + entry_offset, row_ids.get() + entry_offset + 1,
+		       (num_elements - entry_offset) * sizeof(row_t));
+		capacity /= 2;
+		row_ids = move(new_row_id);
+	} else {
 		// Copy the rest
-        for (idx_t j = entry_offset; j < num_elements; j++) {
-            row_ids[j] = row_ids[j + 1];
-        }
-    }
+		for (idx_t j = entry_offset; j < num_elements; j++) {
+			row_ids[j] = row_ids[j + 1];
+		}
+	}
 }
 
 } // namespace duckdb
