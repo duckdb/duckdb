@@ -57,6 +57,7 @@ private:
 
 private:
 	vector<ArrayWrapper> owned_data;
+	std::unordered_map<idx_t, py::object> categorical;
 	idx_t count;
 	idx_t capacity;
 };

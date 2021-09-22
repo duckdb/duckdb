@@ -564,21 +564,6 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(current_offset, dataptr,
 		                                                                                    maskptr, idata, count);
 		break;
-	case LogicalTypeId::ENUM: {
-		auto size = EnumType::GetSize(input.GetType());
-		if (size <= NumericLimits<int8_t>::Maximum()) {
-			may_have_null = ConvertColumnRegular<int8_t>(current_offset, dataptr, maskptr, idata, count);
-		} else if (size <= NumericLimits<int16_t>::Maximum()) {
-			may_have_null = ConvertColumnRegular<int16_t>(current_offset, dataptr, maskptr, idata, count);
-		} else if (size <= NumericLimits<int32_t>::Maximum()) {
-			may_have_null = ConvertColumnRegular<int32_t>(current_offset, dataptr, maskptr, idata, count);
-		} else if (size <= NumericLimits<int64_t>::Maximum()) {
-			may_have_null = ConvertColumnRegular<int64_t>(current_offset, dataptr, maskptr, idata, count);
-		} else {
-			throw InternalException("Size not supported on ENUM types");
-		}
-		break;
-	}
 	default:
 		throw std::runtime_error("unsupported type " + input.GetType().ToString());
 	}
@@ -627,12 +612,23 @@ void NumpyResultConversion::Resize(idx_t new_capacity) {
 	capacity = new_capacity;
 }
 
+py::object ConvertEnumToCategorical(idx_t current_offset, Vector &input, idx_t count){
+
+}
 void NumpyResultConversion::Append(DataChunk &chunk) {
 	if (count + chunk.size() > capacity) {
 		Resize(capacity * 2);
 	}
+	auto chunk_types = chunk.GetTypes();
 	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
+		if (chunk_types[col_idx].id() != LogicalTypeId::ENUM){
+			owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
+		}
+		else{
+			// Its an ENUM type, so we create a categorical type
+			categorical[col_idx] = ConvertEnumToCategorical(count, chunk.data[col_idx], chunk.size());
+//			pd.Categorical(['foo','bla','zoo', 'foo',None, 'foo', 'bla',None])
+		}
 	}
 	count += chunk.size();
 #ifdef DEBUG
