@@ -7,6 +7,7 @@ if(NOT JNI_FOUND OR NOT Java_FOUND)
   message(FATAL_ERROR No compatible Java/JNI found)
 endif()
 
+
 include(UseJava)
 project(DuckDBJDummy NONE)
 
@@ -19,8 +20,11 @@ add_jar(duckdb_jdbc ${JAVA_SRC_FILES} ${JAVA_TEST_FILES}
         META-INF/services/java.sql.Driver GENERATE_NATIVE_HEADERS duckdb-native)
 
 set(OS_NAME "unknown")
+set(JVM_ARCH "amd64")
+
 if(APPLE)
   set(OS_NAME "osx")
+  set(JVM_ARCH ${CMAKE_SYSTEM_PROCESSOR})
 endif()
 if(WIN32)
   set(OS_NAME "windows")
@@ -29,7 +33,6 @@ if(UNIX AND NOT APPLE)
   set(OS_NAME "linux") # sorry BSD
 endif()
 
-set(JVM_BITNESS "amd64")
 # TODO handle 32 bit architectures
 
 include_directories(../../extension/parquet/include)
@@ -41,7 +44,7 @@ if(OS_NAME STREQUAL "linux")
   target_link_libraries(duckdb_java -static-libgcc -static-libstdc++
   )# static link to libstdc++ to target more linux distro
 endif()
-string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${JVM_BITNESS})
+string(JOIN "_" LIB_SUFFIX ".so" ${OS_NAME} ${JVM_ARCH})
 set_target_properties(duckdb_java PROPERTIES SUFFIX ${LIB_SUFFIX})
 set_target_properties(duckdb_java PROPERTIES PREFIX "lib")
 
