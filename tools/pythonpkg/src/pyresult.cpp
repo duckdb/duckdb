@@ -217,8 +217,14 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 
 	// now that we have materialized the result in contiguous arrays, construct the actual NumPy arrays
 	py::dict res;
+	unordered_map<string, idx_t> names;
 	for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
-		res[result->names[col_idx].c_str()] = conversion.ToArray(col_idx);
+		if (names[result->names[col_idx]]++ == 0) {
+			res[result->names[col_idx].c_str()] = conversion.ToArray(col_idx);
+		} else {
+			res[(result->names[col_idx] + "_" + to_string(names[result->names[col_idx]])).c_str()] =
+			    conversion.ToArray(col_idx);
+		}
 	}
 	return res;
 }
