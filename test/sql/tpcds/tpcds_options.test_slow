@@ -1,4 +1,4 @@
-# name: test/sql/tpcds/tpcds_options.test
+# name: test/sql/tpcds/tpcds_options.test_slow
 # description: Test TPC-DS data generation options
 # group: [tpcds]
 

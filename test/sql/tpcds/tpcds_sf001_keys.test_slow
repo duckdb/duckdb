@@ -1,4 +1,4 @@
-# name: test/sql/tpcds/tpcds_sf001.test_slow
+# name: test/sql/tpcds/tpcds_sf001_keys.test_slow
 # description: Test TPC-DS SF0.001
 # group: [tpcds]
 
