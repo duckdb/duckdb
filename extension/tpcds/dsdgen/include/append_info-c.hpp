@@ -19,6 +19,7 @@
 #endif
 
 #include <memory>
+#include <cassert>
 
 namespace duckdb {
 
