@@ -222,8 +222,9 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 		if (names[result->names[col_idx]]++ == 0) {
 			res[result->names[col_idx].c_str()] = conversion.ToArray(col_idx);
 		} else {
-			res[(result->names[col_idx] + "_" + to_string(names[result->names[col_idx]])).c_str()] =
-			    conversion.ToArray(col_idx);
+			auto name = result->names[col_idx] + "_" + to_string(names[result->names[col_idx]]);
+			names[name]++;
+			res[name.c_str()] = conversion.ToArray(col_idx);
 		}
 	}
 	return res;

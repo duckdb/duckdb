@@ -22,12 +22,12 @@ class TestPandasMergeSameName(object):
         con.register('df2', df2)
         query = """SELECT * from df1
         LEFT  OUTER JOIN df2
-        ON (df1.id_1=df2.id_1 and df1.agedate=df2.agedate)  order by df1.id_1, df1.agedate"""
+        ON (df1.id_1=df2.id_1 and df1.agedate=df2.agedate)  order by df1.id_1, df1.agedate, df1.age, df1.v, df2.id_1,df2.agedate,df2.v2"""
 
         result_df = con.execute(query).fetchdf()
         expected_result = con.execute(query).fetchall()
         con.register('result_df', result_df)
-        result = con.execute('select * from result_df').fetchall()
+        result = con.execute('select * from result_df order by id_1, agedate, age, v, id_1_2, agedate_2,v2').fetchall()
 
         assert result == expected_result
 
@@ -49,8 +49,9 @@ class TestPandasMergeSameName(object):
             'id': [1, 1, 2, 1, 1],
             'id_1': [1, 1, 2, 1, 1],
             'id_3': [1, 1, 2, 1, 1],
-            'id_2': [1, 1, 1, 1, 1],
-            'id_1_2': [1, 1, 2, 1, 1]
+            'id_2': [1, 1, 2, 1, 1],
+            'id_1_2': [1, 1, 2, 1, 1],
+            'id_2_2': [1, 1, 1, 1, 1]
         })
 
         con = duckdb.connect()
