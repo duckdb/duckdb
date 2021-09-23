@@ -13,7 +13,9 @@
 #include "duckdb/common/arrow_wrapper.hpp"
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
+#include "duckdb/common/thread.hpp"
 #include <map>
+#include <condition_variable>
 
 namespace duckdb {
 //===--------------------------------------------------------------------===//
@@ -44,6 +46,19 @@ struct ArrowConvertData {
 };
 
 struct ArrowScanFunctionData : public TableFunctionData {
+#ifndef DUCKDB_NO_THREADS
+
+	ArrowScanFunctionData(idx_t rows_per_thread_p,
+	                      unique_ptr<ArrowArrayStreamWrapper> (*scanner_producer_p)(
+	                          uintptr_t stream_factory_ptr,
+	                          std::pair<std::unordered_map<idx_t, string>, std::vector<string>> &project_columns,
+	                          TableFilterCollection *filters),
+	                      uintptr_t stream_factory_ptr_p, std::thread::id thread_id_p)
+	    : lines_read(0), rows_per_thread(rows_per_thread_p), stream_factory_ptr(stream_factory_ptr_p),
+	      scanner_producer(scanner_producer_p), number_of_rows(0), thread_id(thread_id_p) {
+	}
+#endif
+
 	ArrowScanFunctionData(idx_t rows_per_thread_p,
 	                      unique_ptr<ArrowArrayStreamWrapper> (*scanner_producer_p)(
 	                          uintptr_t stream_factory_ptr,
@@ -67,6 +82,10 @@ struct ArrowScanFunctionData : public TableFunctionData {
 	    TableFilterCollection *filters);
 	//! Number of rows (Used in cardinality and progress bar)
 	int64_t number_of_rows;
+#ifndef DUCKDB_NO_THREADS
+	// Thread that made first call in the binder
+	std::thread::id thread_id;
+#endif
 };
 
 struct ArrowScanState : public FunctionOperatorData {
@@ -85,7 +104,10 @@ struct ParallelArrowScanState : public ParallelState {
 	ParallelArrowScanState() {
 	}
 	unique_ptr<ArrowArrayStreamWrapper> stream;
-	std::mutex lock;
+	std::mutex main_mutex;
+	std::mutex sync_mutex;
+	std::condition_variable cv;
+	bool ready = false;
 };
 
 struct ArrowTableFunction {

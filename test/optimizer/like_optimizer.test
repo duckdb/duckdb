@@ -6,9 +6,11 @@ statement ok
 CREATE TABLE test(S VARCHAR);
 
 statement ok
+INSERT INTO test VALUES ('aaa');
+
+statement ok
 PRAGMA explain_output = OPTIMIZED_ONLY;
 
-mode skip
 # no special symbols optimization: aaa -> S=a
 query I nosort nosymbols
 EXPLAIN SELECT S LIKE 'aaa' FROM test
@@ -17,8 +19,6 @@ EXPLAIN SELECT S LIKE 'aaa' FROM test
 query I nosort nosymbols
 EXPLAIN SELECT S='aaa' FROM test
 ----
-
-mode unskip
 
 # prefix optimization: aaa% -> prefix(aaa)
 query I nosort prefix
@@ -57,4 +57,53 @@ EXPLAIN SELECT contains(S, 'aaa') FROM test
 
 query I nosort contains
 EXPLAIN SELECT S LIKE '%%%%aaa%%' FROM test
+----
+
+# NOT LIKE
+# no special symbols optimization: aaa -> S<>a
+query I nosort notlikenosymbols
+EXPLAIN SELECT S NOT LIKE 'aaa' FROM test
+----
+
+query I nosort notlikenosymbols
+EXPLAIN SELECT S<>'aaa' FROM test
+----
+
+# prefix optimization: aaa% -> prefix(aaa)
+query I nosort notlikeprefix
+EXPLAIN SELECT S NOT LIKE 'aaa%' FROM test
+----
+
+query I nosort notlikeprefix
+EXPLAIN SELECT NOT(prefix(S, 'aaa')) FROM test
+----
+
+query I nosort notlikeprefix
+EXPLAIN SELECT S NOT LIKE 'aaa%%%%' FROM test
+----
+
+# suffix optimization: %aaa -> suffix(aaa)
+query I nosort notlikesuffix
+EXPLAIN SELECT S NOT LIKE '%aaa' FROM test
+----
+
+query I nosort notlikesuffix
+EXPLAIN SELECT NOT(suffix(S, 'aaa')) FROM test
+----
+
+query I nosort notlikesuffix
+EXPLAIN SELECT S NOT LIKE '%%%%aaa' FROM test
+----
+
+# contains optimization: %aaa% -> contains(aaa)
+query I nosort notlikecontains
+EXPLAIN SELECT S NOT LIKE '%aaa%' FROM test
+----
+
+query I nosort notlikecontains
+EXPLAIN SELECT NOT(contains(S, 'aaa')) FROM test
+----
+
+query I nosort notlikecontains
+EXPLAIN SELECT S NOT LIKE '%%%%aaa%%' FROM test
 ----

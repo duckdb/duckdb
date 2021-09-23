@@ -34,7 +34,6 @@ with open_utf8(gen_storage_script, 'r') as f:
 	cmd = f.read()
 
 run_command_in_shell(cmd)
-# FIXME: force a checkpoint
 run_command_in_shell('select * from integral_values')
 run_command_in_shell('select * from integral_values')
 

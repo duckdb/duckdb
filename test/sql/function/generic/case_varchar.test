@@ -1,0 +1,37 @@
+# name: test/sql/function/generic/case_varchar.test
+# description: Test case statement with VARCHAR columns
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl AS SELECT i, 'thisisalongstring' || i::VARCHAR s FROM range(10) tbl(i)
+
+query III
+SELECT i, s, CASE WHEN i%2=0 THEN s ELSE s END FROM tbl
+----
+0	thisisalongstring0	thisisalongstring0
+1	thisisalongstring1	thisisalongstring1
+2	thisisalongstring2	thisisalongstring2
+3	thisisalongstring3	thisisalongstring3
+4	thisisalongstring4	thisisalongstring4
+5	thisisalongstring5	thisisalongstring5
+6	thisisalongstring6	thisisalongstring6
+7	thisisalongstring7	thisisalongstring7
+8	thisisalongstring8	thisisalongstring8
+9	thisisalongstring9	thisisalongstring9
+
+query III
+SELECT i, s, CASE WHEN i%2=0 THEN s ELSE s END FROM (SELECT i, s||'_suffix' FROM tbl) tbl(i, s)
+----
+0	thisisalongstring0_suffix	thisisalongstring0_suffix
+1	thisisalongstring1_suffix	thisisalongstring1_suffix
+2	thisisalongstring2_suffix	thisisalongstring2_suffix
+3	thisisalongstring3_suffix	thisisalongstring3_suffix
+4	thisisalongstring4_suffix	thisisalongstring4_suffix
+5	thisisalongstring5_suffix	thisisalongstring5_suffix
+6	thisisalongstring6_suffix	thisisalongstring6_suffix
+7	thisisalongstring7_suffix	thisisalongstring7_suffix
+8	thisisalongstring8_suffix	thisisalongstring8_suffix
+9	thisisalongstring9_suffix	thisisalongstring9_suffix

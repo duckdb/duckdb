@@ -43,12 +43,15 @@ string PragmaVersion(ClientContext &context, const FunctionParameters &parameter
 
 string PragmaImportDatabase(ClientContext &context, const FunctionParameters &parameters) {
 	auto &fs = FileSystem::GetFileSystem(context);
+	auto *opener = FileSystem::GetFileOpener(context);
+
 	string query;
 	// read the "shema.sql" and "load.sql" files
 	vector<string> files = {"schema.sql", "load.sql"};
 	for (auto &file : files) {
 		auto file_path = fs.JoinPath(parameters.values[0].ToString(), file);
-		auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ);
+		auto handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+		                          FileSystem::DEFAULT_COMPRESSION, opener);
 		auto fsize = fs.GetFileSize(*handle);
 		auto buffer = unique_ptr<char[]>(new char[fsize]);
 		fs.Read(*handle, buffer.get(), fsize);

@@ -222,6 +222,29 @@ idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
 	idx_t chunk_idx = GetChunk(row_ids);
 	D_ASSERT(chunk_idx < storage->collection.ChunkCount());
 
+	// delete from unique indices (if any)
+	if (!storage->indexes.empty()) {
+		// Index::Delete assumes that ALL rows are being deleted, so
+		// Slice out the rows that are being deleted from the storage Chunk
+		auto &chunk = storage->collection.GetChunk(chunk_idx);
+
+		VectorData row_ids_data;
+		row_ids.Orrify(count, row_ids_data);
+		auto row_identifiers = (const row_t *)row_ids_data.data;
+		SelectionVector sel(count);
+		for (idx_t i = 0; i < count; ++i) {
+			const auto idx = row_ids_data.sel->get_index(i);
+			sel.set_index(i, row_identifiers[idx] - MAX_ROW_ID);
+		}
+
+		DataChunk deleted;
+		deleted.InitializeEmpty(chunk.GetTypes());
+		deleted.Slice(chunk, sel, count);
+		for (auto &index : storage->indexes) {
+			index->Delete(deleted, row_ids);
+		}
+	}
+
 	// get a pointer to the deleted entries for this chunk
 	bool *deleted;
 	auto entry = storage->deleted_entries.find(chunk_idx);
@@ -294,8 +317,11 @@ static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t co
 	case PhysicalType::DOUBLE:
 		TemplatedUpdateLoop<double>(data, updates, row_ids, count, base_index);
 		break;
+	case PhysicalType::VARCHAR:
+		TemplatedUpdateLoop<string_t>(data, updates, row_ids, count, base_index);
+		break;
 	default:
-		throw Exception("Unsupported type for in-place update");
+		throw Exception("Unsupported type for in-place update: " + TypeIdToString(data.GetType().InternalType()));
 	}
 }
 

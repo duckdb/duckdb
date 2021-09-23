@@ -26,7 +26,7 @@ class TestProgressBarArrow(object):
         assert (result.execute().fetchone()[0] == 49999995000000)
         # Multiple Threads
         duckdb_conn.execute("PRAGMA threads=4")
-        duckdb_conn.execute("PRAGMA force_parallelism")
+        duckdb_conn.execute("PRAGMA verify_parallelism")
         assert (result.execute().fetchone()[0] == 49999995000000)
 
         # More than one batch

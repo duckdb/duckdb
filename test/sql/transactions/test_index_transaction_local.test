@@ -99,3 +99,24 @@ COMMIT
 statement error con2
 COMMIT
 
+# Issue #2241: Delete and reinsert fails on unique/indexed column
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+CREATE TABLE issue2241 (id text primary key);
+
+statement ok
+INSERT INTO issue2241 VALUES ('Alice');
+
+statement ok
+INSERT INTO issue2241 VALUES ('Bob');
+
+statement ok
+DELETE FROM issue2241 WHERE id = 'Bob';
+
+statement ok
+INSERT INTO issue2241 VALUES ('Bob');
+
+statement ok
+COMMIT;

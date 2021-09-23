@@ -403,9 +403,9 @@ struct LocalReadCSVData : public LocalFunctionData {
 };
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
-	GlobalWriteCSVData(FileSystem &fs, const string &file_path) : fs(fs) {
+	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileOpener *opener) : fs(fs) {
 		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-		                     FileLockType::WRITE_LOCK);
+		                     FileLockType::WRITE_LOCK, FileSystem::DEFAULT_COMPRESSION, opener);
 	}
 
 	void WriteData(const_data_ptr_t data, idx_t size) {
@@ -435,7 +435,8 @@ static unique_ptr<LocalFunctionData> WriteCSVInitializeLocal(ClientContext &cont
 static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &context, FunctionData &bind_data) {
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
-	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0]);
+	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0],
+	                                                   FileSystem::GetFileOpener(context));
 
 	if (options.header) {
 		BufferedSerializer serializer;

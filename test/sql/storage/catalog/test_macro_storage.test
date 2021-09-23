@@ -49,7 +49,7 @@ endloop
 
 # create a macro without deleting it this time
 statement ok
-CREATE MACRO plus2(a, b=2) AS a + b
+CREATE MACRO plus2(a, b := 2) AS a + b
 
 loop i 0 2
 

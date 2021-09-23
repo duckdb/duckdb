@@ -6,7 +6,6 @@
 #include <sql.h>
 #include <sqltypes.h>
 #include <sqlext.h>
-#include <vector>
 #include <unordered_set>
 
 #define NUM_FUNC_SUPPORTED 4000
@@ -22,7 +21,7 @@ private:
 	// fill ODBC3 supported functions in this array
 	static const std::unordered_set<SQLUSMALLINT> ODBC3_EXTRA_SUPPORTED_FUNCTIONS;
 
-	static const std::vector<SQLSMALLINT> ODBC_SUPPORTED_SQL_TYPES;
+	static const std::unordered_set<SQLSMALLINT> ODBC_SUPPORTED_SQL_TYPES;
 
 	static void SetFunctionSupported(SQLUSMALLINT *flags, int function_id);
 

@@ -23,6 +23,7 @@ struct CopyInfo;
 struct FileHandle;
 struct StrpTimeFormat;
 
+class FileOpener;
 class FileSystem;
 
 //! The shifts array allows for linear searching of multi-byte values. For each position, it determines the next
@@ -123,10 +124,11 @@ public:
 	BufferedCSVReader(ClientContext &context, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
-	BufferedCSVReader(FileSystem &fs, BufferedCSVReaderOptions options,
+	BufferedCSVReader(FileSystem &fs, FileOpener *opener, BufferedCSVReaderOptions options,
 	                  const vector<LogicalType> &requested_types = vector<LogicalType>());
 
 	FileSystem &fs;
+	FileOpener *opener;
 	BufferedCSVReaderOptions options;
 	vector<LogicalType> sql_types;
 	vector<string> col_names;

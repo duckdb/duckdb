@@ -4,6 +4,8 @@
 // needs to be first because BOOL
 #include "duckdb.hpp"
 
+#include "duckdb/common/windows.hpp"
+
 #include <sql.h>
 #include <sqltypes.h>
 #include <sqlext.h>
@@ -108,15 +110,19 @@ struct OdbcHandleDbc : public OdbcHandle {
 		D_ASSERT(env_p);
 		D_ASSERT(env_p->db);
 	};
+	~OdbcHandleDbc();
+	void EraseStmtRef(OdbcHandleStmt *stmt);
+	SQLRETURN MaterializeResult();
+
 	OdbcHandleEnv *env;
 	unique_ptr<Connection> conn;
 	bool autocommit;
 	// reference to an open statement handled by this connection
-	OdbcHandleStmt *stmt_handle;
+	std::vector<OdbcHandleStmt *> vec_stmt_ref;
 };
 
-inline bool IsSQLVarcharType(SQLSMALLINT type) {
-	if (type == SQL_CHAR || type == SQL_VARCHAR || type == SQL_WVARCHAR) {
+inline bool IsSQLVariableLengthType(SQLSMALLINT type) {
+	if (type == SQL_CHAR || type == SQL_VARCHAR || type == SQL_WVARCHAR || type == SQL_BINARY) {
 		return true;
 	}
 	return false;
@@ -130,7 +136,7 @@ struct OdbcBoundCol {
 	}
 
 	bool IsVarcharBound() {
-		if (IsSQLVarcharType(type)) {
+		if (IsSQLVariableLengthType(type)) {
 			return strlen_or_ind != nullptr;
 		}
 		return false;
@@ -145,6 +151,7 @@ struct OdbcBoundCol {
 struct OdbcHandleStmt : public OdbcHandle {
 	explicit OdbcHandleStmt(OdbcHandleDbc *dbc_p);
 	~OdbcHandleStmt();
+	void Close();
 	SQLRETURN MaterializeResult();
 
 	OdbcHandleDbc *dbc;
@@ -203,7 +210,6 @@ SQLRETURN WithStatement(SQLHANDLE &statement_handle, T &&lambda) {
 	if (!hdl->dbc || !hdl->dbc->conn) {
 		return SQL_ERROR;
 	}
-
 	return lambda(hdl);
 }
 

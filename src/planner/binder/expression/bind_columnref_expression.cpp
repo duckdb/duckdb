@@ -50,7 +50,10 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &colref, idx_t d
 	                        ? binder.macro_binding->Bind(colref, depth)
 	                        : binder.bind_context.BindColumn(colref, depth);
 	if (!result.HasError()) {
-		bound_columns = true;
+		BoundColumnReferenceInfo ref;
+		ref.name = colref.column_name;
+		ref.query_location = colref.query_location;
+		bound_columns.push_back(move(ref));
 	} else {
 		result.error = binder.FormatError(colref, result.error);
 	}

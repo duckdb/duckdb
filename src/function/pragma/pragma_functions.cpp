@@ -148,7 +148,7 @@ static void PragmaDisableVerification(ClientContext &context, const FunctionPara
 }
 
 static void PragmaEnableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
-	context.force_parallelism = true;
+	context.verify_parallelism = true;
 }
 
 static void PragmaEnableForceIndexJoin(ClientContext &context, const FunctionParameters &parameters) {
@@ -160,7 +160,7 @@ static void PragmaForceCheckpoint(ClientContext &context, const FunctionParamete
 }
 
 static void PragmaDisableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
-	context.force_parallelism = false;
+	context.verify_parallelism = false;
 }
 
 static void PragmaEnableForceExternal(ClientContext &context, const FunctionParameters &parameters) {
@@ -193,7 +193,9 @@ static void PragmaLogQueryPath(ClientContext &context, const FunctionParameters 
 		// empty path: clean up query writer
 		context.log_query_writer = nullptr;
 	} else {
-		context.log_query_writer = make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), str_val);
+		context.log_query_writer =
+		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), str_val,
+		                                    BufferedFileWriter::DEFAULT_OPEN_FLAGS, context.file_opener.get());
 	}
 }
 
@@ -306,8 +308,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_verification", PragmaEnableVerification));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verification", PragmaDisableVerification));
 
-	set.AddFunction(PragmaFunction::PragmaStatement("force_parallelism", PragmaEnableForceParallelism));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_parallelism", PragmaDisableForceParallelism));
+	set.AddFunction(PragmaFunction::PragmaStatement("verify_parallelism", PragmaEnableForceParallelism));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_parallelism", PragmaDisableForceParallelism));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_external", PragmaEnableForceExternal));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_external", PragmaDisableForceExternal));

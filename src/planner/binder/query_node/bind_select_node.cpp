@@ -6,7 +6,6 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/parser/expression/table_star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -191,14 +190,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	for (auto &select_element : statement.select_list) {
 		if (select_element->GetExpressionType() == ExpressionType::STAR) {
 			// * statement, expand to all columns from the FROM clause
-			bind_context.GenerateAllColumnExpressions(new_select_list);
-		} else if (select_element->GetExpressionType() == ExpressionType::TABLE_STAR) {
-			auto table_star = (TableStarExpression *)select_element.get();
-			bind_context.GenerateAllColumnExpressions(new_select_list, table_star->relation_name);
+			bind_context.GenerateAllColumnExpressions((StarExpression &)*select_element, new_select_list);
 		} else {
 			// regular statement, add it to the list
 			new_select_list.push_back(move(select_element));
 		}
+	}
+	if (new_select_list.empty()) {
+		throw BinderException("SELECT list is empty after resolving * expressions!");
 	}
 	statement.select_list = move(new_select_list);
 
@@ -276,7 +275,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		LogicalType result_type;
 		auto expr = select_binder.Bind(statement.select_list[i], &result_type);
-		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.BoundColumns()) {
+		if (statement.aggregate_handling == AggregateHandling::FORCE_AGGREGATES && select_binder.HasBoundColumns()) {
 			if (select_binder.BoundAggregates()) {
 				throw BinderException("Cannot mix aggregates with non-aggregated columns!");
 			}
@@ -306,8 +305,12 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
 			throw BinderException("Aggregates cannot be present in a Project relation!");
 		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {
-			if (select_binder.BoundColumns()) {
-				throw BinderException("column must appear in the GROUP BY clause or be used in an aggregate function");
+			if (select_binder.HasBoundColumns()) {
+				auto &bound_columns = select_binder.GetBoundColumns();
+				throw BinderException(
+				    FormatError(bound_columns[0].query_location,
+				                "column \"%s\" must appear in the GROUP BY clause or be used in an aggregate function",
+				                bound_columns[0].name));
 			}
 		}
 	}

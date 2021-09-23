@@ -18,5 +18,7 @@ SQLRETURN FetchStmtResult(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientati
 SQLRETURN GetDataStmtResult(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                             SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr);
 
+SQLRETURN ExecDirectStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length);
+
 } // namespace duckdb
 #endif

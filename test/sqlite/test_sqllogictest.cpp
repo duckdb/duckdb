@@ -88,6 +88,7 @@ public:
 	bool output_hash_mode = false;
 	bool output_result_mode = false;
 	bool debug_mode = false;
+	bool finished_processing_file = false;
 	int hashThreshold = 0; /* Threshold for hashing res */
 	vector<LoopCommand *> active_loops;
 	unique_ptr<Command> top_level_loop;
@@ -578,6 +579,9 @@ struct Command {
 
 	virtual void ExecuteInternal() = 0;
 	void Execute() {
+		if (runner.finished_processing_file) {
+			return;
+		}
 		if (runner.running_loops.empty()) {
 			ExecuteInternal();
 			return;
@@ -640,7 +644,7 @@ void LoopCommand::ExecuteInternal() {
 	definition.loop_idx = definition.loop_start;
 	runner.running_loops.push_back(&definition);
 	bool finished = false;
-	while (!finished) {
+	while (!finished && !runner.finished_processing_file) {
 		// execute the current iteration of the loop
 		for (auto &statement : loop_commands) {
 			statement->Execute();
@@ -674,6 +678,7 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 	}
 	active_loops.push_back(loop_ptr);
 }
+
 void SQLLogicTestRunner::EndLoop() {
 	// finish a loop: pop it from the active_loop queue
 	active_loops.pop_back();
@@ -682,6 +687,16 @@ void SQLLogicTestRunner::EndLoop() {
 		top_level_loop->Execute();
 		top_level_loop.reset();
 	}
+}
+
+static bool SkipErrorMessage(const string &message) {
+	if (StringUtil::Contains(message, "HTTP")) {
+		return true;
+	}
+	if (StringUtil::Contains(message, "Unable to connect")) {
+		return true;
+	}
+	return false;
 }
 
 void Statement::ExecuteInternal() {
@@ -725,6 +740,10 @@ void Statement::ExecuteInternal() {
 		print_line_sep();
 		if (result) {
 			result->Print();
+		}
+		if (expect_ok && SkipErrorMessage(result->error)) {
+			runner.finished_processing_file = true;
+			return;
 		}
 		FAIL_LINE(file_name, query_line, 0);
 	}
@@ -800,6 +819,10 @@ void Query::ExecuteInternal() {
 		print_line_sep();
 		print_header("Actual result:");
 		result->Print();
+		if (SkipErrorMessage(result->error)) {
+			runner.finished_processing_file = true;
+			return;
+		}
 		FAIL_LINE(file_name, query_line, 0);
 	}
 	idx_t row_count = result->collection.Count();
@@ -1118,9 +1141,8 @@ string SQLLogicTestRunner::LoopReplacement(string text, const vector<LoopDefinit
 }
 
 string SQLLogicTestRunner::ReplaceKeywords(string input) {
-	FileSystem fs;
 	input = StringUtil::Replace(input, "__TEST_DIR__", TestDirectoryPath());
-	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", fs.GetWorkingDirectory());
+	input = StringUtil::Replace(input, "__WORKING_DIRECTORY__", FileSystem::GetWorkingDirectory());
 	input = StringUtil::Replace(input, "__BUILD_DIRECTORY__", DUCKDB_BUILD_DIRECTORY);
 	return input;
 }
@@ -1699,19 +1721,20 @@ struct AutoRegTests {
 		    "random/expr/slt_good_47.test", "random/expr/slt_good_11.test", "random/expr/slt_good_40.test",
 		    "random/expr/slt_good_42.test", "random/expr/slt_good_27.test", "random/expr/slt_good_103.test",
 		    "random/expr/slt_good_75.test"};
-		FileSystem fs;
-		fs.SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
-		listFiles(fs, fs.JoinPath(fs.JoinPath("third_party", "sqllogictest"), "test"), [excludes](const string &path) {
-			if (endsWith(path, ".test")) {
-				for (auto excl : excludes) {
-					if (path.find(excl) != string::npos) {
-						return;
-					}
-				}
-				REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
-			}
-		});
-		listFiles(fs, "test", [excludes](const string &path) {
+		FileSystem::SetWorkingDirectory(DUCKDB_ROOT_DIRECTORY);
+		unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+		listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"),
+		          [excludes](const string &path) {
+			          if (endsWith(path, ".test")) {
+				          for (auto excl : excludes) {
+					          if (path.find(excl) != string::npos) {
+						          return;
+					          }
+				          }
+				          REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), "[sqlitelogic][.]");
+			          }
+		          });
+		listFiles(*fs, "test", [excludes](const string &path) {
 			if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
 				for (auto excl : excludes) {
 					if (path.find(excl) != string::npos) {

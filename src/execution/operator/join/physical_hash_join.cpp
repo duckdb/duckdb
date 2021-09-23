@@ -1,12 +1,12 @@
 #include "duckdb/execution/operator/join/physical_hash_join.hpp"
-#include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -14,13 +14,15 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map,
                                    const vector<idx_t> &right_projection_map_p, vector<LogicalType> delim_types,
-                                   idx_t estimated_cardinality)
+                                   idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_stats)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::HASH_JOIN, move(cond), join_type, estimated_cardinality),
-      right_projection_map(right_projection_map_p), delim_types(move(delim_types)) {
+      right_projection_map(right_projection_map_p), delim_types(move(delim_types)),
+      perfect_join_statistics(move(perfect_join_stats)) {
+
 	children.push_back(move(left));
 	children.push_back(move(right));
 
-	D_ASSERT(left_projection_map.size() == 0);
+	D_ASSERT(left_projection_map.empty());
 	for (auto &condition : conditions) {
 		condition_types.push_back(condition.left->return_type);
 	}
@@ -33,8 +35,9 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 
 PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
                                    unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   idx_t estimated_cardinality)
-    : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}, {}, estimated_cardinality) {
+                                   idx_t estimated_cardinality, PerfectHashJoinStats perfect_join_state)
+    : PhysicalHashJoin(op, move(left), move(right), move(cond), join_type, {}, {}, {}, estimated_cardinality,
+                       std::move(perfect_join_state)) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -54,6 +57,8 @@ public:
 
 	//! The HT used by the join
 	unique_ptr<JoinHashTable> hash_table;
+	//! The perfect hash join executor (if any)
+	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor;
 };
 
 unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -100,6 +105,8 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 			info.result_chunk.Initialize(payload_types);
 		}
 	}
+	// for perfect hash join
+	state->perfect_join_executor = make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, move(perfect_join_statistics));
 	return move(state);
 }
 
@@ -120,7 +127,9 @@ SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState
 	auto &sink = (HashJoinGlobalState &)state;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
 	// resolve the join keys for the right chunk
+	lstate.join_keys.Reset();
 	lstate.build_executor.Execute(input, lstate.join_keys);
+	// TODO: add statement to check for possible per
 	// build the HT
 	if (!right_projection_map.empty()) {
 		// there is a projection map: fill the build chunk with the projected columns
@@ -152,7 +161,18 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 //===--------------------------------------------------------------------===//
 void PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const {
 	auto &sink = (HashJoinGlobalState &) gstate;
-	sink.hash_table->Finalize();
+	// check for possible perfect hash table
+	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
+	if (use_perfect_hash) {
+		D_ASSERT(sink.hash_table->equality_types.size() == 1);
+		auto key_type = sink.hash_table->equality_types[0];
+		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
+	}
+	// In case large build side or duplicates, use regular hash join
+	if (!use_perfect_hash) {
+		sink.perfect_join_executor.reset();
+		sink.hash_table->Finalize();
+	}
 }
 
 //===--------------------------------------------------------------------===//
@@ -163,6 +183,7 @@ public:
 	DataChunk join_keys;
 	ExpressionExecutor probe_executor;
 	unique_ptr<JoinHashTable::ScanStructure> scan_structure;
+	unique_ptr<OperatorState> perfect_hash_join_state;
 
 public:
 	void Finalize(PhysicalOperator *op, ExecutionContext &context) override {
@@ -172,9 +193,14 @@ public:
 
 unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &context) const {
 	auto state = make_unique<PhysicalHashJoinState>();
-	state->join_keys.Initialize(condition_types);
-	for (auto &cond : conditions) {
-		state->probe_executor.AddExpression(*cond.left);
+	auto &sink = (HashJoinGlobalState &)*sink_state;
+	if (sink.perfect_join_executor) {
+		state->perfect_hash_join_state = sink.perfect_join_executor->GetOperatorState(context);
+	} else {
+		state->join_keys.Initialize(condition_types);
+		for (auto &cond : conditions) {
+			state->probe_executor.AddExpression(*cond.left);
+		}
 	}
 	return move(state);
 }
@@ -182,6 +208,10 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &cont
 OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (PhysicalHashJoinState &) state_p;
 	auto &sink = (HashJoinGlobalState &)*sink_state;
+
+	if (sink.perfect_join_executor) {
+		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, chunk, *state.perfect_hash_join_state);
+	}
 
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return OperatorResultType::FINISHED;

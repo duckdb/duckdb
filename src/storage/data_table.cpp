@@ -264,7 +264,7 @@ bool DataTable::InitializeScanInRowGroup(TableScanState &state, const vector<col
 
 idx_t DataTable::MaxThreads(ClientContext &context) {
 	idx_t parallel_scan_vector_count = RowGroup::ROW_GROUP_VECTOR_COUNT;
-	if (context.force_parallelism) {
+	if (context.verify_parallelism) {
 		parallel_scan_vector_count = 1;
 	}
 	idx_t parallel_scan_tuple_count = STANDARD_VECTOR_SIZE * parallel_scan_vector_count;
@@ -287,7 +287,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	while (state.current_row_group) {
 		idx_t vector_index;
 		idx_t max_row;
-		if (context.force_parallelism) {
+		if (context.verify_parallelism) {
 			vector_index = state.vector_index;
 			max_row = state.current_row_group->start +
 			          MinValue<idx_t>(state.current_row_group->count,
@@ -299,7 +299,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		max_row = MinValue<idx_t>(max_row, state.max_row);
 		bool need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters,
 		                                             state.current_row_group, vector_index, max_row);
-		if (context.force_parallelism) {
+		if (context.verify_parallelism) {
 			state.vector_index++;
 			if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
 				state.current_row_group = (RowGroup *)state.current_row_group->next.get();

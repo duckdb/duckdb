@@ -39,11 +39,12 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 		throw ParserException("Key name for struct_extract needs to be neither NULL nor empty");
 	}
 
-	auto &config_map = context.db->config.set_variables;
-	if (config_map.find(key_val.str_value) == config_map.end()) {
-		throw InvalidInputException("Variable '%s' was not SET in this context", key_val.str_value);
+	const auto &key = key_val.str_value;
+	Value val;
+	if (!context.TryGetCurrentSetting(key, val)) {
+		throw InvalidInputException("Variable '%s' was not SET in this context", key);
 	}
-	Value val = config_map[key_val.str_value];
+
 	bound_function.return_type = val.type();
 	return make_unique<CurrentSettingBindData>(val);
 }

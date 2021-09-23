@@ -6,7 +6,7 @@ using namespace duckdb;
 using namespace std;
 
 TEST_CASE("Test functioning of checksum", "[storage]") {
-	FileSystem fs;
+	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	unique_ptr<DuckDB> database;
 	auto storage_database = TestCreatePath("checksum_test");
 	auto config = GetTestConfig();
@@ -25,9 +25,9 @@ TEST_CASE("Test functioning of checksum", "[storage]") {
 	database.reset();
 
 	// now write random values into the file
-	auto handle = fs.OpenFile(storage_database, FileFlags::FILE_FLAGS_WRITE);
+	auto handle = fs->OpenFile(storage_database, FileFlags::FILE_FLAGS_WRITE);
 	int8_t value = 0x22;
-	fs.Write(*handle, &value, sizeof(int8_t), 100);
+	fs->Write(*handle, &value, sizeof(int8_t), 100);
 	handle->Sync();
 	handle.reset();
 	// reloading the database no longer works

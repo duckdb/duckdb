@@ -10,7 +10,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 	const idx_t &col_idx = sort_layout.sorting_to_blob_col.at(tie_col);
 	// Locate the first blob row in question
 	data_ptr_t row_ptr = dataptr + start * sort_layout.entry_size;
-	data_ptr_t blob_row_ptr = blob_ptr + Load<idx_t>(row_ptr + sort_layout.comparison_size) * row_width;
+	data_ptr_t blob_row_ptr = blob_ptr + Load<uint32_t>(row_ptr + sort_layout.comparison_size) * row_width;
 	if (!Comparators::TieIsBreakable(col_idx, blob_row_ptr, sort_layout.blob_layout)) {
 		// Quick check to see if ties can be broken
 		return;
@@ -29,8 +29,8 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 	std::sort(entry_ptrs, entry_ptrs + end - start,
 	          [&blob_ptr, &order, &sort_layout, &tie_col_offset, &row_width, &logical_type](const data_ptr_t l,
 	                                                                                        const data_ptr_t r) {
-		          idx_t left_idx = Load<idx_t>(l + sort_layout.comparison_size);
-		          idx_t right_idx = Load<idx_t>(r + sort_layout.comparison_size);
+		          idx_t left_idx = Load<uint32_t>(l + sort_layout.comparison_size);
+		          idx_t right_idx = Load<uint32_t>(r + sort_layout.comparison_size);
 		          data_ptr_t left_ptr = blob_ptr + left_idx * row_width + tie_col_offset;
 		          data_ptr_t right_ptr = blob_ptr + right_idx * row_width + tie_col_offset;
 		          return order * Comparators::CompareVal(left_ptr, right_ptr, logical_type) < 0;
@@ -48,11 +48,11 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 	if (tie_col < sort_layout.column_count - 1) {
 		data_ptr_t idx_ptr = dataptr + start * sort_layout.entry_size + sort_layout.comparison_size;
 		// Load current entry
-		data_ptr_t current_ptr = blob_ptr + Load<idx_t>(idx_ptr) * row_width + tie_col_offset;
+		data_ptr_t current_ptr = blob_ptr + Load<uint32_t>(idx_ptr) * row_width + tie_col_offset;
 		for (idx_t i = 0; i < end - start - 1; i++) {
 			// Load next entry and compare
 			idx_ptr += sort_layout.entry_size;
-			data_ptr_t next_ptr = blob_ptr + Load<idx_t>(idx_ptr) * row_width + tie_col_offset;
+			data_ptr_t next_ptr = blob_ptr + Load<uint32_t>(idx_ptr) * row_width + tie_col_offset;
 			ties[start + i] = Comparators::CompareVal(current_ptr, next_ptr, logical_type) == 0;
 			current_ptr = next_ptr;
 		}
@@ -171,8 +171,8 @@ void LocalSortState::SortInMemory() {
 	const auto dataptr = handle->Ptr();
 	// Assign an index to each row
 	data_ptr_t idx_dataptr = dataptr + sort_layout->comparison_size;
-	for (idx_t i = 0; i < count; i++) {
-		Store<idx_t>(i, idx_dataptr);
+	for (uint32_t i = 0; i < count; i++) {
+		Store<uint32_t>(i, idx_dataptr);
 		idx_dataptr += sort_layout->entry_size;
 	}
 	// Radix sort and break ties until no more ties, or until all columns are sorted

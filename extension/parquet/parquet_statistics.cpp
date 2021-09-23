@@ -1,11 +1,11 @@
 #include "parquet_statistics.hpp"
-#include "parquet_timestamp.hpp"
 
 #include "duckdb.hpp"
+#include "parquet_timestamp.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
 #endif
 
 namespace duckdb {
@@ -174,7 +174,11 @@ unique_ptr<BaseStatistics> ParquetTransformColumnStatistics(const SchemaElement 
 
 	// null count is generic
 	if (row_group_stats) {
-		if (parquet_stats.__isset.null_count) {
+		if (column_chunk.meta_data.type == duckdb_parquet::format::Type::FLOAT ||
+		    column_chunk.meta_data.type == duckdb_parquet::format::Type::DOUBLE) {
+			// floats/doubles can have infinity, which becomes NULL
+			row_group_stats->validity_stats = make_unique<ValidityStatistics>(true);
+		} else if (parquet_stats.__isset.null_count) {
 			row_group_stats->validity_stats = make_unique<ValidityStatistics>(parquet_stats.null_count != 0);
 		} else {
 			row_group_stats->validity_stats = make_unique<ValidityStatistics>(true);

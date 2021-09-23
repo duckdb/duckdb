@@ -262,33 +262,6 @@ int64_t GZipFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 	return gzip_file.ReadData(buffer, nr_bytes);
 }
 
-// unsupported operations
-// LCOV_EXCL_START
-void GZipFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw NotImplementedException("Unsupported: Random read in gzip file not supported");
-}
-
-void GZipFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw NotImplementedException("Unsupported: Write to gzip file");
-}
-
-int64_t GZipFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	throw NotImplementedException("Unsupported: Write to gzip file");
-}
-
-void GZipFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	throw NotImplementedException("Unsupported: Truncate gzip file");
-}
-
-void GZipFileSystem::FileSync(FileHandle &handle) {
-	throw NotImplementedException("Unsupported: Sync  gzip file");
-}
-
-void GZipFileSystem::Seek(FileHandle &handle, idx_t location) {
-	throw NotImplementedException("Unsupported: Seek within gzip file");
-}
-// LCOV_EXCL_STOP
-
 void GZipFileSystem::Reset(FileHandle &handle) {
 	auto &gzip_file = (GZipFile &)handle;
 	gzip_file.child_handle->Reset();

@@ -9,7 +9,7 @@ statement ok
 PRAGMA threads=4
 
 statement ok
-PRAGMA force_parallelism
+PRAGMA verify_parallelism
 
 statement ok
 CREATE TABLE integers AS SELECT * FROM range(75000) tbl(i);

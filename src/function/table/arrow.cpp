@@ -177,7 +177,13 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	        .GetPointer();
 	auto rows_per_thread = inputs[2].GetValue<uint64_t>();
 	std::pair<std::unordered_map<idx_t, string>, std::vector<string>> project_columns;
+#ifndef DUCKDB_NO_THREADS
+
+	auto res = make_unique<ArrowScanFunctionData>(rows_per_thread, stream_factory_produce, stream_factory_ptr,
+	                                              std::this_thread::get_id());
+#else
 	auto res = make_unique<ArrowScanFunctionData>(rows_per_thread, stream_factory_produce, stream_factory_ptr);
+#endif
 	auto &data = *res;
 	auto stream = stream_factory_produce(stream_factory_ptr, project_columns, nullptr);
 
@@ -1042,7 +1048,7 @@ void ArrowTableFunction::ArrowScanFunctionParallel(ClientContext &context, const
 
 idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
-	if (bind_data.number_of_rows <= 0 || context.force_parallelism) {
+	if (bind_data.number_of_rows <= 0 || context.verify_parallelism) {
 		return context.db->NumberOfThreads();
 	}
 	return ((bind_data.number_of_rows + bind_data.rows_per_thread - 1) / bind_data.rows_per_thread) + 1;
@@ -1059,12 +1065,29 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	auto &state = (ArrowScanState &)*operator_state;
 	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
+#ifndef DUCKDB_NO_THREADS
+	if (!parallel_state.stream) {
+		std::unique_lock<mutex> sync_lock(parallel_state.sync_mutex);
 
-	lock_guard<mutex> parallel_lock(parallel_state.lock);
+		if (std::this_thread::get_id() == bind_data.thread_id) {
+			//! Generate a Stream
+			parallel_state.stream = ProduceArrowScan(bind_data, state, state.filters);
+			parallel_state.ready = true;
+			parallel_state.cv.notify_all();
+		} else {
+			parallel_state.cv.wait(sync_lock, [&parallel_state] { return parallel_state.ready; });
+		}
+	}
+	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
+
+#else
+	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
 	if (!parallel_state.stream) {
 		//! Generate a Stream
 		parallel_state.stream = ProduceArrowScan(bind_data, state, state.filters);
 	}
+#endif
+
 	state.chunk_offset = 0;
 
 	auto current_chunk = parallel_state.stream->GetNextChunk();

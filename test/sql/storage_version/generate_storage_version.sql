@@ -80,35 +80,4 @@ SELECT
     repeat('a', 100000) a;
 COMMIT;
 
--- generate a bunch of stuff in the WAL just to force a checkpoint
--- FIXME: this really needs to be done better
-
-UPDATE
-    big_integers
-SET
-    i = i + 1;
-
-UPDATE
-    big_integers
-SET
-    i = i + 1;
-
-UPDATE
-    big_integers
-SET
-    i = i + 1;
-
-UPDATE
-    big_integers
-SET
-    i = i + 1;
-
-UPDATE
-    big_integers
-SET
-    i = i + 1;
-
-UPDATE
-    big_integers
-SET
-    i = i - 5;
+FORCE CHECKPOINT;

@@ -8,6 +8,8 @@ import multiprocessing.pool
 
 from setuptools import setup, Extension
 
+lib_name = 'duckdb'
+
 extensions = ['parquet', 'icu', 'fts','tpch', 'tpcds', 'visualizer']
 
 if platform.system() == 'Windows':
@@ -66,6 +68,8 @@ libraries = []
 for i in range(len(sys.argv)):
     if sys.argv[i].startswith("--binary-dir="):
         existing_duckdb_dir = sys.argv[i].split('=', 1)[1]
+    elif sys.argv[i].startswith('--package_name=') :
+        lib_name = sys.argv[i].split('=', 1)[1]
     elif sys.argv[i].startswith("--compile-flags="):
         toolchain_args = ['-std=c++11'] + [x.strip() for x in sys.argv[i].split('=', 1)[1].split(' ') if len(x.strip()) > 0]
     elif sys.argv[i].startswith("--libs="):
@@ -73,6 +77,7 @@ for i in range(len(sys.argv)):
     else:
         new_sys_args.append(sys.argv[i])
 sys.argv = new_sys_args
+toolchain_args.append('-DDUCKDB_PYTHON_LIB_NAME='+lib_name)
 
 if platform.system() == 'Darwin':
     toolchain_args.extend(['-stdlib=libc++', '-mmacosx-version-min=10.7'])
@@ -156,7 +161,7 @@ if len(existing_duckdb_dir) == 0:
     source_files += duckdb_sources
     include_directories = duckdb_includes + include_directories
 
-    libduckdb = Extension('duckdb',
+    libduckdb = Extension(lib_name,
         include_dirs=include_directories,
         sources=source_files,
         extra_compile_args=toolchain_args,
@@ -173,7 +178,7 @@ else:
     library_dirs = [x[0] for x in result_libraries if x[0] is not None]
     libnames = [x[1] for x in result_libraries if x[1] is not None]
 
-    libduckdb = Extension('duckdb',
+    libduckdb = Extension(lib_name,
         include_dirs=include_directories,
         sources=main_source_files,
         extra_compile_args=toolchain_args,
@@ -217,7 +222,7 @@ def setup_data_files(data_files):
 data_files = setup_data_files(extra_files + header_files)
 
 setup(
-    name = "duckdb",
+    name = lib_name,
     description = 'DuckDB embedded database',
     keywords = 'DuckDB Database SQL OLAP',
     url="https://www.duckdb.org",

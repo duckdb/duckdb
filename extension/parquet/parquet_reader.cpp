@@ -46,15 +46,16 @@ using duckdb_parquet::format::SchemaElement;
 using duckdb_parquet::format::Statistics;
 using duckdb_parquet::format::Type;
 
-static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftProtocol(FileHandle &file_handle) {
-	shared_ptr<ThriftFileTransport> trans(new ThriftFileTransport(file_handle));
-	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(trans);
+static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftProtocol(Allocator &allocator,
+                                                                                   FileHandle &file_handle) {
+	auto transport = make_shared<ThriftFileTransport>(allocator, file_handle);
+	return make_unique<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(move(transport));
 }
 
 static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, FileHandle &file_handle) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
-	auto proto = CreateThriftProtocol(file_handle);
+	auto proto = CreateThriftProtocol(allocator, file_handle);
 	auto &transport = ((ThriftFileTransport &)*proto->getTransport());
 	auto file_size = transport.GetSize();
 	if (file_size < 12) {
@@ -78,6 +79,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	}
 	auto metadata_pos = file_size - (footer_len + 8);
 	transport.SetLocation(metadata_pos);
+	transport.Prefetch(metadata_pos, footer_len);
 
 	auto metadata = make_unique<FileMetaData>();
 	metadata->read(proto.get());
@@ -279,10 +281,11 @@ ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const vector<LogicalType> &expected_types_p,
                              const string &initial_filename_p)
-    : allocator(Allocator::Get(context_p)) {
+    : allocator(Allocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)) {
 	auto &fs = FileSystem::GetFileSystem(context_p);
 	file_name = move(file_name_p);
-	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+	                          FileSystem::DEFAULT_COMPRESSION, file_opener);
 	// If object cached is disabled
 	// or if this file has cached metadata
 	// or if the cached version already expired
@@ -385,8 +388,10 @@ void ParquetReader::InitializeScan(ParquetReaderScanState &state, vector<column_
 	state.group_idx_list = move(groups_to_read);
 	state.filters = filters;
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
-	state.file_handle = file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ);
-	state.thrift_file_proto = CreateThriftProtocol(*state.file_handle);
+	state.file_handle =
+	    file_handle->file_system.OpenFile(file_handle->path, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
+	                                      FileSystem::DEFAULT_COMPRESSION, file_opener);
+	state.thrift_file_proto = CreateThriftProtocol(allocator, *state.file_handle);
 	state.root_reader = CreateReader(*this, GetFileMetadata());
 
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
@@ -475,6 +480,24 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
 		TemplatedFilterOperation<string_t, OP>(v, string_t(constant.str_value), filter_mask, count);
+		break;
+	case LogicalTypeId::DECIMAL:
+		switch (v.GetType().InternalType()) {
+		case PhysicalType::INT16:
+			TemplatedFilterOperation<int16_t, OP>(v, constant.value_.smallint, filter_mask, count);
+			break;
+		case PhysicalType::INT32:
+			TemplatedFilterOperation<int32_t, OP>(v, constant.value_.integer, filter_mask, count);
+			break;
+		case PhysicalType::INT64:
+			TemplatedFilterOperation<int64_t, OP>(v, constant.value_.bigint, filter_mask, count);
+			break;
+		case PhysicalType::INT128:
+			TemplatedFilterOperation<hugeint_t, OP>(v, constant.value_.hugeint, filter_mask, count);
+			break;
+		default:
+			throw InternalException("Unsupported internal type for decimal");
+		}
 		break;
 	default:
 		throw NotImplementedException("Unsupported type for filter %s", v.ToString());

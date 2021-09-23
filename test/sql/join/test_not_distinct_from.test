@@ -2,6 +2,9 @@
 # description: Test join on is not distinct from query
 # group: [join]
 
+statement ok
+PRAGMA enable_verification
+
 foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
 
 statement ok
@@ -48,15 +51,15 @@ explain select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_
 ----
 physical_plan	<REGEX>:.*NESTED_LOOP_JOIN.*
 
-query II
-select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b) order by a,tbl_2.b
+query II rowsort
+select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b)
 ----
+1	2
+1	NULL
+2	1
+2	NULL
 NULL	1
 NULL	2
-1	NULL
-1	2
-2	NULL
-2	1
 
 query II
 select a,tbl_2.b from tbl_1 inner join tbl_2 on (a IS DISTINCT FROM tbl_2.b AND a <> tbl_2.b) order by a,tbl_2.b

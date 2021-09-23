@@ -5,8 +5,13 @@
 namespace duckdb {
 
 void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &db = context.client.db;
-	db->config.set_variables[name] = value; // woop
+	D_ASSERT(scope == SetScope::GLOBAL || scope == SetScope::SESSION);
+
+	if (scope == SetScope::GLOBAL) {
+		context.client.db->config.set_variables[name] = value;
+	} else {
+		context.client.set_variables[name] = value;
+	}
 }
 
 } // namespace duckdb

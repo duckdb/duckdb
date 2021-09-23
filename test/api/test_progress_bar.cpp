@@ -1,14 +1,13 @@
 #ifndef DUCKDB_NO_THREADS
 
+#include "catch.hpp"
+#include "duckdb/common/progress_bar.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "test_helpers.hpp"
+
 #include <duckdb/execution/executor.hpp>
 #include <future>
-#include "catch.hpp"
-#include "test_helpers.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/common/progress_bar.hpp"
-
 #include <thread>
-#include <future>
 
 using namespace duckdb;
 using namespace std;
@@ -87,8 +86,8 @@ TEST_CASE("Test Progress Bar Fast", "[api]") {
 	REQUIRE_NO_FAIL(*result);
 
 	//! Test Multiple threads
-	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
-	REQUIRE_NO_FAIL(con.Query("PRAGMA force_parallelism"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=2"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 
 	//! Simple Aggregation
 	test_progress.Start();
@@ -152,7 +151,7 @@ TEST_CASE("Test Progress Bar", "[api][.]") {
 
 	//! Test Multiple threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
-	REQUIRE_NO_FAIL(con.Query("PRAGMA force_parallelism"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 
 	//! Simple Aggregation
 	test_progress.Start();
@@ -222,7 +221,7 @@ TEST_CASE("Test Progress Bar CSV", "[api][.]") {
 
 	//! Test Multiple threads
 	REQUIRE_NO_FAIL(con.Query("PRAGMA threads=4"));
-	REQUIRE_NO_FAIL(con.Query("PRAGMA force_parallelism"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA verify_parallelism"));
 	//! Create Tables From CSVs
 	test_progress.Start();
 	REQUIRE_NO_FAIL(

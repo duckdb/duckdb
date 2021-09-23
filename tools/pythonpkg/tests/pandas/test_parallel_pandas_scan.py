@@ -79,6 +79,6 @@ class TestParallelPandasScan(object):
         df_empty = pd.DataFrame({'A' : []})
         duckdb_conn = duckdb.connect()
         duckdb_conn.execute("PRAGMA threads=4")
-        duckdb_conn.execute("PRAGMA force_parallelism")
+        duckdb_conn.execute("PRAGMA verify_parallelism")
         duckdb_conn.register('main_table', df_empty)
         assert duckdb_conn.execute('select * from main_table').fetchall() == []

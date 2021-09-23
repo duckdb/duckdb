@@ -55,6 +55,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	default:
 		throw NotImplementedException("Subquery of type %d not implemented\n", (int)root->subLinkType);
 	}
+	subquery_expr->query_location = root->location;
 	return move(subquery_expr);
 }
 

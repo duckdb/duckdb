@@ -3,6 +3,7 @@
 #include "duckdb/common/algorithm.hpp"
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer.hpp"
@@ -10,10 +11,9 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/sel_cache.hpp"
+#include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
-#include "duckdb/common/operator/comparison_operators.hpp"
-#include "duckdb/common/types/vector_cache.hpp"
 
 #include <cstring> // strlen() on Solaris
 
@@ -157,7 +157,6 @@ void Vector::Slice(const SelectionVector &sel, idx_t count) {
 	}
 	Vector child_vector(*this);
 	auto child_ref = make_buffer<VectorChildBuffer>(move(child_vector));
-
 	auto dict_buffer = make_buffer<DictionaryBuffer>(sel);
 	vector_type = VectorType::DICTIONARY_VECTOR;
 	buffer = move(dict_buffer);
@@ -1274,6 +1273,7 @@ void StringVector::AddHandle(Vector &vector, unique_ptr<BufferHandle> handle) {
 
 void StringVector::AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer) {
 	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
+	D_ASSERT(buffer.get() != vector.auxiliary.get());
 	if (!vector.auxiliary) {
 		vector.auxiliary = make_buffer<VectorStringBuffer>();
 	}
@@ -1292,13 +1292,7 @@ void StringVector::AddHeapReference(Vector &vector, Vector &other) {
 	if (!other.auxiliary) {
 		return;
 	}
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	D_ASSERT(other.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = (VectorStringBuffer &)*vector.auxiliary;
-	string_buffer.AddHeapReference(other.auxiliary);
+	StringVector::AddBuffer(vector, other.auxiliary);
 }
 
 vector<unique_ptr<Vector>> &StructVector::GetEntries(Vector &vector) {

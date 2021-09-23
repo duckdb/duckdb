@@ -2,12 +2,12 @@
 
 namespace duckdb {
 
-SetStatement::SetStatement(std::string name_p, Value value_p)
-    : SQLStatement(StatementType::SET_STATEMENT), name(move(name_p)), value(move(value_p)) {
+SetStatement::SetStatement(std::string name_p, Value value_p, SetScope scope_p)
+    : SQLStatement(StatementType::SET_STATEMENT), name(move(name_p)), value(move(value_p)), scope(scope_p) {
 }
 
 unique_ptr<SQLStatement> SetStatement::Copy() const {
-	return make_unique<SetStatement>(name, value);
+	return make_unique<SetStatement>(name, value, scope);
 }
 
 } // namespace duckdb

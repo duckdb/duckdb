@@ -40,8 +40,8 @@ int main(int argc, const char **argv) {
 	// the db instance and client context are not really required so we may remove them
 
 	Allocator allocator;
-	FileSystem fs;
-	ParquetReader reader(allocator, fs.OpenFile(filename, FileFlags::FILE_FLAGS_READ));
+	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	ParquetReader reader(allocator, fs->OpenFile(filename, FileFlags::FILE_FLAGS_READ));
 
 	// only return columns first_name and last_name
 	std::vector<column_t> column_ids;

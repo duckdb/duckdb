@@ -757,33 +757,6 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->subquery = $1;
 					n->alias = $2;
 					n->sample = $3;
-					/*
-					 * The SQL spec does not permit a subselect
-					 * (<derived_table>) without an alias clause,
-					 * so we don't either.  This avoids the problem
-					 * of needing to invent a unique refname for it.
-					 * That could be surmounted if there's sufficient
-					 * popular demand, but for now let's just implement
-					 * the spec and see if anyone complains.
-					 * However, it does seem like a good idea to emit
-					 * an error message that's better than "syntax error".
-					 */
-					if ($2 == NULL)
-					{
-						if (IsA($1, PGSelectStmt) &&
-							((PGSelectStmt *) $1)->valuesLists)
-							ereport(ERROR,
-									(errcode(PG_ERRCODE_SYNTAX_ERROR),
-									 errmsg("VALUES in FROM must have an alias"),
-									 errhint("For example, FROM (VALUES ...) [AS] foo."),
-									 parser_errposition(@1)));
-						else
-							ereport(ERROR,
-									(errcode(PG_ERRCODE_SYNTAX_ERROR),
-									 errmsg("subquery in FROM must have an alias"),
-									 errhint("For example, FROM (SELECT ...) [AS] foo."),
-									 parser_errposition(@1)));
-					}
 					$$ = (PGNode *) n;
 				}
 			| LATERAL_P select_with_parens opt_alias_clause
@@ -793,23 +766,6 @@ table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
 					n->subquery = $2;
 					n->alias = $3;
 					n->sample = NULL;
-					/* same comment as above */
-					if ($3 == NULL)
-					{
-						if (IsA($2, PGSelectStmt) &&
-							((PGSelectStmt *) $2)->valuesLists)
-							ereport(ERROR,
-									(errcode(PG_ERRCODE_SYNTAX_ERROR),
-									 errmsg("VALUES in FROM must have an alias"),
-									 errhint("For example, FROM (VALUES ...) [AS] foo."),
-									 parser_errposition(@2)));
-						else
-							ereport(ERROR,
-									(errcode(PG_ERRCODE_SYNTAX_ERROR),
-									 errmsg("subquery in FROM must have an alias"),
-									 errhint("For example, FROM (SELECT ...) [AS] foo."),
-									 parser_errposition(@2)));
-					}
 					$$ = (PGNode *) n;
 				}
 			| joined_table
@@ -3119,10 +3075,6 @@ indirection_el:
 				{
 					$$ = (PGNode *) makeString($2);
 				}
-			| '.' '*'
-				{
-					$$ = (PGNode *) makeNode(PGAStar);
-				}
 			| '[' a_expr ']'
 				{
 					PGAIndices *ai = makeNode(PGAIndices);
@@ -3208,11 +3160,30 @@ target_el:	a_expr AS ColLabelOrString
 					$$->val = (PGNode *)$1;
 					$$->location = @1;
 				}
-			| '*'
+			| '*' opt_except_list opt_replace_list
 				{
 					PGColumnRef *n = makeNode(PGColumnRef);
-					n->fields = list_make1(makeNode(PGAStar));
+					PGAStar *star = makeNode(PGAStar);
+					n->fields = list_make1(star);
 					n->location = @1;
+					star->except_list = $2;
+					star->replace_list = $3;
+
+					$$ = makeNode(PGResTarget);
+					$$->name = NULL;
+					$$->indirection = NIL;
+					$$->val = (PGNode *)n;
+					$$->location = @1;
+				}
+			| ColId '.' '*' opt_except_list opt_replace_list
+				{
+					PGColumnRef *n = makeNode(PGColumnRef);
+					PGAStar *star = makeNode(PGAStar);
+					n->fields = list_make1(star);
+					n->location = @1;
+					star->relation = $1;
+					star->except_list = $4;
+					star->replace_list = $5;
 
 					$$ = makeNode(PGResTarget);
 					$$->name = NULL;
@@ -3222,6 +3193,26 @@ target_el:	a_expr AS ColLabelOrString
 				}
 		;
 
+except_list: EXCLUDE '(' name_list ')'					{ $$ = $3; }
+			| EXCLUDE ColId								{ $$ = list_make1(makeString($2)); }
+		;
+
+opt_except_list: except_list						{ $$ = $1; }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
+replace_list_el: a_expr AS ColId					{ $$ = list_make2($1, makeString($3)); }
+		;
+
+replace_list:
+			replace_list_el							{ $$ = list_make1($1); }
+			| replace_list ',' replace_list_el		{ $$ = lappend($1, $3); }
+		;
+
+opt_replace_list: REPLACE '(' replace_list ')'		{ $$ = $3; }
+			| REPLACE replace_list_el				{ $$ = list_make1($2); }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
 
 /*****************************************************************************
  *

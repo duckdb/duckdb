@@ -15,6 +15,7 @@ compile_directories = list(set([x.rsplit(os.path.sep, 1)[0] for x in parquet_con
 
 amalgamation.include_paths += parquet_config.include_directories
 amalgamation.main_header_files = [
+    os.path.sep.join('extension/parquet/include/parquet-extension.hpp'.split('/')),
     os.path.sep.join('extension/parquet/include/parquet_reader.hpp'.split('/')),
     os.path.sep.join('extension/parquet/include/parquet_writer.hpp'.split('/'))]
 amalgamation.skip_duckdb_includes = True

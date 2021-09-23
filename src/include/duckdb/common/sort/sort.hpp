@@ -19,7 +19,7 @@ struct LocalSortState;
 
 struct SortLayout {
 public:
-	SortLayout(const vector<BoundOrderByNode> &orders);
+	explicit SortLayout(const vector<BoundOrderByNode> &orders);
 
 public:
 	idx_t column_count;
@@ -30,6 +30,7 @@ public:
 	bool all_constant;
 	vector<bool> constant_size;
 	vector<idx_t> column_sizes;
+	vector<idx_t> prefix_lengths;
 	vector<BaseStatistics *> stats;
 	vector<bool> has_null;
 
@@ -95,7 +96,7 @@ public:
 	//! Size of accumulated data in bytes
 	idx_t SizeInBytes() const;
 	//! Sort the data accumulated so far
-	void Sort(GlobalSortState &global_sort_state);
+	void Sort(GlobalSortState &global_sort_state, bool reorder_heap);
 
 private:
 	//! Concatenate the blocks held by a RowDataCollection into a single block
@@ -103,9 +104,10 @@ private:
 	//! Sorts the data in the newly created SortedBlock
 	void SortInMemory();
 	//! Re-order the local state after sorting
-	void ReOrder(GlobalSortState &gstate);
+	void ReOrder(GlobalSortState &gstate, bool reorder_heap);
 	//! Re-order a SortedData object after sorting
-	void ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap, GlobalSortState &gstate);
+	void ReOrder(SortedData &sd, data_ptr_t sorting_ptr, RowDataCollection &heap, GlobalSortState &gstate,
+	             bool reorder_heap);
 
 public:
 	//! Whether this local state has been initialized

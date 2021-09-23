@@ -13,21 +13,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalWind
 	for (auto &window_expr : window.expressions) {
 		auto over_expr = reinterpret_cast<BoundWindowExpression *>(window_expr.get());
 		for (auto &expr : over_expr->partitions) {
-			PropagateExpression(expr);
-			if (expr->stats) {
-				over_expr->partitions_stats.push_back(expr->stats->Copy());
-			} else {
-				over_expr->partitions_stats.push_back(nullptr);
-			}
+			over_expr->partitions_stats.push_back(PropagateExpression(expr));
 		}
 		for (auto &bound_order : over_expr->orders) {
-			auto &expr = bound_order.expression;
-			PropagateExpression(expr);
-			if (expr->stats) {
-				bound_order.stats = expr->stats->Copy();
-			} else {
-				bound_order.stats = nullptr;
-			}
+			bound_order.stats = PropagateExpression(bound_order.expression);
 		}
 	}
 	return move(node_stats);

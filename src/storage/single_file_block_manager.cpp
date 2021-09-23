@@ -79,7 +79,7 @@ SingleFileBlockManager::SingleFileBlockManager(DatabaseInstance &db, string path
 		flags = FileFlags::FILE_FLAGS_READ;
 		lock = FileLockType::READ_LOCK;
 	} else {
-		flags = FileFlags::FILE_FLAGS_WRITE;
+		flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_READ;
 		lock = FileLockType::WRITE_LOCK;
 		if (create_new) {
 			flags |= FileFlags::FILE_FLAGS_FILE_CREATE;

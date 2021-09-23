@@ -22,15 +22,16 @@ namespace duckdb {
 
 class PipelineTask : public Task {
 public:
-	explicit PipelineTask(Pipeline &pipeline, shared_ptr<Event> event_p)
-	    : event(move(event_p)), executor(pipeline.GetClientContext(), pipeline) {
+	explicit PipelineTask(Pipeline &pipeline_p, shared_ptr<Event> event_p)
+	    : pipeline(pipeline_p), event(move(event_p)) {
 	}
 
+	Pipeline &pipeline;
 	shared_ptr<Event> event;
-	PipelineExecutor executor;
 
 public:
 	void Execute() override {
+		PipelineExecutor executor(pipeline.GetClientContext(), pipeline);
 		executor.Execute();
 		event->FinishTask();
 	}
