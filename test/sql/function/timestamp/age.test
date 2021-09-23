@@ -96,9 +96,9 @@ NULL
 query T
 SELECT t1 - t2 FROM timestamp;
 ----
-43 years 9 months 27 days
+16007 days
 8 days
-3 months 24 days
+114 days
 00:00:00
 NULL
 NULL
