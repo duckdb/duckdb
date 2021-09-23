@@ -1,31 +1,22 @@
 #include "catch.hpp"
-#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/local_file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace std;
 
 namespace duckdb {
 
-class ReadOnlyFileSystem : public FileSystem {
+class ReadOnlyFileSystem : public LocalFileSystem {
 	unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
-	                                FileCompressionType compression) override {
+	                                FileCompressionType compression, FileOpener *opener) override {
 		if (flags & FileFlags::FILE_FLAGS_WRITE) {
 			throw Exception("RO file system");
 		}
-		return FileSystem::OpenFile(path, flags, lock_type, compression);
+		return LocalFileSystem::OpenFile(path, flags, lock_type, compression, opener);
 	}
 
-	void CreateDirectory(const string &directory) override {
-		throw Exception("RO file system");
-	}
-	void RemoveDirectory(const string &directory) override {
-		throw Exception("RO file system");
-	}
-	void MoveFile(const string &source, const string &target) override {
-		throw Exception("RO file system");
-	}
-	void RemoveFile(const string &filename) override {
-		throw Exception("RO file system");
+	std::string GetName() const override {
+		return "ReadOnlyFileSystem";
 	}
 };
 

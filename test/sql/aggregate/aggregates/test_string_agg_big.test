@@ -3,7 +3,7 @@
 # group: [aggregates]
 
 statement ok
-PRAGMA force_parallelism
+PRAGMA verify_parallelism
 
 statement ok
 CREATE TABLE strings AS SELECT c::VARCHAR g, (c*10+e)::VARCHAR x FROM range(0, 100, 1) t1(c), range(0, 100, 1) t2(e);

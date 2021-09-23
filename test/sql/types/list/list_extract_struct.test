@@ -1,0 +1,78 @@
+# name: test/sql/types/list/list_extract_struct.test
+# description: Test list extract on list of structs
+# group: [list]
+
+# list extract for structs
+statement ok
+CREATE TABLE a AS SELECT
+	[
+		{'a': 3, 'b': NULL},
+		NULL,
+		{'a': NULL, 'b': 'hello'}
+	] l;
+
+query I
+SELECT * FROM a
+----
+[{'a': 3, 'b': NULL}, NULL, {'a': NULL, 'b': hello}]
+
+query I
+SELECT l[0] FROM a
+----
+{'a': 3, 'b': NULL}
+
+query I
+SELECT l[1] FROM a
+----
+NULL
+
+query I
+SELECT l[2] FROM a
+----
+{'a': NULL, 'b': hello}
+
+# nested structs
+statement ok
+CREATE TABLE nested AS SELECT
+	[
+		{'a': 3, 'b': {'x': 3, 'y': [1, 2, 3]}},
+		NULL,
+		{'a': NULL, 'b': {'x': NULL, 'y': [4, 5]}},
+		{'a': 27, 'b': NULL},
+		{'a': NULL, 'b': {'x': 7, 'y': NULL}}
+	] l;
+
+query I
+SELECT * FROM nested
+----
+[{'a': 3, 'b': {'x': 3, 'y': [1, 2, 3]}}, NULL, {'a': NULL, 'b': {'x': NULL, 'y': [4, 5]}}, {'a': 27, 'b': NULL}, {'a': NULL, 'b': {'x': 7, 'y': NULL}}]
+
+query I
+SELECT l[0] FROM nested
+----
+{'a': 3, 'b': {'x': 3, 'y': [1, 2, 3]}}
+
+query I
+SELECT l[1] FROM nested
+----
+NULL
+
+query I
+SELECT l[2] FROM nested
+----
+{'a': NULL, 'b': {'x': NULL, 'y': [4, 5]}}
+
+query I
+SELECT l[3] FROM nested
+----
+{'a': 27, 'b': NULL}
+
+query I
+SELECT l[4] FROM nested
+----
+{'a': NULL, 'b': {'x': 7, 'y': NULL}}
+
+query I
+SELECT l[4]['b'] FROM nested
+----
+{'x': 7, 'y': NULL}

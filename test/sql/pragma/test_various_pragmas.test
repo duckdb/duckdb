@@ -9,10 +9,10 @@ statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
 statement ok
-PRAGMA force_parallelism
+PRAGMA verify_parallelism
 
 statement ok
-PRAGMA disable_force_parallelism
+PRAGMA disable_verify_parallelism
 
 statement ok
 PRAGMA explain_output='all'

@@ -74,7 +74,7 @@ class TestTPCHArrow(object):
             print ("Query " + str(i) + " works")
 
         duckdb_conn.execute("PRAGMA threads=4")
-        duckdb_conn.execute("PRAGMA force_parallelism")
+        duckdb_conn.execute("PRAGMA verify_parallelism")
 
         for i in range (1,23):
             query = duckdb_conn.execute("select query from tpch_queries() where query_nr="+str(i)).fetchone()[0]

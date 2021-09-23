@@ -5,9 +5,12 @@
 
 namespace duckdb {
 
-BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags)
+// Remove this when we switch C++17: https://stackoverflow.com/a/53350948
+constexpr uint8_t BufferedFileWriter::DEFAULT_OPEN_FLAGS;
+
+BufferedFileWriter::BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags, FileOpener *opener)
     : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0), total_written(0) {
-	handle = fs.OpenFile(path, open_flags, FileLockType::WRITE_LOCK);
+	handle = fs.OpenFile(path, open_flags, FileLockType::WRITE_LOCK, FileSystem::DEFAULT_COMPRESSION, opener);
 }
 
 int64_t BufferedFileWriter::GetFileSize() {

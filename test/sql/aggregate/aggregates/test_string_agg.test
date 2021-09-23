@@ -98,7 +98,7 @@ SELECT g, GROUP_CONCAT(x) FROM strings GROUP BY g ORDER BY g
 
 # Impervious to threading
 statement ok
-PRAGMA force_parallelism
+PRAGMA verify_parallelism
 
 # Single group
 query TT

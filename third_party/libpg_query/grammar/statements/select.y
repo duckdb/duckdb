@@ -3075,10 +3075,6 @@ indirection_el:
 				{
 					$$ = (PGNode *) makeString($2);
 				}
-			| '.' '*'
-				{
-					$$ = (PGNode *) makeNode(PGAStar);
-				}
 			| '[' a_expr ']'
 				{
 					PGAIndices *ai = makeNode(PGAIndices);
@@ -3164,11 +3160,30 @@ target_el:	a_expr AS ColLabelOrString
 					$$->val = (PGNode *)$1;
 					$$->location = @1;
 				}
-			| '*'
+			| '*' opt_except_list opt_replace_list
 				{
 					PGColumnRef *n = makeNode(PGColumnRef);
-					n->fields = list_make1(makeNode(PGAStar));
+					PGAStar *star = makeNode(PGAStar);
+					n->fields = list_make1(star);
 					n->location = @1;
+					star->except_list = $2;
+					star->replace_list = $3;
+
+					$$ = makeNode(PGResTarget);
+					$$->name = NULL;
+					$$->indirection = NIL;
+					$$->val = (PGNode *)n;
+					$$->location = @1;
+				}
+			| ColId '.' '*' opt_except_list opt_replace_list
+				{
+					PGColumnRef *n = makeNode(PGColumnRef);
+					PGAStar *star = makeNode(PGAStar);
+					n->fields = list_make1(star);
+					n->location = @1;
+					star->relation = $1;
+					star->except_list = $4;
+					star->replace_list = $5;
 
 					$$ = makeNode(PGResTarget);
 					$$->name = NULL;
@@ -3178,6 +3193,26 @@ target_el:	a_expr AS ColLabelOrString
 				}
 		;
 
+except_list: EXCLUDE '(' name_list ')'					{ $$ = $3; }
+			| EXCLUDE ColId								{ $$ = list_make1(makeString($2)); }
+		;
+
+opt_except_list: except_list						{ $$ = $1; }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
+
+replace_list_el: a_expr AS ColId					{ $$ = list_make2($1, makeString($3)); }
+		;
+
+replace_list:
+			replace_list_el							{ $$ = list_make1($1); }
+			| replace_list ',' replace_list_el		{ $$ = lappend($1, $3); }
+		;
+
+opt_replace_list: REPLACE '(' replace_list ')'		{ $$ = $3; }
+			| REPLACE replace_list_el				{ $$ = list_make1($2); }
+			| /*EMPTY*/								{ $$ = NULL; }
+		;
 
 /*****************************************************************************
  *

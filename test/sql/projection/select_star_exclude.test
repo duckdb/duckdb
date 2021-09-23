@@ -1,0 +1,98 @@
+# name: test/sql/projection/select_star_exclude.test
+# description: SELECT * EXCLUDE
+# group: [projection]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER, j INTEGER, k INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 2, 3)
+
+query II
+SELECT * EXCLUDE i FROM integers
+----
+2	3
+
+query I
+SELECT * EXCLUDE (i, j) FROM integers
+----
+3
+
+query II
+SELECT * EXCLUDE (j) FROM integers
+----
+1	3
+
+query II
+SELECT * EXCLUDE (j) FROM integers
+----
+1	3
+
+# case insensitive exclude
+query II
+SELECT * EXCLUDE ("J") FROM integers
+----
+1	3
+
+# no columns remaining...
+statement error
+SELECT * EXCLUDE (i, j, k) FROM integers
+
+# same but with integers.*
+query II
+SELECT integers.* EXCLUDE (i) FROM integers
+----
+2	3
+
+query I
+SELECT integers.* EXCLUDE (i, j) FROM integers
+----
+3
+
+query II
+SELECT integers.* EXCLUDE (j) FROM integers
+----
+1	3
+
+query III
+SELECT integers.* EXCLUDE (i, j), * EXCLUDE (i, j), * EXCLUDE (i, k) FROM integers
+----
+3	3	2
+
+statement error
+SELECT integers.* EXCLUDE (i, j, k) FROM integers
+
+# exclude but with multiple tables
+query II
+SELECT * EXCLUDE (i, j) FROM integers i1, integers i2
+----
+3	3
+
+query I
+SELECT i1.* EXCLUDE (i, j), i2.* EXCLUDE (i, j, k) FROM integers i1, integers i2
+----
+3
+
+query III
+SELECT i1.* EXCLUDE (i, j), i2.* EXCLUDE (k) FROM integers i1, integers i2
+----
+3	1	2
+
+query IIII
+SELECT * EXCLUDE (i) FROM integers i1 JOIN integers i2 USING (i)
+----
+2	3	2	3
+
+# duplicate entry in exclude list
+statement error
+SELECT * EXCLUDE (i, i) FROM integers
+
+# column name that does not exist
+statement error
+SELECT * EXCLUDE (blabla) FROM integers
+
+statement error
+SELECT integers.* EXCLUDE (blabla) FROM integers

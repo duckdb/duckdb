@@ -155,6 +155,7 @@ private:
 	//! Transform a positional reference (e.g. #1)
 	unique_ptr<ParsedExpression> TransformPositionalReference(duckdb_libpgquery::PGPositionalReference *node,
 	                                                          idx_t depth);
+	unique_ptr<ParsedExpression> TransformStarExpression(duckdb_libpgquery::PGNode *node, idx_t depth);
 
 	//! Transform a Postgres constant value into an Expression
 	unique_ptr<ParsedExpression> TransformConstant(duckdb_libpgquery::PGAConst *c, idx_t depth);

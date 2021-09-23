@@ -29,6 +29,7 @@ class Appender;
 class Catalog;
 class ChunkCollection;
 class DatabaseInstance;
+class FileOpener;
 class LogicalOperator;
 class PreparedStatementData;
 class Relation;
@@ -82,7 +83,7 @@ public:
 	//! Enable the running of optimizers
 	bool enable_optimizer = true;
 	//! Force parallelism of small tables, used for testing
-	bool force_parallelism = false;
+	bool verify_parallelism = false;
 	//! Force index join independent of table cardinality, used for testing
 	bool force_index_join = false;
 	//! Force out-of-core computation for operators that support it, used for testing
@@ -99,6 +100,8 @@ public:
 
 	//! The schema search path, in order by which entries are searched if no schema entry is provided
 	vector<string> catalog_search_path = {TEMP_SCHEMA, DEFAULT_SCHEMA, "pg_catalog"};
+
+	unique_ptr<FileOpener> file_opener;
 
 public:
 	DUCKDB_API Transaction &ActiveTransaction() {

@@ -27,7 +27,7 @@ statement ok
 pragma threads=4
 
 statement ok
-pragma force_parallelism
+pragma verify_parallelism
 
 query III
 SELECT * FROM summary((SELECT * FROM a))

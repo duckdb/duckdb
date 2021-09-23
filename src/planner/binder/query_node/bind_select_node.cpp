@@ -6,7 +6,6 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
-#include "duckdb/parser/expression/table_star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -191,14 +190,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	for (auto &select_element : statement.select_list) {
 		if (select_element->GetExpressionType() == ExpressionType::STAR) {
 			// * statement, expand to all columns from the FROM clause
-			bind_context.GenerateAllColumnExpressions(new_select_list);
-		} else if (select_element->GetExpressionType() == ExpressionType::TABLE_STAR) {
-			auto table_star = (TableStarExpression *)select_element.get();
-			bind_context.GenerateAllColumnExpressions(new_select_list, table_star->relation_name);
+			bind_context.GenerateAllColumnExpressions((StarExpression &)*select_element, new_select_list);
 		} else {
 			// regular statement, add it to the list
 			new_select_list.push_back(move(select_element));
 		}
+	}
+	if (new_select_list.empty()) {
+		throw BinderException("SELECT list is empty after resolving * expressions!");
 	}
 	statement.select_list = move(new_select_list);
 

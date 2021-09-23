@@ -20,10 +20,10 @@ static void WriteCatalogEntries(stringstream &ss, vector<CatalogEntry *> &entrie
 	ss << std::endl;
 }
 
-static void WriteStringStreamToFile(FileSystem &fs, stringstream &ss, const string &path) {
+static void WriteStringStreamToFile(FileSystem &fs, FileOpener *opener, stringstream &ss, const string &path) {
 	auto ss_string = ss.str();
 	auto handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-	                          FileLockType::WRITE_LOCK);
+	                          FileLockType::WRITE_LOCK, FileSystem::DEFAULT_COMPRESSION, opener);
 	fs.Write(*handle, (void *)ss_string.c_str(), ss_string.size());
 	handle.reset();
 }
@@ -77,6 +77,7 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEnt
 void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
 	auto &ccontext = context.client;
 	auto &fs = FileSystem::GetFileSystem(ccontext);
+	auto *opener = FileSystem::GetFileOpener(ccontext);
 
 	// gather all catalog types to export
 	vector<CatalogEntry *> schemas;
@@ -116,7 +117,7 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 	WriteCatalogEntries(ss, views);
 	WriteCatalogEntries(ss, indexes);
 
-	WriteStringStreamToFile(fs, ss, fs.JoinPath(info->file_path, "schema.sql"));
+	WriteStringStreamToFile(fs, opener, ss, fs.JoinPath(info->file_path, "schema.sql"));
 
 	// write the load.sql file
 	// for every table, we write COPY INTO statement with the specified options
@@ -126,7 +127,7 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		auto exported_table_info = kv.second;
 		WriteCopyStatement(fs, load_ss, table, *info, exported_table_info, function);
 	}
-	WriteStringStreamToFile(fs, load_ss, fs.JoinPath(info->file_path, "load.sql"));
+	WriteStringStreamToFile(fs, opener, load_ss, fs.JoinPath(info->file_path, "load.sql"));
 	state->finished = true;
 }
 

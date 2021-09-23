@@ -17,10 +17,12 @@ namespace duckdb {
 
 class BufferedFileWriter : public Serializer {
 public:
+	static constexpr uint8_t DEFAULT_OPEN_FLAGS = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE;
+
 	//! Serializes to a buffer allocated by the serializer, will expand when
 	//! writing past the initial threshold
-	BufferedFileWriter(FileSystem &fs, const string &path,
-	                   uint8_t open_flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE);
+	BufferedFileWriter(FileSystem &fs, const string &path, uint8_t open_flags = DEFAULT_OPEN_FLAGS,
+	                   FileOpener *opener = nullptr);
 
 	FileSystem &fs;
 	unique_ptr<data_t[]> data;

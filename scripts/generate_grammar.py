@@ -4,6 +4,7 @@
 import os
 import subprocess
 import re
+import sys
 from python_helpers import open_utf8
 
 bison_location     = "bison"
@@ -20,6 +21,18 @@ result_header      = os.path.join(base_dir, 'grammar_out.hpp')
 target_source_loc  = os.path.join(pg_dir, 'src_backend_parser_gram.cpp')
 target_header_loc  = os.path.join(pg_dir, 'include/parser/gram.hpp')
 kwlist_header      = os.path.join(pg_dir, 'include/parser/kwlist.hpp')
+
+counterexamples = False
+run_update = False
+for arg in sys.argv[1:]:
+    if arg.startswith("--bison="):
+        bison_location = arg.replace("--bison=", "")
+    elif arg.startswith("--counterexamples"):
+        counterexamples = True
+    elif arg.startswith("--update"):
+        run_update = True
+    else:
+        raise Exception("Unrecognized argument: " + arg + ", expected --counterexamples or --bison=/loc/to/bison")
 
 # parse the keyword lists
 def read_list_from_file(fname):
@@ -218,13 +231,26 @@ with open_utf8(target_file, 'w+') as f:
     f.write(text)
 
 # generate the bison
-cmd = [bison_location, "-o", result_source, "-d", target_file]
+cmd = [bison_location]
+if counterexamples:
+    print("Attempting to print counterexamples (-Wcounterexamples)")
+    cmd += ["-Wcounterexamples"]
+if run_update:
+    cmd += ["--update"]
+cmd += ["-o", result_source, "-d", target_file]
 print(' '.join(cmd))
-proc = subprocess.Popen(cmd)
+proc = subprocess.Popen(cmd, stderr=subprocess.PIPE)
 res = proc.wait()
 
 if res != 0:
-	exit(1)
+    text = proc.stderr.read().decode('utf8')
+    print(text)
+    if 'shift/reduce' in text and not counterexamples:
+        print("---------------------------------------------------------------------")
+        print("In case of shift/reduce conflicts, try re-running with --counterexamples")
+        print("Note: this requires a more recent version of Bison (e.g. version 3.8)")
+        print("On a Macbook you can obtain this using \"brew install bison\"")
+    exit(1)
 
 os.rename(result_source, target_source_loc)
 os.rename(result_header, target_header_loc)
