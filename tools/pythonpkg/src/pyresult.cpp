@@ -218,7 +218,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	// now that we have materialized the result in contiguous arrays, construct the actual NumPy arrays
 	py::dict res;
 	for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
-		if (result->types[col_idx].id() == LogicalTypeId::ENUM){
+		if (result->types[col_idx].id() == LogicalTypeId::ENUM) {
 			//! Enums
 		}
 		res[result->names[col_idx].c_str()] = conversion.ToArray(col_idx);

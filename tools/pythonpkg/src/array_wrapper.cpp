@@ -612,8 +612,7 @@ void NumpyResultConversion::Resize(idx_t new_capacity) {
 	capacity = new_capacity;
 }
 
-py::object ConvertEnumToCategorical(idx_t current_offset, Vector &input, idx_t count){
-
+py::object ConvertEnumToCategorical(idx_t current_offset, Vector &input, idx_t count) {
 }
 void NumpyResultConversion::Append(DataChunk &chunk) {
 	if (count + chunk.size() > capacity) {
@@ -621,13 +620,12 @@ void NumpyResultConversion::Append(DataChunk &chunk) {
 	}
 	auto chunk_types = chunk.GetTypes();
 	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-		if (chunk_types[col_idx].id() != LogicalTypeId::ENUM){
+		if (chunk_types[col_idx].id() != LogicalTypeId::ENUM) {
 			owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
-		}
-		else{
+		} else {
 			// Its an ENUM type, so we create a categorical type
 			categorical[col_idx] = ConvertEnumToCategorical(count, chunk.data[col_idx], chunk.size());
-//			pd.Categorical(['foo','bla','zoo', 'foo',None, 'foo', 'bla',None])
+			//			pd.Categorical(['foo','bla','zoo', 'foo',None, 'foo', 'bla',None])
 		}
 	}
 	count += chunk.size();
