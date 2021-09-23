@@ -22,7 +22,7 @@ add_jar(duckdb_jdbc ${JAVA_SRC_FILES} ${JAVA_TEST_FILES}
 set(OS_NAME "unknown")
 set(JVM_ARCH "amd64")
 
-string(REGEX MATCH "(arm64|aarch64)" IS_ARM CMAKE_SYSTEM_PROCESSOR)
+string(REGEX MATCH "(arm64|aarch64)" IS_ARM ${CMAKE_SYSTEM_PROCESSOR})
 if(IS_ARM)
   set(JVM_ARCH "arm64")
 endif()

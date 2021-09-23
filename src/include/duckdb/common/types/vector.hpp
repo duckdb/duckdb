@@ -163,6 +163,7 @@ public:
 
 	// Setters
 	DUCKDB_API void SetVectorType(VectorType vector_type);
+	DUCKDB_API void SetLogicalType(const LogicalType &logical_type);
 
 protected:
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated

@@ -920,6 +920,10 @@ void Vector::SetVectorType(VectorType vector_type_p) {
 	}
 }
 
+void Vector::SetLogicalType(const LogicalType &logical_type_p) {
+	this->type = logical_type_p;
+}
+
 void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
 #ifdef DEBUG
 	if (count == 0) {

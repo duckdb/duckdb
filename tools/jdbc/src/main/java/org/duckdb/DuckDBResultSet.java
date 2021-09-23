@@ -1,12 +1,12 @@
 package org.duckdb;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.Reader;
-import java.io.UnsupportedEncodingException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.net.URL;
-import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.sql.Array;
@@ -126,7 +126,7 @@ public class DuckDBResultSet implements ResultSet {
 			return getInt(columnIndex);
 		} else if (column_type.equals("BIGINT")) {
 			return getLong(columnIndex);
-		}else if (column_type.equals("UTINYINT")) {
+		} else if (column_type.equals("UTINYINT")) {
 			return getShort(columnIndex);
 		} else if (column_type.equals("USMALLINT")) {
 			return getInt(columnIndex);
@@ -194,7 +194,7 @@ public class DuckDBResultSet implements ResultSet {
 	private ByteBuffer getbuf(int columnIndex, int typeWidth) throws SQLException {
 		ByteBuffer buf = current_chunk[columnIndex - 1].constlen_data;
 		buf.order(ByteOrder.LITTLE_ENDIAN);
-		((Buffer) buf).position((chunk_idx - 1) * typeWidth);
+		buf.position((chunk_idx - 1) * typeWidth);
 		return buf;
 	}
 
@@ -233,8 +233,7 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		if ("SMALLINT".equals(meta.column_types[columnIndex - 1])) {
 			return getbuf(columnIndex, 2).getShort();
-		}
-		else if ("UTINYINT".equals(meta.column_types[columnIndex - 1])){
+		} else if ("UTINYINT".equals(meta.column_types[columnIndex - 1])) {
 			byte[] buf_res = new byte[2];
 			byte[] buf = new byte[1];
 			getbuf(columnIndex, 1).get(buf);
@@ -255,8 +254,7 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		if ("INTEGER".equals(meta.column_types[columnIndex - 1])) {
 			return getbuf(columnIndex, 4).getInt();
-		}
-		else if ("USMALLINT".equals(meta.column_types[columnIndex - 1])){
+		} else if ("USMALLINT".equals(meta.column_types[columnIndex - 1])) {
 			byte[] buf_res = new byte[4];
 			byte[] buf = new byte[2];
 			getbuf(columnIndex, 2).get(buf);
@@ -278,8 +276,7 @@ public class DuckDBResultSet implements ResultSet {
 		}
 		if ("BIGINT".equals(meta.column_types[columnIndex - 1])) {
 			return getbuf(columnIndex, 8).getLong();
-		}
-		else if( "UINTEGER".equals(meta.column_types[columnIndex - 1])){
+		} else if ("UINTEGER".equals(meta.column_types[columnIndex - 1])) {
 			byte[] buf_res = new byte[8];
 			byte[] buf = new byte[4];
 			getbuf(columnIndex, 4).get(buf);
@@ -312,8 +309,7 @@ public class DuckDBResultSet implements ResultSet {
 				buf[15 - i] = keep;
 			}
 			return new BigInteger(buf);
-		}
-		else if ("UBIGINT".equals(meta.column_types[columnIndex - 1])) {
+		} else if ("UBIGINT".equals(meta.column_types[columnIndex - 1])) {
 			byte[] buf_res = new byte[16];
 			byte[] buf = new byte[8];
 			getbuf(columnIndex, 8).get(buf);
@@ -803,7 +799,100 @@ public class DuckDBResultSet implements ResultSet {
 		throw new SQLFeatureNotSupportedException();
 	}
 
+	static class ByteBufferBackedInputStream extends InputStream {
+
+		ByteBuffer buf;
+
+		public ByteBufferBackedInputStream(ByteBuffer buf) {
+			this.buf = buf;
+		}
+
+		public int read() throws IOException {
+			if (!buf.hasRemaining()) {
+				return -1;
+			}
+			return buf.get() & 0xFF;
+		}
+
+		public int read(byte[] bytes, int off, int len) throws IOException {
+			if (!buf.hasRemaining()) {
+				return -1;
+			}
+
+			len = Math.min(len, buf.remaining());
+			buf.get(bytes, off, len);
+			return len;
+		}
+	}
+
+	static class DuckDBBlobResult implements Blob {
+		public DuckDBBlobResult(ByteBuffer buffer_p) {
+			buffer_p.position(0);
+			buffer_p.order(ByteOrder.LITTLE_ENDIAN);
+			this.buffer = buffer_p;
+		}
+
+		public InputStream getBinaryStream() {
+			return getBinaryStream(0, length());
+		}
+
+		public InputStream getBinaryStream(long pos, long length) {
+			return new ByteBufferBackedInputStream(buffer);
+		}
+
+		public byte[] getBytes(long pos, int length) {
+			byte[] bytes = new byte[length];
+			buffer.position((int) pos);
+			buffer.get(bytes, 0, length);
+			return bytes;
+		}
+
+		public long position(Blob pattern, long start) throws SQLException {
+			throw new SQLFeatureNotSupportedException();
+		}
+
+		public long position(byte[] pattern, long start) throws SQLException {
+			throw new SQLFeatureNotSupportedException();
+		}
+
+		public long length() {
+			return buffer.capacity();
+		}
+
+		public void free() {
+			// nop
+		}
+
+		public OutputStream setBinaryStream(long pos) throws SQLException {
+			throw new SQLFeatureNotSupportedException();
+		}
+
+		public void truncate(long length) throws SQLException {
+			throw new SQLFeatureNotSupportedException();
+		}
+
+		public int setBytes(long pos, byte[] bytes) throws SQLException {
+			throw new SQLFeatureNotSupportedException();
+
+		}
+
+		public int setBytes(long pos, byte[] bytes, int offset, int len) throws SQLException {
+			throw new SQLFeatureNotSupportedException();
+
+		}
+
+		private ByteBuffer buffer;
+
+	}
+
 	public Blob getBlob(int columnIndex) throws SQLException {
+		if (check_and_null(columnIndex)) {
+			return null;
+		}
+		if ("BLOB".equals(meta.column_types[columnIndex - 1])) {
+			return new DuckDBBlobResult(((ByteBuffer[]) current_chunk[columnIndex - 1].varlen_data)[chunk_idx - 1]);
+		}
+
 		throw new SQLFeatureNotSupportedException();
 	}
 
@@ -824,7 +913,7 @@ public class DuckDBResultSet implements ResultSet {
 	}
 
 	public Blob getBlob(String columnLabel) throws SQLException {
-		throw new SQLFeatureNotSupportedException();
+		return getBlob(findColumn(columnLabel));
 	}
 
 	public Clob getClob(String columnLabel) throws SQLException {

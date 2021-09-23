@@ -1,11 +1,12 @@
 package org.duckdb.test;
 
 import java.lang.reflect.Method;
-import java.lang.ArrayIndexOutOfBoundsException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Blob;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Date;
@@ -14,8 +15,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
-import java.sql.Statement;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
@@ -23,8 +24,8 @@ import java.util.Properties;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
-import org.duckdb.DuckDBDriver;
 import org.duckdb.DuckDBDatabase;
+import org.duckdb.DuckDBDriver;
 
 public class TestDuckDBJDBC {
 
@@ -179,22 +180,22 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getInt(1), 42);
 		assertEquals(rs.getString(1), "42");
 		assertEquals(rs.getDouble(1), 42.0, 0.001);
-		assertTrue(rs.getObject(1).equals(new Integer(42)));
+		assertTrue(rs.getObject(1).equals(42));
 
 		assertEquals(rs.getInt("a"), 42);
 		assertEquals(rs.getString("a"), "42");
 		assertEquals(rs.getDouble("a"), 42.0, 0.001);
-		assertTrue(rs.getObject("a").equals(new Integer(42)));
+		assertTrue(rs.getObject("a").equals(42));
 
 		assertEquals(rs.getInt(2), 4);
 		assertEquals(rs.getString(2), "4.2");
 		assertEquals(rs.getDouble(2), 4.2, 0.001);
-		assertTrue(rs.getObject(2).equals(new Double(4.2)));
+		assertTrue(rs.getObject(2).equals(4.2));
 
 		assertEquals(rs.getInt("b"), 4);
 		assertEquals(rs.getString("b"), "4.2");
 		assertEquals(rs.getDouble("b"), 4.2, 0.001);
-		assertTrue(rs.getObject("b").equals(new Double(4.2)));
+		assertTrue(rs.getObject("b").equals(4.2));
 
 		assertFalse(rs.next());
 
@@ -993,8 +994,7 @@ public class TestDuckDBJDBC {
 	public static void test_parquet_reader() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
-		ResultSet rs = stmt
-				.executeQuery("SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet')");
+		ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet')");
 		assertTrue(rs.next());
 		assertEquals(rs.getInt(1), 1000);
 		rs.close();
@@ -1313,6 +1313,23 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_blob_bug1090() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		String test_str = "asdxxxxxxxxxxxxxxxxxxf";
+		
+		ResultSet rs = stmt.executeQuery("SELECT '"+test_str+"'::BLOB a");
+		assertTrue(rs.next());
+		Blob b = rs.getBlob(1);
+
+		String text = new String(b.getBinaryStream().readAllBytes(), StandardCharsets.US_ASCII);
+		assertTrue(test_str.equals(text));
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
@@ -1321,6 +1338,7 @@ public class TestDuckDBJDBC {
 				m.invoke(null);
 			}
 		}
+		//test_blob_bug1090();
 		System.out.println("OK");
 	}
 }

@@ -23,6 +23,7 @@ static string byte_array_to_string(JNIEnv *env, jbyteArray ba_j) {
 }
 
 static jobject decode_charbuffer_to_jstring(JNIEnv *env, const char *d_str, idx_t d_str_len) {
+	// TODO cache this somewhere, probably slow to look this stuff for every string
 	jclass charset_class = env->FindClass("java/nio/charset/Charset");
 	jclass charbuffer_class = env->FindClass("java/nio/CharBuffer");
 	jmethodID for_name =
@@ -320,6 +321,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::DECIMAL: {
 			Vector double_vec(LogicalType::DOUBLE);
 			VectorOperations::Cast(vec, double_vec, row_count);
+			vec.SetLogicalType(LogicalType::DOUBLE);
 			vec.Reference(double_vec);
 			// fall through on purpose
 		}
@@ -332,6 +334,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::INTERVAL: {
 			Vector string_vec(LogicalType::VARCHAR);
 			VectorOperations::Cast(vec, string_vec, row_count);
+			vec.SetLogicalType(LogicalType::VARCHAR);
 			vec.Reference(string_vec);
 			// fall through on purpose
 		}
@@ -344,6 +347,17 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
 				auto j_str = decode_charbuffer_to_jstring(env, d_str.GetDataUnsafe(), d_str.GetSize());
 				env->SetObjectArrayElement(varlen_data, row_idx, j_str);
+			}
+			break;
+		case LogicalTypeId::BLOB:
+			varlen_data = env->NewObjectArray(row_count, env->FindClass("java/nio/ByteBuffer"), nullptr);
+			for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+				if (FlatVector::IsNull(vec, row_idx)) {
+					continue;
+				}
+				auto d_str = ((string_t *)FlatVector::GetData(vec))[row_idx];
+				auto j_obj = env->NewDirectByteBuffer((void*) d_str.GetDataUnsafe(), d_str.GetSize());
+				env->SetObjectArrayElement(varlen_data, row_idx, j_obj);
 			}
 			break;
 		default:
