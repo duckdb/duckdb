@@ -223,6 +223,10 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 			res[result->names[col_idx].c_str()] = conversion.ToArray(col_idx);
 		} else {
 			auto name = result->names[col_idx] + "_" + to_string(names[result->names[col_idx]]);
+			while (names[name] > 0) {
+				// This entry already exists
+				name += "_" + to_string(names[name]);
+			}
 			names[name]++;
 			res[name.c_str()] = conversion.ToArray(col_idx);
 		}

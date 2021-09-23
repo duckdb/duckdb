@@ -63,3 +63,33 @@ class TestPandasMergeSameName(object):
 
         result_df = con.execute(query).fetchdf()
         assert(exp_result.equals(result_df))
+
+    def test_repeat_name(self, duckdb_cursor):
+
+        df1 = pd.DataFrame({
+            'id': [1],
+            'id_1': [1],
+            'id_2': [1],
+        })
+
+        df2 = pd.DataFrame({
+            'id': [1]
+        })
+
+        exp_result = pd.DataFrame({
+            'id': [1],
+            'id_1': [1],
+            'id_2': [1],
+            'id_2_1': [1],
+        })
+
+        con = duckdb.connect()
+        con.register('df1', df1)
+        con.register('df2', df2)
+        query = """SELECT * from df1
+        LEFT OUTER JOIN df2
+        ON (df1.id=df2.id)"""
+
+        result_df = con.execute(query).fetchdf()
+        print(result_df)
+        assert(exp_result.equals(result_df))
