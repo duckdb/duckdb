@@ -19,7 +19,6 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 	Connection con(*context.db);
 
 	con.Query("BEGIN TRANSACTION");
-	// FIXME: No restart support yet, suspect only fix is init_rand
 	// FIXME: no schema/suffix support yet
 
 	for (int t = 0; t < TPCDS_TABLE_COUNT; t++) {
