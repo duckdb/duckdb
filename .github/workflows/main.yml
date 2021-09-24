@@ -47,7 +47,13 @@ jobs:
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq ninja-build make cmake gcc-multilib g++-multilib
+        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -115,7 +121,13 @@ jobs:
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq make cmake ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
+        apt-get install -y -qq make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
+
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
       run: |
