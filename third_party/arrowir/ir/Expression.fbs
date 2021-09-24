@@ -1,0 +1,209 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+include "../format/Schema.fbs";
+include "Literal.fbs";
+
+namespace org.apache.arrow.computeir.flatbuf;
+
+/// Access a value for a given map key
+table MapKey {
+  /// Any expression can be a map key.
+  key: Expression (required);
+}
+
+/// Struct field access
+table StructField {
+  /// The position of the field in the struct schema
+  position: uint32;
+}
+
+/// Zero-based array index
+table ArraySubscript {
+  position: uint32;
+}
+
+/// Zero-based range of elements in an array
+table ArraySlice {
+  /// The start of an array slice, inclusive
+  start_inclusive: uint32;
+  /// The end of an array slice, exclusive
+  end_exclusive: uint32;
+}
+
+/// Field name in a relation, in ordinal position of the relation's schema.
+table FieldIndex {
+  position: uint32;
+}
+
+/// A union of possible dereference operations
+union Deref {
+  /// Access a value for a given map key
+  MapKey,
+  /// Access the value at a struct field
+  StructField,
+  /// Access the element at a given index in an array
+  ArraySubscript,
+  /// Access a range of elements in an array
+  ArraySlice,
+  /// Access a field of a relation
+  FieldIndex,
+}
+
+/// Access the data of a field
+table FieldRef {
+  ref: Deref (required);
+  /// For Expressions which might reference fields in multiple Relations,
+  /// this index may be provided to indicate which Relation's fields
+  /// `ref` points into. For example in the case of a join,
+  /// 0 refers to the left relation and 1 to the right relation.
+  relation_index: int = 0;
+}
+
+/// A function call expression
+table Call {
+  /// The function to call
+  name: string (required);
+
+  /// The arguments passed to `name`.
+  arguments: [Expression] (required);
+
+  /// Possible ordering of input. These are useful
+  /// in aggregates where ordering in meaningful such as
+  /// string concatenation
+  orderings: [SortKey];
+}
+
+/// A single WHEN x THEN y fragment.
+table CaseFragment {
+  match: Expression (required);
+  result: Expression (required);
+}
+
+/// Conditional case statement expression
+table ConditionalCase {
+  /// List of conditions to evaluate
+  conditions: [CaseFragment] (required);
+  /// The default value if no cases match. This is typically NULL in SQL
+  /// implementations.
+  ///
+  /// Defaulting to NULL is a frontend choice, so producers must specify NULL
+  /// if that's their desired behavior.
+  else: Expression (required);
+}
+
+/// Switch-style case expression
+table SimpleCase {
+  /// The expression whose value will be matched
+  expression: Expression (required);
+  /// Matches for `expression`
+  matches: [CaseFragment] (required);
+  /// The default value if no cases match
+  else: Expression (required);
+}
+
+/// Whether lesser values should precede greater or vice versa,
+/// also whether nulls should preced or follow values
+enum Ordering : uint8 {
+  ASCENDING_THEN_NULLS,
+  DESCENDING_THEN_NULLS,
+  NULLS_THEN_ASCENDING,
+  NULLS_THEN_DESCENDING,
+}
+
+/// An expression with an order
+table SortKey {
+  expression: Expression (required);
+  ordering: Ordering = ASCENDING_THEN_NULLS;
+}
+
+/// An unbounded window bound
+table Unbounded {}
+
+/// A concrete bound, which can be an expression or unbounded
+union ConcreteBoundImpl {
+  Expression,
+  Unbounded,
+}
+
+/// Boundary is preceding rows, determined by the contained expression
+table Preceding {
+  impl: ConcreteBoundImpl (required);
+}
+
+/// Boundary is following rows, determined by the contained expression
+table Following {
+  impl: ConcreteBoundImpl (required);
+}
+
+/// Boundary is the current row
+table CurrentRow {}
+
+union Bound {
+  Preceding,
+  Following,
+  CurrentRow,
+}
+
+/// The kind of window function to be executed
+enum Frame : uint8 {
+  Rows,
+  Range,
+}
+
+/// An expression representing a window function call.
+table WindowCall {
+  /// The expression to operate over
+  expression: Expression (required);
+  /// The kind of window frame
+  kind: Frame;
+  /// Partition keys
+  partitions: [Expression] (required);
+  /// Sort keys
+  orderings: [SortKey] (required);
+  /// Lower window bound
+  lower_bound: Bound (required);
+  /// Upper window bound
+  upper_bound: Bound (required);
+}
+
+/// Various expression types
+///
+/// WindowCall is a separate variant
+/// due to special options for each that don't apply to generic
+/// function calls. Again this is done to make it easier
+/// for consumers to deal with the structure of the operation
+union ExpressionImpl {
+  Literal,
+  FieldRef,
+  Call,
+  ConditionalCase,
+  SimpleCase,
+  WindowCall,
+}
+
+/// Expression types
+///
+/// Expressions have a concrete `impl` value, which is a specific operation.
+///
+/// This is a workaround for flatbuffers' lack of support for direct use of
+/// union types.
+table Expression {
+  impl: ExpressionImpl (required);
+}
+
+root_type Expression;

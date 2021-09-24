@@ -1,0 +1,205 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+include "../format/Schema.fbs";
+
+namespace org.apache.arrow.computeir.flatbuf;
+
+table ListLiteral {
+  values: [Literal] (required);
+}
+
+table StructLiteralField {
+  name: string (required);
+  value: Literal (required);
+}
+
+table StructLiteral {
+  values: [StructLiteralField] (required);
+}
+
+table KeyValue {
+  key: Literal (required);
+  value: Literal (required);
+}
+
+table MapLiteral {
+  values: [KeyValue] (required);
+}
+
+table Int8Literal {
+  value: int8;
+}
+
+table Int16Literal {
+  value: int16;
+}
+
+table Int32Literal {
+  value: int32;
+}
+
+table Int64Literal {
+  value: int64;
+}
+
+table UInt8Literal {
+  value: uint8;
+}
+
+table UInt16Literal {
+  value: uint16;
+}
+
+table UInt32Literal {
+  value: uint32;
+}
+
+table UInt64Literal {
+  value: uint64;
+}
+
+table Float16Literal {
+  value: uint16;
+}
+
+table Float32Literal {
+  value: float32;
+}
+
+table Float64Literal {
+  value: float64;
+}
+
+table DecimalLiteral {
+  /// These bytes must be in little-endian order.
+  value: [byte] (required);
+  scale: int32;
+  precision: int32;
+}
+
+table BooleanLiteral {
+  value: bool;
+}
+
+table NullLiteral {}
+
+table DateLiteral {
+  value: int64;
+
+  // unit of `value`
+  unit: org.apache.arrow.flatbuf.DateUnit = MILLISECOND;
+}
+
+table TimeLiteral {
+  value: int64;
+
+  // unit of `value`
+  unit: org.apache.arrow.flatbuf.TimeUnit = MILLISECOND;
+}
+
+table TimestampLiteral {
+  value: int64;
+
+  // unit of `value`
+  unit: org.apache.arrow.flatbuf.TimeUnit;
+
+  // timezone value, same definition as used in Schema.fbs.
+  timezone: string;
+}
+
+table IntervalLiteralMonths {
+  months: int32;
+}
+
+table IntervalLiteralDaysMilliseconds {
+  days: int32;
+  milliseconds: int32;
+}
+
+union IntervalLiteralImpl {
+  IntervalLiteralMonths,
+  IntervalLiteralDaysMilliseconds,
+}
+
+table IntervalLiteral {
+  value: IntervalLiteralImpl (required);
+}
+
+table DurationLiteral {
+  value: int64;
+
+  // unit of `value`
+  unit: org.apache.arrow.flatbuf.TimeUnit = MILLISECOND;
+}
+
+table BinaryLiteral {
+  value: [byte] (required);
+}
+
+table FixedSizeBinaryLiteral {
+  value: [byte] (required);
+  size: int32;
+}
+
+table StringLiteral {
+  value: string (required);
+}
+
+// no union literal is defined as only one branch of a union can be resolved.
+// no literals for large string/binary types as flatbuffer is limited to 2gb.
+
+union LiteralImpl {
+  NullLiteral,
+  BooleanLiteral,
+
+  Int8Literal,
+  Int16Literal,
+  Int32Literal,
+  Int64Literal,
+
+  UInt8Literal,
+  UInt16Literal,
+  UInt32Literal,
+  UInt64Literal,
+
+  DateLiteral,
+  TimeLiteral,
+  TimestampLiteral,
+  IntervalLiteral,
+  DurationLiteral,
+
+  DecimalLiteral,
+
+  Float16Literal,
+  Float32Literal,
+  Float64Literal,
+
+  ListLiteral,
+  StructLiteral,
+  MapLiteral,
+
+  StringLiteral,
+  BinaryLiteral,
+  FixedSizeBinaryLiteral,
+}
+
+table Literal {
+  impl: LiteralImpl (required);
+}
+
+root_type Literal;

@@ -1,0 +1,209 @@
+// Licensed to the Apache Software Foundation (ASF) under one
+// or more contributor license agreements.  See the NOTICE file
+// distributed with this work for additional information
+// regarding copyright ownership.  The ASF licenses this file
+// to you under the Apache License, Version 2.0 (the
+// "License"); you may not use this file except in compliance
+// with the License.  You may obtain a copy of the License at
+//
+//   http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing,
+// software distributed under the License is distributed on an
+// "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+// KIND, either express or implied.  See the License for the
+// specific language governing permissions and limitations
+// under the License.
+
+include "../format/Schema.fbs";
+include "Literal.fbs";
+include "Expression.fbs";
+
+namespace org.apache.arrow.computeir.flatbuf;
+
+/// A data type indicating that a different mapping of columns
+/// should occur in the output.
+///
+/// For example:
+///
+/// Given a query `SELECT b, a FROM t` where `t` has columns a, b, c
+/// the mapping value for the projection would equal [1, 0].
+table Remap {
+  mapping: [FieldIndex] (required);
+}
+
+// Pass through indicates that no output remapping should occur.
+table PassThrough {}
+
+/// A union for the different colum remapping variants
+union Emit {
+  Remap,
+  PassThrough,
+}
+
+/// Fields common to every relational operator
+table RelBase {
+  /// Output remapping of ordinal columns for a given operation
+  output_mapping: Emit (required);
+}
+
+/// Filter operation
+table Filter {
+  /// Common options
+  base: RelBase (required);
+  /// Child relation
+  rel: Relation (required);
+  /// The expression which will be evaluated against input rows
+  /// to determine whether they should be excluded from the
+  /// filter relation's output.
+  predicate: Expression (required);
+}
+
+/// Projection
+table Project {
+  /// Common options
+  base: RelBase (required);
+  /// Child relation
+  rel: Relation (required);
+  /// Expressions which will be evaluated to produce to
+  /// the rows of the project relation's output.
+  expressions: [Expression] (required);
+}
+
+/// A set of grouping keys
+table Grouping {
+  /// Expressions to group by
+  keys: [Expression] (required);
+}
+
+/// Aggregate operation
+table Aggregate {
+  /// Common options
+  base: RelBase (required);
+  /// Child relation
+  rel: Relation (required);
+  /// Expressions which will be evaluated to produce to
+  /// the rows of the aggregate relation's output.
+  measures: [Expression] (required);
+  /// Keys by which `aggregations` will be grouped.
+  ///
+  /// The nested list here is to support grouping sets
+  /// eg
+  ///
+  /// SELECT a, b, c, sum(d)
+  /// FROM t
+  /// GROUP BY
+  ///   GROUPING SETS (
+  ///     (a, b, c),
+  ///     (a, b),
+  ///     (a),
+  ///     ()
+  ///   );
+  groupings: [Grouping] (required);
+}
+
+enum JoinKind : uint8 {
+  Anti,
+  Cross,
+  FullOuter,
+  Inner,
+  LeftOuter,
+  LeftSemi,
+  RightOuter,
+}
+
+/// Join between two tables
+table Join {
+  /// Common options
+  base: RelBase (required);
+  /// Left relation
+  left: Relation (required);
+  /// Right relation
+  right: Relation (required);
+  /// The expression which will be evaluated against rows from each
+  /// input to determine whether they should be included in the
+  /// join relation's output.
+  on_expression: Expression (required);
+  /// The kind of join to use.
+  join_kind: JoinKind;
+}
+
+/// Order by relation
+table OrderBy {
+  /// Common options
+  base: RelBase (required);
+  /// Child relation
+  rel: Relation (required);
+  /// Define sort order for rows of output.
+  /// Keys with higher precedence are ordered ahead of other keys.
+  keys: [SortKey] (required);
+}
+
+/// Limit operation
+table Limit {
+  /// Common options
+  base: RelBase (required);
+  /// Child relation
+  rel: Relation (required);
+  /// Starting index of rows
+  offset: uint32;
+  /// The maximum number of rows of output.
+  count: uint32;
+}
+
+/// The kind of set operation being performed.
+enum SetOpKind : uint8 {
+  Union,
+  Intersection,
+  Difference,
+}
+
+/// A set operation on two or more relations
+table SetOperation {
+  /// Common options
+  base: RelBase (required);
+  /// Child relations
+  rels: [Relation] (required);
+  /// The kind of set operation
+  set_op: SetOpKind;
+}
+
+/// A single column of literal values.
+table LiteralColumn {
+  /// The literal values of the column
+  elements: [Literal] (required);
+}
+
+/// Literal relation
+table LiteralRelation {
+  /// Common options
+  base: RelBase (required);
+  /// The columns of this literal relation.
+  columns: [LiteralColumn] (required);
+}
+
+/// A table read
+table Table {
+  base: RelBase (required);
+  name: string (required);
+  schema: org.apache.arrow.flatbuf.Schema (required);
+}
+
+/// The varieties of relations
+union RelationImpl {
+  Aggregate,
+  SetOperation,
+  Filter,
+  Limit,
+  LiteralRelation,
+  OrderBy,
+  Project,
+  Table,
+}
+
+/// A table holding an instance of the possible relation types.
+table Relation {
+  impl: RelationImpl (required);
+}
+
+root_type Relation;
