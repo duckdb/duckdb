@@ -38,7 +38,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.6'
+        python-version: '3.5'
 
     - name: GLIBC Version
       run: |
@@ -111,7 +111,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.6'
+        python-version: '3.5'
 
     - name: GLIBC Version
       run: |
