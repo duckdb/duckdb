@@ -38,7 +38,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.6'
 
     - name: GLIBC Version
       run: |
@@ -95,8 +95,6 @@ jobs:
           duckdb_cli-linux-amd64.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
-
-
  linux-release-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
@@ -112,7 +110,7 @@ jobs:
 
     - uses: actions/setup-python@v2
       with:
-        python-version: '3.7'
+        python-version: '3.6'
 
     - name: GLIBC Version
       run: |
