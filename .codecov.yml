@@ -5,14 +5,14 @@ coverage:
       default:
         # basic
         # for now
-        target: auto
+        target: 0
         threshold: 0.5%
         base: auto
         paths:
           - "src"
        # advanced settings
         if_not_found: failure
-        if_ci_failed: success #success, failure, error, ignore
+        if_ci_failed: failure
         informational: false
         only_pulls: false
     patch:
