@@ -43,8 +43,17 @@ jobs:
       run: |
         ldd --version ldd
 
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3.tar.gz
+        tar zxvf cmake-3*
+        cd cmake-3*
+        ./bootstrap --prefix=/usr/local
+        make -j$(nproc)
+        make install
+
     - name: Install
-      run: yum install -y gcc gcc-c++ git cmake make openssl java-8-openjdk-devel openssl-devel
+      run: yum install -y gcc gcc-c++ git make openssl java-8-openjdk-devel openssl-devel
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -104,8 +113,17 @@ jobs:
       run: |
         ldd --version ldd
 
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3.tar.gz
+        tar zxvf cmake-3*
+        cd cmake-3*
+        ./bootstrap --prefix=/usr/local
+        make -j$(nproc)
+        make install
+
     - name: Install
-      run: yum install -y gcc gcc-c++ git cmake make openssl java-8-openjdk-devel openssl-devel
+      run: yum install -y gcc gcc-c++ git make openssl java-8-openjdk-devel openssl-devel
 
     - name: Build
       run: |
