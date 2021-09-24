@@ -53,7 +53,7 @@ jobs:
         make install
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git make openssl java-8-openjdk-devel openssl-devel
+      run: yum install -y gcc gcc-c++ git make openssl java-11-openjdk-devel openssl-devel
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -123,7 +123,7 @@ jobs:
         make install
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git make openssl java-8-openjdk-devel openssl-devel
+      run: yum install -y gcc gcc-c++ git make openssl java-11-openjdk-devel openssl-devel
 
     - name: Build
       run: |
