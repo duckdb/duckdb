@@ -88,7 +88,7 @@ std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
 	auto handle = CreateHandle(path, flags, lock, compression, opener);
 	handle->InitializeMetadata();
-	return handle;
+	return move(handle);
 }
 
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
