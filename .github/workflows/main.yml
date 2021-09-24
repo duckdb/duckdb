@@ -44,7 +44,7 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git make openssl java-11-openjdk-devel openssl-devel wget
+      run: yum install -y gcc gcc-c++ git make openssl java-1.8.0-openjdk-devel openssl-devel wget
 
     - name: Install CMake
       run: |
@@ -114,7 +114,7 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git make openssl java-11-openjdk-devel openssl-devel wget
+      run: yum install -y gcc gcc-c++ git make openssl java-1.8.0-openjdk-devel openssl-devel wget
 
     - name: Install CMake
       run: |
