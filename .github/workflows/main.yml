@@ -43,7 +43,7 @@ jobs:
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3
         python3 --version
 
     - name: Install CMake
@@ -112,7 +112,7 @@ jobs:
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk python3
+        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk python3
         python3 --version
 
     - name: Install CMake
