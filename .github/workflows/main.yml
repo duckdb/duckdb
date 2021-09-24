@@ -31,13 +31,13 @@ jobs:
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
 
+    steps:
     - name: Install
       run: |
         apt-get update -y -qq
         apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip
         python3 --version
 
-    steps:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
@@ -100,13 +100,13 @@ jobs:
     env:
       GEN: ninja
 
+    steps:
     - name: Install
       run: |
         apt-get update -y -qq
         apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk python3.7 zip
         python3 --version
 
-    steps:
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
