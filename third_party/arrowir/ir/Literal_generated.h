@@ -104,6 +104,66 @@ struct StringLiteralBuilder;
 struct Literal;
 struct LiteralBuilder;
 
+inline const flatbuffers::TypeTable *ListLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *StructLiteralFieldTypeTable();
+
+inline const flatbuffers::TypeTable *StructLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *KeyValueTypeTable();
+
+inline const flatbuffers::TypeTable *MapLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *Int8LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *Int16LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *Int32LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *Int64LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *UInt8LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *UInt16LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *UInt32LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *UInt64LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *Float16LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *Float32LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *Float64LiteralTypeTable();
+
+inline const flatbuffers::TypeTable *DecimalLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *BooleanLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *NullLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *DateLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *TimeLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *TimestampLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *IntervalLiteralMonthsTypeTable();
+
+inline const flatbuffers::TypeTable *IntervalLiteralDaysMillisecondsTypeTable();
+
+inline const flatbuffers::TypeTable *IntervalLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *DurationLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *BinaryLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *FixedSizeBinaryLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *StringLiteralTypeTable();
+
+inline const flatbuffers::TypeTable *LiteralTypeTable();
+
 enum IntervalLiteralImpl : uint8_t {
   IntervalLiteralImpl_NONE = 0,
   IntervalLiteralImpl_IntervalLiteralMonths = 1,
@@ -363,6 +423,9 @@ bool VerifyLiteralImplVector(flatbuffers::Verifier &verifier, const flatbuffers:
 
 struct ListLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef ListLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return ListLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUES = 4
   };
@@ -416,6 +479,9 @@ inline flatbuffers::Offset<ListLiteral> CreateListLiteralDirect(
 
 struct StructLiteralField FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef StructLiteralFieldBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return StructLiteralFieldTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_NAME = 4,
     VT_VALUE = 6
@@ -482,6 +548,9 @@ inline flatbuffers::Offset<StructLiteralField> CreateStructLiteralFieldDirect(
 
 struct StructLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef StructLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return StructLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUES = 4
   };
@@ -535,6 +604,9 @@ inline flatbuffers::Offset<StructLiteral> CreateStructLiteralDirect(
 
 struct KeyValue FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef KeyValueBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return KeyValueTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_KEY = 4,
     VT_VALUE = 6
@@ -590,6 +662,9 @@ inline flatbuffers::Offset<KeyValue> CreateKeyValue(
 
 struct MapLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef MapLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return MapLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUES = 4
   };
@@ -643,6 +718,9 @@ inline flatbuffers::Offset<MapLiteral> CreateMapLiteralDirect(
 
 struct Int8Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef Int8LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return Int8LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -684,6 +762,9 @@ inline flatbuffers::Offset<Int8Literal> CreateInt8Literal(
 
 struct Int16Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef Int16LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return Int16LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -725,6 +806,9 @@ inline flatbuffers::Offset<Int16Literal> CreateInt16Literal(
 
 struct Int32Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef Int32LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return Int32LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -766,6 +850,9 @@ inline flatbuffers::Offset<Int32Literal> CreateInt32Literal(
 
 struct Int64Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef Int64LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return Int64LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -807,6 +894,9 @@ inline flatbuffers::Offset<Int64Literal> CreateInt64Literal(
 
 struct UInt8Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef UInt8LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return UInt8LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -848,6 +938,9 @@ inline flatbuffers::Offset<UInt8Literal> CreateUInt8Literal(
 
 struct UInt16Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef UInt16LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return UInt16LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -889,6 +982,9 @@ inline flatbuffers::Offset<UInt16Literal> CreateUInt16Literal(
 
 struct UInt32Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef UInt32LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return UInt32LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -930,6 +1026,9 @@ inline flatbuffers::Offset<UInt32Literal> CreateUInt32Literal(
 
 struct UInt64Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef UInt64LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return UInt64LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -971,6 +1070,9 @@ inline flatbuffers::Offset<UInt64Literal> CreateUInt64Literal(
 
 struct Float16Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef Float16LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return Float16LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -1012,6 +1114,9 @@ inline flatbuffers::Offset<Float16Literal> CreateFloat16Literal(
 
 struct Float32Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef Float32LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return Float32LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -1053,6 +1158,9 @@ inline flatbuffers::Offset<Float32Literal> CreateFloat32Literal(
 
 struct Float64Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef Float64LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return Float64LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -1094,6 +1202,9 @@ inline flatbuffers::Offset<Float64Literal> CreateFloat64Literal(
 
 struct DecimalLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef DecimalLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return DecimalLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4,
     VT_SCALE = 6,
@@ -1171,6 +1282,9 @@ inline flatbuffers::Offset<DecimalLiteral> CreateDecimalLiteralDirect(
 
 struct BooleanLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef BooleanLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return BooleanLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -1212,6 +1326,9 @@ inline flatbuffers::Offset<BooleanLiteral> CreateBooleanLiteral(
 
 struct NullLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef NullLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return NullLiteralTypeTable();
+  }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            verifier.EndTable();
@@ -1241,6 +1358,9 @@ inline flatbuffers::Offset<NullLiteral> CreateNullLiteral(
 
 struct DateLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef DateLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return DateLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4,
     VT_UNIT = 6
@@ -1292,6 +1412,9 @@ inline flatbuffers::Offset<DateLiteral> CreateDateLiteral(
 
 struct TimeLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef TimeLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return TimeLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4,
     VT_UNIT = 6
@@ -1343,6 +1466,9 @@ inline flatbuffers::Offset<TimeLiteral> CreateTimeLiteral(
 
 struct TimestampLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef TimestampLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return TimestampLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4,
     VT_UNIT = 6,
@@ -1418,6 +1544,9 @@ inline flatbuffers::Offset<TimestampLiteral> CreateTimestampLiteralDirect(
 
 struct IntervalLiteralMonths FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef IntervalLiteralMonthsBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return IntervalLiteralMonthsTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_MONTHS = 4
   };
@@ -1459,6 +1588,9 @@ inline flatbuffers::Offset<IntervalLiteralMonths> CreateIntervalLiteralMonths(
 
 struct IntervalLiteralDaysMilliseconds FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef IntervalLiteralDaysMillisecondsBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return IntervalLiteralDaysMillisecondsTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_DAYS = 4,
     VT_MILLISECONDS = 6
@@ -1510,6 +1642,9 @@ inline flatbuffers::Offset<IntervalLiteralDaysMilliseconds> CreateIntervalLitera
 
 struct IntervalLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef IntervalLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return IntervalLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE_TYPE = 4,
     VT_VALUE = 6
@@ -1578,6 +1713,9 @@ inline flatbuffers::Offset<IntervalLiteral> CreateIntervalLiteral(
 
 struct DurationLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef DurationLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return DurationLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4,
     VT_UNIT = 6
@@ -1629,6 +1767,9 @@ inline flatbuffers::Offset<DurationLiteral> CreateDurationLiteral(
 
 struct BinaryLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef BinaryLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return BinaryLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -1681,6 +1822,9 @@ inline flatbuffers::Offset<BinaryLiteral> CreateBinaryLiteralDirect(
 
 struct FixedSizeBinaryLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef FixedSizeBinaryLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return FixedSizeBinaryLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4,
     VT_SIZE = 6
@@ -1745,6 +1889,9 @@ inline flatbuffers::Offset<FixedSizeBinaryLiteral> CreateFixedSizeBinaryLiteralD
 
 struct StringLiteral FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef StringLiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return StringLiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_VALUE = 4
   };
@@ -1797,6 +1944,9 @@ inline flatbuffers::Offset<StringLiteral> CreateStringLiteralDirect(
 
 struct Literal FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef LiteralBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return LiteralTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_IMPL_TYPE = 4,
     VT_IMPL = 6
@@ -2172,6 +2322,560 @@ inline bool VerifyLiteralImplVector(flatbuffers::Verifier &verifier, const flatb
     }
   }
   return true;
+}
+
+inline const flatbuffers::TypeTable *IntervalLiteralImplTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, -1 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 1 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::IntervalLiteralMonthsTypeTable,
+    org::apache::arrow::computeir::flatbuf::IntervalLiteralDaysMillisecondsTypeTable
+  };
+  static const char * const names[] = {
+    "NONE",
+    "IntervalLiteralMonths",
+    "IntervalLiteralDaysMilliseconds"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_UNION, 3, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *LiteralImplTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, -1 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 1 },
+    { flatbuffers::ET_SEQUENCE, 0, 2 },
+    { flatbuffers::ET_SEQUENCE, 0, 3 },
+    { flatbuffers::ET_SEQUENCE, 0, 4 },
+    { flatbuffers::ET_SEQUENCE, 0, 5 },
+    { flatbuffers::ET_SEQUENCE, 0, 6 },
+    { flatbuffers::ET_SEQUENCE, 0, 7 },
+    { flatbuffers::ET_SEQUENCE, 0, 8 },
+    { flatbuffers::ET_SEQUENCE, 0, 9 },
+    { flatbuffers::ET_SEQUENCE, 0, 10 },
+    { flatbuffers::ET_SEQUENCE, 0, 11 },
+    { flatbuffers::ET_SEQUENCE, 0, 12 },
+    { flatbuffers::ET_SEQUENCE, 0, 13 },
+    { flatbuffers::ET_SEQUENCE, 0, 14 },
+    { flatbuffers::ET_SEQUENCE, 0, 15 },
+    { flatbuffers::ET_SEQUENCE, 0, 16 },
+    { flatbuffers::ET_SEQUENCE, 0, 17 },
+    { flatbuffers::ET_SEQUENCE, 0, 18 },
+    { flatbuffers::ET_SEQUENCE, 0, 19 },
+    { flatbuffers::ET_SEQUENCE, 0, 20 },
+    { flatbuffers::ET_SEQUENCE, 0, 21 },
+    { flatbuffers::ET_SEQUENCE, 0, 22 },
+    { flatbuffers::ET_SEQUENCE, 0, 23 },
+    { flatbuffers::ET_SEQUENCE, 0, 24 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::NullLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::BooleanLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::Int8LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::Int16LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::Int32LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::Int64LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::UInt8LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::UInt16LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::UInt32LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::UInt64LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::DateLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::TimeLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::TimestampLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::IntervalLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::DurationLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::DecimalLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::Float16LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::Float32LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::Float64LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::ListLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::StructLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::MapLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::StringLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::BinaryLiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::FixedSizeBinaryLiteralTypeTable
+  };
+  static const char * const names[] = {
+    "NONE",
+    "NullLiteral",
+    "BooleanLiteral",
+    "Int8Literal",
+    "Int16Literal",
+    "Int32Literal",
+    "Int64Literal",
+    "UInt8Literal",
+    "UInt16Literal",
+    "UInt32Literal",
+    "UInt64Literal",
+    "DateLiteral",
+    "TimeLiteral",
+    "TimestampLiteral",
+    "IntervalLiteral",
+    "DurationLiteral",
+    "DecimalLiteral",
+    "Float16Literal",
+    "Float32Literal",
+    "Float64Literal",
+    "ListLiteral",
+    "StructLiteral",
+    "MapLiteral",
+    "StringLiteral",
+    "BinaryLiteral",
+    "FixedSizeBinaryLiteral"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_UNION, 26, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *ListLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 1, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::LiteralTypeTable
+  };
+  static const char * const names[] = {
+    "values"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *StructLiteralFieldTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_STRING, 0, -1 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::LiteralTypeTable
+  };
+  static const char * const names[] = {
+    "name",
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *StructLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 1, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::StructLiteralFieldTypeTable
+  };
+  static const char * const names[] = {
+    "values"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *KeyValueTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::LiteralTypeTable
+  };
+  static const char * const names[] = {
+    "key",
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *MapLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 1, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::KeyValueTypeTable
+  };
+  static const char * const names[] = {
+    "values"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *Int8LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_CHAR, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *Int16LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SHORT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *Int32LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_INT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *Int64LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_LONG, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *UInt8LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UCHAR, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *UInt16LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_USHORT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *UInt32LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UINT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *UInt64LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_ULONG, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *Float16LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_USHORT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *Float32LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_FLOAT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *Float64LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_DOUBLE, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *DecimalLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_CHAR, 1, -1 },
+    { flatbuffers::ET_INT, 0, -1 },
+    { flatbuffers::ET_INT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value",
+    "scale",
+    "precision"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 3, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *BooleanLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_BOOL, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *NullLiteralTypeTable() {
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 0, nullptr, nullptr, nullptr, nullptr, nullptr
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *DateLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_LONG, 0, -1 },
+    { flatbuffers::ET_SHORT, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::flatbuf::DateUnitTypeTable
+  };
+  static const char * const names[] = {
+    "value",
+    "unit"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *TimeLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_LONG, 0, -1 },
+    { flatbuffers::ET_SHORT, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::flatbuf::TimeUnitTypeTable
+  };
+  static const char * const names[] = {
+    "value",
+    "unit"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *TimestampLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_LONG, 0, -1 },
+    { flatbuffers::ET_SHORT, 0, 0 },
+    { flatbuffers::ET_STRING, 0, -1 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::flatbuf::TimeUnitTypeTable
+  };
+  static const char * const names[] = {
+    "value",
+    "unit",
+    "timezone"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 3, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *IntervalLiteralMonthsTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_INT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "months"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *IntervalLiteralDaysMillisecondsTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_INT, 0, -1 },
+    { flatbuffers::ET_INT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "days",
+    "milliseconds"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *IntervalLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UTYPE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::IntervalLiteralImplTypeTable
+  };
+  static const char * const names[] = {
+    "value_type",
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *DurationLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_LONG, 0, -1 },
+    { flatbuffers::ET_SHORT, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::flatbuf::TimeUnitTypeTable
+  };
+  static const char * const names[] = {
+    "value",
+    "unit"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *BinaryLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_CHAR, 1, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *FixedSizeBinaryLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_CHAR, 1, -1 },
+    { flatbuffers::ET_INT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value",
+    "size"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *StringLiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_STRING, 0, -1 }
+  };
+  static const char * const names[] = {
+    "value"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *LiteralTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UTYPE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::LiteralImplTypeTable
+  };
+  static const char * const names[] = {
+    "impl_type",
+    "impl"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
 }
 
 inline const org::apache::arrow::computeir::flatbuf::Literal *GetLiteral(const void *buf) {

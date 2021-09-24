@@ -66,6 +66,40 @@ struct WindowCallBuilder;
 struct Expression;
 struct ExpressionBuilder;
 
+inline const flatbuffers::TypeTable *MapKeyTypeTable();
+
+inline const flatbuffers::TypeTable *StructFieldTypeTable();
+
+inline const flatbuffers::TypeTable *ArraySubscriptTypeTable();
+
+inline const flatbuffers::TypeTable *ArraySliceTypeTable();
+
+inline const flatbuffers::TypeTable *FieldIndexTypeTable();
+
+inline const flatbuffers::TypeTable *FieldRefTypeTable();
+
+inline const flatbuffers::TypeTable *CallTypeTable();
+
+inline const flatbuffers::TypeTable *CaseFragmentTypeTable();
+
+inline const flatbuffers::TypeTable *ConditionalCaseTypeTable();
+
+inline const flatbuffers::TypeTable *SimpleCaseTypeTable();
+
+inline const flatbuffers::TypeTable *SortKeyTypeTable();
+
+inline const flatbuffers::TypeTable *UnboundedTypeTable();
+
+inline const flatbuffers::TypeTable *PrecedingTypeTable();
+
+inline const flatbuffers::TypeTable *FollowingTypeTable();
+
+inline const flatbuffers::TypeTable *CurrentRowTypeTable();
+
+inline const flatbuffers::TypeTable *WindowCallTypeTable();
+
+inline const flatbuffers::TypeTable *ExpressionTypeTable();
+
 /// A union of possible dereference operations
 enum Deref : uint8_t {
   Deref_NONE = 0,
@@ -399,6 +433,9 @@ bool VerifyExpressionImplVector(flatbuffers::Verifier &verifier, const flatbuffe
 /// Access a value for a given map key
 struct MapKey FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef MapKeyBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return MapKeyTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_KEY = 4
   };
@@ -444,6 +481,9 @@ inline flatbuffers::Offset<MapKey> CreateMapKey(
 /// Struct field access
 struct StructField FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef StructFieldBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return StructFieldTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_POSITION = 4
   };
@@ -487,6 +527,9 @@ inline flatbuffers::Offset<StructField> CreateStructField(
 /// Zero-based array index
 struct ArraySubscript FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef ArraySubscriptBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return ArraySubscriptTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_POSITION = 4
   };
@@ -529,6 +572,9 @@ inline flatbuffers::Offset<ArraySubscript> CreateArraySubscript(
 /// Zero-based range of elements in an array
 struct ArraySlice FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef ArraySliceBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return ArraySliceTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_START_INCLUSIVE = 4,
     VT_END_EXCLUSIVE = 6
@@ -583,6 +629,9 @@ inline flatbuffers::Offset<ArraySlice> CreateArraySlice(
 /// Field name in a relation, in ordinal position of the relation's schema.
 struct FieldIndex FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef FieldIndexBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return FieldIndexTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_POSITION = 4
   };
@@ -625,6 +674,9 @@ inline flatbuffers::Offset<FieldIndex> CreateFieldIndex(
 /// Access the data of a field
 struct FieldRef FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef FieldRefBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return FieldRefTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_REF_TYPE = 4,
     VT_REF = 6,
@@ -729,6 +781,9 @@ inline flatbuffers::Offset<FieldRef> CreateFieldRef(
 /// A function call expression
 struct Call FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef CallBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return CallTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_NAME = 4,
     VT_ARGUMENTS = 6,
@@ -818,6 +873,9 @@ inline flatbuffers::Offset<Call> CreateCallDirect(
 /// A single WHEN x THEN y fragment.
 struct CaseFragment FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef CaseFragmentBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return CaseFragmentTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_MATCH = 4,
     VT_RESULT = 6
@@ -874,6 +932,9 @@ inline flatbuffers::Offset<CaseFragment> CreateCaseFragment(
 /// Conditional case statement expression
 struct ConditionalCase FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef ConditionalCaseBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return ConditionalCaseTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_CONDITIONS = 4,
     VT_ELSE_ = 6
@@ -948,6 +1009,9 @@ inline flatbuffers::Offset<ConditionalCase> CreateConditionalCaseDirect(
 /// Switch-style case expression
 struct SimpleCase FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef SimpleCaseBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return SimpleCaseTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_EXPRESSION = 4,
     VT_MATCHES = 6,
@@ -1033,6 +1097,9 @@ inline flatbuffers::Offset<SimpleCase> CreateSimpleCaseDirect(
 /// An expression with an order
 struct SortKey FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef SortKeyBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return SortKeyTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_EXPRESSION = 4,
     VT_ORDERING = 6
@@ -1087,6 +1154,9 @@ inline flatbuffers::Offset<SortKey> CreateSortKey(
 /// An unbounded window bound
 struct Unbounded FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef UnboundedBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return UnboundedTypeTable();
+  }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            verifier.EndTable();
@@ -1117,6 +1187,9 @@ inline flatbuffers::Offset<Unbounded> CreateUnbounded(
 /// Boundary is preceding rows, determined by the contained expression
 struct Preceding FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef PrecedingBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return PrecedingTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_IMPL_TYPE = 4,
     VT_IMPL = 6
@@ -1186,6 +1259,9 @@ inline flatbuffers::Offset<Preceding> CreatePreceding(
 /// Boundary is following rows, determined by the contained expression
 struct Following FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef FollowingBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return FollowingTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_IMPL_TYPE = 4,
     VT_IMPL = 6
@@ -1255,6 +1331,9 @@ inline flatbuffers::Offset<Following> CreateFollowing(
 /// Boundary is the current row
 struct CurrentRow FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef CurrentRowBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return CurrentRowTypeTable();
+  }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            verifier.EndTable();
@@ -1285,6 +1364,9 @@ inline flatbuffers::Offset<CurrentRow> CreateCurrentRow(
 /// An expression representing a window function call.
 struct WindowCall FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef WindowCallBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return WindowCallTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_EXPRESSION = 4,
     VT_KIND = 6,
@@ -1488,6 +1570,9 @@ inline flatbuffers::Offset<WindowCall> CreateWindowCallDirect(
 /// union types.
 struct Expression FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef ExpressionBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return ExpressionTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_IMPL_TYPE = 4,
     VT_IMPL = 6
@@ -1728,6 +1813,443 @@ inline bool VerifyExpressionImplVector(flatbuffers::Verifier &verifier, const fl
     }
   }
   return true;
+}
+
+inline const flatbuffers::TypeTable *DerefTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, -1 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 1 },
+    { flatbuffers::ET_SEQUENCE, 0, 2 },
+    { flatbuffers::ET_SEQUENCE, 0, 3 },
+    { flatbuffers::ET_SEQUENCE, 0, 4 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::MapKeyTypeTable,
+    org::apache::arrow::computeir::flatbuf::StructFieldTypeTable,
+    org::apache::arrow::computeir::flatbuf::ArraySubscriptTypeTable,
+    org::apache::arrow::computeir::flatbuf::ArraySliceTypeTable,
+    org::apache::arrow::computeir::flatbuf::FieldIndexTypeTable
+  };
+  static const char * const names[] = {
+    "NONE",
+    "MapKey",
+    "StructField",
+    "ArraySubscript",
+    "ArraySlice",
+    "FieldIndex"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_UNION, 6, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *OrderingTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UCHAR, 0, 0 },
+    { flatbuffers::ET_UCHAR, 0, 0 },
+    { flatbuffers::ET_UCHAR, 0, 0 },
+    { flatbuffers::ET_UCHAR, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::OrderingTypeTable
+  };
+  static const char * const names[] = {
+    "ASCENDING_THEN_NULLS",
+    "DESCENDING_THEN_NULLS",
+    "NULLS_THEN_ASCENDING",
+    "NULLS_THEN_DESCENDING"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_ENUM, 4, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *ConcreteBoundImplTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, -1 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 1 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ExpressionTypeTable,
+    org::apache::arrow::computeir::flatbuf::UnboundedTypeTable
+  };
+  static const char * const names[] = {
+    "NONE",
+    "Expression",
+    "Unbounded"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_UNION, 3, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *BoundTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, -1 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 1 },
+    { flatbuffers::ET_SEQUENCE, 0, 2 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::PrecedingTypeTable,
+    org::apache::arrow::computeir::flatbuf::FollowingTypeTable,
+    org::apache::arrow::computeir::flatbuf::CurrentRowTypeTable
+  };
+  static const char * const names[] = {
+    "NONE",
+    "Preceding",
+    "Following",
+    "CurrentRow"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_UNION, 4, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *FrameTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UCHAR, 0, 0 },
+    { flatbuffers::ET_UCHAR, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::FrameTypeTable
+  };
+  static const char * const names[] = {
+    "Rows",
+    "Range"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_ENUM, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *ExpressionImplTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, -1 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 1 },
+    { flatbuffers::ET_SEQUENCE, 0, 2 },
+    { flatbuffers::ET_SEQUENCE, 0, 3 },
+    { flatbuffers::ET_SEQUENCE, 0, 4 },
+    { flatbuffers::ET_SEQUENCE, 0, 5 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::LiteralTypeTable,
+    org::apache::arrow::computeir::flatbuf::FieldRefTypeTable,
+    org::apache::arrow::computeir::flatbuf::CallTypeTable,
+    org::apache::arrow::computeir::flatbuf::ConditionalCaseTypeTable,
+    org::apache::arrow::computeir::flatbuf::SimpleCaseTypeTable,
+    org::apache::arrow::computeir::flatbuf::WindowCallTypeTable
+  };
+  static const char * const names[] = {
+    "NONE",
+    "Literal",
+    "FieldRef",
+    "Call",
+    "ConditionalCase",
+    "SimpleCase",
+    "WindowCall"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_UNION, 7, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *MapKeyTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ExpressionTypeTable
+  };
+  static const char * const names[] = {
+    "key"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *StructFieldTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UINT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "position"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *ArraySubscriptTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UINT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "position"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *ArraySliceTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UINT, 0, -1 },
+    { flatbuffers::ET_UINT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "start_inclusive",
+    "end_exclusive"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *FieldIndexTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UINT, 0, -1 }
+  };
+  static const char * const names[] = {
+    "position"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *FieldRefTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UTYPE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_INT, 0, -1 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::DerefTypeTable
+  };
+  static const char * const names[] = {
+    "ref_type",
+    "ref",
+    "relation_index"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 3, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *CallTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_STRING, 0, -1 },
+    { flatbuffers::ET_SEQUENCE, 1, 0 },
+    { flatbuffers::ET_SEQUENCE, 1, 1 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ExpressionTypeTable,
+    org::apache::arrow::computeir::flatbuf::SortKeyTypeTable
+  };
+  static const char * const names[] = {
+    "name",
+    "arguments",
+    "orderings"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 3, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *CaseFragmentTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ExpressionTypeTable
+  };
+  static const char * const names[] = {
+    "match",
+    "result"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *ConditionalCaseTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 1, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 1 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::CaseFragmentTypeTable,
+    org::apache::arrow::computeir::flatbuf::ExpressionTypeTable
+  };
+  static const char * const names[] = {
+    "conditions",
+    "else_"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *SimpleCaseTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 1, 1 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ExpressionTypeTable,
+    org::apache::arrow::computeir::flatbuf::CaseFragmentTypeTable
+  };
+  static const char * const names[] = {
+    "expression",
+    "matches",
+    "else_"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 3, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *SortKeyTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_UCHAR, 0, 1 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ExpressionTypeTable,
+    org::apache::arrow::computeir::flatbuf::OrderingTypeTable
+  };
+  static const char * const names[] = {
+    "expression",
+    "ordering"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *UnboundedTypeTable() {
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 0, nullptr, nullptr, nullptr, nullptr, nullptr
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *PrecedingTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UTYPE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ConcreteBoundImplTypeTable
+  };
+  static const char * const names[] = {
+    "impl_type",
+    "impl"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *FollowingTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UTYPE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ConcreteBoundImplTypeTable
+  };
+  static const char * const names[] = {
+    "impl_type",
+    "impl"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *CurrentRowTypeTable() {
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 0, nullptr, nullptr, nullptr, nullptr, nullptr
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *WindowCallTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_UCHAR, 0, 1 },
+    { flatbuffers::ET_SEQUENCE, 1, 0 },
+    { flatbuffers::ET_SEQUENCE, 1, 2 },
+    { flatbuffers::ET_UTYPE, 0, 3 },
+    { flatbuffers::ET_SEQUENCE, 0, 3 },
+    { flatbuffers::ET_UTYPE, 0, 3 },
+    { flatbuffers::ET_SEQUENCE, 0, 3 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ExpressionTypeTable,
+    org::apache::arrow::computeir::flatbuf::FrameTypeTable,
+    org::apache::arrow::computeir::flatbuf::SortKeyTypeTable,
+    org::apache::arrow::computeir::flatbuf::BoundTypeTable
+  };
+  static const char * const names[] = {
+    "expression",
+    "kind",
+    "partitions",
+    "orderings",
+    "lower_bound_type",
+    "lower_bound",
+    "upper_bound_type",
+    "upper_bound"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 8, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *ExpressionTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_UTYPE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ExpressionImplTypeTable
+  };
+  static const char * const names[] = {
+    "impl_type",
+    "impl"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
 }
 
 inline const org::apache::arrow::computeir::flatbuf::Expression *GetExpression(const void *buf) {

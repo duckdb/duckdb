@@ -9,6 +9,7 @@
 #include "tpch-extension.hpp"
 #include "extension_helper.hpp"
 #include <string>
+#include "flatbuffers/minireflect.h"
 
 // Thank you Mark!
 #include "duckdb/planner/operator/list.hpp"
@@ -54,15 +55,10 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 			default:
 				throw std::runtime_error(duckdb::TypeIdToString(type.InternalType()));
 			}
-			auto decimal_bytes_vec_fb = fbb.CreateVector(decimal_bytes_vec);
 
-			arrowir::DecimalLiteralBuilder decimal_builder(fbb);
-			decimal_builder.add_precision(duckdb::DecimalType::GetWidth(type));
-			decimal_builder.add_scale(duckdb::DecimalType::GetScale(type));
-
-			decimal_builder.add_value(decimal_bytes_vec_fb);
-
-			auto decimal = decimal_builder.Finish();
+			auto decimal =
+			    arrowir::CreateDecimalLiteral(fbb, fbb.CreateVector(decimal_bytes_vec),
+			                                  duckdb::DecimalType::GetScale(type), duckdb::DecimalType::GetWidth(type));
 			auto literal =
 			    arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_DecimalLiteral, decimal.Union());
 			res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
@@ -71,9 +67,6 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		default:
 			throw std::runtime_error(type.ToString());
 		}
-		//			auto field_index = arrowir::CreateFieldIndex(fbb, bound_ref.index);
-		//			auto field_ref = arrowir::CreateFieldRef(fbb, arrowir::Deref::Deref_FieldIndex, field_index.Union(),
-		//0); 			res = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_BinaryLiteral, field_ref.Union());
 		break;
 	}
 	case duckdb::ExpressionType::BOUND_REF: {
@@ -88,18 +81,12 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		auto function_name = fbb.CreateString(aggr.function.name);
 
 		// TODO filter, ordering, distinct are missing here but irrelevant for TPC-H
-
 		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec;
 		for (auto &expr : aggr.children) {
 			arguments_vec.push_back(transform_expr(fbb, *expr));
 		}
-		auto arguments_vec_fb = fbb.CreateVector(arguments_vec);
 
-		arrowir::CallBuilder call_builder(fbb);
-		call_builder.add_name(function_name);
-		call_builder.add_arguments(arguments_vec_fb);
-		auto call = call_builder.Finish();
-
+		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
 		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 		break;
 	}
@@ -111,13 +98,7 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		for (auto &expr : bound_function.children) {
 			arguments_vec.push_back(transform_expr(fbb, *expr));
 		}
-		auto arguments_vec_fb = fbb.CreateVector(arguments_vec);
-
-		arrowir::CallBuilder call_builder(fbb);
-		call_builder.add_name(function_name);
-		call_builder.add_arguments(arguments_vec_fb);
-		auto call = call_builder.Finish();
-
+		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
 		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 		break;
 	}
@@ -129,53 +110,66 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 
 static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBufferBuilder &fbb,
                                                            duckdb::LogicalOperator &op) {
-	flatbuffers::Offset<void> res;
 
 	// TODO what exactly is the point of the RelBase and the output mapping?
-	arrowir::PassThroughBuilder passthrough_builder(fbb);
-	auto passthrough = passthrough_builder.Finish().Union();
-
-	arrowir::RelBaseBuilder rel_base_builder(fbb);
-	rel_base_builder.add_output_mapping(passthrough);
-	auto rel_base = rel_base_builder.Finish();
+	auto rel_base = arrowir::CreateRelBase(fbb, arrowir::Emit_PassThrough, arrowir::CreatePassThrough(fbb).Union());
 
 	switch (op.type) {
 	case duckdb::LogicalOperatorType::LOGICAL_ORDER_BY: {
-		auto child_rel = transform_op(fbb, *op.children[0]);
+		auto &order = (duckdb::LogicalOrder &)op;
 
 		std::vector<flatbuffers::Offset<arrowir::SortKey>> keys_vec;
-
-		// TODO actually transform expressions
-		auto keys_vec_fb = fbb.CreateVector(keys_vec);
-
-		arrowir::OrderByBuilder orderby_builder(fbb);
-		orderby_builder.add_base(rel_base);
-		orderby_builder.add_keys(keys_vec_fb);
-		orderby_builder.add_rel(child_rel);
-
-		res = orderby_builder.Finish().Union();
-		break;
+		for (auto &order_exp : order.orders) {
+			// oh my
+			org::apache::arrow::computeir::flatbuf::Ordering arrow_ordering;
+			switch (order_exp.type) {
+			case duckdb::OrderType::ASCENDING:
+				switch (order_exp.null_order) {
+				case duckdb::OrderByNullType::NULLS_FIRST:
+					arrow_ordering = arrowir::Ordering_NULLS_THEN_ASCENDING;
+					break;
+				case duckdb::OrderByNullType::NULLS_LAST:
+					arrow_ordering = arrowir::Ordering_ASCENDING_THEN_NULLS;
+					break;
+				default:
+					throw std::runtime_error("unknown null order type");
+					break;
+				}
+			case duckdb::OrderType::DESCENDING:
+				switch (order_exp.null_order) {
+				case duckdb::OrderByNullType::NULLS_FIRST:
+					arrow_ordering = arrowir::Ordering_NULLS_THEN_DESCENDING;
+					break;
+				case duckdb::OrderByNullType::NULLS_LAST:
+					arrow_ordering = arrowir::Ordering_DESCENDING_THEN_NULLS;
+					break;
+				default:
+					throw std::runtime_error("unknown null order type");
+					break;
+				}
+			case duckdb::OrderType::ORDER_DEFAULT:
+				arrow_ordering = arrowir::Ordering_NULLS_THEN_ASCENDING;
+				break;
+			default:
+				throw std::runtime_error("unknown order type");
+			}
+			keys_vec.push_back(arrowir::CreateSortKey(fbb, transform_expr(fbb, *order_exp.expression), arrow_ordering));
+		}
+		auto arrow_order =
+		    arrowir::CreateOrderBy(fbb, rel_base, transform_op(fbb, *op.children[0]), fbb.CreateVector(keys_vec));
+		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_OrderBy, arrow_order.Union());
 	}
 	case duckdb::LogicalOperatorType::LOGICAL_PROJECTION: {
-		auto child_rel = transform_op(fbb, *op.children[0]);
-
 		auto &proj = (duckdb::LogicalProjection &)op;
 		std::vector<flatbuffers::Offset<arrowir::Expression>> expressions_vec;
 		for (auto &expr : proj.expressions) {
 			expressions_vec.push_back(transform_expr(fbb, *expr));
 		}
-		auto expressions_vec_fb = fbb.CreateVector(expressions_vec);
-
-		arrowir::ProjectBuilder projection_builder(fbb);
-		projection_builder.add_rel(child_rel);
-		projection_builder.add_base(rel_base);
-		projection_builder.add_expressions(expressions_vec_fb);
-		res = projection_builder.Finish().Union();
-		break;
+		auto arrow_project = arrowir::CreateProject(fbb, rel_base, transform_op(fbb, *op.children[0]),
+		                                            fbb.CreateVector(expressions_vec));
+		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Project, arrow_project.Union());
 	}
 	case duckdb::LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto child_rel = transform_op(fbb, *op.children[0]);
-
 		auto &aggr = (duckdb::LogicalAggregate &)op;
 
 		std::vector<flatbuffers::Offset<arrowir::Expression>> groups_vec;
@@ -185,48 +179,53 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 		auto groups_vec_fb = fbb.CreateVector(groups_vec);
 		std::vector<flatbuffers::Offset<arrowir::Grouping>> grouping_vec;
 		grouping_vec.push_back(arrowir::CreateGrouping(fbb, groups_vec_fb));
-		auto groupings_vec_fb = fbb.CreateVector(grouping_vec);
 
 		std::vector<flatbuffers::Offset<arrowir::Expression>> aggregates_vec;
 		for (auto &expr : aggr.expressions) {
 			aggregates_vec.push_back(transform_expr(fbb, *expr));
 		}
-		auto aggregates_vec_fb = fbb.CreateVector(aggregates_vec);
+		auto arrow_aggr = arrowir::CreateAggregate(fbb, rel_base, transform_op(fbb, *op.children[0]),
+		                                           fbb.CreateVector(aggregates_vec), fbb.CreateVector(grouping_vec));
 
-		arrowir::AggregateBuilder aggregate_builder(fbb);
-		aggregate_builder.add_base(rel_base);
-		aggregate_builder.add_groupings(groupings_vec_fb);
-		aggregate_builder.add_measures(aggregates_vec_fb);
-
-		aggregate_builder.add_rel(child_rel);
-
-		res = aggregate_builder.Finish().Union();
-		break;
+		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Aggregate, arrow_aggr.Union());
 	}
 	case duckdb::LogicalOperatorType::LOGICAL_GET: {
 		auto &get = (duckdb::LogicalGet &)op;
-
 		auto &table_scan_bind_data = (duckdb::TableScanBindData &)*get.bind_data;
+		std::vector<flatbuffers::Offset<arrow::Field>> fields_vec;
+		for (idx_t col_idx = 0; col_idx < get.types.size(); col_idx++) {
+			arrow::Type arrow_type;
+			auto col_name = fbb.CreateString(get.names[col_idx]);
+			auto &type = get.types[col_idx];
+			switch (type.id()) {
+			case duckdb::LogicalTypeId::INTEGER:
+				arrow_type = arrow::Type_Int;
+				break;
+			case duckdb::LogicalTypeId::DECIMAL:
+				arrow_type = arrow::Type_Decimal;
+				break;
+			case duckdb::LogicalTypeId::VARCHAR:
+				arrow_type = arrow::Type_Binary;
+				break;
+			case duckdb::LogicalTypeId::DATE:
+				arrow_type = arrow::Type_Date;
+				break;
+			default:
+				throw std::runtime_error(type.ToString());
+			}
+			fields_vec.push_back(arrow::CreateField(fbb, col_name, true, arrow_type));
+		}
+		auto schema =
+		    arrow::CreateSchema(fbb, org::apache::arrow::flatbuf::Endianness_Little, fbb.CreateVector(fields_vec));
+
 		auto table_name = fbb.CreateString(table_scan_bind_data.table->name);
-		arrow::SchemaBuilder schema_builder(fbb);
+		auto arrow_table = arrowir::CreateTable(fbb, rel_base, table_name, schema);
 
-		// TODO actually create schema
-		// schema_builder.add_fields();
-
-		auto schema = schema_builder.Finish();
-		arrowir::TableBuilder table_builder(fbb);
-		table_builder.add_base(rel_base);
-		table_builder.add_name(table_name);
-		table_builder.add_schema(schema);
-		res = table_builder.Finish().Union();
-		break;
+		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Table, arrow_table.Union());
 	}
 	default:
 		throw std::runtime_error(duckdb::LogicalOperatorToString(op.type));
 	}
-	arrowir::RelationBuilder rel_builder(fbb);
-	rel_builder.add_impl(res);
-	return rel_builder.Finish();
 }
 
 TEST_CASE("Test Arrow IR Usage", "[arrowir]") {
@@ -237,14 +236,12 @@ TEST_CASE("Test Arrow IR Usage", "[arrowir]") {
 	REQUIRE_NO_FAIL(con.Query("call dbgen(sf=0)"));
 
 	auto plan = con.context->ExtractPlan(duckdb::TPCHExtension::GetQuery(1));
-	//	printf("\n%s\n", plan->ToString().c_str());
+
+	printf("\n%s\n", plan->ToString().c_str());
 
 	flatbuffers::FlatBufferBuilder fbb;
-
-	std::vector<flatbuffers::Offset<arrowir::Relation>> relations_vec;
-	relations_vec.push_back(transform_op(fbb, *plan));
-	auto relations_vec_fb = fbb.CreateVector(relations_vec);
-	arrowir::PlanBuilder plan_builder(fbb);
-	plan_builder.add_sinks(relations_vec_fb);
-	plan_builder.Finish();
+	std::vector<flatbuffers::Offset<arrowir::Relation>> relations_vec = {transform_op(fbb, *plan)};
+	auto arrow_plan = arrowir::CreatePlan(fbb, fbb.CreateVector(relations_vec));
+	fbb.Finish(arrow_plan);
+	printf("\n%s\n", flatbuffers::FlatBufferToString(fbb.GetBufferPointer(), arrowir::PlanTypeTable(), true).c_str());
 }

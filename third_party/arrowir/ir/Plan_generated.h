@@ -20,9 +20,14 @@ namespace flatbuf {
 struct Plan;
 struct PlanBuilder;
 
+inline const flatbuffers::TypeTable *PlanTypeTable();
+
 /// A specification of a query.
 struct Plan FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef PlanBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return PlanTypeTable();
+  }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_SINKS = 4
   };
@@ -73,6 +78,22 @@ inline flatbuffers::Offset<Plan> CreatePlanDirect(
   return org::apache::arrow::computeir::flatbuf::CreatePlan(
       _fbb,
       sinks__);
+}
+
+inline const flatbuffers::TypeTable *PlanTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 1, 0 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::RelationTypeTable
+  };
+  static const char * const names[] = {
+    "sinks"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
 }
 
 inline const org::apache::arrow::computeir::flatbuf::Plan *GetPlan(const void *buf) {
