@@ -34,6 +34,7 @@ jobs:
     steps:
     - name: Install
       run: |
+        apt-get update -y -qq
         apt-get install -y -qq software-properties-common
         add-apt-repository ppa:deadsnakes/ppa
         apt-get update -y -qq
@@ -105,6 +106,7 @@ jobs:
     steps:
     - name: Install
       run: |
+        apt-get update -y -qq
         apt-get install -y -qq software-properties-common
         add-apt-repository ppa:deadsnakes/ppa
         apt-get update -y -qq
