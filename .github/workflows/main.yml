@@ -44,7 +44,7 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git cmake make openssl java-11-openjdk-devel
+      run: yum install -y gcc gcc-c++ git cmake make openssl java-11-openjdk-devel openssl-devel
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -105,7 +105,7 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git cmake make openssl java-11-openjdk-devel
+      run: yum install -y gcc gcc-c++ git cmake make openssl java-11-openjdk-devel openssl-devel
 
     - name: Build
       run: |
