@@ -13,7 +13,7 @@ env:
 
 jobs:
  linux-release-64:
-    name: Linux (32 Bit)
+    name: Linux (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
 
