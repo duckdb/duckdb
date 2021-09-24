@@ -17,7 +17,7 @@ target_link_libraries(shell sqlite3_api_wrapper_static
 link_threads(shell)
 if(STATIC_LIBCPP)
   message("Statically linking CLI")
-  target_link_libraries(shell -static-libstdc++)
+  target_link_libraries(shell -static-libstdc++ -static-libgcc)
 endif()
 
 if(NOT AMALGAMATION_BUILD AND NOT WIN32)
