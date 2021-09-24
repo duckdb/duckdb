@@ -39,7 +39,9 @@ jobs:
         add-apt-repository ppa:deadsnakes/ppa
         add-apt-repository ppa:git-core/ppa
         apt-get update -y -qq
-        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip python3-pip
+        python3.7 -m pip install pip
+        python3.7 -m pip install requests
 
     - uses: actions/checkout@v2
       with:
@@ -69,7 +71,6 @@ jobs:
     - name: Tools Tests
       run: |
         python3.7 tools/shell/shell-test.py build/release/duckdb
-        pip3.7 install requests
         python3.7 tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
