@@ -5,8 +5,7 @@ coverage:
       default:
         # basic
         # for now
-        target: 0
-        threshold: 0.5%
+        target: 0%
         base: auto
         paths:
           - "src"
