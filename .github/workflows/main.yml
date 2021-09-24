@@ -334,13 +334,6 @@ jobs:
         chmod +x cmake-3.21.3-linux-x86_64.sh
         ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
-    - name: Examples
-      run: |
-        (cd examples/embedded-c; make)
-        (cd examples/embedded-c++; make)
-        (cd examples/jdbc; make; make maven)
-        build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
-
     - name: Build
       run: STATIC_LIBCPP=1 make
 
@@ -355,6 +348,13 @@ jobs:
         python3.7 tools/shell/shell-test.py build/release/duckdb
         python3.7 tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+
+    - name: Examples
+      run: |
+        (cd examples/embedded-c; make)
+        (cd examples/embedded-c++; make)
+        (cd examples/jdbc; make; make maven)
+        build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
 
     - name: Deploy
       run: |
