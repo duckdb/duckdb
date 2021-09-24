@@ -48,12 +48,9 @@ jobs:
 
     - name: Install CMake
       run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3.tar.gz
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.tar.gz
         tar zxvf cmake-3*
-        cd cmake-3*
-        ./bootstrap --prefix=/usr/local
-        make -j$(nproc)
-        make install
+        cp cmake-3*/bin/cmake /usr/local/bin/
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -118,12 +115,9 @@ jobs:
 
     - name: Install CMake
       run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3.tar.gz
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.tar.gz
         tar zxvf cmake-3*
-        cd cmake-3*
-        ./bootstrap --prefix=/usr/local
-        make -j$(nproc)
-        make install
+        cp cmake-3*/bin/cmake /usr/local/bin/
 
     - name: Build
       run: |
