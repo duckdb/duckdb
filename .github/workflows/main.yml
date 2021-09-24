@@ -47,7 +47,7 @@ jobs:
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq ninja-build make cmake
+        apt-get install -y -qq ninja-build make cmake gcc-multilib g++-multilib
 
     - name: Build
       run: STATIC_LIBCPP=1 make
