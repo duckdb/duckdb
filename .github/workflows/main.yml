@@ -47,7 +47,7 @@ jobs:
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib
+        apt-get install -y -qq ninja-build make gcc-multilib g++-multilib openssl-devel wget
 
     - name: Install CMake
       run: |
@@ -121,7 +121,7 @@ jobs:
     - name: Install
       run: |
         apt-get update -y -qq
-        apt-get install -y -qq make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
+        apt-get install -y -qq make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev openssl-devel wget
 
     - name: Install CMake
       run: |
