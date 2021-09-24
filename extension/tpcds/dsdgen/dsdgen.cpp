@@ -29,7 +29,7 @@ static void CreateTPCDSTable(ClientContext &context, string schema, string suffi
 	}
 	if (keys) {
 		vector<string> pk_columns;
-		for(idx_t i = 0; i < T::PrimaryKeyCount; i++) {
+		for (idx_t i = 0; i < T::PrimaryKeyCount; i++) {
 			pk_columns.push_back(T::PrimaryKeyColumns[i]);
 		}
 		info->constraints.push_back(make_unique<UniqueConstraint>(move(pk_columns), true));

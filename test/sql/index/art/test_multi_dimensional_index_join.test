@@ -1,4 +1,4 @@
-# name: test/sql/index/art/test_art_index_join.test
+# name: test/sql/index/art/test_multi_dimensional_index_join.test
 # description: ART Join
 # group: [art]
 

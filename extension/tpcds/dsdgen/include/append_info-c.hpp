@@ -60,7 +60,6 @@ struct DSDGenAppender {
 		Flush();
 	}
 
-
 	template <class SRC, class DST>
 	void AppendValueInternal(Vector &col, SRC input) {
 		FlatVector::GetData<DST>(col)[chunk.size()] = Cast::Operation<SRC, DST>(input);
@@ -134,7 +133,7 @@ private:
 	idx_t column;
 };
 
-}
+} // namespace duckdb
 
 namespace tpcds {
 
