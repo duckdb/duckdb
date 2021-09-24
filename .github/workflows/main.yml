@@ -288,7 +288,8 @@ jobs:
 
  linux-release-64:
     name: Linux (64 Bit)
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
+    container: centos:7
     needs: linux-debug
 
     env:
@@ -363,7 +364,8 @@ jobs:
 
  linux-release-32:
     name: Linux (32 Bit)
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
+    container: centos:7
     needs: linux-debug
 
     env:
