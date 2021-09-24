@@ -115,7 +115,7 @@ static void CanUseIndexJoin(TableScanBindData *tbl, Expression &expr, Index **re
 		if (index.unbound_expressions.size() != 1) {
 			return false;
 		}
-		if (expr.Equals(index.unbound_expressions[0].get())) {
+		if (expr.alias == index.unbound_expressions[0]->alias) {
 			*result_index = &index;
 			return true;
 		}
