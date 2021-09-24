@@ -45,7 +45,9 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+      run: |
+        apt-get update -y -qq
+        apt-get install -y -qq ninja-build
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -111,7 +113,9 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
+      run: |
+        apt-get update -y -qq
+        apt-get install -y -qq ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
 
     - name: Build
       run: |
