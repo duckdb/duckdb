@@ -111,7 +111,7 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: yum install -y git make openssl java-1.8.0-openjdk-devel openssl-devel wget gcc*i686 libstdc++-static*i686 glibc-static*i686 libgfortran*i686
+      run: yum install -y gcc gcc-c++ git make openssl java-1.8.0-openjdk-devel openssl-devel wget libstdc++-static*i686 glibc-static*i686 libgfortran*i686
 
     - name: Install CMake
       run: |
