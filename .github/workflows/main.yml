@@ -15,7 +15,7 @@ jobs:
  linux-release-64:
     name: Linux (64 Bit)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: ubuntu:14.04
 
     env:
       GEN: ninja
@@ -100,7 +100,7 @@ jobs:
  linux-release-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
-    container: ubuntu:16.04
+    container: ubuntu:14.04
 
     env:
       GEN: ninja
