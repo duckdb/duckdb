@@ -110,6 +110,19 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	return;
 }
 
+static void CanUseIndexJoin(TableScanBindData *tbl, Expression &expr, Index **result_index) {
+	tbl->table->storage->info->indexes.Scan([&](Index &index) {
+		if (index.unbound_expressions.size() != 1) {
+			return false;
+		}
+		if (expr.Equals(index.unbound_expressions[0].get())) {
+			*result_index = &index;
+			return true;
+		}
+		return false;
+	});
+}
+
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
                         PhysicalOperator *left, PhysicalOperator *right) {
 	auto &transaction = Transaction::GetTransaction(context);
@@ -121,32 +134,14 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 			auto &tbl_scan = (PhysicalTableScan &)*left;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
 			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
-				tbl->table->storage->info->indexes.Scan([&](Index &index) {
-					if (index.unbound_expressions.size() > 1) {
-						return false;
-					}
-					if (index.unbound_expressions[0]->alias == op.conditions[0].left->alias) {
-						*left_index = &index;
-						return true;
-					}
-					return false;
-				});
+				CanUseIndexJoin(tbl, *op.conditions[0].left, left_index);
 			}
 		}
 		if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*right;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
 			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
-				tbl->table->storage->info->indexes.Scan([&](Index &index) {
-					if (index.unbound_expressions.size() > 1) {
-						return false;
-					}
-					if (index.unbound_expressions[0]->alias == op.conditions[0].right->alias) {
-						*right_index = &index;
-						return true;
-					}
-					return false;
-				});
+				CanUseIndexJoin(tbl, *op.conditions[0].right, right_index);
 			}
 		}
 	}
