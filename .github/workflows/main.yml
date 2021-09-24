@@ -44,7 +44,7 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git cmake make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
+      run: yum install -y gcc gcc-c++ git cmake make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev openssl
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -105,7 +105,7 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git cmake make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
+      run: yum install -y gcc gcc-c++ git cmake make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev openssl
 
     - name: Build
       run: |
