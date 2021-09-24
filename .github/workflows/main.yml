@@ -13,11 +13,12 @@ env:
 
 jobs:
  linux-release-64:
-    name: Linux (64 Bit)
+    name: Linux (32 Bit)
     runs-on: ubuntu-latest
-    container: centos:7
+    container: ubuntu:16.04
 
     env:
+      GEN: ninja
       BUILD_VISUALIZER: 1
       BUILD_BENCHMARK: 1
       BUILD_ICU: 1
@@ -44,13 +45,7 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git make openssl java-1.8.0-openjdk-devel openssl-devel wget
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -92,10 +87,15 @@ jobs:
           duckdb_cli-linux-amd64.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
+
+
  linux-release-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
-    container: centos:7
+    container: ubuntu:16.04
+
+    env:
+      GEN: ninja
 
     steps:
     - uses: actions/checkout@v2
@@ -111,13 +111,7 @@ jobs:
         ldd --version ldd
 
     - name: Install
-      run: yum install -y gcc gcc-c++ git make openssl java-1.8.0-openjdk-devel openssl-devel wget libstdc++-static*i686 glibc-static*i686 libgfortran*i686 glibc-devel*i686 libstdc++-devel*i686 glibc-static
-
-    - name: Install CMake
-      run: |
-        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
-        chmod +x cmake-3.21.3-linux-x86_64.sh
-        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
 
     - name: Build
       run: |
