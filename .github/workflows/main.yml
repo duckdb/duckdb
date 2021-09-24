@@ -42,6 +42,7 @@ jobs:
 
     - name: GLIBC Version
       run: |
+        python --version
         ldd --version ldd
 
     - name: Install
@@ -114,6 +115,7 @@ jobs:
 
     - name: GLIBC Version
       run: |
+        python --version
         ldd --version ldd
 
     - name: Install
