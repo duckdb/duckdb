@@ -314,6 +314,10 @@ jobs:
       with:
         python-version: '3.7'
 
+    - name: GLIBC Version
+      run: |
+        ldd --version ldd
+
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
 
@@ -357,8 +361,6 @@ jobs:
           duckdb_cli-linux-amd64.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
-
-
  linux-release-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-18.04
@@ -375,6 +377,10 @@ jobs:
     - uses: actions/setup-python@v2
       with:
         python-version: '3.7'
+
+    - name: GLIBC Version
+      run: |
+        ldd --version ldd
 
     - name: Install
       run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
