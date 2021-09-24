@@ -11,7 +11,6 @@ add_subdirectory(helpers)
 add_subdirectory(sql)
 add_subdirectory(sqlite)
 add_subdirectory(ossfuzz)
-add_subdirectory(arrowir)
 
 if(BUILD_ARROW_ABI_TEST)
   add_subdirectory(arrow)

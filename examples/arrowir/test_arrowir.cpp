@@ -1,22 +1,20 @@
-#include "catch.hpp"
-#include "test_helpers.hpp"
-#include "Schema_generated.h"
+#include "duckdb.hpp"
 
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/expression/list.hpp"
+#include "duckdb/function/table/table_scan.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+
+#include "Schema_generated.h"
 #include "Plan_generated.h"
 #include "Relation_generated.h"
 
-#include "duckdb/main/client_context.hpp"
-#include "tpch-extension.hpp"
-#include "extension_helper.hpp"
-#include <string>
 #include "flatbuffers/minireflect.h"
 
-// Thank you Mark!
-#include "duckdb/planner/operator/list.hpp"
-#include "duckdb/planner/expression/list.hpp"
+#include "tpch-extension.hpp"
 
-#include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include <string>
 
 using namespace std;
 
@@ -228,12 +226,15 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 	}
 }
 
-TEST_CASE("Test Arrow IR Usage", "[arrowir]") {
+int main() {
 	duckdb::DuckDB db;
-	duckdb::ExtensionHelper::LoadAllExtensions(db);
+
+	duckdb::TPCHExtension tpch;
+	tpch.Load(db);
+
 	duckdb::Connection con(db);
 	// create TPC-H tables in duckdb catalog, but without any contents
-	REQUIRE_NO_FAIL(con.Query("call dbgen(sf=0)"));
+	con.Query("call dbgen(sf=0)");
 
 	auto plan = con.context->ExtractPlan(duckdb::TPCHExtension::GetQuery(1));
 
