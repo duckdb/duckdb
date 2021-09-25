@@ -183,7 +183,7 @@ table LiteralRelation {
 }
 
 /// A table read
-table Table {
+table ATable {
   base: RelBase (required);
   name: string (required);
   schema: org.apache.arrow.flatbuf.Schema (required);
@@ -198,7 +198,7 @@ union RelationImpl {
   LiteralRelation,
   OrderBy,
   Project,
-  Table,
+  ATable,
   Join,
 }
 
