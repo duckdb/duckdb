@@ -9,7 +9,7 @@ clean:
 	cd ../.. && make clean
 
 duckdb:
-	cd ../.. && BUILD_TPCH=1 DISABLE_SANITIZER=1 make debug
+	cd ../.. && BUILD_TPCH=1 DISABLE_SANITIZER=1 make
 
 main:
 	mkdir -p build

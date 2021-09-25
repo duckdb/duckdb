@@ -290,7 +290,7 @@ jobs:
     name: Linux (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
-    needs: linux-debug
+    #needs: linux-debug
 
     env:
       GEN: ninja
@@ -354,6 +354,7 @@ jobs:
         (cd examples/embedded-c; make)
         (cd examples/embedded-c++; make)
         (cd examples/jdbc; make; make maven)
+        (cd examples/arrowir; make)
         build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
 
     - name: Deploy

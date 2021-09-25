@@ -221,6 +221,49 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 
 		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Table, arrow_table.Union());
 	}
+
+	case duckdb::LogicalOperatorType::LOGICAL_TOP_N: {
+		auto &topn = (duckdb::LogicalTopN &)op;
+		auto arrow_topn =
+		    arrowir::CreateLimit(fbb, rel_base, transform_op(fbb, *op.children[0]), topn.offset, topn.limit);
+		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Limit, arrow_topn.Union());
+	}
+
+	case duckdb::LogicalOperatorType::LOGICAL_FILTER: {
+		auto &filter = (duckdb::LogicalFilter &)op;
+		if (filter.expressions.size() > 1) {
+			// TODO we could push multiple filters but they really should handle multiple expressions
+			// or give us a way to AND them together
+			throw std::runtime_error("cant handle filters with more than one expr :/");
+		}
+
+		auto arrow_filter = arrowir::CreateFilter(fbb, rel_base, transform_op(fbb, *op.children[0]),
+		                                          transform_expr(fbb, *filter.expressions[0]));
+		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Filter, arrow_filter.Union());
+	}
+
+	case duckdb::LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = (duckdb::LogicalComparisonJoin &)op;
+		arrowir::JoinKind arrow_join_kind;
+		switch (join.join_type) {
+		case duckdb::JoinType::INNER:
+			arrow_join_kind = arrowir::JoinKind_Inner;
+			break;
+		default:
+			throw std::runtime_error("unsupported join type");
+		}
+		// TODO join was forgotten in the relational union fbs :D
+		if (join.expressions.size() > 1) {
+			// TODO we could push multiple filters but they really should handle multiple expressions
+			// or give us a way to AND them together
+			throw std::runtime_error("cant handle filters with more than one expr :/");
+		}
+		auto arrow_join =
+		    arrowir::CreateJoin(fbb, rel_base, transform_op(fbb, *op.children[0]), transform_op(fbb, *op.children[1]),
+		                        transform_expr(fbb, *join.expressions[0]), arrow_join_kind);
+		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Join, arrow_join.Union());
+	}
+
 	default:
 		throw std::runtime_error(duckdb::LogicalOperatorToString(op.type));
 	}
@@ -234,7 +277,7 @@ int main() {
 
 	duckdb::Connection con(db);
 	// create TPC-H tables in duckdb catalog, but without any contents
-	con.Query("call dbgen(sf=0)");
+	con.Query("call dbgen(sf=0.1)");
 
 	auto plan = con.context->ExtractPlan(duckdb::TPCHExtension::GetQuery(1));
 
@@ -244,5 +287,12 @@ int main() {
 	std::vector<flatbuffers::Offset<arrowir::Relation>> relations_vec = {transform_op(fbb, *plan)};
 	auto arrow_plan = arrowir::CreatePlan(fbb, fbb.CreateVector(relations_vec));
 	fbb.Finish(arrow_plan);
+
 	printf("\n%s\n", flatbuffers::FlatBufferToString(fbb.GetBufferPointer(), arrowir::PlanTypeTable(), true).c_str());
+
+	// TODO translate back to duckdb plan
+	// TODO execute back translation
+	// TODO check results vs direct plan
+	// TODO translate other queries
+	// TODO optimize all delim joins away for tpch
 }

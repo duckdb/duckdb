@@ -199,6 +199,7 @@ union RelationImpl {
   OrderBy,
   Project,
   Table,
+  Join,
 }
 
 /// A table holding an instance of the possible relation types.
