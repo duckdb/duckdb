@@ -290,7 +290,7 @@ jobs:
     name: Linux (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
-    #needs: linux-debug
+    needs: linux-debug
 
     env:
       GEN: ninja
