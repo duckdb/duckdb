@@ -1,4 +1,4 @@
-# name: test/sql/window/test_partition_flushing.test
+# name: test/sql/window/test_partition_flushing.test_slow
 # description: Test chunk flushing under multithreaded partitioning
 # group: [window]
 
