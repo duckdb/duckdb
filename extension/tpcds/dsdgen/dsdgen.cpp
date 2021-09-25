@@ -7,6 +7,8 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "tpcds_constants.hpp"
+#include "dsdgen_schema.hpp"
+#include "duckdb/parser/constraints/unique_constraint.hpp"
 
 #include <cassert>
 
@@ -15,19 +17,58 @@ using namespace std;
 
 namespace tpcds {
 
-void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, string suffix) {
-	Connection con(*context.db);
-
-	con.Query("BEGIN TRANSACTION");
-	// FIXME: No restart support yet, suspect only fix is init_rand
-	// FIXME: no schema/suffix support yet
-
-	for (int t = 0; t < TPCDS_TABLE_COUNT; t++) {
-		con.Query(TPCDS_TABLE_DDL_NOKEYS[t]);
+template <class T>
+static void CreateTPCDSTable(ClientContext &context, string schema, string suffix, bool keys, bool overwrite) {
+	auto info = make_unique<CreateTableInfo>();
+	info->schema = schema;
+	info->table = T::Name + suffix;
+	info->on_conflict = overwrite ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->temporary = false;
+	for (idx_t i = 0; i < T::ColumnCount; i++) {
+		info->columns.push_back(ColumnDefinition(T::Columns[i], T::Types[i]));
 	}
+	if (keys) {
+		vector<string> pk_columns;
+		for (idx_t i = 0; i < T::PrimaryKeyCount; i++) {
+			pk_columns.push_back(T::PrimaryKeyColumns[i]);
+		}
+		info->constraints.push_back(make_unique<UniqueConstraint>(move(pk_columns), true));
+	}
+	auto binder = Binder::CreateBinder(context);
+	auto bound_info = binder->BindCreateTableInfo(move(info));
+	auto &catalog = Catalog::GetCatalog(context);
 
-	con.Query("COMMIT");
+	catalog.CreateTable(context, bound_info.get());
+}
 
+void DSDGenWrapper::CreateTPCDSSchema(ClientContext &context, string schema, string suffix, bool keys, bool overwrite) {
+	CreateTPCDSTable<CallCenterInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CatalogPageInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CatalogReturnsInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CatalogSalesInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CustomerInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CustomerAddressInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<CustomerDemographicsInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<DateDimInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<HouseholdDemographicsInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<IncomeBandInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<InventoryInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<ItemInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<PromotionInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<ReasonInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<ShipModeInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<StoreInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<StoreReturnsInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<StoreSalesInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<TimeDimInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<WarehouseInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<WebPageInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<WebReturnsInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<WebSalesInfo>(context, schema, suffix, keys, overwrite);
+	CreateTPCDSTable<WebSiteInfo>(context, schema, suffix, keys, overwrite);
+}
+
+void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, string suffix) {
 	if (scale <= 0) {
 		// schema only
 		return;
@@ -38,13 +79,17 @@ void DSDGenWrapper::DSDGen(double scale, ClientContext &context, string schema, 
 	// populate append info
 	vector<unique_ptr<tpcds_append_information>> append_info;
 	append_info.resize(DBGEN_VERSION);
+	auto &catalog = Catalog::GetCatalog(context);
 
 	int tmin = CALL_CENTER, tmax = DBGEN_VERSION;
 
 	for (int table_id = tmin; table_id < tmax; table_id++) {
 		auto table_def = GetTDefByNumber(table_id);
+		auto table_name = table_def.name + suffix;
 		assert(table_def.name);
-		auto append = make_unique<tpcds_append_information>(con, schema, table_def.name);
+		auto table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
+
+		auto append = make_unique<tpcds_append_information>(context, table_entry);
 		append->table_def = table_def;
 		append_info[table_id] = move(append);
 	}

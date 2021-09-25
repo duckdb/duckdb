@@ -288,7 +288,8 @@ jobs:
 
  linux-release-64:
     name: Linux (64 Bit)
-    runs-on: ubuntu-16.04
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
     needs: linux-debug
 
     env:
@@ -306,16 +307,32 @@ jobs:
       FORCE_WARN_UNUSED: 1
 
     steps:
+    - name: Install
+      run: |
+        apt-get update -y -qq
+        apt-get install -y -qq software-properties-common
+        add-apt-repository ppa:deadsnakes/ppa
+        add-apt-repository ppa:git-core/ppa
+        apt-get update -y -qq
+        apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip python3-pip maven
+        python3.7 -m pip install pip
+        python3.7 -m pip install requests
+
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+    - name: Version Check
+      run: |
+        ldd --version ldd
+        python3.7 --version
+        git --version
 
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
       run: STATIC_LIBCPP=1 make
@@ -324,13 +341,12 @@ jobs:
       run: make allunit
 
     - name: Symbol Leakage Test
-      run: python scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+      run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
 
     - name: Tools Tests
       run: |
-        python tools/shell/shell-test.py build/release/duckdb
-        pip install requests
-        python tools/rest/test_the_rest.py build/release/tools/rest
+        python3.7 tools/shell/shell-test.py build/release/duckdb
+        python3.7 tools/rest/test_the_rest.py build/release/tools/rest
         java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
@@ -342,12 +358,12 @@ jobs:
 
     - name: Deploy
       run: |
-        python scripts/amalgamation.py
+        python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
         zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         zip -j duckdb_rest-linux-amd64.zip build/release/tools/rest/duckdb_rest_server
-        python scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
     - uses: actions/upload-artifact@v2
       with:
@@ -357,27 +373,40 @@ jobs:
           duckdb_cli-linux-amd64.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
-
-
  linux-release-32:
     name: Linux (32 Bit)
-    runs-on: ubuntu-16.04
+    runs-on: ubuntu-latest
+    container: ubuntu:16.04
     needs: linux-debug
 
     env:
       GEN: ninja
 
     steps:
+    - name: Install
+      run: |
+        apt-get update -y -qq
+        apt-get install -y -qq software-properties-common
+        add-apt-repository ppa:deadsnakes/ppa
+        add-apt-repository ppa:git-core/ppa
+        apt-get update -y -qq
+        apt-get install -y -qq git make ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev libssl-dev wget openjdk-8-jdk python3.7 zip
+
     - uses: actions/checkout@v2
       with:
         fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+    - name: Version Check
+      run: |
+        ldd --version ldd
+        python3.7 --version
+        git --version
 
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build libc6-dev-i386 gcc-multilib g++-multilib lib32readline6-dev
+    - name: Install CMake
+      run: |
+        wget https://github.com/Kitware/CMake/releases/download/v3.21.3/cmake-3.21.3-linux-x86_64.sh
+        chmod +x cmake-3.21.3-linux-x86_64.sh
+        ./cmake-3.21.3-linux-x86_64.sh --skip-license --prefix=/usr/local
 
     - name: Build
       run: |
@@ -389,10 +418,10 @@ jobs:
 
     - name: Deploy
       run: |
-        python scripts/amalgamation.py
+        python3.7 scripts/amalgamation.py
         zip -j duckdb_cli-linux-i386.zip build/release/duckdb
         zip -j libduckdb-linux-i386.zip build/release/src/libduckdb*.so src/amalgamation/duckdb.hpp src/include/duckdb.h
-        python scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        python3.7 scripts/asset-upload-gha.py libduckdb-linux-i386.zip duckdb_cli-linux-i386.zip duckdb_jdbc-linux-i386.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
     - uses: actions/upload-artifact@v2
       with:
@@ -401,7 +430,6 @@ jobs:
           libduckdb-linux-i386.zip
           duckdb_cli-linux-i386.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
-
 
  linux-rpi:
     name: Linux (Raspberry Pi)
