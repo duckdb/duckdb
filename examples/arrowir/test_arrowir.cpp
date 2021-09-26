@@ -20,6 +20,23 @@ using namespace std;
 
 namespace arrowir = org::apache::arrow::computeir::flatbuf;
 namespace arrow = org::apache::arrow::flatbuf;
+
+static arrow::Type transform_type(duckdb::LogicalType &type) {
+	switch (type.id()) {
+	case duckdb::LogicalTypeId::INTEGER:
+	case duckdb::LogicalTypeId::BIGINT:
+		return arrow::Type_Int; // TODO is this correct?
+	case duckdb::LogicalTypeId::DECIMAL:
+		return arrow::Type_Decimal;
+	case duckdb::LogicalTypeId::VARCHAR:
+		return arrow::Type_Binary;
+	case duckdb::LogicalTypeId::DATE:
+		return arrow::Type_Date;
+	default:
+		throw std::runtime_error(type.ToString());
+	}
+}
+
 static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::FlatBufferBuilder &fbb,
                                                                duckdb::Expression &expr) {
 	flatbuffers::Offset<arrowir::Expression> res;
@@ -29,6 +46,18 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		auto &constant = (duckdb::BoundConstantExpression &)expr;
 		auto &type = constant.value.type();
 		switch (type.id()) {
+		case duckdb::LogicalTypeId::BIGINT: {
+			auto bigint = arrowir::CreateInt64Literal(fbb, constant.value.value_.bigint);
+			auto literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Int64Literal, bigint.Union());
+			res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
+			break;
+		}
+		case duckdb::LogicalTypeId::VARCHAR: {
+			auto bigint = arrowir::CreateStringLiteral(fbb, fbb.CreateString(constant.value.str_value));
+			auto literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_StringLiteral, bigint.Union());
+			res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
+			break;
+		}
 		case duckdb::LogicalTypeId::DECIMAL: {
 
 			std::vector<int8_t> decimal_bytes_vec;
@@ -74,6 +103,54 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_FieldRef, field_ref.Union());
 		break;
 	}
+	case duckdb::ExpressionType::COMPARE_EQUAL:
+	case duckdb::ExpressionType::COMPARE_LESSTHAN:
+	case duckdb::ExpressionType::COMPARE_GREATERTHAN: {
+		auto &comp = (duckdb::BoundComparisonExpression &)expr;
+
+		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec = {transform_expr(fbb, *comp.left),
+		                                                                       transform_expr(fbb, *comp.right)};
+		flatbuffers::Offset<flatbuffers::String> function_name;
+		switch (expr.type) {
+		case duckdb::ExpressionType::COMPARE_EQUAL:
+			function_name = fbb.CreateString("equal");
+			break;
+		case duckdb::ExpressionType::COMPARE_LESSTHAN:
+			function_name = fbb.CreateString("lessthan");
+			break;
+		case duckdb::ExpressionType::COMPARE_GREATERTHAN:
+			function_name = fbb.CreateString("greatherthan");
+			break;
+		default:
+			throw std::runtime_error(duckdb::ExpressionTypeToString(expr.type));
+		}
+
+		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
+		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
+		break;
+	}
+	case duckdb::ExpressionType::CONJUNCTION_AND:
+	case duckdb::ExpressionType::CONJUNCTION_OR: {
+		auto &conj = (duckdb::BoundConjunctionExpression &)expr;
+
+		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec = {transform_expr(fbb, *conj.children[0]),
+		                                                                       transform_expr(fbb, *conj.children[1])};
+		flatbuffers::Offset<flatbuffers::String> function_name;
+		switch (expr.type) {
+		case duckdb::ExpressionType::CONJUNCTION_AND:
+			function_name = fbb.CreateString("and");
+			break;
+		case duckdb::ExpressionType::CONJUNCTION_OR:
+			function_name = fbb.CreateString("or");
+			break;
+		default:
+			throw std::runtime_error(duckdb::ExpressionTypeToString(expr.type));
+		}
+
+		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
+		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
+		break;
+	}
 	case duckdb::ExpressionType::BOUND_AGGREGATE: {
 		auto &aggr = (duckdb::BoundAggregateExpression &)expr;
 		auto function_name = fbb.CreateString(aggr.function.name);
@@ -96,6 +173,14 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		for (auto &expr : bound_function.children) {
 			arguments_vec.push_back(transform_expr(fbb, *expr));
 		}
+		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
+		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
+		break;
+	}
+	case duckdb::ExpressionType::OPERATOR_CAST: {
+		auto &cast = (duckdb::BoundCastExpression &)expr;
+		auto function_name = fbb.CreateString("cast");
+		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec = {transform_expr(fbb, *cast.child)};
 		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
 		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 		break;
@@ -192,33 +277,14 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 		auto &table_scan_bind_data = (duckdb::TableScanBindData &)*get.bind_data;
 		std::vector<flatbuffers::Offset<arrow::Field>> fields_vec;
 		for (idx_t col_idx = 0; col_idx < get.types.size(); col_idx++) {
-			arrow::Type arrow_type;
-			auto col_name = fbb.CreateString(get.names[col_idx]);
-			auto &type = get.types[col_idx];
-			switch (type.id()) {
-			case duckdb::LogicalTypeId::INTEGER:
-				arrow_type = arrow::Type_Int;
-				break;
-			case duckdb::LogicalTypeId::DECIMAL:
-				arrow_type = arrow::Type_Decimal;
-				break;
-			case duckdb::LogicalTypeId::VARCHAR:
-				arrow_type = arrow::Type_Binary;
-				break;
-			case duckdb::LogicalTypeId::DATE:
-				arrow_type = arrow::Type_Date;
-				break;
-			default:
-				throw std::runtime_error(type.ToString());
-			}
-			fields_vec.push_back(arrow::CreateField(fbb, col_name, true, arrow_type));
+			fields_vec.push_back(arrow::CreateField(fbb, fbb.CreateString(get.names[col_idx]), true,
+			                                        transform_type(get.types[col_idx])));
 		}
 		auto schema =
 		    arrow::CreateSchema(fbb, org::apache::arrow::flatbuf::Endianness_Little, fbb.CreateVector(fields_vec));
 
 		auto table_name = fbb.CreateString(table_scan_bind_data.table->name);
 		auto arrow_table = arrowir::CreateATable(fbb, rel_base, table_name, schema);
-
 		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_ATable, arrow_table.Union());
 	}
 
@@ -229,8 +295,19 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Limit, arrow_topn.Union());
 	}
 
+	case duckdb::LogicalOperatorType::LOGICAL_LIMIT: {
+		auto &limit = (duckdb::LogicalLimit &)op;
+		auto arrow_topn =
+		    arrowir::CreateLimit(fbb, rel_base, transform_op(fbb, *op.children[0]), limit.offset_val, limit.limit_val);
+		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Limit, arrow_topn.Union());
+	}
+
 	case duckdb::LogicalOperatorType::LOGICAL_FILTER: {
 		auto &filter = (duckdb::LogicalFilter &)op;
+		if (filter.expressions.size() == 0) {
+			// this is a bug in the plan generation but we can work around this
+			return transform_op(fbb, *op.children[0]);
+		}
 		if (filter.expressions.size() > 1) {
 			// TODO we could push multiple filters but they really should handle multiple expressions
 			// or give us a way to AND them together
@@ -249,24 +326,63 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 		case duckdb::JoinType::INNER:
 			arrow_join_kind = arrowir::JoinKind_Inner;
 			break;
+		case duckdb::JoinType::SEMI:
+			arrow_join_kind = arrowir::JoinKind_LeftSemi;
+			break;
 		default:
 			throw std::runtime_error("unsupported join type");
 		}
 		// TODO join was forgotten in the relational union fbs :D
-		if (join.expressions.size() > 1) {
+		if (join.conditions.size() > 1) {
 			// TODO we could push multiple filters but they really should handle multiple expressions
 			// or give us a way to AND them together
 			throw std::runtime_error("cant handle filters with more than one expr :/");
 		}
+
+		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec;
+		auto &cond = join.conditions[0];
+		std::string join_comparision_name;
+		switch (cond.comparison) {
+		case duckdb::ExpressionType::COMPARE_EQUAL:
+			join_comparision_name = "equals"; // ?
+			break;
+		case duckdb::ExpressionType::COMPARE_GREATERTHAN:
+			join_comparision_name = "greaterthan"; // ?
+			break;
+		default:
+			throw std::runtime_error(duckdb::ExpressionTypeToString(cond.comparison));
+		}
+
+		arguments_vec.push_back(transform_expr(fbb, *cond.left));
+		arguments_vec.push_back(transform_expr(fbb, *cond.right));
+
+		// TODO how do we tell field refs which child they come from?
+		auto call = arrowir::CreateCall(fbb, fbb.CreateString(join_comparision_name), fbb.CreateVector(arguments_vec));
+		auto arrow_join_expression =
+		    arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
+
 		auto arrow_join =
 		    arrowir::CreateJoin(fbb, rel_base, transform_op(fbb, *op.children[0]), transform_op(fbb, *op.children[1]),
-		                        transform_expr(fbb, *join.expressions[0]), arrow_join_kind);
+		                        arrow_join_expression, arrow_join_kind);
 		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Join, arrow_join.Union());
 	}
 
 	default:
 		throw std::runtime_error(duckdb::LogicalOperatorToString(op.type));
 	}
+}
+
+static void transform_plan(duckdb::Connection &con, std::string q) {
+	auto plan = con.context->ExtractPlan(q);
+
+	printf("\n%s\n", plan->ToString().c_str());
+
+	flatbuffers::FlatBufferBuilder fbb;
+	std::vector<flatbuffers::Offset<arrowir::Relation>> relations_vec = {transform_op(fbb, *plan)};
+	auto arrow_plan = arrowir::CreatePlan(fbb, fbb.CreateVector(relations_vec));
+	fbb.Finish(arrow_plan);
+
+	printf("\n%s\n", flatbuffers::FlatBufferToString(fbb.GetBufferPointer(), arrowir::PlanTypeTable(), true).c_str());
 }
 
 int main() {
@@ -279,16 +395,20 @@ int main() {
 	// create TPC-H tables in duckdb catalog, but without any contents
 	con.Query("call dbgen(sf=0.1)");
 
-	auto plan = con.context->ExtractPlan(duckdb::TPCHExtension::GetQuery(1));
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(1));
+	// transform_plan(con, duckdb::TPCHExtension::GetQuery(2)); // DELIM_JOIN
 
-	printf("\n%s\n", plan->ToString().c_str());
-
-	flatbuffers::FlatBufferBuilder fbb;
-	std::vector<flatbuffers::Offset<arrowir::Relation>> relations_vec = {transform_op(fbb, *plan)};
-	auto arrow_plan = arrowir::CreatePlan(fbb, fbb.CreateVector(relations_vec));
-	fbb.Finish(arrow_plan);
-
-	printf("\n%s\n", flatbuffers::FlatBufferToString(fbb.GetBufferPointer(), arrowir::PlanTypeTable(), true).c_str());
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(3));
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(4));
+	// transform_plan(con, duckdb::TPCHExtension::GetQuery(5)); // multiple filter predicates
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(6));
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(7));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(8)); // CASE
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(9)); // multiple filter predicates
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(10));
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(11));
+	// transform_plan(con, duckdb::TPCHExtension::GetQuery(12)); // CASE
+	// transform_plan(con, duckdb::TPCHExtension::GetQuery(13));
 
 	// TODO translate back to duckdb plan
 	// TODO execute back translation
