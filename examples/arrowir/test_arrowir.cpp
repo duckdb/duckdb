@@ -452,7 +452,7 @@ int main() {
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(19)); // hugeint
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(20)); // delim join
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(21)); // delim join
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(22)); // mark join
+	// transform_plan(con, duckdb::TPCHExtension::GetQuery(22)); // mark join
 
 	// TODO translate back to duckdb plan
 	// TODO execute back translation
