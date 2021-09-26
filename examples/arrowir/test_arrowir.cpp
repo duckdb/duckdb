@@ -217,9 +217,9 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 		    arrow::CreateSchema(fbb, org::apache::arrow::flatbuf::Endianness_Little, fbb.CreateVector(fields_vec));
 
 		auto table_name = fbb.CreateString(table_scan_bind_data.table->name);
-		auto arrow_table = arrowir::CreateTable(fbb, rel_base, table_name, schema);
+		auto arrow_table = arrowir::CreateATable(fbb, rel_base, table_name, schema);
 
-		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Table, arrow_table.Union());
+		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_ATable, arrow_table.Union());
 	}
 
 	case duckdb::LogicalOperatorType::LOGICAL_TOP_N: {
