@@ -133,9 +133,9 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 
 		auto true_val = duckdb::Value::BOOLEAN(true);
 		auto true_fragment_arrow = arrowir::CreateCaseFragment(fbb, transform_constant(fbb, true_val), true_res_arrow);
-		std::vector<flatbuffers::Offset<arrowir::CaseFragment>> fragment_vec = {true_fragment_arrow};
-
-		auto field_ref = arrowir::CreateSimpleCase(fbb, check_arrow, fbb.CreateVector(fragment_vec), false_res_arrow);
+		auto field_ref = arrowir::CreateSimpleCase(
+		    fbb, check_arrow, fbb.CreateVector<flatbuffers::Offset<arrowir::CaseFragment>>({true_fragment_arrow}),
+		    false_res_arrow);
 		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_SimpleCase, field_ref.Union());
 	}
 	case duckdb::ExpressionType::COMPARE_EQUAL:
@@ -146,8 +146,6 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 	case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 		auto &comp = (duckdb::BoundComparisonExpression &)expr;
 
-		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec = {transform_expr(fbb, *comp.left),
-		                                                                       transform_expr(fbb, *comp.right)};
 		flatbuffers::Offset<flatbuffers::String> function_name;
 		switch (expr.type) {
 		case duckdb::ExpressionType::COMPARE_EQUAL:
@@ -172,15 +170,15 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 			throw std::runtime_error(duckdb::ExpressionTypeToString(expr.type));
 		}
 
-		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
+		auto arg_list = fbb.CreateVector<flatbuffers::Offset<arrowir::Expression>>(
+		    {transform_expr(fbb, *comp.left), transform_expr(fbb, *comp.right)});
+		auto call = arrowir::CreateCall(fbb, function_name, arg_list);
 		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 	}
 	case duckdb::ExpressionType::CONJUNCTION_AND:
 	case duckdb::ExpressionType::CONJUNCTION_OR: {
 		auto &conj = (duckdb::BoundConjunctionExpression &)expr;
 
-		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec = {transform_expr(fbb, *conj.children[0]),
-		                                                                       transform_expr(fbb, *conj.children[1])};
 		flatbuffers::Offset<flatbuffers::String> function_name;
 		switch (expr.type) {
 		case duckdb::ExpressionType::CONJUNCTION_AND:
@@ -192,8 +190,9 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		default:
 			throw std::runtime_error(duckdb::ExpressionTypeToString(expr.type));
 		}
-
-		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
+		auto arg_list = fbb.CreateVector<flatbuffers::Offset<arrowir::Expression>>(
+		    {transform_expr(fbb, *conj.children[0]), transform_expr(fbb, *conj.children[1])});
+		auto call = arrowir::CreateCall(fbb, function_name, arg_list);
 		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 	}
 	case duckdb::ExpressionType::BOUND_AGGREGATE: {
@@ -230,14 +229,35 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		auto literal_expr =
 		    arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
 
-		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec = {transform_expr(fbb, *cast.child),
-		                                                                       literal_expr};
-		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
+		auto arg_list = fbb.CreateVector<flatbuffers::Offset<arrowir::Expression>>(
+		    {transform_expr(fbb, *cast.child), literal_expr});
+		auto call = arrowir::CreateCall(fbb, function_name, arg_list);
 		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 	}
 	default:
 		throw std::runtime_error(duckdb::ExpressionTypeToString(expr.type));
 	}
+}
+
+static flatbuffers::Offset<arrowir::Expression> transform_join_condition(flatbuffers::FlatBufferBuilder &fbb,
+                                                                         duckdb::JoinCondition &cond) {
+	std::string join_comparision_name;
+	switch (cond.comparison) {
+	case duckdb::ExpressionType::COMPARE_EQUAL:
+		join_comparision_name = "equals"; // ?
+		break;
+	case duckdb::ExpressionType::COMPARE_GREATERTHAN:
+		join_comparision_name = "greaterthan"; // ?
+		break;
+	default:
+		throw std::runtime_error(duckdb::ExpressionTypeToString(cond.comparison));
+	}
+
+	auto arg_list = fbb.CreateVector<flatbuffers::Offset<arrowir::Expression>>(
+	    {transform_expr(fbb, *cond.left), transform_expr(fbb, *cond.right)});
+	// TODO how do we tell field refs which child they come from?
+	auto call = arrowir::CreateCall(fbb, fbb.CreateString(join_comparision_name), arg_list);
+	return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 }
 
 static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBufferBuilder &fbb,
@@ -357,14 +377,19 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 			// this is a bug in the plan generation but we can work around this
 			return transform_op(fbb, *op.children[0]);
 		}
-		if (filter.expressions.size() > 1) {
-			// TODO we could push multiple filters but they really should handle multiple expressions
-			// or give us a way to AND them together
-			throw std::runtime_error("cant handle filters with more than one expr :/");
+		// pretty ugly this
+		auto filter_expr_arrow = transform_expr(fbb, *filter.expressions[0]);
+		// loop from second element ^^
+		auto function_name = fbb.CreateString("and");
+		for (auto i = begin(filter.expressions) + 1, e = end(filter.expressions); i != e; ++i) {
+			auto rhs_arrow = transform_expr(fbb, *i->get());
+			auto arg_list = fbb.CreateVector<flatbuffers::Offset<arrowir::Expression>>({filter_expr_arrow, rhs_arrow});
+			auto call = arrowir::CreateCall(fbb, function_name, arg_list);
+			filter_expr_arrow =
+			    arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 		}
 
-		auto arrow_filter = arrowir::CreateFilter(fbb, rel_base, transform_op(fbb, *op.children[0]),
-		                                          transform_expr(fbb, *filter.expressions[0]));
+		auto arrow_filter = arrowir::CreateFilter(fbb, rel_base, transform_op(fbb, *op.children[0]), filter_expr_arrow);
 		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Filter, arrow_filter.Union());
 	}
 
@@ -387,34 +412,17 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 		default:
 			throw std::runtime_error("unsupported join type");
 		}
-		// TODO join was forgotten in the relational union fbs :D
-		if (join.conditions.size() > 1) {
-			// TODO we could push multiple filters but they really should handle multiple expressions
-			// or give us a way to AND them together
-			throw std::runtime_error("cant handle filters with more than one expr :/");
+
+		auto arrow_join_expression = transform_join_condition(fbb, join.conditions[0]);
+		auto function_name = fbb.CreateString("and");
+		for (auto i = begin(join.conditions) + 1, e = end(join.conditions); i != e; ++i) {
+			auto rhs_arrow = transform_join_condition(fbb, *i);
+			auto arg_list =
+			    fbb.CreateVector<flatbuffers::Offset<arrowir::Expression>>({arrow_join_expression, rhs_arrow});
+			auto call = arrowir::CreateCall(fbb, function_name, arg_list);
+			arrow_join_expression =
+			    arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 		}
-
-		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec;
-		auto &cond = join.conditions[0];
-		std::string join_comparision_name;
-		switch (cond.comparison) {
-		case duckdb::ExpressionType::COMPARE_EQUAL:
-			join_comparision_name = "equals"; // ?
-			break;
-		case duckdb::ExpressionType::COMPARE_GREATERTHAN:
-			join_comparision_name = "greaterthan"; // ?
-			break;
-		default:
-			throw std::runtime_error(duckdb::ExpressionTypeToString(cond.comparison));
-		}
-
-		arguments_vec.push_back(transform_expr(fbb, *cond.left));
-		arguments_vec.push_back(transform_expr(fbb, *cond.right));
-
-		// TODO how do we tell field refs which child they come from?
-		auto call = arrowir::CreateCall(fbb, fbb.CreateString(join_comparision_name), fbb.CreateVector(arguments_vec));
-		auto arrow_join_expression =
-		    arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 
 		auto arrow_join =
 		    arrowir::CreateJoin(fbb, rel_base, transform_op(fbb, *op.children[0]), transform_op(fbb, *op.children[1]),
@@ -433,8 +441,8 @@ static void transform_plan(duckdb::Connection &con, std::string q) {
 	printf("\n%s\n", plan->ToString().c_str());
 
 	flatbuffers::FlatBufferBuilder fbb;
-	std::vector<flatbuffers::Offset<arrowir::Relation>> relations_vec = {transform_op(fbb, *plan)};
-	auto arrow_plan = arrowir::CreatePlan(fbb, fbb.CreateVector(relations_vec));
+	auto arrow_plan =
+	    arrowir::CreatePlan(fbb, fbb.CreateVector<flatbuffers::Offset<arrowir::Relation>>({transform_op(fbb, *plan)}));
 	fbb.Finish(arrow_plan);
 
 	printf("\n%s\n", flatbuffers::FlatBufferToString(fbb.GetBufferPointer(), arrowir::PlanTypeTable(), true).c_str());
@@ -454,14 +462,14 @@ int main() {
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(2)); // delim join
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(3));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(4));
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(5)); // multiple filter predicates
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(5));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(6));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(7));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(8));
-	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(9)); // multiple filter predicates
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(9));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(10));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(11));
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(12)); // multiple filter predicates
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(12));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(13));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(14));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(15));
