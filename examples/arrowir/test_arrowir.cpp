@@ -23,11 +23,15 @@ namespace arrow = org::apache::arrow::flatbuf;
 
 static arrow::Type transform_type(duckdb::LogicalType &type) {
 	switch (type.id()) {
+	case duckdb::LogicalTypeId::UTINYINT:
+	case duckdb::LogicalTypeId::USMALLINT:
 	case duckdb::LogicalTypeId::INTEGER:
 	case duckdb::LogicalTypeId::BIGINT:
 		return arrow::Type_Int; // TODO is this correct?
 	case duckdb::LogicalTypeId::DECIMAL:
 		return arrow::Type_Decimal;
+	case duckdb::LogicalTypeId::DOUBLE:
+		return arrow::Type_FloatingPoint;
 	case duckdb::LogicalTypeId::VARCHAR:
 		return arrow::Type_Binary;
 	case duckdb::LogicalTypeId::BOOLEAN:
@@ -39,92 +43,103 @@ static arrow::Type transform_type(duckdb::LogicalType &type) {
 	}
 }
 
+static flatbuffers::Offset<arrowir::Expression> transform_constant(flatbuffers::FlatBufferBuilder &fbb,
+                                                                   duckdb::Value &value) {
+	flatbuffers::Offset<arrowir::Literal> literal;
+	auto &type = value.type();
+	switch (type.id()) {
+	case duckdb::LogicalTypeId::BOOLEAN: {
+		auto boolean = arrowir::CreateInt64Literal(fbb, value.value_.boolean);
+		literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_BooleanLiteral, boolean.Union());
+		break;
+	}
+	case duckdb::LogicalTypeId::BIGINT: {
+		auto bigint = arrowir::CreateInt64Literal(fbb, value.value_.bigint);
+		literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Int64Literal, bigint.Union());
+		break;
+	}
+	case duckdb::LogicalTypeId::INTEGER: {
+		auto integer = arrowir::CreateInt32Literal(fbb, value.value_.integer);
+		literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Int32Literal, integer.Union());
+		break;
+	}
+	case duckdb::LogicalTypeId::DOUBLE: {
+		auto dbl = arrowir::CreateInt32Literal(fbb, value.value_.double_);
+		literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Float64Literal, dbl.Union());
+		break;
+	}
+	case duckdb::LogicalTypeId::VARCHAR: {
+		auto str = arrowir::CreateStringLiteral(fbb, fbb.CreateString(value.str_value));
+		literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_StringLiteral, str.Union());
+		break;
+	}
+	case duckdb::LogicalTypeId::DECIMAL: {
+
+		std::vector<int8_t> decimal_bytes_vec;
+
+		switch (type.InternalType()) {
+		case duckdb::PhysicalType::INT16:
+			decimal_bytes_vec.resize(2);
+			memcpy(decimal_bytes_vec.data(), &value.value_.smallint, sizeof(int16_t));
+			break;
+		case duckdb::PhysicalType::INT32:
+			decimal_bytes_vec.resize(4);
+			memcpy(decimal_bytes_vec.data(), &value.value_.integer, sizeof(int32_t));
+			break;
+		case duckdb::PhysicalType::INT64:
+			decimal_bytes_vec.resize(8);
+			memcpy(decimal_bytes_vec.data(), &value.value_.bigint, sizeof(int64_t));
+			break;
+		case duckdb::PhysicalType::INT128:
+			decimal_bytes_vec.resize(16);
+			memcpy(decimal_bytes_vec.data(), &value.value_.hugeint, sizeof(duckdb::hugeint_t));
+			break;
+		default:
+			throw std::runtime_error(duckdb::TypeIdToString(type.InternalType()));
+		}
+
+		auto decimal =
+		    arrowir::CreateDecimalLiteral(fbb, fbb.CreateVector(decimal_bytes_vec), duckdb::DecimalType::GetScale(type),
+		                                  duckdb::DecimalType::GetWidth(type));
+		literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_DecimalLiteral, decimal.Union());
+		break;
+	}
+	default:
+		throw std::runtime_error(type.ToString());
+	}
+	return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
+}
+
 static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::FlatBufferBuilder &fbb,
                                                                duckdb::Expression &expr) {
-	flatbuffers::Offset<arrowir::Expression> res;
 
 	switch (expr.type) {
 	case duckdb::ExpressionType::VALUE_CONSTANT: {
 		auto &constant = (duckdb::BoundConstantExpression &)expr;
-		auto &type = constant.value.type();
-		switch (type.id()) {
-		case duckdb::LogicalTypeId::BOOLEAN: {
-			auto boolean = arrowir::CreateInt64Literal(fbb, constant.value.value_.boolean);
-			auto literal =
-			    arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_BooleanLiteral, boolean.Union());
-			res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
-			break;
-		}
-		case duckdb::LogicalTypeId::BIGINT: {
-			auto bigint = arrowir::CreateInt64Literal(fbb, constant.value.value_.bigint);
-			auto literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Int64Literal, bigint.Union());
-			res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
-			break;
-		}
-		case duckdb::LogicalTypeId::INTEGER: {
-			auto integer = arrowir::CreateInt32Literal(fbb, constant.value.value_.integer);
-			auto literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Int32Literal, integer.Union());
-			res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
-			break;
-		}
-		case duckdb::LogicalTypeId::DOUBLE: {
-			auto dbl = arrowir::CreateInt32Literal(fbb, constant.value.value_.double_);
-			auto literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Float64Literal, dbl.Union());
-			res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
-			break;
-		}
-		case duckdb::LogicalTypeId::VARCHAR: {
-			auto bigint = arrowir::CreateStringLiteral(fbb, fbb.CreateString(constant.value.str_value));
-			auto literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_StringLiteral, bigint.Union());
-			res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
-			break;
-		}
-		case duckdb::LogicalTypeId::DECIMAL: {
-
-			std::vector<int8_t> decimal_bytes_vec;
-
-			switch (type.InternalType()) {
-			case duckdb::PhysicalType::INT16:
-				decimal_bytes_vec.resize(2);
-				memcpy(decimal_bytes_vec.data(), &constant.value.value_.smallint, sizeof(int16_t));
-				break;
-			case duckdb::PhysicalType::INT32:
-				decimal_bytes_vec.resize(4);
-				memcpy(decimal_bytes_vec.data(), &constant.value.value_.integer, sizeof(int32_t));
-				break;
-			case duckdb::PhysicalType::INT64:
-				decimal_bytes_vec.resize(8);
-				memcpy(decimal_bytes_vec.data(), &constant.value.value_.bigint, sizeof(int64_t));
-				break;
-			case duckdb::PhysicalType::INT128:
-				decimal_bytes_vec.resize(16);
-				memcpy(decimal_bytes_vec.data(), &constant.value.value_.hugeint, sizeof(duckdb::hugeint_t));
-				break;
-			default:
-				throw std::runtime_error(duckdb::TypeIdToString(type.InternalType()));
-			}
-
-			auto decimal =
-			    arrowir::CreateDecimalLiteral(fbb, fbb.CreateVector(decimal_bytes_vec),
-			                                  duckdb::DecimalType::GetScale(type), duckdb::DecimalType::GetWidth(type));
-			auto literal =
-			    arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_DecimalLiteral, decimal.Union());
-			res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
-			break;
-		}
-		default:
-			throw std::runtime_error(type.ToString());
-		}
-		break;
+		return transform_constant(fbb, constant.value);
 	}
 	case duckdb::ExpressionType::BOUND_REF: {
 		auto &bound_ref = (duckdb::BoundReferenceExpression &)expr;
 		auto field_index = arrowir::CreateFieldIndex(fbb, bound_ref.index);
 		auto field_ref = arrowir::CreateFieldRef(fbb, arrowir::Deref::Deref_FieldIndex, field_index.Union(), 0);
-		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_FieldRef, field_ref.Union());
-		break;
+		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_FieldRef, field_ref.Union());
+	}
+	case duckdb::ExpressionType::CASE_EXPR: {
+		// oof
+		auto &case_expr = (duckdb::BoundCaseExpression &)expr;
+		auto check_arrow = transform_expr(fbb, *case_expr.check);
+		auto true_res_arrow = transform_expr(fbb, *case_expr.result_if_true);
+		auto false_res_arrow = transform_expr(fbb, *case_expr.result_if_false);
+
+		auto true_val = duckdb::Value::BOOLEAN(true);
+		auto true_fragment_arrow = arrowir::CreateCaseFragment(fbb, transform_constant(fbb, true_val), true_res_arrow);
+		std::vector<flatbuffers::Offset<arrowir::CaseFragment>> fragment_vec = {true_fragment_arrow};
+
+		auto field_ref = arrowir::CreateSimpleCase(fbb, check_arrow, fbb.CreateVector(fragment_vec), false_res_arrow);
+		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_SimpleCase, field_ref.Union());
 	}
 	case duckdb::ExpressionType::COMPARE_EQUAL:
+	case duckdb::ExpressionType::COMPARE_NOTEQUAL:
 	case duckdb::ExpressionType::COMPARE_LESSTHAN:
 	case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
 	case duckdb::ExpressionType::COMPARE_GREATERTHAN:
@@ -137,6 +152,9 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		switch (expr.type) {
 		case duckdb::ExpressionType::COMPARE_EQUAL:
 			function_name = fbb.CreateString("equal");
+			break;
+		case duckdb::ExpressionType::COMPARE_NOTEQUAL:
+			function_name = fbb.CreateString("notequal");
 			break;
 		case duckdb::ExpressionType::COMPARE_LESSTHAN:
 			function_name = fbb.CreateString("lessthan");
@@ -155,8 +173,7 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		}
 
 		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
-		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
-		break;
+		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 	}
 	case duckdb::ExpressionType::CONJUNCTION_AND:
 	case duckdb::ExpressionType::CONJUNCTION_OR: {
@@ -177,8 +194,7 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		}
 
 		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
-		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
-		break;
+		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 	}
 	case duckdb::ExpressionType::BOUND_AGGREGATE: {
 		auto &aggr = (duckdb::BoundAggregateExpression &)expr;
@@ -191,8 +207,7 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 		}
 
 		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
-		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
-		break;
+		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 	}
 	case duckdb::ExpressionType::BOUND_FUNCTION: {
 		auto &bound_function = (duckdb::BoundFunctionExpression &)expr;
@@ -203,21 +218,26 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 			arguments_vec.push_back(transform_expr(fbb, *expr));
 		}
 		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
-		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
-		break;
+		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 	}
 	case duckdb::ExpressionType::OPERATOR_CAST: {
 		auto &cast = (duckdb::BoundCastExpression &)expr;
 		auto function_name = fbb.CreateString("cast");
-		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec = {transform_expr(fbb, *cast.child)};
+
+		auto str =
+		    arrowir::CreateStringLiteral(fbb, fbb.CreateString(arrow::EnumNameType(transform_type(cast.return_type))));
+		auto literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_StringLiteral, str.Union());
+		auto literal_expr =
+		    arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
+
+		std::vector<flatbuffers::Offset<arrowir::Expression>> arguments_vec = {transform_expr(fbb, *cast.child),
+		                                                                       literal_expr};
 		auto call = arrowir::CreateCall(fbb, function_name, fbb.CreateVector(arguments_vec));
-		res = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
-		break;
+		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
 	}
 	default:
 		throw std::runtime_error(duckdb::ExpressionTypeToString(expr.type));
 	}
-	return res;
 }
 
 static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBufferBuilder &fbb,
@@ -432,31 +452,28 @@ int main() {
 
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(1));
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(2)); // delim join
-
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(3));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(4));
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(5)); // multiple filter predicates
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(6));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(7));
-	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(8)); // CASE
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(8));
 	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(9)); // multiple filter predicates
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(10));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(11));
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(12)); // CASE
+	// transform_plan(con, duckdb::TPCHExtension::GetQuery(12)); // multiple filter predicates
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(13));
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(14)); // CASE
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(14));
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(15));
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(16)); // mark join
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(17)); // delim join
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(18)); // hugeint
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(19)); // hugeint
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(19));
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(20)); // delim join
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(21)); // delim join
 	// transform_plan(con, duckdb::TPCHExtension::GetQuery(22)); // mark join
 
-	// TODO translate back to duckdb plan
-	// TODO execute back translation
-	// TODO check results vs direct plan
-	// TODO translate other queries
-	// TODO optimize all delim joins away for tpch
+	// TODO translate back to duckdb plan, execute back translation, check results vs original plan
+	// TODO translate missing queries
+	// TODO optimize all delim joins away for tpch?
 }
