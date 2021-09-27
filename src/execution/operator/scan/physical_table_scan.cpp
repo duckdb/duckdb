@@ -147,4 +147,21 @@ string PhysicalTableScan::ParamsToString() const {
 	return result;
 }
 
+bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
+	if (type != other_p.type) {
+		return false;
+	}
+	auto &other = (PhysicalTableScan &) other_p;
+	if (function.function != other.function.function) {
+		return false;
+	}
+	if (column_ids != other.column_ids) {
+		return false;
+	}
+	if (!FunctionData::Equals(bind_data.get(), other.bind_data.get())) {
+		return false;
+	}
+	return true;
+}
+
 } // namespace duckdb

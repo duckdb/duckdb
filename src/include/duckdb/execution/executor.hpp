@@ -72,6 +72,12 @@ private:
 	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);
 	bool NextExecutor();
 
+	void ReadyPipeline(Pipeline &pipeline);
+	void ReadyPipelines();
+
+	void VerifyOperatorPair(PhysicalOperator &left, PhysicalOperator &right);
+	void VerifyPipeline(Pipeline &pipeline);
+	void VerifyPipelines();
 private:
 	PhysicalOperator *physical_plan;
 

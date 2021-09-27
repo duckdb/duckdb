@@ -38,8 +38,6 @@ struct PipelineEventStack {
 
 void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &parent_stack, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
 	D_ASSERT(pipeline);
-	pipeline->Ready();
-
 	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 
 	PipelineEventStack stack;
@@ -60,8 +58,6 @@ void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, Pipel
 
 void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
 	D_ASSERT(pipeline);
-
-	pipeline->Ready();
 
 	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 	auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
@@ -126,6 +122,23 @@ void Executor::ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_pt
 	pipeline_ptr->child_pipelines.clear();
 }
 
+void Executor::ReadyPipeline(Pipeline &pipeline) {
+	pipeline.Ready();
+	for(auto &union_pipeline : pipeline.union_pipelines) {
+		ReadyPipeline(*union_pipeline);
+	}
+	for(auto &child_pipeline : pipeline.child_pipelines) {
+		ReadyPipeline(*child_pipeline);
+	}
+}
+
+void Executor::ReadyPipelines() {
+	for(auto &pipeline : pipelines) {
+		ReadyPipeline(*pipeline);
+	}
+}
+
+
 bool Executor::NextExecutor() {
 	if (root_pipeline_idx >= root_pipelines.size()) {
 		return false;
@@ -133,6 +146,41 @@ bool Executor::NextExecutor() {
 	root_executor = make_unique<PipelineExecutor>(context, *root_pipelines[root_pipeline_idx]);
 	root_pipeline_idx++;
 	return true;
+}
+
+void Executor::VerifyOperatorPair(PhysicalOperator &left, PhysicalOperator &right) {
+	if (left.Equals(right)) {
+		D_ASSERT(right.Equals(left));
+	} else {
+		D_ASSERT(!right.Equals(left));
+	}
+}
+
+void Executor::VerifyPipeline(Pipeline &pipeline) {
+	D_ASSERT(!pipeline.ToString().empty());
+	for (auto &other_pipeline : pipelines) {
+		VerifyOperatorPair(*pipeline.source, *other_pipeline->source);
+		VerifyOperatorPair(*pipeline.source, *other_pipeline->sink);
+		VerifyOperatorPair(*pipeline.sink, *other_pipeline->source);
+		VerifyOperatorPair(*pipeline.sink, *other_pipeline->sink);
+		for(idx_t i = 0; i < pipeline.operators.size(); i++) {
+			for(idx_t k = 0; k < other_pipeline->operators.size(); k++) {
+				VerifyOperatorPair(*pipeline.operators[i], *other_pipeline->operators[k]);
+				VerifyOperatorPair(*pipeline.source, *other_pipeline->operators[k]);
+				VerifyOperatorPair(*pipeline.sink, *other_pipeline->operators[k]);
+			}
+			VerifyOperatorPair(*pipeline.operators[i], *other_pipeline->source);
+			VerifyOperatorPair(*pipeline.operators[i], *other_pipeline->sink);
+		}
+	}
+}
+
+void Executor::VerifyPipelines() {
+#ifdef DEBUG
+		for (auto &pipeline : pipelines) {
+			VerifyPipeline(*pipeline);
+		}
+#endif
 }
 
 void Executor::Initialize(PhysicalOperator *plan) {
@@ -150,16 +198,16 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		root_pipeline->sink = nullptr;
 		BuildPipelines(physical_plan, root_pipeline.get());
 
+		// ready all the pipelines
+		ReadyPipelines();
+
 		this->total_pipelines = pipelines.size();
 
-		// ready all the pipelines
 		root_pipeline_idx = 0;
 		ExtractPipelines(root_pipeline, root_pipelines);
-		for (auto &pipeline : pipelines) {
-#ifdef DEBUG
-			D_ASSERT(!pipeline->ToString().empty());
-#endif
-		}
+
+		VerifyPipelines();
+
 		ScheduleEvents();
 	}
 

@@ -90,6 +90,10 @@ public:
 		return types;
 	}
 
+	virtual bool Equals(const PhysicalOperator &other) const {
+		return false;
+	}
+
 public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const;
