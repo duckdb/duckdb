@@ -1,9 +1,12 @@
 import duckdb
 import pandas as pd
 import numpy as np
+import sys 
 
 class TestPandasMergeSameName(object):
     def test_2304(self, duckdb_cursor):
+        if sys.version_info.major < 3:
+            return
         df1 = pd.DataFrame({
             'id_1': [1, 1, 1, 2, 2],
             'agedate': np.array(['2010-01-01','2010-02-01','2010-03-01','2020-02-01', '2020-03-01']).astype('datetime64[D]'),
@@ -32,6 +35,8 @@ class TestPandasMergeSameName(object):
         assert result == expected_result
 
     def test_pd_names(self, duckdb_cursor):
+        if sys.version_info.major < 3:
+            return
 
         df1 = pd.DataFrame({
             'id': [1, 1, 2],
