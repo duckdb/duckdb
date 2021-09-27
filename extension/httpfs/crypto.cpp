@@ -33,4 +33,4 @@ void hex256(hash_bytes &in, hash_str &out) {
 		pout[1] = hex[*pin & 0xF];
 	}
 }
-}; // namespace duckdb
+} // namespace duckdb

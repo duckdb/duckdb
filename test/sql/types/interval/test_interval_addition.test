@@ -251,5 +251,25 @@ SELECT TIMESTAMP '1992-01-01 10:00:00' - INTERVAL '1' DAY
 query T
 select timestamp '1993-01-01 00:00:00' - timestamp '1991-01-01 01:00:30';
 ----
-1 year 11 months 30 days 22:59:30
+730 days 22:59:30
 
+statement ok
+CREATE TABLE issue1998(id INTEGER, lhs TIMESTAMP, rhs TIMESTAMP);
+
+statement ok
+INSERT INTO issue1998 VALUES
+	(0, '2020-07-07 02:01:01', '2020-08-05 07:51:47'),
+	(1, '2020-02-08 19:26:38', '2020-09-21 10:02:28'),
+	(2, '2020-06-19 20:45:41', '2020-01-04 05:44:42'),
+	(3, '2020-11-18 18:22:26', '2020-06-14 02:46:55'),
+	(4, '2020-08-24 03:31:52', '2020-07-05 19:04:34')
+
+
+query II
+SELECT id, lhs - rhs FROM issue1998 ORDER BY 1
+----
+0	-29 days -05:50:46
+1	-225 days -14:35:50
+2	167 days 15:00:59
+3	157 days 15:35:31
+4	49 days 08:27:18

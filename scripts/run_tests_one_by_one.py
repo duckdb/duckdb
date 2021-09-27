@@ -36,18 +36,16 @@ for line in stdout.splitlines():
 test_count = len(test_cases)
 for test_number in range(test_count):
 	print("[" + str(test_number) + "/" + str(test_count) + "]: " + test_cases[test_number])
-	proc = subprocess.Popen([unittest_program, test_cases[test_number]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-	stdout = proc.stdout.read().decode('utf8')
-	stderr = proc.stderr.read().decode('utf8')
-	proc.wait()
-	proc.terminate()
-	if proc.returncode is not None and proc.returncode != 0:
+	res = subprocess.run([unittest_program, test_cases[test_number]], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+	stdout = res.stdout.decode('utf8')
+	stderr = res.stderr.decode('utf8')
+	if res.returncode is not None and res.returncode != 0:
 		print("FAILURE IN RUNNING TEST")
 		print("""--------------------
 RETURNCODE
 --------------------
 """)
-		print(proc.returncode)
+		print(res.returncode)
 		print("""--------------------
 STDOUT
 --------------------
