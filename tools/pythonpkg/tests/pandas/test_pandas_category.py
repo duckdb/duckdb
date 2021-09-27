@@ -53,14 +53,14 @@ class TestCategory(object):
             category.append(str(i))
         check_category_equal(category)
 
-    def test_category_string_int32(self, duckdb_cursor):
-        category = []
-        for i in range (33000):
-            category.append(str(i))
-        check_category_equal(category)
+    # def test_category_string_int32(self, duckdb_cursor):
+    #     category = []
+    #     for i in range (33000):
+    #         category.append(str(i))
+    #     check_category_equal(category)
 
     # def test_category_string_int32(self, duckdb_cursor):
-    #     check_category_equal(['foo','bla',None,'zoo', 'foo', 'foo',None, 'bla'])
-
-    # def test_category_string_int64(self, duckdb_cursor):
-    #     check_category_equal(['foo','bla',None,'zoo', 'foo', 'foo',None, 'bla'])
+    #     category = []
+    #     for i in range (2147483800):
+    #         category.append(str(i))
+    #     check_category_equal(category)
