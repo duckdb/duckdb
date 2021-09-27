@@ -457,7 +457,7 @@ struct ToStringVisitor : public IterationVisitor {
 
 inline std::string FlatBufferToString(const uint8_t *buffer, const TypeTable *type_table, bool multi_line = false,
                                       bool vector_delimited = true) {
-	ToStringVisitor tostring_visitor(multi_line ? "\n" : " ", false, "", vector_delimited);
+	ToStringVisitor tostring_visitor(multi_line ? "\n" : " ", false, "  ", vector_delimited);
 	IterateFlatBuffer(buffer, type_table, &tostring_visitor);
 	return tostring_visitor.s;
 }

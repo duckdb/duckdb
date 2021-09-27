@@ -435,6 +435,99 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 	}
 }
 
+static duckdb::LogicalType transform_type_back(const arrow::Field *field) {
+	switch (field->type_type()) {
+	case arrow::Type_Binary:
+		return duckdb::LogicalType::VARCHAR;
+	case arrow::Type_Int: // TODO which size is this type? unclear.
+		return duckdb::LogicalType::BIGINT;
+	case arrow::Type_Date:
+		return duckdb::LogicalType::DATE;
+	case arrow::Type_Decimal:
+		// TODO need to transform those properly in transform_type
+		return duckdb::LogicalType::DECIMAL(10, 2);
+	default:
+		throw std::runtime_error(arrow::EnumNameType(field->type_type()));
+	}
+}
+
+static unique_ptr<duckdb::Expression> transform_expr_back(const arrowir::Expression *expr) {
+	switch (expr->impl_type()) {
+		//	case arrowir::ExpressionImpl::ExpressionImpl_FieldRef: {
+		//		return duckdb::make_unique<duckdb::BoundColumnRefExpression>();
+		//	}
+	default:
+		throw std::runtime_error(arrowir::EnumNameExpressionImpl(expr->impl_type()));
+	}
+}
+
+static unique_ptr<duckdb::LogicalOperator> transform_op_back(duckdb::ClientContext &context,
+                                                             const arrowir::Relation *arrow_rel) {
+	switch (arrow_rel->impl_type()) {
+	case arrowir::RelationImpl_OrderBy: {
+		auto arrow_op = arrow_rel->impl_as_OrderBy();
+		vector<duckdb::BoundOrderByNode> order_nodes;
+		// TODO fill nodes
+		auto res = duckdb::make_unique<duckdb::LogicalOrder>(move(order_nodes));
+		res->children.push_back(transform_op_back(context, arrow_op->rel()));
+		return res;
+	}
+	case arrowir::RelationImpl_Project: {
+		auto arrow_op = arrow_rel->impl_as_Project();
+		// TODO fill expressions
+		vector<unique_ptr<duckdb::Expression>> select_list;
+		// TODO where do we get our table index?
+		auto res = duckdb::make_unique<duckdb::LogicalProjection>(0, move(select_list));
+		res->children.push_back(transform_op_back(context, arrow_op->rel()));
+		return res;
+	}
+	case arrowir::RelationImpl_Aggregate: {
+		auto arrow_op = arrow_rel->impl_as_Aggregate();
+		vector<unique_ptr<duckdb::Expression>> aggregates;
+		// TODO this only works for one grouping set for now
+		if (arrow_op->groupings()->size() != 1) {
+			throw runtime_error("unsupported groups");
+		}
+		auto groups = arrow_op->groupings()->Get(0);
+		for (idx_t i = 0; i < groups->keys()->size(); i++) {
+			aggregates.push_back(transform_expr_back(groups->keys()->Get(i)));
+		}
+		for (idx_t i = 0; i < arrow_op->measures()->size(); i++) {
+			aggregates.push_back(transform_expr_back(arrow_op->measures()->Get(i)));
+		}
+		// TODO where do we get our table index?
+		auto res = duckdb::make_unique<duckdb::LogicalAggregate>(0, 0, move(aggregates));
+		res->children.push_back(transform_op_back(context, arrow_op->rel()));
+		return res;
+	}
+	case arrowir::RelationImpl_ATable: {
+		auto arrow_op = arrow_rel->impl_as_ATable();
+		// TODO pretty ghetto this too, we should probably just call the binder
+
+		vector<duckdb::LogicalType> returned_types;
+		vector<string> returned_names;
+		for (idx_t i = 0; i < arrow_op->schema()->fields()->size(); i++) {
+			auto field = arrow_op->schema()->fields()->Get(i);
+			returned_types.push_back(transform_type_back(field));
+			returned_names.push_back((field->name()->str()));
+		}
+
+		auto table_or_view = duckdb::Catalog::GetCatalog(context).GetEntry(context, duckdb::CatalogType::TABLE_ENTRY,
+		                                                                   "main", arrow_op->name()->str(), false);
+		// blind cast woo
+		auto table = (duckdb::TableCatalogEntry *)table_or_view;
+		auto scan_function = duckdb::TableScanFunction::GetFunction();
+		auto bind_data = duckdb::make_unique_base<duckdb::FunctionData, duckdb::TableScanBindData>(table);
+
+		// TODO where do we get our table index?
+		return duckdb::make_unique<duckdb::LogicalGet>(0, scan_function, move(bind_data), move(returned_types),
+		                                               move(returned_names));
+	}
+	default:
+		throw runtime_error(arrowir::EnumNameRelationImpl(arrow_rel->impl_type()));
+	}
+}
+
 static void transform_plan(duckdb::Connection &con, std::string q) {
 	auto plan = con.context->ExtractPlan(q);
 
@@ -446,6 +539,15 @@ static void transform_plan(duckdb::Connection &con, std::string q) {
 	fbb.Finish(arrow_plan);
 
 	printf("\n%s\n", flatbuffers::FlatBufferToString(fbb.GetBufferPointer(), arrowir::PlanTypeTable(), true).c_str());
+
+	// readback woo
+	auto buffer = fbb.GetBufferPointer();
+	auto arrow_plan_readback = arrowir::GetPlan(buffer);
+
+	//	auto root_rel = arrow_plan_readback->sinks()->Get(0);
+	//	auto new_plan = transform_op_back(*con.context, root_rel);
+	//
+	//	printf("\n%s\n", new_plan->ToString().c_str());
 }
 
 int main() {
@@ -459,27 +561,27 @@ int main() {
 	con.Query("call dbgen(sf=0.1)");
 
 	transform_plan(con, duckdb::TPCHExtension::GetQuery(1));
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(2)); // delim join
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(3));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(4));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(5));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(6));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(7));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(8));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(9));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(10));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(11));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(12));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(13));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(14));
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(15));
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(16)); // mark join
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(17)); // delim join
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(18)); // hugeint
-	transform_plan(con, duckdb::TPCHExtension::GetQuery(19));
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(20)); // delim join
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(21)); // delim join
-	// transform_plan(con, duckdb::TPCHExtension::GetQuery(22)); // mark join
+	//	// transform_plan(con, duckdb::TPCHExtension::GetQuery(2)); // delim join
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(3));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(4));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(5));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(6));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(7));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(8));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(9));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(10));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(11));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(12));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(13));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(14));
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(15));
+	//	// transform_plan(con, duckdb::TPCHExtension::GetQuery(16)); // mark join
+	//	// transform_plan(con, duckdb::TPCHExtension::GetQuery(17)); // delim join
+	//	// transform_plan(con, duckdb::TPCHExtension::GetQuery(18)); // hugeint
+	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(19));
+	//	// transform_plan(con, duckdb::TPCHExtension::GetQuery(20)); // delim join
+	//	// transform_plan(con, duckdb::TPCHExtension::GetQuery(21)); // delim join
+	//	// transform_plan(con, duckdb::TPCHExtension::GetQuery(22)); // mark join
 
 	// TODO translate back to duckdb plan, execute back translation, check results vs original plan
 	// TODO translate missing queries
