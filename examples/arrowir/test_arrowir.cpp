@@ -64,7 +64,7 @@ static flatbuffers::Offset<arrowir::Expression> transform_constant(flatbuffers::
 		break;
 	}
 	case duckdb::LogicalTypeId::DOUBLE: {
-		auto dbl = arrowir::CreateInt32Literal(fbb, value.value_.double_);
+		auto dbl = arrowir::CreateFloat64Literal(fbb, value.value_.double_);
 		literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Float64Literal, dbl.Union());
 		break;
 	}
