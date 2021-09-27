@@ -15,11 +15,12 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 
+
 namespace duckdb {
 
 class Serializer;
 class Deserializer;
-
+class Value;
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t {
 	int32_t days;
@@ -507,6 +508,7 @@ struct EnumType{
 	DUCKDB_API static const vector<string> &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static shared_ptr<ExtraTypeInfo> CreateEnumInfo(const string & enum_name, const shared_ptr<vector<string>>& ordered_data);
+	DUCKDB_API static const string& GetValue(const Value &val);
 };
 
 

@@ -437,13 +437,13 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 		break;
 	case LogicalTypeId::ENUM: {
 		auto size = EnumType::GetSize(type);
-		if (size <= NumericLimits<int8_t>::Maximum()) {
+		if (size <= (idx_t)NumericLimits<int8_t>::Maximum()) {
 			dtype = "int8";
-		} else if (size <= NumericLimits<int16_t>::Maximum()) {
+		} else if (size <= (idx_t)NumericLimits<int16_t>::Maximum()) {
 			dtype = "int16";
-		} else if (size <= NumericLimits<int32_t>::Maximum()) {
+		} else if (size <= (idx_t)NumericLimits<int32_t>::Maximum()) {
 			dtype = "int32";
-		} else if (size <= NumericLimits<int64_t>::Maximum()) {
+		} else if (size <= (idx_t)NumericLimits<int64_t>::Maximum()) {
 			dtype = "int64";
 		} else {
 			throw InternalException("Size not supported on ENUM types");
@@ -488,6 +488,20 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	VectorData idata;
 	input.Orrify(count, idata);
 	switch (input.GetType().id()) {
+	case LogicalTypeId::ENUM: {
+		auto size = EnumType::GetSize(input.GetType());
+		if (size <= (idx_t)NumericLimits<int8_t>::Maximum()) {
+			may_have_null = ConvertColumnRegular<int8_t>(current_offset, dataptr, maskptr, idata, count);
+		} else if (size <= (idx_t)NumericLimits<int16_t>::Maximum()) {
+			may_have_null = ConvertColumnRegular<int16_t>(current_offset, dataptr, maskptr, idata, count);
+		} else if (size <= (idx_t)NumericLimits<int32_t>::Maximum()) {
+			may_have_null = ConvertColumnRegular<int32_t>(current_offset, dataptr, maskptr, idata, count);
+		} else if (size <= (idx_t)NumericLimits<int64_t>::Maximum()) {
+			may_have_null = ConvertColumnRegular<int64_t>(current_offset, dataptr, maskptr, idata, count);
+		} else {
+			throw InternalException("Size not supported on ENUM types");
+		}
+	} break;
 	case LogicalTypeId::BOOLEAN:
 		may_have_null = ConvertColumnRegular<bool>(current_offset, dataptr, maskptr, idata, count);
 		break;
@@ -612,20 +626,20 @@ void NumpyResultConversion::Resize(idx_t new_capacity) {
 	capacity = new_capacity;
 }
 
-py::object ConvertEnumToCategorical(idx_t current_offset, Vector &input, idx_t count) {
-}
-void NumpyResultConversion::Append(DataChunk &chunk) {
+void NumpyResultConversion::Append(DataChunk &chunk, unordered_map<idx_t, py::list> *categories) {
 	if (count + chunk.size() > capacity) {
 		Resize(capacity * 2);
 	}
 	auto chunk_types = chunk.GetTypes();
 	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
-		if (chunk_types[col_idx].id() != LogicalTypeId::ENUM) {
-			owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
-		} else {
-			// Its an ENUM type, so we create a categorical type
-			categorical[col_idx] = ConvertEnumToCategorical(count, chunk.data[col_idx], chunk.size());
-			//			pd.Categorical(['foo','bla','zoo', 'foo',None, 'foo', 'bla',None])
+		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
+		if (chunk_types[col_idx].id() == LogicalTypeId::ENUM) {
+			D_ASSERT(categories);
+			// It's an ENUM type, in addition to converting the codes we must convert the categories
+			if (categories->find(col_idx) == categories->end()) {
+				auto categories_list = EnumType::GetValuesInsertOrder(chunk.data[col_idx].GetType());
+				(*categories)[col_idx] = py::cast(categories_list);
+			}
 		}
 	}
 	count += chunk.size();

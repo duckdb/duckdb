@@ -8,6 +8,7 @@
 #include "duckdb/common/types/string_type.hpp"
 
 #include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/value.hpp"
 
 #include <cmath>
 #include <utility>
@@ -1071,6 +1072,26 @@ int64_t EnumType::GetPos(const LogicalType &type, const string &key) {
 		return TemplatedGetPos(*((EnumTypeInfo<uint8_t> &)*info).values, key);
 	case PhysicalType::UINT32:
 		return TemplatedGetPos(*((EnumTypeInfo<uint8_t> &)*info).values, key);
+	default:
+		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+	}
+}
+
+const string &EnumType::GetValue(const Value &val) {
+	auto info = val.type().AuxInfo();
+	switch (val.type().InternalType()) {
+	case PhysicalType::UINT8: {
+		vector<string> &values_insert_order = *((EnumTypeInfo<uint8_t> &)*info).values_insert_order;
+		return values_insert_order[val.value_.utinyint];
+	}
+	case PhysicalType::UINT16: {
+		vector<string> &values_insert_order = *((EnumTypeInfo<uint16_t> &)*info).values_insert_order;
+		return values_insert_order[val.value_.usmallint];
+	}
+	case PhysicalType::UINT32: {
+		vector<string> &values_insert_order = *((EnumTypeInfo<uint32_t> &)*info).values_insert_order;
+		return values_insert_order[val.value_.uinteger];
+	}
 	default:
 		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 	}

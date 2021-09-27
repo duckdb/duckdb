@@ -19,6 +19,10 @@ public:
 
 	unique_ptr<QueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
+	// Holds the categories of Categorical/ENUM types
+	unordered_map<idx_t, py::list> categories;
+	// Holds the categorical type of Categorical/ENUM types
+	unordered_map<idx_t, py::object> categories_type;
 
 public:
 	static void Initialize(py::handle &m);
