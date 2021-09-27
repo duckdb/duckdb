@@ -1,0 +1,54 @@
+# name: test/sql/subquery/scalar/issue_2335.test
+# description: Issue #2335: Correlated subquery with set UNION results in an incorrect count
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE v(id INTEGER);
+
+statement ok
+CREATE TABLE e(source INTEGER, target INTEGER);
+
+statement ok
+INSERT INTO v VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10);
+
+statement ok
+INSERT INTO e VALUES (1, 3), (1, 5), (2, 4), (2, 5), (2, 10), (3, 1), (3, 5), (3, 8), (3, 10), (8, 1);
+
+query I
+SELECT
+    (SELECT count(neighbor) FROM (
+    SELECT e.target AS neighbor FROM e WHERE e.source = v.id
+    UNION
+    SELECT e.source AS neighbor FROM e WHERE e.target = v.id
+    ) d) AS deg
+FROM v
+WHERE v.id = 1;
+----
+3
+
+query I
+SELECT
+    (SELECT count(neighbor) FROM (
+    SELECT e.target AS neighbor FROM e WHERE e.source = 1
+    UNION
+    SELECT e.source AS neighbor FROM e WHERE e.target = 1
+    ) d) AS deg
+FROM v
+WHERE v.id = 1;
+----
+3
+
+query I
+SELECT
+    (SELECT count(DISTINCT neighbor) FROM (
+    SELECT e.target AS neighbor FROM e WHERE e.source = v.id
+    UNION ALL
+    SELECT e.source AS neighbor FROM e WHERE e.target = v.id
+    ) d) AS deg
+FROM v
+WHERE v.id = 1;
+----
+3

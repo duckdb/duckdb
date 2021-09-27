@@ -93,6 +93,10 @@ unique_ptr<LogicalOperator> Deliminator::Optimize(unique_ptr<LogicalOperator> op
 void Deliminator::FindCandidates(unique_ptr<LogicalOperator> *op_ptr,
                                  vector<unique_ptr<LogicalOperator> *> &candidates) {
 	auto op = op_ptr->get();
+	if (op->type == LogicalOperatorType::LOGICAL_DISTINCT ||
+	    op->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+		return;
+	}
 	// search children before adding, so the deepest candidates get added first
 	for (auto &child : op->children) {
 		FindCandidates(&child, candidates);
