@@ -835,6 +835,17 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::TimestampMs(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TimestampSec(timestamp_t(value));
+	case LogicalTypeId::ENUM:
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			return Value::UTINYINT((uint8_t)value);
+		case PhysicalType::UINT16:
+			return Value::USMALLINT((uint16_t)value);
+		case PhysicalType::UINT32:
+			return Value::UINTEGER((uint32_t)value);
+		default:
+			throw InvalidTypeException(type, "Enum doesn't accept this physical type");
+		}
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
