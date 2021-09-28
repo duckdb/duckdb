@@ -407,7 +407,6 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 				auto category_type = string(py::str(categories.attr("dtype")));
 				if (category_type == "object") {
 					// Let's hope the object type is a string.
-
 					bind_data.pandas_type = PandasType::CATEGORY;
 					auto enum_name = string(py::str(df_columns[col_idx]));
 					auto enum_entries = make_shared<vector<string>>();
@@ -421,11 +420,11 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 					bind_data.numpy_col = py::array(column.attr("cat").attr("codes"));
 					bind_data.mask = nullptr;
 				} else {
-					auto numpy_type = bind_data.numpy_col.attr("dtype");
-					// for category types, we use the converted numpy type
-					category_type = string(py::str(numpy_type));
 					bind_data.numpy_col = py::array(column.attr("to_numpy")());
 					bind_data.mask = nullptr;
+					auto numpy_type = bind_data.numpy_col.attr("dtype");
+					// for category types (non-strings), we use the converted numpy type
+					category_type = string(py::str(numpy_type));
 					ConvertPandasType(category_type, duckdb_col_type, bind_data.pandas_type);
 				}
 			} else {

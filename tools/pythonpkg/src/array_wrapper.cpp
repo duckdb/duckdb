@@ -273,6 +273,49 @@ static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *tar
 	}
 }
 
+template <class DUCKDB_T, class NUMPY_T>
+static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t target_data, VectorData &idata,
+                                             idx_t count) {
+	auto src_ptr = (DUCKDB_T *)idata.data;
+	auto out_ptr = (NUMPY_T *)target_data;
+	if (!idata.validity.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
+				out_ptr[offset] = duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(-1);
+			} else {
+				out_ptr[offset] =
+				    duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
+			}
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			out_ptr[offset] =
+			    duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
+		}
+	}
+	// Null values are encoded in the data itself
+	return false;
+}
+
+template <class T>
+static bool ConvertColumnCategorical(idx_t target_offset, data_ptr_t target_data, VectorData &idata, idx_t count,
+                                     PhysicalType physical_type) {
+	switch (physical_type) {
+	case PhysicalType::UINT8:
+		return ConvertColumnCategoricalTemplate<uint8_t, T>(target_offset, target_data, idata, count);
+	case PhysicalType::UINT16:
+		return ConvertColumnCategoricalTemplate<uint16_t, T>(target_offset, target_data, idata, count);
+	case PhysicalType::UINT32:
+		return ConvertColumnCategoricalTemplate<uint32_t, T>(target_offset, target_data, idata, count);
+	default:
+		throw InternalException("Enum Physical Type not Allowed");
+	}
+}
+
 template <class T>
 static bool ConvertColumnRegular(idx_t target_offset, data_ptr_t target_data, bool *target_mask, VectorData &idata,
                                  idx_t count) {
@@ -490,14 +533,15 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	switch (input.GetType().id()) {
 	case LogicalTypeId::ENUM: {
 		auto size = EnumType::GetSize(input.GetType());
+		auto physical_type = input.GetType().InternalType();
 		if (size <= (idx_t)NumericLimits<int8_t>::Maximum()) {
-			may_have_null = ConvertColumnRegular<int8_t>(current_offset, dataptr, maskptr, idata, count);
+			may_have_null = ConvertColumnCategorical<int8_t>(current_offset, dataptr, idata, count, physical_type);
 		} else if (size <= (idx_t)NumericLimits<int16_t>::Maximum()) {
-			may_have_null = ConvertColumnRegular<int16_t>(current_offset, dataptr, maskptr, idata, count);
+			may_have_null = ConvertColumnCategorical<int16_t>(current_offset, dataptr, idata, count, physical_type);
 		} else if (size <= (idx_t)NumericLimits<int32_t>::Maximum()) {
-			may_have_null = ConvertColumnRegular<int32_t>(current_offset, dataptr, maskptr, idata, count);
+			may_have_null = ConvertColumnCategorical<int32_t>(current_offset, dataptr, idata, count, physical_type);
 		} else if (size <= (idx_t)NumericLimits<int64_t>::Maximum()) {
-			may_have_null = ConvertColumnRegular<int64_t>(current_offset, dataptr, maskptr, idata, count);
+			may_have_null = ConvertColumnCategorical<int64_t>(current_offset, dataptr, idata, count, physical_type);
 		} else {
 			throw InternalException("Size not supported on ENUM types");
 		}
