@@ -75,7 +75,6 @@ private:
 	void ReadyPipeline(Pipeline &pipeline);
 	void ReadyPipelines();
 
-	void VerifyOperatorPair(PhysicalOperator &left, PhysicalOperator &right);
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
 private:

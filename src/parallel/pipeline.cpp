@@ -204,4 +204,15 @@ void Pipeline::Print() const {
 	Printer::Print(ToString());
 }
 
+vector<PhysicalOperator *> Pipeline::GetOperators() const {
+	vector<PhysicalOperator *> result;
+	result = operators;
+	D_ASSERT(source);
+	result.push_back(source);
+	if (sink) {
+		result.push_back(sink);
+	}
+	return result;
+}
+
 } // namespace duckdb

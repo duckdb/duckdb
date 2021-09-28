@@ -148,29 +148,21 @@ bool Executor::NextExecutor() {
 	return true;
 }
 
-void Executor::VerifyOperatorPair(PhysicalOperator &left, PhysicalOperator &right) {
-	if (left.Equals(right)) {
-		D_ASSERT(right.Equals(left));
-	} else {
-		D_ASSERT(!right.Equals(left));
-	}
-}
-
 void Executor::VerifyPipeline(Pipeline &pipeline) {
 	D_ASSERT(!pipeline.ToString().empty());
+	auto operators = pipeline.GetOperators();
 	for (auto &other_pipeline : pipelines) {
-		VerifyOperatorPair(*pipeline.source, *other_pipeline->source);
-		VerifyOperatorPair(*pipeline.source, *other_pipeline->sink);
-		VerifyOperatorPair(*pipeline.sink, *other_pipeline->source);
-		VerifyOperatorPair(*pipeline.sink, *other_pipeline->sink);
-		for(idx_t i = 0; i < pipeline.operators.size(); i++) {
-			for(idx_t k = 0; k < other_pipeline->operators.size(); k++) {
-				VerifyOperatorPair(*pipeline.operators[i], *other_pipeline->operators[k]);
-				VerifyOperatorPair(*pipeline.source, *other_pipeline->operators[k]);
-				VerifyOperatorPair(*pipeline.sink, *other_pipeline->operators[k]);
+		auto other_operators = other_pipeline->GetOperators();
+		for(idx_t op_idx = 0; op_idx < operators.size(); op_idx++) {
+			for(idx_t other_idx = 0; other_idx < other_operators.size(); other_idx++) {
+				auto &left = *operators[op_idx];
+				auto &right = *other_operators[other_idx];
+				if (left.Equals(right)) {
+					D_ASSERT(right.Equals(left));
+				} else {
+					D_ASSERT(!right.Equals(left));
+				}
 			}
-			VerifyOperatorPair(*pipeline.operators[i], *other_pipeline->source);
-			VerifyOperatorPair(*pipeline.operators[i], *other_pipeline->sink);
 		}
 	}
 }

@@ -19,6 +19,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		intermediate_chunks.push_back(move(chunk));
 		intermediate_states.push_back(pipeline.operators[i]->GetOperatorState(context.client));
 	}
+	InitializeChunk(final_chunk);
 }
 
 void PipelineExecutor::Execute() {
@@ -27,8 +28,6 @@ void PipelineExecutor::Execute() {
 		return;
 	}
 
-	DataChunk final_chunk;
-	InitializeChunk(final_chunk);
 	auto &executor = pipeline.executor;
 	try {
 		while(true) {
@@ -68,6 +67,16 @@ void PipelineExecutor::GoToSource(idx_t &current_idx) {
 	}
 }
 
+void PipelineExecutor::FetchFromSource(DataChunk &result) {
+	StartOperator(pipeline.source);
+	pipeline.source->GetData(
+		context,
+		result,
+		*pipeline.source_state,
+		*local_source_state);
+	EndOperator(pipeline.source, &result);
+}
+
 void PipelineExecutor::Execute(DataChunk &result) {
 	idx_t current_idx;
 	GoToSource(current_idx);
@@ -83,13 +92,7 @@ void PipelineExecutor::Execute(DataChunk &result) {
 		current_chunk.Reset();
 		if (current_idx == 0) {
 			// if current_idx = 0 we fetch the data from the source
-			StartOperator(pipeline.source);
-			pipeline.source->GetData(
-				context,
-				current_chunk,
-				*pipeline.source_state,
-				*local_source_state);
-			EndOperator(pipeline.source, &current_chunk);
+			FetchFromSource(current_chunk);
 		} else {
 			auto current_operator = current_idx - 1;
 			StartOperator(pipeline.operators[current_operator]);

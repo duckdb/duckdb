@@ -49,6 +49,8 @@ public:
 	//! Returns query progress
 	bool GetProgress(int &current_percentage);
 
+	//! Returns a list of all operators (including source and sink) involved in this pipeline
+	vector<PhysicalOperator *> GetOperators() const;
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;

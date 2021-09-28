@@ -49,6 +49,9 @@ private:
 	//! The local sink state (if any)
 	unique_ptr<LocalSinkState> local_sink_state;
 
+	//! The final chunk used for moving data into the sink
+	DataChunk final_chunk;
+
 	//! The operators that are not yet finished executing and have data remaining
 	//! If the stack of in_process_operators is empty, we fetch from the source instead
 	stack<idx_t> in_process_operators;
@@ -58,6 +61,7 @@ private:
 	void EndOperator(PhysicalOperator *op, DataChunk *chunk);
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx);
+	void FetchFromSource(DataChunk &result);
 };
 
 } // namespace duckdb
