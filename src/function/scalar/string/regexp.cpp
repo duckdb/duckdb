@@ -90,6 +90,24 @@ struct RegexFullMatch {
 	}
 };
 
+struct RegexLocalState : public FunctionData {
+	RegexLocalState(RegexpMatchesBindData &info)
+	    : constant_pattern(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()),
+	                       info.options) {
+		D_ASSERT(info.constant_pattern);
+	}
+
+	RE2 constant_pattern;
+};
+
+static unique_ptr<FunctionData> RegexInitLocalState(const BoundFunctionExpression &expr, FunctionData *bind_data) {
+	auto &info = (RegexpMatchesBindData &)*bind_data;
+	if (info.constant_pattern) {
+		return make_unique<RegexLocalState>(info);
+	}
+	return nullptr;
+}
+
 template <class OP>
 static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &strings = args.data[0];
@@ -99,9 +117,9 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
 
 	if (info.constant_pattern) {
-		RE2 re(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()), info.options);
+		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
 		UnaryExecutor::Execute<string_t, bool>(strings, result, args.size(), [&](string_t input) {
-			return OP::Operation(CreateStringPiece(input), re);
+			return OP::Operation(CreateStringPiece(input), lstate.constant_pattern);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, bool>(strings, patterns, result, args.size(),
@@ -188,18 +206,19 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet regexp_full_match("regexp_full_match");
 	regexp_full_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                                             RegexpMatchesFunction<RegexFullMatch>, false, RegexpMatchesBind));
+	                                             RegexpMatchesFunction<RegexFullMatch>, false, RegexpMatchesBind,
+	                                             nullptr, nullptr, RegexInitLocalState));
 	regexp_full_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                             LogicalType::BOOLEAN, RegexpMatchesFunction<RegexFullMatch>, false,
-	                                             RegexpMatchesBind));
+	                                             RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState));
 
 	ScalarFunctionSet regexp_partial_match("regexp_matches");
 	regexp_partial_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::BOOLEAN,
-	                                                RegexpMatchesFunction<RegexPartialMatch>, false,
-	                                                RegexpMatchesBind));
+	                                                RegexpMatchesFunction<RegexPartialMatch>, false, RegexpMatchesBind,
+	                                                nullptr, nullptr, RegexInitLocalState));
 	regexp_partial_match.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
 	                                                LogicalType::BOOLEAN, RegexpMatchesFunction<RegexPartialMatch>,
-	                                                false, RegexpMatchesBind));
+	                                                false, RegexpMatchesBind, nullptr, nullptr, RegexInitLocalState));
 
 	ScalarFunctionSet regexp_replace("regexp_replace");
 	regexp_replace.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::VARCHAR},
