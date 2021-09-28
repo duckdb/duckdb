@@ -14,13 +14,14 @@ namespace duckdb {
 
 RegexpMatchesBindData::RegexpMatchesBindData(duckdb_re2::RE2::Options options, string constant_string_p)
     : options(options), constant_string(move(constant_string_p)) {
-	if (!constant_string.empty()) {
-		constant_pattern = make_unique<RE2>(constant_string, options);
-		if (!constant_pattern->ok()) {
-			throw Exception(constant_pattern->error());
+	constant_pattern = !constant_string.empty();
+	if (constant_pattern) {
+		auto pattern = make_unique<RE2>(constant_string, options);
+		if (!pattern->ok()) {
+			throw Exception(pattern->error());
 		}
 
-		range_success = constant_pattern->PossibleMatchRange(&range_min, &range_max, 1000);
+		range_success = pattern->PossibleMatchRange(&range_min, &range_max, 1000);
 	} else {
 		range_success = false;
 	}
@@ -98,8 +99,9 @@ static void RegexpMatchesFunction(DataChunk &args, ExpressionState &state, Vecto
 	auto &info = (RegexpMatchesBindData &)*func_expr.bind_info;
 
 	if (info.constant_pattern) {
+		RE2 re(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()), info.options);
 		UnaryExecutor::Execute<string_t, bool>(strings, result, args.size(), [&](string_t input) {
-			return OP::Operation(CreateStringPiece(input), *info.constant_pattern);
+			return OP::Operation(CreateStringPiece(input), re);
 		});
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, bool>(strings, patterns, result, args.size(),
