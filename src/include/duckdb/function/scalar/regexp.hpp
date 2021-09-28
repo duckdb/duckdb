@@ -19,7 +19,7 @@ struct RegexpMatchesBindData : public FunctionData {
 
 	duckdb_re2::RE2::Options options;
 	string constant_string;
-	std::unique_ptr<duckdb_re2::RE2> constant_pattern;
+	bool constant_pattern;
 	string range_min;
 	string range_max;
 	bool range_success;
