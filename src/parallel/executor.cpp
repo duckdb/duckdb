@@ -37,6 +37,8 @@ struct PipelineEventStack {
 };
 
 void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &parent_stack, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
+	pipeline->Ready();
+
 	D_ASSERT(pipeline);
 	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 
@@ -58,6 +60,8 @@ void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, Pipel
 
 void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
 	D_ASSERT(pipeline);
+
+	pipeline->Ready();
 
 	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 	auto pipeline_finish_event = make_shared<PipelineFinishEvent>(pipeline);
@@ -122,23 +126,6 @@ void Executor::ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_pt
 	pipeline_ptr->child_pipelines.clear();
 }
 
-void Executor::ReadyPipeline(Pipeline &pipeline) {
-	pipeline.Ready();
-	for(auto &union_pipeline : pipeline.union_pipelines) {
-		ReadyPipeline(*union_pipeline);
-	}
-	for(auto &child_pipeline : pipeline.child_pipelines) {
-		ReadyPipeline(*child_pipeline);
-	}
-}
-
-void Executor::ReadyPipelines() {
-	for(auto &pipeline : pipelines) {
-		ReadyPipeline(*pipeline);
-	}
-}
-
-
 bool Executor::NextExecutor() {
 	if (root_pipeline_idx >= root_pipelines.size()) {
 		return false;
@@ -172,6 +159,9 @@ void Executor::VerifyPipelines() {
 		for (auto &pipeline : pipelines) {
 			VerifyPipeline(*pipeline);
 		}
+		for (auto &pipeline : root_pipelines) {
+			VerifyPipeline(*pipeline);
+		}
 #endif
 }
 
@@ -189,9 +179,6 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		auto root_pipeline = make_shared<Pipeline>(*this);
 		root_pipeline->sink = nullptr;
 		BuildPipelines(physical_plan, root_pipeline.get());
-
-		// ready all the pipelines
-		ReadyPipelines();
 
 		this->total_pipelines = pipelines.size();
 
@@ -431,7 +418,7 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	auto chunk = make_unique<DataChunk>();
 	root_executor->InitializeChunk(*chunk);
 	while(true) {
-		root_executor->Execute(*chunk);
+		root_executor->ExecutePull(*chunk);
 		if (chunk->size() == 0) {
 			if (NextExecutor()) {
 				continue;

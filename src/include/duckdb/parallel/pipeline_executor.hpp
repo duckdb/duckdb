@@ -23,10 +23,18 @@ class PipelineExecutor {
 public:
 	PipelineExecutor(ClientContext &context, Pipeline &pipeline);
 
-	//! Execute a pipeline with a sink until the source is exhausted
+	//! Fully execute a pipeline with a source and a sink until the source is completely exhausted
 	void Execute();
+	//! Push a single input DataChunk into the pipeline.
+	//! Returns either OperatorResultType::NEED_MORE_INPUT or OperatorResultType::FINISHED
+	//! If OperatorResultType::FINISHED is returned, more input will not change the result anymore
+	OperatorResultType ExecutePush(DataChunk &input);
+	//! Called after depleting the source: finalizes the execution of this pipeline executor
+	//! This should only be called once per PipelineExecutor
+	void PushFinalize();
 	//! Execute a pipeline without a sink, and retrieve a single DataChunk
-	void Execute(DataChunk &result);
+	//! Returns an empty chunk when finished.
+	void ExecutePull(DataChunk &result);
 
 	//! Initializes a chunk with the types that will flow out of the executor
 	void InitializeChunk(DataChunk &chunk);
@@ -62,6 +70,10 @@ private:
 	//! Reset the operator index to the first operator
 	void GoToSource(idx_t &current_idx);
 	void FetchFromSource(DataChunk &result);
+
+	//! Pushes a chunk through the pipeline and returns a single result chunk
+	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
+	OperatorResultType Execute(DataChunk &input, DataChunk &result);
 };
 
 } // namespace duckdb

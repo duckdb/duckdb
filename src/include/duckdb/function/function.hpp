@@ -40,7 +40,7 @@ struct FunctionData {
 		throw InternalException("Unimplemented copy for FunctionData");
 	};
 	virtual bool Equals(FunctionData &other) {
-		return false;
+		return true;
 	}
 	static bool Equals(FunctionData *left, FunctionData *right) {
 		if (left == right) {

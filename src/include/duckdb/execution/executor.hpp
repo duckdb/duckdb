@@ -72,9 +72,6 @@ private:
 	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);
 	bool NextExecutor();
 
-	void ReadyPipeline(Pipeline &pipeline);
-	void ReadyPipelines();
-
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
 private:
