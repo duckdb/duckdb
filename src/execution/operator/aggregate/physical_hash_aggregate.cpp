@@ -307,23 +307,14 @@ public:
 };
 
 void PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                     GlobalSinkState &gstate) const {
-	FinalizeInternal(context, gstate, false, &pipeline, &event);
-}
-
-void PhysicalHashAggregate::FinalizeImmediate(ClientContext &context, GlobalSinkState &gstate) const {
-	FinalizeInternal(context, gstate, true, nullptr, nullptr);
-}
-
-bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, GlobalSinkState &gstate_p,
-                                             bool immediate, Pipeline *pipeline, Event *event) const {
+                                     GlobalSinkState &gstate_p) const {
 	auto &gstate = (HashAggregateGlobalState &) gstate_p;
 	gstate.is_finalized = true;
 	// special case if we have non-combinable aggregates
 	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
 	if (ForceSingleHT(gstate)) {
 		D_ASSERT(gstate.finalized_hts.size() <= 1);
-		return true;
+		return;
 	}
 
 	// we can have two cases now, non-partitioned for few groups and radix-partitioned for very many groups.
@@ -352,17 +343,9 @@ bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, GlobalSinkS
 			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context), group_types,
 			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64);
 		}
-		if (immediate) {
-			for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
-				PhysicalHashAggregateFinalizeTask::FinalizeHT(gstate, r);
-			}
-		} else {
-			D_ASSERT(event);
-			D_ASSERT(pipeline);
-			auto new_event = make_shared<HashAggregateFinalizeEvent>(gstate, pipeline);
-			event->InsertEvent(move(new_event));
-		}
-		return immediate;
+
+		auto new_event = make_shared<HashAggregateFinalizeEvent>(gstate, &pipeline);
+		event.InsertEvent(move(new_event));
 	} else { // in the non-partitioned case we immediately combine all the unpartitioned hts created by the threads.
 		     // TODO possible optimization, if total count < limit for 32 bit ht, use that one
 		     // create this ht here so finalize needs no lock on gstate
@@ -380,7 +363,6 @@ bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, GlobalSinkS
 		}
 		D_ASSERT(gstate.finalized_hts[0]);
 		gstate.finalized_hts[0]->Finalize();
-		return true;
 	}
 }
 

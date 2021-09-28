@@ -33,8 +33,12 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
 	void Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const override;
 
-	// void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, OperatorState *state) const override;
-	// unique_ptr<OperatorState> GetOperatorState() override;
+	bool IsSink() const override {
+		return true;
+	}
+	bool ParallelSink() const override {
+		return true;
+	}
 
 	string ParamsToString() const override;
 };

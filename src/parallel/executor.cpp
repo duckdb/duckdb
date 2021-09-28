@@ -308,7 +308,9 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			break;
 		case PhysicalOperatorType::DELIM_JOIN: {
 			// duplicate eliminated join
-			throw InternalException("FIXME: delim join");
+			// for delim joins, recurse into the actual join
+			pipeline_child = op->children[0].get();
+			break;
 		}
 		default:
 			throw InternalException("Unimplemented sink type!");
@@ -317,7 +319,15 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		// recurse into the pipeline child
 		BuildPipelines(pipeline_child, pipeline.get());
 		if (op->type == PhysicalOperatorType::DELIM_JOIN) {
-			throw InternalException("FIXME: delim join");
+			// for delim joins, recurse into the actual join
+			// any pipelines in there depend on the main pipeline
+			auto &delim_join = (PhysicalDelimJoin &)*op;
+			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
+			// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
+			for (auto &delim_scan : delim_join.delim_scans) {
+				delim_join_dependencies[delim_scan] = pipeline.get();
+			}
+			BuildPipelines(delim_join.join.get(), current);
 		}
 		// regular pipeline: schedule it
 		pipelines.push_back(move(pipeline));
@@ -326,7 +336,17 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		// first check if there is any additional action we need to do depending on the type
 		switch (op->type) {
 		case PhysicalOperatorType::DELIM_SCAN: {
-			throw InternalException("FIXME: delim join");
+			D_ASSERT(op->children.empty());
+			auto entry = delim_join_dependencies.find(op);
+			D_ASSERT(entry != delim_join_dependencies.end());
+			// this chunk scan introduces a dependency to the current pipeline
+			// namely a dependency on the duplicate elimination pipeline to finish
+			auto delim_dependency = entry->second->shared_from_this();
+			D_ASSERT(delim_dependency->sink->type == PhysicalOperatorType::DELIM_JOIN);
+			auto &delim_join = (PhysicalDelimJoin &)*delim_dependency->sink;
+			current->AddDependency(delim_dependency);
+			current->source = (PhysicalOperator *) delim_join.distinct.get();
+			return;
 		}
 		case PhysicalOperatorType::EXECUTE: {
 			// EXECUTE statement: build pipeline on child
@@ -420,6 +440,7 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 	while(true) {
 		root_executor->ExecutePull(*chunk);
 		if (chunk->size() == 0) {
+			root_executor->PullFinalize();
 			if (NextExecutor()) {
 				continue;
 			}

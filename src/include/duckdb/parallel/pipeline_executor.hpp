@@ -32,12 +32,16 @@ public:
 	//! Called after depleting the source: finalizes the execution of this pipeline executor
 	//! This should only be called once per PipelineExecutor
 	void PushFinalize();
+
+	//! Initializes a chunk with the types that will flow out of ExecutePull
+	void InitializeChunk(DataChunk &chunk);
 	//! Execute a pipeline without a sink, and retrieve a single DataChunk
 	//! Returns an empty chunk when finished.
 	void ExecutePull(DataChunk &result);
+	//! Called after depleting the source using ExecutePull
+	//! This flushes profiler states
+	void PullFinalize();
 
-	//! Initializes a chunk with the types that will flow out of the executor
-	void InitializeChunk(DataChunk &chunk);
 
 private:
 	//! The pipeline to process

@@ -52,6 +52,7 @@ OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) {
 		while(true) {
 			OperatorResultType result;
 			if (!pipeline.operators.empty()) {
+				final_chunk.Reset();
 				result = Execute(input, final_chunk);
 				if (result == OperatorResultType::FINISHED) {
 					return OperatorResultType::FINISHED;
@@ -99,6 +100,10 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 	if (!pipeline.operators.empty()) {
 		Execute(source_chunk, result);
 	}
+}
+
+void PipelineExecutor::PullFinalize() {
+	pipeline.executor.Flush(thread);
 }
 
 void PipelineExecutor::GoToSource(idx_t &current_idx) {

@@ -61,8 +61,6 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
 	void Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const override;
 
-	void FinalizeImmediate(ClientContext &context, GlobalSinkState &gstate) const;
-
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
@@ -81,8 +79,6 @@ private:
 	idx_t radix_limit;
 
 private:
-	bool FinalizeInternal(ClientContext &context, GlobalSinkState &gstate, bool immediate,
-	                      Pipeline *pipeline, Event *event) const;
 	bool ForceSingleHT(GlobalSinkState &state) const;
 };
 
