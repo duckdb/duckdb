@@ -54,6 +54,22 @@ struct CatalogEntryLookup {
 	}
 };
 
+//! Return value of SimilarEntryInSchemas
+struct SimilarCatalogEntry {
+	//! The entry name. Empty if absent
+	string name;
+	//! The distance to the given name.
+	idx_t distance;
+	//! The schema of the entry.
+	SchemaCatalogEntry *schema;
+
+	bool Found() const {
+		return !name.empty();
+	}
+
+	string GetQualifiedName() const;
+};
+
 //! The Catalog object represents the catalog of the database.
 class Catalog {
 public:
@@ -149,6 +165,15 @@ private:
 	//! A variation of GetEntry that returns an associated schema as well.
 	CatalogEntryLookup LookupEntry(ClientContext &context, CatalogType type, const string &schema, const string &name,
 	                               bool if_exists = false, QueryErrorContext error_context = QueryErrorContext());
+
+	//! Return an exception with did-you-mean suggestion.
+	CatalogException CreateMissingEntryException(ClientContext &context, const string &entry_name, CatalogType type,
+	                                             const vector<SchemaCatalogEntry *> &schemas,
+	                                             QueryErrorContext error_context);
+
+	//! Return the close entry name, the distance and the belonging schema.
+	SimilarCatalogEntry SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
+	                                          const vector<SchemaCatalogEntry *> &schemas);
 
 	void DropSchema(ClientContext &context, DropInfo *info);
 };

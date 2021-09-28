@@ -26,6 +26,12 @@
 
 namespace duckdb {
 
+string SimilarCatalogEntry::GetQualifiedName() const {
+	D_ASSERT(Found());
+
+	return name + "." + schema->name;
+}
+
 Catalog::Catalog(DatabaseInstance &db)
     : db(db), schemas(make_unique<CatalogSet>(*this, make_unique<DefaultSchemaGenerator>(*this))),
       dependency_manager(make_unique<DependencyManager>(*this)) {
@@ -177,11 +183,65 @@ void Catalog::ScanSchemas(ClientContext &context, std::function<void(CatalogEntr
 	schemas->Scan(context, [&](CatalogEntry *entry) { callback(entry); });
 }
 
+SimilarCatalogEntry Catalog::SimilarEntryInSchemas(ClientContext &context, const string &entry_name, CatalogType type,
+                                                   const vector<SchemaCatalogEntry *> &schemas) {
+
+	vector<CatalogSet *> sets;
+	std::transform(schemas.begin(), schemas.end(), std::back_inserter(sets),
+	               [type](SchemaCatalogEntry *s) -> CatalogSet * { return &s->GetCatalogSet(type); });
+	pair<string, idx_t> most_similar {"", (idx_t)-1};
+	SchemaCatalogEntry *schema_of_most_similar = nullptr;
+	for (auto schema : schemas) {
+		auto entry = schema->GetCatalogSet(type).SimilarEntry(context, entry_name);
+		if (!entry.first.empty() && (most_similar.first.empty() || most_similar.second > entry.second)) {
+			most_similar = entry;
+			schema_of_most_similar = schema;
+		}
+	}
+
+	return {most_similar.first, most_similar.second, schema_of_most_similar};
+}
+
+CatalogException Catalog::CreateMissingEntryException(ClientContext &context, const string &entry_name,
+                                                      CatalogType type, const vector<SchemaCatalogEntry *> &schemas,
+                                                      QueryErrorContext error_context) {
+	auto entry = SimilarEntryInSchemas(context, entry_name, type, schemas);
+
+	vector<SchemaCatalogEntry *> unseen_schemas;
+	this->schemas->Scan([&schemas, &unseen_schemas](CatalogEntry *entry) {
+		auto schema_entry = (SchemaCatalogEntry *)entry;
+		if (std::find(schemas.begin(), schemas.end(), schema_entry) == schemas.end()) {
+			unseen_schemas.emplace_back(schema_entry);
+		}
+	});
+	auto unseen_entry = SimilarEntryInSchemas(context, entry_name, type, unseen_schemas);
+
+	string did_you_mean;
+	if (unseen_entry.Found() && unseen_entry.distance < entry.distance) {
+		did_you_mean = "\nDid you mean \"" + unseen_entry.GetQualifiedName() + "\"?";
+	} else if (entry.Found()) {
+		did_you_mean = "\nDid you mean \"" + entry.name + "\"?";
+	}
+
+	return CatalogException(error_context.FormatError("%s with name %s does not exist!%s", CatalogTypeToString(type),
+	                                                  entry_name, did_you_mean));
+}
+
 CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type, const string &schema_name,
                                         const string &name, bool if_exists, QueryErrorContext error_context) {
 	if (!schema_name.empty()) {
 		auto schema = GetSchema(context, schema_name, if_exists, error_context);
-		return {schema, schema ? schema->GetEntry(context, type, name, if_exists, error_context) : nullptr};
+		if (!schema) {
+			D_ASSERT(if_exists);
+			return {nullptr, nullptr};
+		}
+
+		auto entry = schema->GetCatalogSet(type).GetEntry(context, name);
+		if (!entry && !if_exists) {
+			throw CreateMissingEntryException(context, name, type, {schema}, error_context);
+		}
+
+		return {schema, entry};
 	}
 
 	const auto &paths = context.catalog_search_path->Get();
@@ -192,10 +252,16 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 		}
 	}
 
-	// TODO: Support "did you mean"
 	if (!if_exists) {
-		throw CatalogException(
-		    error_context.FormatError("%s is not found in the search path %s", name, StringUtil::Join(paths, ",")));
+		vector<SchemaCatalogEntry *> schemas;
+		for (const auto &path : paths) {
+			auto schema = GetSchema(context, path, true);
+			if (schema) {
+				schemas.emplace_back(schema);
+			}
+		}
+
+		throw CreateMissingEntryException(context, name, type, schemas, error_context);
 	}
 
 	return {nullptr, nullptr};
