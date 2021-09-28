@@ -91,7 +91,7 @@ struct RegexFullMatch {
 };
 
 struct RegexLocalState : public FunctionData {
-	RegexLocalState(RegexpMatchesBindData &info)
+	explicit RegexLocalState(RegexpMatchesBindData &info)
 	    : constant_pattern(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()),
 	                       info.options) {
 		D_ASSERT(info.constant_pattern);
