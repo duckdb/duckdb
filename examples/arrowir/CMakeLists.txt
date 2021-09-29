@@ -9,8 +9,8 @@ include_directories(flatbuffers)
 include_directories(../../extension/tpch/include)
 
 include_directories(../../src/include)
-link_directories(../../build/release/src)
-link_directories(../../build/release/extension/tpch)
+link_directories(../../build/debug/src)
+link_directories(../../build/debug/extension/tpch)
 
 add_executable(example test_arrowir.cpp)
 target_link_libraries(example duckdb)
