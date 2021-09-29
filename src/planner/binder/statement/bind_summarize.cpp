@@ -28,7 +28,7 @@ static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggre
 }
 
 static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, string column_name,
-                                                             Value modifier) {
+                                                             const Value &modifier) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(make_unique<ColumnRefExpression>(move(column_name)));
 	children.push_back(make_unique<ConstantExpression>(modifier));
