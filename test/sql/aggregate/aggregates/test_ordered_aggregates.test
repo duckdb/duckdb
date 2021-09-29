@@ -1,0 +1,59 @@
+# name: test/sql/aggregate/aggregates/test_ordered_aggregates.test
+# description: Test rewrites of ordered aggregates
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE flights(
+	"year" INTEGER,
+	"month" INTEGER,
+	"day" INTEGER,
+	dep_time INTEGER,
+	sched_dep_time INTEGER,
+	dep_delay DOUBLE,
+	arr_time INTEGER,
+	sched_arr_time INTEGER,
+	arr_delay DOUBLE,
+	carrier VARCHAR,
+	flight INTEGER,
+	tailnum VARCHAR,
+	origin VARCHAR,
+	dest VARCHAR,
+	air_time DOUBLE,
+	distance DOUBLE,
+	"hour" DOUBLE,
+	"minute" DOUBLE,
+	time_hour TIMESTAMP);
+
+statement ok
+SELECT "dest", mode() WITHIN GROUP (ORDER BY "arr_delay") AS "median_delay"
+FROM "flights"
+GROUP BY "dest"
+
+statement ok
+SELECT "dest", percentile_cont(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "median_delay"
+FROM "flights"
+GROUP BY "dest"
+
+statement ok
+SELECT "dest", percentile_cont([0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY "arr_delay") AS "iqr_delay"
+FROM "flights"
+GROUP BY "dest"
+
+statement ok
+SELECT "dest", percentile_disc(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "median_delay"
+FROM "flights"
+GROUP BY "dest"
+
+statement ok
+SELECT "dest", percentile_disc([0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY "arr_delay") AS "iqr_delay"
+FROM "flights"
+GROUP BY "dest"
+
+# Cannot use multiple ORDER BY clauses with WITHIN GROUPstatement error
+statement error
+SELECT "dest", mode() WITHIN GROUP (ORDER BY "arr_delay", "arr_time") AS "median_delay"
+FROM "flights"
+GROUP BY "dest"
