@@ -166,6 +166,12 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		}
 	});
 
+	// write the enums
+	metadata_writer->Write<uint32_t>(enums.size());
+	for (auto &enum_value : enums) {
+		WriteEnum(*enum_value);
+	}
+
 	// write the sequences
 	metadata_writer->Write<uint32_t>(sequences.size());
 	for (auto &seq : sequences) {
@@ -180,11 +186,6 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	metadata_writer->Write<uint32_t>(views.size());
 	for (auto &view : views) {
 		WriteView(*view);
-	}
-	// write the enums
-	metadata_writer->Write<uint32_t>(enums.size());
-	for (auto &enum_value : enums) {
-		WriteEnum(*enum_value);
 	}
 
 	// finally write the macro's
@@ -203,6 +204,12 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateSchema(context, info.get());
 
+	// now read the enums
+	uint32_t enum_count = reader.Read<uint32_t>();
+	for (uint32_t i = 0; i < enum_count; i++) {
+		ReadEnum(context, reader);
+	}
+
 	// read the sequences
 	uint32_t seq_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < seq_count; i++) {
@@ -217,12 +224,6 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	uint32_t view_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < view_count; i++) {
 		ReadView(context, reader);
-	}
-
-	// now read the enums
-	uint32_t enum_count = reader.Read<uint32_t>();
-	for (uint32_t i = 0; i < enum_count; i++) {
-		ReadEnum(context, reader);
 	}
 
 	// finally read the macro's
@@ -261,7 +262,7 @@ void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &re
 }
 
 //===--------------------------------------------------------------------===//
-// Sequences
+// Enums
 //===--------------------------------------------------------------------===//
 void CheckpointManager::WriteEnum(EnumCatalogEntry &seq) {
 	seq.Serialize(*metadata_writer);

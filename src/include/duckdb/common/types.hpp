@@ -315,7 +315,7 @@ enum class PhysicalType : uint8_t {
 	INT128 = 204, // 128-bit integers
 	UNKNOWN = 205, // Unknown physical type of user defined types
 	/// Boolean as 1 bit, LSB bit-packed ordering
-	BIT = 205,
+	BIT = 206,
 
 	INVALID = 255
 };
@@ -476,7 +476,7 @@ public:
 	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType ENUM(const shared_ptr<ExtraTypeInfo> &info, size_t size); // NOLINT
-	DUCKDB_API static LogicalType USER(string &user_type_name); // NOLINT
+	DUCKDB_API static LogicalType USER(string user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
 	//! A list of all INTEGRAL types

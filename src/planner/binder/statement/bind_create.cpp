@@ -112,6 +112,20 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	return BindSchema(info);
 }
+void Binder::BindLogicalType(LogicalType &type, const string &schema) {
+	if (type.id() == LogicalTypeId::USER) {
+		auto &user_type_name = UserType::GetTypeName(type);
+		auto enum_catalog = (EnumCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::ENUM_ENTRY,
+		                                                                          schema, user_type_name, true);
+		if (!enum_catalog) {
+			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
+		}
+		auto values_insert_order = make_shared<vector<string>>();
+		*values_insert_order = enum_catalog->values_insert_order;
+		type = LogicalType::ENUM(EnumType::CreateEnumInfo(user_type_name, values_insert_order),
+		                         values_insert_order->size());
+	}
+}
 
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
@@ -179,18 +193,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// We first check if there are any user types, if yes we check to which custom types they refer.
 		auto &create_table_info = (CreateTableInfo &)*stmt.info;
 		for (auto &column : create_table_info.columns) {
-			if (column.type.id() == LogicalTypeId::USER) {
-				auto &user_type_name = UserType::GetTypeName(column.type);
-				auto enum_catalog = (EnumCatalogEntry *)context.db->GetCatalog().GetEntry(
-				    context, CatalogType::ENUM_ENTRY, stmt.info->schema, user_type_name, true);
-				if (!enum_catalog) {
-					throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
-				}
-				auto values_insert_order = make_shared<vector<string>>();
-				*values_insert_order = enum_catalog->values_insert_order;
-				column.type = LogicalType::ENUM(EnumType::CreateEnumInfo(user_type_name, values_insert_order),
-				                                values_insert_order->size());
-			}
+			BindLogicalType(column.type, stmt.info->schema);
 		}
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);

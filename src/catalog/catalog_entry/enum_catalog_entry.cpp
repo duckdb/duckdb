@@ -18,7 +18,7 @@ EnumCatalogEntry::EnumCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema,
 	unordered_set<string> values;
 	for (auto &value : info->values) {
 		if (values.find(value) != values.end()) {
-			throw std::runtime_error("Duplicate value violates ENUM's unique constraint");
+			throw BinderException("Duplicate value violates ENUM's unique constraint");
 		}
 		values.insert(value);
 		values_insert_order.push_back(value);

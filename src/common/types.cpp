@@ -11,7 +11,6 @@
 #include "duckdb/common/types/value.hpp"
 
 #include <cmath>
-#include <utility>
 
 namespace duckdb {
 
@@ -122,8 +121,8 @@ PhysicalType LogicalType::GetInternalType() {
 		} else if (size <= NumericLimits<uint32_t>::Maximum()) {
 			return PhysicalType::UINT32;
 		} else {
-			throw std::runtime_error("Enum size must be lower than " +
-			                         std::to_string(NumericLimits<uint32_t>::Maximum()));
+			throw InternalException("Enum size must be lower than " +
+			                        std::to_string(NumericLimits<uint32_t>::Maximum()));
 		}
 	}
 	case LogicalTypeId::TABLE:
@@ -270,6 +269,8 @@ string TypeIdToString(PhysicalType type) {
 		return "LARGE_BINARY";
 	case PhysicalType::LARGE_LIST:
 		return "LARGE_LIST";
+	case PhysicalType::UNKNOWN:
+		return "UNKNOWN";
 	}
 	return "INVALID";
 }
@@ -975,7 +976,7 @@ const string &UserType::GetTypeName(const LogicalType &type) {
 	return ((UserTypeInfo &)*info).user_type_name;
 }
 
-LogicalType LogicalType::USER(string &user_type_name) {
+LogicalType LogicalType::USER(string user_type_name) {
 	auto info = make_shared<UserTypeInfo>(user_type_name);
 	return LogicalType(LogicalTypeId::USER, move(info));
 }
@@ -1051,7 +1052,7 @@ LogicalType LogicalType::ENUM(const shared_ptr<ExtraTypeInfo> &info, size_t size
 	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
 		return LogicalType(LogicalTypeId::ENUM, PhysicalType::UINT32, info);
 	} else {
-		throw std::runtime_error("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
 	}
 }
 
@@ -1134,7 +1135,7 @@ shared_ptr<ExtraTypeInfo> EnumType::CreateEnumInfo(const string &enum_name,
 	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
 		return TemplatedCreateEnumInfo<uint32_t>(enum_name, ordered_data);
 	} else {
-		throw std::runtime_error("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
 	}
 }
 
@@ -1189,8 +1190,8 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 		} else if (size <= NumericLimits<uint32_t>::Maximum()) {
 			return EnumTypeInfo<uint32_t>::Deserialize(source);
 		} else {
-			throw std::runtime_error("Enum size must be lower than " +
-			                         std::to_string(NumericLimits<uint32_t>::Maximum()));
+			throw InternalException("Enum size must be lower than " +
+			                        std::to_string(NumericLimits<uint32_t>::Maximum()));
 		}
 	}
 	default:
@@ -1228,8 +1229,8 @@ LogicalType LogicalType::Deserialize(Deserializer &source) {
 		} else if (size <= NumericLimits<uint32_t>::Maximum()) {
 			physical_type = PhysicalType::UINT32;
 		} else {
-			throw std::runtime_error("Enum size must be lower than " +
-			                         std::to_string(NumericLimits<uint32_t>::Maximum()));
+			throw InternalException("Enum size must be lower than " +
+			                        std::to_string(NumericLimits<uint32_t>::Maximum()));
 		}
 		return LogicalType(id, physical_type, move(info));
 	}

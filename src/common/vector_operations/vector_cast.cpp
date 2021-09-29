@@ -197,7 +197,7 @@ bool TransformEnum(Vector &source, Vector &result) {
 		auto string_value = source_data[0].GetString();
 		auto pos = EnumType::GetPos(result.GetType(), source_data[0].GetString());
 		if (pos == -1) {
-			throw std::runtime_error("The value: " + string_value + " does not exist in the ENUM type: " + enum_name);
+			throw CastException(source.GetType(), result.GetType());
 		}
 		result_data[0] = pos;
 	}

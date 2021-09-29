@@ -301,16 +301,16 @@ static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t tar
 	return false;
 }
 
-template <class T>
+template <class NUMPY_T>
 static bool ConvertColumnCategorical(idx_t target_offset, data_ptr_t target_data, VectorData &idata, idx_t count,
                                      PhysicalType physical_type) {
 	switch (physical_type) {
 	case PhysicalType::UINT8:
-		return ConvertColumnCategoricalTemplate<uint8_t, T>(target_offset, target_data, idata, count);
+		return ConvertColumnCategoricalTemplate<uint8_t, NUMPY_T>(target_offset, target_data, idata, count);
 	case PhysicalType::UINT16:
-		return ConvertColumnCategoricalTemplate<uint16_t, T>(target_offset, target_data, idata, count);
+		return ConvertColumnCategoricalTemplate<uint16_t, NUMPY_T>(target_offset, target_data, idata, count);
 	case PhysicalType::UINT32:
-		return ConvertColumnCategoricalTemplate<uint32_t, T>(target_offset, target_data, idata, count);
+		return ConvertColumnCategoricalTemplate<uint32_t, NUMPY_T>(target_offset, target_data, idata, count);
 	default:
 		throw InternalException("Enum Physical Type not Allowed");
 	}
@@ -400,8 +400,10 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::BIGINT:
 		type_width = sizeof(int64_t);
 		break;
-	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::FLOAT:
+		type_width = sizeof(float);
+		break;
+	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DECIMAL:
 		type_width = sizeof(double);

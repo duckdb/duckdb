@@ -519,24 +519,26 @@ Value Value::BLOB(const string &data) {
 	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
-Value Value::ENUM(uint8_t value, const LogicalType &original_type) {
-	Value result(LogicalType::ENUM(original_type.GetExtraTypeInfo(), EnumType::GetSize(original_type)));
-	result.value_.utinyint = value;
+Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
+	D_ASSERT(original_type.id() == LogicalTypeId::ENUM);
+	Value result(original_type);
+	switch (original_type.InternalType()) {
+	case PhysicalType::UINT8:
+		result.value_.utinyint = value;
+		break;
+	case PhysicalType::UINT16:
+		result.value_.usmallint = value;
+		break;
+	case PhysicalType::UINT32:
+		result.value_.uinteger = value;
+		break;
+	default:
+		throw InternalException("Incorrect Physical Type for ENUM");
+	}
 	result.is_null = false;
 	return result;
 }
-Value Value::ENUM(uint16_t value, const LogicalType &original_type) {
-	Value result(LogicalType::ENUM(original_type.GetExtraTypeInfo(), EnumType::GetSize(original_type)));
-	result.value_.usmallint = value;
-	result.is_null = false;
-	return result;
-}
-Value Value::ENUM(uint32_t value, const LogicalType &original_type) {
-	Value result(LogicalType::ENUM(original_type.GetExtraTypeInfo(), EnumType::GetSize(original_type)));
-	result.value_.uinteger = value;
-	result.is_null = false;
-	return result;
-}
+
 Value Value::INTERVAL(int32_t months, int32_t days, int64_t micros) {
 	Value result(LogicalType::INTERVAL);
 	result.is_null = false;
@@ -844,7 +846,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		case PhysicalType::UINT32:
 			return Value::UINTEGER((uint32_t)value);
 		default:
-			throw InvalidTypeException(type, "Enum doesn't accept this physical type");
+			throw InternalException("Enum doesn't accept this physical type");
 		}
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
@@ -1064,7 +1066,7 @@ string Value::ToString() const {
 		return ret;
 	}
 	case LogicalTypeId::ENUM: {
-		auto values_insert_order = EnumType::GetValuesInsertOrder(type_);
+		auto &values_insert_order = EnumType::GetValuesInsertOrder(type_);
 		switch (type_.InternalType()) {
 		case PhysicalType::UINT8:
 			return values_insert_order[value_.utinyint];
