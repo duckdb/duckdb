@@ -43,6 +43,22 @@ static Value BinaryValueOperation(const Value &left, const Value &right) {
 			left_hugeint = Hugeint::Convert(left.value_.bigint);
 			right_hugeint = Hugeint::Convert(right.value_.bigint);
 			break;
+		case PhysicalType::UINT8:
+			left_hugeint = Hugeint::Convert(left.value_.utinyint);
+			right_hugeint = Hugeint::Convert(right.value_.utinyint);
+			break;
+		case PhysicalType::UINT16:
+			left_hugeint = Hugeint::Convert(left.value_.usmallint);
+			right_hugeint = Hugeint::Convert(right.value_.usmallint);
+			break;
+		case PhysicalType::UINT32:
+			left_hugeint = Hugeint::Convert(left.value_.uinteger);
+			right_hugeint = Hugeint::Convert(right.value_.uinteger);
+			break;
+		case PhysicalType::UINT64:
+			left_hugeint = Hugeint::Convert(left.value_.ubigint);
+			right_hugeint = Hugeint::Convert(right.value_.ubigint);
+			break;
 		case PhysicalType::INT128:
 			left_hugeint = left.value_.hugeint;
 			right_hugeint = right.value_.hugeint;

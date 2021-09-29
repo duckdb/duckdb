@@ -1,0 +1,33 @@
+# name: test/sql/copy/parquet/lineitem_arrow.test
+# description: Issue #2261: TPC-H Q6 fails on Parquet input
+# group: [parquet]
+
+require tpch
+
+require parquet
+
+statement ok
+CREATE TABLE lineitem AS SELECT * FROM 'data/parquet-testing/arrow/lineitem-arrow.parquet'
+
+query I nosort q01
+PRAGMA tpch(1)
+----
+
+query I nosort q06
+PRAGMA tpch(6)
+----
+
+statement ok
+DROP TABLE lineitem
+
+statement ok
+CREATE VIEW lineitem AS SELECT * FROM 'data/parquet-testing/arrow/lineitem-arrow.parquet'
+
+query I nosort q01
+PRAGMA tpch(1)
+----
+
+query I nosort q06
+PRAGMA tpch(6)
+----
+

@@ -1,8 +1,13 @@
 library("testthat")
 library("DBI")
 
+skip_on_cran()
+skip_on_os("windows")
+skip_if_not_installed("arrow", "5.0.0")
+# Skip if parquet is not a capability as an indicator that Arrow is fully installed.
+skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not fully featured, skipping Arrow integration tests")
+
 test_that("duckdb_register_arrow() works", {
-  skip_if_not_installed("arrow", "4.0.1")
   con <- dbConnect(duckdb::duckdb())
   res <- arrow::read_parquet("userdata1.parquet", as_data_frame=FALSE)
   duckdb::duckdb_register_arrow(con, "myreader", res)
@@ -23,9 +28,7 @@ test_that("duckdb_register_arrow() works", {
 })
 
 test_that("duckdb_register_arrow() works with datasets", {
-    skip_if_not_installed("arrow", "4.0.1")
     con <- dbConnect(duckdb::duckdb())
-
     # Registering a dataset + aggregation
     ds <- arrow::open_dataset("userdata1.parquet")
     duckdb::duckdb_register_arrow(con, "mydatasetreader", ds)
@@ -39,13 +42,11 @@ test_that("duckdb_register_arrow() works with datasets", {
     duckdb::duckdb_unregister_arrow(con, "mydatasetreader")
 
     dbDisconnect(con, shutdown = T)
-  
+
 })
 
 
 test_that("duckdb_register_arrow() performs projection pushdown", {
-    skip_if_not_installed("arrow", "4.0.1")
-
     con <- dbConnect(duckdb::duckdb())
 
     # Registering a dataset + aggregation
@@ -65,8 +66,6 @@ test_that("duckdb_register_arrow() performs projection pushdown", {
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown", {
-    skip_if_not_installed("arrow", "4.0.1")
-
     con <- dbConnect(duckdb::duckdb())
 
     # Registering a dataset + aggregation
@@ -87,7 +86,6 @@ test_that("duckdb_register_arrow() performs selection pushdown", {
 
 
 numeric_operators <- function(data_type) {
-    skip_if_not_installed("arrow", "4.0.1")
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a ",data_type,", b ",data_type,", c ",data_type,")"))
     dbExecute(con, "INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
@@ -123,8 +121,6 @@ numeric_operators <- function(data_type) {
 
 
 test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
-    skip_if_not_installed("arrow", "4.0.1")
-
     numeric_types <- c('TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT',
     'FLOAT', 'DOUBLE')
 
@@ -141,7 +137,7 @@ test_that("duckdb_register_arrow() performs selection pushdown hugeint type", {
 
     for (data_type in numeric_types)
         expect_error(numeric_operators(data_type))
-        
+
 
 })
 
@@ -156,7 +152,6 @@ test_that("duckdb_register_arrow() performs selection pushdown decimal types", {
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
-    skip_if_not_installed("arrow", "4.0.1")
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  VARCHAR, b VARCHAR, c VARCHAR)"))
     dbExecute(con, "INSERT INTO  test VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)")
@@ -190,7 +185,6 @@ test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown bool type", {
-    skip_if_not_installed("arrow", "4.0.1")
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  BOOL, b BOOL)"))
     dbExecute(con, "INSERT INTO  test VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)")
@@ -216,8 +210,6 @@ test_that("duckdb_register_arrow() performs selection pushdown bool type", {
 
 # NotImplemented: Function equal has no kernel matching input types (array[time64[us]], scalar[time32[s]])
 test_that("duckdb_register_arrow() performs selection pushdown time type", {
-    skip_if_not_installed("arrow", "4.0.1")
-
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  TIME, b TIME, c TIME)"))
     dbExecute(con, "INSERT INTO  test VALUES ('00:01:00','00:01:00','00:01:00'),('00:10:00','00:10:00','00:10:00'),('01:00:00','00:10:00','01:00:00'),(NULL,NULL,NULL)")
@@ -252,8 +244,6 @@ test_that("duckdb_register_arrow() performs selection pushdown time type", {
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown timestamp type", {
-    skip_if_not_installed("arrow", "4.0.1")
-
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  TIMESTAMP, b TIMESTAMP, c TIMESTAMP)"))
     dbExecute(con, "INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
@@ -287,14 +277,12 @@ test_that("duckdb_register_arrow() performs selection pushdown timestamp type", 
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown date type", {
-    skip_if_not_installed("arrow", "4.0.1")
-    
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE TABLE test (a  DATE, b DATE, c DATE)"))
     dbExecute(con, "INSERT INTO  test VALUES ('2000-01-01','2000-01-01','2000-01-01'),('2000-10-01','2000-10-01','2000-10-01'),('2010-01-01','2000-10-01','2010-01-01'),(NULL,NULL,NULL)")
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
     duckdb::duckdb_register_arrow(con, "testarrow", arrow_table)
-    
+
     # Try ==
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a ='2000-01-01'")[[1]], 1)
     # Try >
@@ -326,7 +314,7 @@ test_that("duckdb_register_arrow() under many threads", {
     ds <- arrow::InMemoryDataset$create(mtcars)
     duckdb::duckdb_register_arrow(con, "mtcars_arrow", ds)
     DBI::dbExecute(con, "PRAGMA threads=32")
-    DBI::dbExecute(con, "PRAGMA force_parallelism")
+    DBI::dbExecute(con, "PRAGMA verify_parallelism")
     expect_error(DBI::dbGetQuery(con, "SELECT cyl, COUNT(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
 
     expect_error(DBI::dbGetQuery(con, "SELECT cyl, SUM(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)

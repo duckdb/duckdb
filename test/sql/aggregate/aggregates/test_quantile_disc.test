@@ -149,7 +149,7 @@ statement ok
 pragma threads=4
 
 statement ok
-PRAGMA force_parallelism
+PRAGMA verify_parallelism
 
 # single GROUP
 query III

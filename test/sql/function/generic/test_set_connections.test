@@ -1,0 +1,70 @@
+# name: test/sql/function/generic/test_set_connections.test
+# description: Test SET function across multiple connections
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok con1
+SET SESSION a = 42;
+
+query I con1
+SELECT CURRENT_SETTING('a');
+----
+42
+
+statement error con2
+SELECT CURRENT_SETTING('a');
+
+statement ok con2
+SET SESSION a = asdf;
+
+query I con1
+SELECT CURRENT_SETTING('a');
+----
+42
+
+query I con2
+SELECT CURRENT_SETTING('a');
+----
+asdf
+
+statement ok con1
+SET GLOBAL b = 42;
+
+query I con1
+SELECT CURRENT_SETTING('b');
+----
+42
+
+query I con2
+SELECT CURRENT_SETTING('b');
+----
+42
+
+statement ok con2
+SET GLOBAL b = 43;
+
+query I con1
+SELECT CURRENT_SETTING('b');
+----
+43
+
+query I con2
+SELECT CURRENT_SETTING('b');
+----
+43
+
+# Default (SESSION) scoping
+statement ok con1
+SET c = 42;
+
+query I con1
+SELECT CURRENT_SETTING('c');
+----
+42
+
+statement error
+SELECT CURRENT_SETTING('c');
+----
+42

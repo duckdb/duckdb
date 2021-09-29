@@ -87,7 +87,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(Expression 
 unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(unique_ptr<Expression> &expr) {
 	auto stats = PropagateExpression(*expr, &expr);
 	if (context.query_verification_enabled && stats) {
-		expr->stats = stats->Copy();
+		expr->verification_stats = stats->Copy();
 	}
 	return stats;
 }

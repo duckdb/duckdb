@@ -9,18 +9,19 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/filter_propagate_result.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/planner/bound_tokens.hpp"
+#include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
-#include "duckdb/planner/column_binding_map.hpp"
-#include "duckdb/planner/bound_tokens.hpp"
-#include "duckdb/common/types/value.hpp"
-#include "duckdb/common/enums/filter_propagate_result.hpp"
 
 namespace duckdb {
 class ClientContext;
 class LogicalOperator;
 class TableFilter;
+struct BoundOrderByNode;
 
 class StatisticsPropagator {
 public:
@@ -86,6 +87,8 @@ private:
 	unique_ptr<BaseStatistics> PropagateExpression(BoundConstantExpression &expr, unique_ptr<Expression> *expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundColumnRefExpression &expr, unique_ptr<Expression> *expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr);
+
+	void PropagateAndCompress(unique_ptr<Expression> &expr, unique_ptr<BaseStatistics> &stats);
 
 	void ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node);
 

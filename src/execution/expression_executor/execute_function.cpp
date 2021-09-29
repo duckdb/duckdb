@@ -5,12 +5,15 @@ namespace duckdb {
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundFunctionExpression &expr,
                                                                 ExpressionExecutorState &root) {
-	auto result = make_unique<ExpressionState>(expr, root);
+	auto result = make_unique<ExecuteFunctionState>(expr, root);
 	for (auto &child : expr.children) {
 		result->AddChild(child.get());
 	}
 	result->Finalize();
-	return result;
+	if (expr.function.init_local_state) {
+		result->local_state = expr.function.init_local_state(expr, expr.bind_info.get());
+	}
+	return move(result);
 }
 
 void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, ExpressionState *state,

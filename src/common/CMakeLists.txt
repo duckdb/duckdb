@@ -17,6 +17,7 @@ add_library_unity(
   radix.cpp
   constants.cpp
   checksum.cpp
+  cycle_counter.cpp
   exception.cpp
   exception_format_value.cpp
   file_buffer.cpp
@@ -24,6 +25,7 @@ add_library_unity(
   gzip_file_system.cpp
   pipe_file_system.cpp
   limits.cpp
+  local_file_system.cpp
   printer.cpp
   progress_bar.cpp
   serializer.cpp
@@ -31,7 +33,7 @@ add_library_unity(
   symbols.cpp
   tree_renderer.cpp
   types.cpp
-  cycle_counter.cpp)
+  virtual_file_system.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common>
     PARENT_SCOPE)

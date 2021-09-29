@@ -7,9 +7,10 @@
 
 namespace duckdb {
 
-BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path)
+BufferedFileReader::BufferedFileReader(FileSystem &fs, const char *path, FileOpener *opener)
     : fs(fs), data(unique_ptr<data_t[]>(new data_t[FILE_BUFFER_SIZE])), offset(0), read_data(0), total_read(0) {
-	handle = fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, FileLockType::READ_LOCK);
+	handle =
+	    fs.OpenFile(path, FileFlags::FILE_FLAGS_READ, FileLockType::READ_LOCK, FileSystem::DEFAULT_COMPRESSION, opener);
 	file_size = fs.GetFileSize(*handle);
 }
 

@@ -9,7 +9,7 @@ statement ok
 PRAGMA threads=4
 
 statement ok
-PRAGMA force_parallelism
+PRAGMA verify_parallelism
 
 statement ok
 CREATE TABLE test AS (SELECT string_agg(range, '🦆 ') AS s, mod(range, 10000) xx FROM range(50000) GROUP BY xx)

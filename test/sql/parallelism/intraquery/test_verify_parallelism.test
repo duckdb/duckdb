@@ -1,0 +1,47 @@
+# name: test/sql/parallelism/intraquery/test_verify_parallelism.test
+# description: Test force parallelism on small-ish tables (few thousand rows)
+# group: [intraquery]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+PRAGMA enable_profiling
+
+statement ok
+PRAGMA profiling_output='__TEST_DIR__/test.json'
+
+statement ok
+PRAGMA profiling_mode = detailed
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(0, 5000) tbl(i)
+
+# test simple aggregates
+query II
+SELECT MIN(i), MAX(i) FROM integers
+----
+0	4999
+
+query II
+SELECT MIN(i), MAX(i) FROM integers WHERE i>2000
+----
+2001	4999
+
+# test grouped aggregates
+statement ok
+CREATE TABLE integers2 AS SELECT i%4 i, i j FROM range(0, 5000) tbl(i)
+
+query IIII
+SELECT i, SUM(j), MIN(j), MAX(j) FROM integers2 GROUP BY i ORDER BY i
+----
+0	3122500	0	4996
+1	3123750	1	4997
+2	3125000	2	4998
+3	3126250	3	4999

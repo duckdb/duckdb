@@ -22,6 +22,9 @@ class ClientContext;
 namespace tpcds {
 
 struct DSDGenWrapper {
+	//! Create the TPC-DS tables in the given schema with the given suffix
+	static void CreateTPCDSSchema(duckdb::ClientContext &context, std::string schema, std::string suffix, bool keys,
+	                              bool overwrite);
 	//! Generate the TPC-DS data of the given scale factor
 	static void DSDGen(double scale, duckdb::ClientContext &context, std::string schema = DEFAULT_SCHEMA,
 	                   std::string suffix = "");

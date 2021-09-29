@@ -121,8 +121,8 @@ struct OdbcHandleDbc : public OdbcHandle {
 	std::vector<OdbcHandleStmt *> vec_stmt_ref;
 };
 
-inline bool IsSQLVarcharType(SQLSMALLINT type) {
-	if (type == SQL_CHAR || type == SQL_VARCHAR || type == SQL_WVARCHAR) {
+inline bool IsSQLVariableLengthType(SQLSMALLINT type) {
+	if (type == SQL_CHAR || type == SQL_VARCHAR || type == SQL_WVARCHAR || type == SQL_BINARY) {
 		return true;
 	}
 	return false;
@@ -136,7 +136,7 @@ struct OdbcBoundCol {
 	}
 
 	bool IsVarcharBound() {
-		if (IsSQLVarcharType(type)) {
+		if (IsSQLVariableLengthType(type)) {
 			return strlen_or_ind != nullptr;
 		}
 		return false;

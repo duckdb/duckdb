@@ -23,14 +23,14 @@ public:
 class HTTPFileHandle : public FileHandle {
 public:
 	HTTPFileHandle(FileSystem &fs, std::string path);
+	// This two-phase construction allows subclasses more flexible setup.
+	virtual void InitializeMetadata();
 
 protected:
 	void Close() override {
 	}
 
 private:
-	virtual void IntializeMetadata();
-
 public:
 	idx_t length;
 	time_t last_modified;
@@ -46,8 +46,9 @@ public:
 
 class HTTPFileSystem : public FileSystem {
 public:
-	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = FileLockType::NO_LOCK,
-	                                     FileCompressionType compression = FileCompressionType::UNCOMPRESSED) override;
+	std::unique_ptr<FileHandle> OpenFile(const string &path, uint8_t flags, FileLockType lock = DEFAULT_LOCK,
+	                                     FileCompressionType compression = DEFAULT_COMPRESSION,
+	                                     FileOpener *opener = nullptr) override final;
 
 	std::vector<std::string> Glob(const std::string &path) override {
 		return {path}; // FIXME
@@ -61,12 +62,6 @@ public:
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
-	// unsupported operations
-	void Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override;
-	int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
-	void Truncate(FileHandle &handle, int64_t new_size) override;
-	void FileSync(FileHandle &handle) override;
-
 	int64_t GetFileSize(FileHandle &handle) override;
 
 	time_t GetLastModifiedTime(FileHandle &handle) override;
@@ -75,12 +70,24 @@ public:
 
 	static void Verify();
 
+	bool CanSeek() override {
+		return true;
+	}
+
 	void Seek(FileHandle &handle, idx_t location) override;
 
 	bool CanHandleFile(const string &fpath) override;
 	bool OnDiskFile(FileHandle &handle) override {
 		return false;
 	}
+
+	std::string GetName() const override {
+		return "HTTPFileSystem";
+	}
+
+protected:
+	virtual std::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+	                                                     FileCompressionType compression, FileOpener *opener);
 };
 
 } // namespace duckdb

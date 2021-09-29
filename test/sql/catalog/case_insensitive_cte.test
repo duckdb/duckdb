@@ -1,0 +1,15 @@
+# name: test/sql/catalog/case_insensitive_cte.test
+# description: Test case insensitive CTE
+# group: [catalog]
+
+query I
+with cte AS (SELECT 42 "A")
+select a from cte
+----
+42
+
+query I
+with "CTE" AS (SELECT 42)
+select * from cte
+----
+42

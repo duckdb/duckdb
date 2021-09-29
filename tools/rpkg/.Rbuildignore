@@ -15,3 +15,4 @@ src/Makevars.in
 build-*
 deploy-*
 CMakeLists.txt
+NEWS.md

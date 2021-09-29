@@ -61,6 +61,8 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 	// case hasn't reached the end of query result, then try to fetch
 	if (!resultset_end) {
 		try {
+			// it's need to reset the last_fetched_len
+			ResetLastFetchedVariableVal();
 			auto chunk = stmt->res->Fetch();
 			if (!chunk) {
 				resultset_end = true;
@@ -393,4 +395,26 @@ void OdbcFetch::ClearChunks() {
 	chunk_row = prior_chunk_row = -1;
 	row_count = 0;
 	resultset_end = false;
+}
+
+void OdbcFetch::ResetLastFetchedVariableVal() {
+	last_fetched_variable_val.col_idx = -1;
+	last_fetched_variable_val.row_idx = -1;
+	last_fetched_variable_val.length = 0;
+}
+
+void OdbcFetch::SetLastFetchedVariableVal(row_t col_idx) {
+	if (last_fetched_variable_val.col_idx != col_idx || last_fetched_variable_val.row_idx != chunk_row) {
+		last_fetched_variable_val.length = 0;
+	}
+	last_fetched_variable_val.col_idx = col_idx;
+	last_fetched_variable_val.row_idx = chunk_row;
+}
+
+void OdbcFetch::SetLastFetchedLength(size_t new_len) {
+	last_fetched_variable_val.length = new_len;
+}
+
+size_t OdbcFetch::GetLastFetchedLength() {
+	return last_fetched_variable_val.length;
 }

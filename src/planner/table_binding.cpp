@@ -23,17 +23,10 @@ Binding::Binding(const string &alias, vector<LogicalType> coltypes, vector<strin
 		}
 		name_map[name] = i;
 	}
-	TableCatalogEntry::AddLowerCaseAliases(name_map);
 }
 
 bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
 	auto entry = name_map.find(column_name);
-	if (entry != name_map.end()) {
-		result = entry->second;
-		return true;
-	}
-	// no match found: try to lowercase the column name
-	entry = name_map.find(StringUtil::Lower(column_name));
 	if (entry != name_map.end()) {
 		result = entry->second;
 		return true;

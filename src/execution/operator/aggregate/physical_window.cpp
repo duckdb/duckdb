@@ -422,7 +422,8 @@ public:
 };
 
 static void SortCollectionForPartition(PhysicalWindowOperatorState &state, BoundWindowExpression *wexpr,
-                                       ChunkCollection &input, ChunkCollection &over) {
+                                       ChunkCollection &input, ChunkCollection &over, ChunkCollection *hashes,
+                                       const hash_t hash_bin, const hash_t hash_mask) {
 	if (input.Count() == 0) {
 		return;
 	}
@@ -449,6 +450,17 @@ static void SortCollectionForPartition(PhysicalWindowOperatorState &state, Bound
 	payload.Fuse(over);
 	auto payload_types = payload.Types();
 
+	// initialise partitioning memory
+	// to minimise copying, we fill up a chunk and then sink it.
+	SelectionVector sel;
+	DataChunk over_partition;
+	DataChunk payload_partition;
+	if (hashes) {
+		sel.Initialize(STANDARD_VECTOR_SIZE);
+		over_partition.Initialize(over.Types());
+		payload_partition.Initialize(payload_types);
+	}
+
 	// initialize row layout for sorting
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
@@ -464,7 +476,47 @@ static void SortCollectionForPartition(PhysicalWindowOperatorState &state, Bound
 	for (idx_t i = 0; i < chunk_count; i++) {
 		auto &over_chunk = *over.Chunks()[i];
 		auto &payload_chunk = *payload.Chunks()[i];
-		local_sort_state.SinkChunk(over_chunk, payload_chunk);
+
+		// Extract the hash partition, if any
+		if (hashes) {
+			auto &hash_chunk = *hashes->Chunks()[i];
+			auto hash_size = hash_chunk.size();
+			auto hash_data = FlatVector::GetData<hash_t>(hash_chunk.data[0]);
+			idx_t bin_size = 0;
+			for (idx_t i = 0; i < hash_size; ++i) {
+				if ((hash_data[i] & hash_mask) == hash_bin) {
+					sel.set_index(bin_size++, i);
+				}
+			}
+
+			// Flush the partition chunks if we would overflow
+			if (over_partition.size() + bin_size > STANDARD_VECTOR_SIZE) {
+				local_sort_state.SinkChunk(over_partition, payload_partition);
+				over_partition.Reset();
+				payload_partition.Reset();
+			}
+
+			// Copy the data for each collection.
+			if (bin_size) {
+				over_partition.Append(over_chunk, sel, bin_size);
+				payload_partition.Append(payload_chunk, sel, bin_size);
+			}
+		} else {
+			local_sort_state.SinkChunk(over_chunk, payload_chunk);
+		}
+	}
+
+	// Flush any ragged partition chunks
+	if (over_partition.size() > 0) {
+		local_sort_state.SinkChunk(over_partition, payload_partition);
+		over_partition.Reset();
+		payload_partition.Reset();
+	}
+
+	// If there are no hashes, release the input to save memory.
+	if (!hashes) {
+		over.Reset();
+		input.Reset();
 	}
 
 	// add local state to global state, which sorts the data
@@ -1166,44 +1218,6 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 	}
 }
 
-static void AppendCollection(const ChunkCollection &source, ChunkCollection &target, SelectionVector &sel,
-                             const idx_t source_count, const idx_t chunk_idx) {
-
-	DataChunk chunk;
-	chunk.Initialize(source.Types());
-	source.GetChunk(chunk_idx).Copy(chunk, sel, source_count);
-	target.Append(chunk);
-}
-
-static void ExtractPartition(WindowGlobalState &gstate, ChunkCollection &chunks, ChunkCollection &over_collection,
-                             const hash_t hash_bin, const hash_t hash_mask) {
-
-	//	Copy the partition data so we can work with it on this thread
-	ChunkCollection &hashes = gstate.hash_collection;
-	SelectionVector sel;
-	for (idx_t chunk_idx = 0; chunk_idx < hashes.ChunkCount(); ++chunk_idx) {
-		//	Build a selection vector of matching hashes
-		auto &hash_chunk = hashes.GetChunk(chunk_idx);
-		auto hash_size = hash_chunk.size();
-		auto hash_data = FlatVector::GetData<hash_t>(hash_chunk.data[0]);
-		sel.Initialize(hash_size);
-		idx_t bin_size = 0;
-		for (idx_t i = 0; i < hash_size; ++i) {
-			if ((hash_data[i] & hash_mask) == hash_bin) {
-				sel.set_index(bin_size++, i);
-			}
-		}
-
-		//	Copy the data for each collection
-		if (bin_size == 0) {
-			continue;
-		}
-
-		AppendCollection(gstate.chunks, chunks, sel, bin_size, chunk_idx);
-		AppendCollection(gstate.over_collection, over_collection, sel, bin_size, chunk_idx);
-	}
-}
-
 //===--------------------------------------------------------------------===//
 // GetChunkInternal
 //===--------------------------------------------------------------------===//
@@ -1280,11 +1294,9 @@ static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalSt
 		const auto has_sorting = over_expr->partitions.size() + over_expr->orders.size();
 		if (has_sorting && input.Count() > 0) {
 			// 2. One partition
-			SortCollectionForPartition(state, over_expr, input, over);
+			SortCollectionForPartition(state, over_expr, input, over, nullptr, 0, 0);
 
 			// Overwrite the collections with the sorted data
-			over.Reset();
-			input.Reset();
 			ScanSortedPartition(state, input, input_types, over, over_types);
 		}
 
@@ -1294,16 +1306,14 @@ static void GeneratePartition(PhysicalWindowOperatorState &state, WindowGlobalSt
 
 	} else if (hash_bin < gstate.counts.size() && gstate.counts[hash_bin] > 0) {
 		// 3. Multiple partitions
+		const auto hash_mask = hash_t(gstate.counts.size() - 1);
+		SortCollectionForPartition(state, over_expr, gstate.chunks, gstate.over_collection, &gstate.hash_collection,
+		                           hash_bin, hash_mask);
+
+		// Scan the sorted data into new Collections
 		ChunkCollection input;
 		ChunkCollection output;
 		ChunkCollection over;
-		const auto hash_mask = hash_t(gstate.counts.size() - 1);
-		ExtractPartition(gstate, input, over, hash_bin, hash_mask);
-		SortCollectionForPartition(state, over_expr, input, over);
-
-		// Overwrite the collections with the sorted data
-		over.Reset();
-		input.Reset();
 		ScanSortedPartition(state, input, input_types, over, over_types);
 
 		ComputeWindowExpressions(window_exprs, input, output, over);

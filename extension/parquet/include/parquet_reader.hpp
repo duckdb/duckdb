@@ -71,6 +71,7 @@ public:
 
 	Allocator &allocator;
 	string file_name;
+	FileOpener *file_opener;
 	vector<LogicalType> return_types;
 	vector<string> names;
 	shared_ptr<ParquetFileMetadataCache> metadata;

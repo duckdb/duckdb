@@ -5,7 +5,7 @@
 namespace duckdb {
 
 void DuckDBPyRelation::Initialize(py::handle &m) {
-	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation")
+	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation", py::module_local())
 	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
 	         py::arg("filter_expr"))
 	    .def("project", &DuckDBPyRelation::Project, "Project the relation object by the projection in project_expr",

@@ -127,7 +127,6 @@ void ParsedExpressionIterator::EnumerateChildren(
 	case ExpressionClass::CONSTANT:
 	case ExpressionClass::DEFAULT:
 	case ExpressionClass::STAR:
-	case ExpressionClass::TABLE_STAR:
 	case ExpressionClass::PARAMETER:
 	case ExpressionClass::POSITIONAL_REFERENCE:
 		// these node types have no children

@@ -75,14 +75,20 @@ HTTPFileHandle::HTTPFileHandle(FileSystem &fs, std::string path)
     : FileHandle(fs, path), length(0), buffer_available(0), buffer_idx(0), file_offset(0), buffer_start(0),
       buffer_end(0) {
 	buffer = std::unique_ptr<data_t[]>(new data_t[BUFFER_LEN]);
+}
 
-	IntializeMetadata();
+std::unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, uint8_t flags, FileLockType lock,
+                                                             FileCompressionType compression, FileOpener *opener) {
+	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
+	return duckdb::make_unique<HTTPFileHandle>(*this, path);
 }
 
 std::unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
-                                                     FileCompressionType compression) {
+                                                     FileCompressionType compression, FileOpener *opener) {
 	D_ASSERT(compression == FileCompressionType::UNCOMPRESSED);
-	return duckdb::make_unique<HTTPFileHandle>(*this, path);
+	auto handle = CreateHandle(path, flags, lock, compression, opener);
+	handle->InitializeMetadata();
+	return move(handle);
 }
 
 void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -137,22 +143,6 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
 	return nr_bytes;
 }
 
-void HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	throw std::runtime_error("Cannot write to HTTPFS directly");
-}
-
-int64_t HTTPFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	throw std::runtime_error("Cannot write to HTTPFS directly");
-}
-
-void HTTPFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
-	throw std::runtime_error("Cannot truncate a file from HTTPFS");
-}
-
-void HTTPFileSystem::FileSync(FileHandle &handle) {
-	throw std::runtime_error("Cannot sync a file on HTTPFS");
-}
-
 int64_t HTTPFileSystem::GetFileSize(FileHandle &handle) {
 	auto &sfh = (HTTPFileHandle &)handle;
 	return sfh.length;
@@ -185,12 +175,13 @@ void HTTPFileSystem::Seek(FileHandle &handle, idx_t location) {
 	sfh.file_offset = location;
 }
 
-void HTTPFileHandle::IntializeMetadata() {
+void HTTPFileHandle::InitializeMetadata() {
 	// get length using HEAD
 	auto &hfs = (HTTPFileSystem &)file_system;
 	auto res = hfs.Request(*this, path, "HEAD");
 	if (res->code != 200) {
-		throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + res->error);
+		throw std::runtime_error("Unable to connect to URL \"" + path + "\": " + std::to_string(res->code) + " (" +
+		                         res->error + ")");
 	}
 	length = std::atoll(res->headers["Content-Length"].c_str());
 
