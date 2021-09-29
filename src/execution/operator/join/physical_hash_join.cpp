@@ -234,6 +234,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	// resolve the join keys for the left chunk
+	state.join_keys.Reset();
 	state.probe_executor.Execute(input, state.join_keys);
 
 	// perform the actual probe
