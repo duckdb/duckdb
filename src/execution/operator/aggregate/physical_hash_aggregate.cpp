@@ -95,7 +95,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 class HashAggregateGlobalState : public GlobalSinkState {
 public:
 	HashAggregateGlobalState(const PhysicalHashAggregate &op_p, ClientContext &context)
-	    : op(op_p), is_empty(true), total_groups(0),
+	    : op(op_p), is_empty(true), multi_scan(true), total_groups(0),
 	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()) {
 	}
 
@@ -105,6 +105,8 @@ public:
 
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
+	//! Whether or not the hash table should be scannable multiple times
+	bool multi_scan;
 	//! The lock for updating the global aggregate state
 	mutex lock;
 	//! a counter to determine if we should switch over to p
@@ -140,6 +142,11 @@ public:
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
 };
+
+void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
+	auto &gstate = (HashAggregateGlobalState &)state;
+	gstate.multi_scan = true;
+}
 
 unique_ptr<GlobalSinkState> PhysicalHashAggregate::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<HashAggregateGlobalState>(*this, context);
@@ -314,6 +321,7 @@ void PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientCon
 	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
 	if (ForceSingleHT(gstate)) {
 		D_ASSERT(gstate.finalized_hts.size() <= 1);
+		D_ASSERT(gstate.finalized_hts.empty() || gstate.finalized_hts[0]);
 		return;
 	}
 
@@ -435,12 +443,15 @@ void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
 			state.finished = true;
 			return;
 		}
+		D_ASSERT(gstate.finalized_hts[state.ht_index]);
 		elements_found = gstate.finalized_hts[state.ht_index]->Scan(state.ht_scan_position, state.scan_chunk);
 
 		if (elements_found > 0) {
 			break;
 		}
-		gstate.finalized_hts[state.ht_index].reset();
+		if (!gstate.multi_scan) {
+			gstate.finalized_hts[state.ht_index].reset();
+		}
 		state.ht_index++;
 		state.ht_scan_position = 0;
 	}

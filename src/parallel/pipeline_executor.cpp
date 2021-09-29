@@ -22,64 +22,75 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	InitializeChunk(final_chunk);
 }
 
-void PipelineExecutor::Execute() {
-	D_ASSERT(pipeline.sink);
-	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
-	while(true) {
-		source_chunk.Reset();
-		FetchFromSource(source_chunk);
-		if (source_chunk.size() == 0) {
-			break;
-		}
-		auto result = ExecutePush(source_chunk);
-		if (result == OperatorResultType::FINISHED) {
-			break;
-		}
-	}
-	PushFinalize();
-}
-
-OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) {
-	D_ASSERT(pipeline.sink);
-	if (context.client.interrupted) {
-		return OperatorResultType::FINISHED;
-	}
-	if (input.size() == 0) {
-		return OperatorResultType::NEED_MORE_INPUT;
-	}
+void PipelineExecutor::RunFunctionInTryCatch(const std::function<void(void)> &fun) {
 	auto &executor = pipeline.executor;
 	try {
-		while(true) {
-			OperatorResultType result;
-			if (!pipeline.operators.empty()) {
-				final_chunk.Reset();
-				result = Execute(input, final_chunk);
-				if (result == OperatorResultType::FINISHED) {
-					return OperatorResultType::FINISHED;
-				}
-			} else {
-				result = OperatorResultType::NEED_MORE_INPUT;
-			}
-			auto &sink_chunk = pipeline.operators.empty() ? input : final_chunk;
-			if (sink_chunk.size() > 0) {
-				StartOperator(pipeline.sink);
-				D_ASSERT(pipeline.sink);
-				D_ASSERT(pipeline.sink->sink_state);
-				auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
-				EndOperator(pipeline.sink, nullptr);
-				if (sink_result == SinkResultType::FINISHED) {
-					return OperatorResultType::FINISHED;
-				}
-			}
-			if (result == OperatorResultType::NEED_MORE_INPUT) {
-				return OperatorResultType::NEED_MORE_INPUT;
-			}
-		}
+		fun();
 	} catch (std::exception &ex) {
 		executor.PushError(ex.what());
 	} catch (...) { // LCOV_EXCL_START
 		executor.PushError("Unknown exception in pipeline!");
 	} // LCOV_EXCL_STOP
+}
+
+void PipelineExecutor::Execute() {
+	RunFunctionInTryCatch([&]() {
+		D_ASSERT(pipeline.sink);
+		auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
+		while(true) {
+			source_chunk.Reset();
+			FetchFromSource(source_chunk);
+			if (source_chunk.size() == 0) {
+				break;
+			}
+			auto result = ExecutePushInternal(source_chunk);
+			if (result == OperatorResultType::FINISHED) {
+				break;
+			}
+		}
+		PushFinalize();
+	});
+}
+
+OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) {
+	auto result = OperatorResultType::FINISHED;
+	RunFunctionInTryCatch([&]() {
+		result = ExecutePushInternal(input);
+	});
+	return result;
+}
+
+OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input) {
+	D_ASSERT(pipeline.sink);
+	if (input.size() == 0) {
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
+	while(true) {
+		OperatorResultType result;
+		if (!pipeline.operators.empty()) {
+			final_chunk.Reset();
+			result = Execute(input, final_chunk);
+			if (result == OperatorResultType::FINISHED) {
+				return OperatorResultType::FINISHED;
+			}
+		} else {
+			result = OperatorResultType::NEED_MORE_INPUT;
+		}
+		auto &sink_chunk = pipeline.operators.empty() ? input : final_chunk;
+		if (sink_chunk.size() > 0) {
+			StartOperator(pipeline.sink);
+			D_ASSERT(pipeline.sink);
+			D_ASSERT(pipeline.sink->sink_state);
+			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
+			EndOperator(pipeline.sink, nullptr);
+			if (sink_result == SinkResultType::FINISHED) {
+				return OperatorResultType::FINISHED;
+			}
+		}
+		if (result == OperatorResultType::NEED_MORE_INPUT) {
+			return OperatorResultType::NEED_MORE_INPUT;
+		}
+	}
 	return OperatorResultType::FINISHED;
 }
 
@@ -91,18 +102,20 @@ void PipelineExecutor::PushFinalize() {
 }
 
 void PipelineExecutor::ExecutePull(DataChunk &result) {
-	D_ASSERT(!pipeline.sink);
-	auto &source_chunk = pipeline.operators.empty() ? result : *intermediate_chunks[0];
-	source_chunk.Reset();
-	if (in_process_operators.empty()) {
-		FetchFromSource(source_chunk);
-		if (source_chunk.size() == 0) {
+	RunFunctionInTryCatch([&]() {
+		if (context.client.interrupted) {
 			return;
 		}
-	}
-	if (!pipeline.operators.empty()) {
-		Execute(source_chunk, result);
-	}
+		D_ASSERT(!pipeline.sink);
+		auto &source_chunk = pipeline.operators.empty() ? result : *intermediate_chunks[0];
+		source_chunk.Reset();
+		if (in_process_operators.empty()) {
+			FetchFromSource(source_chunk);
+		}
+		if (!pipeline.operators.empty()) {
+			Execute(source_chunk, result);
+		}
+	});
 }
 
 void PipelineExecutor::PullFinalize() {
@@ -122,6 +135,9 @@ void PipelineExecutor::GoToSource(idx_t &current_idx) {
 }
 
 OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result) {
+	if (input.size() == 0) {
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
 	D_ASSERT(!pipeline.operators.empty());
 
 	idx_t current_idx;

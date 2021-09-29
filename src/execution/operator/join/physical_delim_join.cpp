@@ -49,6 +49,9 @@ public:
 unique_ptr<GlobalSinkState> PhysicalDelimJoin::GetGlobalSinkState(ClientContext &context) const {
 	auto state = make_unique<DelimJoinGlobalState>(this);
 	distinct->sink_state = distinct->GetGlobalSinkState(context);
+	if (delim_scans.size() > 1) {
+		PhysicalHashAggregate::SetMultiScan(*distinct->sink_state);
+	}
 	return move(state);
 }
 
