@@ -52,8 +52,14 @@ SELECT "dest", percentile_disc([0.25, 0.5, 0.75]) WITHIN GROUP (ORDER BY "arr_de
 FROM "flights"
 GROUP BY "dest"
 
-# Cannot use multiple ORDER BY clauses with WITHIN GROUPstatement error
+# Cannot use multiple ORDER BY clauses with WITHIN GROUP
 statement error
 SELECT "dest", mode() WITHIN GROUP (ORDER BY "arr_delay", "arr_time") AS "median_delay"
+FROM "flights"
+GROUP BY "dest"
+
+# Unknown ordered aggregate "duck".
+statement error
+SELECT "dest", duck(0.5) WITHIN GROUP (ORDER BY "arr_delay") AS "duck_delay"
 FROM "flights"
 GROUP BY "dest"

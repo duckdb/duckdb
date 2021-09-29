@@ -216,6 +216,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		} else if (lowercase_name == "percentile_disc") {
 			lowercase_name = "quantile_disc";
 		} else if (lowercase_name == "mode") {
+			lowercase_name = "mode";
 		} else {
 			throw ParserException("Unknown ordered aggregate \"%s\".", function_name);
 		}
