@@ -308,6 +308,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 	case PhysicalType::INTERVAL:
 		return sizeof(interval_t);
 	case PhysicalType::STRUCT:
+	case PhysicalType::UNKNOWN:
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return sizeof(list_entry_t); // offset + len
@@ -457,6 +458,9 @@ string LogicalType::ToString() const {
 			return "DECIMAL";
 		}
 		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
+	}
+	case LogicalTypeId::ENUM: {
+		return EnumType::GetTypeName(*this);
 	}
 	default:
 		return LogicalTypeIdToString(id_);

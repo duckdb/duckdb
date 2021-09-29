@@ -140,6 +140,8 @@ public:
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
 
+	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &schema);
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
@@ -167,8 +169,6 @@ private:
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
-
-	void BindLogicalType(LogicalType &type, const string &schema);
 
 	BoundStatement Bind(SelectStatement &stmt);
 	BoundStatement Bind(InsertStatement &stmt);

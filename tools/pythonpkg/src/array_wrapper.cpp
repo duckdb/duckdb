@@ -488,8 +488,6 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 			dtype = "int16";
 		} else if (size <= (idx_t)NumericLimits<int32_t>::Maximum()) {
 			dtype = "int32";
-		} else if (size <= (idx_t)NumericLimits<int64_t>::Maximum()) {
-			dtype = "int64";
 		} else {
 			throw InternalException("Size not supported on ENUM types");
 		}
@@ -542,8 +540,6 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 			may_have_null = ConvertColumnCategorical<int16_t>(current_offset, dataptr, idata, count, physical_type);
 		} else if (size <= (idx_t)NumericLimits<int32_t>::Maximum()) {
 			may_have_null = ConvertColumnCategorical<int32_t>(current_offset, dataptr, idata, count, physical_type);
-		} else if (size <= (idx_t)NumericLimits<int64_t>::Maximum()) {
-			may_have_null = ConvertColumnCategorical<int64_t>(current_offset, dataptr, idata, count, physical_type);
 		} else {
 			throw InternalException("Size not supported on ENUM types");
 		}

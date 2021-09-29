@@ -194,6 +194,7 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AddColumn(ClientContext &context, Ad
 	for (idx_t i = 0; i < columns.size(); i++) {
 		create_info->columns.push_back(columns[i].Copy());
 	}
+	Binder::BindLogicalType(context, info.new_column.type, schema->name);
 	info.new_column.oid = columns.size();
 	create_info->columns.push_back(info.new_column.Copy());
 

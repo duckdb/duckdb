@@ -112,7 +112,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	return BindSchema(info);
 }
-void Binder::BindLogicalType(LogicalType &type, const string &schema) {
+void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &schema) {
 	if (type.id() == LogicalTypeId::USER) {
 		auto &user_type_name = UserType::GetTypeName(type);
 		auto enum_catalog = (EnumCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::ENUM_ENTRY,
@@ -193,7 +193,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		// We first check if there are any user types, if yes we check to which custom types they refer.
 		auto &create_table_info = (CreateTableInfo &)*stmt.info;
 		for (auto &column : create_table_info.columns) {
-			BindLogicalType(column.type, stmt.info->schema);
+			BindLogicalType(context, column.type, stmt.info->schema);
 		}
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);

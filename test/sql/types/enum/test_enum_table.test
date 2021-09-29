@@ -100,7 +100,138 @@ statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
 statement ok
+CREATE TYPE intelligence AS ENUM ('dumb', 'smart', 'ehh');
+
+statement ok
 CREATE TABLE aliens (
     name text,
     current_mood mood
 );
+
+# ALTER TABLE ADD COLUMN with the enum type (see test/sql/alter/add_col/test_add_col.test)
+
+statement ok
+INSERT INTO aliens VALUES ('Alf o Eteimoso', 'happy'), ('Dr Zoidberg', 'sad')
+
+statement ok
+ALTER TABLE aliens ADD COLUMN iq_level intelligence
+
+query III
+select * from aliens
+----
+Alf o Eteimoso	happy	NULL
+Dr Zoidberg	sad	NULL
+
+statement ok
+INSERT INTO aliens VALUES ('The Borg', 'ok', 'ehh')
+
+query III
+select * from aliens
+----
+Alf o Eteimoso	happy	NULL
+Dr Zoidberg	sad	NULL
+The Borg	ok	ehh
+
+# ALTER TABLE SET DATA TYPE with the enum type (see test/sql/alter/alter_type/test_alter_type.test)
+statement ok
+ALTER TABLE aliens ALTER current_mood SET DATA TYPE VARCHAR
+
+query III
+select * from aliens
+----
+Alf o Eteimoso	happy	NULL
+Dr Zoidberg	sad	NULL
+The Borg	ok	ehh
+
+# Comparisons between enum columns with the same enum type
+statement ok
+CREATE TYPE car_brand AS ENUM ('Tesla', 'VW', 'Seat', 'Fiets');
+
+statement ok
+DROP TABLE person
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood,
+    last_year_mood mood,
+    car car_brand
+);
+
+statement ok
+INSERT INTO person VALUES ('Pedro', 'ok', 'ok','Seat'), ('Mark', 'sad', 'happy','Fiets');
+
+query IIII
+select * from person where current_mood = last_year_mood
+----
+Pedro	ok	ok	Seat
+
+# Comparisons between enums and strings
+
+query IIII
+select * from person where current_mood = 'ok'
+----
+Pedro	ok	ok	Seat
+
+# Comparison between two different enum types (Unimplemented type for cast (car_brand -> mood))
+statement error
+select * from person where current_mood = car
+
+#GROUP BY and ORDER BY on enums, both as keys and in the payload
+statement ok
+INSERT INTO person VALUES ('Diego', 'sad', 'happy','Seat'), ('Tim', 'happy', 'sad','Fiets');
+
+query II
+select count(*), current_mood from person group by current_mood
+----
+1	ok
+2	sad
+1	happy
+
+query II
+select name, current_mood from person order by current_mood
+----
+Mark	sad
+Diego	sad
+Pedro	ok
+Tim	happy
+
+#Explicit CAST and TRY_CAST from enum -> string
+query I
+SELECT CAST (current_mood as STRING) from person
+----
+ok
+sad
+sad
+happy
+
+query I
+SELECT TRY_CAST (current_mood as STRING) from person
+----
+ok
+sad
+sad
+happy
+
+#Explicit CAST and TRY_CAST from string -> enum (note that try_cast should return NULL instead of throwing an exception if the cast fails)
+query I
+SELECT CAST ('ok' as mood)
+----
+ok
+
+query I
+SELECT TRY_CAST ('ok' as mood)
+----
+ok
+
+statement error
+SELECT CAST ('bla' as mood)
+----
+ok
+
+query I
+SELECT TRY_CAST ('bla' as mood)
+----
+NULL
+
+#Enums in structs/lists/maps, including casts (e.g. select ['happy']::mood[])

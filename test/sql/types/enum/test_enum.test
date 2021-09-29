@@ -8,6 +8,20 @@ PRAGMA enable_verification
 statement ok
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
+# Casts should work
+query I
+select 'happy'::mood;
+----
+happy
+
+# Casts should fail if not in the enum
+statement error
+select 'awesome-bro'::mood;
+
+# Non-String keys should fail
+statement error
+select 0::mood;
+
 # Postgres accept empty ENUMs
 statement ok
 CREATE TYPE bla AS ENUM ();
@@ -75,3 +89,11 @@ DROP TYPE IF EXISTS mood;
 # We shouldn't be able to add NULL values to ENUMs
 statement error
 CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy', NULL);
+
+mode skip
+
+# CREATE TEMPORARY TYPE (Fixme : Parser doesn't support this yet)
+statement ok
+CREATE TEMPORARY TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+mode unskip

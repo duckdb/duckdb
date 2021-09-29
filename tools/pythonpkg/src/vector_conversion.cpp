@@ -287,8 +287,6 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 			ScanPandasCategory<int16_t>(numpy_col, count, offset, out);
 		} else if (src_type == "int32") {
 			ScanPandasCategory<int32_t>(numpy_col, count, offset, out);
-		} else if (src_type == "int64") {
-			ScanPandasCategory<int64_t>(numpy_col, count, offset, out);
 		} else {
 			throw NotImplementedException("The Pandas type " + src_type +
 			                              " for categorical types is not implemented yet");

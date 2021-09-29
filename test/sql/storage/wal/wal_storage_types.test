@@ -56,6 +56,25 @@ SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE not i
 ----
 false	false	500	500
 
+# enum
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+INSERT INTO person VALUES ('Moe', 'happy');
+
+query TT
+select * from person
+----
+Moe	happy
+
+
 restart
 
 # restart and check all types again
@@ -92,3 +111,9 @@ query IIII
 SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE not i
 ----
 false	false	500	500
+
+
+query TT
+select * from person
+----
+Moe	happy

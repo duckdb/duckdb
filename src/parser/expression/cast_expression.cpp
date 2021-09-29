@@ -9,10 +9,6 @@ CastExpression::CastExpression(LogicalType target, unique_ptr<ParsedExpression> 
     : ParsedExpression(ExpressionType::OPERATOR_CAST, ExpressionClass::CAST), cast_type(move(target)),
       try_cast(try_cast_p) {
 	D_ASSERT(child);
-	if (cast_type.id() == LogicalTypeId::USER) {
-		// Right now the only custom type is ENUM, casts shouldn't work on them
-		throw std::runtime_error("Cast not allowed for User Type " + UserType::GetTypeName(cast_type));
-	}
 	this->child = move(child);
 }
 

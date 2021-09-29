@@ -46,6 +46,9 @@ private:
 	void ReplayCreateSchema();
 	void ReplayDropSchema();
 
+	void ReplayCreateEnum();
+	void ReplayDropEnum();
+
 	void ReplayCreateSequence();
 	void ReplayDropSequence();
 	void ReplaySequenceValue();
@@ -202,6 +205,13 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::CHECKPOINT:
 		ReplayCheckpoint();
 		break;
+	case WALType::CREATE_ENUM:
+		ReplayCreateEnum();
+		break;
+	case WALType::DROP_ENUM:
+		ReplayDropEnum();
+		break;
+
 	default:
 		throw InternalException("Invalid WAL entry type!");
 	}
@@ -287,6 +297,37 @@ void ReplayState::ReplayCreateSchema() {
 }
 
 void ReplayState::ReplayDropSchema() {
+	DropInfo info;
+
+	info.type = CatalogType::SCHEMA_ENTRY;
+	info.name = source.Read<string>();
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Enum
+//===--------------------------------------------------------------------===//
+void ReplayState::ReplayCreateEnum() {
+	CreateEnumInfo info;
+
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
+	source.ReadStringVector(info.values);
+
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateEnum(context, &info);
+}
+
+void ReplayState::ReplayDropEnum() {
 	DropInfo info;
 
 	info.type = CatalogType::SCHEMA_ENTRY;
