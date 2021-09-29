@@ -5,6 +5,7 @@ if(NOT ODBC_FOUND)
   message(FATAL_ERROR No ODBC found)
 endif()
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
 set(LINK_LIB_LIST "")
 
 if(ODBC_FOUND)
@@ -13,6 +14,10 @@ if(ODBC_FOUND)
     list(APPEND LINK_LIB_LIST ${ODBCINST_LIB})
     add_definitions(-DODBC_LINK_ODBCINST)
     message(STATUS "Found ODBCINST_LIB: " ${ODBCINST_LIB})
+  endif()
+
+  if(WIN32)
+    add_subdirectory(winsetup)
   endif()
 endif()
 
