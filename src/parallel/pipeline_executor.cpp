@@ -96,6 +96,9 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 	source_chunk.Reset();
 	if (in_process_operators.empty()) {
 		FetchFromSource(source_chunk);
+		if (source_chunk.size() == 0) {
+			return;
+		}
 	}
 	if (!pipeline.operators.empty()) {
 		Execute(source_chunk, result);
