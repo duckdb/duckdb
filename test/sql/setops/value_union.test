@@ -61,3 +61,7 @@ SELECT * FROM (SELECT * FROM vunion INTERSECT SELECT * FROM vunion) tbl ORDER BY
 1	10
 2	5
 3	4
+
+query II
+SELECT * FROM (SELECT * FROM vunion EXCEPT SELECT * FROM vunion) tbl
+----

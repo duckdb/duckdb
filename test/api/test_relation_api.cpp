@@ -244,7 +244,7 @@ TEST_CASE("Test combinations of set operations", "[relation_api]") {
 	REQUIRE_NOTHROW(result = vunion->Union(vunion)->Distinct()->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10, 5, 4}));
-	REQUIRE_NOTHROW(result = vunion->Intersect(vunion)->Order("1")->Execute());
+	REQUIRE_NOTHROW(result = vunion->Intersect(vunion)->Distinct()->Order("1")->Execute());
 	REQUIRE(CHECK_COLUMN(result, 0, {1, 2, 3}));
 	REQUIRE(CHECK_COLUMN(result, 1, {10,  5, 4}));
 	REQUIRE_NOTHROW(result = vunion->Except(vunion)->Execute());
