@@ -67,12 +67,16 @@ TEST_CASE("Test ART index with the same value multiple times", "[art][.]") {
 	}
 }
 
+// If you directly use RAND_MAX:
+// > warning: implicit conversion from 'int' to 'float' changes value from 2147483647 to 2147483648
+constexpr float RAND_MAX_FLOAT = static_cast<float>(static_cast<double>(RAND_MAX));
+
 float generate_small_float() {
-	return static_cast<float>(rand()) / static_cast<float>(RAND_MAX);
+	return static_cast<float>(rand()) / RAND_MAX_FLOAT;
 }
 
 float generate_float(float min_float, float max_float) {
-	return min_float + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (max_float - min_float)));
+	return min_float + static_cast<float>(rand()) / (RAND_MAX_FLOAT / (max_float - min_float));
 }
 
 double generate_small_double() {

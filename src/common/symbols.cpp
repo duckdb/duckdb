@@ -164,7 +164,10 @@ INSTANTIATE_VECTOR(std::vector<std::shared_ptr<Pipeline>>)
 template class std::vector<std::vector<Expression *>>;
 template class std::vector<LogicalType>;
 
+#if !defined(__clang__)
 template struct std::atomic<uint64_t>;
+#endif
+
 template class std::bitset<STANDARD_VECTOR_SIZE>;
 template class std::unordered_map<PhysicalOperator *, QueryProfiler::TreeNode *>;
 template class std::stack<PhysicalOperator *>;
