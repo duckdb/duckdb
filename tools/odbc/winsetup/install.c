@@ -6,6 +6,7 @@
 #include <odbcinst.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdbool.h>
 
 static const char *DriverName = "DuckDB Driver";
 static const char *DataSourceName = "DuckDB";
@@ -14,13 +15,13 @@ static const char *DriverDLLs = "duckdb_odbc_setup.dll";
 static const char *DUCKDB_ODBC_VER = "3.0";
 
 //global option do show or not message box, useful on the CI
-bool SHOW_MSG_BOX=true
+static bool SHOW_MSG_BOX = true;
 
 void print_msg(const char *func, const char *msg, int errnr) {
 	if (SHOW_MSG_BOX) {
-		MessageBox(NULL, errmsg, func, MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
+		MessageBox(NULL, msg, func, MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
 	} else {
-		prinf("%d - %s: %s\n", errnr, func, errmsg);
+		printf("%d - %s: %s\n", errnr, func, msg);
 	}
 }
 
@@ -55,7 +56,7 @@ ProcessSysErrorMessage(DWORD err, const char *func)
 	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 				  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 				  (LPTSTR) & lpMsgBuf, 0, NULL);
-	print_msg(func, lpMsgBuf, errnr);
+	print_msg(func, lpMsgBuf, 0);
 	LocalFree(lpMsgBuf);
 }
 
@@ -164,9 +165,11 @@ CreateAttributeString(char *attrs, size_t len, const char *dsn)
 			 "DSN=%s;Database=:memory:;",
 			 dsn);
 
-	for (; *attrs; attrs++)
-		if (*attrs == ';')
+	for (; *attrs; attrs++) {
+		if (*attrs == ';') {
 			*attrs = '\0';
+		}
+	}
 }
 
 static BOOL
@@ -195,9 +198,11 @@ RemoveMyDSN(const char *dsn, const char *drivername)
 	char *p;
 
 	snprintf(buf, sizeof(buf), "DSN=%s;", dsn);
-	for (p = buf; *p; p++)
-		if (*p == ';')
+	for (p = buf; *p; p++) {
+		if (*p == ';') {
 			*p = 0;
+		}
+	}
 	SQLConfigDataSource(NULL, ODBC_REMOVE_SYS_DSN, drivername, buf);
 	return TRUE;
 }
@@ -213,8 +218,9 @@ Install(const char *driverpath, const char *dsn, const char *drivername)
 	/* first, retrieve the path the driver should be installed to
 	 * in path */
 	if (!SQLInstallDriverManager(path, sizeof(path), &pathlen) &&
-	    ProcessSQLErrorMessages("SQLInstallDriverManager"))
+	    ProcessSQLErrorMessages("SQLInstallDriverManager")) {
 		return FALSE;
+	}
 
 	if (!CheckIfFileExists(path, "odbc32.dll")) {
 		print_msg("Install", "You must install MDAC before you can use the ODBC driver", 0);
@@ -229,9 +235,10 @@ Install(const char *driverpath, const char *dsn, const char *drivername)
 		rc = AddMyDSN(dsn, drivername);
 	}
 
-	if (!rc)
+	if (!rc) {
 		SQLRemoveDriverManager(&usagecount);
-
+	}
+	
 	return rc;
 }
 
@@ -261,27 +268,26 @@ int main(int argc, char **argv)
 
 	/* after /Install or /Uninstall we optionally accept the DSN and the driver name */
 	const char *dsn;
-	if (argc >= 2) {
+	if (argc > 2) {
 		dsn = argv[2];
-		// /print was provided
+		// /print option was provided
 		if (is_print) {
-			dsn = argv[3];
+			dsn = (argc == 3) ? DataSourceName : argv[3];
 		}
 	} else {
 		dsn = DataSourceName;
 	}
 	
-	const char *drivername = argc >= 5 ? argv[4] : DriverName;
-	if (argc >= 4) {
+	const char *drivername; // = argc >= 5 ? argv[4] : DriverName;
+	if (argc > 3) {
 		drivername = argv[3];
-		// /print was provided
+		// /print option was provided
 		if (is_print) {
-			drivername = argv[4];
+			drivername = (argc == 4) ? DriverName : argv[4];
 		}
 	} else {
 		drivername = DriverName;
 	}
-
 
 	char buf[MAX_PATH];
 	if (GetModuleFileName(NULL, buf, (DWORD) sizeof(buf)) == 0) {
