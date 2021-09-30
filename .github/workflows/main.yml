@@ -117,7 +117,7 @@ jobs:
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
 
     - name: Install ODBC
-      run: tools/odbc/bin/Release/odbc_install.exe /print /Install
+      run: bin/Release/odbc_install.exe /print /Install
 
     - uses: actions/upload-artifact@v2
       with:
@@ -166,7 +166,7 @@ jobs:
         python scripts/asset-upload-gha.py libduckdb-windows-i386.zip duckdb_cli-windows-i386.zip duckdb_jdbc-windows-i386.jar=tools/jdbc/duckdb_jdbc.jar
 
     - name: Install ODBC
-      run: tools/odbc/bin/Release/odbc_install.exe /print /Install
+      run: bin/Release/odbc_install.exe /print /Install
 
     - uses: actions/upload-artifact@v2
       with:
