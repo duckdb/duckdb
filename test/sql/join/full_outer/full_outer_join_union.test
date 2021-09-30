@@ -51,7 +51,7 @@ UNION
 SELECT i+3, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
 UNION
 SELECT i+4, j, k, l FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.k
-ORDER BY i
+ORDER BY 1,2,3,4
 ----
 NULL	NULL	2	20
 1	1	1	10

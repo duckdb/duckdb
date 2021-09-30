@@ -44,9 +44,10 @@ void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, Pipel
 
 	PipelineEventStack stack;
 	stack.pipeline_event = pipeline_event.get();
-	stack.pipeline_finish_event = nullptr;
-	stack.pipeline_complete_event = nullptr;
+	stack.pipeline_finish_event = parent_stack.pipeline_finish_event;
+	stack.pipeline_complete_event = parent_stack.pipeline_complete_event;
 
+	stack.pipeline_event->AddDependency(*parent_stack.pipeline_event);
 	parent_stack.pipeline_finish_event->AddDependency(*pipeline_event);
 
 	events.push_back(move(pipeline_event));
@@ -76,13 +77,18 @@ void Executor::ScheduleChildPipeline(const shared_ptr<Pipeline> &pipeline, unord
 	stack.pipeline_complete_event = nullptr;
 
 	// set up the dependencies for this child pipeline
+	unordered_set<Event*> finish_events;
 	for(auto &dep : dependencies->second) {
 		auto dep_entry = event_map.find(dep);
 		D_ASSERT(dep_entry != event_map.end());
 		D_ASSERT(dep_entry->second.pipeline_event);
+		D_ASSERT(dep_entry->second.pipeline_finish_event);
+
+		auto finish_event = dep_entry->second.pipeline_finish_event;
 		stack.pipeline_event->AddDependency(*dep_entry->second.pipeline_event);
-		if (dep_entry->second.pipeline_finish_event) {
-			dep_entry->second.pipeline_finish_event->AddDependency(*stack.pipeline_event);
+		if (finish_events.find(finish_event) == finish_events.end()) {
+			finish_event->AddDependency(*stack.pipeline_event);
+			finish_events.insert(finish_event);
 		}
 	}
 
@@ -450,7 +456,6 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			auto union_pipeline = make_shared<Pipeline>(*this);
 			auto pipeline_ptr = union_pipeline.get();
 			union_pipeline->operators = current->operators;
-			union_pipeline->dependencies = current->dependencies;
 			BuildPipelines(op->children[0].get(), current);
 			union_pipelines[current].push_back(move(union_pipeline));
 
