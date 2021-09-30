@@ -112,8 +112,17 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 	return BindSchema(info);
 }
+
 void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &schema) {
-	if (type.id() == LogicalTypeId::USER) {
+	if (type.id() == LogicalTypeId::LIST) {
+		auto &child_type = ListType::GetChildTypeBind(type);
+		BindLogicalType(context, child_type, schema);
+	} else if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
+		auto &child_types = StructType::GetChildTypesBind(type);
+		for (auto &child_type : child_types) {
+			BindLogicalType(context, child_type.second, schema);
+		}
+	} else if (type.id() == LogicalTypeId::USER) {
 		auto &user_type_name = UserType::GetTypeName(type);
 		auto enum_catalog = (EnumCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::ENUM_ENTRY,
 		                                                                          schema, user_type_name, true);

@@ -861,6 +861,13 @@ const LogicalType &ListType::GetChildType(const LogicalType &type) {
 	return ((ListTypeInfo &)*info).child_type;
 }
 
+LogicalType &ListType::GetChildTypeBind(LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::LIST);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((ListTypeInfo &)*info).child_type;
+}
+
 LogicalType LogicalType::LIST(LogicalType child) {
 	auto info = make_shared<ListTypeInfo>(move(child));
 	return LogicalType(LogicalTypeId::LIST, move(info));
@@ -909,6 +916,13 @@ public:
 };
 
 const child_list_t<LogicalType> &StructType::GetChildTypes(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((StructTypeInfo &)*info).child_types;
+}
+
+child_list_t<LogicalType> &StructType::GetChildTypesBind(LogicalType &type) {
 	D_ASSERT(type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP);
 	auto info = type.AuxInfo();
 	D_ASSERT(info);

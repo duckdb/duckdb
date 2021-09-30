@@ -496,6 +496,8 @@ struct StringType {
 
 struct ListType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
+	// Non-constant on the logical type so we can bind it in case is a user type
+	DUCKDB_API static LogicalType &GetChildTypeBind( LogicalType &type);
 };
 
 struct UserType{
@@ -514,6 +516,8 @@ struct EnumType{
 
 struct StructType {
 	DUCKDB_API static const child_list_t<LogicalType> &GetChildTypes(const LogicalType &type);
+	// Non-constant on the logical type so we can bind it in case is a user type
+	DUCKDB_API static  child_list_t<LogicalType> &GetChildTypesBind(LogicalType &type);
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetChildName(const LogicalType &type, idx_t index);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);

@@ -97,3 +97,62 @@ statement ok
 CREATE TEMPORARY TYPE mood AS ENUM ('sad', 'ok', 'happy');
 
 mode unskip
+
+#Enums in structs/lists/maps
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+query I
+select ['happy']::mood[]
+----
+[happy]
+
+query I
+select ['happy','ok','ok']::mood[]
+----
+[happy, ok, ok]
+
+statement error
+select ['bla']::mood[]
+
+statement error
+select [1]::mood[]
+
+query I
+select []::mood[]
+----
+[]
+
+query I
+select [NULL]::mood[]
+----
+[NULL]
+
+query I
+select {'a': 'happy'::mood};
+----
+{'a': happy}
+
+query I
+select {'a': 'happy'::mood, 'b': 'ok'::mood};
+----
+{'a': happy, 'b': ok}
+
+query I
+select {'a': 'happy'::mood, 'b': 1, 'c': 'ok'::mood};
+----
+{'a': happy, 'b': 1, 'c': ok}
+
+statement error
+select {'a': 'happy'::mood, 'b': 'bla'::mood};
+
+statement error
+select {'a': 'bla'::mood};
+
+query I
+select MAP([1,2,3,4],['happy','ok','ok','sad']::mood[])
+----
+{1=happy, 2=ok, 3=ok, 4=sad}
+
+statement error
+select MAP([1,2,3,4],['bla','ok','ok','sad']::mood[])

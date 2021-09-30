@@ -145,17 +145,6 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 		return VectorTryCastLoop<SRC, int64_t, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::UTINYINT:
 		return VectorTryCastLoop<SRC, uint8_t, duckdb::NumericTryCast>(source, result, count, error_message);
-		//	case LogicalTypeId::ENUM: {
-		//		switch (result.GetType().InternalType()) {
-		//		case PhysicalType::UINT8:
-		//			return VectorTryCastLoop<SRC, uint8_t, duckdb::NumericTryCast>(source, result, count,
-		// error_message); 		case PhysicalType::UINT16: 			return VectorTryCastLoop<SRC, uint16_t,
-		// duckdb::NumericTryCast>(source, result, count, error_message); 		case PhysicalType::UINT32: return
-		// VectorTryCastLoop<SRC, uint32_t, duckdb::NumericTryCast>(source, result, count, error_message); 		default:
-		// throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
-		//		}
-		//
-		//	}
 	case LogicalTypeId::USMALLINT:
 		return VectorTryCastLoop<SRC, uint16_t, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::UINTEGER:
@@ -180,16 +169,18 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 }
 
 template <class T>
-void FillEnum(string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type, T *result_data,
-              ValidityMask &result_mask, const LogicalType &result_type, idx_t count, bool strict) {
+bool FillEnum(string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type, T *result_data,
+              ValidityMask &result_mask, const LogicalType &result_type, idx_t count, string *error_message) {
+	bool all_converted = true;
 	if (source_mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			auto string_value = source_data[i].GetString();
 			auto pos = EnumType::GetPos(result_type, string_value);
 			if (pos == -1) {
-				if (strict) {
+				if (!error_message) {
 					throw CastException(source_type, result_type);
 				} else {
+					all_converted = false;
 					result_mask.SetInvalid(i);
 				}
 			} else {
@@ -202,9 +193,10 @@ void FillEnum(string_t *source_data, ValidityMask &source_mask, const LogicalTyp
 				auto string_value = source_data[i].GetString();
 				auto pos = EnumType::GetPos(result_type, string_value);
 				if (pos == -1) {
-					if (strict) {
+					if (!error_message) {
 						throw CastException(source_type, result_type);
 					} else {
+						all_converted = false;
 						result_mask.SetInvalid(i);
 					}
 				} else {
@@ -215,12 +207,14 @@ void FillEnum(string_t *source_data, ValidityMask &source_mask, const LogicalTyp
 			}
 		}
 	}
+	return all_converted;
 }
 
 template <class T>
-bool TransformEnum(Vector &source, Vector &result, idx_t count, bool strict) {
+bool TransformEnum(Vector &source, Vector &result, idx_t count, string *error_message) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
 	auto enum_name = EnumType::GetTypeName(result.GetType());
+	bool all_converted = true;
 	switch (source.GetVectorType()) {
 	case VectorType::CONSTANT_VECTOR: {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -233,9 +227,10 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count, bool strict) {
 			auto string_value = source_data[0].GetString();
 			auto pos = EnumType::GetPos(result.GetType(), source_data[0].GetString());
 			if (pos == -1) {
-				if (strict) {
+				if (!error_message) {
 					throw CastException(source.GetType(), result.GetType());
 				} else {
+					all_converted = false;
 					ConstantVector::SetNull(result, true);
 				}
 			} else {
@@ -253,7 +248,8 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count, bool strict) {
 		auto result_data = FlatVector::GetData<T>(result);
 		auto result_mask = FlatVector::Validity(result);
 
-		FillEnum(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(), count, strict);
+		all_converted = FillEnum(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(),
+		                         count, error_message);
 		break;
 	}
 	default: {
@@ -268,12 +264,13 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count, bool strict) {
 		auto result_data = FlatVector::GetData<T>(result);
 		auto result_mask = FlatVector::Validity(result);
 
-		FillEnum(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(), count, strict);
+		all_converted = FillEnum(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(),
+		                         count, error_message);
 		break;
 	}
 	}
 
-	return true;
+	return all_converted;
 }
 static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, bool strict,
                                           string *error_message) {
@@ -282,11 +279,11 @@ static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t 
 	case LogicalTypeId::ENUM: {
 		switch (result.GetType().InternalType()) {
 		case PhysicalType::UINT8:
-			return TransformEnum<uint8_t>(source, result, count, strict);
+			return TransformEnum<uint8_t>(source, result, count, error_message);
 		case PhysicalType::UINT16:
-			return TransformEnum<uint16_t>(source, result, count, strict);
+			return TransformEnum<uint16_t>(source, result, count, error_message);
 		case PhysicalType::UINT32:
-			return TransformEnum<uint32_t>(source, result, count, strict);
+			return TransformEnum<uint32_t>(source, result, count, error_message);
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
