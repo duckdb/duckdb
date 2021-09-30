@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "array_wrapper.hpp"
 #include "duckdb.hpp"
+#include "duckdb_python/pybind_wrapper.hpp"
 
 namespace duckdb {
 
@@ -48,6 +49,9 @@ public:
 	py::list Description();
 
 	void Close();
+
+private:
+	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 };
 
 } // namespace duckdb

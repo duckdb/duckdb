@@ -171,6 +171,23 @@ py::list DuckDBPyResult::Fetchall() {
 py::dict DuckDBPyResult::FetchNumpy() {
 	return FetchNumpyInternal();
 }
+
+void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name) {
+	if (result->types[col_idx].id() == LogicalTypeId::ENUM) {
+		// first we (might) need to create the categorical type
+		if (categories_type.find(col_idx) == categories_type.end()) {
+			// Equivalent to: pandas.CategoricalDtype(['a', 'b'], ordered=True)
+			categories_type[col_idx] = py::module::import("pandas").attr("CategoricalDtype")(categories[col_idx], true);
+		}
+		// Equivalent to: pandas.Categorical.from_codes(codes=[0, 1, 0, 1], dtype=dtype)
+		res[name] = py::module::import("pandas")
+		                .attr("Categorical")
+		                .attr("from_codes")(conversion.ToArray(col_idx), py::arg("dtype") = categories_type[col_idx]);
+	} else {
+		res[name] = conversion.ToArray(col_idx);
+	}
+}
+
 py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk) {
 	if (!result) {
 		throw std::runtime_error("result closed");
@@ -223,7 +240,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	unordered_map<string, idx_t> names;
 	for (idx_t col_idx = 0; col_idx < result->types.size(); col_idx++) {
 		if (names[result->names[col_idx]]++ == 0) {
-			res[result->names[col_idx].c_str()] = conversion.ToArray(col_idx);
+			FillNumpy(res, col_idx, conversion, result->names[col_idx].c_str());
 		} else {
 			auto name = result->names[col_idx] + "_" + to_string(names[result->names[col_idx]]);
 			while (names[name] > 0) {
@@ -231,7 +248,7 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 				name += "_" + to_string(names[name]);
 			}
 			names[name]++;
-			res[name.c_str()] = conversion.ToArray(col_idx);
+			FillNumpy(res, col_idx, conversion, name.c_str());
 		}
 	}
 	return res;
