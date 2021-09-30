@@ -65,10 +65,6 @@ bool Pipeline::GetProgressInternal(ClientContext &context, PhysicalOperator *op,
 
 bool Pipeline::GetProgress(int &current_percentage) {
 	auto &client = executor.context;
-
-	if (!child_pipelines.empty()) {
-		return false;
-	}
 	return GetProgressInternal(client, source, current_percentage);
 }
 
@@ -143,26 +139,6 @@ void Pipeline::Ready() {
 	}
 	ready = true;
 	std::reverse(operators.begin(), operators.end());
-	// schedule child pipelines, if any
-	auto current_pipeline = this;
-	for(idx_t i = 0; i < operators.size(); i++) {
-		if (operators[i]->IsSource()) {
-			// found another operator that is a source
-			// schedule a child pipeline
-			auto new_pipeline = make_shared<Pipeline>(executor);
-			new_pipeline->sink = sink;
-			new_pipeline->source = operators[i];
-			for(idx_t k = i + 1; k < operators.size(); k++) {
-				new_pipeline->operators.push_back(operators[k]);
-			}
-			new_pipeline->ready = true;
-			new_pipeline->Reset();
-
-			auto next_pipeline = new_pipeline.get();
-			current_pipeline->child_pipelines.push_back(move(new_pipeline));
-			current_pipeline = next_pipeline;
-		}
-	}
 	Reset();
 }
 
@@ -181,11 +157,6 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 	D_ASSERT(pipeline);
 	dependencies.push_back(weak_ptr<Pipeline>(pipeline));
 	pipeline->parents.push_back(weak_ptr<Pipeline>(shared_from_this()));
-}
-
-void Pipeline::AddUnionPipeline(shared_ptr<Pipeline> pipeline) {
-	D_ASSERT(pipeline);
-	union_pipelines.push_back(pipeline);
 }
 
 string Pipeline::ToString() const {

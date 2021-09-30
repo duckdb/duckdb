@@ -69,8 +69,11 @@ private:
 	void ScheduleEvents();
 	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map);
 	void ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &stack, unordered_map<Pipeline *, PipelineEventStack> &event_map);
+	void ScheduleChildPipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map);
 	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);
 	bool NextExecutor();
+
+	void AddChildPipeline(Pipeline *current);
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
@@ -98,7 +101,21 @@ private:
 	//! The total amount of pipelines in the query
 	idx_t total_pipelines;
 
+	//! The adjacent union pipelines of each pipeline
+	//! Union pipelines have the same sink, but can be run concurrently along with this pipeline
+	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> union_pipelines;
+	//! Child pipelines of this pipeline
+	//! Like union pipelines, child pipelines share the same sink
+	//! Unlike union pipelines, child pipelines should be run AFTER their dependencies are completed
+	//! i.e. they should be run after the dependencies are completed, but before finalize is called on the sink
+	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> child_pipelines;
+	//! Dependencies of child pipelines
+	unordered_map<Pipeline *, vector<Pipeline *>> child_dependencies;
+
+	//! Duplicate eliminated join scan dependencies
 	unordered_map<PhysicalOperator *, Pipeline *> delim_join_dependencies;
+
+	//! Active recursive CTE node (if any)
 	PhysicalOperator *recursive_cte;
 };
 } // namespace duckdb

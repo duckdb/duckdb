@@ -68,13 +68,6 @@ private:
 	vector<weak_ptr<Pipeline>> parents;
 	//! The dependencies of this pipeline
 	vector<weak_ptr<Pipeline>> dependencies;
-	//! The adjacent union pipelines of this pipeline
-	//! Union pipelines have the same sink, but can be run concurrently along with this pipeline
-	vector<shared_ptr<Pipeline>> union_pipelines;
-	//! Child pipelines of this pipeline
-	//! Child pipelines should be run AFTER this pipeline is completed, but share the same sink
-	//! i.e. they should be run after this pipeline is completed, but before the finalize is called
-	vector<shared_ptr<Pipeline>> child_pipelines;
 
 private:
 	bool GetProgressInternal(ClientContext &context, PhysicalOperator *op, int &current_percentage);
@@ -82,9 +75,6 @@ private:
 	bool LaunchScanTasks(shared_ptr<Event> &event, idx_t max_threads);
 
 	bool ScheduleParallel(shared_ptr<Event> &event);
-
-	//! Add a pipeline to this pipeline with the same sink
-	void AddUnionPipeline(shared_ptr<Pipeline> pipeline);
 };
 
 } // namespace duckdb

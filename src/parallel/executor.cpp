@@ -51,12 +51,45 @@ void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, Pipel
 
 	events.push_back(move(pipeline_event));
 
-	for(auto &union_pipeline : pipeline->union_pipelines) {
-		ScheduleUnionPipeline(union_pipeline, parent_stack, event_map);
+	auto union_entry = union_pipelines.find(pipeline.get());
+	if (union_entry != union_pipelines.end()) {
+		for(auto &entry : union_entry->second) {
+			ScheduleUnionPipeline(entry, parent_stack, event_map);
+		}
 	}
 	event_map.insert(make_pair(pipeline.get(), stack));
 }
 
+void Executor::ScheduleChildPipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
+	pipeline->Ready();
+
+	auto child_ptr = pipeline.get();
+	auto dependencies = child_dependencies.find(child_ptr);
+	D_ASSERT(union_pipelines.find(child_ptr) == union_pipelines.end());
+	D_ASSERT(dependencies != child_dependencies.end());
+	// create the pipeline event and the event stack
+	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
+
+	PipelineEventStack stack;
+	stack.pipeline_event = pipeline_event.get();
+	stack.pipeline_finish_event = nullptr;
+	stack.pipeline_complete_event = nullptr;
+
+	// set up the dependencies for this child pipeline
+	for(auto &dep : dependencies->second) {
+		auto dep_entry = event_map.find(dep);
+		D_ASSERT(dep_entry != event_map.end());
+		D_ASSERT(dep_entry->second.pipeline_event);
+		stack.pipeline_event->AddDependency(*dep_entry->second.pipeline_event);
+		if (dep_entry->second.pipeline_finish_event) {
+			dep_entry->second.pipeline_finish_event->AddDependency(*stack.pipeline_event);
+		}
+	}
+
+	events.push_back(move(pipeline_event));
+
+	event_map.insert(make_pair(child_ptr, stack));
+}
 
 void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
 	D_ASSERT(pipeline);
@@ -79,8 +112,11 @@ void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_
 	events.push_back(move(pipeline_finish_event));
 	events.push_back(move(pipeline_complete_event));
 
-	for(auto &union_pipeline : pipeline->union_pipelines) {
-		ScheduleUnionPipeline(union_pipeline, stack, event_map);
+	auto union_entry = union_pipelines.find(pipeline.get());
+	if (union_entry != union_pipelines.end()) {
+		for(auto &entry : union_entry->second) {
+			ScheduleUnionPipeline(entry, stack, event_map);
+		}
 	}
 	event_map.insert(make_pair(pipeline.get(), stack));
 }
@@ -91,6 +127,12 @@ void Executor::ScheduleEvents() {
 	unordered_map<Pipeline *, PipelineEventStack> event_map;
 	for(auto &pipeline : pipelines) {
 		SchedulePipeline(pipeline, event_map);
+	}
+	// schedule child pipelines
+	for(auto &entry : child_pipelines) {
+		for(auto &child_entry : entry.second) {
+			ScheduleChildPipeline(child_entry, event_map);
+		}
 	}
 	// set up the dependencies between pipeline events
 	for(auto &entry : event_map) {
@@ -116,14 +158,20 @@ void Executor::ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_pt
 
 	auto pipeline_ptr = pipeline.get();
 	result.push_back(move(pipeline));
-	for(auto &union_pipeline : pipeline_ptr->union_pipelines) {
-		ExtractPipelines(union_pipeline, result);
+	auto union_entry = union_pipelines.find(pipeline_ptr);
+	if (union_entry != union_pipelines.end()) {
+		for(auto &entry : union_entry->second) {
+			ExtractPipelines(entry, result);
+		}
+		union_pipelines.erase(pipeline_ptr);
 	}
-	pipeline_ptr->union_pipelines.clear();
-	for(auto &child_pipeline : pipeline_ptr->child_pipelines) {
-		ExtractPipelines(child_pipeline, result);
+	auto child_entry = child_pipelines.find(pipeline_ptr);
+	if (child_entry != child_pipelines.end()) {
+		for(auto &entry : child_entry->second) {
+			ExtractPipelines(entry, result);
+		}
+		child_pipelines.erase(pipeline_ptr);
 	}
-	pipeline_ptr->child_pipelines.clear();
 }
 
 bool Executor::NextExecutor() {
@@ -251,6 +299,33 @@ void Executor::Reset() {
 	exceptions.clear();
 	pipelines.clear();
 	events.clear();
+	union_pipelines.clear();
+	child_pipelines.clear();
+	child_dependencies.clear();
+}
+
+void Executor::AddChildPipeline(Pipeline *current) {
+	D_ASSERT(!current->operators.empty());
+	// found another operator that is a source
+	// schedule a child pipeline
+	auto child_pipeline = make_shared<Pipeline>(*this);
+	child_pipeline->sink = current->sink;
+	child_pipeline->operators = current->operators;
+	child_pipeline->source = current->operators.back();
+	D_ASSERT(child_pipeline->source->IsSource());
+	child_pipeline->operators.pop_back();
+
+	vector<Pipeline *> dependencies;
+	dependencies.push_back(current);
+	auto entry = union_pipelines.find(current);
+	if (entry != union_pipelines.end()) {
+		for(auto &union_pipeline : entry->second) {
+			dependencies.push_back(union_pipeline.get());
+		}
+	}
+	D_ASSERT(child_dependencies.find(child_pipeline.get()) == child_dependencies.end());
+	child_dependencies.insert(make_pair(child_pipeline.get(), move(dependencies)));
+	child_pipelines[current].push_back(move(child_pipeline));
 }
 
 void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
@@ -304,6 +379,9 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			pipeline_child = op->children[1].get();
 			// on the LHS (probe child), the operator becomes a regular operator
 			current->operators.push_back(op);
+			if (op->IsSource()) {
+				AddChildPipeline(current);
+			}
 			BuildPipelines(op->children[0].get(), current);
 			break;
 		case PhysicalOperatorType::DELIM_JOIN: {
@@ -373,7 +451,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			auto pipeline_ptr = union_pipeline.get();
 			union_pipeline->operators = current->operators;
 			BuildPipelines(op->children[0].get(), current);
-			current->AddUnionPipeline(move(union_pipeline));
+			union_pipelines[current].push_back(move(union_pipeline));
+
 			pipeline_ptr->sink = current->sink;
 			BuildPipelines(op->children[1].get(), pipeline_ptr);
 			return;

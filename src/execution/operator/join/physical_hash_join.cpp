@@ -59,6 +59,8 @@ public:
 	unique_ptr<JoinHashTable> hash_table;
 	//! The perfect hash join executor (if any)
 	unique_ptr<PerfectHashJoinExecutor> perfect_join_executor;
+	//! Whether or not the hash table has been finalized
+	bool finalized = false;
 };
 
 unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -167,12 +169,15 @@ void PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext 
 		D_ASSERT(sink.hash_table->equality_types.size() == 1);
 		auto key_type = sink.hash_table->equality_types[0];
 		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
+	} else {
+		sink.perfect_join_executor.reset();
 	}
 	// In case large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
 		sink.perfect_join_executor.reset();
 		sink.hash_table->Finalize();
 	}
+	sink.finalized = true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -208,13 +213,13 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &cont
 OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
 	auto &state = (PhysicalHashJoinState &) state_p;
 	auto &sink = (HashJoinGlobalState &)*sink_state;
-
-	if (sink.perfect_join_executor) {
-		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, chunk, *state.perfect_hash_join_state);
-	}
+	D_ASSERT(sink.finalized);
 
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return OperatorResultType::FINISHED;
+	}
+	if (sink.perfect_join_executor) {
+		return sink.perfect_join_executor->ProbePerfectHashTable(context, input, chunk, *state.perfect_hash_join_state);
 	}
 
 	if (state.scan_structure) {
