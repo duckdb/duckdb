@@ -450,6 +450,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			auto union_pipeline = make_shared<Pipeline>(*this);
 			auto pipeline_ptr = union_pipeline.get();
 			union_pipeline->operators = current->operators;
+			union_pipeline->dependencies = current->dependencies;
 			BuildPipelines(op->children[0].get(), current);
 			union_pipelines[current].push_back(move(union_pipeline));
 
