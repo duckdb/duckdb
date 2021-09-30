@@ -146,10 +146,12 @@ void Pipeline::Finalize(Event &event) {
 	D_ASSERT(ready);
 	try {
 		sink->Finalize(*this, event, executor.context, *sink->sink_state);
+	} catch (Exception &ex) {
+		executor.PushError(ex.type, ex.what());
 	} catch (std::exception &ex) {
-		executor.PushError(ex.what());
+		executor.PushError(ExceptionType::UNKNOWN_TYPE, ex.what());
 	} catch (...) { // LCOV_EXCL_START
-		executor.PushError("Unknown exception in Finalize!");
+		executor.PushError(ExceptionType::UNKNOWN_TYPE, "Unknown exception in Finalize!");
 	} // LCOV_EXCL_STOP
 }
 

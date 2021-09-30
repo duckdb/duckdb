@@ -257,6 +257,9 @@ public:
 
 	static void ParquetScanImplementation(ClientContext &context, const FunctionData *bind_data_p,
 	                                      FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+		if (!operator_state) {
+			return;
+		}
 		auto &data = (ParquetReadOperatorData &)*operator_state;
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 
@@ -310,6 +313,9 @@ public:
 
 	static bool ParquetParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
 	                                     FunctionOperatorData *state_p, ParallelState *parallel_state_p) {
+		if (!state_p) {
+			return false;
+		}
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 		auto &parallel_state = (ParquetReadParallelState &)*parallel_state_p;
 		auto &scan_data = (ParquetReadOperatorData &)*state_p;

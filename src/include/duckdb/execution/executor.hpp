@@ -12,8 +12,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/common/unordered_map.hpp"
-
-#include <queue>
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -48,8 +47,10 @@ public:
 	unique_ptr<DataChunk> FetchChunk();
 
 	//! Push a new error
-	void PushError(const string &exception);
-	bool GetError(string &exception);
+	void PushError(ExceptionType type, const string &exception);
+	bool HasError();
+	void ThrowException();
+
 
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
@@ -92,7 +93,7 @@ private:
 	//! The producer of this query
 	unique_ptr<ProducerToken> producer;
 	//! Exceptions that occurred during the execution of the current query
-	vector<string> exceptions;
+	vector<pair<ExceptionType, string>> exceptions;
 	//! List of events
 	vector<shared_ptr<Event>> events;
 

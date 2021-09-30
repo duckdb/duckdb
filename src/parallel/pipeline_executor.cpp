@@ -26,10 +26,12 @@ void PipelineExecutor::RunFunctionInTryCatch(const std::function<void(void)> &fu
 	auto &executor = pipeline.executor;
 	try {
 		fun();
+	} catch (Exception &ex) {
+		executor.PushError(ex.type, ex.what());
 	} catch (std::exception &ex) {
-		executor.PushError(ex.what());
+		executor.PushError(ExceptionType::UNKNOWN_TYPE, ex.what());
 	} catch (...) { // LCOV_EXCL_START
-		executor.PushError("Unknown exception in pipeline!");
+		executor.PushError(ExceptionType::UNKNOWN_TYPE, "Unknown exception in Finalize!");
 	} // LCOV_EXCL_STOP
 }
 
@@ -123,17 +125,15 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 			}
 		}
 	} catch (std::exception &ex) {
-		string error;
-		if (executor.GetError(error)) {
-			throw Exception(error);
+		if (executor.HasError()) {
+			executor.ThrowException();
 		}
-		throw ex;
+		throw;
 	} catch (...) { // LCOV_EXCL_START
-		string error;
-		if (executor.GetError(error)) {
-			throw Exception(error);
+		if (executor.HasError()) {
+			executor.ThrowException();
 		}
-		throw Exception("Unknown exception in pipeline!");
+		throw;
 	} // LCOV_EXCL_STOP
 }
 

@@ -256,8 +256,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 			task->Execute();
 			task.reset();
 		}
-		string exception;
-		if (!GetError(exception)) {
+		if (!HasError()) {
 			// no exceptions: continue
 			continue;
 		}
@@ -285,7 +284,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 				}
 			}
 		}
-		throw Exception(exception);
+		ThrowException();
 	}
 
 	lock_guard<mutex> elock(executor_lock);
@@ -293,7 +292,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 	NextExecutor();
 	if (!exceptions.empty()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
-		throw Exception(exceptions[0]);
+		ThrowException();
 	} // LCOV_EXCL_STOP
 }
 
@@ -496,21 +495,47 @@ vector<LogicalType> Executor::GetTypes() {
 	return physical_plan->GetTypes();
 }
 
-void Executor::PushError(const string &exception) {
+void Executor::PushError(ExceptionType type, const string &exception) {
 	lock_guard<mutex> elock(executor_lock);
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupted = true;
 	// push the exception onto the stack
-	exceptions.push_back(exception);
+	exceptions.push_back(make_pair(type, exception));
 }
 
-bool Executor::GetError(string &exception) {
+bool Executor::HasError() {
 	lock_guard<mutex> elock(executor_lock);
-	if (exceptions.empty()) {
-		return false;
+	return !exceptions.empty();
+
+}
+void Executor::ThrowException() {
+	lock_guard<mutex> elock(executor_lock);
+	D_ASSERT(!exceptions.empty());
+	auto &entry = exceptions[0];
+	switch(entry.first) {
+	case ExceptionType::TRANSACTION:
+		throw TransactionException(entry.second);
+	case ExceptionType::CATALOG:
+		throw CatalogException(entry.second);
+	case ExceptionType::PARSER:
+		throw ParserException(entry.second);
+	case ExceptionType::BINDER:
+		throw BinderException(entry.second);
+	case ExceptionType::INTERRUPT:
+		throw InterruptException();
+	case ExceptionType::FATAL:
+		throw FatalException(entry.second);
+	case ExceptionType::INTERNAL:
+		throw InternalException(entry.second);
+	case ExceptionType::IO:
+		throw IOException(entry.second);
+	case ExceptionType::CONSTRAINT:
+		throw ConstraintException(entry.second);
+	case ExceptionType::CONVERSION:
+		throw ConversionException(entry.second);
+	default:
+		throw Exception(entry.second);
 	}
-	exception = exceptions[0];
-	return true;
 }
 
 void Executor::Flush(ThreadContext &tcontext) {
