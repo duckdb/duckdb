@@ -44,9 +44,9 @@ bool PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalT
 	// todo: add check for fast pass when probe is part of build domain
 	SelectionVector sel_build(keys_count + 1);
 	SelectionVector sel_tuples(keys_count + 1);
-	bool error = FillSelectionVectorSwitchBuild(build_vector, sel_build, sel_tuples, keys_count);
+	bool success = FillSelectionVectorSwitchBuild(build_vector, sel_build, sel_tuples, keys_count);
 	// early out
-	if (error) {
+	if (!success) {
 		return false;
 	}
 	if (unique_keys == perfect_join_statistics.build_range + 1 && !ht.has_null) {
