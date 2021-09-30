@@ -13,7 +13,16 @@ static const char *DriverDLL = "duckdb_odbc.dll";
 static const char *DriverDLLs = "duckdb_odbc_setup.dll";
 static const char *DUCKDB_ODBC_VER = "3.0";
 
-/* General error handler for installer functions */
+//global option do show or not message box, useful on the CI
+bool SHOW_MSG_BOX=true
+
+void print_msg(const char *func, const char *msg, int errnr) {
+	if (SHOW_MSG_BOX) {
+		MessageBox(NULL, errmsg, func, MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
+	} else {
+		prinf("%d - %s: %s\n", errnr, func, errmsg);
+	}
+}
 
 static BOOL
 ProcessSQLErrorMessages(const char *func)
@@ -30,8 +39,7 @@ ProcessSQLErrorMessages(const char *func)
 		rc = SQLInstallerError(errnr, &errcode,
 							   errmsg, sizeof(errmsg), &errmsglen);
 		if (rc == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) {
-			MessageBox(NULL, errmsg, func,
-					   MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
+			print_msg(func, errmsg, errnr);
 			func_rc = TRUE;
 		}
 		errnr++;
@@ -47,7 +55,7 @@ ProcessSysErrorMessage(DWORD err, const char *func)
 	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 				  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 				  (LPTSTR) & lpMsgBuf, 0, NULL);
-	MessageBox(NULL, (LPCTSTR) lpMsgBuf, func, MB_OK | MB_ICONINFORMATION);
+	print_msg(func, lpMsgBuf, errnr);
 	LocalFree(lpMsgBuf);
 }
 
@@ -209,10 +217,7 @@ Install(const char *driverpath, const char *dsn, const char *drivername)
 		return FALSE;
 
 	if (!CheckIfFileExists(path, "odbc32.dll")) {
-		MessageBox(NULL,
-				   "You must install MDAC before you can use the ODBC driver",
-				   "Install",
-				   MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
+		print_msg("Install", "You must install MDAC before you can use the ODBC driver", 0);
 		SQLRemoveDriverManager(&usagecount);
 		return FALSE;
 	}
@@ -243,12 +248,44 @@ Uninstall(const char *dsn, const char *drivername)
 
 int main(int argc, char **argv)
 {
-	char buf[MAX_PATH];
+	if (argc < 2 || argc > 5) {
+		print_msg(argv[0], "[/Install | /Uninstall]", 0);
+		exit(1);
+	}
 
+	bool is_print = (strcmp("/print", argv[1]) == 0) ? true : false;
+	char *cmd = is_print ? argv[2] : argv[1];
+ 	if (is_print) {
+		SHOW_MSG_BOX = false;
+	}
+
+	/* after /Install or /Uninstall we optionally accept the DSN and the driver name */
+	const char *dsn;
+	if (argc >= 2) {
+		dsn = argv[2];
+		// /print was provided
+		if (is_print) {
+			dsn = argv[3];
+		}
+	} else {
+		dsn = DataSourceName;
+	}
+	
+	const char *drivername = argc >= 5 ? argv[4] : DriverName;
+	if (argc >= 4) {
+		drivername = argv[3];
+		// /print was provided
+		if (is_print) {
+			drivername = argv[4];
+		}
+	} else {
+		drivername = DriverName;
+	}
+
+
+	char buf[MAX_PATH];
 	if (GetModuleFileName(NULL, buf, (DWORD) sizeof(buf)) == 0) {
-		MessageBox(NULL, "Cannot retrieve file location",
-				   argv[0],
-				   MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
+		print_msg(argv[0], "Cannot retrieve file location", 0);
 		exit(1);
 	}
 
@@ -262,44 +299,23 @@ int main(int argc, char **argv)
 			*p = '\0';
 		}
 	}
-	/* else {
-		strcpy(buf, ".");
-		p = buf + 1;
-	} */
 
-
-	if (argc < 2 || argc > 4) {
-		MessageBox(NULL, "/Install or /Uninstall argument expected",
-				   argv[0],
-				   MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
-		exit(1);
-	}
-
-	/* after /Install or /Uninstall we optionally accept the DSN and
-	 * the driver name */
-	const char *dsn = argc >= 3 ? argv[2] : DataSourceName;
-	const char *drivername = argc >= 4 ? argv[3] : DriverName;
-
-	if (strcmp("/Install", argv[1]) == 0) {
+	if (strcmp("/Install", cmd) == 0) {
 		if (!Install(buf, dsn, drivername)) {
-			MessageBox(NULL, "ODBC Install Failed", argv[0],
-					   MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
+			print_msg(argv[0], "ODBC Install Failed", 0);
 			exit(1);
 		}
-	} else if (strcmp("/Uninstall", argv[1]) == 0) {
+	} else if (strcmp("/Uninstall", cmd) == 0) {
 		/* remove file we've installed in previous versions of this program */
 		strcat_s(buf, sizeof(buf), "\\ODBCDriverInstalled.txt");
 		(void) DeleteFile(buf);
 
 		if (!Uninstall(dsn, drivername)) {
-			MessageBox(NULL, "ODBC Uninstall Failed", argv[0],
-					   MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
+			print_msg(argv[0], "ODBC Uninstall Failed", 0);
 			exit(1);
 		}
 	} else {
-		MessageBox(NULL, "/Install or /Uninstall argument expected",
-				   argv[0],
-				   MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
+		print_msg(argv[0], "[/Install | /Uninstall]", 0);
 		exit(1);
 	}
 	return 0;
