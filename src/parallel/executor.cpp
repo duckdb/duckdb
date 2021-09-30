@@ -61,7 +61,7 @@ void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, Pipel
 	event_map.insert(make_pair(pipeline.get(), stack));
 }
 
-void Executor::ScheduleChildPipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
+void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
 	pipeline->Ready();
 
 	auto child_ptr = pipeline.get();
@@ -71,10 +71,11 @@ void Executor::ScheduleChildPipeline(const shared_ptr<Pipeline> &pipeline, unord
 	// create the pipeline event and the event stack
 	auto pipeline_event = make_shared<PipelineEvent>(pipeline);
 
+	auto parent_entry = event_map.find(parent);
 	PipelineEventStack stack;
 	stack.pipeline_event = pipeline_event.get();
-	stack.pipeline_finish_event = nullptr;
-	stack.pipeline_complete_event = nullptr;
+	stack.pipeline_finish_event = parent_entry->second.pipeline_finish_event;
+	stack.pipeline_complete_event = parent_entry->second.pipeline_complete_event;
 
 	// set up the dependencies for this child pipeline
 	unordered_set<Event*> finish_events;
@@ -136,8 +137,12 @@ void Executor::ScheduleEvents() {
 	}
 	// schedule child pipelines
 	for(auto &entry : child_pipelines) {
-		for(auto &child_entry : entry.second) {
-			ScheduleChildPipeline(child_entry, event_map);
+		// iterate in reverse order
+		// since child entries are added from top to bottom
+		// dependencies are in reverse order (bottom to top)
+		for(idx_t i = entry.second.size(); i > 0; i--) {
+			auto &child_entry = entry.second[i - 1];
+			ScheduleChildPipeline(entry.first, child_entry, event_map);
 		}
 	}
 	// set up the dependencies between pipeline events
@@ -323,10 +328,17 @@ void Executor::AddChildPipeline(Pipeline *current) {
 
 	vector<Pipeline *> dependencies;
 	dependencies.push_back(current);
-	auto entry = union_pipelines.find(current);
-	if (entry != union_pipelines.end()) {
-		for(auto &union_pipeline : entry->second) {
+	auto union_entry = union_pipelines.find(current);
+	if (union_entry != union_pipelines.end()) {
+		for(auto &union_pipeline : union_entry->second) {
 			dependencies.push_back(union_pipeline.get());
+		}
+	}
+	auto child_entry = child_pipelines.find(current);
+	if (child_entry != child_pipelines.end()) {
+		for(auto &current_child : child_entry->second) {
+			D_ASSERT(child_dependencies.find(current_child.get()) != child_dependencies.end());
+			child_dependencies[current_child.get()].push_back(child_pipeline.get());
 		}
 	}
 	D_ASSERT(child_dependencies.find(child_pipeline.get()) == child_dependencies.end());
