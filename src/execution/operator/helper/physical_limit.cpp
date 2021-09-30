@@ -37,6 +37,9 @@ uint64_t GetDelimiter(DataChunk &input, Expression *expr, uint64_t original_valu
 	if (limit_value.is_null) {
 		return original_value;
 	}
+	if (limit_value.value_.ubigint > 1ULL << 62ULL) {
+		throw BinderException("Max value %lld for LIMIT/OFFSET is %lld", original_value, 1ULL << 62ULL);
+	}
 	return limit_value.value_.ubigint;
 }
 
@@ -65,6 +68,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 		offset = GetDelimiter(input, offset_expression.get(), 0);
 	}
 	idx_t max_element = limit + offset;
+	idx_t input_size = input.size();
 	if (limit == 0 || state.current_offset >= max_element) {
 		return SinkResultType::FINISHED;
 	}
@@ -81,6 +85,9 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 			}
 			// set up a slice of the input chunks
 			input.Slice(input, sel, chunk_count);
+		} else {
+			state.current_offset += input_size;
+			return SinkResultType::NEED_MORE_INPUT;
 		}
 	} else {
 		// have to copy either the entire chunk or part of it
@@ -97,7 +104,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 		input.SetCardinality(chunk_count);
 	}
 
-	state.current_offset += input.size();
+	state.current_offset += input_size;
 	state.data.Append(input);
 	return SinkResultType::NEED_MORE_INPUT;
 }

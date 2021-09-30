@@ -95,6 +95,10 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input) {
 }
 
 void PipelineExecutor::PushFinalize() {
+	if (finalized) {
+		throw InternalException("Calling PushFinalize on a pipeline that has been finalized already");
+	}
+	finalized = true;
 	D_ASSERT(local_sink_state);
 	pipeline.sink->Combine(context, *pipeline.sink->sink_state, *local_sink_state);
 	pipeline.executor.Flush(thread);
@@ -102,23 +106,42 @@ void PipelineExecutor::PushFinalize() {
 }
 
 void PipelineExecutor::ExecutePull(DataChunk &result) {
-	RunFunctionInTryCatch([&]() {
-		if (context.client.interrupted) {
-			return;
-		}
+	auto &executor = pipeline.executor;
+	try {
 		D_ASSERT(!pipeline.sink);
 		auto &source_chunk = pipeline.operators.empty() ? result : *intermediate_chunks[0];
-		source_chunk.Reset();
-		if (in_process_operators.empty()) {
-			FetchFromSource(source_chunk);
+		while(result.size() == 0) {
+			if (in_process_operators.empty()) {
+				source_chunk.Reset();
+				FetchFromSource(source_chunk);
+				if (source_chunk.size() == 0) {
+					break;
+				}
+			}
+			if (!pipeline.operators.empty()) {
+				Execute(source_chunk, result);
+			}
 		}
-		if (!pipeline.operators.empty()) {
-			Execute(source_chunk, result);
+	} catch (std::exception &ex) {
+		string error;
+		if (executor.GetError(error)) {
+			throw Exception(error);
 		}
-	});
+		throw ex;
+	} catch (...) { // LCOV_EXCL_START
+		string error;
+		if (executor.GetError(error)) {
+			throw Exception(error);
+		}
+		throw Exception("Unknown exception in pipeline!");
+	} // LCOV_EXCL_STOP
 }
 
 void PipelineExecutor::PullFinalize() {
+	if (finalized) {
+		throw InternalException("Calling PullFinalize on a pipeline that has been finalized already");
+	}
+	finalized = true;
 	pipeline.executor.Flush(thread);
 }
 

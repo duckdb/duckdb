@@ -69,6 +69,8 @@ private:
 	//! The operators that are not yet finished executing and have data remaining
 	//! If the stack of in_process_operators is empty, we fetch from the source instead
 	stack<idx_t> in_process_operators;
+	//! Whether or not the pipeline has been finalized (used for verification only)
+	bool finalized = false;
 
 private:
 	void StartOperator(PhysicalOperator *op);
