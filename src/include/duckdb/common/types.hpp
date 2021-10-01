@@ -11,7 +11,6 @@
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/single_thread_ptr.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 
@@ -371,7 +370,6 @@ struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	DUCKDB_API LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info);
-	DUCKDB_API LogicalType(LogicalTypeId id,PhysicalType internal_type, shared_ptr<ExtraTypeInfo> type_info);
 
 	DUCKDB_API LogicalType(const LogicalType &other) :
 		id_(other.id_), physical_type_(other.physical_type_), type_info_(other.type_info_) {}

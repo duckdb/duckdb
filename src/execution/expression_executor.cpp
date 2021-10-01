@@ -91,7 +91,7 @@ Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {
 }
 
 void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t count) {
-	D_ASSERT(expr.return_type.InternalType() == vector.GetType().InternalType());
+	D_ASSERT(expr.return_type.id() == vector.GetType().id());
 	vector.Verify(count);
 	if (expr.verification_stats) {
 		expr.verification_stats->Verify(vector, count);
