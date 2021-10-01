@@ -322,7 +322,7 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 			column_name += "_" + to_string(pandas_column_names_map[column_name_py] - 1);
 			auto new_column_name_py = py::str(column_name);
 			names.emplace_back(new_column_name_py);
-			df_columns[py::cast(col_idx)] = column_name;
+			df_columns[py::cast(col_idx)] = new_column_name_py;
 			pandas_column_names_map[new_column_name_py]++;
 		} else {
 			names.emplace_back(column_name_py);
