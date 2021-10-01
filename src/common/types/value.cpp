@@ -81,6 +81,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
+	case LogicalTypeId::UUID:
+		return Value::UUID(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Minimum());
 	case LogicalTypeId::USMALLINT:
@@ -146,6 +148,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
+	case LogicalTypeId::UUID:
+		return Value::UUID(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Maximum());
 	case LogicalTypeId::USMALLINT:
@@ -237,6 +241,22 @@ Value Value::HUGEINT(hugeint_t value) {
 	result.is_null = false;
 	return result;
 }
+
+Value Value::UUID(hugeint_t value) {
+	Value result(LogicalType::UUID);
+	result.value_.hugeint = value;
+	result.is_null = false;
+	return result;
+}
+
+// Value Value::UUID(const string& value) {
+// 	Value result(LogicalType::UUID);
+// 	// TODO
+// 	hugeint_t hi = Hugeint::FromString(value);
+// 	result.value_.hugeint = hi;
+// 	result.is_null = false;
+// 	return result;
+// }
 
 Value Value::UTINYINT(uint8_t value) {
 	Value result(LogicalType::UTINYINT);
@@ -919,6 +939,7 @@ string Value::ToString() const {
 	case LogicalTypeId::UBIGINT:
 		return to_string(value_.ubigint);
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UUID:
 		return Hugeint::ToString(value_.hugeint);
 	case LogicalTypeId::FLOAT:
 		return to_string(value_.float_);

@@ -54,6 +54,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::UBIGINT:
 		return PhysicalType::UINT64;
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UUID:
 		return PhysicalType::INT128;
 	case LogicalTypeId::FLOAT:
 		return PhysicalType::FLOAT;
@@ -124,6 +125,7 @@ const LogicalType LogicalType::UINTEGER = LogicalType(LogicalTypeId::UINTEGER);
 const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
 const LogicalType LogicalType::UBIGINT = LogicalType(LogicalTypeId::UBIGINT);
 const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
+const LogicalType LogicalType::UUID = LogicalType(LogicalTypeId::UUID);
 const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
 const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
 const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
@@ -162,7 +164,7 @@ const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,      LogicalType::INTERVAL,
     LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,  LogicalType::USMALLINT,
     LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,      LogicalTypeId::LIST,
-    LogicalTypeId::STRUCT, LogicalTypeId::MAP};
+    LogicalTypeId::STRUCT, LogicalTypeId::MAP,     LogicalType::UUID};
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
 const PhysicalType ROW_TYPE = PhysicalType::INT64;
@@ -319,6 +321,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "BIGINT";
 	case LogicalTypeId::HUGEINT:
 		return "HUGEINT";
+	case LogicalTypeId::UUID:
+		return "UUID";
 	case LogicalTypeId::UTINYINT:
 		return "UTINYINT";
 	case LogicalTypeId::USMALLINT:
@@ -475,6 +479,8 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::INTERVAL;
 	} else if (lower_str == "hugeint" || lower_str == "int128") {
 		return LogicalTypeId::HUGEINT;
+	} else if (lower_str == "uuid" || lower_str == "guid") {
+		return LogicalTypeId::UUID;
 	} else if (lower_str == "struct" || lower_str == "row") {
 		return LogicalTypeId::STRUCT;
 	} else if (lower_str == "map") {
@@ -503,6 +509,7 @@ bool LogicalType::IsIntegral() const {
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UUID:
 		return true;
 	default:
 		return false;
