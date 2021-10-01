@@ -249,14 +249,12 @@ Value Value::UUID(hugeint_t value) {
 	return result;
 }
 
-// Value Value::UUID(const string& value) {
-// 	Value result(LogicalType::UUID);
-// 	// TODO
-// 	hugeint_t hi = Hugeint::FromString(value);
-// 	result.value_.hugeint = hi;
-// 	result.is_null = false;
-// 	return result;
-// }
+Value Value::UUID(const string& value) {
+	Value result(LogicalType::UUID);
+	result.value_.hugeint = Hugeint::FromUUIDString(value);
+	result.is_null = false;
+	return result;
+}
 
 Value Value::UTINYINT(uint8_t value) {
 	Value result(LogicalType::UTINYINT);
@@ -939,8 +937,9 @@ string Value::ToString() const {
 	case LogicalTypeId::UBIGINT:
 		return to_string(value_.ubigint);
 	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UUID:
 		return Hugeint::ToString(value_.hugeint);
+	case LogicalTypeId::UUID:
+		return Hugeint::ToUUIDString(value_.hugeint);
 	case LogicalTypeId::FLOAT:
 		return to_string(value_.float_);
 	case LogicalTypeId::DOUBLE:

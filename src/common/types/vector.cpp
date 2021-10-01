@@ -333,6 +333,9 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case LogicalTypeId::HUGEINT:
 		((hugeint_t *)data)[index] = val.value_.hugeint;
 		break;
+	case LogicalTypeId::UUID:
+		((hugeint_t *)data)[index] = val.value_.hugeint;
+		break;
 	case LogicalTypeId::DECIMAL:
 		D_ASSERT(DecimalType::GetWidth(GetType()) == DecimalType::GetWidth(val.type()));
 		D_ASSERT(DecimalType::GetScale(GetType()) == DecimalType::GetScale(val.type()));
@@ -463,6 +466,8 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::TimestampSec(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
+	case LogicalTypeId::UUID:
+		return Value::UUID(((hugeint_t *)data)[index]);
 	case LogicalTypeId::DECIMAL: {
 		auto width = DecimalType::GetWidth(GetType());
 		auto scale = DecimalType::GetScale(GetType());

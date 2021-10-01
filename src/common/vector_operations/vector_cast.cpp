@@ -153,6 +153,8 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 		return VectorTryCastLoop<SRC, uint64_t, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::HUGEINT:
 		return VectorTryCastLoop<SRC, hugeint_t, duckdb::NumericTryCast>(source, result, count, error_message);
+	case LogicalTypeId::UUID:
+		return VectorTryCastLoop<SRC, hugeint_t, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::FLOAT:
 		return VectorTryCastLoop<SRC, float, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::DOUBLE:
@@ -198,6 +200,7 @@ static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t 
 		return VectorTryCastStrictLoop<string_t, uint64_t, duckdb::TryCast>(source, result, count, strict,
 		                                                                    error_message);
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UUID:
 		return VectorTryCastStrictLoop<string_t, hugeint_t, duckdb::TryCast>(source, result, count, strict,
 		                                                                     error_message);
 	case LogicalTypeId::FLOAT:
@@ -237,6 +240,9 @@ static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 		                                                                                    strict, error_message);
 	case LogicalTypeId::BLOB:
 		return VectorTryCastStringLoop<string_t, string_t, duckdb::TryCastToBlob>(source, result, count, strict,
+		                                                                          error_message);
+	case LogicalTypeId::UUID:
+		return VectorTryCastStringLoop<string_t, hugeint_t, duckdb::TryCastToUUID>(source, result, count, strict,
 		                                                                          error_message);
 	case LogicalTypeId::SQLNULL:
 		return TryVectorNullCast(source, result, count, error_message);
@@ -362,6 +368,19 @@ static bool IntervalCastSwitch(Vector &source, Vector &result, idx_t count, stri
 	case LogicalTypeId::VARCHAR:
 		// time to varchar
 		VectorStringCast<interval_t, duckdb::StringCast>(source, result, count);
+		break;
+	default:
+		return TryVectorNullCast(source, result, count, error_message);
+	}
+	return true;
+}
+
+static bool UUIDCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
+	// now switch on the result type
+	switch (result.GetType().id()) {
+	case LogicalTypeId::VARCHAR:
+		// uuid to varchar
+		VectorStringCast<hugeint_t, duckdb::CastFromUUID>(source, result, count);
 		break;
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
@@ -511,6 +530,8 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 		return NumericCastSwitch<uint64_t>(source, result, count, error_message);
 	case LogicalTypeId::HUGEINT:
 		return NumericCastSwitch<hugeint_t>(source, result, count, error_message);
+	case LogicalTypeId::UUID:
+		return UUIDCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::DECIMAL:
 		return DecimalCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::FLOAT:

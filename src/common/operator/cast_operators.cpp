@@ -1263,6 +1263,7 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 	result = Timestamp::GetEpochSeconds(result);
 	return true;
 }
+
 //===--------------------------------------------------------------------===//
 // Cast From Blob
 //===--------------------------------------------------------------------===//
@@ -1291,6 +1292,28 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 	Blob::ToBlob(input, (data_ptr_t)result.GetDataWriteable());
 	result.Finalize();
 	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From UUID
+//===--------------------------------------------------------------------===//
+template <>
+string_t CastFromUUID::Operation(hugeint_t input, Vector &vector) {
+	auto uuid = Hugeint::ToUUIDString(input);
+	idx_t result_size = uuid.length();
+	string_t result = StringVector::EmptyString(vector, result_size);
+	memcpy(result.GetDataWriteable(), uuid.data(), result_size);
+	result.Finalize();
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To UUID
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, string *error_message,
+                              bool strict) {
+	return Hugeint::FromUUIDString(input.GetString(), result);
 }
 
 //===--------------------------------------------------------------------===//

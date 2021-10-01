@@ -640,4 +640,28 @@ template <>
 bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_vector, string *error_message,
                               bool strict);
 
+//===--------------------------------------------------------------------===//
+// UUID
+//===--------------------------------------------------------------------===//
+struct CastFromUUID {
+	template <class SRC>
+	static inline string_t Operation(SRC input, Vector &result) {
+		throw duckdb::NotImplementedException("Cast from uuid could not be performed!");
+	}
+};
+template <>
+duckdb::string_t CastFromUUID::Operation(duckdb::hugeint_t input, Vector &vector);
+
+struct TryCastToUUID {
+	template <class SRC, class DST>
+	static inline bool Operation(SRC input, DST &result, Vector &result_vector, string *error_message,
+	                             bool strict = false) {
+		throw InternalException("Unsupported type for try cast to uuid");
+	}
+};
+
+template <>
+bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, string *error_message,
+                              bool strict);
+
 } // namespace duckdb
