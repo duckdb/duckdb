@@ -292,7 +292,19 @@ void Executor::Initialize(PhysicalOperator *plan) {
 			for (auto &pipeline : pipelines) {
 				weak_references.push_back(weak_ptr<Pipeline>(pipeline));
 			}
+			for(auto &kv : union_pipelines) {
+				for(auto &pipeline : kv.second) {
+					weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+				}
+			}
+			for(auto &kv : child_pipelines) {
+				for(auto &pipeline : kv.second) {
+					weak_references.push_back(weak_ptr<Pipeline>(pipeline));
+				}
+			}
 			pipelines.clear();
+			union_pipelines.clear();
+			child_pipelines.clear();
 			events.clear();
 		}
 		for (auto &weak_ref : weak_references) {
