@@ -1,0 +1,93 @@
+# name: test/sql/function/numeric/test_round_even.test
+# description: Test round even
+# group: [numeric]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+select i, round_even(i + 0.5, 0) from generate_series(-2,4) tbl(i);
+----
+-2	-2
+-1	0
+0	0
+1	2
+2	2
+3	4
+4	4
+
+
+query II
+select i, round_even(i + 0.55, 0) from generate_series(-2,4) tbl(i);
+----
+-2	-1
+-1	0
+0	1
+1	2
+2	3
+3	4
+4	5
+
+query II
+select i, roundBankers(i + 0.55, 0) from generate_series(-2,4) tbl(i);
+----
+-2	-1
+-1	0
+0	1
+1	2
+2	3
+3	4
+4	5
+
+# decimals
+query II
+SELECT roundBankers(45, -1), roundBankers(35, -1)
+----
+40	40
+
+query II
+SELECT roundBankers(45.5, 0), roundBankers(44.5, 0)
+----
+46	44
+
+query II
+SELECT roundBankers(45.55, 1), roundBankers(45.45, 1)
+----
+45.6	45.4
+
+# negative values
+query II
+SELECT roundBankers(-45, -1), roundBankers(-35, -1)
+----
+-40	-40
+
+query II
+SELECT roundBankers(-45.5, 0), roundBankers(-44.5, 0)
+----
+-46	-44
+
+query II
+SELECT roundBankers(-45.55, 1), roundBankers(-45.45, 1)
+----
+-45.6	-45.4
+
+# doubles
+query II
+SELECT roundBankers(45::DOUBLE, -1), roundBankers(35::DOUBLE, -1)
+----
+40	40
+
+query II
+SELECT roundBankers(45.5::DOUBLE, 0), roundBankers(44.5::DOUBLE, 0)
+----
+46	44
+
+query II
+SELECT roundBankers(45.55::DOUBLE, 1), roundBankers(45.45::DOUBLE, 1)
+----
+45.6	45.4
+
+query III
+SELECT roundBankers(NULL, 1), roundBankers(45, NULL), roundBankers(NULL, NULL)
+----
+NULL	NULL	NULL
