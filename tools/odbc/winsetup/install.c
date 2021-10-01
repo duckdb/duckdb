@@ -260,9 +260,9 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
-	bool is_print = (strcmp("/print", argv[1]) == 0) ? true : false;
-	char *cmd = is_print ? argv[2] : argv[1];
- 	if (is_print) {
+	bool is_CI = (strcmp("/CI", argv[1]) == 0) ? true : false;
+	char *cmd = is_CI ? argv[2] : argv[1];
+ 	if (is_CI) {
 		SHOW_MSG_BOX = false;
 	}
 
@@ -270,19 +270,19 @@ int main(int argc, char **argv)
 	const char *dsn;
 	if (argc > 2) {
 		dsn = argv[2];
-		// /print option was provided
-		if (is_print) {
+		// /CI option was provided
+		if (is_CI) {
 			dsn = (argc == 3) ? DataSourceName : argv[3];
 		}
 	} else {
 		dsn = DataSourceName;
 	}
 	
-	const char *drivername; // = argc >= 5 ? argv[4] : DriverName;
+	const char *drivername;
 	if (argc > 3) {
 		drivername = argv[3];
-		// /print option was provided
-		if (is_print) {
+		// /CI option was provided
+		if (is_CI) {
 			drivername = (argc == 4) ? DriverName : argv[4];
 		}
 	} else {
