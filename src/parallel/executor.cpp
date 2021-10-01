@@ -36,7 +36,7 @@ struct PipelineEventStack {
 	Event *pipeline_complete_event;
 };
 
-void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &parent_stack, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
+void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &parent_stack, unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events) {
 	pipeline->Ready();
 
 	D_ASSERT(pipeline);
@@ -55,13 +55,13 @@ void Executor::ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, Pipel
 	auto union_entry = union_pipelines.find(pipeline.get());
 	if (union_entry != union_pipelines.end()) {
 		for(auto &entry : union_entry->second) {
-			ScheduleUnionPipeline(entry, parent_stack, event_map);
+			ScheduleUnionPipeline(entry, parent_stack, event_map, events);
 		}
 	}
 	event_map.insert(make_pair(pipeline.get(), stack));
 }
 
-void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
+void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events) {
 	pipeline->Ready();
 
 	auto child_ptr = pipeline.get();
@@ -98,7 +98,7 @@ void Executor::ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline
 	event_map.insert(make_pair(child_ptr, stack));
 }
 
-void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map) {
+void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events) {
 	D_ASSERT(pipeline);
 
 	pipeline->Ready();
@@ -122,18 +122,18 @@ void Executor::SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_
 	auto union_entry = union_pipelines.find(pipeline.get());
 	if (union_entry != union_pipelines.end()) {
 		for(auto &entry : union_entry->second) {
-			ScheduleUnionPipeline(entry, stack, event_map);
+			ScheduleUnionPipeline(entry, stack, event_map, events);
 		}
 	}
 	event_map.insert(make_pair(pipeline.get(), stack));
 }
 
-void Executor::ScheduleEvents() {
+void Executor::ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipelines, unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines, vector<shared_ptr<Event>> &events) {
 	D_ASSERT(events.empty());
 	// create all the required pipeline events
 	unordered_map<Pipeline *, PipelineEventStack> event_map;
 	for(auto &pipeline : pipelines) {
-		SchedulePipeline(pipeline, event_map);
+		SchedulePipeline(pipeline, event_map, events);
 	}
 	// schedule child pipelines
 	for(auto &entry : child_pipelines) {
@@ -142,7 +142,7 @@ void Executor::ScheduleEvents() {
 		// dependencies are in reverse order (bottom to top)
 		for(idx_t i = entry.second.size(); i > 0; i--) {
 			auto &child_entry = entry.second[i - 1];
-			ScheduleChildPipeline(entry.first, child_entry, event_map);
+			ScheduleChildPipeline(entry.first, child_entry, event_map, events);
 		}
 	}
 	// set up the dependencies between pipeline events
@@ -151,7 +151,11 @@ void Executor::ScheduleEvents() {
 		for(auto &dependency : pipeline->dependencies) {
 			auto dep = dependency.lock();
 			D_ASSERT(dep);
-			auto &dep_entry = event_map[dep.get()];
+			auto event_map_entry = event_map.find(dep.get());
+			if (event_map_entry == event_map.end()) {
+				continue;
+			}
+			auto &dep_entry = event_map_entry->second;
 			D_ASSERT(dep_entry.pipeline_complete_event);
 			entry.second.pipeline_event->AddDependency(*dep_entry.pipeline_complete_event);
 		}
@@ -162,6 +166,15 @@ void Executor::ScheduleEvents() {
 			event->Schedule();
 		}
 	}
+}
+
+void Executor::ScheduleEvents() {
+	ScheduleEventsInternal(pipelines, child_pipelines, events);
+}
+
+void Executor::ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events) {
+	unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> child_pipelines;
+	ScheduleEventsInternal(pipelines, child_pipelines, events);
 }
 
 void Executor::ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result) {
@@ -224,6 +237,16 @@ void Executor::VerifyPipelines() {
 #endif
 }
 
+void Executor::WorkOnTasks() {
+	auto &scheduler = TaskScheduler::GetScheduler(context);
+
+	unique_ptr<Task> task;
+	while (scheduler.GetTaskFromProducer(*producer, task)) {
+		task->Execute();
+		task.reset();
+	}
+}
+
 void Executor::Initialize(PhysicalOperator *plan) {
 	Reset();
 
@@ -251,11 +274,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 
 	// now execute tasks from this producer until all pipelines are completed
 	while (completed_pipelines < total_pipelines) {
-		unique_ptr<Task> task;
-		while (scheduler.GetTaskFromProducer(*producer, task)) {
-			task->Execute();
-			task.reset();
-		}
+		WorkOnTasks();
 		if (!HasError()) {
 			// no exceptions: continue
 			continue;
@@ -397,6 +416,9 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			// on the LHS (probe child), the operator becomes a regular operator
 			current->operators.push_back(op);
 			if (op->IsSource()) {
+				if (recursive_cte) {
+					throw NotImplementedException("FULL and RIGHT outer joins are not supported in recursive CTEs yet");
+				}
 				AddChildPipeline(current);
 			}
 			BuildPipelines(op->children[0].get(), current);
@@ -405,6 +427,31 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			// duplicate eliminated join
 			// for delim joins, recurse into the actual join
 			pipeline_child = op->children[0].get();
+			break;
+		}
+		case PhysicalOperatorType::RECURSIVE_CTE: {
+			auto &cte_node = (PhysicalRecursiveCTE &)*op;
+
+			// recursive CTE
+			current->source = op;
+			// the LHS of the recursive CTE is our initial state
+			// we build this pipeline as normal
+			pipeline_child = op->children[0].get();
+			// for the RHS, we gather all pipelines that depend on the recursive cte
+			// these pipelines need to be rerun
+			if (recursive_cte) {
+				throw InternalException("Recursive CTE detected WITHIN a recursive CTE node");
+			}
+			recursive_cte = op;
+
+			auto recursive_pipeline = make_shared<Pipeline>(*this);
+			recursive_pipeline->sink = op;
+			op->sink_state.reset();
+			BuildPipelines(op->children[1].get(), recursive_pipeline.get());
+
+			cte_node.pipelines.push_back(move(recursive_pipeline));
+
+			recursive_cte = nullptr;
 			break;
 		}
 		default:
@@ -424,8 +471,15 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			}
 			BuildPipelines(delim_join.join.get(), current);
 		}
-		// regular pipeline: schedule it
-		pipelines.push_back(move(pipeline));
+		if (!recursive_cte) {
+			// regular pipeline: schedule it
+			pipelines.push_back(move(pipeline));
+		} else {
+			// CTE pipeline! add it to the CTE pipelines
+			D_ASSERT(recursive_cte);
+			auto &cte = (PhysicalRecursiveCTE &)*recursive_cte;
+			cte.pipelines.push_back(move(pipeline));
+		}
 	} else {
 		// operator is not a sink! recurse in children
 		// first check if there is any additional action we need to do depending on the type
@@ -449,11 +503,11 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			BuildPipelines(execute.plan, current);
 			return;
 		}
-		case PhysicalOperatorType::RECURSIVE_CTE: {
-			throw InternalException("FIXME: recursive CTEs");
-		}
 		case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
-			throw InternalException("FIXME: recursive CTEs");
+			if (!recursive_cte) {
+				throw InternalException("Recursive CTE scan found without recursive CTE node");
+			}
+			break;
 		}
 		case PhysicalOperatorType::INDEX_JOIN: {
 			// index join: we only continue into the LHS
@@ -464,6 +518,9 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			return;
 		}
 		case PhysicalOperatorType::UNION: {
+			if (recursive_cte) {
+				throw NotImplementedException("UNIONS are not supported in recursive CTEs yet");
+			}
 			auto union_pipeline = make_shared<Pipeline>(*this);
 			auto pipeline_ptr = union_pipeline.get();
 			union_pipeline->operators = current->operators;

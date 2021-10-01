@@ -41,6 +41,9 @@ public:
 
 	void InsertEvent(shared_ptr<Event> replacement_event);
 
+	bool IsFinished() {
+		return finished;
+	}
 protected:
 	Executor &executor;
 	//! The current threads working on the event

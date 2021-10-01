@@ -49,6 +49,7 @@ public:
 	vector<BoundAggregateExpression *> bindings;
 
 	unordered_map<Expression *, size_t> filter_indexes;
+
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
@@ -71,12 +72,12 @@ public:
 	bool ParallelSink() const override {
 		return all_combinable;
 	}
+
 public:
 	string ParamsToString() const override;
 	//! Toggle multi-scan capability on a hash table, which prevents the scan of the aggregate from being destructive
 	//! If this is not toggled the GetData method will destroy the hash table as it is scanning it
 	static void SetMultiScan(GlobalSinkState &state);
-
 
 private:
 	//! how many groups can we have in the operator before we switch to radix partitioning

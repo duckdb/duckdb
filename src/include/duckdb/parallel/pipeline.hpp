@@ -51,6 +51,10 @@ public:
 
 	//! Returns a list of all operators (including source and sink) involved in this pipeline
 	vector<PhysicalOperator *> GetOperators() const;
+
+	PhysicalOperator *GetSink() {
+		return sink;
+	}
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;

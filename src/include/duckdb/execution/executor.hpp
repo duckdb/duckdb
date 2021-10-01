@@ -48,9 +48,14 @@ public:
 
 	//! Push a new error
 	void PushError(ExceptionType type, const string &exception);
+	//! True if an error has been thrown
 	bool HasError();
+	//! Throw the exception that was pushed using PushError.
+	//! Should only be called if HasError returns true
 	void ThrowException();
 
+	//! Work on tasks for this specific executor, until there are no tasks remaining
+	void WorkOnTasks();
 
 	//! Flush a thread context into the client context
 	void Flush(ThreadContext &context);
@@ -66,11 +71,15 @@ public:
 	}
 	void AddEvent(shared_ptr<Event> event);
 
+	void ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events);
+
 private:
 	void ScheduleEvents();
-	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map);
-	void ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &stack, unordered_map<Pipeline *, PipelineEventStack> &event_map);
-	void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map);
+	void ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipelines, unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines, vector<shared_ptr<Event>> &events);
+
+	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events);
+	void ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &stack, unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events);
+	void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events);
 	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);
 	bool NextExecutor();
 
