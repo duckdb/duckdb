@@ -313,7 +313,6 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 
 	// check if names in pandas dataframe are unique
 	unordered_map<string, idx_t> pandas_column_names_map;
-	py::array column_attributes = df.attr("columns").attr("values");
 	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
 		auto column_name_py = py::str(df_columns[col_idx]);
 		pandas_column_names_map[column_name_py]++;
@@ -323,12 +322,13 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 			column_name += "_" + to_string(pandas_column_names_map[column_name_py] - 1);
 			auto new_column_name_py = py::str(column_name);
 			names.emplace_back(new_column_name_py);
-			column_attributes[py::cast(col_idx)] = new_column_name_py;
+			df_columns[py::cast(col_idx)] = column_name;
 			pandas_column_names_map[new_column_name_py]++;
 		} else {
 			names.emplace_back(column_name_py);
 		}
 	}
+	df.attr("columns") = df_columns;
 
 	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
 		LogicalType duckdb_col_type;
