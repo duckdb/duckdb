@@ -75,9 +75,9 @@ public:
 
 private:
 	void ScheduleEvents();
-	void ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipelines, unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines, vector<shared_ptr<Event>> &events);
+	void ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipelines, unordered_map<Pipeline *, vector<shared_ptr<Pipeline>>> &child_pipelines, vector<shared_ptr<Event>> &events, bool main_schedule = true);
 
-	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events);
+	void SchedulePipeline(const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events, bool complete_pipeline);
 	void ScheduleUnionPipeline(const shared_ptr<Pipeline> &pipeline, PipelineEventStack &stack, unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events);
 	void ScheduleChildPipeline(Pipeline *parent, const shared_ptr<Pipeline> &pipeline, unordered_map<Pipeline *, PipelineEventStack> &event_map, vector<shared_ptr<Event>> &events);
 	void ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_ptr<Pipeline>> &result);

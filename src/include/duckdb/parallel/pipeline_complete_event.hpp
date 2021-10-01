@@ -15,7 +15,9 @@ class Executor;
 
 class PipelineCompleteEvent : public Event {
 public:
-	PipelineCompleteEvent(Executor &executor);
+	PipelineCompleteEvent(Executor &executor, bool complete_pipeline_p);
+
+	bool complete_pipeline;
 
 public:
 	void Schedule() override;
