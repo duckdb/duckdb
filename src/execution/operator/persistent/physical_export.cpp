@@ -105,7 +105,8 @@ void PhysicalExport::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 		});
 		schema->Scan(context.client, CatalogType::SEQUENCE_ENTRY,
 		             [&](CatalogEntry *entry) { sequences.push_back(entry); });
-		schema->Scan(context.client, CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) { custom_types.push_back(entry); });
+		schema->Scan(context.client, CatalogType::TYPE_ENTRY,
+		             [&](CatalogEntry *entry) { custom_types.push_back(entry); });
 		schema->Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { indexes.push_back(entry); });
 	});
 

@@ -12,7 +12,7 @@
 namespace duckdb {
 
 TypeCatalogEntry::TypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTypeInfo *info)
-    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info->name){
+    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info->name) {
 	user_type = make_unique<LogicalType>(*info->type);
 }
 

@@ -125,9 +125,9 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 			BindLogicalType(context, child_type.second, schema);
 		}
 		// Generate new Struct/Map Type
-		if (type.id() == LogicalTypeId::STRUCT){
+		if (type.id() == LogicalTypeId::STRUCT) {
 			type = LogicalType::STRUCT(child_types);
-		} else{
+		} else {
 			type = LogicalType::MAP(child_types);
 		}
 	} else if (type.id() == LogicalTypeId::USER) {
