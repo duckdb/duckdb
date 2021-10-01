@@ -638,6 +638,7 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::BIGINT:
 		return Cast::Operation<int64_t, T>(value_.bigint);
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UUID:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
 	case LogicalTypeId::DATE:
 		return Cast::Operation<date_t, T>(value_.date);
