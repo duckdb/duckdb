@@ -14,7 +14,7 @@ static const char *DriverDLL = "duckdb_odbc.dll";
 static const char *DriverDLLs = "duckdb_odbc_setup.dll";
 static const char *DUCKDB_ODBC_VER = "3.0";
 
-//global option do show or not message box, useful on the CI
+// global option do show or not message box, useful on the CI
 static bool SHOW_MSG_BOX = true;
 
 void print_msg(const char *func, const char *msg, int errnr) {
@@ -25,9 +25,7 @@ void print_msg(const char *func, const char *msg, int errnr) {
 	}
 }
 
-static BOOL
-ProcessSQLErrorMessages(const char *func)
-{
+static BOOL ProcessSQLErrorMessages(const char *func) {
 	WORD errnr = 1;
 	DWORD errcode;
 	char errmsg[300];
@@ -37,8 +35,7 @@ ProcessSQLErrorMessages(const char *func)
 
 	do {
 		errmsg[0] = '\0';
-		rc = SQLInstallerError(errnr, &errcode,
-							   errmsg, sizeof(errmsg), &errmsglen);
+		rc = SQLInstallerError(errnr, &errcode, errmsg, sizeof(errmsg), &errmsglen);
 		if (rc == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) {
 			print_msg(func, errmsg, errnr);
 			func_rc = TRUE;
@@ -48,30 +45,23 @@ ProcessSQLErrorMessages(const char *func)
 	return func_rc;
 }
 
-static void
-ProcessSysErrorMessage(DWORD err, const char *func)
-{
+static void ProcessSysErrorMessage(DWORD err, const char *func) {
 	char *lpMsgBuf;
 
-	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-				  NULL, err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-				  (LPTSTR) & lpMsgBuf, 0, NULL);
+	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL,
+	              err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&lpMsgBuf, 0, NULL);
 	print_msg(func, lpMsgBuf, 0);
 	LocalFree(lpMsgBuf);
 }
 
-int
-CheckIfFileExists(const char *filepath, const char *filename)
-{
+int CheckIfFileExists(const char *filepath, const char *filename) {
 	char buf[300];
 	LPTSTR b;
 
 	return SearchPath(filepath, filename, NULL, sizeof(buf), buf, &b) > 0;
 }
 
-static BOOL
-InstallMyDriver(const char *driverpath, const char *drivername)
-{
+static BOOL InstallMyDriver(const char *driverpath, const char *drivername) {
 	char outpath[301];
 	WORD outpathlen;
 	DWORD usagecount;
@@ -82,10 +72,9 @@ InstallMyDriver(const char *driverpath, const char *drivername)
 	size_t driverlen = strlen(drivername) + 2 * strlen(driverpath) + strlen(DriverDLL) + strlen(DriverDLLs) + 90;
 	char *driver = (char *)malloc(driverlen);
 	snprintf(driver, driverlen,
-			 "%s;Driver=%s\\%s;Setup=%s\\%s;APILevel=1;"
-			 "ConnectFunctions=YYN;DriverODBCVer=%s;SQLLevel=3;",
-			 drivername, driverpath, DriverDLL, driverpath, DriverDLLs,
-			 DUCKDB_ODBC_VER);
+	         "%s;Driver=%s\\%s;Setup=%s\\%s;APILevel=1;"
+	         "ConnectFunctions=YYN;DriverODBCVer=%s;SQLLevel=3;",
+	         drivername, driverpath, DriverDLL, driverpath, DriverDLLs, DUCKDB_ODBC_VER);
 
 	for (p = driver; *p; p++) {
 		if (*p == ';') {
@@ -95,9 +84,8 @@ InstallMyDriver(const char *driverpath, const char *drivername)
 
 	/* call SQLInstallDriverEx to install the driver in the
 	 * registry */
-	if (!SQLInstallDriverEx(driver, driverpath,
-							outpath, sizeof(outpath), &outpathlen,
-							ODBC_INSTALL_COMPLETE, &usagecount) &&
+	if (!SQLInstallDriverEx(driver, driverpath, outpath, sizeof(outpath), &outpathlen, ODBC_INSTALL_COMPLETE,
+	                        &usagecount) &&
 	    ProcessSQLErrorMessages("SQLInstallDriverEx")) {
 		free(driver);
 		return FALSE;
@@ -107,9 +95,7 @@ InstallMyDriver(const char *driverpath, const char *drivername)
 	return TRUE;
 }
 
-static BOOL
-RemoveMyDriver(const char *drivername)
-{
+static BOOL RemoveMyDriver(const char *drivername) {
 	char buf[300];
 	DWORD usagecount;
 	DWORD valtype, valsize, rc;
@@ -117,13 +103,11 @@ RemoveMyDriver(const char *drivername)
 	/* most of this is equivalent to what SQLRemoveDriver is
 	   suppposed to do, except that it consistently causes a
 	   crash, so we do it ourselves */
-	snprintf(buf, sizeof(buf), "SOFTWARE\\ODBC\\ODBCINST.INI\\%s",
-			 drivername);
+	snprintf(buf, sizeof(buf), "SOFTWARE\\ODBC\\ODBCINST.INI\\%s", drivername);
 	valsize = sizeof(usagecount);
 	usagecount = 0;
 	valtype = REG_DWORD;
-	rc = SHGetValue(HKEY_LOCAL_MACHINE, buf, "UsageCount",
-					&valtype, &usagecount, &valsize);
+	rc = SHGetValue(HKEY_LOCAL_MACHINE, buf, "UsageCount", &valtype, &usagecount, &valsize);
 	if (rc == ERROR_FILE_NOT_FOUND) {
 		/* not installed, do nothing */
 		exit(0);
@@ -134,8 +118,7 @@ RemoveMyDriver(const char *drivername)
 	}
 	if (usagecount > 1) {
 		usagecount--;
-		rc = SHSetValue(HKEY_LOCAL_MACHINE, buf, "UsageCount",
-						REG_DWORD, &usagecount, sizeof(usagecount));
+		rc = SHSetValue(HKEY_LOCAL_MACHINE, buf, "UsageCount", REG_DWORD, &usagecount, sizeof(usagecount));
 		if (rc != ERROR_SUCCESS) {
 			ProcessSysErrorMessage(rc, "two");
 			return FALSE;
@@ -147,9 +130,7 @@ RemoveMyDriver(const char *drivername)
 		ProcessSysErrorMessage(rc, "three");
 		return FALSE;
 	}
-	rc = SHDeleteValue(HKEY_LOCAL_MACHINE,
-					   "SOFTWARE\\ODBC\\ODBCINST.INI\\ODBC Drivers",
-					   drivername);
+	rc = SHDeleteValue(HKEY_LOCAL_MACHINE, "SOFTWARE\\ODBC\\ODBCINST.INI\\ODBC Drivers", drivername);
 	if (rc != ERROR_SUCCESS) {
 		ProcessSysErrorMessage(rc, "four");
 		return FALSE;
@@ -158,12 +139,8 @@ RemoveMyDriver(const char *drivername)
 	return TRUE;
 }
 
-static void
-CreateAttributeString(char *attrs, size_t len, const char *dsn)
-{
-	snprintf(attrs, len,
-			 "DSN=%s;Database=:memory:;",
-			 dsn);
+static void CreateAttributeString(char *attrs, size_t len, const char *dsn) {
+	snprintf(attrs, len, "DSN=%s;Database=:memory:;", dsn);
 
 	for (; *attrs; attrs++) {
 		if (*attrs == ';') {
@@ -172,9 +149,7 @@ CreateAttributeString(char *attrs, size_t len, const char *dsn)
 	}
 }
 
-static BOOL
-AddMyDSN(const char *dsn, const char *drivername)
-{
+static BOOL AddMyDSN(const char *dsn, const char *drivername) {
 	char attrs[200];
 
 	CreateAttributeString(attrs, sizeof(attrs), dsn);
@@ -191,9 +166,7 @@ AddMyDSN(const char *dsn, const char *drivername)
 	return TRUE;
 }
 
-static BOOL
-RemoveMyDSN(const char *dsn, const char *drivername)
-{
+static BOOL RemoveMyDSN(const char *dsn, const char *drivername) {
 	char buf[200];
 	char *p;
 
@@ -207,9 +180,7 @@ RemoveMyDSN(const char *dsn, const char *drivername)
 	return TRUE;
 }
 
-static BOOL
-Install(const char *driverpath, const char *dsn, const char *drivername)
-{
+static BOOL Install(const char *driverpath, const char *dsn, const char *drivername) {
 	char path[300];
 	WORD pathlen;
 	BOOL rc;
@@ -217,8 +188,7 @@ Install(const char *driverpath, const char *dsn, const char *drivername)
 
 	/* first, retrieve the path the driver should be installed to
 	 * in path */
-	if (!SQLInstallDriverManager(path, sizeof(path), &pathlen) &&
-	    ProcessSQLErrorMessages("SQLInstallDriverManager")) {
+	if (!SQLInstallDriverManager(path, sizeof(path), &pathlen) && ProcessSQLErrorMessages("SQLInstallDriverManager")) {
 		return FALSE;
 	}
 
@@ -238,13 +208,11 @@ Install(const char *driverpath, const char *dsn, const char *drivername)
 	if (!rc) {
 		SQLRemoveDriverManager(&usagecount);
 	}
-	
+
 	return rc;
 }
 
-static BOOL
-Uninstall(const char *dsn, const char *drivername)
-{
+static BOOL Uninstall(const char *dsn, const char *drivername) {
 	DWORD usagecount;
 
 	RemoveMyDSN(dsn, drivername);
@@ -253,8 +221,7 @@ Uninstall(const char *dsn, const char *drivername)
 	return TRUE;
 }
 
-int main(int argc, char **argv)
-{
+int main(int argc, char **argv) {
 	if (argc < 2 || argc > 5) {
 		print_msg(argv[0], "[/Install | /Uninstall]", 0);
 		exit(1);
@@ -262,7 +229,7 @@ int main(int argc, char **argv)
 
 	bool is_CI = (strcmp("/CI", argv[1]) == 0) ? true : false;
 	char *cmd = is_CI ? argv[2] : argv[1];
- 	if (is_CI) {
+	if (is_CI) {
 		SHOW_MSG_BOX = false;
 	}
 
@@ -277,7 +244,7 @@ int main(int argc, char **argv)
 	} else {
 		dsn = DataSourceName;
 	}
-	
+
 	const char *drivername;
 	if (argc > 3) {
 		drivername = argv[3];
@@ -290,7 +257,7 @@ int main(int argc, char **argv)
 	}
 
 	char buf[MAX_PATH];
-	if (GetModuleFileName(NULL, buf, (DWORD) sizeof(buf)) == 0) {
+	if (GetModuleFileName(NULL, buf, (DWORD)sizeof(buf)) == 0) {
 		print_msg(argv[0], "Cannot retrieve file location", 0);
 		exit(1);
 	}
@@ -314,7 +281,7 @@ int main(int argc, char **argv)
 	} else if (strcmp("/Uninstall", cmd) == 0) {
 		/* remove file we've installed in previous versions of this program */
 		strcat_s(buf, sizeof(buf), "\\ODBCDriverInstalled.txt");
-		(void) DeleteFile(buf);
+		(void)DeleteFile(buf);
 
 		if (!Uninstall(dsn, drivername)) {
 			print_msg(argv[0], "ODBC Uninstall Failed", 0);

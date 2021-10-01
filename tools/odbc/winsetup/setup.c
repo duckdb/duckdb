@@ -21,9 +21,7 @@
 static char *DriverName = "DuckDB Driver";
 static HINSTANCE instance;
 
-static void
-ODBCLOG(const char *fmt, ...)
-{
+static void ODBCLOG(const char *fmt, ...) {
 	va_list ap;
 	char *s = getenv("ODBCDEBUG");
 
@@ -41,9 +39,7 @@ ODBCLOG(const char *fmt, ...)
 	va_end(ap);
 }
 
-BOOL INSTAPI
-ConfigDriver(HWND hwnd, WORD request, LPCSTR driver, LPCSTR args, LPSTR msg, WORD msgmax, WORD * msgout)
-{
+BOOL INSTAPI ConfigDriver(HWND hwnd, WORD request, LPCSTR driver, LPCSTR args, LPSTR msg, WORD msgmax, WORD *msgout) {
 	(void)hwnd;
 	ODBCLOG("ConfigDriver %d %s %s\n", request, driver ? driver : "(null)", args ? args : "(null)");
 
@@ -58,13 +54,11 @@ ConfigDriver(HWND hwnd, WORD request, LPCSTR driver, LPCSTR args, LPSTR msg, WOR
 	case ODBC_CONFIG_DRIVER:
 		break;
 	default:
-		SQLPostInstallerError(ODBC_ERROR_INVALID_REQUEST_TYPE,
-				      "Invalid request");
+		SQLPostInstallerError(ODBC_ERROR_INVALID_REQUEST_TYPE, "Invalid request");
 		return FALSE;
 	}
 	if (strcmp(driver, DriverName) != 0) {
-		SQLPostInstallerError(ODBC_ERROR_INVALID_NAME,
-				      "Invalid driver name");
+		SQLPostInstallerError(ODBC_ERROR_INVALID_NAME, "Invalid driver name");
 		return FALSE;
 	}
 	return TRUE;
@@ -77,9 +71,7 @@ struct data {
 	WORD request;
 };
 
-static void
-MergeFromProfileString(const char *dsn, char **datap, const char *entry, const char *defval)
-{
+static void MergeFromProfileString(const char *dsn, char **datap, const char *entry, const char *defval) {
 	char buf[256];
 
 	if (*datap != NULL)
@@ -93,26 +85,23 @@ MergeFromProfileString(const char *dsn, char **datap, const char *entry, const c
 	*datap = strdup(buf);
 }
 
-static INT_PTR CALLBACK
-DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
-{
+static INT_PTR CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
 	static struct data *datap;
 	char buf[128];
 	RECT rcDlg, rcOwner;
 
 	switch (uMsg) {
 	case WM_INITDIALOG:
-		ODBCLOG("DialogProc WM_INITDIALOG 0x%x 0x%x\n", (unsigned) wParam, (unsigned) lParam);
+		ODBCLOG("DialogProc WM_INITDIALOG 0x%x 0x%x\n", (unsigned)wParam, (unsigned)lParam);
 
-		datap = (struct data *) lParam;
+		datap = (struct data *)lParam;
 		/* center dialog on parent */
 		GetWindowRect(datap->parent, &rcOwner);
 		GetWindowRect(hwndDlg, &rcDlg);
-		SetWindowPos(hwndDlg, 0,
-			     rcOwner.left + (rcOwner.right - rcOwner.left - (rcDlg.right - rcDlg.left)) / 2,
-			     rcOwner.top + (rcOwner.bottom - rcOwner.top - (rcDlg.bottom - rcDlg.top)) / 2,
-			     0, 0, /* ignores size arguments */
-			     SWP_NOSIZE | SWP_NOZORDER);
+		SetWindowPos(hwndDlg, 0, rcOwner.left + (rcOwner.right - rcOwner.left - (rcDlg.right - rcDlg.left)) / 2,
+		             rcOwner.top + (rcOwner.bottom - rcOwner.top - (rcDlg.bottom - rcDlg.top)) / 2, 0,
+		             0, /* ignores size arguments */
+		             SWP_NOSIZE | SWP_NOZORDER);
 
 		/* fill in text fields */
 		SetDlgItemText(hwndDlg, IDC_EDIT_DSN, datap->dsn ? datap->dsn : "");
@@ -121,17 +110,14 @@ DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			EnableWindow(GetDlgItem(hwndDlg, IDC_EDIT_DSN), FALSE);
 		return TRUE;
 	case WM_COMMAND:
-		ODBCLOG("DialogProc WM_COMMAND 0x%x 0x%x\n", (unsigned) wParam, (unsigned) lParam);
+		ODBCLOG("DialogProc WM_COMMAND 0x%x 0x%x\n", (unsigned)wParam, (unsigned)lParam);
 
 		switch (LOWORD(wParam)) {
 		case IDOK:
 			if (datap->request != ODBC_ADD_DSN || datap->dsn == NULL || *datap->dsn == 0) {
 				GetDlgItemText(hwndDlg, IDC_EDIT_DSN, buf, sizeof(buf));
 				if (!SQLValidDSN(buf)) {
-					MessageBox(hwndDlg,
-						   "Invalid Datasource Name",
-						   NULL,
-						   MB_ICONERROR);
+					MessageBox(hwndDlg, "Invalid Datasource Name", NULL, MB_ICONERROR);
 					return TRUE;
 				}
 				if (datap->dsn)
@@ -148,7 +134,7 @@ DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 			return TRUE;
 		}
 	default:
-		ODBCLOG("DialogProc 0x%x 0x%x 0x%x\n", uMsg, (unsigned) wParam, (unsigned) lParam);
+		ODBCLOG("DialogProc 0x%x 0x%x 0x%x\n", uMsg, (unsigned)wParam, (unsigned)lParam);
 		break;
 	}
 	return FALSE;
@@ -156,7 +142,7 @@ DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam)
 
 inline int strncasecmp(const char *s1, const char *s2, int n) {
 	int cmp_val = 0;
-	while(n != 0 && *s1 != '\0') {
+	while (n != 0 && *s1 != '\0') {
 		cmp_val = tolower(*s1++) - tolower(*s2++);
 		if (cmp_val != 0) {
 			return cmp_val;
@@ -166,18 +152,16 @@ inline int strncasecmp(const char *s1, const char *s2, int n) {
 	return cmp_val;
 }
 
-BOOL INSTAPI
-ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes)
-{
+BOOL INSTAPI ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes) {
 	struct data data;
 	char *dsn = NULL;
 	BOOL rc;
 
-	ODBCLOG("ConfigDSN %d %s %s 0x%" PRIxPTR "\n", request, driver ? driver : "(null)", attributes ? attributes : "(null)", (uintptr_t) &data);
+	ODBCLOG("ConfigDSN %d %s %s 0x%" PRIxPTR "\n", request, driver ? driver : "(null)",
+	        attributes ? attributes : "(null)", (uintptr_t)&data);
 
 	if (strcmp(driver, DriverName) != 0) {
-		SQLPostInstallerError(ODBC_ERROR_INVALID_NAME,
-				      "Invalid driver name");
+		SQLPostInstallerError(ODBC_ERROR_INVALID_NAME, "Invalid driver name");
 		return FALSE;
 	}
 	switch (request) {
@@ -186,8 +170,7 @@ ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes)
 	case ODBC_REMOVE_DSN:
 		break;
 	default:
-		SQLPostInstallerError(ODBC_ERROR_INVALID_REQUEST_TYPE,
-				      "Invalid request");
+		SQLPostInstallerError(ODBC_ERROR_INVALID_REQUEST_TYPE, "Invalid request");
 		return FALSE;
 	}
 
@@ -200,8 +183,7 @@ ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes)
 		char *value = strchr(attributes, '=');
 
 		if (value == NULL) {
-			SQLPostInstallerError(ODBC_ERROR_INVALID_KEYWORD_VALUE,
-					      "Invalid attributes string");
+			SQLPostInstallerError(ODBC_ERROR_INVALID_KEYWORD_VALUE, "Invalid attributes string");
 			return FALSE;
 		}
 		value++;
@@ -215,8 +197,7 @@ ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes)
 
 	if (request == ODBC_REMOVE_DSN) {
 		if (data.dsn == NULL) {
-			SQLPostInstallerError(ODBC_ERROR_INVALID_KEYWORD_VALUE,
-					      "No DSN specified");
+			SQLPostInstallerError(ODBC_ERROR_INVALID_KEYWORD_VALUE, "No DSN specified");
 			return FALSE;
 		}
 		rc = SQLRemoveDSNFromIni(data.dsn);
@@ -226,25 +207,19 @@ ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes)
 
 	MergeFromProfileString(data.dsn, &data.database, "database", ":memory:");
 
-	ODBCLOG("ConfigDSN values: dsn=%s database=%s\n",
-		data.dsn ? data.dsn : "(null)",
-		data.database ? data.database : "(null)");
+	ODBCLOG("ConfigDSN values: dsn=%s database=%s\n", data.dsn ? data.dsn : "(null)",
+	        data.database ? data.database : "(null)");
 
 	/* we're optimistic: default return value */
 	rc = TRUE;
 
 	if (parent) {
-		switch (DialogBoxParam(instance,
-				       MAKEINTRESOURCE(IDD_SETUP_DIALOG),
-				       parent,
-				       DialogProc,
-				       (LPARAM) &data)) {
+		switch (DialogBoxParam(instance, MAKEINTRESOURCE(IDD_SETUP_DIALOG), parent, DialogProc, (LPARAM)&data)) {
 		case IDOK:
 			break;
 		default:
 			rc = FALSE;
-			SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED,
-					      "Error creating configuration dialog");
+			SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Error creating configuration dialog");
 			/* fall through */
 		case IDCANCEL:
 			goto finish;
@@ -255,12 +230,8 @@ ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes)
 		if (!SQLValidDSN(data.dsn)) {
 			rc = FALSE;
 			if (parent)
-				MessageBox(parent,
-					   "Invalid Datasource Name",
-					   NULL,
-					   MB_ICONERROR);
-			SQLPostInstallerError(ODBC_ERROR_INVALID_NAME,
-					      "Invalid driver name");
+				MessageBox(parent, "Invalid Datasource Name", NULL, MB_ICONERROR);
+			SQLPostInstallerError(ODBC_ERROR_INVALID_NAME, "Invalid driver name");
 			goto finish;
 		}
 		if (dsn == NULL || strcmp(dsn, data.dsn) != 0) {
@@ -270,22 +241,15 @@ ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes)
 			MergeFromProfileString(data.dsn, &drv, "driver", "");
 			if (drv && *drv) {
 				free(drv);
-				if (parent &&
-				    MessageBox(parent,
-					       "Replace existing Datasource Name?",
-					       NULL,
-					       MB_OKCANCEL | MB_ICONQUESTION) != IDOK) {
+				if (parent && MessageBox(parent, "Replace existing Datasource Name?", NULL,
+				                         MB_OKCANCEL | MB_ICONQUESTION) != IDOK) {
 					goto finish;
 				}
 				ODBCLOG("ConfigDSN removing dsn %s\n", data.dsn);
 				if (!SQLRemoveDSNFromIni(data.dsn)) {
 					rc = FALSE;
-					MessageBox(parent,
-						   "Failed to remove old Datasource Name",
-						   NULL,
-						   MB_ICONERROR);
-					SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED,
-							      "Failed to remove old Datasource Name");
+					MessageBox(parent, "Failed to remove old Datasource Name", NULL, MB_ICONERROR);
+					SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Failed to remove old Datasource Name");
 					goto finish;
 				}
 			} else if (drv)
@@ -294,43 +258,30 @@ ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes)
 		if (dsn && !SQLRemoveDSNFromIni(dsn)) {
 			rc = FALSE;
 			if (parent)
-				MessageBox(parent,
-					   "Failed to remove old Datasource Name",
-					   NULL,
-					   MB_ICONERROR);
-			SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED,
-					      "Failed to remove old Datasource Name");
+				MessageBox(parent, "Failed to remove old Datasource Name", NULL, MB_ICONERROR);
+			SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Failed to remove old Datasource Name");
 			goto finish;
 		}
 		if (!SQLWriteDSNToIni(data.dsn, driver)) {
 			rc = FALSE;
 			if (parent)
-				MessageBox(parent,
-					   "Failed to add new Datasource Name",
-					   NULL,
-					   MB_ICONERROR);
-			SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED,
-					      "Failed to add new Datasource Name");
+				MessageBox(parent, "Failed to add new Datasource Name", NULL, MB_ICONERROR);
+			SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Failed to add new Datasource Name");
 			goto finish;
 		}
 	}
-	ODBCLOG("ConfigDSN writing values: dsn=%s database=%s\n",
-		data.dsn ? data.dsn : "(null)",
-		data.database ? data.database : "(null)");
+	ODBCLOG("ConfigDSN writing values: dsn=%s database=%s\n", data.dsn ? data.dsn : "(null)",
+	        data.database ? data.database : "(null)");
 
 	if (!SQLWritePrivateProfileString(data.dsn, "database", data.database, "odbc.ini")) {
 		rc = FALSE;
 		if (parent)
-			MessageBox(parent,
-				   "Error writing configuration data to registry",
-				   NULL,
-				   MB_ICONERROR);
-		SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED,
-				      "Error writing configuration data to registry");
+			MessageBox(parent, "Error writing configuration data to registry", NULL, MB_ICONERROR);
+		SQLPostInstallerError(ODBC_ERROR_REQUEST_FAILED, "Error writing configuration data to registry");
 		goto finish;
 	}
 
-  finish:
+finish:
 	if (data.dsn)
 		free(data.dsn);
 	if (data.database)
@@ -339,11 +290,9 @@ ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes)
 	return rc;
 }
 
-BOOL WINAPI
-DllMain(HINSTANCE hinstDLL, DWORD reason, LPVOID reserved)
-{
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD reason, LPVOID reserved) {
 	instance = hinstDLL;
-	(void) reserved;
+	(void)reserved;
 	ODBCLOG("DllMain %d\n", reason);
 
 	return TRUE;

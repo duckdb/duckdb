@@ -16,7 +16,7 @@ if(ODBC_FOUND)
   endif()
 
   if(WIN32)
-	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
     add_subdirectory(winsetup)
   endif()
 endif()
