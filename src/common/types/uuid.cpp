@@ -56,7 +56,7 @@ void UUID::ToString(hugeint_t input, char *buff) {
 	buff[18] = '-';
 	std::snprintf(buff+19, 5, "%04llx", input.lower>>48&0xFFFF);
 	buff[23] = '-';
-	std::snprintf(buff+24, 12, "%011llx", input.lower>>4&0xFFFFFFFFFFFF);
+	std::snprintf(buff+24, 12, "%011llx", input.lower>>4&0xFFFFFFFFFFF);
 	// snprintf always append null termintor at the end
 	// which requires buff size be 37
 	// but our buffer size is 36
