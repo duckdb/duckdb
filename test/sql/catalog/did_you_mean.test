@@ -1,0 +1,26 @@
+# name: test/sql/catalog/did_you_mean.test
+# Description: The error messages suggest possible alternative
+# group: [catalog]
+ 
+statement ok
+CREATE TABLE hello(i INTEGER);
+
+statement ok
+CREATE SCHEMA test;
+
+statement ok
+CREATE TABLE test.bye(i INTEGER);
+
+statement error
+SELECT * FROM helloo;
+
+# TODO(omo): Test the error message being like this:
+# > Catalog Error: Table with name helloo does not exist!
+# > Did you mean "hello"?
+
+statement error
+SELECT * FROM bye;
+
+# TODO(omo): Test the error message being like this:
+# > Catalog Error: Table with name bye does not exist!
+# > Did you mean "test.bye"?
