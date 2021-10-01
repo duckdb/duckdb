@@ -391,10 +391,6 @@ struct LogicalType {
 		return type_info_.get();
 	}
 
-	const shared_ptr<ExtraTypeInfo>  GetExtraTypeInfo() const {
-		return type_info_;
-	}
-
 	// copy assignment
 	LogicalType& operator=(const LogicalType &other) {
 		id_ = other.id_;
@@ -472,10 +468,10 @@ public:
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
-	DUCKDB_API static LogicalType LIST(const LogicalType &child);                       // NOLINT
-	DUCKDB_API static LogicalType STRUCT(const child_list_t<LogicalType> &children);    // NOLINT
-	DUCKDB_API static LogicalType MAP(const child_list_t<LogicalType> &children);       // NOLINT
-	DUCKDB_API static LogicalType ENUM(const shared_ptr<ExtraTypeInfo> &info, size_t size); // NOLINT
+	DUCKDB_API static LogicalType LIST( LogicalType child);                       // NOLINT
+	DUCKDB_API static LogicalType STRUCT( child_list_t<LogicalType> children);    // NOLINT
+	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
+	DUCKDB_API static LogicalType ENUM(const string &enum_name, vector<string> ordered_data); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
@@ -496,8 +492,6 @@ struct StringType {
 
 struct ListType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
-	// Non-constant on the logical type so we can bind it in case is a user type
-	DUCKDB_API static LogicalType &GetChildTypeBind( LogicalType &type);
 };
 
 struct UserType{
@@ -509,15 +503,11 @@ struct EnumType{
 	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string& key);
 	DUCKDB_API static const vector<string> &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
-	DUCKDB_API static shared_ptr<ExtraTypeInfo> CreateEnumInfo(const string & enum_name, const shared_ptr<vector<string>>& ordered_data);
 	DUCKDB_API static const string& GetValue(const Value &val);
 };
 
-
 struct StructType {
 	DUCKDB_API static const child_list_t<LogicalType> &GetChildTypes(const LogicalType &type);
-	// Non-constant on the logical type so we can bind it in case is a user type
-	DUCKDB_API static  child_list_t<LogicalType> &GetChildTypesBind(LogicalType &type);
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type, idx_t index);
 	DUCKDB_API static const string &GetChildName(const LogicalType &type, idx_t index);
 	DUCKDB_API static idx_t GetChildCount(const LogicalType &type);

@@ -23,14 +23,14 @@ struct CreateTypeInfo : public CreateInfo {
 	//! Name of the Type
 	string name;
 	//! Shared Pointer of Logical Type
-	shared_ptr<LogicalType> type;
+	unique_ptr<LogicalType> type;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
 		auto result = make_unique<CreateTypeInfo>();
 		CopyProperties(*result);
 		result->name = name;
-		result->type = type;
+		result->type = make_unique<LogicalType>(*type);
 		return move(result);
 	}
 };

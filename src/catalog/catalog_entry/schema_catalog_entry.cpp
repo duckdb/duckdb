@@ -42,7 +42,7 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool int
       tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), pragma_functions(*catalog),
       functions(*catalog, make_unique<DefaultFunctionGenerator>(*catalog, this)), sequences(*catalog),
-      collations(*catalog), enums(*catalog) {
+      collations(*catalog), types(*catalog) {
 	this->internal = internal;
 }
 
@@ -238,7 +238,7 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 	case CatalogType::COLLATION_ENTRY:
 		return collations;
 	case CatalogType::TYPE_ENTRY:
-		return enums;
+		return types;
 	default:
 		throw InternalException("Unsupported catalog type in schema");
 	}

@@ -10,7 +10,7 @@ string CatalogTypeToString(CatalogType type) {
 	case CatalogType::COLLATION_ENTRY:
 		return "Collation";
 	case CatalogType::TYPE_ENTRY:
-		return "Enum";
+		return "Type";
 	case CatalogType::TABLE_ENTRY:
 		return "Table";
 	case CatalogType::SCHEMA_ENTRY:

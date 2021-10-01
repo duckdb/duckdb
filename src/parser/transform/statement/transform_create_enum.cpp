@@ -23,9 +23,9 @@ unique_ptr<CreateStatement> Transformer::TransformCreateEnum(duckdb_libpgquery::
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateTypeInfo>();
 	info->name = ReadPgListToString(stmt->typeName)[0];
-	auto ordered_array = make_shared<vector<string>>(ReadPgListToString(stmt->vals));
-	info->type = make_shared<LogicalType>(
-	    LogicalType::ENUM(EnumType::CreateEnumInfo(info->name, ordered_array), ordered_array->size()));
+	vector<string> ordered_array = ReadPgListToString(stmt->vals);
+	info->type = make_unique<LogicalType>(
+	    LogicalType::ENUM(info->name, move(ordered_array)));
 	result->info = move(info);
 	return result;
 }

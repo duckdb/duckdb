@@ -67,16 +67,16 @@ CatalogEntry *Catalog::CreateSequence(ClientContext &context, CreateSequenceInfo
 	return CreateSequence(context, schema, info);
 }
 
-CatalogEntry *Catalog::CreateEnum(ClientContext &context, CreateTypeInfo *info) {
+CatalogEntry *Catalog::CreateType(ClientContext &context, CreateTypeInfo *info) {
 	auto schema = GetSchema(context, info->schema);
-	return CreateEnum(context, schema, info);
+	return CreateType(context, schema, info);
 }
 
 CatalogEntry *Catalog::CreateSequence(ClientContext &context, SchemaCatalogEntry *schema, CreateSequenceInfo *info) {
 	return schema->CreateSequence(context, info);
 }
 
-CatalogEntry *Catalog::CreateEnum(ClientContext &context, SchemaCatalogEntry *schema, CreateTypeInfo *info) {
+CatalogEntry *Catalog::CreateType(ClientContext &context, SchemaCatalogEntry *schema, CreateTypeInfo *info) {
 	return schema->CreateType(context, info);
 }
 

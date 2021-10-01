@@ -47,7 +47,7 @@ private:
 	void ReplayDropSchema();
 
 	void ReplayCreateType();
-	void ReplayDropEnum();
+	void ReplayDropType();
 
 	void ReplayCreateSequence();
 	void ReplayDropSequence();
@@ -209,7 +209,7 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 		ReplayCreateType();
 		break;
 	case WALType::DROP_TYPE:
-		ReplayDropEnum();
+		ReplayDropType();
 		break;
 
 	default:
@@ -317,17 +317,17 @@ void ReplayState::ReplayCreateType() {
 
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
-	info.type = make_shared<LogicalType>(LogicalType::Deserialize(source));
+	info.type = make_unique<LogicalType>(LogicalType::Deserialize(source));
 
 	if (deserialize_only) {
 		return;
 	}
 
 	auto &catalog = Catalog::GetCatalog(context);
-	catalog.CreateEnum(context, &info);
+	catalog.CreateType(context, &info);
 }
 
-void ReplayState::ReplayDropEnum() {
+void ReplayState::ReplayDropType() {
 	DropInfo info;
 
 	info.type = CatalogType::SCHEMA_ENTRY;

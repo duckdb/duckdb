@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/schema/physical_create_enum.hpp
+// duckdb/execution/operator/schema/physical_create_type.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,11 +13,11 @@
 
 namespace duckdb {
 
-//! PhysicalCreateSequence represents a CREATE SEQUENCE command
-class PhysicalCreateEnum : public PhysicalOperator {
+//! PhysicalCreateType represents a CREATE TYPE command
+class PhysicalCreateType : public PhysicalOperator {
 public:
-	explicit PhysicalCreateEnum(unique_ptr<CreateTypeInfo> info, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::CREATE_ENUM, {LogicalType::BIGINT}, estimated_cardinality),
+	explicit PhysicalCreateType(unique_ptr<CreateTypeInfo> info, idx_t estimated_cardinality)
+	    : PhysicalOperator(PhysicalOperatorType::CREATE_TYPE, {LogicalType::BIGINT}, estimated_cardinality),
 	      info(move(info)) {
 	}
 

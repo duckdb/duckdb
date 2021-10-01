@@ -12,7 +12,8 @@
 namespace duckdb {
 
 TypeCatalogEntry::TypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTypeInfo *info)
-    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info->name), user_type(info->type) {
+    : StandardEntry(CatalogType::TYPE_ENTRY, schema, catalog, info->name){
+	user_type = make_unique<LogicalType>(*info->type);
 }
 
 void TypeCatalogEntry::Serialize(Serializer &serializer) {
@@ -25,7 +26,7 @@ unique_ptr<CreateTypeInfo> TypeCatalogEntry::Deserialize(Deserializer &source) {
 	auto info = make_unique<CreateTypeInfo>();
 	info->schema = source.Read<string>();
 	info->name = source.Read<string>();
-	info->type = make_shared<LogicalType>(LogicalType::Deserialize(source));
+	info->type = make_unique<LogicalType>(LogicalType::Deserialize(source));
 	return info;
 }
 

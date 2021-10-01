@@ -22,7 +22,7 @@ public:
 	//! Create a TypeCatalogEntry and initialize storage for it
 	TypeCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schema, CreateTypeInfo *info);
 
-	shared_ptr<LogicalType> user_type;
+	unique_ptr<LogicalType> user_type;
 
 public:
 	//! Serialize the meta information of the TypeCatalogEntry a serializer

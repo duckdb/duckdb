@@ -63,8 +63,8 @@ private:
 	CatalogSet sequences;
 	//! The catalog set holding the collations
 	CatalogSet collations;
-	//! The catalog set holding the enums
-	CatalogSet enums;
+	//! The catalog set holding the types
+	CatalogSet types;
 
 public:
 	//! Scan the specified catalog set, invoking the callback method for every entry

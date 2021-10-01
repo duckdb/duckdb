@@ -116,12 +116,19 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 
 void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &schema) {
 	if (type.id() == LogicalTypeId::LIST) {
-		auto &child_type = ListType::GetChildTypeBind(type);
+		auto child_type = ListType::GetChildType(type);
 		BindLogicalType(context, child_type, schema);
+		type = LogicalType::LIST(child_type);
 	} else if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
-		auto &child_types = StructType::GetChildTypesBind(type);
+		auto child_types = StructType::GetChildTypes(type);
 		for (auto &child_type : child_types) {
 			BindLogicalType(context, child_type.second, schema);
+		}
+		// Generate new Struct/Map Type
+		if (type.id() == LogicalTypeId::STRUCT){
+			type = LogicalType::STRUCT(child_types);
+		} else{
+			type = LogicalType::MAP(child_types);
 		}
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto &user_type_name = UserType::GetTypeName(type);
@@ -130,7 +137,6 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		if (!user_type_catalog) {
 			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
 		}
-		// FIXME: Avoid copy in the future
 		type = *user_type_catalog->user_type;
 	}
 }
@@ -217,7 +223,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
-		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_ENUM, move(stmt.info), schema);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
 		break;
 	}
 	default:

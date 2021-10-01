@@ -62,7 +62,7 @@ Vector::Vector(Vector &&other) noexcept
 }
 
 void Vector::Reference(const Value &value) {
-	D_ASSERT(GetType().InternalType() == value.type().InternalType());
+	D_ASSERT(GetType().id() == value.type().id());
 	this->vector_type = VectorType::CONSTANT_VECTOR;
 	buffer = VectorBuffer::CreateConstantVector(value.type());
 	auto internal_type = value.type().InternalType();

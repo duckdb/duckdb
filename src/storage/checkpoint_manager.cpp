@@ -266,7 +266,7 @@ void CheckpointManager::ReadType(ClientContext &context, MetaBlockReader &reader
 	auto info = TypeCatalogEntry::Deserialize(reader);
 
 	auto &catalog = Catalog::GetCatalog(db);
-	catalog.CreateEnum(context, info.get());
+	catalog.CreateType(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
