@@ -9,7 +9,7 @@ string CatalogTypeToString(CatalogType type) {
 	switch (type) {
 	case CatalogType::COLLATION_ENTRY:
 		return "Collation";
-	case CatalogType::ENUM_ENTRY:
+	case CatalogType::TYPE_ENTRY:
 		return "Enum";
 	case CatalogType::TABLE_ENTRY:
 		return "Table";

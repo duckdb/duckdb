@@ -1,8 +1,10 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -10,7 +12,6 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
@@ -20,9 +21,8 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/catalog/catalog_entry/enum_catalog_entry.hpp"
-#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -124,15 +124,13 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 		}
 	} else if (type.id() == LogicalTypeId::USER) {
 		auto &user_type_name = UserType::GetTypeName(type);
-		auto enum_catalog = (EnumCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::ENUM_ENTRY,
-		                                                                          schema, user_type_name, true);
-		if (!enum_catalog) {
+		auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
+		                                                                               schema, user_type_name, true);
+		if (!user_type_catalog) {
 			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
 		}
-		auto values_insert_order = make_shared<vector<string>>();
-		*values_insert_order = enum_catalog->values_insert_order;
-		type = LogicalType::ENUM(EnumType::CreateEnumInfo(user_type_name, values_insert_order),
-		                         values_insert_order->size());
+		// FIXME: Avoid copy in the future
+		type = *user_type_catalog->user_type;
 	}
 }
 
@@ -216,7 +214,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		result.plan = move(create_table);
 		break;
 	}
-	case CatalogType::ENUM_ENTRY: {
+	case CatalogType::TYPE_ENTRY: {
 		auto schema = BindSchema(*stmt.info);
 		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_ENUM, move(stmt.info), schema);
 		break;

@@ -1,5 +1,6 @@
 #include "duckdb/transaction/commit_state.hpp"
 
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
@@ -12,8 +13,6 @@
 #include "duckdb/transaction/append_info.hpp"
 #include "duckdb/transaction/delete_info.hpp"
 #include "duckdb/transaction/update_info.hpp"
-
-#include "duckdb/catalog/catalog_entry/enum_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -81,8 +80,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 	case CatalogType::MACRO_ENTRY:
 		log->WriteCreateMacro((MacroCatalogEntry *)parent);
 		break;
-	case CatalogType::ENUM_ENTRY:
-		log->WriteCreateEnum((EnumCatalogEntry *)parent);
+	case CatalogType::TYPE_ENTRY:
+		log->WriteCreateType((TypeCatalogEntry *)parent);
 		break;
 	case CatalogType::DELETED_ENTRY:
 		switch (entry->type) {
@@ -104,8 +103,8 @@ void CommitState::WriteCatalogEntry(CatalogEntry *entry, data_ptr_t dataptr) {
 		case CatalogType::MACRO_ENTRY:
 			log->WriteDropMacro((MacroCatalogEntry *)entry);
 			break;
-		case CatalogType::ENUM_ENTRY:
-			log->WriteDropEnum((EnumCatalogEntry *)entry);
+		case CatalogType::TYPE_ENTRY:
+			log->WriteDropType((TypeCatalogEntry *)entry);
 			break;
 		case CatalogType::INDEX_ENTRY:
 		case CatalogType::PREPARED_STATEMENT:

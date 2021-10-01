@@ -27,7 +27,7 @@ struct CreateFunctionInfo;
 struct CreateViewInfo;
 struct CreateSequenceInfo;
 struct CreateCollationInfo;
-struct CreateEnumInfo;
+struct CreateTypeInfo;
 
 class ClientContext;
 class Transaction;
@@ -91,7 +91,7 @@ public:
 	//! Creates a table in the catalog.
 	CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
 	//! Creates a Enum in the catalog.
-	CatalogEntry *CreateEnum(ClientContext &context, CreateEnumInfo *info);
+	CatalogEntry *CreateEnum(ClientContext &context, CreateTypeInfo *info);
 	//! Creates a collation in the catalog
 	CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
 
@@ -112,7 +112,7 @@ public:
 	//! Creates a table in the catalog.
 	CatalogEntry *CreateSequence(ClientContext &context, SchemaCatalogEntry *schema, CreateSequenceInfo *info);
 	//! Creates a enum in the catalog.
-	CatalogEntry *CreateEnum(ClientContext &context, SchemaCatalogEntry *schema, CreateEnumInfo *info);
+	CatalogEntry *CreateEnum(ClientContext &context, SchemaCatalogEntry *schema, CreateTypeInfo *info);
 	//! Creates a collation in the catalog
 	CatalogEntry *CreateCollation(ClientContext &context, SchemaCatalogEntry *schema, CreateCollationInfo *info);
 

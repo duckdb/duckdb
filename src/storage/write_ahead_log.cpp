@@ -3,12 +3,12 @@
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 #include <cstring>
-#include "duckdb/catalog/catalog_entry/enum_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -142,21 +142,21 @@ void WriteAheadLog::WriteDropMacro(MacroCatalogEntry *entry) {
 }
 
 //===--------------------------------------------------------------------===//
-// ENUM'S
+// Custom Types
 //===--------------------------------------------------------------------===//
-void WriteAheadLog::WriteCreateEnum(EnumCatalogEntry *entry) {
+void WriteAheadLog::WriteCreateType(TypeCatalogEntry *entry) {
 	if (skip_writing) {
 		return;
 	}
-	writer->Write<WALType>(WALType::CREATE_ENUM);
+	writer->Write<WALType>(WALType::CREATE_TYPE);
 	entry->Serialize(*writer);
 }
 
-void WriteAheadLog::WriteDropEnum(EnumCatalogEntry *entry) {
+void WriteAheadLog::WriteDropType(TypeCatalogEntry *entry) {
 	if (skip_writing) {
 		return;
 	}
-	writer->Write<WALType>(WALType::DROP_ENUM);
+	writer->Write<WALType>(WALType::DROP_TYPE);
 	writer->WriteString(entry->schema->name);
 	writer->WriteString(entry->name);
 }

@@ -35,7 +35,7 @@ struct CreateSequenceInfo;
 struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
-struct CreateEnumInfo;
+struct CreateTypeInfo;
 
 struct DropInfo;
 
@@ -104,7 +104,7 @@ private:
 	//! Create a collation within the given schema
 	CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
 	//! Create a enum within the given schema
-	CatalogEntry *CreateEnum(ClientContext &context, CreateEnumInfo *info);
+	CatalogEntry *CreateType(ClientContext &context, CreateTypeInfo *info);
 
 	//! Drops an entry from the schema
 	void DropEntry(ClientContext &context, DropInfo *info);

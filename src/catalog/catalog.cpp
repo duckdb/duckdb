@@ -18,11 +18,10 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-
-#include "duckdb/parser/parsed_data/create_enum_info.hpp"
 
 namespace duckdb {
 
@@ -61,7 +60,7 @@ CatalogEntry *Catalog::CreateSequence(ClientContext &context, CreateSequenceInfo
 	return CreateSequence(context, schema, info);
 }
 
-CatalogEntry *Catalog::CreateEnum(ClientContext &context, CreateEnumInfo *info) {
+CatalogEntry *Catalog::CreateEnum(ClientContext &context, CreateTypeInfo *info) {
 	auto schema = GetSchema(context, info->schema);
 	return CreateEnum(context, schema, info);
 }
@@ -70,8 +69,8 @@ CatalogEntry *Catalog::CreateSequence(ClientContext &context, SchemaCatalogEntry
 	return schema->CreateSequence(context, info);
 }
 
-CatalogEntry *Catalog::CreateEnum(ClientContext &context, SchemaCatalogEntry *schema, CreateEnumInfo *info) {
-	return schema->CreateEnum(context, info);
+CatalogEntry *Catalog::CreateEnum(ClientContext &context, SchemaCatalogEntry *schema, CreateTypeInfo *info) {
+	return schema->CreateType(context, info);
 }
 
 CatalogEntry *Catalog::CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info) {

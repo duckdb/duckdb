@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/parser/parsed_data/create_enum_info.hpp
+// duckdb/parser/parsed_data/create_type_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -15,22 +15,22 @@
 
 namespace duckdb {
 
-struct CreateEnumInfo : public CreateInfo {
+struct CreateTypeInfo : public CreateInfo {
 
-	CreateEnumInfo() : CreateInfo(CatalogType::ENUM_ENTRY) {
+	CreateTypeInfo() : CreateInfo(CatalogType::TYPE_ENTRY) {
 	}
 
-	//! Name of the Enum
+	//! Name of the Type
 	string name;
-	//! List of Enum values
-	vector<string> values;
+	//! Shared Pointer of Logical Type
+	shared_ptr<LogicalType> type;
 
 public:
 	unique_ptr<CreateInfo> Copy() const override {
-		auto result = make_unique<CreateEnumInfo>();
+		auto result = make_unique<CreateTypeInfo>();
 		CopyProperties(*result);
 		result->name = name;
-		result->values = values;
+		result->type = type;
 		return move(result);
 	}
 };

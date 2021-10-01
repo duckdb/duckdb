@@ -1,22 +1,22 @@
-#include "duckdb/storage/write_ahead_log.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/common/printer.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/parser/parsed_data/create_enum_info.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
 namespace duckdb {
 class ReplayState {
 public:
@@ -46,7 +46,7 @@ private:
 	void ReplayCreateSchema();
 	void ReplayDropSchema();
 
-	void ReplayCreateEnum();
+	void ReplayCreateType();
 	void ReplayDropEnum();
 
 	void ReplayCreateSequence();
@@ -205,10 +205,10 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::CHECKPOINT:
 		ReplayCheckpoint();
 		break;
-	case WALType::CREATE_ENUM:
-		ReplayCreateEnum();
+	case WALType::CREATE_TYPE:
+		ReplayCreateType();
 		break;
-	case WALType::DROP_ENUM:
+	case WALType::DROP_TYPE:
 		ReplayDropEnum();
 		break;
 
@@ -310,14 +310,14 @@ void ReplayState::ReplayDropSchema() {
 }
 
 //===--------------------------------------------------------------------===//
-// Replay Enum
+// Replay Custom Type
 //===--------------------------------------------------------------------===//
-void ReplayState::ReplayCreateEnum() {
-	CreateEnumInfo info;
+void ReplayState::ReplayCreateType() {
+	CreateTypeInfo info;
 
 	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
-	source.ReadStringVector(info.values);
+	info.type = make_shared<LogicalType>(LogicalType::Deserialize(source));
 
 	if (deserialize_only) {
 		return;
