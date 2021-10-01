@@ -144,3 +144,87 @@ TEST_CASE("Test join vector items", "[string_util]") {
 		REQUIRE(result == "");
 	}
 }
+
+TEST_CASE("Test split quoted strings", "[string_util]") {
+	SECTION("Empty string") {
+		REQUIRE(StringUtil::SplitWithQuote("") == vector<string> {});
+	}
+
+	SECTION("Empty string with space") {
+		REQUIRE(StringUtil::SplitWithQuote(" ") == vector<string> {});
+	}
+
+	SECTION("One item") {
+		REQUIRE(StringUtil::SplitWithQuote("x") == vector<string> {"x"});
+	}
+
+	SECTION("One item with space") {
+		REQUIRE(StringUtil::SplitWithQuote(" x ") == vector<string> {"x"});
+	}
+
+	SECTION("One item with quote") {
+		REQUIRE(StringUtil::SplitWithQuote("\"x\"") == vector<string> {"x"});
+	}
+
+	SECTION("One empty item with quote") {
+		REQUIRE(StringUtil::SplitWithQuote("\"\"") == vector<string> {""});
+	}
+
+	SECTION("One empty item, followed by non-empty one - Or vise versa") {
+		REQUIRE(StringUtil::SplitWithQuote("\"\",hello") == vector<string> {"", "hello"});
+		REQUIRE(StringUtil::SplitWithQuote(",\"hello\"") == vector<string> {"", "hello"});
+		REQUIRE(StringUtil::SplitWithQuote(",hello") == vector<string> {"", "hello"});
+		REQUIRE(StringUtil::SplitWithQuote("\"\",\"hello\"") == vector<string> {"", "hello"});
+
+		REQUIRE(StringUtil::SplitWithQuote("\"hello\",") == vector<string> {"hello", ""});
+		REQUIRE(StringUtil::SplitWithQuote("hello,\"\"") == vector<string> {"hello", ""});
+		REQUIRE(StringUtil::SplitWithQuote("hello,") == vector<string> {"hello", ""});
+		REQUIRE(StringUtil::SplitWithQuote("\"hello\",\"\"") == vector<string> {"hello", ""});
+	}
+
+	SECTION("One quoted item with spaces") {
+		REQUIRE(StringUtil::SplitWithQuote(" \" x y \" ") == vector<string> {" x y "});
+	}
+
+	SECTION("One quoted item with a delimiter") {
+		REQUIRE(StringUtil::SplitWithQuote("\"x,y\"") == vector<string> {"x,y"});
+	}
+
+	SECTION("Three items") {
+		REQUIRE(StringUtil::SplitWithQuote("x,y,z") == vector<string> {"x", "y", "z"});
+	}
+
+	SECTION("Three items, with and without quote") {
+		REQUIRE(StringUtil::SplitWithQuote("x,\"y\",z") == vector<string> {"x", "y", "z"});
+	}
+
+	SECTION("Even more items, with and without quote") {
+		REQUIRE(StringUtil::SplitWithQuote("a,b,c,d,e,f,g") == vector<string> {"a", "b", "c", "d", "e", "f", "g"});
+	}
+
+	SECTION("Three empty items") {
+		REQUIRE(StringUtil::SplitWithQuote(",,") == vector<string> {"", "", ""});
+	}
+
+	SECTION("Three empty quoted items") {
+		REQUIRE(StringUtil::SplitWithQuote("\"\",\"\",\"\"") == vector<string> {"", "", ""});
+	}
+
+	SECTION("Unclosed quote") {
+		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\""), ParserException);
+		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x"), ParserException);
+		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x "), ParserException);
+		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\","), ParserException);
+		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x,"), ParserException);
+	}
+
+	SECTION("Unexpected quote") {
+		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("abc\"def"), ParserException);
+	}
+
+	SECTION("Missing delimiter") {
+		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x\"\"y\""), ParserException);
+		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("\"x\" \"y\""), ParserException);
+		REQUIRE_THROWS_AS(StringUtil::SplitWithQuote("x y"), ParserException);
+	}
+}

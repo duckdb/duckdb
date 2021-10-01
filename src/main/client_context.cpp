@@ -4,6 +4,7 @@
 #include "duckdb/main/query_profiler.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/serializer/buffered_deserializer.hpp"
 #include "duckdb/common/serializer/buffered_serializer.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
@@ -53,6 +54,7 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
     : profiler(make_unique<QueryProfiler>()), query_profiler_history(make_unique<QueryProfilerHistory>()),
       db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
       temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)),
+      catalog_search_path(make_unique<CatalogSearchPath>(*this)),
       file_opener(make_unique<ClientContextFileOpener>(*this)), open_result(nullptr) {
 	std::random_device rd;
 	random_engine.seed(rd());
