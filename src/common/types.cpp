@@ -509,7 +509,6 @@ bool LogicalType::IsIntegral() const {
 	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UUID:
 		return true;
 	default:
 		return false;

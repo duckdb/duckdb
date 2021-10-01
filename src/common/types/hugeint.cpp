@@ -6,8 +6,6 @@
 
 #include <cmath>
 #include <limits>
-#include <sstream>
-#include <iomanip>
 
 namespace duckdb {
 
@@ -146,73 +144,6 @@ string Hugeint::ToString(hugeint_t input) {
 	return negative ? "-" + result : result;
 }
 
-bool Hugeint::FromUUIDString(string str, hugeint_t &result) {
-	auto hex2char = [](char ch) -> unsigned char
-    {
-         if (ch >= '0' && ch <= '9')
-            return ch - '0';
-         if (ch >= 'a' && ch <= 'f')
-            return 10 + ch - 'a';
-         if (ch >= 'A' && ch <= 'F')
-            return 10 + ch - 'A';
-         return 0;
-    };
-	auto is_hex = [](char ch) -> bool
-	{
-         return
-			 (ch >= '0' && ch <= '9') ||
-			 (ch >= 'a' && ch <= 'f') ||
-			 (ch >= 'A' && ch <= 'F');
-	};
-
-
-	if (str.empty()) return false;
-	int hasBraces = 0;
-	if (str.front() == '{') hasBraces = 1;
-	if (hasBraces && str.back() != '}') return false;
-
-	result.lower = 0;
-	result.upper = 0;
-	size_t count = 0;
-	for (size_t i = hasBraces; i < str.size() - hasBraces; ++i)
-	{
-		if (str[i] == '-') continue;
-		if (count >= 32 || !is_hex(str[i])) return false;
-		if (count >= 16) {
-			result.lower = (result.lower<<4) | hex2char(str[i]);
-		} else {
-			result.upper = (result.upper<<4) | hex2char(str[i]);
-		}
-		count++;
-	}
-	return count == 32;
-}
-
-string Hugeint::ToUUIDString(hugeint_t input) {
-	std::stringstream ss;
-    ss << std::setfill('0') << std::hex
-	   << std::setw(2) << (input.upper>>56&0xFF)
-	   << std::setw(2) << (input.upper>>48&0xFF)
-	   << std::setw(2) << (input.upper>>40&0xFF)
-	   << std::setw(2) << (input.upper>>32&0xFF)
-       << '-'
-	   << std::setw(2) << (input.upper>>24&0xFF)
-	   << std::setw(2) << (input.upper>>16&0xFF)
-       << '-'
-	   << std::setw(2) << (input.upper>>8&0xFF)
-	   << std::setw(2) << (input.upper&0xFF)
-       << '-'
-	   << std::setw(2) << (input.lower>>56&0xFF)
-	   << std::setw(2) << (input.lower>>48&0xFF)
-       << '-'
-	   << std::setw(2) << (input.lower>>40&0xFF)
-	   << std::setw(2) << (input.lower>>32&0xFF)
-	   << std::setw(2) << (input.lower>>28&0xFF)
-	   << std::setw(2) << (input.lower>>16&0xFF)
-	   << std::setw(2) << (input.lower>>8&0xFF)
-	   << std::setw(2) << (input.lower&0xFF);
-    return ss.str();
-}
 
 //===--------------------------------------------------------------------===//
 // Multiply

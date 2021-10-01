@@ -11,6 +11,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -1299,10 +1300,8 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 //===--------------------------------------------------------------------===//
 template <>
 string_t CastFromUUID::Operation(hugeint_t input, Vector &vector) {
-	auto uuid = Hugeint::ToUUIDString(input);
-	idx_t result_size = uuid.length();
-	string_t result = StringVector::EmptyString(vector, result_size);
-	memcpy(result.GetDataWriteable(), uuid.data(), result_size);
+	string_t result = StringVector::EmptyString(vector, 36);
+	UUID::ToString(input, result.GetDataWriteable());
 	result.Finalize();
 	return result;
 }
@@ -1313,7 +1312,7 @@ string_t CastFromUUID::Operation(hugeint_t input, Vector &vector) {
 template <>
 bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, string *error_message,
                               bool strict) {
-	return Hugeint::FromUUIDString(input.GetString(), result);
+	return UUID::FromString(input.GetString(), result);
 }
 
 //===--------------------------------------------------------------------===//

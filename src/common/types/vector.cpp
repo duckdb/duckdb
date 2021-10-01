@@ -331,8 +331,6 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		((uint64_t *)data)[index] = val.value_.ubigint;
 		break;
 	case LogicalTypeId::HUGEINT:
-		((hugeint_t *)data)[index] = val.value_.hugeint;
-		break;
 	case LogicalTypeId::UUID:
 		((hugeint_t *)data)[index] = val.value_.hugeint;
 		break;

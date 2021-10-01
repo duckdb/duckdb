@@ -15,6 +15,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -251,7 +252,7 @@ Value Value::UUID(hugeint_t value) {
 
 Value Value::UUID(const string& value) {
 	Value result(LogicalType::UUID);
-	result.value_.hugeint = Hugeint::FromUUIDString(value);
+	result.value_.hugeint = UUID::FromString(value);
 	result.is_null = false;
 	return result;
 }
@@ -940,7 +941,7 @@ string Value::ToString() const {
 	case LogicalTypeId::HUGEINT:
 		return Hugeint::ToString(value_.hugeint);
 	case LogicalTypeId::UUID:
-		return Hugeint::ToUUIDString(value_.hugeint);
+		return UUID::ToString(value_.hugeint);
 	case LogicalTypeId::FLOAT:
 		return to_string(value_.float_);
 	case LogicalTypeId::DOUBLE:

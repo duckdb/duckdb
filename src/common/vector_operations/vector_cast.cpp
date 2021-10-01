@@ -153,8 +153,6 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 		return VectorTryCastLoop<SRC, uint64_t, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::HUGEINT:
 		return VectorTryCastLoop<SRC, hugeint_t, duckdb::NumericTryCast>(source, result, count, error_message);
-	case LogicalTypeId::UUID:
-		return VectorTryCastLoop<SRC, hugeint_t, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::FLOAT:
 		return VectorTryCastLoop<SRC, float, duckdb::NumericTryCast>(source, result, count, error_message);
 	case LogicalTypeId::DOUBLE:
@@ -200,7 +198,6 @@ static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t 
 		return VectorTryCastStrictLoop<string_t, uint64_t, duckdb::TryCast>(source, result, count, strict,
 		                                                                    error_message);
 	case LogicalTypeId::HUGEINT:
-	case LogicalTypeId::UUID:
 		return VectorTryCastStrictLoop<string_t, hugeint_t, duckdb::TryCast>(source, result, count, strict,
 		                                                                     error_message);
 	case LogicalTypeId::FLOAT:
