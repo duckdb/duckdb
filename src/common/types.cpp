@@ -868,7 +868,7 @@ LogicalType &ListType::GetChildTypeBind(LogicalType &type) {
 	return ((ListTypeInfo &)*info).child_type;
 }
 
-LogicalType LogicalType::LIST(LogicalType child) {
+LogicalType LogicalType::LIST(const LogicalType &child) {
 	auto info = make_shared<ListTypeInfo>(move(child));
 	return LogicalType(LogicalTypeId::LIST, move(info));
 }
@@ -945,12 +945,12 @@ idx_t StructType::GetChildCount(const LogicalType &type) {
 	return StructType::GetChildTypes(type).size();
 }
 
-LogicalType LogicalType::STRUCT(child_list_t<LogicalType> children) {
+LogicalType LogicalType::STRUCT(const child_list_t<LogicalType> &children) {
 	auto info = make_shared<StructTypeInfo>(move(children));
 	return LogicalType(LogicalTypeId::STRUCT, move(info));
 }
 
-LogicalType LogicalType::MAP(child_list_t<LogicalType> children) {
+LogicalType LogicalType::MAP(const child_list_t<LogicalType> &children) {
 	auto info = make_shared<StructTypeInfo>(move(children));
 	return LogicalType(LogicalTypeId::MAP, move(info));
 }
@@ -994,7 +994,7 @@ const string &UserType::GetTypeName(const LogicalType &type) {
 	return ((UserTypeInfo &)*info).user_type_name;
 }
 
-LogicalType LogicalType::USER(string user_type_name) {
+LogicalType LogicalType::USER(const string &user_type_name) {
 	auto info = make_shared<UserTypeInfo>(user_type_name);
 	return LogicalType(LogicalTypeId::USER, move(info));
 }

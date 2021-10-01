@@ -472,11 +472,11 @@ public:
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
-	DUCKDB_API static LogicalType LIST(LogicalType child);                       // NOLINT
-	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
-	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);       // NOLINT
+	DUCKDB_API static LogicalType LIST(const LogicalType &child);                       // NOLINT
+	DUCKDB_API static LogicalType STRUCT(const child_list_t<LogicalType> &children);    // NOLINT
+	DUCKDB_API static LogicalType MAP(const child_list_t<LogicalType> &children);       // NOLINT
 	DUCKDB_API static LogicalType ENUM(const shared_ptr<ExtraTypeInfo> &info, size_t size); // NOLINT
-	DUCKDB_API static LogicalType USER(string user_type_name); // NOLINT
+	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
 	//! A list of all INTEGRAL types

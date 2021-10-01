@@ -16,7 +16,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/string_util.hpp"
-
+#include "duckdb/parser/parsed_data/create_enum_info.hpp"
 namespace duckdb {
 class ReplayState {
 public:
