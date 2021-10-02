@@ -8,34 +8,42 @@ namespace duckdb {
 
 bool UUID::FromString(string str, hugeint_t &result) {
 	auto hex2char = [](char ch) -> unsigned char {
-		if (ch >= '0' && ch <= '9')
+		if (ch >= '0' && ch <= '9') {
 			return ch - '0';
-		if (ch >= 'a' && ch <= 'f')
+		}
+		if (ch >= 'a' && ch <= 'f') {
 			return 10 + ch - 'a';
-		if (ch >= 'A' && ch <= 'F')
+		}
+		if (ch >= 'A' && ch <= 'F') {
 			return 10 + ch - 'A';
+		}
 		return 0;
 	};
 	auto is_hex = [](char ch) -> bool {
 		return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
 	};
 
-	if (str.empty())
+	if (str.empty()) {
 		return false;
-	int hasBraces = 0;
-	if (str.front() == '{')
-		hasBraces = 1;
-	if (hasBraces && str.back() != '}')
+	}
+	int has_braces = 0;
+	if (str.front() == '{') {
+		has_braces = 1;
+	}
+	if (has_braces && str.back() != '}') {
 		return false;
+	}
 
 	result.lower = 0;
 	result.upper = 0;
 	size_t count = 0;
-	for (size_t i = hasBraces; i < str.size() - hasBraces; ++i) {
-		if (str[i] == '-')
+	for (size_t i = has_braces; i < str.size() - has_braces; ++i) {
+		if (str[i] == '-') {
 			continue;
-		if (count >= 32 || !is_hex(str[i]))
+		}
+		if (count >= 32 || !is_hex(str[i])) {
 			return false;
+		}
 		if (count >= 16) {
 			result.lower = (result.lower << 4) | hex2char(str[i]);
 		} else {
