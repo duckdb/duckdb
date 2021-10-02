@@ -47,8 +47,8 @@ bool UUID::FromString(string str, hugeint_t &result) {
 
 void UUID::ToString(hugeint_t input, char *buff) {
 	std::snprintf(buff, 36, "%08llx-%04llx-%04llx-%04llx-%011llx", input.upper >> 32 & 0xFFFFFFFF,
-	              input.upper >> 16 & 0xFFFF, input.upper & 0xFFFF, input.lower >> 48 & 0xFFFF,
-	              input.lower >> 4 & 0xFFFFFFFFFFF);
+	              input.upper >> 16 & 0xFFFF, input.upper & 0xFFFF, (long long unsigned int)input.lower >> 48 & 0xFFFF,
+	              (long long unsigned int)input.lower >> 4 & 0xFFFFFFFFFFF);
 	// snprintf always append null termintor at the end
 	// which requires buff size be 37
 	// but our buffer size is 36

@@ -379,6 +379,10 @@ static bool UUIDCastSwitch(Vector &source, Vector &result, idx_t count, string *
 		// uuid to varchar
 		VectorStringCast<hugeint_t, duckdb::CastFromUUID>(source, result, count);
 		break;
+	case LogicalTypeId::HUGEINT:
+		// uuid to hugeint, for debuging order by clause
+		VectorTryCastLoop<hugeint_t, hugeint_t, duckdb::NumericTryCast>(source, result, count, error_message);
+		break;
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}

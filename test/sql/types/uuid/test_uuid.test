@@ -1,0 +1,80 @@
+# name: test/sql/types/uuid/test_uuid.test
+# description: Test UUID type
+# group: [uuid]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE IF NOT EXISTS uuid (u uuid);
+
+statement ok
+INSERT INTO uuid VALUES ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'), (NULL), ('47183823-2574-4bfd-b411-99ed177d3e43'), ('{10203040506070800102030405060708}');
+
+# output is always in the standard form
+query I
+SELECT uuid 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11';
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# there can be multiple -
+query I
+SELECT uuid 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11';
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# braces need to match
+statement error
+SELECT uuid '{a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11';
+
+# char length should be 32
+statement error
+SELECT uuid '47183823-2574-4bfd-b411-99ed177d3e4';
+
+query I
+SELECT u FROM uuid ORDER BY u;
+----
+NULL
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+10203040-5060-7080-0102-030405060708
+47183823-2574-4bfd-b411-99ed177d3e43
+
+# need to convert to varchar to sort by the string format
+query I
+SELECT u FROM uuid ORDER BY u::varchar;
+----
+NULL
+10203040-5060-7080-0102-030405060708
+47183823-2574-4bfd-b411-99ed177d3e43
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query I
+SELECT MIN(u) FROM uuid;
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query I
+SELECT MAX(u) FROM uuid;
+----
+47183823-2574-4bfd-b411-99ed177d3e43
+
+statement error
+SELECT SUM(u) FROM uuid
+
+statement error
+SELECT AVG(u) FROM uuid
+
+statement error
+SELECT u+u FROM uuid
+
+statement error
+SELECT u*u FROM uuid
+
+statement error
+SELECT u/u FROM uuid
+
+statement error
+SELECT u%u FROM uuid
+
+statement error
+SELECT u-u FROM uuid
