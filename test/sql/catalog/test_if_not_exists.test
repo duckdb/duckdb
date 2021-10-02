@@ -20,3 +20,6 @@ DROP TABLE IF EXISTS integers
 statement ok
 DROP TABLE IF EXISTS integers
 
+statement ok
+DROP TABLE IF EXISTS no_such_scheme.integers
+

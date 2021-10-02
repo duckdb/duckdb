@@ -203,6 +203,27 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	auto order_bys = make_unique<OrderModifier>();
 	TransformOrderBy(root->agg_order, order_bys->orders);
 
+	// Ordered aggregates can be either WITHIN GROUP or after the function arguments
+	if (root->agg_within_group) {
+		//	https://www.postgresql.org/docs/current/functions-aggregate.html#FUNCTIONS-ORDEREDSET-TABLE
+		//  Since we implement "ordered aggregates" without sorting,
+		//  we map all the ones we support to the corresponding aggregate function.
+		if (order_bys->orders.size() != 1) {
+			throw ParserException("Cannot use multiple ORDER BY clauses with WITHIN GROUP");
+		}
+		if (lowercase_name == "percentile_cont") {
+			lowercase_name = "quantile_cont";
+		} else if (lowercase_name == "percentile_disc") {
+			lowercase_name = "quantile_disc";
+		} else if (lowercase_name == "mode") {
+			lowercase_name = "mode";
+		} else {
+			throw ParserException("Unknown ordered aggregate \"%s\".", function_name);
+		}
+		children.insert(children.begin(), move(order_bys->orders[0].expression));
+		order_bys->orders.clear();
+	}
+
 	// star gets eaten in the parser
 	if (lowercase_name == "count" && children.empty()) {
 		lowercase_name = "count_star";

@@ -64,10 +64,6 @@ private:
 	CatalogSet collations;
 
 public:
-	//! Gets a catalog entry from the given catalog set matching the given name
-	CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &name, bool if_exists,
-	                       QueryErrorContext error_context = QueryErrorContext());
-
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry *)> &callback);
 	//! Scan the specified catalog set, invoking the callback method for every committed entry

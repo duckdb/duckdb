@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/set_statement.hpp"
+
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 

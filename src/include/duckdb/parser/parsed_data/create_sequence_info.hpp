@@ -15,8 +15,8 @@ namespace duckdb {
 
 struct CreateSequenceInfo : public CreateInfo {
 	CreateSequenceInfo()
-	    : CreateInfo(CatalogType::SEQUENCE_ENTRY), name(string()), usage_count(0), increment(1), min_value(1),
-	      max_value(NumericLimits<int64_t>::Maximum()), start_value(1), cycle(false) {
+	    : CreateInfo(CatalogType::SEQUENCE_ENTRY, INVALID_SCHEMA), name(string()), usage_count(0), increment(1),
+	      min_value(1), max_value(NumericLimits<int64_t>::Maximum()), start_value(1), cycle(false) {
 	}
 
 	//! Sequence name to create
@@ -39,6 +39,7 @@ public:
 		auto result = make_unique<CreateSequenceInfo>();
 		CopyProperties(*result);
 		result->name = name;
+		result->schema = schema;
 		result->usage_count = usage_count;
 		result->increment = increment;
 		result->min_value = min_value;
