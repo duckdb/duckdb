@@ -213,7 +213,6 @@ jobs:
       BUILD_REST: 1
       BUILD_JDBC: 1
 
-
     steps:
     - uses: actions/checkout@v2
       with:
