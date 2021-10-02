@@ -212,8 +212,6 @@ jobs:
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
-      BUILD_HTTPFS: 1
-      OPENSSL_ROOT_DIR: /usr/local/opt/openssl/
 
 
     steps:
