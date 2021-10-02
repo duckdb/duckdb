@@ -250,7 +250,7 @@ Value Value::UUID(hugeint_t value) {
 	return result;
 }
 
-Value Value::UUID(const string& value) {
+Value Value::UUID(const string &value) {
 	Value result(LogicalType::UUID);
 	result.value_.hugeint = UUID::FromString(value);
 	result.is_null = false;

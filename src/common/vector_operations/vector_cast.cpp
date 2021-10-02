@@ -240,7 +240,7 @@ static bool StringCastSwitch(Vector &source, Vector &result, idx_t count, bool s
 		                                                                          error_message);
 	case LogicalTypeId::UUID:
 		return VectorTryCastStringLoop<string_t, hugeint_t, duckdb::TryCastToUUID>(source, result, count, strict,
-		                                                                          error_message);
+		                                                                           error_message);
 	case LogicalTypeId::SQLNULL:
 		return TryVectorNullCast(source, result, count, error_message);
 	default:
