@@ -54,7 +54,7 @@ void UUID::ToString(hugeint_t input, char *buff) {
 	// which requires buff size be 37
 	// but our buffer size is 36
 	char last[2];
-	std::snprintf(last, 2, "%01llx", input.lower & 0xF);
+	std::snprintf(last, 2, "%01" PRIx64, input.lower & 0xF);
 	buff[35] = last[0];
 }
 
