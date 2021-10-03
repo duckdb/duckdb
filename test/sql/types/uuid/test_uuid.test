@@ -189,6 +189,34 @@ SELECT u, count(1) FROM uuid WHERE u<'80000000-0000-0000-0000-000000000000' GROU
 10203040-5060-7080-0102-030405060708	2
 47183823-2574-4bfd-b411-99ed177d3e43	2
 
+# test UUID round-trippability and ordering with many generated UUIDs
+statement ok
+create function hex_char(i) as substr('0123456789abcdef', (i%16)::int+1, 1);
+
+statement ok
+create function hex_char_repeat(i, j, rep) as repeat(hex_char(i)||hex_char(j), rep);
+
+statement ok
+create function uuid_generate(i, j) as concat(hex_char_repeat(i, j, 4), '-', hex_char_repeat(i, j, 2), '-', hex_char_repeat(i, j, 2), '-', hex_char_repeat(i, j, 2), '-', hex_char_repeat(i, j, 6));
+
+# set up a view that generates a bunch of UUIDs
+statement ok
+CREATE VIEW uuid_generated AS select uuid_generate(i, j) uuid from range(0,16) tbl(i), range(0, 16) tbl2(j)
+
+# test that UUID sort order matches varchar sort order
+query I nosort order
+SELECT uuid::VARCHAR FROM uuid_generated ORDER BY uuid
+
+query I nosort order
+SELECT uuid::UUID FROM uuid_generated ORDER BY uuid
+
+# round-trippability of UUIDs
+query I nosort roundtrip
+SELECT uuid::UUID::VARCHAR=uuid FROM uuid_generated ORDER BY uuid
+
+query I nosort roundtrip
+SELECT uuid=uuid FROM uuid_generated ORDER BY uuid
+
 statement error
 SELECT SUM(u) FROM uuid
 
@@ -221,3 +249,5 @@ SELECT 'aaaa'::uuid
 
 statement error
 SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380Z11'::uuid
+
+
