@@ -205,17 +205,36 @@ CREATE VIEW uuid_generated AS select uuid_generate(i, j) uuid from range(0,16) t
 
 # test that UUID sort order matches varchar sort order
 query I nosort order
-SELECT uuid::VARCHAR FROM uuid_generated ORDER BY uuid
+SELECT uuid::VARCHAR FROM uuid_generated ORDER BY 1
 
 query I nosort order
-SELECT uuid::UUID FROM uuid_generated ORDER BY uuid
+SELECT uuid::UUID FROM uuid_generated ORDER BY 1
 
 # round-trippability of UUIDs
 query I nosort roundtrip
-SELECT uuid::UUID::VARCHAR=uuid FROM uuid_generated ORDER BY uuid
+SELECT uuid::UUID::VARCHAR=uuid FROM uuid_generated ORDER BY 1
 
 query I nosort roundtrip
-SELECT uuid=uuid FROM uuid_generated ORDER BY uuid
+SELECT uuid=uuid FROM uuid_generated ORDER BY 1
+
+# Joins on UUID columns should match joins on varchar columns
+query I nosort uuid_ge_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::VARCHAR >= u2.uuid::VARCHAR;
+
+query I nosort uuid_ge_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::UUID >= u2.uuid::UUID;
+
+query I nosort uuid_le_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::VARCHAR <= u2.uuid::VARCHAR;
+
+query I nosort uuid_le_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::UUID <= u2.uuid::UUID;
+
+query I nosort uuid_eq_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::VARCHAR = u2.uuid::VARCHAR;
+
+query I nosort uuid_eq_join
+SELECT COUNT(*) FROM uuid_generated u1, uuid_generated u2 WHERE u1.uuid::UUID = u2.uuid::UUID;
 
 statement error
 SELECT SUM(u) FROM uuid
