@@ -1,9 +1,5 @@
 #include "duckdb/common/types/uuid.hpp"
 
-#include <sstream>
-#include <iomanip>
-#include <inttypes.h>
-
 namespace duckdb {
 
 bool UUID::FromString(string str, hugeint_t &result) {
