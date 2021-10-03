@@ -9,7 +9,27 @@ statement ok
 CREATE TABLE IF NOT EXISTS uuid (u uuid);
 
 statement ok
-INSERT INTO uuid VALUES ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'), (NULL), ('47183823-2574-4bfd-b411-99ed177d3e43'), ('{10203040506070800102030405060708}');
+INSERT INTO uuid VALUES
+	   ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'),
+	   (NULL),
+	   ('47183823-2574-4bfd-b411-99ed177d3e43'),
+	   ('{10203040506070800102030405060708}'),
+	   ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'),
+	   (NULL),
+	   ('47183823-2574-4bfd-b411-99ed177d3e43'),
+	   ('{10203040506070800102030405060708}'),
+       ('00000000-0000-0000-0000-000000000000'),
+       ('00000000-0000-0000-0000-000000000001'),
+       ('00000000-0000-0000-8000-000000000001'),
+       ('80000000-0000-0000-0000-000000000000'),
+       ('80000000-0000-0000-8000-000000000000'),
+       ('80000000-0000-0000-8fff-ffffffffffff'),
+       ('80000000-0000-0000-ffff-ffffffffffff'),
+       ('8fffffff-ffff-ffff-0000-000000000000'),
+       ('8fffffff-ffff-ffff-8000-000000000000'),
+       ('8fffffff-ffff-ffff-8fff-ffffffffffff'),
+       ('8fffffff-ffff-ffff-ffff-ffffffffffff'),
+       ('ffffffff-ffff-ffff-ffff-ffffffffffff');
 
 # output is always in the standard form
 query I
@@ -17,9 +37,28 @@ SELECT uuid 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11';
 ----
 a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
 
-# there can be multiple -
 query I
-SELECT uuid 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11';
+SELECT 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11';
+----
+a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11
+
+query I
+SELECT 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11'::uuid;
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query I
+SELECT 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11'::uuid::varchar;
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query I
+SELECT 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11'::uuid::varchar::uuid;
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query I
+SELECT 'a0ee-bc99-9c0b-4ef8-bb6d-6bb9-bd38-0a11'::uuid::varchar::uuid::varchar;
 ----
 a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
 
@@ -35,28 +74,120 @@ query I
 SELECT u FROM uuid ORDER BY u;
 ----
 NULL
-a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+NULL
+00000000-0000-0000-0000-000000000000
+00000000-0000-0000-0000-000000000001
+00000000-0000-0000-8000-000000000001
+10203040-5060-7080-0102-030405060708
 10203040-5060-7080-0102-030405060708
 47183823-2574-4bfd-b411-99ed177d3e43
+47183823-2574-4bfd-b411-99ed177d3e43
+80000000-0000-0000-0000-000000000000
+80000000-0000-0000-8000-000000000000
+80000000-0000-0000-8fff-ffffffffffff
+80000000-0000-0000-ffff-ffffffffffff
+8fffffff-ffff-ffff-0000-000000000000
+8fffffff-ffff-ffff-8000-000000000000
+8fffffff-ffff-ffff-8fff-ffffffffffff
+8fffffff-ffff-ffff-ffff-ffffffffffff
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+ffffffff-ffff-ffff-ffff-ffffffffffff
 
 # need to convert to varchar to sort by the string format
 query I
 SELECT u FROM uuid ORDER BY u::varchar;
 ----
 NULL
+NULL
+00000000-0000-0000-0000-000000000000
+00000000-0000-0000-0000-000000000001
+00000000-0000-0000-8000-000000000001
+10203040-5060-7080-0102-030405060708
 10203040-5060-7080-0102-030405060708
 47183823-2574-4bfd-b411-99ed177d3e43
+47183823-2574-4bfd-b411-99ed177d3e43
+80000000-0000-0000-0000-000000000000
+80000000-0000-0000-8000-000000000000
+80000000-0000-0000-8fff-ffffffffffff
+80000000-0000-0000-ffff-ffffffffffff
+8fffffff-ffff-ffff-0000-000000000000
+8fffffff-ffff-ffff-8000-000000000000
+8fffffff-ffff-ffff-8fff-ffffffffffff
+8fffffff-ffff-ffff-ffff-ffffffffffff
 a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+ffffffff-ffff-ffff-ffff-ffffffffffff
 
 query I
 SELECT MIN(u) FROM uuid;
 ----
-a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+00000000-0000-0000-0000-000000000000
 
 query I
 SELECT MAX(u) FROM uuid;
 ----
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query I
+SELECT u FROM uuid WHERE u='8fffffff-ffff-ffff-ffff-ffffffffffff';
+----
+8fffffff-ffff-ffff-ffff-ffffffffffff
+
+query I
+SELECT u FROM uuid WHERE u<>'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11' ORDER BY u;
+----
+00000000-0000-0000-0000-000000000000
+00000000-0000-0000-0000-000000000001
+00000000-0000-0000-8000-000000000001
+10203040-5060-7080-0102-030405060708
+10203040-5060-7080-0102-030405060708
 47183823-2574-4bfd-b411-99ed177d3e43
+47183823-2574-4bfd-b411-99ed177d3e43
+80000000-0000-0000-0000-000000000000
+80000000-0000-0000-8000-000000000000
+80000000-0000-0000-8fff-ffffffffffff
+80000000-0000-0000-ffff-ffffffffffff
+8fffffff-ffff-ffff-0000-000000000000
+8fffffff-ffff-ffff-8000-000000000000
+8fffffff-ffff-ffff-8fff-ffffffffffff
+8fffffff-ffff-ffff-ffff-ffffffffffff
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query I
+SELECT u FROM uuid WHERE u>='80000000-0000-0000-0000-000000000000' ORDER BY u;
+----
+80000000-0000-0000-0000-000000000000
+80000000-0000-0000-8000-000000000000
+80000000-0000-0000-8fff-ffffffffffff
+80000000-0000-0000-ffff-ffffffffffff
+8fffffff-ffff-ffff-0000-000000000000
+8fffffff-ffff-ffff-8000-000000000000
+8fffffff-ffff-ffff-8fff-ffffffffffff
+8fffffff-ffff-ffff-ffff-ffffffffffff
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query I
+SELECT u FROM uuid WHERE u<'80000000-0000-0000-0000-000000000000' ORDER BY u;
+----
+00000000-0000-0000-0000-000000000000
+00000000-0000-0000-0000-000000000001
+00000000-0000-0000-8000-000000000001
+10203040-5060-7080-0102-030405060708
+10203040-5060-7080-0102-030405060708
+47183823-2574-4bfd-b411-99ed177d3e43
+47183823-2574-4bfd-b411-99ed177d3e43
+
+query II
+SELECT u, count(1) FROM uuid WHERE u<'80000000-0000-0000-0000-000000000000' GROUP BY u ORDER BY u;
+----
+00000000-0000-0000-0000-000000000000	1
+00000000-0000-0000-0000-000000000001	1
+00000000-0000-0000-8000-000000000001	1
+10203040-5060-7080-0102-030405060708	2
+47183823-2574-4bfd-b411-99ed177d3e43	2
 
 statement error
 SELECT SUM(u) FROM uuid
@@ -78,3 +209,15 @@ SELECT u%u FROM uuid
 
 statement error
 SELECT u-u FROM uuid
+
+statement error
+SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'::uuid::hugeint;
+
+statement error
+SELECT ''::uuid
+
+statement error
+SELECT 'aaaa'::uuid
+
+statement error
+SELECT 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380Z11'::uuid
