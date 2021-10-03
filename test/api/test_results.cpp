@@ -169,3 +169,24 @@ TEST_CASE("Error in streaming result after initial query", "[api][.]") {
 	auto str = result->ToString();
 	REQUIRE(!str.empty());
 }
+
+TEST_CASE("Test UUID", "[api][uuid]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE uuids (u uuid)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO uuids VALUES ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'), "
+	                          "('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11');"));
+	REQUIRE_FAIL(con.Query("INSERT INTO uuids VALUES ('');"));
+	REQUIRE_FAIL(con.Query("INSERT INTO uuids VALUES ('a0eebc99');"));
+	REQUIRE_FAIL(con.Query("INSERT INTO uuids VALUES ('a0eebc99-9c0b-4ef8-bb6d-6bb9bd380z11');"));
+
+	idx_t row_count = 0;
+	auto result = con.Query("SELECT * FROM uuids");
+	for (auto &row : *result) {
+		auto uuid = row.GetValue<string>(0);
+		REQUIRE(uuid == "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11");
+		row_count++;
+	}
+	REQUIRE(row_count == 2);
+}
