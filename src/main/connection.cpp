@@ -190,7 +190,7 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 }
 
 shared_ptr<Relation> Connection::RelationFromQuery(const string &query, const string &alias) {
-	return make_shared<QueryRelation>(*context, move(query), move(alias));
+	return make_shared<QueryRelation>(*context, query, alias);
 }
 
 void Connection::BeginTransaction() {
