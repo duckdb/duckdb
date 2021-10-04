@@ -11,6 +11,7 @@
 #include "duckdb/common/types/value.hpp"
 
 #include <cmath>
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
@@ -1019,8 +1020,8 @@ public:
 
 template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
-	explicit EnumTypeInfoTemplated(string enum_name_p, vector<string> values_insert_order_p)
-	    : EnumTypeInfo(enum_name_p, move(values_insert_order_p)) {
+	explicit EnumTypeInfoTemplated(const string &enum_name_p, const vector<string> &values_insert_order_p)
+	    : EnumTypeInfo(enum_name_p, values_insert_order_p) {
 		idx_t count = 0;
 		for (auto &value : values_insert_order) {
 			values[value] = count++;
@@ -1042,16 +1043,16 @@ const string &EnumType::GetTypeName(const LogicalType &type) {
 	return ((EnumTypeInfo &)*info).enum_name;
 }
 
-LogicalType LogicalType::ENUM(const string &enum_name, vector<string> ordered_data) {
+LogicalType LogicalType::ENUM(const string &enum_name, const vector<string> &ordered_data) {
 	auto size = ordered_data.size();
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
 	if (size <= NumericLimits<uint8_t>::Maximum()) {
-		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, move(ordered_data));
+		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data);
 	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
-		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, move(ordered_data));
+		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, ordered_data);
 	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
-		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, move(ordered_data));
+		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, ordered_data);
 	} else {
 		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
 	}
