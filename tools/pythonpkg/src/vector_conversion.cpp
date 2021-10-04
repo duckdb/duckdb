@@ -302,7 +302,7 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 
 void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &bind_columns,
                                   vector<LogicalType> &return_types, vector<string> &names) {
-	auto df_columns = py::list(df.attr("columns"));
+	auto df_columns = py::array(df.attr("columns"));
 	auto df_types = py::list(df.attr("dtypes"));
 	auto get_fun = df.attr("__getitem__");
 	// TODO support masked arrays as well
