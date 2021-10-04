@@ -9,6 +9,8 @@
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
+#include "duckdb/planner/expression_binder/select_binder.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 
 #include "Schema_generated.h"
 #include "Plan_generated.h"
@@ -478,9 +480,16 @@ struct ArrowPlanToDuckDB {
 		case arrowir::ExpressionImpl::ExpressionImpl_Call: {
 			auto arrow_expr = expr->impl_as_Call();
 			vector<unique_ptr<duckdb::ParsedExpression>> children;
-			// TODO fill children
+			for (idx_t i = 0; i < arrow_expr->arguments()->size(); i++) {
+				children.push_back(TransformParsed(arrow_expr->arguments()->Get(i)));
+			}
 			return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::FunctionExpression>(
 			    arrow_expr->name()->str(), move(children));
+		}
+		case arrowir::ExpressionImpl::ExpressionImpl_Literal: {
+			auto arrow_expr = expr->impl_as_Literal();
+			// TODO actually set value
+			return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::ConstantExpression>(duckdb::Value());
 		}
 		default:
 			throw std::runtime_error(arrowir::EnumNameExpressionImpl(expr->impl_type()));
@@ -493,6 +502,15 @@ struct ArrowPlanToDuckDB {
 		return expression_binder.Bind(parsed_expr);
 	}
 
+	unique_ptr<duckdb::Expression> TransformAggregate(const arrowir::Expression *expr, idx_t aggregate_index) {
+		auto parsed_expr = TransformParsed(expr);
+		duckdb::BoundSelectNode node;
+		node.aggregate_index = aggregate_index;
+		duckdb::BoundGroupInformation group_info;
+		duckdb::SelectBinder select_binder(*binder, context, node, group_info);
+		return select_binder.Bind(parsed_expr);
+	}
+
 	unique_ptr<duckdb::LogicalOperator> TransformOperator(const arrowir::Relation *arrow_rel) {
 		switch (arrow_rel->impl_type()) {
 		case arrowir::RelationImpl_Limit: {
@@ -503,45 +521,69 @@ struct ArrowPlanToDuckDB {
 			res->children.push_back(TransformOperator(arrow_op->rel()));
 			return res;
 		}
-			//		case arrowir::RelationImpl_OrderBy: {
-			//			auto arrow_op = arrow_rel->impl_as_OrderBy();
-			//			vector<duckdb::BoundOrderByNode> order_nodes;
-			//			// TODO fill nodes
-			//			auto res = duckdb::make_unique<duckdb::LogicalOrder>(move(order_nodes));
-			//			res->children.push_back(TransformOperator(arrow_op->rel()));
-			//			return res;
-			//		}
+		case arrowir::RelationImpl_OrderBy: {
+			auto arrow_op = arrow_rel->impl_as_OrderBy();
+			auto child = TransformOperator(arrow_op->rel());
+			vector<duckdb::BoundOrderByNode> order_nodes;
+			// TODO fill order nodes
+			auto res = duckdb::make_unique<duckdb::LogicalOrder>(move(order_nodes));
+			res->children.push_back(move(child));
+			return res;
+		}
 		case arrowir::RelationImpl_Project: {
 			auto arrow_op = arrow_rel->impl_as_Project();
 			auto child = TransformOperator(arrow_op->rel());
 			vector<unique_ptr<duckdb::Expression>> select_list;
+			vector<string> names;
+			vector<duckdb::LogicalType> types;
 			for (idx_t i = 0; i < arrow_op->expressions()->size(); i++) {
-				select_list.push_back(TransformExpression(arrow_op->expressions()->Get(i)));
+				auto expr = TransformExpression(arrow_op->expressions()->Get(i));
+				names.push_back("expr_" + to_string(i)); // we need a name but its ugly
+				types.push_back(expr->return_type);
+				select_list.push_back(move(expr));
 			}
-			// TODO where do we get our table index?
-			auto res = duckdb::make_unique<duckdb::LogicalProjection>(0, move(select_list));
+
+			auto bind_index = binder->GenerateTableIndex();
+			auto res = duckdb::make_unique<duckdb::LogicalProjection>(bind_index, move(select_list));
 			res->children.push_back(move(child));
+			binder->bind_context.AddGenericBinding(bind_index, "binding_" + to_string(bind_index), names, types);
+
 			return res;
 		}
-			//		case arrowir::RelationImpl_Aggregate: {
-			//			auto arrow_op = arrow_rel->impl_as_Aggregate();
-			//			vector<unique_ptr<duckdb::Expression>> aggregates;
-			//			// TODO this only works for one grouping set for now
-			//			if (arrow_op->groupings()->size() != 1) {
-			//				throw runtime_error("unsupported groups");
-			//			}
-			//			auto groups = arrow_op->groupings()->Get(0);
-			//			for (idx_t i = 0; i < groups->keys()->size(); i++) {
-			//				aggregates.push_back(TransformExpression(groups->keys()->Get(i)));
-			//			}
-			//			for (idx_t i = 0; i < arrow_op->measures()->size(); i++) {
-			//				aggregates.push_back(TransformExpression(arrow_op->measures()->Get(i)));
-			//			}
-			//			// TODO where do we get our table index?
-			//			auto res = duckdb::make_unique<duckdb::LogicalAggregate>(0, 0, move(aggregates));
-			//			res->children.push_back(move(TransformOperator(arrow_op->rel())));
-			//			return res;
-			//		}
+		case arrowir::RelationImpl_Aggregate: {
+			auto arrow_op = arrow_rel->impl_as_Aggregate();
+			auto child = TransformOperator(arrow_op->rel());
+			vector<unique_ptr<duckdb::Expression>> aggregates;
+			// TODO this only works for one grouping set for now
+			if (arrow_op->groupings()->size() != 1) {
+				throw runtime_error("unsupported groups");
+			}
+			vector<string> names;
+			vector<duckdb::LogicalType> types;
+			auto groups = arrow_op->groupings()->Get(0);
+
+			for (idx_t i = 0; i < groups->keys()->size(); i++) {
+				auto expr = TransformExpression(groups->keys()->Get(i));
+				names.push_back("group_" + to_string(i)); // we need a name but its ugly
+				types.push_back(expr->return_type);
+				aggregates.push_back(move(expr));
+
+			}
+			for (idx_t i = 0; i < arrow_op->measures()->size(); i++) {
+				auto expr = TransformAggregate(arrow_op->measures()->Get(i), 1 /* TODO where does this come from? */);
+				names.push_back("aggr_" + to_string(i)); // we need a name but its ugly
+				types.push_back(expr->return_type);
+				aggregates.push_back(move(expr));
+			}
+
+			auto bind_index = binder->GenerateTableIndex();
+			auto res = duckdb::make_unique<duckdb::LogicalAggregate>(bind_index, bind_index, move(aggregates));
+			res->children.push_back(move(child));
+			// TODO this is not in the API yet, but we need to hide the previous binders from the positional reference
+			binder->bind_context.AddGenericBinding(bind_index, "binding_" + to_string(bind_index), names, types);
+
+			return res;
+		}
 		case arrowir::RelationImpl_Source: {
 			auto arrow_op = arrow_rel->impl_as_Source();
 			auto base_table_ref = duckdb::make_unique_base<duckdb::TableRef, duckdb::BaseTableRef>();
@@ -554,7 +596,9 @@ struct ArrowPlanToDuckDB {
 
 			auto &logical_get = (duckdb::LogicalGet &)*plan;
 
-			// TODO ensure it is a remap
+			// TODO pushed down filters need to be made explicit as well!
+
+			// TODO ensure it is a remap, otherwise we can skip creating the projection below
 			auto arrow_rel_base = arrow_op->base()->output_mapping_as_Remap();
 
 			duckdb::ExpressionBinder expression_binder(*table_binder, context);
@@ -636,9 +680,9 @@ int main() {
 	// create TPC-H tables in duckdb catalog, but without any contents
 	con.Query("call dbgen(sf=0.1)");
 
-	transform_plan(con, "SELECT l_orderkey, l_returnflag FROM lineitem LIMIT 10");
+	transform_plan(con, "SELECT avg(l_discount) FROM lineitem");
 
-	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(1));
+	//transform_plan(con, duckdb::TPCHExtension::GetQuery(1));
 	//	// transform_plan(con, duckdb::TPCHExtension::GetQuery(2)); // delim join
 	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(3));
 	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(4));
