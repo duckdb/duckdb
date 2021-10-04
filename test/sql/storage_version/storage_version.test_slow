@@ -70,3 +70,11 @@ query II
 SELECT LENGTH(a), SUBSTR(a, 5000, 3) FROM big_string ORDER BY 1
 ----
 100000	aaa
+
+query I
+SELECT * FROM uuid_values
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+NULL
+47183823-2574-4bfd-b411-99ed177d3e43
+10203040-5060-7080-0102-030405060708

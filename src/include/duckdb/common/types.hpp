@@ -356,6 +356,7 @@ enum class LogicalTypeId : uint8_t {
 	POINTER = 51,
 	HASH = 52,
 	VALIDITY = 53,
+	UUID = 54,
 
 	STRUCT = 100,
 	LIST = 101,
@@ -458,6 +459,7 @@ public:
 	DUCKDB_API static const LogicalType BLOB;
 	DUCKDB_API static const LogicalType INTERVAL;
 	DUCKDB_API static const LogicalType HUGEINT;
+	DUCKDB_API static const LogicalType UUID;
 	DUCKDB_API static const LogicalType HASH;
 	DUCKDB_API static const LogicalType POINTER;
 	DUCKDB_API static const LogicalType TABLE;

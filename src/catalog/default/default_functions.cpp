@@ -83,8 +83,10 @@ static DefaultMacro internal_macros[] = {
 	{"pg_catalog", "pg_ts_template_is_visible", {"template_oid", nullptr}, "true"},
 	{"pg_catalog", "pg_type_is_visible", {"type_oid", nullptr}, "true"},
 
+	{DEFAULT_SCHEMA, "round_even", {"x", "n", nullptr}, "CASE ((abs(x) * power(10, n+1)) % 10) WHEN 5 THEN round(x/2, n) * 2 ELSE round(x, n) END"},
+	{DEFAULT_SCHEMA, "roundbankers", {"x", "n", nullptr}, "round_even(x, n)"},
 	{DEFAULT_SCHEMA, "nullif", {"a", "b", nullptr}, "CASE WHEN a=b THEN NULL ELSE a END"},
-                                         {nullptr, nullptr, {nullptr}, nullptr}};
+    {nullptr, nullptr, {nullptr}, nullptr}};
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &schema, const string &name) {
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {

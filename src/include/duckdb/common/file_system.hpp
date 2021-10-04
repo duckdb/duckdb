@@ -84,7 +84,7 @@ class FileFlags {
 public:
 	//! Open file with read access
 	static constexpr uint8_t FILE_FLAGS_READ = 1 << 0;
-	//! Open file with read/write access
+	//! Open file with write access
 	static constexpr uint8_t FILE_FLAGS_WRITE = 1 << 1;
 	//! Use direct IO when reading/writing to the file
 	static constexpr uint8_t FILE_FLAGS_DIRECT_IO = 1 << 2;

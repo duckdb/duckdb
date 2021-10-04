@@ -5,11 +5,9 @@ coverage:
       default:
         # basic
         # for now
-        target: 0%
-        base: auto
-        paths:
-          - "src"
-       # advanced settings
+        target: number
+        threshold: 95%
+         # advanced settings
         if_not_found: failure
         if_ci_failed: failure
         informational: false
