@@ -1110,7 +1110,7 @@ jobs:
  rstats-linux:
     name: R Package Linux
     runs-on: ubuntu-20.04
-    needs: linux-debug
+    #needs: linux-debug
 
     env:
       LIBARROW_BINARY : 'true'
@@ -1130,7 +1130,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind pandoc
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
