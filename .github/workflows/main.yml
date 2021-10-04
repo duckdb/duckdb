@@ -1110,7 +1110,7 @@ jobs:
  rstats-linux:
     name: R Package Linux
     runs-on: ubuntu-20.04
-    needs: linux-debug
+   # needs: linux-debug
 
     env:
       LIBARROW_BINARY : 'true'
@@ -1168,6 +1168,11 @@ jobs:
     - name: Deploy
       run: python scripts/asset-upload-gha.py duckdb_r_src.tar.gz=tools/rpkg/duckdb_*.tar.gz
 
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-r-package
+        path: |
+          tools/rpkg/duckdb_*.tar.gz
 
  rstats-windows:
     name: R Package Windows
