@@ -325,7 +325,7 @@ void GlobalSortState::AddLocalState(LocalSortState &local_sort_state) {
 	}
 
 	// Sort accumulated data
-	local_sort_state.Sort(*this, external || !sorted_blocks.empty());
+	local_sort_state.Sort(*this, external || !local_sort_state.sorted_blocks.empty());
 
 	// Append local state sorted data to this global state
 	lock_guard<mutex> append_guard(lock);
