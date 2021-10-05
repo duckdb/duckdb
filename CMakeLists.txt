@@ -525,6 +525,26 @@ if(${EXPORT_DLL_SYMBOLS})
   add_definitions(-DDUCKDB_BUILD_LIBRARY)
 endif()
 
+function(link_uuid LIBRARY)
+  # Modified from crossguid without ANDROID
+  # https://github.com/graeme-hill/crossguid/blob/master/CMakeLists.txt
+  if(WIN32)
+    # do nothing
+  elseif(APPLE)
+    find_library(CFLIB CoreFoundation)
+    target_link_libraries(${LIBRARY} ${CFLIB})
+  else()
+    find_package(Libuuid REQUIRED)
+    if (NOT LIBUUID_FOUND)
+        message(FATAL_ERROR
+            "You might need to run 'sudo apt-get install uuid-dev' or similar")
+    endif()
+
+    target_include_directories(${LIBRARY} PRIVATE ${LIBUUID_INCLUDE_DIR})
+    target_link_libraries(${LIBRARY} ${LIBUUID_LIBRARY})
+  endif()
+endfunction()
+
 add_subdirectory(src)
 
 add_subdirectory(tools)

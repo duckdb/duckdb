@@ -37,6 +37,8 @@ public:
 		FromString(str, result);
 		return result;
 	}
+
+	static hugeint_t Random();
 };
 
 } // namespace duckdb

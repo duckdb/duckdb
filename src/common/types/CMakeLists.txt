@@ -1,3 +1,11 @@
+if(WIN32)
+  add_definitions(-DUUID_WINDOWS)
+elseif(APPLE)
+  add_definitions(-DUUID_CFUUID)
+else()
+  add_definitions(-DUUID_LIBUUID)
+endif()
+
 add_library_unity(
   duckdb_common_types
   OBJECT
