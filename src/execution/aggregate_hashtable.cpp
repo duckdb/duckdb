@@ -637,6 +637,7 @@ void GroupedAggregateHashTable::Partition(vector<GroupedAggregateHashTable *> &p
 }
 
 idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
+	Vector addresses(LogicalType::POINTER);
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 
 	auto remaining = entries - scan_position;

@@ -105,8 +105,8 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p
 
 class PhysicalOrderMergeTask : public Task {
 public:
-	PhysicalOrderMergeTask(Event &event_p, ClientContext &context, OrderGlobalState &state)
-	    : event(event_p), context(context), state(state) {
+	PhysicalOrderMergeTask(shared_ptr<Event> event_p, ClientContext &context, OrderGlobalState &state)
+	    : event(move(event_p)), context(context), state(state) {
 	}
 
 	void Execute() override {
@@ -114,11 +114,11 @@ public:
 		auto &global_sort_state = state.global_sort_state;
 		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));
 		merge_sorter.PerformInMergeRound();
-		event.FinishTask();
+		event->FinishTask();
 	}
 
 private:
-	Event &event;
+	shared_ptr<Event> event;
 	ClientContext &context;
 	OrderGlobalState &state;
 };
@@ -141,7 +141,7 @@ public:
 
 		vector<unique_ptr<Task>> merge_tasks;
 		for (idx_t tnum = 0; tnum < num_threads; tnum++) {
-			merge_tasks.push_back(make_unique<PhysicalOrderMergeTask>(*this, context, gstate));
+			merge_tasks.push_back(make_unique<PhysicalOrderMergeTask>(shared_from_this(), context, gstate));
 		}
 		SetTasks(move(merge_tasks));
 	}

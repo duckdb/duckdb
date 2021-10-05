@@ -61,7 +61,7 @@ protected:
 	vector<weak_ptr<Event>> parents;
 
 	//! Whether or not the event is finished executing
-	bool finished;
+	atomic<bool> finished;
 };
 
 }
