@@ -295,6 +295,7 @@ INSERT INTO dog_3 VALUES ('Licity', 'Golden')
 statement error
 select * from dog_3 inner join dog on (dog_3.type = dog.type);
 
+# Lets do a dictionary vector type
 statement ok
 CREATE TABLE person_string (
     name text,
