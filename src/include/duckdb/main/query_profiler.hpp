@@ -126,6 +126,7 @@ public:
 
 public:
 	struct TreeNode {
+		PhysicalOperatorType type;
 		string name;
 		string extra_info;
 		OperatorInformation info;
@@ -193,6 +194,8 @@ public:
 	idx_t OperatorSize() {
 		return tree_map.size();
 	}
+
+	void Finalize(TreeNode &node);
 
 private:
 	//! Whether or not query profiling is enabled

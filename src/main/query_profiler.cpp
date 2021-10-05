@@ -63,12 +63,24 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	}
 }
 
+void QueryProfiler::Finalize(TreeNode &node) {
+	for(auto &child : node.children) {
+		Finalize(*child);
+		if (node.type == PhysicalOperatorType::UNION) {
+			node.info.elements += child->info.elements;
+		}
+	}
+}
+
 void QueryProfiler::EndQuery() {
 	if (!enabled || !running) {
 		return;
 	}
 
 	main_query.End();
+	if (root) {
+		Finalize(*root);
+	}
 	this->running = false;
 	// print or output the query profiling after termination, if this is enabled
 	if (automatic_print_format != ProfilerPrintFormat::NONE) {
@@ -514,6 +526,7 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 		this->query_requires_profiling = true;
 	}
 	auto node = make_unique<QueryProfiler::TreeNode>();
+	node->type = root->type;
 	node->name = root->GetName();
 	node->extra_info = root->ParamsToString();
 	node->depth = depth;
