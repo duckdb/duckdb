@@ -295,3 +295,16 @@ INSERT INTO dog_3 VALUES ('Licity', 'Golden')
 statement error
 select * from dog_3 inner join dog on (dog_3.type = dog.type);
 
+statement ok
+CREATE TABLE person_string (
+    name text,
+    current_mood text
+);
+
+statement ok
+INSERT INTO person_string VALUES ('Pedro', 'ok'), ('Mark', 'sad');
+
+query II
+select name,current_mood::mood from person_string where current_mood = 'sad'
+----
+Mark	sad

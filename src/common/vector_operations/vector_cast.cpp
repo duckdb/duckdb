@@ -170,41 +170,26 @@ static bool NumericCastSwitch(Vector &source, Vector &result, idx_t count, strin
 
 template <class T>
 bool FillEnum(string_t *source_data, ValidityMask &source_mask, const LogicalType &source_type, T *result_data,
-              ValidityMask &result_mask, const LogicalType &result_type, idx_t count, string *error_message) {
+              ValidityMask &result_mask, const LogicalType &result_type, idx_t count, string *error_message,
+              const SelectionVector *sel) {
 	bool all_converted = true;
-	if (source_mask.AllValid()) {
-		for (idx_t i = 0; i < count; i++) {
-			auto string_value = source_data[i].GetString();
+	for (idx_t i = 0; i < count; i++) {
+		idx_t source_idx = i;
+		if (sel) {
+			source_idx = sel->get_index(i);
+		}
+		if (source_mask.RowIsValid(source_idx)) {
+			auto string_value = source_data[source_idx].GetString();
 			auto pos = EnumType::GetPos(result_type, string_value);
 			if (pos == -1) {
-				if (!error_message) {
-					throw CastException(source_type, result_type);
-				} else {
-					all_converted = false;
-					result_mask.SetInvalid(i);
-				}
+				result_data[i] =
+				    HandleVectorCastError::Operation<T>(CastExceptionText<string_t, T>(source_data[source_idx]),
+				                                        result_mask, i, error_message, all_converted);
 			} else {
 				result_data[i] = pos;
 			}
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			if (source_mask.RowIsValid(i)) {
-				auto string_value = source_data[i].GetString();
-				auto pos = EnumType::GetPos(result_type, string_value);
-				if (pos == -1) {
-					if (!error_message) {
-						throw CastException(source_type, result_type);
-					} else {
-						all_converted = false;
-						result_mask.SetInvalid(i);
-					}
-				} else {
-					result_data[i] = pos;
-				}
-			} else {
-				result_mask.SetInvalid(i);
-			}
+		} else {
+			result_mask.SetInvalid(i);
 		}
 	}
 	return all_converted;
@@ -214,43 +199,17 @@ template <class T>
 bool TransformEnum(Vector &source, Vector &result, idx_t count, string *error_message) {
 	D_ASSERT(source.GetType().id() == LogicalTypeId::VARCHAR);
 	auto enum_name = EnumType::GetTypeName(result.GetType());
-	bool all_converted = true;
 	switch (source.GetVectorType()) {
 	case VectorType::CONSTANT_VECTOR: {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+
 		auto source_data = ConstantVector::GetData<string_t>(source);
+		auto source_mask = ConstantVector::Validity(source);
 		auto result_data = ConstantVector::GetData<T>(result);
-		if (ConstantVector::IsNull(source)) {
-			ConstantVector::SetNull(result, true);
-		} else {
-			ConstantVector::SetNull(result, false);
-			auto string_value = source_data[0].GetString();
-			auto pos = EnumType::GetPos(result.GetType(), source_data[0].GetString());
-			if (pos == -1) {
-				if (!error_message) {
-					throw CastException(source.GetType(), result.GetType());
-				} else {
-					all_converted = false;
-					ConstantVector::SetNull(result, true);
-				}
-			} else {
-				result_data[0] = pos;
-			}
-		}
-		break;
-	}
-	case VectorType::FLAT_VECTOR: {
-		result.SetVectorType(VectorType::FLAT_VECTOR);
+		auto &result_mask = ConstantVector::Validity(result);
 
-		auto source_data = FlatVector::GetData<string_t>(source);
-		auto source_mask = FlatVector::Validity(source);
-
-		auto result_data = FlatVector::GetData<T>(result);
-		auto result_mask = FlatVector::Validity(result);
-
-		all_converted = FillEnum(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(),
-		                         count, error_message);
-		break;
+		return FillEnum(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(), 1,
+		                error_message, nullptr);
 	}
 	default: {
 		VectorData vdata;
@@ -259,18 +218,15 @@ bool TransformEnum(Vector &source, Vector &result, idx_t count, string *error_me
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 
 		auto source_data = (string_t *)vdata.data;
+		auto source_sel = vdata.sel;
 		auto source_mask = vdata.validity;
-
 		auto result_data = FlatVector::GetData<T>(result);
-		auto result_mask = FlatVector::Validity(result);
+		auto &result_mask = FlatVector::Validity(result);
 
-		all_converted = FillEnum(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(),
-		                         count, error_message);
-		break;
+		return FillEnum(source_data, source_mask, source.GetType(), result_data, result_mask, result.GetType(), count,
+		                error_message, source_sel);
 	}
 	}
-
-	return all_converted;
 }
 static bool VectorStringCastNumericSwitch(Vector &source, Vector &result, idx_t count, bool strict,
                                           string *error_message) {

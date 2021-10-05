@@ -108,9 +108,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::VALIDITY:
 		return PhysicalType::BIT;
 	case LogicalTypeId::ENUM: {
-		if (!type_info_) {
-			return PhysicalType::INVALID;
-		}
+		D_ASSERT(type_info_);
 		auto size = EnumType::GetSize(*this);
 		if (size <= NumericLimits<uint8_t>::Maximum()) {
 			return PhysicalType::UINT8;

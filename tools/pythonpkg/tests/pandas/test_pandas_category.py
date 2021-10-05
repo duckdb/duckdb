@@ -2,12 +2,15 @@ import duckdb
 import pandas as pd
 import numpy
 
-def check_category_equal(category):
+def check_category_equal(category, select = False):
     df_in = pd.DataFrame({
     'x': pd.Categorical(category, ordered=True),
     })
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
     assert df_in.equals(df_out)
+    if select:
+        res = duckdb.query_df(df_in, "data", "SELECT * FROM data where x = '1'").fetchall()
+        assert res == [('1',)]
 
 class TestCategory(object):
 
@@ -45,17 +48,19 @@ class TestCategory(object):
         })
         assert duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchall() == [('foo',), ('bla',), (None,), ('zoo',), ('foo',), ('foo',), (None,), ('bla',)]
     
-    def test_category_string_int16(self, duckdb_cursor):
+    def test_category_string_uint16(self, duckdb_cursor):
+        connection = duckdb.connect(":memory:")
         category = []
         for i in range (300):
             category.append(str(i))
-        check_category_equal(category)
+        check_category_equal(category,True)
 
-    def test_category_string_int32(self, duckdb_cursor):
+    def test_category_string_uint32(self, duckdb_cursor):
+        connection = duckdb.connect(":memory:")
         category = []
-        for i in range (33000):
+        for i in range (70000):
             category.append(str(i))
-        check_category_equal(category)
+        check_category_equal(category,True)
 
     def test_category_fetch_df_chunk(self, duckdb_cursor):
         con = duckdb.connect()

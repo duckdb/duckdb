@@ -108,6 +108,11 @@ select ['happy']::mood[]
 [happy]
 
 query I
+select [NULL,'happy',NULL]::mood[]
+----
+[NULL, happy, NULL]
+
+query I
 select ['happy','ok','ok']::mood[]
 ----
 [happy, ok, ok]

@@ -330,7 +330,8 @@ void ReplayState::ReplayCreateType() {
 void ReplayState::ReplayDropType() {
 	DropInfo info;
 
-	info.type = CatalogType::SCHEMA_ENTRY;
+	info.type = CatalogType::TYPE_ENTRY;
+	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 	if (deserialize_only) {
 		return;
