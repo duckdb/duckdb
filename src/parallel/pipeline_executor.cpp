@@ -6,20 +6,22 @@ namespace duckdb {
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p) :
 	pipeline(pipeline_p), thread(context_p), context(context_p, thread) {
 	D_ASSERT(pipeline.source_state);
-	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
-	if (pipeline.sink) {
-		local_sink_state = pipeline.sink->GetLocalSinkState(context);
-	}
-	intermediate_chunks.reserve(pipeline.operators.size());
-	intermediate_states.reserve(pipeline.operators.size());
-	for(idx_t i = 0; i < pipeline.operators.size(); i++) {
-		auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
-		auto chunk = make_unique<DataChunk>();
-		chunk->Initialize(prev_operator->GetTypes());
-		intermediate_chunks.push_back(move(chunk));
-		intermediate_states.push_back(pipeline.operators[i]->GetOperatorState(context.client));
-	}
-	InitializeChunk(final_chunk);
+	RunFunctionInTryCatch([&]() {
+		local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
+		if (pipeline.sink) {
+			local_sink_state = pipeline.sink->GetLocalSinkState(context);
+		}
+		intermediate_chunks.reserve(pipeline.operators.size());
+		intermediate_states.reserve(pipeline.operators.size());
+		for(idx_t i = 0; i < pipeline.operators.size(); i++) {
+			auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
+			auto chunk = make_unique<DataChunk>();
+			chunk->Initialize(prev_operator->GetTypes());
+			intermediate_chunks.push_back(move(chunk));
+			intermediate_states.push_back(pipeline.operators[i]->GetOperatorState(context.client));
+		}
+		InitializeChunk(final_chunk);
+	});
 }
 
 void PipelineExecutor::RunFunctionInTryCatch(const std::function<void(void)> &fun) {
