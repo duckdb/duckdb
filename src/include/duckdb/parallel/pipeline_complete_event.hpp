@@ -24,4 +24,4 @@ public:
 	void FinalizeFinish() override;
 };
 
-}
+} // namespace duckdb

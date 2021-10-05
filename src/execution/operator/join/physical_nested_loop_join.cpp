@@ -141,7 +141,7 @@ public:
 };
 
 SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                  DataChunk &input) const {
+                                            DataChunk &input) const {
 	auto &gstate = (NestedLoopJoinGlobalState &)state;
 	auto &nlj_state = (NestedLoopJoinLocalState &)lstate;
 
@@ -192,8 +192,7 @@ unique_ptr<LocalSinkState> PhysicalNestedLoopJoin::GetLocalSinkState(ExecutionCo
 class PhysicalNestedLoopJoinState : public OperatorState {
 public:
 	PhysicalNestedLoopJoinState(const PhysicalNestedLoopJoin &op, const vector<JoinCondition> &conditions)
-	    : fetch_next_left(true), fetch_next_right(false), right_chunk(0),
-	      left_tuple(0), right_tuple(0) {
+	    : fetch_next_left(true), fetch_next_right(false), right_chunk(0), left_tuple(0), right_tuple(0) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : conditions) {
 			lhs_executor.AddExpression(*cond.left);
@@ -204,7 +203,6 @@ public:
 			left_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
 			memset(left_found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 		}
-
 	}
 
 	bool fetch_next_left;
@@ -229,7 +227,8 @@ unique_ptr<OperatorState> PhysicalNestedLoopJoin::GetOperatorState(ClientContext
 	return make_unique<PhysicalNestedLoopJoinState>(*this, conditions);
 }
 
-OperatorResultType PhysicalNestedLoopJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+OperatorResultType PhysicalNestedLoopJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                   OperatorState &state_p) const {
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.Count() == 0) {
@@ -259,8 +258,9 @@ OperatorResultType PhysicalNestedLoopJoin::Execute(ExecutionContext &context, Da
 	}
 }
 
-void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
-	auto &state = (PhysicalNestedLoopJoinState &) state_p;
+void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                               OperatorState &state_p) const {
+	auto &state = (PhysicalNestedLoopJoinState &)state_p;
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	// resolve the left join condition for the current chunk
@@ -271,8 +271,7 @@ void PhysicalNestedLoopJoin::ResolveSimpleJoin(ExecutionContext &context, DataCh
 	switch (join_type) {
 	case JoinType::MARK:
 		// now construct the mark join result from the found matches
-		PhysicalJoin::ConstructMarkJoinResult(state.left_condition, input, chunk, found_match,
-												gstate.has_null);
+		PhysicalJoin::ConstructMarkJoinResult(state.left_condition, input, chunk, found_match, gstate.has_null);
 		break;
 	case JoinType::SEMI:
 		// construct the semi join result from the found matches
@@ -304,8 +303,9 @@ void PhysicalJoin::ConstructLeftJoinResult(DataChunk &left, DataChunk &result, b
 	}
 }
 
-OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
-	auto &state = (PhysicalNestedLoopJoinState &) state_p;
+OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input,
+                                                              DataChunk &chunk, OperatorState &state_p) const {
+	auto &state = (PhysicalNestedLoopJoinState &)state_p;
 	auto &gstate = (NestedLoopJoinGlobalState &)*sink_state;
 
 	idx_t match_count;
@@ -352,7 +352,7 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 		// now perform the join
 		SelectionVector lvector(STANDARD_VECTOR_SIZE), rvector(STANDARD_VECTOR_SIZE);
 		match_count = NestedLoopJoinInner::Perform(state.left_tuple, state.right_tuple, state.left_condition,
-															right_chunk, lvector, rvector, conditions);
+		                                           right_chunk, lvector, rvector, conditions);
 		// we have finished resolving the join conditions
 		if (match_count > 0) {
 			// we have matching tuples!
@@ -375,7 +375,7 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 		if (state.right_tuple >= right_chunk.size()) {
 			state.fetch_next_right = true;
 		}
-	} while(match_count == 0);
+	} while (match_count == 0);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
@@ -384,15 +384,15 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 //===--------------------------------------------------------------------===//
 class NestedLoopJoinScanState : public GlobalSourceState {
 public:
-	NestedLoopJoinScanState(const PhysicalNestedLoopJoin &op) :
-		op(op), right_outer_position(0) {}
+	NestedLoopJoinScanState(const PhysicalNestedLoopJoin &op) : op(op), right_outer_position(0) {
+	}
 
 	mutex lock;
 	const PhysicalNestedLoopJoin &op;
 	idx_t right_outer_position;
 
 public:
-	idx_t MaxThreads() override{
+	idx_t MaxThreads() override {
 		auto &sink = (NestedLoopJoinGlobalState &)*op.sink_state;
 		return sink.right_chunks.Count() / (STANDARD_VECTOR_SIZE * 10);
 	}
@@ -402,11 +402,12 @@ unique_ptr<GlobalSourceState> PhysicalNestedLoopJoin::GetGlobalSourceState(Clien
 	return make_unique<NestedLoopJoinScanState>(*this);
 }
 
-void PhysicalNestedLoopJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+void PhysicalNestedLoopJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                     LocalSourceState &lstate) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = (NestedLoopJoinGlobalState &)*sink_state;
-	auto &state = (NestedLoopJoinScanState &) gstate;
+	auto &state = (NestedLoopJoinScanState &)gstate;
 
 	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we
 	// still need to output

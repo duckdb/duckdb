@@ -348,32 +348,32 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string ex
 
 class TreeChildrenIterator {
 public:
-	template<class T>
+	template <class T>
 	static bool HasChildren(const T &op) {
 		return !op.children.empty();
 	}
-	template<class T>
+	template <class T>
 	static void Iterate(const T &op, const std::function<void(const T &child)> &callback) {
 		for (auto &child : op.children) {
 			callback(*child);
 		}
 	}
-
 };
-template<>
+template <>
 bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
 	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
 		return true;
 	}
 	return !op.children.empty();
 }
-template<>
-void TreeChildrenIterator::Iterate(const PhysicalOperator &op, const std::function<void(const PhysicalOperator &child)> &callback) {
+template <>
+void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
+                                   const std::function<void(const PhysicalOperator &child)> &callback) {
 	for (auto &child : op.children) {
 		callback(*child);
 	}
 	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
-		auto &delim = (PhysicalDelimJoin &) op;
+		auto &delim = (PhysicalDelimJoin &)op;
 		callback(*delim.join);
 	}
 }
@@ -407,9 +407,8 @@ idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, i
 	}
 	idx_t width = 0;
 	// render the children of this node
-	TreeChildrenIterator::Iterate<T>(op, [&](const T &child) {
-		width += CreateRenderTreeRecursive<T>(result, child, x + width, y + 1);
-	});
+	TreeChildrenIterator::Iterate<T>(
+	    op, [&](const T &child) { width += CreateRenderTreeRecursive<T>(result, child, x + width, y + 1); });
 	return width;
 }
 

@@ -24,9 +24,11 @@ public:
 public:
 	virtual void Schedule() = 0;
 	//! Called right after the event is finished
-	virtual void FinishEvent() {}
+	virtual void FinishEvent() {
+	}
 	//! Called after the event is entirely finished
-	virtual void FinalizeFinish() {}
+	virtual void FinalizeFinish() {
+	}
 
 	void FinishTask();
 	void Finish();
@@ -44,6 +46,7 @@ public:
 	bool IsFinished() {
 		return finished;
 	}
+
 protected:
 	Executor &executor;
 	//! The current threads working on the event
@@ -64,4 +67,4 @@ protected:
 	atomic<bool> finished;
 };
 
-}
+} // namespace duckdb

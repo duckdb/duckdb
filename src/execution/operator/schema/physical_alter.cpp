@@ -9,7 +9,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class AlterSourceState : public GlobalSourceState {
 public:
-	AlterSourceState() : finished(false) {}
+	AlterSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -18,8 +19,9 @@ unique_ptr<GlobalSourceState> PhysicalAlter::GetGlobalSourceState(ClientContext 
 	return make_unique<AlterSourceState>();
 }
 
-void PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (AlterSourceState &) gstate;
+void PhysicalAlter::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                            LocalSourceState &lstate) const {
+	auto &state = (AlterSourceState &)gstate;
 	if (state.finished) {
 		return;
 	}

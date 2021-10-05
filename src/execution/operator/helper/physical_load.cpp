@@ -26,7 +26,8 @@ void *dlsym(void *handle, const char *name) {
 }
 #endif
 
-void PhysicalLoad::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+void PhysicalLoad::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                           LocalSourceState &lstate) const {
 	auto &fs = FileSystem::GetFileSystem(context.client);
 	auto filename = fs.ConvertSeparators(info->filename);
 	if (!fs.FileExists(filename)) {

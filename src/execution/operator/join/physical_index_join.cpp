@@ -87,11 +87,12 @@ unique_ptr<OperatorState> PhysicalIndexJoin::GetOperatorState(ClientContext &con
 	return make_unique<IndexJoinOperatorState>(*this);
 }
 
-void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
+void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                               OperatorState &state_p) const {
 	auto &transaction = Transaction::GetTransaction(context.client);
 	auto &phy_tbl_scan = (PhysicalTableScan &)*children[1];
 	auto &bind_tbl = (TableScanBindData &)*phy_tbl_scan.bind_data;
-	auto &state = (IndexJoinOperatorState &) state_p;
+	auto &state = (IndexJoinOperatorState &)state_p;
 
 	auto tbl = bind_tbl.table->storage.get();
 	idx_t output_sel_idx = 0;
@@ -143,7 +144,7 @@ void PhysicalIndexJoin::Output(ExecutionContext &context, DataChunk &input, Data
 }
 
 void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const {
-	auto &state = (IndexJoinOperatorState &) state_p;
+	auto &state = (IndexJoinOperatorState &)state_p;
 	auto &art = (ART &)*index;
 	auto &transaction = Transaction::GetTransaction(context.client);
 	for (idx_t i = 0; i < input.size(); i++) {
@@ -172,8 +173,9 @@ void PhysicalIndexJoin::GetRHSMatches(ExecutionContext &context, DataChunk &inpu
 	}
 }
 
-OperatorResultType PhysicalIndexJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
-	auto &state = (IndexJoinOperatorState &) state_p;
+OperatorResultType PhysicalIndexJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                              OperatorState &state_p) const {
+	auto &state = (IndexJoinOperatorState &)state_p;
 
 	state.result_size = 0;
 	if (state.first_fetch) {

@@ -40,7 +40,8 @@ static LogicalType ResolveWindowExpressionType(ExpressionType window_type, const
 		throw InternalException("Unrecognized window expression type " + ExpressionTypeToString(window_type));
 	}
 	if (child_types.size() != param_count) {
-		throw BinderException("%s needs %d parameter%s, got %d", ExpressionTypeToString(window_type), param_count, param_count == 1 ? "" : "s", child_types.size());
+		throw BinderException("%s needs %d parameter%s, got %d", ExpressionTypeToString(window_type), param_count,
+		                      param_count == 1 ? "" : "s", child_types.size());
 	}
 	switch (window_type) {
 	case ExpressionType::WINDOW_PERCENT_RANK:

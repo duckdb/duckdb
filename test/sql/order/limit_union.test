@@ -1,4 +1,4 @@
-# name: test/sql/order/limit_full_outer_join.test
+# name: test/sql/order/limit_union.test
 # description: Test LIMIT with full outer joins
 # group: [order]
 

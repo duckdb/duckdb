@@ -108,7 +108,8 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 		}
 	}
 	// for perfect hash join
-	state->perfect_join_executor = make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, move(perfect_join_statistics));
+	state->perfect_join_executor =
+	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, move(perfect_join_statistics));
 	return move(state);
 }
 
@@ -125,7 +126,7 @@ unique_ptr<LocalSinkState> PhysicalHashJoin::GetLocalSinkState(ExecutionContext 
 }
 
 SinkResultType PhysicalHashJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
-                            DataChunk &input) const {
+                                      DataChunk &input) const {
 	auto &sink = (HashJoinGlobalState &)state;
 	auto &lstate = (HashJoinLocalState &)lstate_p;
 	// resolve the join keys for the right chunk
@@ -161,8 +162,9 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const {
-	auto &sink = (HashJoinGlobalState &) gstate;
+void PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                GlobalSinkState &gstate) const {
+	auto &sink = (HashJoinGlobalState &)gstate;
 	// check for possible perfect hash table
 	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
 	if (use_perfect_hash) {
@@ -210,8 +212,9 @@ unique_ptr<OperatorState> PhysicalHashJoin::GetOperatorState(ClientContext &cont
 	return move(state);
 }
 
-OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
-	auto &state = (PhysicalHashJoinState &) state_p;
+OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                             OperatorState &state_p) const {
+	auto &state = (PhysicalHashJoinState &)state_p;
 	auto &sink = (HashJoinGlobalState &)*sink_state;
 	D_ASSERT(sink.finalized);
 
@@ -253,14 +256,14 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 class HashJoinScanState : public GlobalSourceState {
 public:
-	HashJoinScanState(const PhysicalHashJoin &op) :
-		op(op) {}
+	HashJoinScanState(const PhysicalHashJoin &op) : op(op) {
+	}
 
 	const PhysicalHashJoin &op;
 	//! Only used for FULL OUTER JOIN: scan state of the final scan to find unmatched tuples in the build-side
 	JoinHTScanState ht_scan_state;
 
-	idx_t MaxThreads() override{
+	idx_t MaxThreads() override {
 		auto &sink = (HashJoinGlobalState &)*op.sink_state;
 		return sink.hash_table->Count() / (STANDARD_VECTOR_SIZE * 10);
 	}
@@ -270,11 +273,12 @@ unique_ptr<GlobalSourceState> PhysicalHashJoin::GetGlobalSourceState(ClientConte
 	return make_unique<HashJoinScanState>(*this);
 }
 
-void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+void PhysicalHashJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                               LocalSourceState &lstate) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = (HashJoinGlobalState &)*sink_state;
-	auto &state = (HashJoinScanState &) gstate;
+	auto &state = (HashJoinScanState &)gstate;
 	sink.hash_table->ScanFullOuter(chunk, state.ht_scan_state);
 }
 

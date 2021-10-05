@@ -11,8 +11,7 @@ namespace duckdb {
 //! The operator state of the window
 class UnnestOperatorState : public OperatorState {
 public:
-	UnnestOperatorState()
-	    : parent_position(0), list_position(0), list_length(-1), first_fetch(true) {
+	UnnestOperatorState() : parent_position(0), list_position(0), list_length(-1), first_fetch(true) {
 	}
 
 	idx_t parent_position;
@@ -150,8 +149,9 @@ unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ClientContext &contex
 	return make_unique<UnnestOperatorState>();
 }
 
-OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
-	auto &state = (UnnestOperatorState &) state_p;
+OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                           OperatorState &state_p) const {
+	auto &state = (UnnestOperatorState &)state_p;
 	do {
 		if (state.first_fetch) {
 			// get the list data to unnest
@@ -224,8 +224,7 @@ OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk 
 		chunk.SetCardinality(this_chunk_len);
 
 		for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-			ConstantVector::Reference(chunk.data[col_idx], input.data[col_idx], state.parent_position,
-										input.size());
+			ConstantVector::Reference(chunk.data[col_idx], input.data[col_idx], state.parent_position, input.size());
 		}
 
 		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
@@ -255,7 +254,7 @@ OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk 
 
 					auto base_offset = list_entry.offset + state.list_position;
 					UnnestVector(child_data, child_vector, list_size, base_offset, base_offset + list_count,
-									result_vector);
+					             result_vector);
 				}
 			}
 			UnnestNull(list_count, this_chunk_len, result_vector);

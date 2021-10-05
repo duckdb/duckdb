@@ -54,7 +54,7 @@ public:
 		if (filters.size() != other.filters.size()) {
 			return false;
 		}
-		for(auto &entry : filters) {
+		for (auto &entry : filters) {
 			auto other_entry = other.filters.find(entry.first);
 			if (other_entry == other.filters.end()) {
 				return false;

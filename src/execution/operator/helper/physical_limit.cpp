@@ -12,8 +12,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class LimitGlobalState : public GlobalSinkState {
 public:
-	explicit LimitGlobalState(const PhysicalLimit &op)
-	    : current_offset(0) {
+	explicit LimitGlobalState(const PhysicalLimit &op) : current_offset(0) {
 		this->limit = op.limit_expression ? INVALID_INDEX : op.limit_value;
 		this->offset = op.offset_expression ? INVALID_INDEX : op.offset_value;
 	}
@@ -47,9 +46,10 @@ unique_ptr<GlobalSinkState> PhysicalLimit::GetGlobalSinkState(ClientContext &con
 	return make_unique<LimitGlobalState>(*this);
 }
 
-SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate, DataChunk &input) const {
+SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                   DataChunk &input) const {
 	D_ASSERT(input.size() > 0);
-	auto &state = (LimitGlobalState &) gstate;
+	auto &state = (LimitGlobalState &)gstate;
 	auto &limit = state.limit;
 	auto &offset = state.offset;
 
@@ -114,7 +114,8 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 //===--------------------------------------------------------------------===//
 class LimitOperatorState : public GlobalSourceState {
 public:
-	LimitOperatorState() : chunk_idx(0) {}
+	LimitOperatorState() : chunk_idx(0) {
+	}
 
 	idx_t chunk_idx;
 };
@@ -123,9 +124,10 @@ unique_ptr<GlobalSourceState> PhysicalLimit::GetGlobalSourceState(ClientContext 
 	return make_unique<LimitOperatorState>();
 }
 
-void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                            LocalSourceState &lstate) const {
 	auto &gstate = (LimitGlobalState &)*sink_state;
-	auto &state = (LimitOperatorState &) gstate_p;
+	auto &state = (LimitOperatorState &)gstate_p;
 	if (state.chunk_idx >= gstate.data.ChunkCount()) {
 		return;
 	}

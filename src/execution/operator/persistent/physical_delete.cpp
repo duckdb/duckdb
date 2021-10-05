@@ -20,7 +20,7 @@ public:
 };
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                          DataChunk &input) const {
+                                    DataChunk &input) const {
 	auto &gstate = (DeleteGlobalState &)state;
 
 	// delete data in the base table
@@ -39,7 +39,8 @@ unique_ptr<GlobalSinkState> PhysicalDelete::GetGlobalSinkState(ClientContext &co
 //===--------------------------------------------------------------------===//
 class DeleteSourceState : public GlobalSourceState {
 public:
-	DeleteSourceState() : finished(false) {}
+	DeleteSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -48,8 +49,9 @@ unique_ptr<GlobalSourceState> PhysicalDelete::GetGlobalSourceState(ClientContext
 	return make_unique<DeleteSourceState>();
 }
 
-void PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (DeleteSourceState &) gstate;
+void PhysicalDelete::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                             LocalSourceState &lstate) const {
+	auto &state = (DeleteSourceState &)gstate;
 	auto &g = (DeleteGlobalState &)*sink_state;
 	if (state.finished) {
 		return;

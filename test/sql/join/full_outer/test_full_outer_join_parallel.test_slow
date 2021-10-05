@@ -1,6 +1,6 @@
 # name: test/sql/join/full_outer/test_full_outer_join_parallel.test_slow
 # description: Test full outer join with parallelism
-# group: [join]
+# group: [full_outer]
 
 statement ok
 PRAGMA enable_verification

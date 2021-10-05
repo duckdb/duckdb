@@ -21,7 +21,8 @@ public:
 public:
 	// Operator Interface
 	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
-	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const override;
+	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                           OperatorState &state) const override;
 
 	bool ParallelOperator() const override {
 		return true;
@@ -31,7 +32,7 @@ public:
 	// Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	          DataChunk &input) const override;
+	                    DataChunk &input) const override;
 
 	bool IsSink() const override {
 		return true;

@@ -3,8 +3,9 @@
 
 namespace duckdb {
 
-PipelineCompleteEvent::PipelineCompleteEvent(Executor &executor, bool complete_pipeline_p) :
-	Event(executor), complete_pipeline(complete_pipeline_p) {}
+PipelineCompleteEvent::PipelineCompleteEvent(Executor &executor, bool complete_pipeline_p)
+    : Event(executor), complete_pipeline(complete_pipeline_p) {
+}
 
 void PipelineCompleteEvent::Schedule() {
 }
@@ -15,4 +16,4 @@ void PipelineCompleteEvent::FinalizeFinish() {
 	}
 }
 
-}
+} // namespace duckdb

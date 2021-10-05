@@ -55,6 +55,7 @@ public:
 	PhysicalOperator *GetSink() {
 		return sink;
 	}
+
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;

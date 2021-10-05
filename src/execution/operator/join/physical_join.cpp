@@ -9,7 +9,7 @@ PhysicalJoin::PhysicalJoin(LogicalOperator &op, PhysicalOperatorType type, JoinT
 
 bool PhysicalJoin::EmptyResultIfRHSIsEmpty() const {
 	// empty RHS with INNER, RIGHT or SEMI join means empty result set
-	switch(join_type) {
+	switch (join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 	case JoinType::SEMI:

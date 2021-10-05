@@ -34,11 +34,11 @@ bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
 	if (!TableFilter::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (ConjunctionOrFilter &) other_p;
+	auto &other = (ConjunctionOrFilter &)other_p;
 	if (other.child_filters.size() != child_filters.size()) {
 		return false;
 	}
-	for(idx_t i = 0; i < other.child_filters.size(); i++) {
+	for (idx_t i = 0; i < other.child_filters.size(); i++) {
 		if (!child_filters[i]->Equals(*other.child_filters[i])) {
 			return false;
 		}
@@ -79,11 +79,11 @@ bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
 	if (!TableFilter::Equals(other_p)) {
 		return false;
 	}
-	auto &other = (ConjunctionAndFilter &) other_p;
+	auto &other = (ConjunctionAndFilter &)other_p;
 	if (other.child_filters.size() != child_filters.size()) {
 		return false;
 	}
-	for(idx_t i = 0; i < other.child_filters.size(); i++) {
+	for (idx_t i = 0; i < other.child_filters.size(); i++) {
 		if (!child_filters[i]->Equals(*other.child_filters[i])) {
 			return false;
 		}

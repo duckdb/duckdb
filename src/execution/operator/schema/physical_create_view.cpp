@@ -8,7 +8,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class CreateViewSourceState : public GlobalSourceState {
 public:
-	CreateViewSourceState() : finished(false) {}
+	CreateViewSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -17,8 +18,9 @@ unique_ptr<GlobalSourceState> PhysicalCreateView::GetGlobalSourceState(ClientCon
 	return make_unique<CreateViewSourceState>();
 }
 
-void PhysicalCreateView::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (CreateViewSourceState &) gstate;
+void PhysicalCreateView::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                 LocalSourceState &lstate) const {
+	auto &state = (CreateViewSourceState &)gstate;
 	if (state.finished) {
 		return;
 	}

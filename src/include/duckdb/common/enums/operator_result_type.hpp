@@ -21,15 +21,8 @@ namespace duckdb {
 //! The operator will be called again with the same input.
 //! FINISHED means the operator has finished the entire pipeline and no more processing is necessary.
 //! The operator will not be called again, and neither will any other operators in this pipeline.
-enum class OperatorResultType : uint8_t {
-	NEED_MORE_INPUT,
-	HAVE_MORE_OUTPUT,
-	FINISHED
-};
+enum class OperatorResultType : uint8_t { NEED_MORE_INPUT, HAVE_MORE_OUTPUT, FINISHED };
 
-enum class SinkResultType : uint8_t {
-	NEED_MORE_INPUT,
-	FINISHED
-};
+enum class SinkResultType : uint8_t { NEED_MORE_INPUT, FINISHED };
 
 } // namespace duckdb

@@ -25,7 +25,8 @@ public:
 
 public:
 	// Source interface
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
 };
 
 } // namespace duckdb

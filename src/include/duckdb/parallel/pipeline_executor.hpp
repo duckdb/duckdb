@@ -44,7 +44,6 @@ public:
 	//! This flushes profiler states
 	void PullFinalize();
 
-
 private:
 	//! The pipeline to process
 	Pipeline &pipeline;
@@ -85,7 +84,6 @@ private:
 	//! Pushes a chunk through the pipeline and returns a single result chunk
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
 	OperatorResultType Execute(DataChunk &input, DataChunk &result);
-
 };
 
 } // namespace duckdb

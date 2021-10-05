@@ -37,8 +37,7 @@ public:
 	}
 };
 
-Pipeline::Pipeline(Executor &executor_p)
-    : executor(executor_p), ready(false), source(nullptr), sink(nullptr) {
+Pipeline::Pipeline(Executor &executor_p) : executor(executor_p), ready(false), source(nullptr), sink(nullptr) {
 }
 
 ClientContext &Pipeline::GetClientContext() {
@@ -81,7 +80,7 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 	if (!source->ParallelSource()) {
 		return false;
 	}
-	for(auto &op : operators) {
+	for (auto &op : operators) {
 		if (!op->ParallelOperator()) {
 			return false;
 		}

@@ -27,13 +27,14 @@ public:
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
 
 public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-	          DataChunk &input) const override;
+	                    DataChunk &input) const override;
 
 	bool IsSink() const override {
 		return true;
@@ -41,6 +42,5 @@ public:
 	bool ParallelSink() const override {
 		return true;
 	}
-
 };
 } // namespace duckdb

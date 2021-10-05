@@ -25,14 +25,14 @@ public:
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function, unique_ptr<FunctionData> bind_data,
-					idx_t estimated_cardinality)
-	: PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, move(types), estimated_cardinality), function(function),
-		bind_data(move(bind_data)) {
+PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction function,
+                                       unique_ptr<FunctionData> bind_data, idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::COPY_TO_FILE, move(types), estimated_cardinality), function(function),
+      bind_data(move(bind_data)) {
 }
 
 SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-                              DataChunk &input) const {
+                                        DataChunk &input) const {
 	auto &g = (CopyToFunctionGlobalState &)gstate;
 	auto &l = (CopyToFunctionLocalState &)lstate;
 
@@ -50,8 +50,9 @@ void PhysicalCopyToFile::Combine(ExecutionContext &context, GlobalSinkState &gst
 	}
 }
 
-void PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate_p) const {
-	auto &gstate = (CopyToFunctionGlobalState &) gstate_p;
+void PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                  GlobalSinkState &gstate_p) const {
+	auto &gstate = (CopyToFunctionGlobalState &)gstate_p;
 	if (function.copy_to_finalize) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
 	}
@@ -69,7 +70,8 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 //===--------------------------------------------------------------------===//
 class CopyToFileState : public GlobalSourceState {
 public:
-	CopyToFileState() : finished(false) {}
+	CopyToFileState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -78,8 +80,9 @@ unique_ptr<GlobalSourceState> PhysicalCopyToFile::GetGlobalSourceState(ClientCon
 	return make_unique<CopyToFileState>();
 }
 
-void PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (CopyToFileState &) gstate;
+void PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                 LocalSourceState &lstate) const {
+	auto &state = (CopyToFileState &)gstate;
 	auto &g = (CopyToFunctionGlobalState &)*sink_state;
 	if (state.finished) {
 		return;

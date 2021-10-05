@@ -103,7 +103,7 @@ unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ExecutionC
 }
 
 SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                   DataChunk &input) const {
+                                             DataChunk &input) const {
 	auto &sink = (SimpleAggregateLocalState &)lstate;
 	// perform the aggregation inside the local state
 	idx_t payload_idx = 0, payload_expr_idx = 0;
@@ -178,7 +178,8 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 //===--------------------------------------------------------------------===//
 class SimpleAggregateState : public GlobalSourceState {
 public:
-	SimpleAggregateState() : finished(false) {}
+	SimpleAggregateState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -187,9 +188,10 @@ unique_ptr<GlobalSourceState> PhysicalSimpleAggregate::GetGlobalSourceState(Clie
 	return make_unique<SimpleAggregateState>();
 }
 
-void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                      LocalSourceState &lstate) const {
 	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
-	auto &state = (SimpleAggregateState &) gstate_p;
+	auto &state = (SimpleAggregateState &)gstate_p;
 	if (state.finished) {
 		return;
 	}

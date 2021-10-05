@@ -2,8 +2,9 @@
 
 namespace duckdb {
 
-PipelineEvent::PipelineEvent(shared_ptr<Pipeline> pipeline_p) :
-	Event(pipeline_p->executor), pipeline(move(pipeline_p)) {}
+PipelineEvent::PipelineEvent(shared_ptr<Pipeline> pipeline_p)
+    : Event(pipeline_p->executor), pipeline(move(pipeline_p)) {
+}
 
 void PipelineEvent::Schedule() {
 	auto event = shared_from_this();
@@ -14,4 +15,4 @@ void PipelineEvent::Schedule() {
 void PipelineEvent::FinishEvent() {
 }
 
-}
+} // namespace duckdb

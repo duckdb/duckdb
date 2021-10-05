@@ -25,7 +25,8 @@ public:
 	virtual ~OperatorState() {
 	}
 
-	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {}
+	virtual void Finalize(PhysicalOperator *op, ExecutionContext &context) {
+	}
 };
 
 class GlobalSinkState {
@@ -97,7 +98,8 @@ public:
 public:
 	// Operator interface
 	virtual unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const;
-	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const;
+	virtual OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                                   OperatorState &state) const;
 
 	virtual bool ParallelOperator() const {
 		return false;
@@ -105,9 +107,11 @@ public:
 
 public:
 	// Source interface
-	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const;
+	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,
+	                                                         GlobalSourceState &gstate) const;
 	virtual unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
-	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const;
+	virtual void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                     LocalSourceState &lstate) const;
 
 	virtual bool IsSource() const {
 		return false;
@@ -123,7 +127,7 @@ public:
 	//! The sink method is called constantly with new input, as long as new input is available. Note that this method
 	//! CAN be called in parallel, proper locking is needed when accessing data inside the GlobalSinkState.
 	virtual SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                  DataChunk &input) const;
+	                            DataChunk &input) const;
 	// The combine is called when a single thread has completed execution of its part of the pipeline, it is the final
 	// time that a specific LocalSinkState is accessible. This method can be called in parallel while other Sink() or
 	// Combine() calls are active on the same GlobalSinkState.

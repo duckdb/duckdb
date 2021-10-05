@@ -72,8 +72,8 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 	return make_unique<MergeJoinLocalState>(conditions);
 }
 
-SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                      DataChunk &input) const {
+SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &state,
+                                                LocalSinkState &lstate, DataChunk &input) const {
 	auto &gstate = (MergeJoinGlobalState &)state;
 	auto &mj_state = (MergeJoinLocalState &)lstate;
 
@@ -106,7 +106,7 @@ static void OrderVector(Vector &vector, idx_t count, MergeOrder &order);
 
 void PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                           GlobalSinkState &gstate_p) const {
-	auto &gstate = (MergeJoinGlobalState &) gstate_p;
+	auto &gstate = (MergeJoinGlobalState &)gstate_p;
 	if (gstate.right_conditions.ChunkCount() > 0) {
 		// now order all the chunks
 		gstate.right_orders.resize(gstate.right_conditions.ChunkCount());
@@ -137,8 +137,7 @@ void PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, Clie
 class PiecewiseMergeJoinState : public OperatorState {
 public:
 	PiecewiseMergeJoinState(const PhysicalPiecewiseMergeJoin &op)
-	    : op(op), first_fetch(true), finished(true), left_position(0), right_position(0),
-	      right_chunk_index(0) {
+	    : op(op), first_fetch(true), finished(true), left_position(0), right_position(0), right_chunk_index(0) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : op.conditions) {
 			lhs_executor.AddExpression(*cond.left);
@@ -188,7 +187,7 @@ unique_ptr<OperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(ClientCon
 
 void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                    OperatorState &state_p) const {
-	auto &state = (PiecewiseMergeJoinState &) state_p;
+	auto &state = (PiecewiseMergeJoinState &)state_p;
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 
 	state.ResolveJoinKeys(input);
@@ -202,8 +201,7 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	// now construct the result based ont he join result
 	switch (join_type) {
 	case JoinType::MARK:
-		PhysicalJoin::ConstructMarkJoinResult(state.join_keys, input, chunk, right_info.found_match,
-												gstate.has_null);
+		PhysicalJoin::ConstructMarkJoinResult(state.join_keys, input, chunk, right_info.found_match, gstate.has_null);
 		break;
 	case JoinType::SEMI:
 		PhysicalJoin::ConstructSemiJoinResult(input, chunk, right_info.found_match);
@@ -216,9 +214,9 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 	}
 }
 
-OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
-                                                    OperatorState &state_p) const {
-	auto &state = (PiecewiseMergeJoinState &) state_p;
+OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &input,
+                                                                  DataChunk &chunk, OperatorState &state_p) const {
+	auto &state = (PiecewiseMergeJoinState &)state_p;
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 	do {
 		if (state.first_fetch) {
@@ -280,7 +278,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
-OperatorResultType PhysicalPiecewiseMergeJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const {
+OperatorResultType PhysicalPiecewiseMergeJoin::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                       OperatorState &state) const {
 	auto &gstate = (MergeJoinGlobalState &)*sink_state;
 
 	if (gstate.right_chunks.Count() == 0) {
@@ -463,15 +462,15 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 //===--------------------------------------------------------------------===//
 class PiecewiseJoinScanState : public GlobalSourceState {
 public:
-	PiecewiseJoinScanState(const PhysicalPiecewiseMergeJoin &op) :
-		op(op), right_outer_position(0) {}
+	PiecewiseJoinScanState(const PhysicalPiecewiseMergeJoin &op) : op(op), right_outer_position(0) {
+	}
 
 	mutex lock;
 	const PhysicalPiecewiseMergeJoin &op;
 	idx_t right_outer_position;
 
 public:
-	idx_t MaxThreads() override{
+	idx_t MaxThreads() override {
 		auto &sink = (MergeJoinGlobalState &)*op.sink_state;
 		return sink.right_chunks.Count() / (STANDARD_VECTOR_SIZE * 10);
 	}
@@ -481,11 +480,12 @@ unique_ptr<GlobalSourceState> PhysicalPiecewiseMergeJoin::GetGlobalSourceState(C
 	return make_unique<PiecewiseJoinScanState>(*this);
 }
 
-void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                         LocalSourceState &lstate) const {
 	D_ASSERT(IsRightOuterJoin(join_type));
 	// check if we need to scan any unmatched tuples from the RHS for the full/right outer join
 	auto &sink = (MergeJoinGlobalState &)*sink_state;
-	auto &state = (PiecewiseJoinScanState &) gstate;
+	auto &state = (PiecewiseJoinScanState &)gstate;
 
 	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we
 	// still need to output

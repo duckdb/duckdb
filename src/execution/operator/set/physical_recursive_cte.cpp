@@ -27,10 +27,10 @@ PhysicalRecursiveCTE::~PhysicalRecursiveCTE() {
 //===--------------------------------------------------------------------===//
 class RecursiveCTEState : public GlobalSinkState {
 public:
-	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op) :
-		new_groups(STANDARD_VECTOR_SIZE) {
+	explicit RecursiveCTEState(ClientContext &context, const PhysicalRecursiveCTE &op)
+	    : new_groups(STANDARD_VECTOR_SIZE) {
 		ht = make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context), op.types,
-		                                                   vector<LogicalType>(), vector<BoundAggregateExpression *>());
+		                                            vector<LogicalType>(), vector<BoundAggregateExpression *>());
 	}
 
 	unique_ptr<GroupedAggregateHashTable> ht;
@@ -45,7 +45,6 @@ unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientConte
 	return make_unique<RecursiveCTEState>(context, *this);
 }
 
-
 idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) const {
 	Vector dummy_addresses(LogicalType::POINTER);
 
@@ -58,8 +57,9 @@ idx_t PhysicalRecursiveCTE::ProbeHT(DataChunk &chunk, RecursiveCTEState &state) 
 	return new_group_count;
 }
 
-SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate, DataChunk &input) const {
-	auto &gstate = (RecursiveCTEState &) state;
+SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+                                          DataChunk &input) const {
+	auto &gstate = (RecursiveCTEState &)state;
 	if (!union_all) {
 		idx_t match_count = ProbeHT(input, gstate);
 		if (match_count > 0) {
@@ -74,9 +74,10 @@ SinkResultType PhysicalRecursiveCTE::Sink(ExecutionContext &context, GlobalSinkS
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
-	auto &gstate = (RecursiveCTEState &) *sink_state;
-	while(chunk.size() == 0) {
+void PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                   LocalSourceState &lstate) const {
+	auto &gstate = (RecursiveCTEState &)*sink_state;
+	while (chunk.size() == 0) {
 		if (gstate.chunk_idx < gstate.intermediate_table.ChunkCount()) {
 			// scan any chunks we have collected so far
 			chunk.Reference(gstate.intermediate_table.GetChunk(gstate.chunk_idx));
@@ -108,7 +109,7 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 		throw InternalException("Missing pipelines for recursive CTE");
 	}
 
-	for(auto &pipeline : pipelines) {
+	for (auto &pipeline : pipelines) {
 		auto sink = pipeline->GetSink();
 		if (sink != this) {
 			// reset the sink state for any intermediate sinks

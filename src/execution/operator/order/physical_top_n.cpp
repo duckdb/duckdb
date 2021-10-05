@@ -11,9 +11,9 @@
 namespace duckdb {
 
 PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
-				idx_t estimated_cardinality)
-	: PhysicalOperator(PhysicalOperatorType::TOP_N, move(types), estimated_cardinality), orders(move(orders)),
-		limit(limit), offset(offset) {
+                           idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::TOP_N, move(types), estimated_cardinality), orders(move(orders)),
+      limit(limit), offset(offset) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -419,7 +419,7 @@ unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &cont
 // Sink
 //===--------------------------------------------------------------------===//
 SinkResultType PhysicalTopN::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                        DataChunk &input) const {
+                                  DataChunk &input) const {
 	// append to the local sink state
 	auto &sink = (TopNLocalState &)lstate;
 	sink.heap.Sink(input);
@@ -443,7 +443,7 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, Lo
 // Finalize
 //===--------------------------------------------------------------------===//
 void PhysicalTopN::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate_p) const {
-	auto &gstate = (TopNGlobalState &) gstate_p;
+	auto &gstate = (TopNGlobalState &)gstate_p;
 	// global finalize: compute the final top N
 	gstate.heap.Finalize();
 }
@@ -457,16 +457,16 @@ public:
 	bool initialized = false;
 };
 
-
 unique_ptr<GlobalSourceState> PhysicalTopN::GetGlobalSourceState(ClientContext &context) const {
 	return make_unique<TopNOperatorState>();
 }
 
-void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                           LocalSourceState &lstate) const {
 	if (limit == 0) {
 		return;
 	}
-	auto &state = (TopNOperatorState &) gstate_p;
+	auto &state = (TopNOperatorState &)gstate_p;
 	auto &gstate = (TopNGlobalState &)*sink_state;
 
 	if (!state.initialized) {

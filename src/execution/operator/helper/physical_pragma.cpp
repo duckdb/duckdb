@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-void PhysicalPragma::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+void PhysicalPragma::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                             LocalSourceState &lstate) const {
 	auto &client = context.client;
 	FunctionParameters parameters {info.parameters, info.named_parameters};
 	function.function(client, parameters);

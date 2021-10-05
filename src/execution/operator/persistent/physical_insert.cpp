@@ -33,7 +33,7 @@ public:
 };
 
 SinkResultType PhysicalInsert::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                          DataChunk &chunk) const {
+                                    DataChunk &chunk) const {
 	auto &gstate = (InsertGlobalState &)state;
 	auto &istate = (InsertLocalState &)lstate;
 
@@ -88,7 +88,8 @@ void PhysicalInsert::Combine(ExecutionContext &context, GlobalSinkState &gstate,
 //===--------------------------------------------------------------------===//
 class InsertSourceState : public GlobalSourceState {
 public:
-	InsertSourceState() : finished(false) {}
+	InsertSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -97,8 +98,9 @@ unique_ptr<GlobalSourceState> PhysicalInsert::GetGlobalSourceState(ClientContext
 	return make_unique<InsertSourceState>();
 }
 
-void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (InsertSourceState &) gstate;
+void PhysicalInsert::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                             LocalSourceState &lstate) const {
+	auto &state = (InsertSourceState &)gstate;
 	auto &g = (InsertGlobalState &)*sink_state;
 	if (state.finished) {
 		return;

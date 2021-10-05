@@ -34,6 +34,7 @@ struct PerfectHashJoinStats {
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PerfectHashJoinExecutor {
 	using PerfectHashTable = std::vector<Vector>;
+
 public:
 	explicit PerfectHashJoinExecutor(const PhysicalHashJoin &join, JoinHashTable &ht, PerfectHashJoinStats pjoin_stats);
 
@@ -41,7 +42,8 @@ public:
 	bool CanDoPerfectHashJoin();
 
 	unique_ptr<OperatorState> GetOperatorState(ClientContext &context);
-	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state);
+	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                                         OperatorState &state);
 	bool BuildPerfectHashTable(LogicalType &type);
 
 private:

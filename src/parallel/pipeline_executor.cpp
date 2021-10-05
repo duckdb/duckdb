@@ -3,8 +3,8 @@
 
 namespace duckdb {
 
-PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p) :
-	pipeline(pipeline_p), thread(context_p), context(context_p, thread) {
+PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p)
+    : pipeline(pipeline_p), thread(context_p), context(context_p, thread) {
 	D_ASSERT(pipeline.source_state);
 	RunFunctionInTryCatch([&]() {
 		local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
@@ -13,7 +13,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		}
 		intermediate_chunks.reserve(pipeline.operators.size());
 		intermediate_states.reserve(pipeline.operators.size());
-		for(idx_t i = 0; i < pipeline.operators.size(); i++) {
+		for (idx_t i = 0; i < pipeline.operators.size(); i++) {
 			auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
 			auto chunk = make_unique<DataChunk>();
 			chunk->Initialize(prev_operator->GetTypes());
@@ -41,7 +41,7 @@ void PipelineExecutor::Execute() {
 	RunFunctionInTryCatch([&]() {
 		D_ASSERT(pipeline.sink);
 		auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
-		while(true) {
+		while (true) {
 			source_chunk.Reset();
 			FetchFromSource(source_chunk);
 			if (source_chunk.size() == 0) {
@@ -58,9 +58,7 @@ void PipelineExecutor::Execute() {
 
 OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) {
 	auto result = OperatorResultType::FINISHED;
-	RunFunctionInTryCatch([&]() {
-		result = ExecutePushInternal(input);
-	});
+	RunFunctionInTryCatch([&]() { result = ExecutePushInternal(input); });
 	return result;
 }
 
@@ -69,7 +67,7 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input) {
 	if (input.size() == 0) {
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
-	while(true) {
+	while (true) {
 		OperatorResultType result;
 		if (!pipeline.operators.empty()) {
 			final_chunk.Reset();
@@ -114,7 +112,7 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 	try {
 		D_ASSERT(!pipeline.sink);
 		auto &source_chunk = pipeline.operators.empty() ? result : *intermediate_chunks[0];
-		while(result.size() == 0) {
+		while (result.size() == 0) {
 			if (in_process_operators.empty()) {
 				source_chunk.Reset();
 				FetchFromSource(source_chunk);
@@ -170,7 +168,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 	if (current_idx == 0) {
 		current_idx++;
 	}
-	while(true) {
+	while (true) {
 		if (context.client.interrupted) {
 			throw InterruptException();
 		}
@@ -178,7 +176,8 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 		// if current_idx is the last possible index (>= operators.size()) we write to the result
 		// otherwise we write to an intermediate chunk
 		auto current_intermediate = current_idx;
-		auto &current_chunk = current_intermediate >= intermediate_chunks.size() ? result : *intermediate_chunks[current_intermediate];
+		auto &current_chunk =
+		    current_intermediate >= intermediate_chunks.size() ? result : *intermediate_chunks[current_intermediate];
 		current_chunk.Reset();
 		if (current_idx == 0) {
 			// we went back to the source: we need more input
@@ -186,12 +185,11 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 		} else {
 			auto current_operator = current_idx - 1;
 			StartOperator(pipeline.operators[current_operator]);
-			// if current_idx > source_idx, we pass the previous' operators output through the Execute of the current operator
+			// if current_idx > source_idx, we pass the previous' operators output through the Execute of the current
+			// operator
 			auto result = pipeline.operators[current_operator]->Execute(
-				context,
-				*intermediate_chunks[current_intermediate - 1],
-				current_chunk,
-				*intermediate_states[current_intermediate - 1]);
+			    context, *intermediate_chunks[current_intermediate - 1], current_chunk,
+			    *intermediate_states[current_intermediate - 1]);
 			EndOperator(pipeline.operators[current_operator], &current_chunk);
 			if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
 				// more data remains in this operator
@@ -230,11 +228,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 
 void PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(pipeline.source);
-	pipeline.source->GetData(
-		context,
-		result,
-		*pipeline.source_state,
-		*local_source_state);
+	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
 	EndOperator(pipeline.source, &result);
 }
 
@@ -258,4 +252,4 @@ void PipelineExecutor::EndOperator(PhysicalOperator *op, DataChunk *chunk) {
 	}
 }
 
-}
+} // namespace duckdb

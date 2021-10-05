@@ -18,7 +18,8 @@ PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry
 //===--------------------------------------------------------------------===//
 class CreateTableSourceState : public GlobalSourceState {
 public:
-	CreateTableSourceState() : finished(false) {}
+	CreateTableSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -27,8 +28,9 @@ unique_ptr<GlobalSourceState> PhysicalCreateTable::GetGlobalSourceState(ClientCo
 	return make_unique<CreateTableSourceState>();
 }
 
-void PhysicalCreateTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (CreateTableSourceState &) gstate;
+void PhysicalCreateTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                  LocalSourceState &lstate) const {
+	auto &state = (CreateTableSourceState &)gstate;
 	if (state.finished) {
 		return;
 	}

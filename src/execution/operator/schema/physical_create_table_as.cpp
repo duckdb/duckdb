@@ -34,7 +34,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateTableAs::GetGlobalSinkState(ClientCont
 }
 
 SinkResultType PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
-                                 DataChunk &input) const {
+                                           DataChunk &input) const {
 	auto &sink = (CreateTableAsGlobalState &)state;
 	if (sink.table) {
 		lock_guard<mutex> client_guard(sink.append_lock);
@@ -49,7 +49,8 @@ SinkResultType PhysicalCreateTableAs::Sink(ExecutionContext &context, GlobalSink
 //===--------------------------------------------------------------------===//
 class CreateTableAsSourceState : public GlobalSourceState {
 public:
-	CreateTableAsSourceState() : finished(false) {}
+	CreateTableAsSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -58,8 +59,9 @@ unique_ptr<GlobalSourceState> PhysicalCreateTableAs::GetGlobalSourceState(Client
 	return make_unique<CreateTableAsSourceState>();
 }
 
-void PhysicalCreateTableAs::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (CreateTableAsSourceState &) gstate;
+void PhysicalCreateTableAs::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                    LocalSourceState &lstate) const {
+	auto &state = (CreateTableAsSourceState &)gstate;
 	auto &sink = (CreateTableAsGlobalState &)*sink_state;
 	if (state.finished) {
 		return;

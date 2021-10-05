@@ -44,7 +44,7 @@ public:
 };
 
 SinkResultType PhysicalUpdate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                          DataChunk &chunk) const {
+                                    DataChunk &chunk) const {
 	auto &gstate = (UpdateGlobalState &)state;
 	auto &ustate = (UpdateLocalState &)lstate;
 
@@ -124,7 +124,8 @@ void PhysicalUpdate::Combine(ExecutionContext &context, GlobalSinkState &gstate,
 //===--------------------------------------------------------------------===//
 class UpdateSourceState : public GlobalSourceState {
 public:
-	UpdateSourceState() : finished(false) {}
+	UpdateSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -133,8 +134,9 @@ unique_ptr<GlobalSourceState> PhysicalUpdate::GetGlobalSourceState(ClientContext
 	return make_unique<UpdateSourceState>();
 }
 
-void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (UpdateSourceState &) gstate;
+void PhysicalUpdate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                             LocalSourceState &lstate) const {
+	auto &state = (UpdateSourceState &)gstate;
 	auto &g = (UpdateGlobalState &)*sink_state;
 	if (state.finished) {
 		return;

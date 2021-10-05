@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-void PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+void PhysicalTransaction::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                  LocalSourceState &lstate) const {
 	auto &client = context.client;
 
 	switch (info->type) {

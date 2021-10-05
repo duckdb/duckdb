@@ -157,7 +157,7 @@ unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionCon
 }
 
 SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-                                 DataChunk &input) const {
+                                           DataChunk &input) const {
 	auto &llstate = (HashAggregateLocalState &)lstate;
 	auto &gstate = (HashAggregateGlobalState &)state;
 	D_ASSERT(!gstate.is_finalized);
@@ -297,8 +297,9 @@ private:
 
 class HashAggregateFinalizeEvent : public Event {
 public:
-	HashAggregateFinalizeEvent(HashAggregateGlobalState &gstate_p, Pipeline *pipeline_p) :
-	    Event(pipeline_p->executor), gstate(gstate_p), pipeline(pipeline_p) {}
+	HashAggregateFinalizeEvent(HashAggregateGlobalState &gstate_p, Pipeline *pipeline_p)
+	    : Event(pipeline_p->executor), gstate(gstate_p), pipeline(pipeline_p) {
+	}
 
 	HashAggregateGlobalState &gstate;
 	Pipeline *pipeline;
@@ -315,7 +316,7 @@ public:
 
 void PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                      GlobalSinkState &gstate_p) const {
-	auto &gstate = (HashAggregateGlobalState &) gstate_p;
+	auto &gstate = (HashAggregateGlobalState &)gstate_p;
 	gstate.is_finalized = true;
 	// special case if we have non-combinable aggregates
 	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
@@ -401,9 +402,10 @@ unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(Client
 	return make_unique<PhysicalHashAggregateState>(group_types, aggregate_return_types);
 }
 
-void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                    LocalSourceState &lstate) const {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
-	auto &state = (PhysicalHashAggregateState &) gstate_p;
+	auto &state = (PhysicalHashAggregateState &)gstate_p;
 	D_ASSERT(gstate.is_finalized);
 	if (state.finished) {
 		return;

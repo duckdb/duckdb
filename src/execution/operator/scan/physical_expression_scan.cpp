@@ -6,8 +6,7 @@ namespace duckdb {
 
 class ExpressionScanState : public GlobalSourceState {
 public:
-	ExpressionScanState()
-	    : expression_index(0) {
+	ExpressionScanState() : expression_index(0) {
 	}
 
 	//! The current position in the scan
@@ -28,7 +27,8 @@ unique_ptr<GlobalSourceState> PhysicalExpressionScan::GetGlobalSourceState(Clien
 	return make_unique<ExpressionScanState>();
 }
 
-void PhysicalExpressionScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+void PhysicalExpressionScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                     LocalSourceState &lstate) const {
 	auto &state = (ExpressionScanState &)gstate;
 	if (state.expression_index >= expressions.size()) {
 		// finished executing all expression lists
@@ -38,7 +38,7 @@ void PhysicalExpressionScan::GetData(ExecutionContext &context, DataChunk &chunk
 	// execute the expressions of the nth expression list for the child chunk list
 	state.executor = make_unique<ExpressionExecutor>(expressions[state.expression_index]);
 	if (sink_state) {
-		auto &gstate = (ExpressionSinkState &) *sink_state;
+		auto &gstate = (ExpressionSinkState &)*sink_state;
 		state.executor->Execute(gstate.child_chunk, chunk);
 	} else {
 		state.executor->Execute(chunk);
@@ -47,9 +47,9 @@ void PhysicalExpressionScan::GetData(ExecutionContext &context, DataChunk &chunk
 	state.expression_index++;
 }
 
-SinkResultType PhysicalExpressionScan::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate,
-					DataChunk &input) const {
-	auto &gstate = (ExpressionSinkState &) gstate_p;
+SinkResultType PhysicalExpressionScan::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
+                                            LocalSinkState &lstate, DataChunk &input) const {
+	auto &gstate = (ExpressionSinkState &)gstate_p;
 
 	D_ASSERT(children.size() == 1);
 	D_ASSERT(gstate.child_chunk.size() == 0);

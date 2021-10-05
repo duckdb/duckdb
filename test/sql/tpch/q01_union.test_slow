@@ -1,4 +1,4 @@
-# name: test/sql/tpch/q01_union.test
+# name: test/sql/tpch/q01_union.test_slow
 # description: Test TPC-H SF0.01 Q1 with unions
 # group: [tpch]
 

@@ -12,7 +12,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class CreateIndexSourceState : public GlobalSourceState {
 public:
-	CreateIndexSourceState() : finished(false) {}
+	CreateIndexSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -21,8 +22,9 @@ unique_ptr<GlobalSourceState> PhysicalCreateIndex::GetGlobalSourceState(ClientCo
 	return make_unique<CreateIndexSourceState>();
 }
 
-void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (CreateIndexSourceState &) gstate;
+void PhysicalCreateIndex::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                  LocalSourceState &lstate) const {
+	auto &state = (CreateIndexSourceState &)gstate;
 	if (state.finished) {
 		return;
 	}

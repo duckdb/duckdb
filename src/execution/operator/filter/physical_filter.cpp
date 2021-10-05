@@ -22,8 +22,7 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 
 class FilterState : public OperatorState {
 public:
-	FilterState(Expression &expr)
-	    : executor(expr), sel(STANDARD_VECTOR_SIZE) {
+	FilterState(Expression &expr) : executor(expr), sel(STANDARD_VECTOR_SIZE) {
 	}
 
 	ExpressionExecutor executor;
@@ -39,8 +38,9 @@ unique_ptr<OperatorState> PhysicalFilter::GetOperatorState(ClientContext &contex
 	return make_unique<FilterState>(*expression);
 }
 
-OperatorResultType PhysicalFilter::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const {
-	auto &state = (FilterState &) state_p;
+OperatorResultType PhysicalFilter::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                           OperatorState &state_p) const {
+	auto &state = (FilterState &)state_p;
 	idx_t result_count = state.executor.SelectExpression(input, state.sel);
 	if (result_count == input.size()) {
 		// nothing was filtered: skip adding any selection vectors

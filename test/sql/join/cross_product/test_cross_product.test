@@ -1,6 +1,6 @@
 # name: test/sql/join/cross_product/test_cross_product.test
 # description: Test cross products
-# group: [join]
+# group: [cross_product]
 
 statement ok
 PRAGMA enable_verification

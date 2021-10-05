@@ -5,7 +5,8 @@
 
 namespace duckdb {
 
-PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p, JoinHashTable &ht_p, PerfectHashJoinStats perfect_join_stats)
+PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p, JoinHashTable &ht_p,
+                                                 PerfectHashJoinStats perfect_join_stats)
     : join(join_p), ht(ht_p), perfect_join_statistics(move(perfect_join_stats)) {
 }
 
@@ -32,7 +33,7 @@ bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 }
 
 bool PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType &key_type) {
-	Vector tuples_addresses(LogicalType::POINTER, ht.Count());     // allocate space for all the tuples
+	Vector tuples_addresses(LogicalType::POINTER, ht.Count());              // allocate space for all the tuples
 	auto key_locations = FlatVector::GetData<data_ptr_t>(tuples_addresses); // get a pointer to vector data
 	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
 	// Go through all the blocks and fill the keys addresses
@@ -145,8 +146,9 @@ unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ClientContex
 	return move(state);
 }
 
-OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &result, OperatorState &state_p) {
-	auto &state = (PerfectHashJoinState &) state_p;
+OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &input,
+                                                                  DataChunk &result, OperatorState &state_p) {
+	auto &state = (PerfectHashJoinState &)state_p;
 	// keeps track of how many probe keys have a match
 	idx_t probe_sel_count = 0;
 
@@ -156,8 +158,7 @@ OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionConte
 	auto &keys_vec = state.join_keys.data[0];
 	auto keys_count = state.join_keys.size();
 	// todo: add check for fast pass when probe is part of build domain
-	FillSelectionVectorSwitchProbe(keys_vec, state.build_sel_vec, state.probe_sel_vec,
-									keys_count, probe_sel_count);
+	FillSelectionVectorSwitchProbe(keys_vec, state.build_sel_vec, state.probe_sel_vec, keys_count, probe_sel_count);
 
 	// If build is dense and probe is in build's domain, just reference probe
 	if (perfect_join_statistics.is_build_dense && keys_count == probe_sel_count) {

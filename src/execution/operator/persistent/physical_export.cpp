@@ -79,7 +79,8 @@ static void WriteCopyStatement(FileSystem &fs, stringstream &ss, TableCatalogEnt
 //===--------------------------------------------------------------------===//
 class ExportSourceState : public GlobalSourceState {
 public:
-	ExportSourceState() : finished(false) {}
+	ExportSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -88,8 +89,9 @@ unique_ptr<GlobalSourceState> PhysicalExport::GetGlobalSourceState(ClientContext
 	return make_unique<ExportSourceState>();
 }
 
-void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (ExportSourceState &) gstate;
+void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                             LocalSourceState &lstate) const {
+	auto &state = (ExportSourceState &)gstate;
 	if (state.finished) {
 		return;
 	}
@@ -153,7 +155,8 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate, DataChunk &input) const {
+SinkResultType PhysicalExport::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+                                    DataChunk &input) const {
 	// nop
 	return SinkResultType::NEED_MORE_INPUT;
 }

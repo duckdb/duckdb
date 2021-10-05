@@ -8,7 +8,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class CreateSequenceSourceState : public GlobalSourceState {
 public:
-	CreateSequenceSourceState() : finished(false) {}
+	CreateSequenceSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -17,8 +18,9 @@ unique_ptr<GlobalSourceState> PhysicalCreateSequence::GetGlobalSourceState(Clien
 	return make_unique<CreateSequenceSourceState>();
 }
 
-void PhysicalCreateSequence::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (CreateSequenceSourceState &) gstate;
+void PhysicalCreateSequence::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                     LocalSourceState &lstate) const {
+	auto &state = (CreateSequenceSourceState &)gstate;
 	if (state.finished) {
 		return;
 	}

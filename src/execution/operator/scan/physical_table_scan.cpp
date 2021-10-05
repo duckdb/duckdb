@@ -40,7 +40,7 @@ public:
 	idx_t max_threads = 0;
 	unique_ptr<ParallelState> parallel_state;
 
-	idx_t MaxThreads() override{
+	idx_t MaxThreads() override {
 		return max_threads;
 	}
 };
@@ -151,7 +151,7 @@ bool PhysicalTableScan::Equals(const PhysicalOperator &other_p) const {
 	if (type != other_p.type) {
 		return false;
 	}
-	auto &other = (PhysicalTableScan &) other_p;
+	auto &other = (PhysicalTableScan &)other_p;
 	if (function.function != other.function.function) {
 		return false;
 	}

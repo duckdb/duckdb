@@ -54,9 +54,9 @@ public:
 // Per-thread read state
 class WindowOperatorState : public LocalSourceState {
 public:
-	WindowOperatorState(const PhysicalWindow &op, ExecutionContext &context) :
-		buffer_manager(BufferManager::GetBufferManager(context.client)) {
-		auto &gstate = (WindowGlobalState &) *op.sink_state;
+	WindowOperatorState(const PhysicalWindow &op, ExecutionContext &context)
+	    : buffer_manager(BufferManager::GetBufferManager(context.client)) {
+		auto &gstate = (WindowGlobalState &)*op.sink_state;
 		// initialize thread-local operator state
 		partitions = gstate.counts.size();
 		next_part = 0;
@@ -423,9 +423,9 @@ static void MaterializeExpression(Expression *expr, ChunkCollection &input, Chun
 	MaterializeExpressions(&expr, 1, input, output, scalar);
 }
 
-static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowExpression *wexpr,
-                                       ChunkCollection &input, ChunkCollection &over, ChunkCollection *hashes,
-                                       const hash_t hash_bin, const hash_t hash_mask) {
+static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowExpression *wexpr, ChunkCollection &input,
+                                       ChunkCollection &over, ChunkCollection *hashes, const hash_t hash_bin,
+                                       const hash_t hash_mask) {
 	if (input.Count() == 0) {
 		return;
 	}
@@ -1308,7 +1308,7 @@ static void Scan(WindowOperatorState &state, DataChunk &chunk) {
 }
 
 SinkResultType PhysicalWindow::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p,
-                          DataChunk &input) const {
+                                    DataChunk &input) const {
 	auto &lstate = (WindowLocalState &)lstate_p;
 	lstate.chunks.Append(input);
 
@@ -1371,8 +1371,7 @@ unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &co
 //===--------------------------------------------------------------------===//
 class WindowGlobalSourceState : public GlobalSourceState {
 public:
-	WindowGlobalSourceState(const PhysicalWindow &op) :
-		op(op), next_part(0) {
+	WindowGlobalSourceState(const PhysicalWindow &op) : op(op), next_part(0) {
 	}
 
 	const PhysicalWindow &op;
@@ -1410,8 +1409,8 @@ unique_ptr<GlobalSourceState> PhysicalWindow::GetGlobalSourceState(ClientContext
 
 void PhysicalWindow::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                              LocalSourceState &lstate_p) const {
-	auto &state = (WindowOperatorState &) lstate_p;
-	auto &global_source = (WindowGlobalSourceState &) gstate_p;
+	auto &state = (WindowOperatorState &)lstate_p;
+	auto &global_source = (WindowGlobalSourceState &)gstate_p;
 	auto &gstate = (WindowGlobalState &)*sink_state;
 
 	do {

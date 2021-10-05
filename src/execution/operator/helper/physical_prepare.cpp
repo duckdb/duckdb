@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-void PhysicalPrepare::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p, LocalSourceState &lstate) const {
+void PhysicalPrepare::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                              LocalSourceState &lstate) const {
 	auto &client = context.client;
 
 	// store the prepared statement in the context

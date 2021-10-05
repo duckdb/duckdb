@@ -10,7 +10,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class CreateFunctionSourceState : public GlobalSourceState {
 public:
-	CreateFunctionSourceState() : finished(false) {}
+	CreateFunctionSourceState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -19,8 +20,9 @@ unique_ptr<GlobalSourceState> PhysicalCreateFunction::GetGlobalSourceState(Clien
 	return make_unique<CreateFunctionSourceState>();
 }
 
-void PhysicalCreateFunction::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (CreateFunctionSourceState &) gstate;
+void PhysicalCreateFunction::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                     LocalSourceState &lstate) const {
+	auto &state = (CreateFunctionSourceState &)gstate;
 	if (state.finished) {
 		return;
 	}

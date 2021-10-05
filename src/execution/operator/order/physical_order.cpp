@@ -70,7 +70,7 @@ unique_ptr<LocalSinkState> PhysicalOrder::GetLocalSinkState(ExecutionContext &co
 }
 
 SinkResultType PhysicalOrder::Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
-                         DataChunk &input) const {
+                                   DataChunk &input) const {
 	auto &gstate = (OrderGlobalState &)gstate_p;
 	auto &lstate = (OrderLocalState &)lstate_p;
 
@@ -125,8 +125,9 @@ private:
 
 class OrderMergeEvent : public Event {
 public:
-	OrderMergeEvent(OrderGlobalState &gstate_p, Pipeline &pipeline_p) :
-	    Event(pipeline_p.executor), gstate(gstate_p), pipeline(pipeline_p) {}
+	OrderMergeEvent(OrderGlobalState &gstate_p, Pipeline &pipeline_p)
+	    : Event(pipeline_p.executor), gstate(gstate_p), pipeline(pipeline_p) {
+	}
 
 	OrderGlobalState &gstate;
 	Pipeline &pipeline;
@@ -157,7 +158,8 @@ public:
 	}
 };
 
-void PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate_p) const {
+void PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                             GlobalSinkState &gstate_p) const {
 	auto &state = (OrderGlobalState &)gstate_p;
 	auto &global_sort_state = state.global_sort_state;
 

@@ -15,8 +15,9 @@ unique_ptr<GlobalSourceState> PhysicalChunkScan::GetGlobalSourceState(ClientCont
 	return make_unique<PhysicalChunkScanState>();
 }
 
-void PhysicalChunkScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (PhysicalChunkScanState &) gstate;
+void PhysicalChunkScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                LocalSourceState &lstate) const {
+	auto &state = (PhysicalChunkScanState &)gstate;
 	D_ASSERT(collection);
 	if (collection->Count() == 0) {
 		return;

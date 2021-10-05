@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-Event::Event(Executor &executor_p) :
-	executor(executor_p), finished_tasks(0), total_tasks(0), finished_dependencies(0), total_dependencies(0), finished(false) {
+Event::Event(Executor &executor_p)
+    : executor(executor_p), finished_tasks(0), total_tasks(0), finished_dependencies(0), total_dependencies(0),
+      finished(false) {
 }
 
 void Event::CompleteDependency() {
@@ -65,9 +66,9 @@ void Event::SetTasks(vector<unique_ptr<Task>> tasks) {
 	D_ASSERT(total_tasks == 0);
 	D_ASSERT(!tasks.empty());
 	this->total_tasks = tasks.size();
-	for(auto &task : tasks) {
+	for (auto &task : tasks) {
 		ts.ScheduleTask(executor.GetToken(), move(task));
 	}
 }
 
-}
+} // namespace duckdb

@@ -15,8 +15,7 @@ PhysicalStreamingSample::PhysicalStreamingSample(vector<LogicalType> types, Samp
 //===--------------------------------------------------------------------===//
 class StreamingSampleOperatorState : public OperatorState {
 public:
-	StreamingSampleOperatorState(int64_t seed)
-	    : random(seed) {
+	StreamingSampleOperatorState(int64_t seed) : random(seed) {
 	}
 
 	RandomEngine random;
@@ -32,8 +31,7 @@ void PhysicalStreamingSample::SystemSample(DataChunk &input, DataChunk &result, 
 	}
 }
 
-void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &result,
-                                              OperatorState &state_p) const {
+void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &result, OperatorState &state_p) const {
 	// bernoulli sampling: we throw one dice per tuple
 	// then slice the result chunk
 	auto &state = (StreamingSampleOperatorState &)state_p;
@@ -54,7 +52,8 @@ unique_ptr<OperatorState> PhysicalStreamingSample::GetOperatorState(ClientContex
 	return make_unique<StreamingSampleOperatorState>(seed);
 }
 
-OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const {
+OperatorResultType PhysicalStreamingSample::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                                    OperatorState &state) const {
 	switch (method) {
 	case SampleMethod::BERNOULLI_SAMPLE:
 		BernoulliSample(input, chunk, state);

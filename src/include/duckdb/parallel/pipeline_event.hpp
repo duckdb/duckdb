@@ -25,4 +25,4 @@ public:
 	void FinishEvent() override;
 };
 
-}
+} // namespace duckdb

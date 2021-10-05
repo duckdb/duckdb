@@ -24,7 +24,6 @@ void PhysicalOperator::Print() const {
 }
 // LCOV_EXCL_STOP
 
-
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
@@ -33,7 +32,8 @@ unique_ptr<OperatorState> PhysicalOperator::GetOperatorState(ClientContext &cont
 }
 
 // LCOV_EXCL_START
-OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state) const {
+OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                             OperatorState &state) const {
 	throw InternalException("Calling Execute on a node that is not an operator!");
 }
 // LCOV_EXCL_STOP
@@ -41,7 +41,8 @@ OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
-unique_ptr<LocalSourceState> PhysicalOperator::GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const {
+unique_ptr<LocalSourceState> PhysicalOperator::GetLocalSourceState(ExecutionContext &context,
+                                                                   GlobalSourceState &gstate) const {
 	return make_unique<LocalSourceState>();
 }
 
@@ -50,7 +51,8 @@ unique_ptr<GlobalSourceState> PhysicalOperator::GetGlobalSourceState(ClientConte
 }
 
 // LCOV_EXCL_START
-void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                               LocalSourceState &lstate) const {
 	throw InternalException("Calling GetData on a node that is not a source!");
 }
 // LCOV_EXCL_STOP
@@ -60,7 +62,7 @@ void PhysicalOperator::GetData(ExecutionContext &context, DataChunk &chunk, Glob
 //===--------------------------------------------------------------------===//
 // LCOV_EXCL_START
 SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-					DataChunk &input) const {
+                                      DataChunk &input) const {
 	throw InternalException("Calling Sink on a node that is not a sink!");
 }
 // LCOV_EXCL_STOP
@@ -68,7 +70,8 @@ SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState
 void PhysicalOperator::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 }
 
-void PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const {
+void PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                GlobalSinkState &gstate) const {
 }
 
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {

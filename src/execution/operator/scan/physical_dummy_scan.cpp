@@ -4,7 +4,8 @@ namespace duckdb {
 
 class DummyScanState : public GlobalSourceState {
 public:
-	DummyScanState() : finished(false) {}
+	DummyScanState() : finished(false) {
+	}
 
 	bool finished;
 };
@@ -13,8 +14,9 @@ unique_ptr<GlobalSourceState> PhysicalDummyScan::GetGlobalSourceState(ClientCont
 	return make_unique<DummyScanState>();
 }
 
-void PhysicalDummyScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (DummyScanState &) gstate;
+void PhysicalDummyScan::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                LocalSourceState &lstate) const {
+	auto &state = (DummyScanState &)gstate;
 	if (state.finished) {
 		return;
 	}

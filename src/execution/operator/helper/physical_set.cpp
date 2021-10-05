@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
+void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                          LocalSourceState &lstate) const {
 	D_ASSERT(scope == SetScope::GLOBAL || scope == SetScope::SESSION);
 
 	auto normalized_name = ValidateInput(context);

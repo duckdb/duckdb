@@ -11,7 +11,6 @@
 #include "duckdb/parallel/event.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 
-
 namespace duckdb {
 class Executor;
 
@@ -21,9 +20,10 @@ public:
 
 	//! The pipeline that this event belongs to
 	shared_ptr<Pipeline> pipeline;
+
 public:
 	void Schedule() override;
 	void FinishEvent() override;
 };
 
-}
+} // namespace duckdb
