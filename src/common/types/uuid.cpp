@@ -96,12 +96,10 @@ void UUID::ToString(hugeint_t input, char *buf) {
 	byte_to_hex(input.lower & 0xFF, buf, pos);
 }
 
-
 // This is the linux friendly implementation, but it could work on other
 // systems that have libuuid available
 #ifdef UUID_LIBUUID
-hugeint_t UUID::Random()
-{
+hugeint_t UUID::Random() {
 	uuid_t data;
 	uuid_generate(data);
 	hugeint_t result;
@@ -132,8 +130,7 @@ hugeint_t UUID::Random()
 
 // this is the mac and ios version
 #ifdef UUID_CFUUID
-hugeint_t UUID::Random()
-{
+hugeint_t UUID::Random() {
 	auto newId = CFUUIDCreate(NULL);
 	auto bytes = CFUUIDGetUUIDBytes(newId);
 	CFRelease(newId);
@@ -166,8 +163,7 @@ hugeint_t UUID::Random()
 
 // obviously this is the windows version
 #ifdef UUID_WINDOWS
-hugeint_t UUID::Random()
-{
+hugeint_t UUID::Random() {
 	GUID newId;
 	CoCreateGuid(&newId);
 
