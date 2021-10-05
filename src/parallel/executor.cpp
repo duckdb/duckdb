@@ -408,6 +408,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			current->source = op;
 			// we create a new pipeline starting from the child
 			pipeline_child = op->children[0].get();
+			break;
 		case PhysicalOperatorType::EXPORT:
 			// EXPORT has an optional child
 			// we only need to schedule child pipelines if there is a child

@@ -618,7 +618,6 @@ static inline bool BoundaryNeedsPeer(const WindowBoundary &boundary) {
 }
 
 struct WindowBoundariesState {
-
 	static inline bool IsScalar(const unique_ptr<Expression> &expr) {
 		return expr ? expr->IsScalar() : true;
 	}
