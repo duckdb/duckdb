@@ -325,6 +325,9 @@ void GlobalSortState::AddLocalState(LocalSortState &local_sort_state) {
 	}
 
 	// Sort accumulated data
+	// we only re-order the heap when the data is expected to not fit in memory
+	// re-ordering the heap avoids random access when reading/merging but incurs a significant cost of shuffling data
+	// when data fits in memory, doing random access on reads is cheaper than re-shuffling
 	local_sort_state.Sort(*this, external || !local_sort_state.sorted_blocks.empty());
 
 	// Append local state sorted data to this global state
