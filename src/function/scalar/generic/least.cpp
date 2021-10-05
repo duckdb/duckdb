@@ -98,20 +98,20 @@ template <class OP>
 static void RegisterLeastGreatest(BuiltinFunctions &set, const string &fun_name) {
 	ScalarFunctionSet fun_set(fun_name);
 	fun_set.AddFunction(ScalarFunction({LogicalType::DATE}, LogicalType::DATE, LeastGreatestFunction<date_t, OP>, false,
-	                                   nullptr, nullptr, nullptr, LogicalType::DATE));
+	                                   nullptr, nullptr, nullptr, nullptr, LogicalType::DATE));
 	fun_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
 	                                   LeastGreatestFunction<timestamp_t, OP>, false, nullptr, nullptr, nullptr,
-	                                   LogicalType::TIMESTAMP));
+	                                   nullptr, LogicalType::TIMESTAMP));
 	fun_set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::BIGINT, LeastGreatestFunction<int64_t, OP>,
-	                                   false, nullptr, nullptr, nullptr, LogicalType::BIGINT));
+	                                   false, nullptr, nullptr, nullptr, nullptr, LogicalType::BIGINT));
 	fun_set.AddFunction(ScalarFunction({LogicalType::HUGEINT}, LogicalType::HUGEINT,
-	                                   LeastGreatestFunction<hugeint_t, OP>, false, nullptr, nullptr, nullptr,
+	                                   LeastGreatestFunction<hugeint_t, OP>, false, nullptr, nullptr, nullptr, nullptr,
 	                                   LogicalType::HUGEINT));
 	fun_set.AddFunction(ScalarFunction({LogicalType::DOUBLE}, LogicalType::DOUBLE, LeastGreatestFunction<double, OP>,
-	                                   false, nullptr, nullptr, nullptr, LogicalType::DOUBLE));
+	                                   false, nullptr, nullptr, nullptr, nullptr, LogicalType::DOUBLE));
 	fun_set.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                   LeastGreatestFunction<string_t, OP, true>, false, nullptr, nullptr, nullptr,
-	                                   LogicalType::VARCHAR));
+	                                   nullptr, LogicalType::VARCHAR));
 	set.AddFunction(fun_set);
 }
 

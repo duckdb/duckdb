@@ -1,0 +1,46 @@
+# name: test/sql/storage/types/test_uuid.storage.test
+# description: Test UUID with persistent storage
+# group: [types]
+
+# load the DB from disk
+load __TEST_DIR__/uuid_storage_test.db
+
+# create a table with uuid
+statement ok
+CREATE TABLE uuids (u uuid);
+
+statement ok
+INSERT INTO uuids VALUES ('A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'), (NULL), ('47183823-2574-4bfd-b411-99ed177d3e43'), ('{10203040506070800102030405060708}');
+
+# reload the database from disk a few times, and check that the data is still there
+loop i 0 2
+
+restart
+
+query I
+SELECT * FROM uuids
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+NULL
+47183823-2574-4bfd-b411-99ed177d3e43
+10203040-5060-7080-0102-030405060708
+
+# can query by the upper case
+query I
+SELECT * FROM uuids WHERE u = 'A0EEBC99-9C0B-4EF8-BB6D-6BB9BD380A11'
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+# can also query by the standard format
+query I
+SELECT * FROM uuids WHERE u = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'
+----
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+query I
+SELECT u FROM uuids WHERE u > '10203040-5060-7080-0102-030405060708' ORDER BY 1;
+----
+47183823-2574-4bfd-b411-99ed177d3e43
+a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
+
+endloop

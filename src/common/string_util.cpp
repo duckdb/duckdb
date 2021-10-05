@@ -2,6 +2,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/common/exception.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -66,6 +67,65 @@ vector<string> StringUtil::Split(const string &str, char delimiter) {
 		lines.push_back(temp);
 	}
 	return (lines);
+}
+
+namespace string_util_internal {
+
+inline void SkipSpaces(const string &str, idx_t &index) {
+	while (index < str.size() && std::isspace(str[index])) {
+		index++;
+	}
+}
+
+inline void ConsumeLetter(const string &str, idx_t &index, char expected) {
+	if (index >= str.size() || str[index] != expected) {
+		throw ParserException("Invalid quoted list: %s", str);
+	}
+
+	index++;
+}
+
+template <typename F>
+inline void TakeWhile(const string &str, idx_t &index, const F &cond, string &taker) {
+	while (index < str.size() && cond(str[index])) {
+		taker.push_back(str[index]);
+		index++;
+	}
+}
+
+inline string TakePossiblyQuotedItem(const string &str, idx_t &index, char delimiter, char quote) {
+	string entry;
+
+	if (str[index] == quote) {
+		index++;
+		TakeWhile(
+		    str, index, [quote](char c) { return c != quote; }, entry);
+		ConsumeLetter(str, index, quote);
+	} else {
+		TakeWhile(
+		    str, index, [delimiter, quote](char c) { return c != delimiter && c != quote && !std::isspace(c); }, entry);
+	}
+
+	return entry;
+}
+
+} // namespace string_util_internal
+
+vector<string> StringUtil::SplitWithQuote(const string &str, char delimiter, char quote) {
+	vector<string> entries;
+	idx_t i = 0;
+
+	string_util_internal::SkipSpaces(str, i);
+	while (i < str.size()) {
+		if (!entries.empty()) {
+			string_util_internal::ConsumeLetter(str, i, delimiter);
+		}
+
+		entries.emplace_back(string_util_internal::TakePossiblyQuotedItem(str, i, delimiter, quote));
+		string_util_internal::SkipSpaces(str, i);
+	}
+
+	return entries;
 }
 
 string StringUtil::Join(const vector<string> &input, const string &separator) {

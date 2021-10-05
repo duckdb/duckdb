@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
@@ -26,7 +27,7 @@ namespace duckdb {
 
 SchemaCatalogEntry *Binder::BindSchema(CreateInfo &info) {
 	if (info.schema.empty()) {
-		info.schema = info.temporary ? TEMP_SCHEMA : DEFAULT_SCHEMA;
+		info.schema = info.temporary ? TEMP_SCHEMA : context.catalog_search_path->GetDefault();
 	}
 
 	if (!info.temporary) {

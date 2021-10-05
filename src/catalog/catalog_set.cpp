@@ -307,7 +307,7 @@ CatalogEntry *CatalogSet::GetCommittedEntry(CatalogEntry *current) {
 	return current;
 }
 
-string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
+pair<string, idx_t> CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
 	string result;
@@ -322,7 +322,7 @@ string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 			}
 		}
 	}
-	return result;
+	return {result, current_score};
 }
 
 CatalogEntry *CatalogSet::CreateEntryInternal(ClientContext &context, unique_ptr<CatalogEntry> entry) {

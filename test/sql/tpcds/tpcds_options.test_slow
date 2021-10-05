@@ -1,0 +1,32 @@
+# name: test/sql/tpcds/tpcds_options.test_slow
+# description: Test TPC-DS data generation options
+# group: [tpcds]
+
+require tpcds
+
+statement ok
+CALL dsdgen(sf=0)
+
+# tables already exist
+statement error
+CALL dsdgen(sf=0)
+
+# overwrite should work
+statement ok
+CALL dsdgen(sf=0, overwrite=true)
+
+# suffix
+statement ok
+CALL dsdgen(sf=0.01, suffix='_bla')
+
+statement ok
+SELECT COUNT(*) FROM call_center_bla
+
+statement ok
+create schema tpcds
+
+statement ok
+CALL dsdgen(sf=0.01, schema='tpcds')
+
+statement ok
+SELECT COUNT(*) FROM tpcds.call_center

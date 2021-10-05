@@ -9,6 +9,7 @@ add_library_unity(
   decimal.cpp
   hash.cpp
   hugeint.cpp
+  uuid.cpp
   hyperloglog.cpp
   interval.cpp
   row_data_collection.cpp

@@ -277,7 +277,7 @@ int64_t Interval::GetNanoseconds(interval_t val) {
 
 	return nano;
 }
-interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
+interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 	date_t date1, date2;
 	dtime_t time1, time2;
 
@@ -364,6 +364,18 @@ interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestam
 	interval.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
 
 	return interval;
+}
+interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
+	const auto us_1 = Timestamp::GetEpochMicroSeconds(timestamp_1);
+	const auto us_2 = Timestamp::GetEpochMicroSeconds(timestamp_2);
+	const auto delta_us = us_1 - us_2;
+
+	interval_t result;
+	result.months = 0;
+	result.days = delta_us / Interval::MICROS_PER_DAY;
+	result.micros = delta_us % Interval::MICROS_PER_DAY;
+
+	return result;
 }
 
 static void NormalizeIntervalEntries(interval_t input, int64_t &months, int64_t &days, int64_t &micros) {

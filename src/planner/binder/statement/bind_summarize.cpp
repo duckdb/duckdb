@@ -27,6 +27,16 @@ static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggre
 	return move(cast_function);
 }
 
+static unique_ptr<ParsedExpression> SummarizeCreateAggregate(const string &aggregate, string column_name,
+                                                             const Value &modifier) {
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_unique<ColumnRefExpression>(move(column_name)));
+	children.push_back(make_unique<ConstantExpression>(modifier));
+	auto aggregate_function = make_unique<FunctionExpression>(aggregate, move(children));
+	auto cast_function = make_unique<CastExpression>(LogicalType::VARCHAR, move(aggregate_function));
+	return move(cast_function);
+}
+
 static unique_ptr<ParsedExpression> SummarizeCreateCountStar() {
 	vector<unique_ptr<ParsedExpression>> children;
 	auto aggregate_function = make_unique<FunctionExpression>("count_star", move(children));
@@ -70,6 +80,10 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 	vector<unique_ptr<ParsedExpression>> max_children;
 	vector<unique_ptr<ParsedExpression>> unique_children;
 	vector<unique_ptr<ParsedExpression>> avg_children;
+	vector<unique_ptr<ParsedExpression>> std_children;
+	vector<unique_ptr<ParsedExpression>> q25_children;
+	vector<unique_ptr<ParsedExpression>> q50_children;
+	vector<unique_ptr<ParsedExpression>> q75_children;
 	vector<unique_ptr<ParsedExpression>> count_children;
 	vector<unique_ptr<ParsedExpression>> null_percentage_children;
 	auto select = make_unique<SelectStatement>();
@@ -80,8 +94,19 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 		min_children.push_back(SummarizeCreateAggregate("min", plan.names[i]));
 		max_children.push_back(SummarizeCreateAggregate("max", plan.names[i]));
 		unique_children.push_back(SummarizeCreateAggregate("approx_count_distinct", plan.names[i]));
-		avg_children.push_back(plan.types[i].IsNumeric() ? SummarizeCreateAggregate("avg", plan.names[i])
-		                                                 : make_unique<ConstantExpression>(Value()));
+		if (plan.types[i].IsNumeric()) {
+			avg_children.push_back(SummarizeCreateAggregate("avg", plan.names[i]));
+			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i]));
+			q25_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.25)));
+			q50_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.50)));
+			q75_children.push_back(SummarizeCreateAggregate("approx_quantile", plan.names[i], Value::FLOAT(0.75)));
+		} else {
+			avg_children.push_back(make_unique<ConstantExpression>(Value()));
+			std_children.push_back(make_unique<ConstantExpression>(Value()));
+			q25_children.push_back(make_unique<ConstantExpression>(Value()));
+			q50_children.push_back(make_unique<ConstantExpression>(Value()));
+			q75_children.push_back(make_unique<ConstantExpression>(Value()));
+		}
 		count_children.push_back(SummarizeCreateCountStar());
 		null_percentage_children.push_back(SummarizeCreateNullPercentage(plan.names[i]));
 	}
@@ -95,6 +120,10 @@ BoundStatement Binder::BindSummarize(ShowStatement &stmt) {
 	select_node->select_list.push_back(SummarizeWrapUnnest(max_children, "max"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(unique_children, "approx_unique"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(avg_children, "avg"));
+	select_node->select_list.push_back(SummarizeWrapUnnest(std_children, "std"));
+	select_node->select_list.push_back(SummarizeWrapUnnest(q25_children, "q25"));
+	select_node->select_list.push_back(SummarizeWrapUnnest(q50_children, "q50"));
+	select_node->select_list.push_back(SummarizeWrapUnnest(q75_children, "q75"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(count_children, "count"));
 	select_node->select_list.push_back(SummarizeWrapUnnest(null_percentage_children, "null_percentage"));
 	select_node->from_table = move(subquery_ref);

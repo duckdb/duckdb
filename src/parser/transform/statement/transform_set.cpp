@@ -1,4 +1,5 @@
 #include "duckdb/parser/statement/set_statement.hpp"
+
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
@@ -15,8 +16,7 @@ SetScope ToSetScope(duckdb_libpgquery::VariableSetScope pg_scope) {
 	case duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_GLOBAL:
 		return SetScope::GLOBAL;
 	case duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_DEFAULT:
-		// FIXME: This should be SESSION. See https://github.com/duckdb/duckdb/pull/2247
-		return SetScope::GLOBAL;
+		return SetScope::SESSION;
 	default:
 		throw InternalException("Unexpected pg_scope: %d", pg_scope);
 	}

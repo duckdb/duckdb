@@ -1,0 +1,4 @@
+EXPORTS
+DllMain
+ConfigDSN
+ConfigDriver
