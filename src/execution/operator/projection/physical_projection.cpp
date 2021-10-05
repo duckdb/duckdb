@@ -6,7 +6,7 @@ namespace duckdb {
 
 class ProjectionState : public OperatorState {
 public:
-	ProjectionState(const vector<unique_ptr<Expression>> &expressions) : executor(expressions) {
+	explicit ProjectionState(const vector<unique_ptr<Expression>> &expressions) : executor(expressions) {
 	}
 
 	ExpressionExecutor executor;
