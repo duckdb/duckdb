@@ -384,7 +384,7 @@ OperatorResultType PhysicalNestedLoopJoin::ResolveComplexJoin(ExecutionContext &
 //===--------------------------------------------------------------------===//
 class NestedLoopJoinScanState : public GlobalSourceState {
 public:
-	NestedLoopJoinScanState(const PhysicalNestedLoopJoin &op) : op(op), right_outer_position(0) {
+	explicit NestedLoopJoinScanState(const PhysicalNestedLoopJoin &op) : op(op), right_outer_position(0) {
 	}
 
 	mutex lock;

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -16,13 +17,13 @@ namespace duckdb {
 class PhysicalInsert : public PhysicalOperator {
 public:
 	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
-	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
-	      column_index_map(std::move(column_index_map)), table(table), bound_defaults(move(bound_defaults)) {
-	}
+	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality);
 
+	//! The map from insert column index to table column index
 	vector<idx_t> column_index_map;
+	//! The table to insert into
 	TableCatalogEntry *table;
+	//! The default expressions of the columns for which no value is provided
 	vector<unique_ptr<Expression>> bound_defaults;
 
 public:

@@ -22,7 +22,7 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 
 class FilterState : public OperatorState {
 public:
-	FilterState(Expression &expr) : executor(expr), sel(STANDARD_VECTOR_SIZE) {
+	explicit FilterState(Expression &expr) : executor(expr), sel(STANDARD_VECTOR_SIZE) {
 	}
 
 	ExpressionExecutor executor;

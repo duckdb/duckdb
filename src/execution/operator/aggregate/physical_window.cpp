@@ -1371,7 +1371,7 @@ unique_ptr<GlobalSinkState> PhysicalWindow::GetGlobalSinkState(ClientContext &co
 //===--------------------------------------------------------------------===//
 class WindowGlobalSourceState : public GlobalSourceState {
 public:
-	WindowGlobalSourceState(const PhysicalWindow &op) : op(op), next_part(0) {
+	explicit WindowGlobalSourceState(const PhysicalWindow &op) : op(op), next_part(0) {
 	}
 
 	const PhysicalWindow &op;

@@ -578,7 +578,7 @@ void Executor::PushError(ExceptionType type, const string &exception) {
 	// interrupt execution of any other pipelines that belong to this executor
 	context.interrupted = true;
 	// push the exception onto the stack
-	exceptions.push_back(make_pair(type, exception));
+	exceptions.emplace_back(type, exception);
 }
 
 bool Executor::HasError() {

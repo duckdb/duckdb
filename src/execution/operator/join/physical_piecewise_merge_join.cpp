@@ -136,7 +136,7 @@ void PhysicalPiecewiseMergeJoin::Finalize(Pipeline &pipeline, Event &event, Clie
 //===--------------------------------------------------------------------===//
 class PiecewiseMergeJoinState : public OperatorState {
 public:
-	PiecewiseMergeJoinState(const PhysicalPiecewiseMergeJoin &op)
+	explicit PiecewiseMergeJoinState(const PhysicalPiecewiseMergeJoin &op)
 	    : op(op), first_fetch(true), finished(true), left_position(0), right_position(0), right_chunk_index(0) {
 		vector<LogicalType> condition_types;
 		for (auto &cond : op.conditions) {
@@ -462,7 +462,7 @@ void OrderVector(Vector &vector, idx_t count, MergeOrder &order) {
 //===--------------------------------------------------------------------===//
 class PiecewiseJoinScanState : public GlobalSourceState {
 public:
-	PiecewiseJoinScanState(const PhysicalPiecewiseMergeJoin &op) : op(op), right_outer_position(0) {
+	explicit PiecewiseJoinScanState(const PhysicalPiecewiseMergeJoin &op) : op(op), right_outer_position(0) {
 	}
 
 	mutex lock;

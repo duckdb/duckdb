@@ -15,7 +15,7 @@ PhysicalStreamingSample::PhysicalStreamingSample(vector<LogicalType> types, Samp
 //===--------------------------------------------------------------------===//
 class StreamingSampleOperatorState : public OperatorState {
 public:
-	StreamingSampleOperatorState(int64_t seed) : random(seed) {
+	explicit StreamingSampleOperatorState(int64_t seed) : random(seed) {
 	}
 
 	RandomEngine random;

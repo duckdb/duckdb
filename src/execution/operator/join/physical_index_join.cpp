@@ -14,7 +14,7 @@ namespace duckdb {
 
 class IndexJoinOperatorState : public OperatorState {
 public:
-	IndexJoinOperatorState(const PhysicalIndexJoin &op) {
+	explicit IndexJoinOperatorState(const PhysicalIndexJoin &op) {
 		rhs_rows.resize(STANDARD_VECTOR_SIZE);
 		result_sizes.resize(STANDARD_VECTOR_SIZE);
 

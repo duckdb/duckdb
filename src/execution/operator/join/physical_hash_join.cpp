@@ -109,7 +109,7 @@ unique_ptr<GlobalSinkState> PhysicalHashJoin::GetGlobalSinkState(ClientContext &
 	}
 	// for perfect hash join
 	state->perfect_join_executor =
-	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, move(perfect_join_statistics));
+	    make_unique<PerfectHashJoinExecutor>(*this, *state->hash_table, perfect_join_statistics);
 	return move(state);
 }
 
@@ -256,7 +256,7 @@ OperatorResultType PhysicalHashJoin::Execute(ExecutionContext &context, DataChun
 //===--------------------------------------------------------------------===//
 class HashJoinScanState : public GlobalSourceState {
 public:
-	HashJoinScanState(const PhysicalHashJoin &op) : op(op) {
+	explicit HashJoinScanState(const PhysicalHashJoin &op) : op(op) {
 	}
 
 	const PhysicalHashJoin &op;

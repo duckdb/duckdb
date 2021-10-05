@@ -66,7 +66,7 @@ void PhysicalBlockwiseNLJoin::Finalize(Pipeline &pipeline, Event &event, ClientC
 //===--------------------------------------------------------------------===//
 class BlockwiseNLJoinState : public OperatorState {
 public:
-	BlockwiseNLJoinState(const PhysicalBlockwiseNLJoin &op)
+	explicit BlockwiseNLJoinState(const PhysicalBlockwiseNLJoin &op)
 	    : left_position(0), right_position(0), executor(*op.condition) {
 		if (IsLeftOuterJoin(op.join_type)) {
 			left_found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
@@ -180,7 +180,7 @@ string PhysicalBlockwiseNLJoin::ParamsToString() const {
 //===--------------------------------------------------------------------===//
 class BlockwiseNLJoinScanState : public GlobalSourceState {
 public:
-	BlockwiseNLJoinScanState(const PhysicalBlockwiseNLJoin &op) : op(op), right_outer_position(0) {
+	explicit BlockwiseNLJoinScanState(const PhysicalBlockwiseNLJoin &op) : op(op), right_outer_position(0) {
 	}
 
 	mutex lock;
