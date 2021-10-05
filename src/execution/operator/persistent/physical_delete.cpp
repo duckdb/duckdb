@@ -15,7 +15,8 @@ public:
 	DeleteGlobalState() : deleted_count(0) {
 	}
 
-	atomic<idx_t> deleted_count;
+	mutex delete_lock;
+	idx_t deleted_count;
 };
 
 SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
@@ -24,6 +25,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, GlobalSinkState &
 
 	// delete data in the base table
 	// the row ids are given to us as the last column of the child chunk
+	lock_guard<mutex> delete_guard(gstate.delete_lock);
 	gstate.deleted_count += table.Delete(tableref, context.client, input.data[row_id_index], input.size());
 	return SinkResultType::NEED_MORE_INPUT;
 }
