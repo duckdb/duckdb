@@ -5,12 +5,13 @@
 #include "duckdb/planner/expression/list.hpp"
 #include "duckdb/parser/expression/list.hpp"
 #include "duckdb/function/table/table_scan.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/main/relation/limit_relation.hpp"
+#include "duckdb/main/relation/order_relation.hpp"
+#include "duckdb/main/relation/projection_relation.hpp"
+#include "duckdb/main/relation/aggregate_relation.hpp"
 
 #include "Schema_generated.h"
 #include "Plan_generated.h"
@@ -19,6 +20,8 @@
 #include "flatbuffers/minireflect.h"
 
 #include "tpch-extension.hpp"
+
+#include "compare_result.hpp"
 
 #include <string>
 
@@ -466,8 +469,7 @@ static duckdb::LogicalType transform_type_back(const arrow::Field *field) {
 
 // this needs some state so no collection of static methods ^^
 struct ArrowPlanToDuckDB {
-	ArrowPlanToDuckDB(duckdb::ClientContext &context_p) : context(context_p) {
-		binder = duckdb::Binder::CreateBinder(context);
+	ArrowPlanToDuckDB(duckdb::Connection &conn_p) : conn(conn_p), context(*conn_p.context) {
 	}
 
 	unique_ptr<duckdb::ParsedExpression> TransformParsed(const arrowir::Expression *expr) {
@@ -488,146 +490,110 @@ struct ArrowPlanToDuckDB {
 		}
 		case arrowir::ExpressionImpl::ExpressionImpl_Literal: {
 			auto arrow_expr = expr->impl_as_Literal();
-			// TODO actually set value
-			return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::ConstantExpression>(duckdb::Value());
+			switch (arrow_expr->impl_type()) {
+			case arrowir::LiteralImpl::LiteralImpl_DecimalLiteral: {
+				auto arrow_decimal = arrow_expr->impl_as_DecimalLiteral();
+				int64_t raw_val = 1; // TODO: actually transform a value
+				auto val = duckdb::Value::DECIMAL(raw_val, arrow_decimal->precision(), arrow_decimal->scale());
+				return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::ConstantExpression>(val);
+			}
+			default:
+				throw std::runtime_error(arrowir::EnumNameLiteralImpl(arrow_expr->impl_type()));
+			}
 		}
 		default:
 			throw std::runtime_error(arrowir::EnumNameExpressionImpl(expr->impl_type()));
 		}
 	}
 
-	unique_ptr<duckdb::Expression> TransformExpression(const arrowir::Expression *expr) {
-		auto parsed_expr = TransformParsed(expr);
-		duckdb::ExpressionBinder expression_binder(*binder, context);
-		return expression_binder.Bind(parsed_expr);
-	}
-
-	unique_ptr<duckdb::Expression> TransformAggregate(const arrowir::Expression *expr, idx_t aggregate_index) {
-		auto parsed_expr = TransformParsed(expr);
-		duckdb::BoundSelectNode node;
-		node.aggregate_index = aggregate_index;
-		duckdb::BoundGroupInformation group_info;
-		duckdb::SelectBinder select_binder(*binder, context, node, group_info);
-		return select_binder.Bind(parsed_expr);
-	}
-
-	unique_ptr<duckdb::LogicalOperator> TransformOperator(const arrowir::Relation *arrow_rel) {
+	shared_ptr<duckdb::Relation> TransformRelRel(const arrowir::Relation *arrow_rel) {
 		switch (arrow_rel->impl_type()) {
 		case arrowir::RelationImpl_Limit: {
 			auto arrow_op = arrow_rel->impl_as_Limit();
-
-			auto res =
-			    duckdb::make_unique<duckdb::LogicalLimit>(arrow_op->count(), arrow_op->offset(), nullptr, nullptr);
-			res->children.push_back(TransformOperator(arrow_op->rel()));
-			return res;
+			return duckdb::make_shared<duckdb::LimitRelation>(TransformRelRel(arrow_op->rel()), arrow_op->count(),
+			                                                  arrow_op->offset());
 		}
 		case arrowir::RelationImpl_OrderBy: {
 			auto arrow_op = arrow_rel->impl_as_OrderBy();
-			auto child = TransformOperator(arrow_op->rel());
-			vector<duckdb::BoundOrderByNode> order_nodes;
-			// TODO fill order nodes
-			auto res = duckdb::make_unique<duckdb::LogicalOrder>(move(order_nodes));
-			res->children.push_back(move(child));
-			return res;
+			vector<duckdb::OrderByNode> order_nodes;
+			for (idx_t i = 0; i < arrow_op->keys()->size(); i++) {
+				auto arrow_sort_key = arrow_op->keys()->Get(i);
+				duckdb::OrderType type;
+				duckdb::OrderByNullType null_order;
+				switch (arrow_sort_key->ordering()) {
+				case arrowir::Ordering_NULLS_THEN_ASCENDING:
+					type = duckdb::OrderType::ASCENDING;
+					null_order = duckdb::OrderByNullType::NULLS_FIRST;
+					break;
+				default:
+					throw runtime_error(arrowir::EnumNameOrdering(arrow_sort_key->ordering()));
+				}
+				order_nodes.emplace_back(type, null_order, TransformParsed(arrow_sort_key->expression()));
+			}
+			return duckdb::make_shared<duckdb::OrderRelation>(TransformRelRel(arrow_op->rel()), move(order_nodes));
 		}
 		case arrowir::RelationImpl_Project: {
 			auto arrow_op = arrow_rel->impl_as_Project();
-			auto child = TransformOperator(arrow_op->rel());
-			vector<unique_ptr<duckdb::Expression>> select_list;
-			vector<string> names;
+
+			vector<unique_ptr<duckdb::ParsedExpression>> expressions;
+			vector<string> aliases;
+
 			vector<duckdb::LogicalType> types;
 			for (idx_t i = 0; i < arrow_op->expressions()->size(); i++) {
-				auto expr = TransformExpression(arrow_op->expressions()->Get(i));
-				names.push_back("expr_" + to_string(i)); // we need a name but its ugly
-				types.push_back(expr->return_type);
-				select_list.push_back(move(expr));
+				expressions.push_back(TransformParsed(arrow_op->expressions()->Get(i)));
+				aliases.push_back("expr_" + to_string(i)); // we need a name but its ugly
 			}
-
-			auto bind_index = binder->GenerateTableIndex();
-			auto res = duckdb::make_unique<duckdb::LogicalProjection>(bind_index, move(select_list));
-			res->children.push_back(move(child));
-			binder->bind_context.AddGenericBinding(bind_index, "binding_" + to_string(bind_index), names, types);
-
-			return res;
+			return duckdb::make_shared<duckdb::ProjectionRelation>(TransformRelRel(arrow_op->rel()), move(expressions),
+			                                                       move(aliases));
 		}
 		case arrowir::RelationImpl_Aggregate: {
 			auto arrow_op = arrow_rel->impl_as_Aggregate();
-			auto child = TransformOperator(arrow_op->rel());
-			vector<unique_ptr<duckdb::Expression>> aggregates;
-			// TODO this only works for one grouping set for now
+
+			vector<unique_ptr<duckdb::ParsedExpression>> groups, expressions;
+			// TODO this only works for one grouping set, DuckDB does not support multiple sets (yet)
 			if (arrow_op->groupings()->size() != 1) {
 				throw runtime_error("unsupported groups");
 			}
-			vector<string> names;
-			vector<duckdb::LogicalType> types;
-			auto groups = arrow_op->groupings()->Get(0);
-
-			for (idx_t i = 0; i < groups->keys()->size(); i++) {
-				auto expr = TransformExpression(groups->keys()->Get(i));
-				names.push_back("group_" + to_string(i)); // we need a name but its ugly
-				types.push_back(expr->return_type);
-				aggregates.push_back(move(expr));
-
+			auto arrow_groups = arrow_op->groupings()->Get(0);
+			for (idx_t i = 0; i < arrow_groups->keys()->size(); i++) {
+				groups.push_back(TransformParsed(arrow_groups->keys()->Get(i)));
+				// we also need the expression because the groups are not automatically projected out (as they should
+				// be)
+				expressions.push_back(TransformParsed(arrow_groups->keys()->Get(i)));
 			}
 			for (idx_t i = 0; i < arrow_op->measures()->size(); i++) {
-				auto expr = TransformAggregate(arrow_op->measures()->Get(i), 1 /* TODO where does this come from? */);
-				names.push_back("aggr_" + to_string(i)); // we need a name but its ugly
-				types.push_back(expr->return_type);
-				aggregates.push_back(move(expr));
+				expressions.push_back(TransformParsed(arrow_op->measures()->Get(i)));
 			}
-
-			auto bind_index = binder->GenerateTableIndex();
-			auto res = duckdb::make_unique<duckdb::LogicalAggregate>(bind_index, bind_index, move(aggregates));
-			res->children.push_back(move(child));
-			// TODO this is not in the API yet, but we need to hide the previous binders from the positional reference
-			binder->bind_context.AddGenericBinding(bind_index, "binding_" + to_string(bind_index), names, types);
-
-			return res;
+			return duckdb::make_shared<duckdb::AggregateRelation>(TransformRelRel(arrow_op->rel()), move(expressions),
+			                                                      move(groups));
 		}
 		case arrowir::RelationImpl_Source: {
 			auto arrow_op = arrow_rel->impl_as_Source();
-			auto base_table_ref = duckdb::make_unique_base<duckdb::TableRef, duckdb::BaseTableRef>();
-			auto &btr = (duckdb::BaseTableRef &)*base_table_ref;
-			btr.schema_name = "main"; // TODO this is kind of dirty. Perhaps the IR should allow for a schema name?
-			btr.table_name = arrow_op->name()->str();
-			auto table_binder = duckdb::Binder::CreateBinder(context, binder.get());
-			auto bound_table_ref = table_binder->Bind(*base_table_ref);
-			auto plan = table_binder->CreatePlan(*bound_table_ref);
-
-			auto &logical_get = (duckdb::LogicalGet &)*plan;
-
-			// TODO pushed down filters need to be made explicit as well!
+			auto duckdb_table_rel = conn.Table(arrow_op->name()->str());
 
 			// TODO ensure it is a remap, otherwise we can skip creating the projection below
 			auto arrow_rel_base = arrow_op->base()->output_mapping_as_Remap();
 
-			duckdb::ExpressionBinder expression_binder(*table_binder, context);
-			vector<unique_ptr<duckdb::Expression>> projection_columns;
-			vector<string> names;
-			vector<duckdb::LogicalType> types;
+			vector<unique_ptr<duckdb::ParsedExpression>> expressions;
+			vector<string> aliases;
 			for (idx_t i = 0; i < arrow_rel_base->mapping()->size(); i++) {
-				auto column_id = arrow_rel_base->mapping()->Get(i)->position();
-				auto parsed_expression =
-				    duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::ColumnRefExpression>(
-				        logical_get.names[column_id]);
-				projection_columns.push_back(expression_binder.Bind(parsed_expression));
-				names.push_back(logical_get.names[column_id]);
-				types.push_back(logical_get.returned_types[column_id]);
+				expressions.push_back(duckdb::make_unique<duckdb::PositionalReferenceExpression>(
+				    arrow_rel_base->mapping()->Get(i)->position() + 1));
+				auto &col_info = duckdb_table_rel->Columns()[arrow_rel_base->mapping()->Get(i)->position()];
+				aliases.push_back(col_info.name);
 			}
-			auto bind_index = binder->GenerateTableIndex();
-			auto projection = duckdb::make_unique<duckdb::LogicalProjection>(bind_index, move(projection_columns));
-			projection->children.push_back(move(plan));
-			binder->bind_context.AddGenericBinding(bind_index, btr.table_name, names, types);
-			return move(projection);
+			return duckdb::make_shared<duckdb::ProjectionRelation>(duckdb_table_rel, move(expressions), move(aliases));
 		}
 		default:
 			throw runtime_error(arrowir::EnumNameRelationImpl(arrow_rel->impl_type()));
 		}
 	}
 
-	shared_ptr<duckdb::Binder> binder;
+	duckdb::Connection &conn;
 	duckdb::ClientContext &context;
 };
+
+#include <fstream>
 
 static void transform_plan(duckdb::Connection &con, std::string q) {
 	auto plan = con.context->ExtractPlan(q);
@@ -646,27 +612,17 @@ static void transform_plan(duckdb::Connection &con, std::string q) {
 	auto arrow_plan_readback = arrowir::GetPlan(buffer);
 
 	auto root_rel = arrow_plan_readback->sinks()->Get(0);
-	ArrowPlanToDuckDB transformer(*con.context);
-	auto new_plan = transformer.TransformOperator(root_rel);
+	ArrowPlanToDuckDB transformer(con);
+	auto duckdb_rel = transformer.TransformRelRel(root_rel);
+	duckdb_rel->Print();
+	duckdb_rel->Execute()->Print();
+	auto res = duckdb_rel->Execute();
+	// check the results
+	// ...
+	std::string file_content;
+	std::getline(std::ifstream("../../extension/tpch/dbgen/answers/sf0.1/q01.csv"), file_content, '\0');
 
-	printf("\n%s\n", new_plan->ToString().c_str());
-
-	// now lets try to create a physical plan and execute
-	duckdb::PhysicalPlanGenerator planner(*con.context);
-
-	auto physical_plan = planner.CreatePlan(move(new_plan));
-	printf("\n%s\n", physical_plan->ToString().c_str());
-
-	duckdb::Executor executor(*con.context);
-	executor.Initialize(physical_plan.get());
-
-	while (true) {
-		auto chunk = executor.FetchChunk();
-		if (chunk->size() == 0) {
-			break;
-		}
-		chunk->Print();
-	}
+	printf("%s\n", duckdb::compare_csv(*res, file_content, true).c_str());
 }
 
 int main() {
@@ -680,9 +636,9 @@ int main() {
 	// create TPC-H tables in duckdb catalog, but without any contents
 	con.Query("call dbgen(sf=0.1)");
 
-	transform_plan(con, "SELECT avg(l_discount) FROM lineitem");
+	// transform_plan(con, "SELECT avg(l_discount) FROM lineitem");
 
-	//transform_plan(con, duckdb::TPCHExtension::GetQuery(1));
+	transform_plan(con, duckdb::TPCHExtension::GetQuery(1));
 	//	// transform_plan(con, duckdb::TPCHExtension::GetQuery(2)); // delim join
 	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(3));
 	//	transform_plan(con, duckdb::TPCHExtension::GetQuery(4));
