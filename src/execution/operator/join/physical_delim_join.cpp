@@ -44,6 +44,22 @@ public:
 	}
 
 	ChunkCollection lhs_data;
+	mutex lhs_lock;
+
+	void Merge(ChunkCollection &input) {
+		lock_guard<mutex> guard(lhs_lock);
+		lhs_data.Append(input);
+	}
+};
+
+class DelimJoinLocalState : public LocalSinkState {
+public:
+	unique_ptr<LocalSinkState> distinct_state;
+	ChunkCollection lhs_data;
+
+	void Append(DataChunk &input) {
+		lhs_data.Append(input);
+	}
 };
 
 unique_ptr<GlobalSinkState> PhysicalDelimJoin::GetGlobalSinkState(ClientContext &context) const {
@@ -56,19 +72,24 @@ unique_ptr<GlobalSinkState> PhysicalDelimJoin::GetGlobalSinkState(ClientContext 
 }
 
 unique_ptr<LocalSinkState> PhysicalDelimJoin::GetLocalSinkState(ExecutionContext &context) const {
-	return distinct->GetLocalSinkState(context);
+	auto state = make_unique<DelimJoinLocalState>();
+	state->distinct_state = distinct->GetLocalSinkState(context);
+	return move(state);
 }
 
-SinkResultType PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalSinkState &state_p, LocalSinkState &lstate,
+SinkResultType PhysicalDelimJoin::Sink(ExecutionContext &context, GlobalSinkState &state_p, LocalSinkState &lstate_p,
                                        DataChunk &input) const {
-	auto &state = (DelimJoinGlobalState &)state_p;
-	state.lhs_data.Append(input);
-	distinct->Sink(context, *distinct->sink_state, lstate, input);
+	auto &lstate = (DelimJoinLocalState &) lstate_p;
+	lstate.lhs_data.Append(input);
+	distinct->Sink(context, *distinct->sink_state, *lstate.distinct_state, input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-void PhysicalDelimJoin::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
-	distinct->Combine(context, *distinct->sink_state, lstate);
+void PhysicalDelimJoin::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
+	auto &lstate = (DelimJoinLocalState &) lstate_p;
+	auto &gstate = (DelimJoinGlobalState &) state;
+	gstate.Merge(lstate.lhs_data);
+	distinct->Combine(context, *distinct->sink_state, *lstate.distinct_state);
 }
 
 void PhysicalDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
