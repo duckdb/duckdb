@@ -192,8 +192,9 @@ void Executor::ExtractPipelines(shared_ptr<Pipeline> &pipeline, vector<shared_pt
 	result.push_back(move(pipeline));
 	auto union_entry = union_pipelines.find(pipeline_ptr);
 	if (union_entry != union_pipelines.end()) {
-		for (auto &entry : union_entry->second) {
-			ExtractPipelines(entry, result);
+		auto &union_pipeline_list = union_entry->second;
+		for (idx_t i = union_pipeline_list.size(); i > 0; i--) {
+			ExtractPipelines(union_pipeline_list[i - 1], result);
 		}
 		union_pipelines.erase(pipeline_ptr);
 	}

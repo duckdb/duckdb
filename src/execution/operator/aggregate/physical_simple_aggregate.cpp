@@ -54,13 +54,16 @@ struct AggregateState {
 
 class SimpleAggregateGlobalState : public GlobalSinkState {
 public:
-	explicit SimpleAggregateGlobalState(const vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
+	explicit SimpleAggregateGlobalState(const vector<unique_ptr<Expression>> &aggregates) :
+	    state(aggregates), finished(false) {
 	}
 
 	//! The lock for updating the global aggregate state
 	mutex lock;
 	//! The global aggregate state
 	AggregateState state;
+	//! Whether or not the aggregate is finished
+	bool finished;
 };
 
 class SimpleAggregateLocalState : public LocalSinkState {
@@ -150,6 +153,7 @@ SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSi
 void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
 	auto &gstate = (SimpleAggregateGlobalState &)state;
 	auto &source = (SimpleAggregateLocalState &)lstate;
+	D_ASSERT(!gstate.finished);
 
 	// finalize: combine the local state into the global state
 	if (all_combinable) {
@@ -173,6 +177,13 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 	context.client.profiler->Flush(context.thread.profiler);
 }
 
+void PhysicalSimpleAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate_p) const {
+	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
+
+	D_ASSERT(!gstate.finished);
+	gstate.finished = true;
+}
+
 //===--------------------------------------------------------------------===//
 // Source
 //===--------------------------------------------------------------------===//
@@ -192,6 +203,7 @@ void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chun
                                       LocalSourceState &lstate) const {
 	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
 	auto &state = (SimpleAggregateState &)gstate_p;
+	D_ASSERT(gstate.finished);
 	if (state.finished) {
 		return;
 	}
