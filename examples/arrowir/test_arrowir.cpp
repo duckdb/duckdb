@@ -603,7 +603,7 @@ struct ArrowPlanToDuckDB {
 			switch (arrow_expr->impl_type()) {
 			case arrowir::LiteralImpl::LiteralImpl_DecimalLiteral: {
 				auto arrow_decimal = arrow_expr->impl_as_DecimalLiteral();
-				int64_t raw_val = 1; // TODO: actually transform a value
+				int64_t raw_val = 100; // TODO: actually transform a value
 				auto val = duckdb::Value::DECIMAL(raw_val, arrow_decimal->precision(), arrow_decimal->scale());
 				return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::ConstantExpression>(val);
 			}
