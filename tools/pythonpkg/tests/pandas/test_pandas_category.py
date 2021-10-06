@@ -9,7 +9,7 @@ def check_category_equal(category):
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
     assert df_in.equals(df_out)
 
-def check_create_table(category, internal_type):
+def check_create_table(category):
     conn = duckdb.connect()
 
     conn.execute ("PRAGMA enable_verification")
@@ -18,10 +18,6 @@ def check_create_table(category, internal_type):
     })
     conn.execute("CREATE TABLE t1 AS SELECT * FROM df_in")
     conn.execute("CREATE TABLE t2 AS SELECT * FROM df_in")
-    
-    # Check if type is Categorical/ENUM
-    col_type = conn.execute("DESCRIBE t1").fetchall()[0][1]
-    assert col_type ==  internal_type
 
     # Do a insert to trigger string -> cat 
     conn.execute("INSERT INTO t1 VALUES ('2')")
@@ -74,19 +70,19 @@ class TestCategory(object):
         category = []
         for i in range (10):
             category.append(str(i))
-        check_create_table(category,'ENUM (uint_8)')
+        check_create_table(category)
 
     def test_category_string_uint16(self, duckdb_cursor):
         category = []
         for i in range (300):
             category.append(str(i))
-        check_create_table(category,'ENUM (uint_16)')
+        check_create_table(category)
 
     def test_category_string_uint32(self, duckdb_cursor):
         category = []
         for i in range (70000):
             category.append(str(i))
-        check_create_table(category,'ENUM (uint_32)')
+        check_create_table(category)
 
     def test_category_fetch_df_chunk(self, duckdb_cursor):
         con = duckdb.connect()
