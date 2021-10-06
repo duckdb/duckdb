@@ -6,6 +6,7 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/execution/operator/join/physical_delim_join.hpp"
 #include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
@@ -231,6 +232,12 @@ string TreeRenderer::ToString(const QueryProfiler::TreeNode &op) {
 	return ss.str();
 }
 
+string TreeRenderer::ToString(const Pipeline &op) {
+	std::stringstream ss;
+	Render(op, ss);
+	return ss.str();
+}
+
 void TreeRenderer::Render(const LogicalOperator &op, std::ostream &ss) {
 	auto tree = CreateTree(op);
 	ToStream(*tree, ss);
@@ -242,6 +249,11 @@ void TreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
 }
 
 void TreeRenderer::Render(const QueryProfiler::TreeNode &op, std::ostream &ss) {
+	auto tree = CreateTree(op);
+	ToStream(*tree, ss);
+}
+
+void TreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	auto tree = CreateTree(op);
 	ToStream(*tree, ss);
 }
@@ -359,6 +371,7 @@ public:
 		}
 	}
 };
+
 template <>
 bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
 	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
@@ -375,6 +388,27 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
 		auto &delim = (PhysicalDelimJoin &)op;
 		callback(*delim.join);
+	}
+}
+
+struct PipelineRenderNode {
+	PipelineRenderNode(PhysicalOperator &op) :
+		op(op) {}
+
+	PhysicalOperator &op;
+	unique_ptr<PipelineRenderNode> child;
+};
+
+template <>
+bool TreeChildrenIterator::HasChildren(const PipelineRenderNode &op) {
+	return op.child.get();
+}
+
+template <>
+void TreeChildrenIterator::Iterate(const PipelineRenderNode &op,
+                                   const std::function<void(const PipelineRenderNode &child)> &callback) {
+	if (op.child) {
+		callback(*op.child);
 	}
 }
 
@@ -432,6 +466,10 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) 
 	return CreateRenderNode(op.GetName(), op.ParamsToString());
 }
 
+unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PipelineRenderNode &op) {
+	return CreateNode(op.op);
+}
+
 string TreeRenderer::ExtractExpressionsRecursive(ExpressionInfo &state) {
 	string result = "\n[INFOSEPARATOR]";
 	result += "\n" + state.function_name;
@@ -487,4 +525,17 @@ unique_ptr<RenderTree> TreeRenderer::CreateTree(const PhysicalOperator &op) {
 unique_ptr<RenderTree> TreeRenderer::CreateTree(const QueryProfiler::TreeNode &op) {
 	return CreateRenderTree<QueryProfiler::TreeNode>(op);
 }
+
+unique_ptr<RenderTree> TreeRenderer::CreateTree(const Pipeline &op) {
+	auto operators = op.GetOperators();
+	D_ASSERT(!operators.empty());
+	unique_ptr<PipelineRenderNode> node;
+	for(auto &op : operators) {
+		auto new_node = make_unique<PipelineRenderNode>(*op);
+		new_node->child = move(node);
+		node = move(new_node);
+	}
+	return CreateRenderTree<PipelineRenderNode>(*node);
+}
+
 } // namespace duckdb

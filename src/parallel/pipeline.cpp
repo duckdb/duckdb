@@ -17,6 +17,7 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 
 #include "duckdb/common/algorithm.hpp"
+#include "duckdb/common/tree_renderer.hpp"
 
 namespace duckdb {
 
@@ -161,15 +162,8 @@ void Pipeline::AddDependency(shared_ptr<Pipeline> &pipeline) {
 }
 
 string Pipeline::ToString() const {
-	string str;
-	str = PhysicalOperatorToString(source->type);
-	for (auto &op : operators) {
-		str += " -> " + PhysicalOperatorToString(op->type);
-	}
-	if (sink) {
-		str += " -> " + PhysicalOperatorToString(sink->type);
-	}
-	return str;
+	TreeRenderer renderer;
+	return renderer.ToString(*this);
 }
 
 void Pipeline::Print() const {
@@ -178,9 +172,9 @@ void Pipeline::Print() const {
 
 vector<PhysicalOperator *> Pipeline::GetOperators() const {
 	vector<PhysicalOperator *> result;
-	result = operators;
 	D_ASSERT(source);
 	result.push_back(source);
+	result.insert(result.end(), operators.begin(), operators.end());
 	if (sink) {
 		result.push_back(sink);
 	}

@@ -24,6 +24,7 @@ class Pipeline : public std::enable_shared_from_this<Pipeline> {
 	friend class Executor;
 	friend class PipelineExecutor;
 	friend class PipelineEvent;
+	friend class PipelineFinishEvent;
 
 public:
 	Pipeline(Executor &execution_context);
