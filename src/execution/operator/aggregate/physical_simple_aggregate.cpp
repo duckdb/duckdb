@@ -54,8 +54,8 @@ struct AggregateState {
 
 class SimpleAggregateGlobalState : public GlobalSinkState {
 public:
-	explicit SimpleAggregateGlobalState(const vector<unique_ptr<Expression>> &aggregates) :
-	    state(aggregates), finished(false) {
+	explicit SimpleAggregateGlobalState(const vector<unique_ptr<Expression>> &aggregates)
+	    : state(aggregates), finished(false) {
 	}
 
 	//! The lock for updating the global aggregate state
@@ -177,7 +177,8 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 	context.client.profiler->Flush(context.thread.profiler);
 }
 
-void PhysicalSimpleAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate_p) const {
+void PhysicalSimpleAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                       GlobalSinkState &gstate_p) const {
 	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
 
 	D_ASSERT(!gstate.finished);

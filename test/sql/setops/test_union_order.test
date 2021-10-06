@@ -1,6 +1,6 @@
-# name: test/sql/setops/test_union_order.test.test
+# name: test/sql/setops/test_union_order.test
 # description: Test order of UNION statements
-# group: [list]
+# group: [setops]
 
 statement ok
 PRAGMA enable_verification
