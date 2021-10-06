@@ -12,6 +12,11 @@
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
 #include "duckdb/main/relation/aggregate_relation.hpp"
+#include "duckdb/main/relation/filter_relation.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/common/types/date.hpp"
 
 #include "Schema_generated.h"
 #include "Plan_generated.h"
@@ -80,6 +85,11 @@ static flatbuffers::Offset<arrowir::Expression> transform_constant(flatbuffers::
 	case duckdb::LogicalTypeId::VARCHAR: {
 		auto str = arrowir::CreateStringLiteral(fbb, fbb.CreateString(value.str_value));
 		literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_StringLiteral, str.Union());
+		break;
+	}
+	case duckdb::LogicalTypeId::DATE: {
+		auto date = arrowir::CreateDateLiteral(fbb, duckdb::Date::EpochNanoseconds(value.value_.date) / 1000000);
+		literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_DateLiteral, date.Union());
 		break;
 	}
 	case duckdb::LogicalTypeId::DECIMAL: {
@@ -248,6 +258,68 @@ static flatbuffers::Offset<arrowir::Expression> transform_expr(flatbuffers::Flat
 	}
 }
 
+static flatbuffers::Offset<arrowir::Expression> transform_filter(flatbuffers::FlatBufferBuilder &fbb, idx_t col_idx,
+                                                                 duckdb::TableFilter &filter) {
+
+	switch (filter.filter_type) {
+	case duckdb::TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_and_filter = (duckdb::ConjunctionAndFilter &)filter;
+
+		if (conjunction_and_filter.child_filters.size() != 2) {
+			// TODO support arbitrary filter counts
+			throw runtime_error("cant do more than two filters in a conjunction filter");
+		}
+		auto lhs = transform_filter(fbb, col_idx, *conjunction_and_filter.child_filters[0]);
+		auto rhs = transform_filter(fbb, col_idx, *conjunction_and_filter.child_filters[1]);
+
+		flatbuffers::Offset<flatbuffers::String> function_name = fbb.CreateString("and");
+		auto arg_list = fbb.CreateVector<flatbuffers::Offset<arrowir::Expression>>({lhs, rhs});
+		auto call = arrowir::CreateCall(fbb, function_name, arg_list);
+		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
+	}
+	case duckdb::TableFilterType::IS_NOT_NULL: {
+		auto &is_not_null_filter = (duckdb::ConjunctionAndFilter &)filter;
+
+		auto field_index = arrowir::CreateFieldIndex(fbb, col_idx);
+		auto field_ref = arrowir::CreateFieldRef(fbb, arrowir::Deref::Deref_FieldIndex, field_index.Union(), 0);
+		auto val = arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_FieldRef, field_ref.Union());
+
+		flatbuffers::Offset<flatbuffers::String> function_name = fbb.CreateString("is_not_null");
+		auto arg_list = fbb.CreateVector<flatbuffers::Offset<arrowir::Expression>>({val});
+		auto call = arrowir::CreateCall(fbb, function_name, arg_list);
+		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
+	}
+	case duckdb::TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = (duckdb::ConstantFilter &)filter;
+
+		auto field_index = arrowir::CreateFieldIndex(fbb, col_idx);
+		auto field_ref = arrowir::CreateFieldRef(fbb, arrowir::Deref::Deref_FieldIndex, field_index.Union(), 0);
+		auto lhs_expr =
+		    arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_FieldRef, field_ref.Union());
+
+		auto rhs_expr = transform_constant(fbb, constant_filter.constant);
+
+		flatbuffers::Offset<flatbuffers::String> function_name;
+		switch (constant_filter.comparison_type) {
+		case duckdb::ExpressionType::COMPARE_EQUAL:
+			function_name = fbb.CreateString("equal");
+			break;
+		case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
+			function_name = fbb.CreateString("lessthanequal");
+			break;
+		default:
+			throw std::runtime_error(duckdb::ExpressionTypeToString(constant_filter.comparison_type));
+		}
+
+		auto arg_list = fbb.CreateVector<flatbuffers::Offset<arrowir::Expression>>({lhs_expr, rhs_expr});
+		auto call = arrowir::CreateCall(fbb, function_name, arg_list);
+		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Call, call.Union());
+	}
+	default:
+		throw runtime_error("Unsupported table filter type");
+	}
+}
+
 static flatbuffers::Offset<arrowir::Expression> transform_join_condition(flatbuffers::FlatBufferBuilder &fbb,
                                                                          duckdb::JoinCondition &cond) {
 	std::string join_comparision_name;
@@ -354,13 +426,6 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 		auto &get = (duckdb::LogicalGet &)op;
 		auto &table_scan_bind_data = (duckdb::TableScanBindData &)*get.bind_data;
 
-		std::vector<flatbuffers::Offset<arrowir::FieldIndex>> projection_vector;
-		for (auto column_index : get.column_ids) {
-			projection_vector.push_back(arrowir::CreateFieldIndex(fbb, column_index));
-		}
-
-		auto get_rel_base = arrowir::CreateRelBase(
-		    fbb, arrowir::Emit_Remap, arrowir::CreateRemap(fbb, fbb.CreateVector(projection_vector)).Union());
 		std::vector<flatbuffers::Offset<arrow::Field>> fields_vec;
 		for (auto &col : table_scan_bind_data.table->columns) {
 			fields_vec.push_back(arrow::CreateField(fbb, fbb.CreateString(col.name), true, transform_type(col.type)));
@@ -369,8 +434,40 @@ static flatbuffers::Offset<arrowir::Relation> transform_op(flatbuffers::FlatBuff
 		    arrow::CreateSchema(fbb, org::apache::arrow::flatbuf::Endianness_Little, fbb.CreateVector(fields_vec));
 
 		auto table_name = fbb.CreateString(table_scan_bind_data.table->name);
-		auto arrow_table = arrowir::CreateSource(fbb, get_rel_base, table_name, schema);
-		return arrowir::CreateRelation(fbb, arrowir::RelationImpl_Source, arrow_table.Union());
+		auto arrow_table = arrowir::CreateSource(fbb, rel_base, table_name, schema);
+		auto rel = arrowir::CreateRelation(fbb, arrowir::RelationImpl_Source, arrow_table.Union());
+
+		if (get.table_filters.filters.size() != 1) {
+			throw runtime_error("eek"); // TODO support more than one filter
+		}
+		flatbuffers::Offset<arrowir::Expression> filter_expression;
+		for (auto &filter_entry : get.table_filters.filters) {
+			auto col_idx = filter_entry.first;
+			auto &filter = *filter_entry.second;
+
+			filter_expression = transform_filter(fbb, col_idx, filter);
+		}
+		auto arrow_filter = arrowir::CreateFilter(fbb, rel_base, rel, filter_expression);
+
+		auto filter = arrowir::CreateRelation(fbb, arrowir::RelationImpl_Filter, arrow_filter.Union());
+
+		// we have probably pushed some projection
+		std::vector<flatbuffers::Offset<arrowir::Expression>> expressions_vec;
+
+		for (auto column_index : get.column_ids) {
+			// TODO make this a function
+			auto field_index = arrowir::CreateFieldIndex(fbb, column_index);
+			auto field_ref = arrowir::CreateFieldRef(fbb, arrowir::Deref::Deref_FieldIndex, field_index.Union(), 0);
+			expressions_vec.push_back(
+			    arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_FieldRef, field_ref.Union()));
+		}
+
+		auto arrow_project = arrowir::CreateProject(fbb, rel_base, filter, fbb.CreateVector(expressions_vec));
+
+		// we probably pushed some filters too
+		auto proj = arrowir::CreateRelation(fbb, arrowir::RelationImpl_Project, arrow_project.Union());
+
+		return proj;
 	}
 
 	case duckdb::LogicalOperatorType::LOGICAL_TOP_N: {
@@ -485,6 +582,19 @@ struct ArrowPlanToDuckDB {
 			for (idx_t i = 0; i < arrow_expr->arguments()->size(); i++) {
 				children.push_back(TransformParsed(arrow_expr->arguments()->Get(i)));
 			}
+			//  here we go recovering string name to function semantics
+			if (arrow_expr->name()->str() == "and") {
+				return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::ConjunctionExpression>(
+				    duckdb::ExpressionType::CONJUNCTION_AND, move(children));
+			}
+			if (arrow_expr->name()->str() == "lessthanequal") {
+				return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::ComparisonExpression>(
+				    duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO, move(children[0]), move(children[1]));
+			}
+			if (arrow_expr->name()->str() == "is_not_null") {
+				return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::OperatorExpression>(
+				    duckdb::ExpressionType::OPERATOR_IS_NOT_NULL, move(children[0]));
+			}
 			return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::FunctionExpression>(
 			    arrow_expr->name()->str(), move(children));
 		}
@@ -495,6 +605,12 @@ struct ArrowPlanToDuckDB {
 				auto arrow_decimal = arrow_expr->impl_as_DecimalLiteral();
 				int64_t raw_val = 1; // TODO: actually transform a value
 				auto val = duckdb::Value::DECIMAL(raw_val, arrow_decimal->precision(), arrow_decimal->scale());
+				return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::ConstantExpression>(val);
+			}
+			case arrowir::LiteralImpl::LiteralImpl_DateLiteral: {
+				auto arrow_date = arrow_expr->impl_as_DateLiteral();
+				// FIXME this loses some precision
+				auto val = duckdb::Value::DATE(duckdb::Date::EpochToDate(arrow_date->value() / 1000));
 				return duckdb::make_unique_base<duckdb::ParsedExpression, duckdb::ConstantExpression>(val);
 			}
 			default:
@@ -508,6 +624,11 @@ struct ArrowPlanToDuckDB {
 
 	shared_ptr<duckdb::Relation> TransformRelRel(const arrowir::Relation *arrow_rel) {
 		switch (arrow_rel->impl_type()) {
+		case arrowir::RelationImpl_Filter: {
+			auto arrow_op = arrow_rel->impl_as_Filter();
+			return duckdb::make_shared<duckdb::FilterRelation>(TransformRelRel(arrow_op->rel()),
+			                                                   TransformParsed(arrow_op->predicate()));
+		}
 		case arrowir::RelationImpl_Limit: {
 			auto arrow_op = arrow_rel->impl_as_Limit();
 			return duckdb::make_shared<duckdb::LimitRelation>(TransformRelRel(arrow_op->rel()), arrow_op->count(),
@@ -568,21 +689,8 @@ struct ArrowPlanToDuckDB {
 			                                                      move(groups));
 		}
 		case arrowir::RelationImpl_Source: {
-			auto arrow_op = arrow_rel->impl_as_Source();
-			auto duckdb_table_rel = conn.Table(arrow_op->name()->str());
-
-			// TODO ensure it is a remap, otherwise we can skip creating the projection below
-			auto arrow_rel_base = arrow_op->base()->output_mapping_as_Remap();
-
-			vector<unique_ptr<duckdb::ParsedExpression>> expressions;
-			vector<string> aliases;
-			for (idx_t i = 0; i < arrow_rel_base->mapping()->size(); i++) {
-				expressions.push_back(duckdb::make_unique<duckdb::PositionalReferenceExpression>(
-				    arrow_rel_base->mapping()->Get(i)->position() + 1));
-				auto &col_info = duckdb_table_rel->Columns()[arrow_rel_base->mapping()->Get(i)->position()];
-				aliases.push_back(col_info.name);
-			}
-			return duckdb::make_shared<duckdb::ProjectionRelation>(duckdb_table_rel, move(expressions), move(aliases));
+			// yay one liners
+			return conn.Table(arrow_rel->impl_as_Source()->name()->str());
 		}
 		default:
 			throw runtime_error(arrowir::EnumNameRelationImpl(arrow_rel->impl_type()));
