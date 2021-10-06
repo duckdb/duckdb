@@ -71,19 +71,19 @@ struct TreeRendererConfig {
 	const char *HORIZONTAL = "─";
 #else
 	// ASCII version
-	const char* LTCORNER = "<";
-	const char* RTCORNER = ">";
-	const char* LDCORNER = "<";
-	const char* RDCORNER = ">";
+	const char *LTCORNER = "<";
+	const char *RTCORNER = ">";
+	const char *LDCORNER = "<";
+	const char *RDCORNER = ">";
 
-	const char* MIDDLE = "+";
-	const char* TMIDDLE = "+";
-	const char* LMIDDLE = "+";
-	const char* RMIDDLE = "+";
-	const char* DMIDDLE = "+";
+	const char *MIDDLE = "+";
+	const char *TMIDDLE = "+";
+	const char *LMIDDLE = "+";
+	const char *RMIDDLE = "+";
+	const char *DMIDDLE = "+";
 
-	const char* VERTICAL = "|";
-	const char* HORIZONTAL = "-";
+	const char *VERTICAL = "|";
+	const char *HORIZONTAL = "-";
 #endif
 };
 

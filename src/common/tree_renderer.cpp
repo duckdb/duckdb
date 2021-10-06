@@ -392,8 +392,8 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 }
 
 struct PipelineRenderNode {
-	PipelineRenderNode(PhysicalOperator &op) :
-		op(op) {}
+	PipelineRenderNode(PhysicalOperator &op) : op(op) {
+	}
 
 	PhysicalOperator &op;
 	unique_ptr<PipelineRenderNode> child;
@@ -530,7 +530,7 @@ unique_ptr<RenderTree> TreeRenderer::CreateTree(const Pipeline &op) {
 	auto operators = op.GetOperators();
 	D_ASSERT(!operators.empty());
 	unique_ptr<PipelineRenderNode> node;
-	for(auto &op : operators) {
+	for (auto &op : operators) {
 		auto new_node = make_unique<PipelineRenderNode>(*op);
 		new_node->child = move(node);
 		node = move(new_node);

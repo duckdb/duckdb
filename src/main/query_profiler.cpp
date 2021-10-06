@@ -64,7 +64,7 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 }
 
 void QueryProfiler::Finalize(TreeNode &node) {
-	for(auto &child : node.children) {
+	for (auto &child : node.children) {
 		Finalize(*child);
 		if (node.type == PhysicalOperatorType::UNION) {
 			node.info.elements += child->info.elements;
