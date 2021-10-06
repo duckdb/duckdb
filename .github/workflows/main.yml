@@ -116,6 +116,9 @@ jobs:
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
 
+    - name: Install ODBC
+      run: tools\\odbc\\bin\\Release\\odbc_install.exe //CI //Install
+
     - uses: actions/upload-artifact@v2
       with:
         name: duckdb-binaries-windows
@@ -212,9 +215,6 @@ jobs:
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
-      BUILD_HTTPFS: 1
-      OPENSSL_ROOT_DIR: /usr/local/opt/openssl/
-
 
     steps:
     - uses: actions/checkout@v2
@@ -950,10 +950,11 @@ jobs:
       CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
+      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
       CIBW_TEST_COMMAND: 'python -m pytest {project}/tests && python -m pytest {project}/tests_slow'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
+      PYTEST_TIMEOUT: '600'
 
     steps:
     - uses: actions/checkout@v2
@@ -1130,7 +1131,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind pandoc
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 

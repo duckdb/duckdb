@@ -75,6 +75,10 @@ public:
 	DUCKDB_API static Value UBIGINT(uint64_t value);
 	//! Create a hugeint Value from a specified value
 	DUCKDB_API static Value HUGEINT(hugeint_t value);
+	//! Create a uuid Value from a specified value
+	DUCKDB_API static Value UUID(const string &value);
+	//! Create a uuid Value from a specified value
+	DUCKDB_API static Value UUID(hugeint_t value);
 	//! Create a hash Value from a specified value
 	DUCKDB_API static Value HASH(hash_t value);
 	//! Create a pointer Value from a specified value
