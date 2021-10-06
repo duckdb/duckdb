@@ -332,7 +332,7 @@ void Executor::Initialize(PhysicalOperator *plan) {
 	NextExecutor();
 	if (!exceptions.empty()) { // LCOV_EXCL_START
 		// an exception has occurred executing one of the pipelines
-		ThrowException();
+		ThrowExceptionInternal();
 	} // LCOV_EXCL_STOP
 }
 
@@ -595,8 +595,13 @@ bool Executor::HasError() {
 	lock_guard<mutex> elock(executor_lock);
 	return !exceptions.empty();
 }
+
 void Executor::ThrowException() {
 	lock_guard<mutex> elock(executor_lock);
+	ThrowExceptionInternal();
+}
+
+void Executor::ThrowExceptionInternal() {
 	D_ASSERT(!exceptions.empty());
 	auto &entry = exceptions[0];
 	switch (entry.first) {

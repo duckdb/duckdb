@@ -95,6 +95,7 @@ private:
 
 	void VerifyPipeline(Pipeline &pipeline);
 	void VerifyPipelines();
+	void ThrowExceptionInternal();
 
 private:
 	PhysicalOperator *physical_plan;
