@@ -358,6 +358,7 @@ void Executor::AddChildPipeline(Pipeline *current) {
 	// found another operator that is a source
 	// schedule a child pipeline
 	auto child_pipeline = make_shared<Pipeline>(*this);
+	auto child_pipeline_ptr = child_pipeline.get();
 	child_pipeline->sink = current->sink;
 	child_pipeline->operators = current->operators;
 	child_pipeline->source = current->operators.back();
@@ -366,21 +367,15 @@ void Executor::AddChildPipeline(Pipeline *current) {
 
 	vector<Pipeline *> dependencies;
 	dependencies.push_back(current);
-	auto union_entry = union_pipelines.find(current);
-	if (union_entry != union_pipelines.end()) {
-		for (auto &union_pipeline : union_entry->second) {
-			dependencies.push_back(union_pipeline.get());
-		}
-	}
 	auto child_entry = child_pipelines.find(current);
 	if (child_entry != child_pipelines.end()) {
 		for (auto &current_child : child_entry->second) {
 			D_ASSERT(child_dependencies.find(current_child.get()) != child_dependencies.end());
-			child_dependencies[current_child.get()].push_back(child_pipeline.get());
+			child_dependencies[current_child.get()].push_back(child_pipeline_ptr);
 		}
 	}
-	D_ASSERT(child_dependencies.find(child_pipeline.get()) == child_dependencies.end());
-	child_dependencies.insert(make_pair(child_pipeline.get(), move(dependencies)));
+	D_ASSERT(child_dependencies.find(child_pipeline_ptr) == child_dependencies.end());
+	child_dependencies.insert(make_pair(child_pipeline_ptr, move(dependencies)));
 	child_pipelines[current].push_back(move(child_pipeline));
 }
 
@@ -437,6 +432,9 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			// on the LHS (probe child), the operator becomes a regular operator
 			current->operators.push_back(op);
 			if (op->IsSource()) {
+				// FULL or RIGHT outer join
+				// schedule a scan of the node as a child pipeline
+				// this scan has to be performed AFTER all the probing has happened
 				if (recursive_cte) {
 					throw NotImplementedException("FULL and RIGHT outer joins are not supported in recursive CTEs yet");
 				}
@@ -544,10 +542,21 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 			}
 			auto union_pipeline = make_shared<Pipeline>(*this);
 			auto pipeline_ptr = union_pipeline.get();
+			// set up dependencies for any child pipelines to this union pipeline
+			auto child_entry = child_pipelines.find(current);
+			if (child_entry != child_pipelines.end()) {
+				for (auto &current_child : child_entry->second) {
+					D_ASSERT(child_dependencies.find(current_child.get()) != child_dependencies.end());
+					child_dependencies[current_child.get()].push_back(pipeline_ptr);
+				}
+			}
+			// for the current pipeline, continue building on the LHS
 			union_pipeline->operators = current->operators;
 			BuildPipelines(op->children[0].get(), current);
+			// insert the union pipeline as a union pipeline of the current node
 			union_pipelines[current].push_back(move(union_pipeline));
 
+			// for the union pipeline, build on the RHS
 			pipeline_ptr->sink = current->sink;
 			BuildPipelines(op->children[1].get(), pipeline_ptr);
 			return;
