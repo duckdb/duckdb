@@ -392,7 +392,7 @@ void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
 }
 
 struct PipelineRenderNode {
-	PipelineRenderNode(PhysicalOperator &op) : op(op) {
+	explicit PipelineRenderNode(PhysicalOperator &op) : op(op) {
 	}
 
 	PhysicalOperator &op;
