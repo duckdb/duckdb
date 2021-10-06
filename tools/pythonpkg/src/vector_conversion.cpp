@@ -34,9 +34,7 @@ void ScanPandasCategoryTemplated(py::array &column, idx_t offset, Vector &out, i
 }
 
 template <class T>
-void ScanPandasCategory(py::array &column, idx_t count, idx_t offset, Vector &out) {
-	D_ASSERT(py::hasattr(column, "dtype"));
-	auto src_type = string(py::str(column.attr("dtype")));
+void ScanPandasCategory(py::array &column, idx_t count, idx_t offset, Vector &out, string &src_type) {
 	if (src_type == "int8") {
 		ScanPandasCategoryTemplated<int8_t, T>(column, offset, out, count);
 	} else if (src_type == "int16") {
@@ -279,13 +277,13 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 	case PandasType::CATEGORY: {
 		switch (out.GetType().InternalType()) {
 		case PhysicalType::UINT8:
-			ScanPandasCategory<uint8_t>(numpy_col, count, offset, out);
+			ScanPandasCategory<uint8_t>(numpy_col, count, offset, out, bind_data.internal_categorical_type);
 			break;
 		case PhysicalType::UINT16:
-			ScanPandasCategory<uint16_t>(numpy_col, count, offset, out);
+			ScanPandasCategory<uint16_t>(numpy_col, count, offset, out, bind_data.internal_categorical_type);
 			break;
 		case PhysicalType::UINT32:
-			ScanPandasCategory<uint32_t>(numpy_col, count, offset, out);
+			ScanPandasCategory<uint32_t>(numpy_col, count, offset, out, bind_data.internal_categorical_type);
 			break;
 		default:
 			throw InternalException("Invalid Physical Type for ENUMs");
@@ -411,6 +409,8 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 					duckdb_col_type = LogicalType::ENUM(enum_name, enum_entries);
 					bind_data.numpy_col = py::array(column.attr("cat").attr("codes"));
 					bind_data.mask = nullptr;
+					D_ASSERT(py::hasattr(bind_data.numpy_col, "dtype"));
+					bind_data.internal_categorical_type = string(py::str(bind_data.numpy_col.attr("dtype")));
 				} else {
 					bind_data.numpy_col = py::array(column.attr("to_numpy")());
 					bind_data.mask = nullptr;

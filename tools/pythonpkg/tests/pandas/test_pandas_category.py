@@ -2,15 +2,37 @@ import duckdb
 import pandas as pd
 import numpy
 
-def check_category_equal(category, select = False):
+def check_category_equal(category):
     df_in = pd.DataFrame({
     'x': pd.Categorical(category, ordered=True),
     })
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
     assert df_in.equals(df_out)
-    if select:
-        res = duckdb.query_df(df_in, "data", "SELECT * FROM data where x = '1'").fetchall()
-        assert res == [('1',)]
+
+def check_create_table(category, internal_type):
+    conn = duckdb.connect()
+
+    conn.execute ("PRAGMA enable_verification")
+    df_in = pd.DataFrame({
+    'x': pd.Categorical(category, ordered=True),
+    })
+    conn.execute("CREATE TABLE t1 AS SELECT * FROM df_in")
+    conn.execute("CREATE TABLE t2 AS SELECT * FROM df_in")
+    
+    # Check if type is Categorical/ENUM
+    col_type = conn.execute("DESCRIBE t1").fetchall()[0][1]
+    assert col_type ==  internal_type
+
+    # Do a insert to trigger string -> cat 
+    conn.execute("INSERT INTO t1 VALUES ('2')")
+
+    res = conn.execute("SELECT * FROM t1 where x = '1'").fetchall()
+    assert res == [('1',)]
+
+    res =  conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.x)").fetchall()
+    assert res == conn.execute("SELECT x FROM t1").fetchall()
+    # Triggering the cast with ENUM as a src
+    conn.execute("ALTER TABLE t1 ALTER x SET DATA TYPE VARCHAR")
 
 class TestCategory(object):
 
@@ -48,19 +70,23 @@ class TestCategory(object):
         })
         assert duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchall() == [('foo',), ('bla',), (None,), ('zoo',), ('foo',), ('foo',), (None,), ('bla',)]
     
+    def test_category_string_uint8(self, duckdb_cursor):
+        category = []
+        for i in range (10):
+            category.append(str(i))
+        check_create_table(category,'ENUM (uint_8)')
+
     def test_category_string_uint16(self, duckdb_cursor):
-        connection = duckdb.connect(":memory:")
         category = []
         for i in range (300):
             category.append(str(i))
-        check_category_equal(category,True)
+        check_create_table(category,'ENUM (uint_16)')
 
     def test_category_string_uint32(self, duckdb_cursor):
-        connection = duckdb.connect(":memory:")
         category = []
         for i in range (70000):
             category.append(str(i))
-        check_category_equal(category,True)
+        check_create_table(category,'ENUM (uint_32)')
 
     def test_category_fetch_df_chunk(self, duckdb_cursor):
         con = duckdb.connect()

@@ -674,9 +674,8 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 		return StructCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::LIST:
 		return ListCastSwitch(source, result, count, error_message);
-	case LogicalTypeId::ENUM: {
+	case LogicalTypeId::ENUM:
 		return EnumCastSwitch(source, result, count, error_message);
-	}
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}

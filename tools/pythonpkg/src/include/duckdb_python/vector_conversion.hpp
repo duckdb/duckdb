@@ -45,6 +45,8 @@ struct PandasColumnBindData {
 	py::array numpy_col;
 	idx_t numpy_stride;
 	unique_ptr<NumPyArrayWrapper> mask;
+	// Only for categorical types
+	string internal_categorical_type;
 };
 
 class VectorConversion {

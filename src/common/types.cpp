@@ -459,7 +459,21 @@ string LogicalType::ToString() const {
 		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
 	}
 	case LogicalTypeId::ENUM: {
-		return EnumType::GetTypeName(*this);
+		string physical_type = "uint_";
+		switch (physical_type_) {
+		case PhysicalType::UINT8:
+			physical_type += "8";
+			break;
+		case PhysicalType::UINT16:
+			physical_type += "16";
+			break;
+		case PhysicalType::UINT32:
+			physical_type += "32";
+			break;
+		default:
+			throw InternalException("Physical Type not possible for ENUMs");
+		}
+		return "ENUM (" + physical_type + ")";
 	}
 	default:
 		return LogicalTypeIdToString(id_);
