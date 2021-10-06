@@ -39,6 +39,7 @@ void PhysicalExpressionScan::GetData(ExecutionContext &context, DataChunk &chunk
 	state.executor = make_unique<ExpressionExecutor>(expressions[state.expression_index]);
 	if (sink_state) {
 		auto &gstate = (ExpressionSinkState &)*sink_state;
+		gstate.child_chunk.Verify();
 		state.executor->Execute(gstate.child_chunk, chunk);
 	} else {
 		state.executor->Execute(chunk);
@@ -57,7 +58,8 @@ SinkResultType PhysicalExpressionScan::Sink(ExecutionContext &context, GlobalSin
 		throw InternalException("Expected expression scan child to have exactly one element");
 	}
 	gstate.child_chunk.Move(input);
-	return SinkResultType::NEED_MORE_INPUT;
+	gstate.child_chunk.Verify();
+	return SinkResultType::FINISHED;
 }
 
 unique_ptr<GlobalSinkState> PhysicalExpressionScan::GetGlobalSinkState(ClientContext &context) const {
