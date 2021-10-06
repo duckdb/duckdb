@@ -42,7 +42,7 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 	RProtector r;
 	auto confignamessexp = r.Protect(GET_NAMES(configsexp));
 
-	for (idx_t i = 0; i < Rf_length(configsexp); i++) {
+	for (idx_t i = 0; i < (idx_t) Rf_length(configsexp); i++) {
 		string key = string(CHAR(STRING_ELT(confignamessexp, i)));
 		string val = string(CHAR(STRING_ELT(VECTOR_ELT(configsexp, i), 0)));
 		auto config_property = DBConfig::GetOptionByName(key);
@@ -56,13 +56,16 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 		}
 	}
 
-	DuckDB *dbaddr;
+	config.replacement_scans.emplace_back(ArrowScanReplacement);
+
+		DuckDB *dbaddr;
 	try {
 		dbaddr = new DuckDB(dbdir, &config);
 	} catch (std::exception &e) {
 		Rf_error("duckdb_startup_R: Failed to open database: %s", e.what());
 	}
 	ExtensionHelper::LoadAllExtensions(*dbaddr);
+
 
 	DataFrameScanFunction scan_fun;
 	CreateTableFunctionInfo info(scan_fun);

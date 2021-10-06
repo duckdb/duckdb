@@ -5,6 +5,8 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 using namespace duckdb;
 
@@ -220,6 +222,23 @@ static SEXP duckdb_finalize_arrow_factory_R(SEXP factorysexp) {
 	return R_NilValue;
 }
 
+unique_ptr<TableFunctionRef> RApi::ArrowScanReplacement(const string &table_name, void *data) {
+	for (auto& e : arrow_scans) {
+		if (e.first == table_name) {
+			auto table_function = make_unique<TableFunctionRef>();
+			vector<unique_ptr<ParsedExpression>> children;
+			children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)R_ExternalPtrAddr(e.second))));
+			children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)RArrowTabularStreamFactory::Produce)));
+			children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(100000)));
+			table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
+			return table_function;
+		}
+	}
+	return nullptr;
+}
+
+arrow_scans_t RApi::arrow_scans;
+
 SEXP RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_register_R: Need external pointer parameter for connection");
@@ -242,14 +261,16 @@ SEXP RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP
 
 	RProtector r;
 	auto stream_factory = new RArrowTabularStreamFactory(export_funsexp, valuesexp);
-	auto stream_factory_produce = RArrowTabularStreamFactory::Produce;
-	conn->TableFunction("arrow_scan", {Value::POINTER((uintptr_t)stream_factory),
-	                                   Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(100000)})
-	    ->CreateView(name, true, true);
+//	auto stream_factory_produce = RArrowTabularStreamFactory::Produce;
 
 	// make r external ptr object to keep factory around until arrow table is unregistered
 	SEXP factorysexp = r.Protect(R_MakeExternalPtr(stream_factory, R_NilValue, R_NilValue));
 	R_RegisterCFinalizer(factorysexp, (void (*)(SEXP))duckdb_finalize_arrow_factory_R);
+
+	// TODO arrow_scans should really be connection-scoped
+	// TODO check if this name already exists
+	// TODO need a lock for arrow_scans there is a race condition otherwise
+	arrow_scans[name] = factorysexp;
 
 	SEXP state_list = r.Protect(NEW_LIST(3));
 	SET_VECTOR_ELT(state_list, 0, export_funsexp);
@@ -273,7 +294,12 @@ SEXP RApi::UnregisterArrow(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
 		Rf_error("duckdb_unregister_R: Need single string parameter for name");
 	}
+
 	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+
+	// TODO see above
+	arrow_scans.erase(name);
+
 	auto key = Rf_install(("_registered_arrow_" + name).c_str());
 	Rf_setAttrib(connsexp, key, R_NilValue);
 	auto res = conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");

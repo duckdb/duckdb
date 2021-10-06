@@ -6,8 +6,12 @@
 
 #include "duckdb.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
+
+typedef unordered_map<std::string, SEXP> arrow_scans_t;
 
 struct RApi {
 
@@ -39,12 +43,16 @@ struct RApi {
 	static SEXP RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
 
 	static SEXP UnregisterArrow(SEXP connsexp, SEXP namesexp);
+	static unique_ptr<TableFunctionRef> ArrowScanReplacement(const string &table_name, void *data);
+
 
 	static SEXP PointerToString(SEXP extptr);
 	static SEXP StringsToSexp(vector<string> s);
 
 	static SEXP REvalThrows(SEXP call, SEXP env = R_GlobalEnv);
 	static SEXP REvalRerror(SEXP call, SEXP env = R_GlobalEnv);
+
+	static arrow_scans_t arrow_scans;
 };
 
 struct RProtector {
