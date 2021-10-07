@@ -22,6 +22,7 @@ class Executor;
 
 //! The Pipeline class represents an execution pipeline
 class PipelineExecutor {
+	static constexpr const idx_t CACHE_THRESHOLD = 64;
 public:
 	PipelineExecutor(ClientContext &context, Pipeline &pipeline);
 
@@ -71,6 +72,9 @@ private:
 	//! Whether or not the pipeline has been finalized (used for verification only)
 	bool finalized = false;
 
+	//! Cached chunks for any operators that require caching
+	vector<unique_ptr<DataChunk>> cached_chunks;
+
 private:
 	void StartOperator(PhysicalOperator *op);
 	void EndOperator(PhysicalOperator *op, DataChunk *chunk);
@@ -78,10 +82,13 @@ private:
 	void GoToSource(idx_t &current_idx);
 	void FetchFromSource(DataChunk &result);
 
-	OperatorResultType ExecutePushInternal(DataChunk &input);
+	OperatorResultType ExecutePushInternal(DataChunk &input, idx_t initial_idx = 0);
 	//! Pushes a chunk through the pipeline and returns a single result chunk
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished
-	OperatorResultType Execute(DataChunk &input, DataChunk &result);
+	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
+
+	static bool CanCacheType(const LogicalType &type);
+	void CacheChunk(DataChunk &prev_chunk, DataChunk &input, idx_t operator_idx);
 };
 
 } // namespace duckdb

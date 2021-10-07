@@ -12,12 +12,29 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 	}
 	intermediate_chunks.reserve(pipeline.operators.size());
 	intermediate_states.reserve(pipeline.operators.size());
+	cached_chunks.resize(pipeline.operators.size());
 	for (idx_t i = 0; i < pipeline.operators.size(); i++) {
 		auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
+		auto current_operator = pipeline.operators[i];
 		auto chunk = make_unique<DataChunk>();
 		chunk->Initialize(prev_operator->GetTypes());
 		intermediate_chunks.push_back(move(chunk));
-		intermediate_states.push_back(pipeline.operators[i]->GetOperatorState(context.client));
+		intermediate_states.push_back(current_operator->GetOperatorState(context.client));
+		if (pipeline.sink && current_operator->RequiresCache()) {
+			auto &cache_types = current_operator->GetTypes();
+			bool can_cache = true;
+			for(auto &type : cache_types) {
+				if (!CanCacheType(type)) {
+					can_cache = false;
+					break;
+				}
+			}
+			if (!can_cache) {
+				continue;
+			}
+			cached_chunks[i] = make_unique<DataChunk>();
+			cached_chunks[i]->Initialize(current_operator->GetTypes());
+		}
 	}
 	InitializeChunk(final_chunk);
 }
@@ -43,7 +60,7 @@ OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) {
 	return ExecutePushInternal(input);
 }
 
-OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input) {
+OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t initial_idx) {
 	D_ASSERT(pipeline.sink);
 	if (input.size() == 0) {
 		return OperatorResultType::NEED_MORE_INPUT;
@@ -52,7 +69,7 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input) {
 		OperatorResultType result;
 		if (!pipeline.operators.empty()) {
 			final_chunk.Reset();
-			result = Execute(input, final_chunk);
+			result = Execute(input, final_chunk, initial_idx);
 			if (result == OperatorResultType::FINISHED) {
 				return OperatorResultType::FINISHED;
 			}
@@ -82,10 +99,58 @@ void PipelineExecutor::PushFinalize() {
 		throw InternalException("Calling PushFinalize on a pipeline that has been finalized already");
 	}
 	finalized = true;
+	// flush all caches
+	for(idx_t i = 0; i < cached_chunks.size(); i++) {
+		if (cached_chunks[i] && cached_chunks[i]->size() > 0) {
+			ExecutePushInternal(*cached_chunks[i], i + 1);
+			cached_chunks[i].reset();
+		}
+	}
 	D_ASSERT(local_sink_state);
 	pipeline.sink->Combine(context, *pipeline.sink->sink_state, *local_sink_state);
 	pipeline.executor.Flush(thread);
 	local_sink_state.reset();
+}
+
+bool PipelineExecutor::CanCacheType(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+		return false;
+	case LogicalTypeId::STRUCT: {
+		auto &entries = StructType::GetChildTypes(type);
+		for (auto &entry : entries) {
+			if (!CanCacheType(entry.second)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	default:
+		return true;
+	}
+}
+
+
+void PipelineExecutor::CacheChunk(DataChunk &prev_chunk, DataChunk &current_chunk, idx_t operator_idx) {
+#if STANDARD_VECTOR_SIZE >= 128
+	if (cached_chunks[operator_idx]) {
+		if (prev_chunk.size() >= CACHE_THRESHOLD && current_chunk.size() < CACHE_THRESHOLD) {
+			// we have filtered out a significant amount of tuples
+			// add this chunk to the cache and continue
+			auto &chunk_cache = *cached_chunks[operator_idx];
+			chunk_cache.Append(current_chunk);
+			if (chunk_cache.size() >= (STANDARD_VECTOR_SIZE - CACHE_THRESHOLD)) {
+				// chunk cache full: return it
+				current_chunk.Move(chunk_cache);
+				chunk_cache.Initialize(pipeline.operators[operator_idx]->GetTypes());
+			} else {
+				// chunk cache not full: probe again
+				current_chunk.Reset();
+			}
+		}
+	}
+#endif
 }
 
 void PipelineExecutor::ExecutePull(DataChunk &result) {
@@ -138,7 +203,7 @@ void PipelineExecutor::GoToSource(idx_t &current_idx) {
 	}
 }
 
-OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result) {
+OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result, idx_t initial_index) {
 	if (input.size() == 0) {
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
@@ -147,7 +212,12 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 	idx_t current_idx;
 	GoToSource(current_idx);
 	if (current_idx == 0) {
-		current_idx++;
+		current_idx = initial_index + 1;
+	}
+	D_ASSERT(current_idx > initial_index);
+	if (current_idx > pipeline.operators.size()) {
+		result.Reference(input);
+		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	while (true) {
 		if (context.client.interrupted) {
@@ -164,14 +234,16 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 			// we went back to the source: we need more input
 			return OperatorResultType::NEED_MORE_INPUT;
 		} else {
-			auto current_operator = current_idx - 1;
-			StartOperator(pipeline.operators[current_operator]);
+			auto &prev_chunk = current_intermediate == initial_index + 1 ? input : *intermediate_chunks[current_intermediate - 1];
+			auto operator_idx = current_idx - 1;
+			auto current_operator = pipeline.operators[operator_idx];
+			StartOperator(current_operator);
 			// if current_idx > source_idx, we pass the previous' operators output through the Execute of the current
 			// operator
-			auto result = pipeline.operators[current_operator]->Execute(
-			    context, *intermediate_chunks[current_intermediate - 1], current_chunk,
+			auto result = current_operator->Execute(
+			    context, prev_chunk, current_chunk,
 			    *intermediate_states[current_intermediate - 1]);
-			EndOperator(pipeline.operators[current_operator], &current_chunk);
+			EndOperator(current_operator, &current_chunk);
 			if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
 				// more data remains in this operator
 				// push in-process marker
@@ -180,6 +252,7 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 				D_ASSERT(current_chunk.size() == 0);
 				return OperatorResultType::FINISHED;
 			}
+			CacheChunk(prev_chunk, current_chunk, operator_idx);
 		}
 		current_chunk.Verify();
 

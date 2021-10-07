@@ -105,6 +105,10 @@ public:
 		return false;
 	}
 
+	virtual bool RequiresCache() const {
+		return false;
+	}
+
 public:
 	// Source interface
 	virtual unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context,

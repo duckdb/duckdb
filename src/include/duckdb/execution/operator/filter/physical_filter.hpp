@@ -32,6 +32,9 @@ public:
 	bool ParallelOperator() const override {
 		return true;
 	}
+	bool RequiresCache() const override {
+		return true;
+	}
 
 	string ParamsToString() const override;
 };
