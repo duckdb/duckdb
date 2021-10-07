@@ -150,6 +150,10 @@ public:
 	virtual bool ParallelSink() const {
 		return false;
 	}
+
+	virtual bool SinkOrderMatters() const {
+		return false;
+	}
 };
 
 } // namespace duckdb

@@ -42,6 +42,10 @@ public:
 	bool IsSink() const override {
 		return true;
 	}
+
+	bool SinkOrderMatters() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

@@ -71,6 +71,8 @@ private:
 	stack<idx_t> in_process_operators;
 	//! Whether or not the pipeline has been finalized (used for verification only)
 	bool finalized = false;
+	//! Whether or not the pipeline has finished processing
+	bool finished_processing = false;
 
 	//! Cached chunks for any operators that require caching
 	vector<unique_ptr<DataChunk>> cached_chunks;
@@ -79,7 +81,7 @@ private:
 	void StartOperator(PhysicalOperator *op);
 	void EndOperator(PhysicalOperator *op, DataChunk *chunk);
 	//! Reset the operator index to the first operator
-	void GoToSource(idx_t &current_idx);
+	void GoToSource(idx_t &current_idx, idx_t initial_idx);
 	void FetchFromSource(DataChunk &result);
 
 	OperatorResultType ExecutePushInternal(DataChunk &input, idx_t initial_idx = 0);

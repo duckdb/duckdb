@@ -20,7 +20,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		chunk->Initialize(prev_operator->GetTypes());
 		intermediate_chunks.push_back(move(chunk));
 		intermediate_states.push_back(current_operator->GetOperatorState(context.client));
-		if (pipeline.sink && current_operator->RequiresCache()) {
+		if (pipeline.sink && !pipeline.sink->SinkOrderMatters() && current_operator->RequiresCache()) {
 			auto &cache_types = current_operator->GetTypes();
 			bool can_cache = true;
 			for(auto &type : cache_types) {
@@ -50,6 +50,7 @@ void PipelineExecutor::Execute() {
 		}
 		auto result = ExecutePushInternal(source_chunk);
 		if (result == OperatorResultType::FINISHED) {
+			finished_processing = true;
 			break;
 		}
 	}
@@ -100,10 +101,13 @@ void PipelineExecutor::PushFinalize() {
 	}
 	finalized = true;
 	// flush all caches
-	for(idx_t i = 0; i < cached_chunks.size(); i++) {
-		if (cached_chunks[i] && cached_chunks[i]->size() > 0) {
-			ExecutePushInternal(*cached_chunks[i], i + 1);
-			cached_chunks[i].reset();
+	if (!finished_processing) {
+		D_ASSERT(in_process_operators.empty());
+		for(idx_t i = 0; i < cached_chunks.size(); i++) {
+			if (cached_chunks[i] && cached_chunks[i]->size() > 0) {
+				ExecutePushInternal(*cached_chunks[i], i + 1);
+				cached_chunks[i].reset();
+			}
 		}
 	}
 	D_ASSERT(local_sink_state);
@@ -191,9 +195,9 @@ void PipelineExecutor::PullFinalize() {
 	pipeline.executor.Flush(thread);
 }
 
-void PipelineExecutor::GoToSource(idx_t &current_idx) {
+void PipelineExecutor::GoToSource(idx_t &current_idx, idx_t initial_idx) {
 	// we go back to the first operator (the source)
-	current_idx = 0;
+	current_idx = initial_idx;
 	if (!in_process_operators.empty()) {
 		// ... UNLESS there is an in process operator
 		// if there is an in-process operator, we start executing at the latest one
@@ -201,20 +205,20 @@ void PipelineExecutor::GoToSource(idx_t &current_idx) {
 		current_idx = in_process_operators.top();
 		in_process_operators.pop();
 	}
+	D_ASSERT(current_idx >= initial_idx);
 }
 
-OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result, idx_t initial_index) {
+OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result, idx_t initial_idx) {
 	if (input.size() == 0) {
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	D_ASSERT(!pipeline.operators.empty());
 
 	idx_t current_idx;
-	GoToSource(current_idx);
-	if (current_idx == 0) {
-		current_idx = initial_index + 1;
+	GoToSource(current_idx, initial_idx);
+	if (current_idx == initial_idx) {
+		current_idx++;
 	}
-	D_ASSERT(current_idx > initial_index);
 	if (current_idx > pipeline.operators.size()) {
 		result.Reference(input);
 		return OperatorResultType::NEED_MORE_INPUT;
@@ -230,11 +234,11 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 		auto &current_chunk =
 		    current_intermediate >= intermediate_chunks.size() ? result : *intermediate_chunks[current_intermediate];
 		current_chunk.Reset();
-		if (current_idx == 0) {
+		if (current_idx == initial_idx) {
 			// we went back to the source: we need more input
 			return OperatorResultType::NEED_MORE_INPUT;
 		} else {
-			auto &prev_chunk = current_intermediate == initial_index + 1 ? input : *intermediate_chunks[current_intermediate - 1];
+			auto &prev_chunk = current_intermediate == initial_idx + 1 ? input : *intermediate_chunks[current_intermediate - 1];
 			auto operator_idx = current_idx - 1;
 			auto current_operator = pipeline.operators[operator_idx];
 			StartOperator(current_operator);
@@ -258,13 +262,13 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 
 		if (current_chunk.size() == 0) {
 			// no output from this operator!
-			if (current_idx == 0) {
+			if (current_idx == initial_idx) {
 				// if we got no output from the scan, we are done
 				break;
 			} else {
 				// if we got no output from an intermediate op
 				// we go back and try to pull data from the source again
-				GoToSource(current_idx);
+				GoToSource(current_idx, initial_idx);
 				continue;
 			}
 		} else {
