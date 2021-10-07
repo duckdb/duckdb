@@ -21,6 +21,10 @@ const vector<string> &CatalogSearchPath::Get() {
 	return paths;
 }
 
+const string &CatalogSearchPath::GetOrDefault(const string &name) {
+	return name == INVALID_SCHEMA ? GetDefault() : name;
+}
+
 const string &CatalogSearchPath::GetDefault() {
 	const auto &paths = Get();
 	D_ASSERT(paths.size() >= 2);
