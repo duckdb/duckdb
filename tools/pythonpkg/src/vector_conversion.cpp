@@ -167,7 +167,6 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 			auto source_idx = offset + row;
 			py::str str_val;
 			PyObject *val = src_ptr[source_idx];
-#if PY_MAJOR_VERSION >= 3
 			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
 				if (val == Py_None) {
 					out_mask.SetInvalid(row);
@@ -181,9 +180,6 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 				str_val = py::str(object_handle);
 				val = str_val.ptr();
 			}
-#endif
-
-#if PY_MAJOR_VERSION >= 3
 			// Python 3 string representation:
 			// https://github.com/python/cpython/blob/3a8fdb28794b2f19f6c8464378fb8b46bce1f5f4/Include/cpython/unicodeobject.h#L79
 			if (!PyUnicode_CheckExact(val)) {
@@ -227,22 +223,6 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 					throw std::runtime_error("Unsupported string type: no clue what this string is");
 				}
 			}
-#else
-			if (PyString_CheckExact(val)) {
-				auto dataptr = PyString_AS_STRING(val);
-				auto size = PyString_GET_SIZE(val);
-				// string object: directly pass the data
-				if (Utf8Proc::Analyze(dataptr, size) == UnicodeType::INVALID) {
-					throw std::runtime_error("String contains invalid UTF8! Please encode as UTF8 first");
-				}
-				tgt_ptr[row] = string_t(dataptr, uint32_t(size));
-			} else if (PyUnicode_CheckExact(val)) {
-				throw std::runtime_error("Unicode is only supported in Python 3 and up.");
-			} else {
-				out_mask.SetInvalid(row);
-				continue;
-			}
-#endif
 		}
 		break;
 	}
