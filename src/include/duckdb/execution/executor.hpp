@@ -37,6 +37,8 @@ public:
 	ClientContext &context;
 
 public:
+	static Executor &Get(ClientContext &context);
+
 	void Initialize(PhysicalOperator *physical_plan);
 	void BuildPipelines(PhysicalOperator *op, Pipeline *current);
 

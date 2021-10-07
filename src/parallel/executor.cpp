@@ -25,6 +25,10 @@ Executor::Executor(ClientContext &context) : context(context) {
 Executor::~Executor() {
 }
 
+Executor &Executor::Get(ClientContext &context) {
+	return context.executor;
+}
+
 void Executor::AddEvent(shared_ptr<Event> event) {
 	lock_guard<mutex> elock(executor_lock);
 	events.push_back(move(event));

@@ -78,8 +78,6 @@ private:
 	void GoToSource(idx_t &current_idx);
 	void FetchFromSource(DataChunk &result);
 
-	void RunFunctionInTryCatch(const std::function<void(void)> &fun);
-
 	OperatorResultType ExecutePushInternal(DataChunk &input);
 	//! Pushes a chunk through the pipeline and returns a single result chunk
 	//! Returns whether or not a new input chunk is needed, or whether or not we are finished

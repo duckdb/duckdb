@@ -103,13 +103,13 @@ void PhysicalOrder::Combine(ExecutionContext &context, GlobalSinkState &gstate_p
 	gstate.global_sort_state.AddLocalState(lstate.local_sort_state);
 }
 
-class PhysicalOrderMergeTask : public Task {
+class PhysicalOrderMergeTask : public ExecutorTask {
 public:
 	PhysicalOrderMergeTask(shared_ptr<Event> event_p, ClientContext &context, OrderGlobalState &state)
-	    : event(move(event_p)), context(context), state(state) {
+	    : ExecutorTask(context), event(move(event_p)), context(context), state(state) {
 	}
 
-	void Execute() override {
+	void ExecuteTask() override {
 		// Initialize merge sorted and iterate until done
 		auto &global_sort_state = state.global_sort_state;
 		MergeSorter merge_sorter(global_sort_state, BufferManager::GetBufferManager(context));

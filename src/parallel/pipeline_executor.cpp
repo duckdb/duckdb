@@ -6,60 +6,41 @@ namespace duckdb {
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p)
     : pipeline(pipeline_p), thread(context_p), context(context_p, thread) {
 	D_ASSERT(pipeline.source_state);
-	RunFunctionInTryCatch([&]() {
-		local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
-		if (pipeline.sink) {
-			local_sink_state = pipeline.sink->GetLocalSinkState(context);
-		}
-		intermediate_chunks.reserve(pipeline.operators.size());
-		intermediate_states.reserve(pipeline.operators.size());
-		for (idx_t i = 0; i < pipeline.operators.size(); i++) {
-			auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
-			auto chunk = make_unique<DataChunk>();
-			chunk->Initialize(prev_operator->GetTypes());
-			intermediate_chunks.push_back(move(chunk));
-			intermediate_states.push_back(pipeline.operators[i]->GetOperatorState(context.client));
-		}
-		InitializeChunk(final_chunk);
-	});
-}
-
-void PipelineExecutor::RunFunctionInTryCatch(const std::function<void(void)> &fun) {
-	auto &executor = pipeline.executor;
-	try {
-		fun();
-	} catch (Exception &ex) {
-		executor.PushError(ex.type, ex.what());
-	} catch (std::exception &ex) {
-		executor.PushError(ExceptionType::UNKNOWN_TYPE, ex.what());
-	} catch (...) { // LCOV_EXCL_START
-		executor.PushError(ExceptionType::UNKNOWN_TYPE, "Unknown exception in Finalize!");
-	} // LCOV_EXCL_STOP
+	local_source_state = pipeline.source->GetLocalSourceState(context, *pipeline.source_state);
+	if (pipeline.sink) {
+		local_sink_state = pipeline.sink->GetLocalSinkState(context);
+	}
+	intermediate_chunks.reserve(pipeline.operators.size());
+	intermediate_states.reserve(pipeline.operators.size());
+	for (idx_t i = 0; i < pipeline.operators.size(); i++) {
+		auto prev_operator = i == 0 ? pipeline.source : pipeline.operators[i - 1];
+		auto chunk = make_unique<DataChunk>();
+		chunk->Initialize(prev_operator->GetTypes());
+		intermediate_chunks.push_back(move(chunk));
+		intermediate_states.push_back(pipeline.operators[i]->GetOperatorState(context.client));
+	}
+	InitializeChunk(final_chunk);
 }
 
 void PipelineExecutor::Execute() {
-	RunFunctionInTryCatch([&]() {
-		D_ASSERT(pipeline.sink);
-		auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
-		while (true) {
-			source_chunk.Reset();
-			FetchFromSource(source_chunk);
-			if (source_chunk.size() == 0) {
-				break;
-			}
-			auto result = ExecutePushInternal(source_chunk);
-			if (result == OperatorResultType::FINISHED) {
-				break;
-			}
+	D_ASSERT(pipeline.sink);
+	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
+	while (true) {
+		source_chunk.Reset();
+		FetchFromSource(source_chunk);
+		if (source_chunk.size() == 0) {
+			break;
 		}
-		PushFinalize();
-	});
+		auto result = ExecutePushInternal(source_chunk);
+		if (result == OperatorResultType::FINISHED) {
+			break;
+		}
+	}
+	PushFinalize();
 }
 
 OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) {
-	auto result = OperatorResultType::FINISHED;
-	RunFunctionInTryCatch([&]() { result = ExecutePushInternal(input); });
-	return result;
+	return ExecutePushInternal(input);
 }
 
 OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input) {
