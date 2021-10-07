@@ -96,6 +96,16 @@ SELECT MAIN.CURRENT_SETTING('schema');
 ----
 test
 
+query I
+SELECT current_schema();
+----
+test
+
+query I
+SELECT current_schemas(false);
+----
+[temp, test, main, pg_catalog]
+
 # Case insensitivity
 
 statement ok
