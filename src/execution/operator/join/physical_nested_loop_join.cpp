@@ -130,6 +130,7 @@ public:
 	NestedLoopJoinGlobalState() : has_null(false) {
 	}
 
+	mutex nj_lock;
 	//! Materialized data of the RHS
 	ChunkCollection right_data;
 	//! Materialized join condition of the RHS
@@ -157,6 +158,7 @@ SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalSin
 	}
 
 	// append the data and the
+	lock_guard<mutex> nj_guard(gstate.nj_lock);
 	gstate.right_data.Append(input);
 	gstate.right_chunks.Append(nlj_state.right_condition);
 	return SinkResultType::NEED_MORE_INPUT;

@@ -50,6 +50,7 @@ public:
 	MergeJoinGlobalState() : has_null(false), right_outer_position(0) {
 	}
 
+	mutex mj_lock;
 	//! The materialized data of the RHS
 	ChunkCollection right_chunks;
 	//! The materialized join keys of the RHS
@@ -87,6 +88,7 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 		mj_state.rhs_executor.ExecuteExpression(k, mj_state.join_keys.data[k]);
 	}
 	// append the join keys and the chunk to the chunk collection
+	lock_guard<mutex> mj_guard(gstate.mj_lock);
 	gstate.right_chunks.Append(input);
 	gstate.right_conditions.Append(mj_state.join_keys);
 	return SinkResultType::NEED_MORE_INPUT;

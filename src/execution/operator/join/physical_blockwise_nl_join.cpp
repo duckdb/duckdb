@@ -29,6 +29,7 @@ public:
 
 class BlockwiseNLJoinGlobalState : public GlobalSinkState {
 public:
+	mutex lock;
 	ChunkCollection right_chunks;
 	//! Whether or not a tuple on the RHS has found a match, only used for FULL OUTER joins
 	unique_ptr<bool[]> rhs_found_match;
@@ -45,6 +46,7 @@ unique_ptr<LocalSinkState> PhysicalBlockwiseNLJoin::GetLocalSinkState(ExecutionC
 SinkResultType PhysicalBlockwiseNLJoin::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
                                              DataChunk &input) const {
 	auto &gstate = (BlockwiseNLJoinGlobalState &)state;
+	lock_guard<mutex> nl_lock(gstate.lock);
 	gstate.right_chunks.Append(input);
 	return SinkResultType::NEED_MORE_INPUT;
 }
