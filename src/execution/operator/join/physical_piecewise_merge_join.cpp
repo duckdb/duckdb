@@ -376,10 +376,10 @@ static void TemplatedQuicksortRefine(T *data, const SelectionVector &sel, idx_t 
 	sel_t part = i - 1;
 
 	if (part > 0) {
-		pivots.push_back(QuickSortPivot(left, part - 1));
+		pivots.emplace_back(left, part - 1);
 	}
 	if (part + 1 < right) {
-		pivots.push_back(QuickSortPivot(part + 1, right));
+		pivots.emplace_back(part + 1, right);
 	}
 }
 
@@ -391,8 +391,8 @@ void TemplatedQuicksort(T *__restrict data, const SelectionVector &sel, const Se
 		return;
 	}
 	vector<QuickSortPivot> pivots;
-	pivots.push_back(QuickSortPivot(0, part));
-	pivots.push_back(QuickSortPivot(part + 1, count - 1));
+	pivots.emplace_back(0, part);
+	pivots.emplace_back(part + 1, count - 1);
 	for (idx_t i = 0; i < pivots.size(); i++) {
 		auto pivot = pivots[i];
 		TemplatedQuicksortRefine<T, OP>(data, sel, count, result, pivot.left, pivot.right, pivots);
