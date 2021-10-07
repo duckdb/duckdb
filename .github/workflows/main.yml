@@ -1073,7 +1073,7 @@ jobs:
     needs: linux-debug
 
     env:
-      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-* cp310-*'
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
       CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
