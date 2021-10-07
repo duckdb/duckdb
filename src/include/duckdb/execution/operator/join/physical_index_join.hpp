@@ -58,6 +58,9 @@ public:
 		return true;
 	}
 
+	bool RequiresCache() const override {
+		return true;
+	}
 private:
 	void GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const;
 	//! Fills result chunk
