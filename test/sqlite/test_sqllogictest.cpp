@@ -42,6 +42,7 @@
 #include "extension_helper.hpp"
 
 #include "test_helpers.hpp"
+#include "test_helper_extension.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -1545,6 +1546,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// vector size is too low for this test: skip it
 					return;
 				}
+			} else if (param == "test_helper") {
+				db->LoadExtension<TestHelperExtension>();
 			} else {
 				auto result = ExtensionHelper::LoadExtension(*db, param);
 				if (result == ExtensionLoadResult::LOADED_EXTENSION) {
