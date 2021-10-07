@@ -21,6 +21,11 @@ struct PandasScanFunctionData : public TableFunctionData {
 	atomic<idx_t> lines_read;
 	vector<PandasColumnBindData> pandas_bind_data;
 	vector<LogicalType> sql_types;
+
+	~PandasScanFunctionData() override {
+		py::gil_scoped_acquire acquire;
+		pandas_bind_data.clear();
+	}
 };
 
 struct PandasScanState : public FunctionOperatorData {
