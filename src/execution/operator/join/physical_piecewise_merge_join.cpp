@@ -335,7 +335,8 @@ static sel_t TemplatedQuicksortInitial(T *data, const SelectionVector &sel, cons
 }
 
 struct QuickSortPivot {
-	QuickSortPivot(sel_t left_p, sel_t right_p) : left(left_p), right(right_p) {}
+	QuickSortPivot(sel_t left_p, sel_t right_p) : left(left_p), right(right_p) {
+	}
 
 	sel_t left;
 	sel_t right;
@@ -390,7 +391,7 @@ void TemplatedQuicksort(T *__restrict data, const SelectionVector &sel, const Se
 	vector<QuickSortPivot> pivots;
 	pivots.push_back(QuickSortPivot(0, part));
 	pivots.push_back(QuickSortPivot(part + 1, count - 1));
-	for(idx_t i = 0; i < pivots.size(); i++) {
+	for (idx_t i = 0; i < pivots.size(); i++) {
 		auto pivot = pivots[i];
 		TemplatedQuicksortRefine<T, OP>(data, sel, count, result, pivot.left, pivot.right, pivots);
 	}

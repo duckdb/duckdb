@@ -31,6 +31,7 @@ public:
 	virtual ~ExecutorTask();
 
 	Executor &executor;
+
 public:
 	virtual void ExecuteTask() = 0;
 	void Execute() override;

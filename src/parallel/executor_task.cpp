@@ -3,13 +3,10 @@
 
 namespace duckdb {
 
-
-ExecutorTask::ExecutorTask(Executor &executor_p) :
-	executor(executor_p) {
+ExecutorTask::ExecutorTask(Executor &executor_p) : executor(executor_p) {
 }
 
-ExecutorTask::ExecutorTask(ClientContext &context) :
-	ExecutorTask(Executor::Get(context)) {
+ExecutorTask::ExecutorTask(ClientContext &context) : ExecutorTask(Executor::Get(context)) {
 }
 
 ExecutorTask::~ExecutorTask() {
@@ -27,4 +24,4 @@ void ExecutorTask::Execute() {
 	} // LCOV_EXCL_STOP
 }
 
-}
+} // namespace duckdb

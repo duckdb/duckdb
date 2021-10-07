@@ -270,7 +270,8 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 // folds them into the global ht finally.
 class PhysicalHashAggregateFinalizeTask : public ExecutorTask {
 public:
-	PhysicalHashAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, HashAggregateGlobalState &state_p, idx_t radix_p)
+	PhysicalHashAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, HashAggregateGlobalState &state_p,
+	                                  idx_t radix_p)
 	    : ExecutorTask(executor), event(move(event_p)), state(state_p), radix(radix_p) {
 	}
 	static void FinalizeHT(HashAggregateGlobalState &gstate, idx_t radix) {
@@ -311,7 +312,8 @@ public:
 		for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
 			D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
 			D_ASSERT(gstate.finalized_hts[r]);
-			tasks.push_back(make_unique<PhysicalHashAggregateFinalizeTask>(pipeline->executor, shared_from_this(), gstate, r));
+			tasks.push_back(
+			    make_unique<PhysicalHashAggregateFinalizeTask>(pipeline->executor, shared_from_this(), gstate, r));
 		}
 		SetTasks(move(tasks));
 	}
