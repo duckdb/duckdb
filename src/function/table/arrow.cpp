@@ -1109,9 +1109,7 @@ ArrowTableFunction::ArrowScanParallelInit(ClientContext &context, const Function
 	auto result = make_unique<ArrowScanState>(move(current_chunk));
 	result->column_ids = column_ids;
 	result->filters = filters;
-	if (!ArrowScanParallelStateNext(context, bind_data_p, result.get(), state)) {
-		return nullptr;
-	}
+	ArrowScanParallelStateNext(context, bind_data_p, result.get(), state);
 	return move(result);
 }
 
