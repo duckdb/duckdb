@@ -147,6 +147,7 @@ SinkResultType PhysicalNestedLoopJoin::Sink(ExecutionContext &context, GlobalSin
 	auto &nlj_state = (NestedLoopJoinLocalState &)lstate;
 
 	// resolve the join expression of the right side
+	nlj_state.right_condition.Reset();
 	nlj_state.rhs_executor.Execute(input, nlj_state.right_condition);
 
 	// if we have not seen any NULL values yet, and we are performing a MARK join, check if there are NULL values in
