@@ -104,6 +104,9 @@ void NumericStatistics::Merge(const BaseStatistics &other_p) {
 }
 
 FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
+	if (constant.is_null) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
 	if (min.is_null || max.is_null) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
