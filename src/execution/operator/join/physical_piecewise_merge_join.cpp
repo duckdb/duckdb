@@ -334,9 +334,16 @@ static sel_t TemplatedQuicksortInitial(T *data, const SelectionVector &sel, cons
 	return low;
 }
 
+struct QuickSortPivot {
+	QuickSortPivot(sel_t left_p, sel_t right_p) : left(left_p), right(right_p) {}
+
+	sel_t left;
+	sel_t right;
+};
+
 template <class T, class OP>
 static void TemplatedQuicksortRefine(T *data, const SelectionVector &sel, idx_t count, SelectionVector &result,
-                                     sel_t left, sel_t right) {
+                                     sel_t left, sel_t right, vector<QuickSortPivot> &pivots) {
 	if (left >= right) {
 		return;
 	}
@@ -366,9 +373,11 @@ static void TemplatedQuicksortRefine(T *data, const SelectionVector &sel, idx_t 
 	sel_t part = i - 1;
 
 	if (part > 0) {
-		TemplatedQuicksortRefine<T, OP>(data, sel, count, result, left, part - 1);
+		pivots.push_back(QuickSortPivot(left, part - 1));
 	}
-	TemplatedQuicksortRefine<T, OP>(data, sel, count, result, part + 1, right);
+	if (part + 1 < right) {
+		pivots.push_back(QuickSortPivot(part + 1, right));
+	}
 }
 
 template <class T, class OP>
@@ -378,8 +387,13 @@ void TemplatedQuicksort(T *__restrict data, const SelectionVector &sel, const Se
 	if (part > count) {
 		return;
 	}
-	TemplatedQuicksortRefine<T, OP>(data, sel, count, result, 0, part);
-	TemplatedQuicksortRefine<T, OP>(data, sel, count, result, part + 1, count - 1);
+	vector<QuickSortPivot> pivots;
+	pivots.push_back(QuickSortPivot(0, part));
+	pivots.push_back(QuickSortPivot(part + 1, count - 1));
+	for(idx_t i = 0; i < pivots.size(); i++) {
+		auto pivot = pivots[i];
+		TemplatedQuicksortRefine<T, OP>(data, sel, count, result, pivot.left, pivot.right, pivots);
+	}
 }
 
 template <class T>
