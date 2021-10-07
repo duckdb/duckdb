@@ -575,7 +575,15 @@ struct Command {
 	unique_ptr<MaterializedQueryResult> ExecuteQuery(Connection *connection, string file_name, int query_line,
 	                                                 string sql_query) {
 		query_break(query_line);
-		return connection->Query(sql_query);
+		auto result = connection->Query(sql_query);
+
+		if (!result->success) {
+			TestHelperExtension::SetLastError(result->error);
+		} else {
+			TestHelperExtension::ClearLastError();
+		}
+
+		return result;
 	}
 
 	virtual void ExecuteInternal() = 0;

@@ -15,6 +15,13 @@ namespace duckdb {
 class TestHelperExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
+
+	//! Report the last error message.
+	static void SetLastError(const string &error);
+	//! Clear the last error message previously reported.
+	static void ClearLastError();
+
+	static unique_ptr<string> last_error;
 };
 
 } // namespace duckdb

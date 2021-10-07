@@ -11,14 +11,36 @@ void TestHelperHello(DataChunk &args, ExpressionState &state, Vector &result) {
 	result.Reference(Value("Hello!"));
 }
 
+void TestHelperLastError(DataChunk &args, ExpressionState &state, Vector &result) {
+	if (!TestHelperExtension::last_error) {
+		result.Reference(Value(LogicalType::VARCHAR));
+		return;
+	}
+
+	result.Reference(Value(*TestHelperExtension::last_error));
+}
+
+unique_ptr<string> TestHelperExtension::last_error = nullptr;
+
 void TestHelperExtension::Load(DuckDB &db) {
 	CreateScalarFunctionInfo hello_info(ScalarFunction("test_helper_hello", {}, LogicalType::VARCHAR, TestHelperHello));
+	CreateScalarFunctionInfo last_error_info(
+	    ScalarFunction("test_helper_last_error", {}, LogicalType::VARCHAR, TestHelperLastError));
 
 	Connection conn(db);
 	conn.BeginTransaction();
 	auto &catalog = Catalog::GetCatalog(*conn.context);
 	catalog.CreateFunction(*conn.context, &hello_info);
+	catalog.CreateFunction(*conn.context, &last_error_info);
 	conn.Commit();
+}
+
+void TestHelperExtension::SetLastError(const string &error) {
+	last_error = make_unique<string>(error);
+}
+
+void TestHelperExtension::ClearLastError() {
+	last_error.reset();
 }
 
 } // namespace duckdb
