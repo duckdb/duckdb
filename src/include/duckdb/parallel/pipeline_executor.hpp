@@ -89,7 +89,7 @@ private:
 	OperatorResultType Execute(DataChunk &input, DataChunk &result, idx_t initial_index = 0);
 
 	static bool CanCacheType(const LogicalType &type);
-	void CacheChunk(DataChunk &prev_chunk, DataChunk &input, idx_t operator_idx);
+	void CacheChunk(DataChunk &input, idx_t operator_idx);
 };
 
 } // namespace duckdb

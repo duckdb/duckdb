@@ -165,10 +165,10 @@ bool PipelineExecutor::CanCacheType(const LogicalType &type) {
 	}
 }
 
-void PipelineExecutor::CacheChunk(DataChunk &prev_chunk, DataChunk &current_chunk, idx_t operator_idx) {
+void PipelineExecutor::CacheChunk(DataChunk &current_chunk, idx_t operator_idx) {
 #if STANDARD_VECTOR_SIZE >= 128
 	if (cached_chunks[operator_idx]) {
-		if (prev_chunk.size() >= CACHE_THRESHOLD && current_chunk.size() < CACHE_THRESHOLD) {
+		if (current_chunk.size() < CACHE_THRESHOLD) {
 			// we have filtered out a significant amount of tuples
 			// add this chunk to the cache and continue
 			auto &chunk_cache = *cached_chunks[operator_idx];
@@ -285,9 +285,9 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 				D_ASSERT(current_chunk.size() == 0);
 				return OperatorResultType::FINISHED;
 			}
-			CacheChunk(prev_chunk, current_chunk, operator_idx);
+			current_chunk.Verify();
+			CacheChunk(current_chunk, operator_idx);
 		}
-		current_chunk.Verify();
 
 		if (current_chunk.size() == 0) {
 			// no output from this operator!
