@@ -1317,14 +1317,28 @@ public class TestDuckDBJDBC {
 		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
 
-		String test_str = "asdxxxxxxxxxxxxxxxxxxf";
-		
-		ResultSet rs = stmt.executeQuery("SELECT '"+test_str+"'::BLOB a");
-		assertTrue(rs.next());
-		Blob b = rs.getBlob(1);
+		String test_str1 = "asdf";
+		String test_str2 = "asdxxxxxxxxxxxxxxf";
 
-		String text = new String(b.getBinaryStream().readAllBytes(), StandardCharsets.US_ASCII);
-		assertTrue(test_str.equals(text));
+		ResultSet rs = stmt
+				.executeQuery("SELECT '" + test_str1 + "'::BLOB a, NULL::BLOB b, '" + test_str2 + "'::BLOB c");
+		assertTrue(rs.next());
+
+		String text1 = new String(rs.getBlob(1).getBinaryStream().readAllBytes(), StandardCharsets.US_ASCII);
+		String text2 = new String(rs.getBlob("a").getBinaryStream().readAllBytes(), StandardCharsets.US_ASCII);
+
+		assertTrue(test_str1.equals(text1));
+		assertTrue(test_str1.equals(text2));
+
+		String text3 = new String(rs.getBlob("c").getBinaryStream().readAllBytes(), StandardCharsets.US_ASCII);
+		assertTrue(test_str2.equals(text3));
+
+		rs.getBlob("a");
+		assertFalse(rs.wasNull());
+
+		rs.getBlob("b");
+		assertTrue(rs.wasNull());
+
 		rs.close();
 		stmt.close();
 		conn.close();
@@ -1338,7 +1352,6 @@ public class TestDuckDBJDBC {
 				m.invoke(null);
 			}
 		}
-		//test_blob_bug1090();
 		System.out.println("OK");
 	}
 }
