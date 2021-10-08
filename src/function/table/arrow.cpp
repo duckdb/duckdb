@@ -216,13 +216,13 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	return move(res);
 }
 
-unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData &function, ArrowScanState &scan_state,
+unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData &function, const vector<column_t> &column_ids,
                                                      TableFilterCollection *filters) {
 	//! Generate Projection Pushdown Vector
 	pair<unordered_map<idx_t, string>, vector<string>> project_columns;
-	D_ASSERT(!scan_state.column_ids.empty());
-	for (idx_t idx = 0; idx < scan_state.column_ids.size(); idx++) {
-		auto col_idx = scan_state.column_ids[idx];
+	D_ASSERT(!column_ids.empty());
+	for (idx_t idx = 0; idx < column_ids.size(); idx++) {
+		auto col_idx = column_ids[idx];
 		if (col_idx != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &schema = *function.schema_root.arrow_schema.children[col_idx];
 			project_columns.first[idx] = schema.name;
@@ -240,7 +240,7 @@ unique_ptr<FunctionOperatorData> ArrowTableFunction::ArrowScanInit(ClientContext
 	auto result = make_unique<ArrowScanState>(move(current_chunk));
 	result->column_ids = column_ids;
 	auto &data = (const ArrowScanFunctionData &)*bind_data;
-	result->stream = ProduceArrowScan(data, *result, filters);
+	result->stream = ProduceArrowScan(data, column_ids, filters);
 	return move(result);
 }
 
@@ -980,6 +980,7 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanS
 	}
 	vector.Slice(*dict_vectors[col_idx], sel, size);
 }
+
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
                                        std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
                                        DataChunk &output, idx_t start) {
@@ -1055,23 +1056,22 @@ idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const Func
 }
 
 unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientContext &context,
-                                                                         const FunctionData *bind_data_p) {
-	return make_unique<ParallelArrowScanState>();
+                                                                         const FunctionData *bind_data_p,
+                                                                           const vector<column_t> &column_ids,
+                                                                           TableFilterCollection *filters) {
+	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
+	auto result = make_unique<ParallelArrowScanState>();
+	result->stream = ProduceArrowScan(bind_data, column_ids, filters);
+	return move(result);
 }
 
 bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                                     FunctionOperatorData *operator_state,
                                                     ParallelState *parallel_state_p) {
-	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	auto &state = (ArrowScanState &)*operator_state;
 	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
 
 	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
-	if (!parallel_state.stream) {
-		//! Generate a Stream
-		parallel_state.stream = ProduceArrowScan(bind_data, state, state.filters);
-	}
-
 	state.chunk_offset = 0;
 
 	auto current_chunk = parallel_state.stream->GetNextChunk();

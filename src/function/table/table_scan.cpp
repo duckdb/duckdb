@@ -84,7 +84,9 @@ idx_t TableScanMaxThreads(ClientContext &context, const FunctionData *bind_data_
 	return bind_data.table->storage->MaxThreads(context);
 }
 
-unique_ptr<ParallelState> TableScanInitParallelState(ClientContext &context, const FunctionData *bind_data_p) {
+unique_ptr<ParallelState> TableScanInitParallelState(ClientContext &context, const FunctionData *bind_data_p,
+                                                                           const vector<column_t> &column_ids,
+                                                                           TableFilterCollection *filters) {
 	D_ASSERT(bind_data_p);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto result = make_unique<ParallelTableFunctionScanState>();

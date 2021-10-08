@@ -33,7 +33,8 @@ public:
 			return;
 		}
 		if (op.function.init_parallel_state) {
-			parallel_state = op.function.init_parallel_state(context, op.bind_data.get());
+			TableFilterCollection collection(op.table_filters.get());
+			parallel_state = op.function.init_parallel_state(context, op.bind_data.get(), op.column_ids, &collection);
 		}
 	}
 
