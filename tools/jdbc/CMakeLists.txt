@@ -7,7 +7,6 @@ if(NOT JNI_FOUND OR NOT Java_FOUND)
   message(FATAL_ERROR No compatible Java/JNI found)
 endif()
 
-
 include(UseJava)
 project(DuckDBJDummy NONE)
 
