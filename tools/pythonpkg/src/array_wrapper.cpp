@@ -108,7 +108,6 @@ struct TimeConvert {
 };
 
 struct StringConvert {
-#if PY_MAJOR_VERSION >= 3
 	template <class T>
 	static void ConvertUnicodeValueTemplated(T *result, int32_t *codepoints, idx_t codepoint_count, const char *data,
 	                                         idx_t ascii_count) {
@@ -198,13 +197,6 @@ struct StringConvert {
 		memcpy(target_data, data, len);
 		return result;
 	}
-#else
-	template <class DUCKDB_T, class NUMPY_T>
-	static PyObject *ConvertValue(string_t val) {
-		return py::str(val.GetString()).release().ptr();
-	}
-#endif
-
 	template <class NUMPY_T>
 	static NUMPY_T NullValue() {
 		return nullptr;
