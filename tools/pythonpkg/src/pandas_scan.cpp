@@ -84,7 +84,9 @@ idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const Fun
 }
 
 unique_ptr<ParallelState> PandasScanFunction::PandasScanInitParallelState(ClientContext &context,
-                                                                          const FunctionData *bind_data_p) {
+                                                                          const FunctionData *bind_data_p,
+                                                                            const vector<column_t> &column_ids,
+                                                                            TableFilterCollection *filters) {
 	return make_unique<ParallelPandasScanState>();
 }
 
@@ -141,6 +143,9 @@ void PandasScanFunction::PandasScanFuncParallel(ClientContext &context, const Fu
 //! hence this needs to be GIL-safe, i.e. no methods that create Python objects are allowed
 void PandasScanFunction::PandasScanFunc(ClientContext &context, const FunctionData *bind_data,
                                         FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	if (!operator_state) {
+		return;
+	}
 	auto &data = (PandasScanFunctionData &)*bind_data;
 	auto &state = (PandasScanState &)*operator_state;
 
