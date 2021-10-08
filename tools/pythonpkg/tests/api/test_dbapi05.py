@@ -1,11 +1,7 @@
 #simple DB API testcase
 
-import sys
-
 class TestSimpleDBAPI(object):
     def test_prepare(self, duckdb_cursor):
-        if sys.version_info.major < 3:
-            return
         result = duckdb_cursor.execute('SELECT CAST(? AS INTEGER), CAST(? AS INTEGER)', ['42', '84']).fetchall()
         assert result == [(42, 84, )], "Incorrect result returned"
 
