@@ -1,7 +1,6 @@
 import duckdb
 import pandas as pd
 import numpy
-import sys
 
 def round_trip(data,pandas_type):
     df_in = pd.DataFrame({
@@ -11,7 +10,7 @@ def round_trip(data,pandas_type):
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
     print (df_out)
     print (df_in)
-    assert numpy.all(df_out['object'] == data)
+    assert df_out.equals(df_in)
 
 class TestPandasTypes(object):
     def test_pandas_unsigned(self, duckdb_cursor):
@@ -52,10 +51,11 @@ class TestPandasTypes(object):
         assert  pd.isnull(df_out['object'][1])
 
     def test_pandas_encoded_utf8(self, duckdb_cursor):
-        if sys.version_info.major < 3:
-            return
-            data = u'\u00c3'            # Unicode data
-            data = [data.encode('utf8')]
-            round_trip(data,'string')
+        data = u'\u00c3'            # Unicode data
+        data = [data.encode('utf8')]
+        expected_result = data[0]
+        df_in = pd.DataFrame({'object': pd.Series(data, dtype='object')})
+        result = duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchone()[0]
+        assert result == str(expected_result)
 
 
