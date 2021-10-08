@@ -321,8 +321,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::DECIMAL: {
 			Vector double_vec(LogicalType::DOUBLE);
 			VectorOperations::Cast(vec, double_vec, row_count);
-			vec.SetLogicalType(LogicalType::DOUBLE);
-			vec.Reference(double_vec);
+			vec.ReferenceAndSetType(double_vec);
 			// fall through on purpose
 		}
 		case LogicalTypeId::DOUBLE:
@@ -334,8 +333,7 @@ JNIEXPORT jobjectArray JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1fetch(
 		case LogicalTypeId::INTERVAL: {
 			Vector string_vec(LogicalType::VARCHAR);
 			VectorOperations::Cast(vec, string_vec, row_count);
-			vec.SetLogicalType(LogicalType::VARCHAR);
-			vec.Reference(string_vec);
+			vec.ReferenceAndSetType(string_vec);
 			// fall through on purpose
 		}
 		case LogicalTypeId::VARCHAR:

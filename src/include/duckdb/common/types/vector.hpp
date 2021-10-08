@@ -84,6 +84,9 @@ public:
 	//! Without changing the type of this vector
 	void Reinterpret(Vector &other);
 
+	//! Causes this vector to reference the data held by the other vector, changes the type if required.
+	void ReferenceAndSetType(Vector &other);
+
 	//! Resets a vector from a vector cache.
 	//! This turns the vector back into an empty FlatVector with STANDARD_VECTOR_SIZE entries.
 	//! The VectorCache is used so this can be done without requiring any allocations.
@@ -163,7 +166,6 @@ public:
 
 	// Setters
 	DUCKDB_API void SetVectorType(VectorType vector_type);
-	DUCKDB_API void SetLogicalType(const LogicalType &logical_type);
 
 protected:
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated

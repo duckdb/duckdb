@@ -95,6 +95,11 @@ void Vector::Reference(Vector &other) {
 	Reinterpret(other);
 }
 
+void Vector::ReferenceAndSetType(Vector &other) {
+	type = other.GetType();
+	Reference(other);
+}
+
 void Vector::Reinterpret(Vector &other) {
 	vector_type = other.vector_type;
 	AssignSharedPointer(buffer, other.buffer);
@@ -921,10 +926,6 @@ void Vector::SetVectorType(VectorType vector_type_p) {
 			entry->SetVectorType(vector_type);
 		}
 	}
-}
-
-void Vector::SetLogicalType(const LogicalType &logical_type_p) {
-	this->type = logical_type_p;
 }
 
 void Vector::UTFVerify(const SelectionVector &sel, idx_t count) {
