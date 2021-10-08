@@ -3,37 +3,6 @@
 
 namespace duckdb {
 
-class ScopedOperatorProfiler {
-public:
-	ScopedOperatorProfiler(ExecutionContext &context_p, PhysicalOperator *op_p, DataChunk *chunk_p = nullptr)
-	    : context(context_p), op(op_p), chunk(chunk_p) {
-		StartOperator(op);
-	}
-	~ScopedOperatorProfiler() {
-		EndOperator(op, chunk);
-	}
-
-	void StartOperator(PhysicalOperator *op) {
-		if (context.client.interrupted) {
-			throw InterruptException();
-		}
-		context.thread.profiler.StartOperator(op);
-	}
-
-	void EndOperator(PhysicalOperator *op, DataChunk *chunk) {
-		context.thread.profiler.EndOperator(chunk);
-
-		if (chunk) {
-			chunk->Verify();
-		}
-	}
-
-private:
-	ExecutionContext &context;
-	PhysicalOperator *op;
-	DataChunk *chunk;
-};
-
 PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_p)
     : pipeline(pipeline_p), thread(context_p), context(context_p, thread) {
 	D_ASSERT(pipeline.source_state);
@@ -110,10 +79,11 @@ OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t
 		}
 		auto &sink_chunk = pipeline.operators.empty() ? input : final_chunk;
 		if (sink_chunk.size() > 0) {
-			ScopedOperatorProfiler prof(context, pipeline.sink);
+			StartOperator(pipeline.sink);
 			D_ASSERT(pipeline.sink);
 			D_ASSERT(pipeline.sink->sink_state);
 			auto sink_result = pipeline.sink->Sink(context, *pipeline.sink->sink_state, *local_sink_state, sink_chunk);
+			EndOperator(pipeline.sink, nullptr);
 			if (sink_result == SinkResultType::FINISHED) {
 				return OperatorResultType::FINISHED;
 			}
@@ -272,11 +242,12 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 			auto operator_idx = current_idx - 1;
 			auto current_operator = pipeline.operators[operator_idx];
 
-			ScopedOperatorProfiler prof(context, current_operator, &current_chunk);
 			// if current_idx > source_idx, we pass the previous' operators output through the Execute of the current
 			// operator
+			StartOperator(current_operator);
 			auto result = current_operator->Execute(context, prev_chunk, current_chunk,
 			                                        *intermediate_states[current_intermediate - 1]);
+			EndOperator(current_operator, &current_chunk);
 			if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
 				// more data remains in this operator
 				// push in-process marker
@@ -314,13 +285,29 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 }
 
 void PipelineExecutor::FetchFromSource(DataChunk &result) {
-	ScopedOperatorProfiler prof(context, pipeline.source, &result);
+	StartOperator(pipeline.source);
 	pipeline.source->GetData(context, result, *pipeline.source_state, *local_source_state);
+	EndOperator(pipeline.source, &result);
 }
 
 void PipelineExecutor::InitializeChunk(DataChunk &chunk) {
 	PhysicalOperator *last_op = pipeline.operators.empty() ? pipeline.source : pipeline.operators.back();
 	chunk.Initialize(last_op->GetTypes());
+}
+
+void PipelineExecutor::StartOperator(PhysicalOperator *op) {
+	if (context.client.interrupted) {
+		throw InterruptException();
+	}
+	context.thread.profiler.StartOperator(op);
+}
+
+void PipelineExecutor::EndOperator(PhysicalOperator *op, DataChunk *chunk) {
+	context.thread.profiler.EndOperator(chunk);
+
+	if (chunk) {
+		chunk->Verify();
+	}
 }
 
 } // namespace duckdb
