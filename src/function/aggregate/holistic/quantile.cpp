@@ -19,9 +19,13 @@ hugeint_t operator*(const hugeint_t &h, const double &d) {
 
 using FrameBounds = std::pair<idx_t, idx_t>;
 
+template <typename SAVE_TYPE>
 struct QuantileState {
-	data_ptr_t v;
-	idx_t len;
+	// Regular aggregation
+	std::vector<SAVE_TYPE> v;
+
+	// Windowed Aggregation
+	std::vector<idx_t> w;
 	idx_t pos;
 
 	// List temporaries
@@ -29,26 +33,17 @@ struct QuantileState {
 	std::vector<idx_t> lower;
 	std::vector<idx_t> upper;
 
-	QuantileState() : v(nullptr), len(0), pos(0) {
+	QuantileState() : pos(0) {
 	}
 
 	~QuantileState() {
-		if (v) {
-			free(v);
-			v = nullptr;
-		}
 	}
 
-	template <typename T>
-	void Resize(idx_t new_len) {
-		if (new_len <= len) {
-			return;
+	inline void SetPos(size_t pos_p) {
+		pos = pos_p;
+		if (pos >= w.size()) {
+			w.resize(pos);
 		}
-		v = (data_ptr_t)realloc(v, new_len * sizeof(T));
-		if (!v) {
-			throw InternalException("Memory allocation failure");
-		}
-		len = new_len;
 	}
 };
 
@@ -87,10 +82,8 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 	}
 }
 
-template <class STATE>
-static idx_t ReplaceIndex(STATE *state, const FrameBounds &frame, const FrameBounds &prev) {
-	D_ASSERT(state->v);
-	auto index = (idx_t *)state->v;
+static idx_t ReplaceIndex(idx_t *index, const FrameBounds &frame, const FrameBounds &prev) {
+	D_ASSERT(index);
 
 	idx_t j = 0;
 	for (idx_t p = 0; p < (prev.second - prev.first); ++p) {
@@ -108,12 +101,12 @@ static idx_t ReplaceIndex(STATE *state, const FrameBounds &frame, const FrameBou
 	return j;
 }
 
-template <class INPUT_TYPE, class STATE>
-static inline bool CanReplace(STATE *state, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0, const idx_t k1) {
+template <class INPUT_TYPE>
+static inline bool CanReplace(const idx_t *index, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0,
+                              const idx_t k1) {
 	auto same = false;
 
-	D_ASSERT(state->v);
-	auto index = (idx_t *)state->v;
+	D_ASSERT(index);
 
 	auto curr = fdata[index[j]];
 	if (k1 < j) {
@@ -249,22 +242,15 @@ struct QuantileOperation {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
-		if (state->pos == state->len) {
-			// growing conservatively here since we could be running this on many small groups
-			state->template Resize<SAVE_TYPE>(state->len == 0 ? 1 : state->len * 2);
-		}
-		D_ASSERT(state->v);
-		((SAVE_TYPE *)state->v)[state->pos++] = data[idx];
+		state->v.emplace_back(data[idx]);
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE *target) {
-		if (source.pos == 0) {
+		if (source.v.empty()) {
 			return;
 		}
-		target->template Resize<SAVE_TYPE>(target->pos + source.pos);
-		memcpy(target->v + target->pos * sizeof(SAVE_TYPE), source.v, source.pos * sizeof(SAVE_TYPE));
-		target->pos += source.pos;
+		target->v.insert(target->v.end(), source.v.begin(), source.v.end());
 	}
 
 	template <class STATE>
@@ -325,17 +311,15 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
 	template <class RESULT_TYPE, class STATE>
 	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
-		if (state->pos == 0) {
+		if (state->v.empty()) {
 			mask.SetInvalid(idx);
 			return;
 		}
-		D_ASSERT(state->v);
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
 		D_ASSERT(bind_data->quantiles.size() == 1);
-		Interpolator<SAVE_TYPE, RESULT_TYPE, DISCRETE> interp(bind_data->quantiles[0], state->pos);
-		auto v_t = (SAVE_TYPE *)state->v;
-		target[idx] = interp(v_t);
+		Interpolator<SAVE_TYPE, RESULT_TYPE, DISCRETE> interp(bind_data->quantiles[0], state->v.size());
+		target[idx] = interp(state->v.data());
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -346,11 +330,10 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
 
 		//  Lazily initialise frame state
 		const auto prev_valid = state->pos == (prev.second - prev.first);
-		state->pos = frame.second - frame.first;
-		state->template Resize<idx_t>(state->pos);
+		state->SetPos(frame.second - frame.first);
 
-		D_ASSERT(state->v);
-		auto index = (idx_t *)state->v;
+		auto index = state->w.data();
+		D_ASSERT(index);
 
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
@@ -361,15 +344,16 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
 		bool same = false;
 		if (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
-			const auto j = ReplaceIndex(state, frame, prev);
+			const auto j = ReplaceIndex(index, frame, prev);
 			Interpolator<INPUT_TYPE, RESULT_TYPE, DISCRETE> interp(q, state->pos);
-			same = CanReplace(state, data, j, interp.FRN, interp.CRN);
+			same = CanReplace(index, data, j, interp.FRN, interp.CRN);
 		} else {
 			ReuseIndexes(index, frame, prev);
 		}
 
 		if (!same) {
 			if (!dmask.AllValid()) {
+				// Remove the NULLs
 				IndirectNotNull not_null(dmask, MinValue(frame.first, prev.first));
 				state->pos = std::partition(index, index + state->pos, not_null) - index;
 			}
@@ -393,7 +377,7 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
 
 template <typename INPUT_TYPE>
 AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &type) {
-	using STATE = QuantileState;
+	using STATE = QuantileState<INPUT_TYPE>;
 	using OP = QuantileScalarOperation<INPUT_TYPE, true>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
@@ -452,7 +436,7 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 	template <class RESULT_TYPE, class STATE>
 	static void Finalize(Vector &result_list, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
-		if (state->pos == 0) {
+		if (state->v.empty()) {
 			mask.SetInvalid(idx);
 			return;
 		}
@@ -465,12 +449,12 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 		ListVector::Reserve(result_list, ridx + bind_data->quantiles.size());
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
-		D_ASSERT(state->v);
-		auto v_t = (SAVE_TYPE *)state->v;
+		auto v_t = state->v.data();
+		D_ASSERT(v_t);
 
 		target[idx].offset = ridx;
 		for (const auto &quantile : bind_data->quantiles) {
-			Interpolator<SAVE_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);
+			Interpolator<SAVE_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->v.size());
 			rdata[ridx] = interp(v_t);
 			++ridx;
 		}
@@ -498,18 +482,16 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
 		//  Lazily initialise frame state
-		const auto prev_valid = state->pos == (prev.second - prev.first);
-		state->pos = frame.second - frame.first;
-		state->template Resize<idx_t>(state->pos);
+		const auto prev_valid = state->w.size() == (prev.second - prev.first);
+		state->SetPos(frame.second - frame.first);
 
-		D_ASSERT(state->v);
-		auto index = (idx_t *)state->v;
+		auto index = state->w.data();
 
 		bool fixed = false;
 		auto j = state->pos;
 		if (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
-			j = ReplaceIndex(state, frame, prev);
+			j = ReplaceIndex(index, frame, prev);
 			fixed = true;
 		} else {
 			ReuseIndexes(index, frame, prev);
@@ -534,7 +516,7 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 			const auto &quantile = bind_data->quantiles[q];
 			Interpolator<INPUT_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);
 
-			if (fixed && CanReplace(state, data, j, interp.FRN, interp.CRN)) {
+			if (fixed && CanReplace(index, data, j, interp.FRN, interp.CRN)) {
 				rdata[lentry.offset + q] = interp(data, index);
 				state->upper.resize(state->lower.size(), interp.FRN);
 			} else {
@@ -563,7 +545,7 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 
 template <typename INPUT_TYPE>
 AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalType &type) {
-	using STATE = QuantileState;
+	using STATE = QuantileState<INPUT_TYPE>;
 	using OP = QuantileListOperation<INPUT_TYPE, INPUT_TYPE, true>;
 	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
@@ -619,7 +601,7 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 template <typename INPUT_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType &input_type,
                                                               const LogicalType &target_type) {
-	using STATE = QuantileState;
+	using STATE = QuantileState<INPUT_TYPE>;
 	using OP = QuantileScalarOperation<INPUT_TYPE, false>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
@@ -673,7 +655,7 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 template <typename INPUT_TYPE, typename CHILD_TYPE>
 AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalType &input_type,
                                                                   const LogicalType &result_type) {
-	using STATE = QuantileState;
+	using STATE = QuantileState<INPUT_TYPE>;
 	using OP = QuantileListOperation<INPUT_TYPE, CHILD_TYPE, false>;
 	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
