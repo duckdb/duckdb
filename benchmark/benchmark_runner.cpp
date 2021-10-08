@@ -191,8 +191,9 @@ void print_help() {
 	fprintf(stderr, "              --log=[file]           Move log output to file\n");
 	fprintf(stderr, "              --info                 Prints info about the benchmark\n");
 	fprintf(stderr, "              --query                Prints query of the benchmark\n");
-	fprintf(stderr, "              [name_pattern]         Run only the benchmark which names match the specified name pattern, "
-	                "e.g., DS.* for TPC-DS benchmarks\n");
+	fprintf(stderr,
+	        "              [name_pattern]         Run only the benchmark which names match the specified name pattern, "
+	        "e.g., DS.* for TPC-DS benchmarks\n");
 }
 
 enum ConfigurationError { None, BenchmarkNotFound, InfoWithoutBenchmarkName };

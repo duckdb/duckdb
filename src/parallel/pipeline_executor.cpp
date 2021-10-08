@@ -5,8 +5,8 @@ namespace duckdb {
 
 class ScopedOperatorProfiler {
 public:
-	ScopedOperatorProfiler(ExecutionContext &context_p, PhysicalOperator *op_p, DataChunk *chunk_p = nullptr) :
-		context(context_p), op(op_p), chunk(chunk_p) {
+	ScopedOperatorProfiler(ExecutionContext &context_p, PhysicalOperator *op_p, DataChunk *chunk_p = nullptr)
+	    : context(context_p), op(op_p), chunk(chunk_p) {
 		StartOperator(op);
 	}
 	~ScopedOperatorProfiler() {
