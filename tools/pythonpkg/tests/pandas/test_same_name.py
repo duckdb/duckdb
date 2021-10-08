@@ -1,7 +1,6 @@
 import pytest
 import duckdb
 import pandas as pd
-import sys
 
 class TestMultipleColumnsSameName(object):
 
@@ -17,9 +16,6 @@ class TestMultipleColumnsSameName(object):
         assert con.execute("select a_1 from df_view;").fetchall() == [(5,), (6,), (7,), (8,)]
 
     def test_multiple_columns_with_same_name_2(self, duckdb_cursor):
-        # Python 2 failure seems to be related to bytes vs strings
-        if sys.version_info.major < 3:
-            return
         df = pd.DataFrame({'a': [1, 2, 3, 4], 'b': [5, 6, 7, 8], 'a_1': [9, 10, 11, 12]})
         df = df.rename(columns={ df.columns[1]: "a_1" })
         con = duckdb.connect()

@@ -14,6 +14,11 @@ if(ODBC_FOUND)
     add_definitions(-DODBC_LINK_ODBCINST)
     message(STATUS "Found ODBCINST_LIB: " ${ODBCINST_LIB})
   endif()
+
+  if(WIN32)
+    set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin)
+    add_subdirectory(winsetup)
+  endif()
 endif()
 
 add_definitions(-DNO_FRAMEWORKS)

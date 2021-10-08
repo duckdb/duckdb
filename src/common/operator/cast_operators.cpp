@@ -11,6 +11,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -1263,6 +1264,7 @@ bool TryCastToTimestampSec::Operation(string_t input, timestamp_t &result, bool 
 	result = Timestamp::GetEpochSeconds(result);
 	return true;
 }
+
 //===--------------------------------------------------------------------===//
 // Cast From Blob
 //===--------------------------------------------------------------------===//
@@ -1291,6 +1293,26 @@ bool TryCastToBlob::Operation(string_t input, string_t &result, Vector &result_v
 	Blob::ToBlob(input, (data_ptr_t)result.GetDataWriteable());
 	result.Finalize();
 	return true;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast From UUID
+//===--------------------------------------------------------------------===//
+template <>
+string_t CastFromUUID::Operation(hugeint_t input, Vector &vector) {
+	string_t result = StringVector::EmptyString(vector, 36);
+	UUID::ToString(input, result.GetDataWriteable());
+	result.Finalize();
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// Cast To UUID
+//===--------------------------------------------------------------------===//
+template <>
+bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_vector, string *error_message,
+                              bool strict) {
+	return UUID::FromString(input.GetString(), result);
 }
 
 //===--------------------------------------------------------------------===//

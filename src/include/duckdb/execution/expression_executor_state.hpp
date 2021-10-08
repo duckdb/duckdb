@@ -12,6 +12,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/cycle_counter.hpp"
 #include "duckdb/common/random_engine.hpp"
+#include "duckdb/function/function.hpp"
 
 namespace duckdb {
 class Expression;
@@ -34,6 +35,18 @@ struct ExpressionState {
 public:
 	void AddChild(Expression *expr);
 	void Finalize();
+};
+
+struct ExecuteFunctionState : public ExpressionState {
+	ExecuteFunctionState(const Expression &expr, ExpressionExecutorState &root) : ExpressionState(expr, root) {
+	}
+
+	unique_ptr<FunctionData> local_state;
+
+public:
+	static FunctionData *GetFunctionState(ExpressionState &state) {
+		return ((ExecuteFunctionState &)state).local_state.get();
+	}
 };
 
 struct ExpressionExecutorState {

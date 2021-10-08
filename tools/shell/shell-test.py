@@ -378,6 +378,13 @@ PRAGMA enable_profiling;
 SELECT 42;
 ''', out="42", err="Query Profiling Information")
 
+# escapes in query profiling
+test("""
+PRAGMA enable_profiling=json;
+CREATE TABLE "foo"("hello world" INT);
+SELECT "hello world", '\r\t\n\b\f\\' FROM "foo";
+""", err="""SELECT \\"hello world\\", '\\r\\t\\n\\b\\f\\\\' FROM \\"foo""")
+
 test('.system echo 42', out="42")
 test('.shell echo 42', out="42")
 

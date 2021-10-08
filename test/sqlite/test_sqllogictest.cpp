@@ -42,6 +42,7 @@
 #include "extension_helper.hpp"
 
 #include "test_helpers.hpp"
+#include "test_helper_extension.hpp"
 
 #include <algorithm>
 #include <functional>
@@ -574,7 +575,15 @@ struct Command {
 	unique_ptr<MaterializedQueryResult> ExecuteQuery(Connection *connection, string file_name, int query_line,
 	                                                 string sql_query) {
 		query_break(query_line);
-		return connection->Query(sql_query);
+		auto result = connection->Query(sql_query);
+
+		if (!result->success) {
+			TestHelperExtension::SetLastError(result->error);
+		} else {
+			TestHelperExtension::ClearLastError();
+		}
+
+		return result;
 	}
 
 	virtual void ExecuteInternal() = 0;
@@ -1545,6 +1554,8 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 					// vector size is too low for this test: skip it
 					return;
 				}
+			} else if (param == "test_helper") {
+				db->LoadExtension<TestHelperExtension>();
 			} else {
 				auto result = ExtensionHelper::LoadExtension(*db, param);
 				if (result == ExtensionLoadResult::LOADED_EXTENSION) {

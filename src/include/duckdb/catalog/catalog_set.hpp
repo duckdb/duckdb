@@ -12,6 +12,7 @@
 #include "duckdb/catalog/default/default_generator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/mutex.hpp"
 
@@ -58,8 +59,8 @@ public:
 	CatalogEntry *GetEntry(ClientContext &context, const string &name);
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
-	//! none is found
-	string SimilarEntry(ClientContext &context, const string &name);
+	//! none is found. The returned pair consists of the entry name and the distance (smaller means closer).
+	pair<string, idx_t> SimilarEntry(ClientContext &context, const string &name);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry

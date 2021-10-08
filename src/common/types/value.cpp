@@ -15,6 +15,7 @@
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/time.hpp"
@@ -81,6 +82,8 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::BIGINT(NumericLimits<int64_t>::Minimum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Minimum());
+	case LogicalTypeId::UUID:
+		return Value::UUID(NumericLimits<hugeint_t>::Minimum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Minimum());
 	case LogicalTypeId::USMALLINT:
@@ -146,6 +149,8 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::BIGINT(NumericLimits<int64_t>::Maximum());
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
+	case LogicalTypeId::UUID:
+		return Value::UUID(NumericLimits<hugeint_t>::Maximum());
 	case LogicalTypeId::UTINYINT:
 		return Value::UTINYINT(NumericLimits<uint8_t>::Maximum());
 	case LogicalTypeId::USMALLINT:
@@ -234,6 +239,20 @@ Value Value::BIGINT(int64_t value) {
 Value Value::HUGEINT(hugeint_t value) {
 	Value result(LogicalType::HUGEINT);
 	result.value_.hugeint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::UUID(hugeint_t value) {
+	Value result(LogicalType::UUID);
+	result.value_.hugeint = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::UUID(const string &value) {
+	Value result(LogicalType::UUID);
+	result.value_.hugeint = UUID::FromString(value);
 	result.is_null = false;
 	return result;
 }
@@ -620,6 +639,7 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::BIGINT:
 		return Cast::Operation<int64_t, T>(value_.bigint);
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UUID:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
 	case LogicalTypeId::DATE:
 		return Cast::Operation<date_t, T>(value_.date);
@@ -920,6 +940,8 @@ string Value::ToString() const {
 		return to_string(value_.ubigint);
 	case LogicalTypeId::HUGEINT:
 		return Hugeint::ToString(value_.hugeint);
+	case LogicalTypeId::UUID:
+		return UUID::ToString(value_.hugeint);
 	case LogicalTypeId::FLOAT:
 		return to_string(value_.float_);
 	case LogicalTypeId::DOUBLE:

@@ -10,6 +10,7 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/pair.hpp"
@@ -27,6 +28,7 @@
 namespace duckdb {
 class Appender;
 class Catalog;
+class CatalogSearchPath;
 class ChunkCollection;
 class DatabaseInstance;
 class FileOpener;
@@ -76,7 +78,7 @@ public:
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
 
-	unordered_map<string, Value> set_variables;
+	case_insensitive_map_t<Value> set_variables;
 
 	// Whether or not aggressive query verification is enabled
 	bool query_verification_enabled = false;
@@ -98,8 +100,7 @@ public:
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
-	//! The schema search path, in order by which entries are searched if no schema entry is provided
-	vector<string> catalog_search_path = {TEMP_SCHEMA, DEFAULT_SCHEMA, "pg_catalog"};
+	const unique_ptr<CatalogSearchPath> catalog_search_path;
 
 	unique_ptr<FileOpener> file_opener;
 

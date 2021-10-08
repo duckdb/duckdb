@@ -76,3 +76,29 @@ query I
 SELECT CURRENT_SETTING('shadowed');
 ----
 42
+
+statement ok
+SET SESSION CASE_IS_LOWERED = 42;
+
+query I
+SELECT CURRENT_SETTING('case_is_lowered');
+----
+42
+
+query I
+SELECT CURRENT_SETTING('CASE_IS_LOWERED');
+----
+42
+
+statement ok
+SET SESSION case_is_lowered = 43;
+
+query I
+SELECT CURRENT_SETTING('case_is_lowered');
+----
+43
+
+query I
+SELECT CURRENT_SETTING('CASE_IS_LOWERED');
+----
+43
