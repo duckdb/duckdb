@@ -238,6 +238,18 @@ void NumericStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t
 	case PhysicalType::INT64:
 		TemplatedVerify<int64_t>(vector, sel, count);
 		break;
+	case PhysicalType::UINT8:
+		TemplatedVerify<uint8_t>(vector, sel, count);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedVerify<uint16_t>(vector, sel, count);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedVerify<uint32_t>(vector, sel, count);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedVerify<uint64_t>(vector, sel, count);
+		break;
 	case PhysicalType::INT128:
 		TemplatedVerify<hugeint_t>(vector, sel, count);
 		break;

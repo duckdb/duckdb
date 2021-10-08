@@ -11,6 +11,7 @@
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/catalog/default/default_functions.hpp"
 #include "duckdb/catalog/default/default_views.hpp"
@@ -24,11 +25,13 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/transaction/transaction.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/transaction.hpp"
+
 #include <algorithm>
 #include <sstream>
 
@@ -39,7 +42,7 @@ SchemaCatalogEntry::SchemaCatalogEntry(Catalog *catalog, string name_p, bool int
       tables(*catalog, make_unique<DefaultViewGenerator>(*catalog, this)), indexes(*catalog), table_functions(*catalog),
       copy_functions(*catalog), pragma_functions(*catalog),
       functions(*catalog, make_unique<DefaultFunctionGenerator>(*catalog, this)), sequences(*catalog),
-      collations(*catalog) {
+      collations(*catalog), types(*catalog) {
 	this->internal = internal;
 }
 
@@ -88,6 +91,11 @@ CatalogEntry *SchemaCatalogEntry::AddEntry(ClientContext &context, unique_ptr<St
 
 CatalogEntry *SchemaCatalogEntry::CreateSequence(ClientContext &context, CreateSequenceInfo *info) {
 	auto sequence = make_unique<SequenceCatalogEntry>(catalog, this, info);
+	return AddEntry(context, move(sequence), info->on_conflict);
+}
+
+CatalogEntry *SchemaCatalogEntry::CreateType(ClientContext &context, CreateTypeInfo *info) {
+	auto sequence = make_unique<TypeCatalogEntry>(catalog, this, info);
 	return AddEntry(context, move(sequence), info->on_conflict);
 }
 
@@ -229,6 +237,8 @@ CatalogSet &SchemaCatalogEntry::GetCatalogSet(CatalogType type) {
 		return sequences;
 	case CatalogType::COLLATION_ENTRY:
 		return collations;
+	case CatalogType::TYPE_ENTRY:
+		return types;
 	default:
 		throw InternalException("Unsupported catalog type in schema");
 	}

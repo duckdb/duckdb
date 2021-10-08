@@ -102,6 +102,7 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 
 	// gather all catalog types to export
 	vector<CatalogEntry *> schemas;
+	vector<CatalogEntry *> custom_types;
 	vector<CatalogEntry *> sequences;
 	vector<CatalogEntry *> tables;
 	vector<CatalogEntry *> views;
@@ -125,6 +126,8 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 		});
 		schema->Scan(context.client, CatalogType::SEQUENCE_ENTRY,
 		             [&](CatalogEntry *entry) { sequences.push_back(entry); });
+		schema->Scan(context.client, CatalogType::TYPE_ENTRY,
+		             [&](CatalogEntry *entry) { custom_types.push_back(entry); });
 		schema->Scan(context.client, CatalogType::INDEX_ENTRY, [&](CatalogEntry *entry) { indexes.push_back(entry); });
 	});
 
@@ -133,6 +136,7 @@ void PhysicalExport::GetData(ExecutionContext &context, DataChunk &chunk, Global
 
 	stringstream ss;
 	WriteCatalogEntries(ss, schemas);
+	WriteCatalogEntries(ss, custom_types);
 	WriteCatalogEntries(ss, sequences);
 	WriteCatalogEntries(ss, tables);
 	WriteCatalogEntries(ss, views);

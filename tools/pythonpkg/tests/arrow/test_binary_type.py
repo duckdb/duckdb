@@ -1,6 +1,5 @@
 import duckdb
 import os
-import sys
 try:
     import pyarrow as pa
     from pyarrow import parquet as pq

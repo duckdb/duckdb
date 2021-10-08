@@ -140,6 +140,8 @@ public:
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
 
+	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &schema);
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;

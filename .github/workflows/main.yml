@@ -1130,7 +1130,7 @@ jobs:
 
     - name: Install
       run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind
+        sudo apt-get update -y -qq && sudo apt-get install -y -qq texlive-latex-base texlive-fonts-extra libcurl4-openssl-dev valgrind pandoc
         mkdir -p $HOME/.R
         R -f tools/rpkg/dependencies.R
 
@@ -1222,39 +1222,6 @@ jobs:
       run: |
         cat duckdb.Rcheck/00check.log
         cat duckdb.Rcheck/tests/testthat.Rout.fail
-
-
- linux-tarball-v2:
-    name: Python 2 Tarball
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '2.7'
-
-    - name: Install
-      run: |
-        pip install setuptools-scm==5.0.2
-        pip install numpy pytest pandas
-
-    - name: Build
-      run: |
-        python --version
-        git archive --format zip --output test-tarball.zip HEAD
-        mkdir duckdb-test-tarball
-        mv test-tarball.zip duckdb-test-tarball
-        cd duckdb-test-tarball
-        unzip test-tarball.zip
-        cd tools/pythonpkg
-        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-        python setup.py install --user
-        (cd tests/ && python -m pytest)
 
  linux-tarball:
     name: Python 3 Tarball

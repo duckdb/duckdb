@@ -1,34 +1,29 @@
 #include "duckdb/storage/checkpoint_manager.hpp"
-#include "duckdb/storage/block_manager.hpp"
-#include "duckdb/storage/meta_block_reader.hpp"
-
-#include "duckdb/common/serializer.hpp"
-#include "duckdb/common/vector_operations/vector_operations.hpp"
-#include "duckdb/common/types/null_value.hpp"
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
-
+#include "duckdb/common/serializer.hpp"
+#include "duckdb/common/types/null_value.hpp"
+#include "duckdb/common/vector_operations/vector_operations.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/config.hpp"
+#include "duckdb/main/connection.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
-
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/connection.hpp"
-#include "duckdb/main/database.hpp"
-
-#include "duckdb/transaction/transaction_manager.hpp"
-
-#include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/block_manager.hpp"
 #include "duckdb/storage/checkpoint/table_data_reader.hpp"
-#include "duckdb/main/config.hpp"
+#include "duckdb/storage/checkpoint/table_data_writer.hpp"
+#include "duckdb/storage/meta_block_reader.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -149,6 +144,12 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 		sequences.push_back((SequenceCatalogEntry *)entry);
 	});
 
+	vector<TypeCatalogEntry *> custom_types;
+	schema.Scan(CatalogType::TYPE_ENTRY, [&](CatalogEntry *entry) {
+		D_ASSERT(!entry->internal);
+		custom_types.push_back((TypeCatalogEntry *)entry);
+	});
+
 	vector<MacroCatalogEntry *> macros;
 	schema.Scan(CatalogType::SCALAR_FUNCTION_ENTRY, [&](CatalogEntry *entry) {
 		if (entry->internal) {
@@ -158,6 +159,12 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 			macros.push_back((MacroCatalogEntry *)entry);
 		}
 	});
+
+	// write the custom_types
+	metadata_writer->Write<uint32_t>(custom_types.size());
+	for (auto &custom_type : custom_types) {
+		WriteType(*custom_type);
+	}
 
 	// write the sequences
 	metadata_writer->Write<uint32_t>(sequences.size());
@@ -174,6 +181,7 @@ void CheckpointManager::WriteSchema(SchemaCatalogEntry &schema) {
 	for (auto &view : views) {
 		WriteView(*view);
 	}
+
 	// finally write the macro's
 	metadata_writer->Write<uint32_t>(macros.size());
 	for (auto &macro : macros) {
@@ -190,6 +198,12 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	info->on_conflict = OnCreateConflict::IGNORE_ON_CONFLICT;
 	catalog.CreateSchema(context, info.get());
 
+	// now read the enums
+	uint32_t enum_count = reader.Read<uint32_t>();
+	for (uint32_t i = 0; i < enum_count; i++) {
+		ReadType(context, reader);
+	}
+
 	// read the sequences
 	uint32_t seq_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < seq_count; i++) {
@@ -205,6 +219,7 @@ void CheckpointManager::ReadSchema(ClientContext &context, MetaBlockReader &read
 	for (uint32_t i = 0; i < view_count; i++) {
 		ReadView(context, reader);
 	}
+
 	// finally read the macro's
 	uint32_t macro_count = reader.Read<uint32_t>();
 	for (uint32_t i = 0; i < macro_count; i++) {
@@ -238,6 +253,20 @@ void CheckpointManager::ReadSequence(ClientContext &context, MetaBlockReader &re
 
 	auto &catalog = Catalog::GetCatalog(db);
 	catalog.CreateSequence(context, info.get());
+}
+
+//===--------------------------------------------------------------------===//
+// Custom Types
+//===--------------------------------------------------------------------===//
+void CheckpointManager::WriteType(TypeCatalogEntry &table) {
+	table.Serialize(*metadata_writer);
+}
+
+void CheckpointManager::ReadType(ClientContext &context, MetaBlockReader &reader) {
+	auto info = TypeCatalogEntry::Deserialize(reader);
+
+	auto &catalog = Catalog::GetCatalog(db);
+	catalog.CreateType(context, info.get());
 }
 
 //===--------------------------------------------------------------------===//
