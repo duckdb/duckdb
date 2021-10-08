@@ -426,7 +426,7 @@ void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 	} else {
 		//! Check if last offset is higher than max uint32
 		if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) {
-			throw std::runtime_error("We do not support Blobs over 4GB");
+			throw std::runtime_error("DuckDB does not support Blobs over 4GB");
 		}
 		auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
@@ -625,7 +625,7 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		auto cdata = (char *)array.buffers[2];
 		if (original_type.first == ArrowVariableSizeType::SUPER_SIZE) {
 			if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) {
-				throw std::runtime_error("We do not support Strings over 4GB");
+				throw std::runtime_error("DuckDB does not support Strings over 4GB");
 			}
 			auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
@@ -1065,28 +1065,12 @@ bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, cons
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	auto &state = (ArrowScanState &)*operator_state;
 	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
-#ifndef DUCKDB_NO_THREADS
-	if (!parallel_state.stream) {
-		std::unique_lock<mutex> sync_lock(parallel_state.sync_mutex);
 
-		if (std::this_thread::get_id() == bind_data.thread_id) {
-			//! Generate a Stream
-			parallel_state.stream = ProduceArrowScan(bind_data, state, state.filters);
-			parallel_state.ready = true;
-			parallel_state.cv.notify_all();
-		} else {
-			parallel_state.cv.wait(sync_lock, [&parallel_state] { return parallel_state.ready; });
-		}
-	}
-	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
-
-#else
 	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
 	if (!parallel_state.stream) {
 		//! Generate a Stream
 		parallel_state.stream = ProduceArrowScan(bind_data, state, state.filters);
 	}
-#endif
 
 	state.chunk_offset = 0;
 

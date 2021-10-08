@@ -105,8 +105,6 @@ struct ParallelArrowScanState : public ParallelState {
 	}
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	std::mutex main_mutex;
-	std::mutex sync_mutex;
-	std::condition_variable cv;
 	bool ready = false;
 };
 
