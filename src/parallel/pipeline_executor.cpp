@@ -23,7 +23,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		if (pipeline.sink && !pipeline.sink->SinkOrderMatters() && current_operator->RequiresCache()) {
 			auto &cache_types = current_operator->GetTypes();
 			bool can_cache = true;
-			for(auto &type : cache_types) {
+			for (auto &type : cache_types) {
 				if (!CanCacheType(type)) {
 					can_cache = false;
 					break;
@@ -103,7 +103,7 @@ void PipelineExecutor::PushFinalize() {
 	// flush all caches
 	if (!finished_processing) {
 		D_ASSERT(in_process_operators.empty());
-		for(idx_t i = 0; i < cached_chunks.size(); i++) {
+		for (idx_t i = 0; i < cached_chunks.size(); i++) {
 			if (cached_chunks[i] && cached_chunks[i]->size() > 0) {
 				ExecutePushInternal(*cached_chunks[i], i + 1);
 				cached_chunks[i].reset();
@@ -134,7 +134,6 @@ bool PipelineExecutor::CanCacheType(const LogicalType &type) {
 		return true;
 	}
 }
-
 
 void PipelineExecutor::CacheChunk(DataChunk &prev_chunk, DataChunk &current_chunk, idx_t operator_idx) {
 #if STANDARD_VECTOR_SIZE >= 128
@@ -238,15 +237,15 @@ OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result
 			// we went back to the source: we need more input
 			return OperatorResultType::NEED_MORE_INPUT;
 		} else {
-			auto &prev_chunk = current_intermediate == initial_idx + 1 ? input : *intermediate_chunks[current_intermediate - 1];
+			auto &prev_chunk =
+			    current_intermediate == initial_idx + 1 ? input : *intermediate_chunks[current_intermediate - 1];
 			auto operator_idx = current_idx - 1;
 			auto current_operator = pipeline.operators[operator_idx];
 			StartOperator(current_operator);
 			// if current_idx > source_idx, we pass the previous' operators output through the Execute of the current
 			// operator
-			auto result = current_operator->Execute(
-			    context, prev_chunk, current_chunk,
-			    *intermediate_states[current_intermediate - 1]);
+			auto result = current_operator->Execute(context, prev_chunk, current_chunk,
+			                                        *intermediate_states[current_intermediate - 1]);
 			EndOperator(current_operator, &current_chunk);
 			if (result == OperatorResultType::HAVE_MORE_OUTPUT) {
 				// more data remains in this operator

@@ -85,8 +85,8 @@ idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const Fun
 
 unique_ptr<ParallelState> PandasScanFunction::PandasScanInitParallelState(ClientContext &context,
                                                                           const FunctionData *bind_data_p,
-                                                                            const vector<column_t> &column_ids,
-                                                                            TableFilterCollection *filters) {
+                                                                          const vector<column_t> &column_ids,
+                                                                          TableFilterCollection *filters) {
 	return make_unique<ParallelPandasScanState>();
 }
 

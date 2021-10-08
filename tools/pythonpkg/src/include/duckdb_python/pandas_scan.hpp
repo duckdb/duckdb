@@ -34,8 +34,8 @@ public:
 
 	static unique_ptr<ParallelState> PandasScanInitParallelState(ClientContext &context,
 	                                                             const FunctionData *bind_data_p,
-	                                                       const vector<column_t> &column_ids,
-	                                                       TableFilterCollection *filters);
+	                                                             const vector<column_t> &column_ids,
+	                                                             TableFilterCollection *filters);
 
 	static unique_ptr<FunctionOperatorData>
 	PandasScanParallelInit(ClientContext &context, const FunctionData *bind_data_p, ParallelState *state,

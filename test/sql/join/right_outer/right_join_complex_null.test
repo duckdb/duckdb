@@ -1,4 +1,4 @@
-# name: test/sql/join/right_outer/sqlancer_right_join_null.test
+# name: test/sql/join/right_outer/right_join_complex_null.test
 # description: Test RIGHT OUTER JOIN on complex expression involving NULL
 # group: [right_outer]
 

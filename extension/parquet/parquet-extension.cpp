@@ -303,8 +303,8 @@ public:
 	}
 
 	static unique_ptr<ParallelState> ParquetInitParallelState(ClientContext &context, const FunctionData *bind_data_p,
-                                                                        const vector<column_t> &column_ids,
-                                                                        TableFilterCollection *filters) {
+	                                                          const vector<column_t> &column_ids,
+	                                                          TableFilterCollection *filters) {
 		auto &bind_data = (ParquetReadBindData &)*bind_data_p;
 		auto result = make_unique<ParquetReadParallelState>();
 		result->current_reader = bind_data.initial_reader;

@@ -23,6 +23,7 @@ class Executor;
 //! The Pipeline class represents an execution pipeline
 class PipelineExecutor {
 	static constexpr const idx_t CACHE_THRESHOLD = 64;
+
 public:
 	PipelineExecutor(ClientContext &context, Pipeline &pipeline);
 

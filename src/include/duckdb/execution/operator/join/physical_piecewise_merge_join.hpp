@@ -36,6 +36,7 @@ public:
 	bool RequiresCache() const override {
 		return true;
 	}
+
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;

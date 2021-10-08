@@ -216,7 +216,8 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	return move(res);
 }
 
-unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData &function, const vector<column_t> &column_ids,
+unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData &function,
+                                                     const vector<column_t> &column_ids,
                                                      TableFilterCollection *filters) {
 	//! Generate Projection Pushdown Vector
 	pair<unordered_map<idx_t, string>, vector<string>> project_columns;
@@ -1057,8 +1058,8 @@ idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const Func
 
 unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientContext &context,
                                                                          const FunctionData *bind_data_p,
-                                                                           const vector<column_t> &column_ids,
-                                                                           TableFilterCollection *filters) {
+                                                                         const vector<column_t> &column_ids,
+                                                                         TableFilterCollection *filters) {
 	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	auto result = make_unique<ParallelArrowScanState>();
 	result->stream = ProduceArrowScan(bind_data, column_ids, filters);
