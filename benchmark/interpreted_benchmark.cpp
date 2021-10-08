@@ -292,8 +292,12 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		}
 		result = move(result->next);
 	}
-	if (config.print_profile_info) {
+	if (config.profile_info == BenchmarkProfileInfo::NORMAL) {
 		state->con.Query("PRAGMA enable_profiling");
+	} else if (config.profile_info == BenchmarkProfileInfo::DETAILED) {
+		state->con.Query("PRAGMA enable_profiling");
+		state->con.Query("PRAGMA profiling_mode='detailed'");
+
 	}
 	return state;
 }

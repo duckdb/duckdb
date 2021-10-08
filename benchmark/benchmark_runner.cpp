@@ -182,15 +182,16 @@ void BenchmarkRunner::RunBenchmarks() {
 
 void print_help() {
 	fprintf(stderr, "Usage: benchmark_runner\n");
-	fprintf(stderr, "              --list         Show a list of all benchmarks\n");
-	fprintf(stderr, "              --profile      Prints the query profile information\n");
-	fprintf(stderr, "              --threads=n    Sets the amount of threads to use during execution (default: "
+	fprintf(stderr, "              --list                 Show a list of all benchmarks\n");
+	fprintf(stderr, "              --profile              Prints the query profile information\n");
+	fprintf(stderr, "              --detailed-profile     Prints detailed query profile information\n");
+	fprintf(stderr, "              --threads=n            Sets the amount of threads to use during execution (default: "
 	                "hardware concurrency)\n");
-	fprintf(stderr, "              --out=[file]   Move benchmark output to file\n");
-	fprintf(stderr, "              --log=[file]   Move log output to file\n");
-	fprintf(stderr, "              --info         Prints info about the benchmark\n");
-	fprintf(stderr, "              --query        Prints query of the benchmark\n");
-	fprintf(stderr, "              [name_pattern] Run only the benchmark which names match the specified name pattern, "
+	fprintf(stderr, "              --out=[file]           Move benchmark output to file\n");
+	fprintf(stderr, "              --log=[file]           Move log output to file\n");
+	fprintf(stderr, "              --info                 Prints info about the benchmark\n");
+	fprintf(stderr, "              --query                Prints query of the benchmark\n");
+	fprintf(stderr, "              [name_pattern]         Run only the benchmark which names match the specified name pattern, "
 	                "e.g., DS.* for TPC-DS benchmarks\n");
 }
 
@@ -225,7 +226,10 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 			instance.configuration.meta = BenchmarkMetaType::INFO;
 		} else if (arg == "--profile") {
 			// write info of benchmark
-			instance.configuration.print_profile_info = true;
+			instance.configuration.profile_info = BenchmarkProfileInfo::NORMAL;
+		} else if (arg == "--detailed-profile") {
+			// write info of benchmark
+			instance.configuration.profile_info = BenchmarkProfileInfo::DETAILED;
 		} else if (StringUtil::StartsWith(arg, "--threads=")) {
 			// write info of benchmark
 			auto splits = StringUtil::Split(arg, '=');
