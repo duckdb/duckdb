@@ -1394,7 +1394,6 @@ public class TestDuckDBJDBC {
 				m.invoke(null);
 			}
 		}
-		// test_unsiged_integers();
 		System.out.println("OK");
 	}
 }
