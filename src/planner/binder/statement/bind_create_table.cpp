@@ -74,7 +74,7 @@ static void BindConstraints(Binder &binder, BoundCreateTableInfo &info) {
 			} else {
 				// unique constraint is given by list of names
 				// have to resolve names
-				D_ASSERT(unique.columns.size() > 0);
+				D_ASSERT(!unique.columns.empty());
 				for (auto &keyname : unique.columns) {
 					auto entry = info.name_map.find(keyname);
 					if (entry == info.name_map.end()) {

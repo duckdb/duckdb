@@ -129,6 +129,24 @@ Value Value::MinimumValue(const LogicalType &type) {
 		result.type_ = type;
 		return result;
 	}
+	case LogicalTypeId::ENUM: {
+		Value result;
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			result = Value::MinimumValue(LogicalType::UTINYINT);
+			break;
+		case PhysicalType::UINT16:
+			result = Value::MinimumValue(LogicalType::USMALLINT);
+			break;
+		case PhysicalType::UINT32:
+			result = Value::MinimumValue(LogicalType::UINTEGER);
+			break;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+		result.type_ = type;
+		return result;
+	}
 	default:
 		throw InvalidTypeException(type, "MinimumValue requires numeric type");
 	}
@@ -192,6 +210,24 @@ Value Value::MaximumValue(const LogicalType &type) {
 			break;
 		default:
 			throw InternalException("Unknown decimal type");
+		}
+		result.type_ = type;
+		return result;
+	}
+	case LogicalTypeId::ENUM: {
+		Value result;
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			result = Value::MaximumValue(LogicalType::UTINYINT);
+			break;
+		case PhysicalType::UINT16:
+			result = Value::MaximumValue(LogicalType::USMALLINT);
+			break;
+		case PhysicalType::UINT32:
+			result = Value::MaximumValue(LogicalType::UINTEGER);
+			break;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 		result.type_ = type;
 		return result;
@@ -502,6 +538,25 @@ Value Value::BLOB(const string &data) {
 	result.str_value = Blob::ToBlob(string_t(data));
 	return result;
 }
+Value Value::ENUM(uint64_t value, const LogicalType &original_type) {
+	D_ASSERT(original_type.id() == LogicalTypeId::ENUM);
+	Value result(original_type);
+	switch (original_type.InternalType()) {
+	case PhysicalType::UINT8:
+		result.value_.utinyint = value;
+		break;
+	case PhysicalType::UINT16:
+		result.value_.usmallint = value;
+		break;
+	case PhysicalType::UINT32:
+		result.value_.uinteger = value;
+		break;
+	default:
+		throw InternalException("Incorrect Physical Type for ENUM");
+	}
+	result.is_null = false;
+	return result;
+}
 
 Value Value::INTERVAL(int32_t months, int32_t days, int64_t micros) {
 	Value result(LogicalType::INTERVAL);
@@ -802,6 +857,17 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::TimestampMs(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TimestampSec(timestamp_t(value));
+	case LogicalTypeId::ENUM:
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			return Value::UTINYINT((uint8_t)value);
+		case PhysicalType::UINT16:
+			return Value::USMALLINT((uint16_t)value);
+		case PhysicalType::UINT32:
+			return Value::UINTEGER((uint32_t)value);
+		default:
+			throw InternalException("Enum doesn't accept this physical type");
+		}
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
@@ -1020,6 +1086,19 @@ string Value::ToString() const {
 		}
 		ret += "}";
 		return ret;
+	}
+	case LogicalTypeId::ENUM: {
+		auto &values_insert_order = EnumType::GetValuesInsertOrder(type_);
+		switch (type_.InternalType()) {
+		case PhysicalType::UINT8:
+			return values_insert_order[value_.utinyint];
+		case PhysicalType::UINT16:
+			return values_insert_order[value_.usmallint];
+		case PhysicalType::UINT32:
+			return values_insert_order[value_.uinteger];
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());

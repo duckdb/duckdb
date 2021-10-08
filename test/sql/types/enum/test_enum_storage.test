@@ -1,0 +1,82 @@
+# name: test/sql/types/enum/test_enum_storage.test
+# description: ENUM types used in table/catalog storage tests
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+# load the DB from disk
+load __TEST_DIR__/enum_types.db
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+INSERT INTO person VALUES ('Moe', 'happy');
+
+query TT
+select * from person
+----
+Moe	happy
+
+statement ok
+DROP TABLE person;
+
+# reload the database from disk a few times, and check that the data in the catalog is still there
+loop i 0 2
+
+restart
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+INSERT INTO person VALUES ('Moe', 'happy');
+
+query TT
+select * from person
+----
+Moe	happy
+
+statement ok
+DROP TABLE person;
+
+endloop
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+INSERT INTO person VALUES ('Moe', 'happy');
+
+query TT
+select * from person
+----
+Moe	happy
+
+statement ok
+DROP TYPE mood;
+
+# reload the database from disk a few times, and check that the data in the table is still there
+loop i 0 2
+
+restart
+
+query TT
+select * from person
+----
+Moe	happy
+
+endloop
