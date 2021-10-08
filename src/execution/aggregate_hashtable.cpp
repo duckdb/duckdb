@@ -37,7 +37,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(BufferManager &buffer_manag
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      HtEntryType entry_type)
     : BaseAggregateHashTable(buffer_manager, move(payload_types_p)), entry_type(entry_type), capacity(0), entries(0),
-      payload_page_offset(0), addresses(LogicalType::POINTER), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
+      payload_page_offset(0), is_finalized(false), ht_offsets(LogicalTypeId::BIGINT),
       hash_salts(LogicalTypeId::SMALLINT), group_compare_vector(STANDARD_VECTOR_SIZE),
       no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE) {
 
