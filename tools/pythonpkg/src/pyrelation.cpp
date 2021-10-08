@@ -259,10 +259,12 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 
 void DuckDBPyRelation::Insert(py::object params) {
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(move(params))};
+	py::gil_scoped_release release;
 	rel->Insert(values);
 }
 
 void DuckDBPyRelation::Create(const string &table) {
+	py::gil_scoped_release release;
 	rel->Create(table);
 }
 
