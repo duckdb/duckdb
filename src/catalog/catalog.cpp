@@ -29,7 +29,7 @@ namespace duckdb {
 string SimilarCatalogEntry::GetQualifiedName() const {
 	D_ASSERT(Found());
 
-	return name + "." + schema->name;
+	return schema->name + "." + name;
 }
 
 Catalog::Catalog(DatabaseInstance &db)

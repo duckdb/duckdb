@@ -1,0 +1,10 @@
+# name: test/extension/load_test_helper.test
+# description: Enable TestHelperExtension.
+# group: [extension]
+
+require test_helper
+
+query I
+SELECT test_helper_hello();
+----
+Hello!
