@@ -720,6 +720,8 @@ struct ArrowPlanToDuckDB {
 static void transform_plan(duckdb::Connection &con, std::string q) {
 	auto plan = con.context->ExtractPlan(q);
 
+	printf("\n%s\n", q.c_str());
+
 	printf("\n%s\n", plan->ToString().c_str());
 
 	flatbuffers::FlatBufferBuilder fbb;
