@@ -2,6 +2,7 @@
 
 #include "duckdb/main/connection.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/qualified_name.hpp"
@@ -14,7 +15,7 @@ static string fts_schema_name(const string &schema, const string &table) {
 
 string drop_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto qname = QualifiedName::Parse(parameters.values[0].str_value);
-	qname.schema = qname.schema == INVALID_SCHEMA ? DEFAULT_SCHEMA : qname.schema;
+	qname.schema = context.catalog_search_path->GetOrDefault(qname.schema);
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
 	auto &catalog = Catalog::GetCatalog(context);
@@ -236,7 +237,7 @@ void check_exists(ClientContext &context, QualifiedName &qname) {
 
 string create_fts_index_query(ClientContext &context, const FunctionParameters &parameters) {
 	auto qname = QualifiedName::Parse(parameters.values[0].str_value);
-	qname.schema = qname.schema == INVALID_SCHEMA ? DEFAULT_SCHEMA : qname.schema;
+	qname.schema = context.catalog_search_path->GetOrDefault(qname.schema);
 	check_exists(context, qname);
 	string fts_schema = fts_schema_name(qname.schema, qname.name);
 
@@ -253,7 +254,7 @@ string create_fts_index_query(ClientContext &context, const FunctionParameters &
 		stopwords = stopword_entry->second.str_value;
 		if (stopwords != "english" && stopwords != "none") {
 			auto stopwords_qname = QualifiedName::Parse(stopwords);
-			stopwords_qname.schema = stopwords_qname.schema == INVALID_SCHEMA ? DEFAULT_SCHEMA : stopwords_qname.schema;
+			stopwords_qname.schema = context.catalog_search_path->GetOrDefault(stopwords_qname.schema);
 			check_exists(context, stopwords_qname);
 		}
 	}
