@@ -22,7 +22,7 @@ const vector<string> &CatalogSearchPath::Get() {
 }
 
 const string &CatalogSearchPath::GetOrDefault(const string &name) {
-	return name == INVALID_SCHEMA ? GetDefault() : name;
+	return name == INVALID_SCHEMA ? GetDefault() : name; // NOLINT
 }
 
 const string &CatalogSearchPath::GetDefault() {
