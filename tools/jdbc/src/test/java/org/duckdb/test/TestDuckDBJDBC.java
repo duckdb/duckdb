@@ -6,7 +6,6 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.sql.Blob;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Date;
@@ -1344,6 +1343,49 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	public static void test_unsiged_integers() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT 201::utinyint uint8, 40001::usmallint uint16, 4000000001::uinteger uint32, 18446744073709551615::ubigint uint64");
+		assertTrue(rs.next());
+
+		assertEquals(rs.getShort("uint8"), Short.valueOf((short) 201));
+		assertEquals(rs.getObject("uint8"), Short.valueOf((short) 201));
+		assertEquals(rs.getInt("uint8"), Integer.valueOf((int) 201));
+
+		assertEquals(rs.getInt("uint16"), Integer.valueOf((int) 40001));
+		assertEquals(rs.getObject("uint16"), Integer.valueOf((int) 40001));
+		assertEquals(rs.getLong("uint16"), Long.valueOf((long) 40001));
+
+		assertEquals(rs.getLong("uint32"), Long.valueOf((long) 4000000001L));
+		assertEquals(rs.getObject("uint32"), Long.valueOf((long) 4000000001L));
+
+		assertEquals(rs.getObject("uint64"), new BigInteger("18446744073709551615"));
+
+		rs.close();
+
+		rs = stmt.executeQuery(
+				"SELECT NULL::utinyint uint8, NULL::usmallint uint16, NULL::uinteger uint32, NULL::ubigint uint64");
+		assertTrue(rs.next());
+
+		rs.getObject(1);
+		assertTrue(rs.wasNull());
+
+		rs.getObject(2);
+		assertTrue(rs.wasNull());
+
+		rs.getObject(3);
+		assertTrue(rs.wasNull());
+
+		rs.getObject(4);
+		assertTrue(rs.wasNull());
+
+		stmt.close();
+		conn.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
@@ -1352,6 +1394,7 @@ public class TestDuckDBJDBC {
 				m.invoke(null);
 			}
 		}
+		// test_unsiged_integers();
 		System.out.println("OK");
 	}
 }
