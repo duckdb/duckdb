@@ -37,7 +37,7 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 		}
 		if (current_operator->IsSink() && current_operator->sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
 			// one of the operators has already figured out no output is possible
-			// we can skip executing the pipeline entirely
+			// we can skip executing the pipeline
 			finished_processing = true;
 		}
 	}
@@ -65,15 +65,15 @@ void PipelineExecutor::Execute() {
 	PushFinalize();
 }
 
-OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) {
+OperatorResultType PipelineExecutor::ExecutePush(DataChunk &input) { // LCOV_EXCL_START
 	return ExecutePushInternal(input);
-}
+} // LCOV_EXCL_STOP
 
 OperatorResultType PipelineExecutor::ExecutePushInternal(DataChunk &input, idx_t initial_idx) {
 	D_ASSERT(pipeline.sink);
-	if (input.size() == 0) {
+	if (input.size() == 0) { // LCOV_EXCL_START
 		return OperatorResultType::NEED_MORE_INPUT;
-	}
+	} // LCOV_EXCL_STOP
 	while (true) {
 		OperatorResultType result;
 		if (!pipeline.operators.empty()) {
@@ -184,12 +184,12 @@ void PipelineExecutor::ExecutePull(DataChunk &result) {
 				Execute(source_chunk, result);
 			}
 		}
-	} catch (std::exception &ex) {
+	} catch (std::exception &ex) { // LCOV_EXCL_START
 		if (executor.HasError()) {
 			executor.ThrowException();
 		}
 		throw;
-	} catch (...) { // LCOV_EXCL_START
+	} catch (...) {
 		if (executor.HasError()) {
 			executor.ThrowException();
 		}
@@ -219,9 +219,9 @@ void PipelineExecutor::GoToSource(idx_t &current_idx, idx_t initial_idx) {
 }
 
 OperatorResultType PipelineExecutor::Execute(DataChunk &input, DataChunk &result, idx_t initial_idx) {
-	if (input.size() == 0) {
+	if (input.size() == 0) { // LCOV_EXCL_START
 		return OperatorResultType::NEED_MORE_INPUT;
-	}
+	} // LCOV_EXCL_STOP
 	D_ASSERT(!pipeline.operators.empty());
 
 	idx_t current_idx;

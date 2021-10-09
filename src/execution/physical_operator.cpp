@@ -27,11 +27,11 @@ void PhysicalOperator::Print() const {
 //===--------------------------------------------------------------------===//
 // Operator
 //===--------------------------------------------------------------------===//
+// LCOV_EXCL_START
 unique_ptr<OperatorState> PhysicalOperator::GetOperatorState(ClientContext &context) const {
 	return make_unique<OperatorState>();
 }
 
-// LCOV_EXCL_START
 OperatorResultType PhysicalOperator::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                              OperatorState &state) const {
 	throw InternalException("Calling Execute on a node that is not an operator!");

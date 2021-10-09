@@ -20,6 +20,7 @@ class Event;
 class PhysicalOperator;
 class Pipeline;
 
+// LCOV_EXCL_START
 class OperatorState {
 public:
 	virtual ~OperatorState() {
@@ -60,6 +61,7 @@ public:
 	virtual ~LocalSourceState() {
 	}
 };
+// LCOV_EXCL_STOP
 
 //! PhysicalOperator is the base class of the physical operators present in the
 //! execution plan

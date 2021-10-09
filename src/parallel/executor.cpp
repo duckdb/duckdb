@@ -164,9 +164,7 @@ void Executor::ScheduleEventsInternal(const vector<shared_ptr<Pipeline>> &pipeli
 			auto dep = dependency.lock();
 			D_ASSERT(dep);
 			auto event_map_entry = event_map.find(dep.get());
-			if (event_map_entry == event_map.end()) {
-				continue;
-			}
+			D_ASSERT(event_map_entry != event_map.end());
 			auto &dep_entry = event_map_entry->second;
 			D_ASSERT(dep_entry.pipeline_complete_event);
 			entry.second.pipeline_event->AddDependency(*dep_entry.pipeline_complete_event);
@@ -605,7 +603,7 @@ void Executor::ThrowException() {
 	ThrowExceptionInternal();
 }
 
-void Executor::ThrowExceptionInternal() {
+void Executor::ThrowExceptionInternal() { // LCOV_EXCL_START
 	D_ASSERT(!exceptions.empty());
 	auto &entry = exceptions[0];
 	switch (entry.first) {
@@ -632,7 +630,7 @@ void Executor::ThrowExceptionInternal() {
 	default:
 		throw Exception(entry.second);
 	}
-}
+} // LCOV_EXCL_STOP
 
 void Executor::Flush(ThreadContext &tcontext) {
 	lock_guard<mutex> elock(executor_lock);

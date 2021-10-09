@@ -31,9 +31,9 @@ void Event::Finish() {
 	// finished processing the pipeline, now we can schedule pipelines that depend on this pipeline
 	for (auto &parent_entry : parents) {
 		auto parent = parent_entry.lock();
-		if (!parent) {
+		if (!parent) { // LCOV_EXCL_START
 			continue;
-		}
+		} // LCOV_EXCL_STOP
 		// mark a dependency as completed for each of the parents
 		parent->CompleteDependency();
 	}

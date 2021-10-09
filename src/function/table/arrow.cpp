@@ -426,9 +426,9 @@ void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 		}
 	} else {
 		//! Check if last offset is higher than max uint32
-		if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) {
+		if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
 			throw std::runtime_error("DuckDB does not support Blobs over 4GB");
-		}
+		} // LCOV_EXCL_STOP
 		auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
 			offsets = (uint64_t *)array.buffers[1] + array.offset + nested_offset;
@@ -625,9 +625,9 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.first++];
 		auto cdata = (char *)array.buffers[2];
 		if (original_type.first == ArrowVariableSizeType::SUPER_SIZE) {
-			if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) {
+			if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
 				throw std::runtime_error("DuckDB does not support Strings over 4GB");
-			}
+			} // LCOV_EXCL_STOP
 			auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
 				offsets = (uint64_t *)array.buffers[1] + array.offset + nested_offset;

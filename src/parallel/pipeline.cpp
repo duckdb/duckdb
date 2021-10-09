@@ -92,9 +92,7 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 
 void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
-	if (!sink) {
-		return;
-	}
+	D_ASSERT(sink);
 	if (!ScheduleParallel(event)) {
 		// could not parallelize this pipeline: push a sequential task instead
 		ScheduleSequentialTask(event);
@@ -147,11 +145,11 @@ void Pipeline::Finalize(Event &event) {
 	try {
 		auto sink_state = sink->Finalize(*this, event, executor.context, *sink->sink_state);
 		sink->sink_state->state = sink_state;
-	} catch (Exception &ex) {
+	} catch (Exception &ex) { // LCOV_EXCL_START
 		executor.PushError(ex.type, ex.what());
 	} catch (std::exception &ex) {
 		executor.PushError(ExceptionType::UNKNOWN_TYPE, ex.what());
-	} catch (...) { // LCOV_EXCL_START
+	} catch (...) {
 		executor.PushError(ExceptionType::UNKNOWN_TYPE, "Unknown exception in Finalize!");
 	} // LCOV_EXCL_STOP
 }
