@@ -95,6 +95,11 @@ void Vector::Reference(Vector &other) {
 	Reinterpret(other);
 }
 
+void Vector::ReferenceAndSetType(Vector &other) {
+	type = other.GetType();
+	Reference(other);
+}
+
 void Vector::Reinterpret(Vector &other) {
 	vector_type = other.vector_type;
 	AssignSharedPointer(buffer, other.buffer);

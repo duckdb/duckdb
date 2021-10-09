@@ -7,20 +7,40 @@ import java.sql.SQLFeatureNotSupportedException;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
+import java.util.ArrayList;
+
+import org.duckdb.DuckDBResultSet.DuckDBBlobResult;
 
 public class DuckDBResultSetMetaData implements ResultSetMetaData {
 
-	public DuckDBResultSetMetaData(int param_count, int column_count, String[] column_names, String[] column_types) {
+	public DuckDBResultSetMetaData(int param_count, int column_count, String[] column_names,
+			String[] column_types_string) {
 		this.param_count = param_count;
 		this.column_count = column_count;
 		this.column_names = column_names;
-		this.column_types = column_types;
+		this.column_types_string = column_types_string;
+		ArrayList<DuckDBColumnType> column_types_al = new ArrayList<DuckDBColumnType>(column_count);
+
+		for (String column_type_string : this.column_types_string) {
+			column_types_al.add(TypeNameToType(column_type_string));
+		}
+		this.column_types = new DuckDBColumnType[column_count];
+		this.column_types = column_types_al.toArray(this.column_types);
+	}
+
+	public static DuckDBColumnType TypeNameToType(String type_name) {
+		if (type_name.startsWith("DECIMAL")) {
+			return DuckDBColumnType.DECIMAL;
+		} else {
+			return DuckDBColumnType.valueOf(type_name);
+		}
 	}
 
 	protected int param_count;
 	protected int column_count;
 	protected String[] column_names;
-	protected String[] column_types;
+	protected String[] column_types_string;
+	protected DuckDBColumnType[] column_types;
 
 	public int getColumnCount() throws SQLException {
 		return column_count;
@@ -37,38 +57,57 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		return column_names[column - 1];
 	}
 
-	public static int type_to_int(String type_name) throws SQLException {
-		if (type_name.equals("BOOLEAN")) {
+	public static int type_to_int(DuckDBColumnType type) throws SQLException {
+		switch (type) {
+		case BOOLEAN:
 			return Types.BOOLEAN;
-		} else if (type_name.equals("TINYINT")) {
+		case TINYINT:
 			return Types.TINYINT;
-		} else if (type_name.equals("SMALLINT")) {
+		case SMALLINT:
 			return Types.SMALLINT;
-		} else if (type_name.equals("INTEGER")) {
+		case INTEGER:
 			return Types.INTEGER;
-		} else if (type_name.equals("BIGINT")) {
+		case BIGINT:
 			return Types.BIGINT;
-		} else if (type_name.equals("FLOAT")) {
+		case HUGEINT:
+			return Types.JAVA_OBJECT;
+		case UTINYINT:
+			return Types.JAVA_OBJECT;
+		case USMALLINT:
+			return Types.JAVA_OBJECT;
+		case UINTEGER:
+			return Types.JAVA_OBJECT;
+		case UBIGINT:
+			return Types.JAVA_OBJECT;
+		case FLOAT:
 			return Types.FLOAT;
-		} else if (type_name.equals("DOUBLE") || type_name.startsWith("DECIMAL")) {
+		case DOUBLE:
 			return Types.DOUBLE;
-		} else if (type_name.equals("VARCHAR")) {
+		case DECIMAL:
+			return Types.DECIMAL;
+		case VARCHAR:
 			return Types.VARCHAR;
-		} else if (type_name.equals("TIME")) {
+		case TIME:
 			return Types.TIME;
-		} else if (type_name.equals("DATE")) {
+		case DATE:
 			return Types.DATE;
-		} else if (type_name.equals("TIMESTAMP")) {
+		case TIMESTAMP:
 			return Types.TIMESTAMP;
-		} else if (type_name.equals("INTERVAL")) {
-			return Types.VARCHAR;
-		} else {
-			throw new SQLException("Unknown type " + type_name);
+		case INTERVAL:
+			return Types.JAVA_OBJECT;
+		case BLOB:
+			return Types.BLOB;
+
+		default:
+			throw new SQLException("Unsupported type " + type.toString());
 		}
 	}
 
 	public int getColumnType(int column) throws SQLException {
-		return type_to_int(getColumnTypeName(column));
+		if (column > column_count) {
+			throw new SQLException("Column index out of bounds");
+		}
+		return type_to_int(column_types[column - 1]);
 	}
 
 	public String getColumnClassName(int column) throws SQLException {
@@ -95,6 +134,8 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 			return Date.class.toString();
 		case Types.TIMESTAMP:
 			return Timestamp.class.toString();
+		case Types.BLOB:
+			return DuckDBBlobResult.class.toString();
 		default:
 			throw new SQLException("Unknown type " + getColumnTypeName(column));
 		}
@@ -104,7 +145,7 @@ public class DuckDBResultSetMetaData implements ResultSetMetaData {
 		if (column > column_count) {
 			throw new SQLException("Column index out of bounds");
 		}
-		return column_types[column - 1];
+		return column_types_string[column - 1];
 	}
 
 	public boolean isReadOnly(int column) throws SQLException {
