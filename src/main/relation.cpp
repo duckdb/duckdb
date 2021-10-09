@@ -9,6 +9,7 @@
 #include "duckdb/main/relation/limit_relation.hpp"
 #include "duckdb/main/relation/order_relation.hpp"
 #include "duckdb/main/relation/projection_relation.hpp"
+#include "duckdb/main/relation/query_relation.hpp"
 #include "duckdb/main/relation/setop_relation.hpp"
 #include "duckdb/main/relation/subquery_relation.hpp"
 #include "duckdb/main/relation/table_function_relation.hpp"
@@ -249,6 +250,11 @@ unique_ptr<QueryResult> Relation::Query(const string &sql) {
 unique_ptr<QueryResult> Relation::Query(const string &name, const string &sql) {
 	CreateView(name);
 	return Query(sql);
+}
+
+shared_ptr<Relation> Relation::QueryRelation(const string &name, const string &sql) {
+	CreateView(name);
+	return make_shared<duckdb::QueryRelation>(context, sql);
 }
 
 unique_ptr<QueryResult> Relation::Explain() {

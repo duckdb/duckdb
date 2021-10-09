@@ -30,7 +30,11 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("distinct", &DuckDBPyRelation::Distinct, "Retrieve distinct rows from this relation object")
 	    .def("limit", &DuckDBPyRelation::Limit, "Only retrieve the first n rows from this relation object",
 	         py::arg("n"))
-	    .def("query", &DuckDBPyRelation::Query,
+	    .def("query_once", &DuckDBPyRelation::QueryOnce,
+	         "Create a relation from the given SQL query in sql_query on the view named virtual_table_name that refers to the "
+			 "relation object",
+	         py::arg("virtual_table_name"), py::arg("sql_query"))
+	    .def("query_relation", &DuckDBPyRelation::QueryRelation,
 	         "Run the given SQL query in sql_query on the view named virtual_table_name that refers to the relation "
 	         "object",
 	         py::arg("virtual_table_name"), py::arg("sql_query"))
@@ -221,7 +225,11 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::CreateView(const string &view_nam
 	return make_unique<DuckDBPyRelation>(rel);
 }
 
-unique_ptr<DuckDBPyResult> DuckDBPyRelation::Query(const string &view_name, const string &sql_query) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::QueryRelation(const string &view_name, const string &sql_query) {
+	return make_unique<DuckDBPyRelation>(rel->QueryRelation(view_name, sql_query));
+}
+
+unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryOnce(const string &view_name, const string &sql_query) {
 	auto res = make_unique<DuckDBPyResult>();
 	res->result = rel->Query(view_name, sql_query);
 	if (!res->result->success) {
@@ -243,7 +251,7 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
 }
 
 unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string &view_name, const string &sql_query) {
-	return DuckDBPyConnection::DefaultConnection()->FromDF(std::move(df))->Query(view_name, sql_query);
+	return DuckDBPyConnection::DefaultConnection()->FromDF(std::move(df))->QueryOnce(view_name, sql_query);
 }
 
 void DuckDBPyRelation::InsertInto(const string &table) {
