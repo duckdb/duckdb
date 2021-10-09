@@ -15,6 +15,7 @@ struct S3AuthParams {
 	const std::string access_key_id;
 	const std::string secret_access_key;
 	const std::string session_token;
+	const std::string endpoint;
 
 	static S3AuthParams ReadFrom(FileOpener *opener);
 };
@@ -24,6 +25,7 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 	std::string access_key_id;
 	std::string secret_access_key;
 	std::string session_token;
+	std::string endpoint;
 	Value value;
 
 	if (opener->TryGetCurrentSetting("s3_region", value)) {
@@ -42,7 +44,13 @@ S3AuthParams S3AuthParams::ReadFrom(FileOpener *opener) {
 		session_token = value.str_value;
 	}
 
-	return {region, access_key_id, secret_access_key, session_token};
+	if (opener->TryGetCurrentSetting("s3_endpoint", value)) {
+		endpoint = value.str_value;
+	} else {
+		endpoint = "s3.amazonaws.com";
+	}
+
+	return {region, access_key_id, secret_access_key, session_token, endpoint};
 }
 
 class S3FileHandle : public HTTPFileHandle {
@@ -156,10 +164,10 @@ unique_ptr<ResponseWrapper> S3FileSystem::Request(FileHandle &handle, string url
 	if (path.empty()) {
 		throw std::runtime_error("URL needs to contain key");
 	}
-	auto host = bucket + ".s3.amazonaws.com";
-	auto http_host = "https://" + host;
 	// actual request
 	const auto &auth_params = static_cast<S3FileHandle &>(handle).auth_params;
+	auto host = bucket + "." + auth_params.endpoint;
+	auto http_host = "https://" + host;
 	auto headers = create_s3_get_header(path, "", host, auth_params.region, "s3", method, auth_params.access_key_id,
 	                                    auth_params.secret_access_key, auth_params.session_token);
 	return HTTPFileSystem::Request(handle, http_host + path, method, headers, file_offset, buffer_out, buffer_len);
