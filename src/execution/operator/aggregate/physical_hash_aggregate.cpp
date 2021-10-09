@@ -319,8 +319,8 @@ public:
 	}
 };
 
-void PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                     GlobalSinkState &gstate_p) const {
+SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                 GlobalSinkState &gstate_p) const {
 	auto &gstate = (HashAggregateGlobalState &)gstate_p;
 	gstate.is_finalized = true;
 	// special case if we have non-combinable aggregates
@@ -328,7 +328,7 @@ void PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientCon
 	if (ForceSingleHT(gstate)) {
 		D_ASSERT(gstate.finalized_hts.size() <= 1);
 		D_ASSERT(gstate.finalized_hts.empty() || gstate.finalized_hts[0]);
-		return;
+		return SinkFinalizeType::READY;
 	}
 
 	// we can have two cases now, non-partitioned for few groups and radix-partitioned for very many groups.
@@ -378,6 +378,7 @@ void PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientCon
 		D_ASSERT(gstate.finalized_hts[0]);
 		gstate.finalized_hts[0]->Finalize();
 	}
+	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//

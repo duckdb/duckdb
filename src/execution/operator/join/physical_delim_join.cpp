@@ -92,11 +92,12 @@ void PhysicalDelimJoin::Combine(ExecutionContext &context, GlobalSinkState &stat
 	distinct->Combine(context, *distinct->sink_state, *lstate.distinct_state);
 }
 
-void PhysicalDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
-                                 GlobalSinkState &gstate) const {
+SinkFinalizeType PhysicalDelimJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &client,
+                                             GlobalSinkState &gstate) const {
 	// finalize the distinct HT
 	D_ASSERT(distinct);
 	distinct->Finalize(pipeline, event, client, *distinct->sink_state);
+	return SinkFinalizeType::READY;
 }
 
 string PhysicalDelimJoin::ParamsToString() const {

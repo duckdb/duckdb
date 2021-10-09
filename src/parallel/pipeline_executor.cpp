@@ -35,6 +35,11 @@ PipelineExecutor::PipelineExecutor(ClientContext &context_p, Pipeline &pipeline_
 			cached_chunks[i] = make_unique<DataChunk>();
 			cached_chunks[i]->Initialize(current_operator->GetTypes());
 		}
+		if (current_operator->IsSink() && current_operator->sink_state->state == SinkFinalizeType::NO_OUTPUT_POSSIBLE) {
+			// one of the operators has already figured out no output is possible
+			// we can skip executing the pipeline entirely
+			finished_processing = true;
+		}
 	}
 	InitializeChunk(final_chunk);
 }
@@ -43,6 +48,9 @@ void PipelineExecutor::Execute() {
 	D_ASSERT(pipeline.sink);
 	auto &source_chunk = pipeline.operators.empty() ? final_chunk : *intermediate_chunks[0];
 	while (true) {
+		if (finished_processing) {
+			break;
+		}
 		source_chunk.Reset();
 		FetchFromSource(source_chunk);
 		if (source_chunk.size() == 0) {
@@ -157,6 +165,9 @@ void PipelineExecutor::CacheChunk(DataChunk &current_chunk, idx_t operator_idx) 
 }
 
 void PipelineExecutor::ExecutePull(DataChunk &result) {
+	if (finished_processing) {
+		return;
+	}
 	auto &executor = pipeline.executor;
 	try {
 		D_ASSERT(!pipeline.sink);

@@ -31,8 +31,12 @@ public:
 
 class GlobalSinkState {
 public:
+	GlobalSinkState() : state(SinkFinalizeType::READY) {
+	}
 	virtual ~GlobalSinkState() {
 	}
+
+	SinkFinalizeType state;
 };
 
 class LocalSinkState {
@@ -138,7 +142,9 @@ public:
 	virtual void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const;
 	//! The finalize is called when ALL threads are finished execution. It is called only once per pipeline, and is
 	//! entirely single threaded.
-	virtual void Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate) const;
+	//! If Finalize returns SinkResultType::FINISHED, the sink is marked as finished
+	virtual SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                                  GlobalSinkState &gstate) const;
 
 	virtual unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 	virtual unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;

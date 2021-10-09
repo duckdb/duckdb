@@ -70,8 +70,9 @@ SinkResultType PhysicalOperator::Sink(ExecutionContext &context, GlobalSinkState
 void PhysicalOperator::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
 }
 
-void PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                GlobalSinkState &gstate) const {
+SinkFinalizeType PhysicalOperator::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                            GlobalSinkState &gstate) const {
+	return SinkFinalizeType::READY;
 }
 
 unique_ptr<LocalSinkState> PhysicalOperator::GetLocalSinkState(ExecutionContext &context) const {

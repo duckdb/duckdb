@@ -162,8 +162,8 @@ void PhysicalHashJoin::Combine(ExecutionContext &context, GlobalSinkState &gstat
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                GlobalSinkState &gstate) const {
+SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                            GlobalSinkState &gstate) const {
 	auto &sink = (HashJoinGlobalState &)gstate;
 	// check for possible perfect hash table
 	auto use_perfect_hash = sink.perfect_join_executor->CanDoPerfectHashJoin();
@@ -180,6 +180,10 @@ void PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext 
 		sink.hash_table->Finalize();
 	}
 	sink.finalized = true;
+	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
+		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+	}
+	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//

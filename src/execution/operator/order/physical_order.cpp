@@ -158,14 +158,14 @@ public:
 	}
 };
 
-void PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                             GlobalSinkState &gstate_p) const {
+SinkFinalizeType PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                         GlobalSinkState &gstate_p) const {
 	auto &state = (OrderGlobalState &)gstate_p;
 	auto &global_sort_state = state.global_sort_state;
 
 	if (global_sort_state.sorted_blocks.empty()) {
 		// Empty input!
-		return;
+		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
 
 	// Prepare for merge sort phase
@@ -175,6 +175,7 @@ void PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, ClientContext &co
 	if (global_sort_state.sorted_blocks.size() > 1) {
 		PhysicalOrder::ScheduleMergeTasks(pipeline, event, state);
 	}
+	return SinkFinalizeType::READY;
 }
 
 void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGlobalState &state) {

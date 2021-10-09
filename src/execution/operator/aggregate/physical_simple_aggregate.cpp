@@ -177,12 +177,13 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState
 	context.client.profiler->Flush(context.thread.profiler);
 }
 
-void PhysicalSimpleAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                       GlobalSinkState &gstate_p) const {
+SinkFinalizeType PhysicalSimpleAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                   GlobalSinkState &gstate_p) const {
 	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
 
 	D_ASSERT(!gstate.finished);
 	gstate.finished = true;
+	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//

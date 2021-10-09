@@ -442,10 +442,12 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, Lo
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Finalize(Pipeline &pipeline, Event &event, ClientContext &context, GlobalSinkState &gstate_p) const {
+SinkFinalizeType PhysicalTopN::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                        GlobalSinkState &gstate_p) const {
 	auto &gstate = (TopNGlobalState &)gstate_p;
 	// global finalize: compute the final top N
 	gstate.heap.Finalize();
+	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//

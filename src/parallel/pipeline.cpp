@@ -145,7 +145,8 @@ void Pipeline::Ready() {
 void Pipeline::Finalize(Event &event) {
 	D_ASSERT(ready);
 	try {
-		sink->Finalize(*this, event, executor.context, *sink->sink_state);
+		auto sink_state = sink->Finalize(*this, event, executor.context, *sink->sink_state);
+		sink->sink_state->state = sink_state;
 	} catch (Exception &ex) {
 		executor.PushError(ex.type, ex.what());
 	} catch (std::exception &ex) {

@@ -171,14 +171,18 @@ void PhysicalNestedLoopJoin::Combine(ExecutionContext &context, GlobalSinkState 
 	context.client.profiler->Flush(context.thread.profiler);
 }
 
-void PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                      GlobalSinkState &gstate_p) const {
+SinkFinalizeType PhysicalNestedLoopJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                  GlobalSinkState &gstate_p) const {
 	auto &gstate = (NestedLoopJoinGlobalState &)gstate_p;
 	if (join_type == JoinType::OUTER || join_type == JoinType::RIGHT) {
 		// for FULL/RIGHT OUTER JOIN, initialize found_match to false for every tuple
 		gstate.right_found_match = unique_ptr<bool[]>(new bool[gstate.right_data.Count()]);
 		memset(gstate.right_found_match.get(), 0, sizeof(bool) * gstate.right_data.Count());
 	}
+	if (gstate.right_chunks.Count() == 0 && EmptyResultIfRHSIsEmpty()) {
+		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
+	}
+	return SinkFinalizeType::READY;
 }
 
 unique_ptr<GlobalSinkState> PhysicalNestedLoopJoin::GetGlobalSinkState(ClientContext &context) const {
