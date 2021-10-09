@@ -6,6 +6,7 @@ import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Blob;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Date;
@@ -1312,6 +1313,10 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	private static String blob_to_string(Blob b) throws SQLException {
+		return new String(b.getBytes(0, (int) b.length()), StandardCharsets.US_ASCII);
+	}
+
 	public static void test_blob_bug1090() throws Exception {
 		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
@@ -1323,14 +1328,10 @@ public class TestDuckDBJDBC {
 				.executeQuery("SELECT '" + test_str1 + "'::BLOB a, NULL::BLOB b, '" + test_str2 + "'::BLOB c");
 		assertTrue(rs.next());
 
-		String text1 = new String(rs.getBlob(1).getBinaryStream().readAllBytes(), StandardCharsets.US_ASCII);
-		String text2 = new String(rs.getBlob("a").getBinaryStream().readAllBytes(), StandardCharsets.US_ASCII);
+		assertTrue(test_str1.equals(blob_to_string(rs.getBlob(1))));
+		assertTrue(test_str1.equals(blob_to_string(rs.getBlob("a"))));
 
-		assertTrue(test_str1.equals(text1));
-		assertTrue(test_str1.equals(text2));
-
-		String text3 = new String(rs.getBlob("c").getBinaryStream().readAllBytes(), StandardCharsets.US_ASCII);
-		assertTrue(test_str2.equals(text3));
+		assertTrue(test_str2.equals(blob_to_string(rs.getBlob("c"))));
 
 		rs.getBlob("a");
 		assertFalse(rs.wasNull());
