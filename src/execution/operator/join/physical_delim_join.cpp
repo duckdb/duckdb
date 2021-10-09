@@ -7,14 +7,6 @@
 
 namespace duckdb {
 
-// class PhysicalDelimJoinState : public OperatorState {
-// public:
-// 	PhysicalDelimJoinState(PhysicalOperator &op, PhysicalOperator *left) : OperatorState(op, left) {
-// 	}
-
-// 	unique_ptr<OperatorState> join_state;
-// };
-
 PhysicalDelimJoin::PhysicalDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
                                      vector<PhysicalOperator *> delim_scans, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::DELIM_JOIN, move(types), estimated_cardinality), join(move(original_join)),
