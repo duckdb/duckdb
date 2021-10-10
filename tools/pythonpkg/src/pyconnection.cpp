@@ -86,7 +86,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
 	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"))
-	    .def("__getattr__", &DuckDBPyConnection::GetAttr, "Get result set attributes, mainly column names");
+	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
+	                           "Get result set attributes, mainly column names");
 
 	PyDateTime_IMPORT;
 }
@@ -313,14 +314,11 @@ DuckDBPyConnection *DuckDBPyConnection::Rollback() {
 	return this;
 }
 
-py::object DuckDBPyConnection::GetAttr(const py::str &key) {
-	if (key.cast<string>() == "description") {
-		if (!result) {
-			return py::none();
-		}
-		return result->Description();
+py::object DuckDBPyConnection::GetDescription() {
+	if (!result) {
+		return py::none();
 	}
-	return py::none();
+	return result->Description();
 }
 
 void DuckDBPyConnection::Close() {
