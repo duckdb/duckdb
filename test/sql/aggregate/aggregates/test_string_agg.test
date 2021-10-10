@@ -197,7 +197,7 @@ statement ok
 INSERT INTO integers (VALUES (1), (2), (3), (NULL));
 
 query II
-SELECT i1.i, (SELECT STRING_AGG(i::VARCHAR, ',' ORDER BY i1.i) FROM integers WHERE i<=i1.i) c1
+SELECT i1.i, (SELECT STRING_AGG(i::VARCHAR, ',' ORDER BY i1.i+i) FROM integers WHERE i<=i1.i) c1
 FROM integers i1
 ORDER BY 1 NULLS LAST
 ----

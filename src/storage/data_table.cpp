@@ -272,9 +272,14 @@ idx_t DataTable::MaxThreads(ClientContext &context) {
 	return total_rows / parallel_scan_tuple_count + 1;
 }
 
-void DataTable::InitializeParallelScan(ParallelTableScanState &state) {
+void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
 	state.current_row_group = (RowGroup *)row_groups->GetRootSegment();
 	state.transaction_local_data = false;
+	// figure out the max row we can scan for both the regular and the transaction-local storage
+	state.max_row = total_rows;
+	state.local_state.max_index = 0;
+	auto &transaction = Transaction::GetTransaction(context);
+	transaction.storage.InitializeScan(this, state.local_state, nullptr);
 }
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
@@ -291,6 +296,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 			vector_index = 0;
 			max_row = state.current_row_group->start + state.current_row_group->count;
 		}
+		max_row = MinValue<idx_t>(max_row, state.max_row);
 		bool need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters,
 		                                             state.current_row_group, vector_index, max_row);
 		if (context.verify_parallelism) {
@@ -314,6 +320,8 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		scan_state.row_group_scan_state.max_row = 0;
 		scan_state.max_row = 0;
 		transaction.storage.InitializeScan(this, scan_state.local_state, scan_state.table_filters);
+		scan_state.local_state.max_index = state.local_state.max_index;
+		scan_state.local_state.last_chunk_count = state.local_state.last_chunk_count;
 		state.transaction_local_data = true;
 		return true;
 	} else {

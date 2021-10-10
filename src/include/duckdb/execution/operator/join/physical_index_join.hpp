@@ -23,6 +23,7 @@ public:
 	                  vector<JoinCondition> cond, JoinType join_type, const vector<idx_t> &left_projection_map,
 	                  vector<idx_t> right_projection_map, vector<column_t> column_ids, Index *index, bool lhs_first,
 	                  idx_t estimated_cardinality);
+
 	//! Columns from RHS used in the query
 	vector<column_t> column_ids;
 	//! Columns to be fetched
@@ -40,21 +41,31 @@ public:
 	//! The types of all conditions
 	vector<LogicalType> build_types;
 	//! Index used for join
-	Index *index {};
+	Index *index;
 
 	vector<JoinCondition> conditions;
 
 	JoinType join_type;
 	//! In case we swap rhs with lhs we need to output columns related to rhs first.
 	bool lhs_first = true;
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
+
+public:
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                           OperatorState &state) const override;
+
+	bool ParallelOperator() const override {
+		return true;
+	}
+
+	bool RequiresCache() const override {
+		return true;
+	}
 
 private:
-	void GetRHSMatches(ExecutionContext &context, PhysicalOperatorState *state_p) const;
+	void GetRHSMatches(ExecutionContext &context, DataChunk &input, OperatorState &state_p) const;
 	//! Fills result chunk
-	void Output(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const;
+	void Output(ExecutionContext &context, DataChunk &input, DataChunk &chunk, OperatorState &state_p) const;
 };
 
 } // namespace duckdb

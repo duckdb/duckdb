@@ -5,19 +5,22 @@
 
 namespace duckdb {
 
-PerfectHashJoinExecutor::PerfectHashJoinExecutor(PerfectHashJoinStats perfect_join_stats)
-    : perfect_join_statistics(std::move(perfect_join_stats)) {
+PerfectHashJoinExecutor::PerfectHashJoinExecutor(const PhysicalHashJoin &join_p, JoinHashTable &ht_p,
+                                                 PerfectHashJoinStats perfect_join_stats)
+    : join(join_p), ht(ht_p), perfect_join_statistics(move(perfect_join_stats)) {
 }
 
 bool PerfectHashJoinExecutor::CanDoPerfectHashJoin() {
 	return perfect_join_statistics.is_build_small;
 }
 
-void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_ptr, JoinHTScanState &join_ht_state,
-                                                    LogicalType &key_type) {
+//===--------------------------------------------------------------------===//
+// Build
+//===--------------------------------------------------------------------===//
+bool PerfectHashJoinExecutor::BuildPerfectHashTable(LogicalType &key_type) {
 	// First, allocate memory for each build column
 	auto build_size = perfect_join_statistics.build_range + 1;
-	for (const auto &type : hash_table_ptr->build_types) {
+	for (const auto &type : ht.build_types) {
 		perfect_hash_table.emplace_back(type, build_size);
 	}
 	// and for duplicate_checking
@@ -25,79 +28,75 @@ void PerfectHashJoinExecutor::BuildPerfectHashTable(JoinHashTable *hash_table_pt
 	memset(bitmap_build_idx.get(), 0, sizeof(bool) * build_size); // set false
 
 	// Now fill columns with build data
-	FullScanHashTable(join_ht_state, key_type, hash_table_ptr);
+	JoinHTScanState join_ht_state;
+	return FullScanHashTable(join_ht_state, key_type);
 }
 
-void PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType &key_type,
-                                                JoinHashTable *hash_table) {
-	Vector tuples_addresses(LogicalType::POINTER, hash_table->Count());     // allocate space for all the tuples
+bool PerfectHashJoinExecutor::FullScanHashTable(JoinHTScanState &state, LogicalType &key_type) {
+	Vector tuples_addresses(LogicalType::POINTER, ht.Count());              // allocate space for all the tuples
 	auto key_locations = FlatVector::GetData<data_ptr_t>(tuples_addresses); // get a pointer to vector data
 	// TODO: In a parallel finalize: One should exclusively lock and each thread should do one part of the code below.
 	// Go through all the blocks and fill the keys addresses
-	auto keys_count = hash_table->FillWithHTOffsets(key_locations, state);
+	auto keys_count = ht.FillWithHTOffsets(key_locations, state);
 	// Scan the build keys in the hash table
 	Vector build_vector(key_type, keys_count);
-	RowOperations::FullScanColumn(hash_table->layout, tuples_addresses, build_vector, keys_count, 0);
+	RowOperations::FullScanColumn(ht.layout, tuples_addresses, build_vector, keys_count, 0);
 	// Now fill the selection vector using the build keys and create a sequential vector
 	// todo: add check for fast pass when probe is part of build domain
 	SelectionVector sel_build(keys_count + 1);
 	SelectionVector sel_tuples(keys_count + 1);
-	FillSelectionVectorSwitchBuild(build_vector, sel_build, sel_tuples, keys_count);
+	bool success = FillSelectionVectorSwitchBuild(build_vector, sel_build, sel_tuples, keys_count);
 	// early out
-	if (has_duplicates) {
-		return;
+	if (!success) {
+		return false;
 	}
-	if (unique_keys == perfect_join_statistics.build_range + 1 && !hash_table->has_null) {
+	if (unique_keys == perfect_join_statistics.build_range + 1 && !ht.has_null) {
 		perfect_join_statistics.is_build_dense = true;
 	}
 	keys_count = unique_keys; // do not consider keys out of the range
 	// Full scan the remaining build columns and fill the perfect hash table
-	for (idx_t i = 0; i < hash_table->build_types.size(); i++) {
+	for (idx_t i = 0; i < ht.build_types.size(); i++) {
 		auto build_size = perfect_join_statistics.build_range + 1;
 		auto &vector = perfect_hash_table[i];
-		D_ASSERT(vector.GetType() == hash_table->build_types[i]);
-		const auto col_no = hash_table->condition_types.size() + i;
-		const auto col_offset = hash_table->layout.GetOffsets()[col_no];
+		D_ASSERT(vector.GetType() == ht.build_types[i]);
+		const auto col_no = ht.condition_types.size() + i;
+		const auto col_offset = ht.layout.GetOffsets()[col_no];
 		RowOperations::Gather(tuples_addresses, sel_tuples, vector, sel_build, keys_count, col_offset, col_no,
 		                      build_size);
 	}
+	return true;
 }
 
-void PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, SelectionVector &sel_vec,
+bool PerfectHashJoinExecutor::FillSelectionVectorSwitchBuild(Vector &source, SelectionVector &sel_vec,
                                                              SelectionVector &seq_sel_vec, idx_t count) {
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::INT8:
-		TemplatedFillSelectionVectorBuild<int8_t>(source, sel_vec, seq_sel_vec, count);
-		break;
+		return TemplatedFillSelectionVectorBuild<int8_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::INT16:
-		TemplatedFillSelectionVectorBuild<int16_t>(source, sel_vec, seq_sel_vec, count);
-		break;
+		return TemplatedFillSelectionVectorBuild<int16_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::INT32:
-		TemplatedFillSelectionVectorBuild<int32_t>(source, sel_vec, seq_sel_vec, count);
-		break;
+		return TemplatedFillSelectionVectorBuild<int32_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::INT64:
-		TemplatedFillSelectionVectorBuild<int64_t>(source, sel_vec, seq_sel_vec, count);
-		break;
+		return TemplatedFillSelectionVectorBuild<int64_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::UINT8:
-		TemplatedFillSelectionVectorBuild<uint8_t>(source, sel_vec, seq_sel_vec, count);
-		break;
+		return TemplatedFillSelectionVectorBuild<uint8_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::UINT16:
-		TemplatedFillSelectionVectorBuild<uint16_t>(source, sel_vec, seq_sel_vec, count);
-		break;
+		return TemplatedFillSelectionVectorBuild<uint16_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::UINT32:
-		TemplatedFillSelectionVectorBuild<uint32_t>(source, sel_vec, seq_sel_vec, count);
-		break;
+		return TemplatedFillSelectionVectorBuild<uint32_t>(source, sel_vec, seq_sel_vec, count);
 	case PhysicalType::UINT64:
-		TemplatedFillSelectionVectorBuild<uint64_t>(source, sel_vec, seq_sel_vec, count);
-		break;
+		return TemplatedFillSelectionVectorBuild<uint64_t>(source, sel_vec, seq_sel_vec, count);
 	default:
-		throw NotImplementedException("Type not supported");
+		throw NotImplementedException("Type not supported for perfect hash join");
 	}
 }
 
 template <typename T>
-void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec,
+bool PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec,
                                                                 SelectionVector &seq_sel_vec, idx_t count) {
+	if (perfect_join_statistics.build_min.is_null || perfect_join_statistics.build_max.is_null) {
+		return false;
+	}
 	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
 	VectorData vector_data;
@@ -112,8 +111,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 			auto idx = (idx_t)(input_value - min_value); // subtract min value to get the idx position
 			sel_vec.set_index(sel_idx, idx);
 			if (bitmap_build_idx[idx]) {
-				has_duplicates = true;
-				break;
+				return false;
 			} else {
 				bitmap_build_idx[idx] = true;
 				unique_keys++;
@@ -121,49 +119,63 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorBuild(Vector &source, 
 			seq_sel_vec.set_index(sel_idx++, i);
 		}
 	}
+	return true;
 }
 
-bool PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &result,
-                                                    PhysicalHashJoinState *physical_state, JoinHashTable *ht_ptr,
-                                                    PhysicalOperator *operator_child) {
-	do {
-		// keeps track of how many probe keys have a match
-		idx_t probe_sel_count = 0;
+//===--------------------------------------------------------------------===//
+// Probe
+//===--------------------------------------------------------------------===//
+class PerfectHashJoinState : public OperatorState {
+public:
+	DataChunk join_keys;
+	ExpressionExecutor probe_executor;
+	SelectionVector build_sel_vec;
+	SelectionVector probe_sel_vec;
+	SelectionVector seq_sel_vec;
+};
 
-		// fetch the chunk to join
-		operator_child->GetChunk(context, physical_state->child_chunk, physical_state->child_state.get());
-		if (physical_state->child_chunk.size() == 0) {
-			// no more keys to probe
-			return true;
-		}
-		// fetch the join keys from the chunk
-		physical_state->probe_executor.Execute(physical_state->child_chunk, physical_state->join_keys);
-		// select the keys that are in the min-max range
-		auto &keys_vec = physical_state->join_keys.data[0];
-		auto keys_count = physical_state->join_keys.size();
-		// todo: add check for fast pass when probe is part of build domain
-		FillSelectionVectorSwitchProbe(keys_vec, physical_state->build_sel_vec, physical_state->probe_sel_vec,
-		                               keys_count, probe_sel_count);
+unique_ptr<OperatorState> PerfectHashJoinExecutor::GetOperatorState(ClientContext &context) {
+	auto state = make_unique<PerfectHashJoinState>();
+	state->join_keys.Initialize(join.condition_types);
+	for (auto &cond : join.conditions) {
+		state->probe_executor.AddExpression(*cond.left);
+	}
+	state->build_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
+	state->probe_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
+	state->seq_sel_vec.Initialize(STANDARD_VECTOR_SIZE);
+	return move(state);
+}
 
-		// If build is dense and probe is in build's domain, just reference probe
-		if (perfect_join_statistics.is_build_dense && keys_count == probe_sel_count) {
-			result.Reference(physical_state->child_chunk);
-		} else {
-			// otherwise, filter it out the values that do not match
-			result.Slice(physical_state->child_chunk, physical_state->probe_sel_vec, probe_sel_count, 0);
-		}
-		// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
-		for (idx_t i = 0; i < ht_ptr->build_types.size(); i++) {
-			auto &result_vector = result.data[physical_state->child_chunk.ColumnCount() + i];
-			D_ASSERT(result_vector.GetType() == ht_ptr->build_types[i]);
-			auto &build_vec = perfect_hash_table[i];
-			result_vector.Reference(build_vec);
-			result_vector.Slice(physical_state->build_sel_vec, probe_sel_count);
-		}
+OperatorResultType PerfectHashJoinExecutor::ProbePerfectHashTable(ExecutionContext &context, DataChunk &input,
+                                                                  DataChunk &result, OperatorState &state_p) {
+	auto &state = (PerfectHashJoinState &)state_p;
+	// keeps track of how many probe keys have a match
+	idx_t probe_sel_count = 0;
 
-	} while (result.size() == 0);
-	result.Verify();
-	return true;
+	// fetch the join keys from the chunk
+	state.probe_executor.Execute(input, state.join_keys);
+	// select the keys that are in the min-max range
+	auto &keys_vec = state.join_keys.data[0];
+	auto keys_count = state.join_keys.size();
+	// todo: add check for fast pass when probe is part of build domain
+	FillSelectionVectorSwitchProbe(keys_vec, state.build_sel_vec, state.probe_sel_vec, keys_count, probe_sel_count);
+
+	// If build is dense and probe is in build's domain, just reference probe
+	if (perfect_join_statistics.is_build_dense && keys_count == probe_sel_count) {
+		result.Reference(input);
+	} else {
+		// otherwise, filter it out the values that do not match
+		result.Slice(input, state.probe_sel_vec, probe_sel_count, 0);
+	}
+	// on the build side, we need to fetch the data and build dictionary vectors with the sel_vec
+	for (idx_t i = 0; i < ht.build_types.size(); i++) {
+		auto &result_vector = result.data[input.ColumnCount() + i];
+		D_ASSERT(result_vector.GetType() == ht.build_types[i]);
+		auto &build_vec = perfect_hash_table[i];
+		result_vector.Reference(build_vec);
+		result_vector.Slice(state.build_sel_vec, probe_sel_count);
+	}
+	return OperatorResultType::NEED_MORE_INPUT;
 }
 
 void PerfectHashJoinExecutor::FillSelectionVectorSwitchProbe(Vector &source, SelectionVector &build_sel_vec,
@@ -205,6 +217,7 @@ void PerfectHashJoinExecutor::TemplatedFillSelectionVectorProbe(Vector &source, 
                                                                 idx_t &probe_sel_count) {
 	auto min_value = perfect_join_statistics.build_min.GetValueUnsafe<T>();
 	auto max_value = perfect_join_statistics.build_max.GetValueUnsafe<T>();
+
 	VectorData vector_data;
 	source.Orrify(count, vector_data);
 	auto data = reinterpret_cast<T *>(vector_data.data);

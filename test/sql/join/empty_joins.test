@@ -1,0 +1,129 @@
+# name: test/sql/join/empty_joins.test
+# description: Test joins with empty inputs
+# group: [join]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT i FROM range(10) tbl(i)
+
+statement ok
+CREATE TABLE integers2 AS SELECT i FROM range(10) tbl(i)
+
+statement ok
+CREATE VIEW integers_empty AS SELECT * FROM integers WHERE rowid>100
+
+statement ok
+CREATE VIEW integers2_empty AS SELECT * FROM integers WHERE rowid>100
+
+statement ok
+CREATE VIEW empty_join AS SELECT * FROM integers JOIN integers2_empty USING (i)
+
+# empty LHS
+query I
+SELECT COUNT(*) FROM integers_empty JOIN integers2 USING (i)
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers_empty JOIN integers2 ON (integers_empty.i>integers2.i)
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers_empty JOIN integers2 ON (integers_empty.i<>integers2.i)
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers_empty JOIN integers2 ON (integers_empty.i<>integers2.i OR integers_empty.i+1<>integers2.i)
+----
+0
+
+query I
+SELECT * FROM integers_empty JOIN integers2 USING (i)
+----
+
+query I
+SELECT COUNT(*) FROM integers_empty LEFT JOIN integers2 USING (i)
+----
+0
+
+query I
+SELECT * FROM integers_empty LEFT JOIN integers2 USING (i)
+----
+
+query I
+SELECT COUNT(*) FROM integers_empty RIGHT JOIN integers2 USING (i)
+----
+10
+
+query I
+SELECT COUNT(*) FROM integers_empty FULL OUTER JOIN integers2 USING (i)
+----
+10
+
+# empty RHS
+query I
+SELECT COUNT(*) FROM integers JOIN integers2_empty USING (i)
+----
+0
+
+query I
+SELECT * FROM integers JOIN integers2_empty USING (i)
+----
+
+query I
+SELECT COUNT(*) FROM integers LEFT JOIN integers2_empty USING (i)
+----
+10
+
+query I
+SELECT COUNT(*) FROM integers RIGHT JOIN integers2_empty USING (i)
+----
+0
+
+query I
+SELECT * FROM integers RIGHT JOIN integers2_empty USING (i)
+----
+
+query I
+SELECT COUNT(*) FROM integers FULL OUTER JOIN integers2_empty USING (i)
+----
+10
+
+query II
+SELECT integers.*, integers2_empty.* FROM integers FULL OUTER JOIN integers2_empty USING (i)
+----
+0	NULL
+1	NULL
+2	NULL
+3	NULL
+4	NULL
+5	NULL
+6	NULL
+7	NULL
+8	NULL
+9	NULL
+
+# nested empty
+query I
+SELECT COUNT(*) FROM integers JOIN empty_join USING (i)
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers LEFT JOIN empty_join USING (i)
+----
+10
+
+query I
+SELECT COUNT(*) FROM integers RIGHT JOIN empty_join USING (i)
+----
+0
+
+query I
+SELECT COUNT(*) FROM integers FULL OUTER JOIN empty_join USING (i)
+----
+10
