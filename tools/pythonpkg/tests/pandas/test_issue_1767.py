@@ -4,13 +4,10 @@
 import duckdb
 import pandas as pd
 import numpy
-import sys
 
 # Join from pandas not matching identical strings #1767
 class TestIssue1767(object):
     def test_unicode_join_pandas(self, duckdb_cursor):
-        if sys.version_info.major < 3:
-            return
         A = pd.DataFrame({"key": ["a", "п"]})
         B = pd.DataFrame({"key": ["a", "п"]})
         con = duckdb.connect(":memory:")

@@ -9,6 +9,8 @@ string CatalogTypeToString(CatalogType type) {
 	switch (type) {
 	case CatalogType::COLLATION_ENTRY:
 		return "Collation";
+	case CatalogType::TYPE_ENTRY:
+		return "Type";
 	case CatalogType::TABLE_ENTRY:
 		return "Table";
 	case CatalogType::SCHEMA_ENTRY:

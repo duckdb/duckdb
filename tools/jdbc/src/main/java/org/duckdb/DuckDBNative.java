@@ -18,6 +18,9 @@ public class DuckDBNative {
 			if (os_arch_detect.equals("x86_64") || os_arch_detect.equals("amd64")) {
 				os_arch = "amd64";
 			}
+            if (os_arch_detect.equals("aarch64") || os_arch_detect.equals("arm64")) {
+                os_arch = "arm64";
+            }
 			// TODO 32 bit gunk
 
 			if (os_name_detect.startsWith("windows")) {

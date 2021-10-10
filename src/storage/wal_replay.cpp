@@ -1,22 +1,22 @@
-#include "duckdb/storage/write_ahead_log.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/common/serializer/buffered_file_reader.hpp"
 #include "duckdb/catalog/catalog_entry/macro_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/common/printer.hpp"
+#include "duckdb/common/serializer/buffered_file_reader.hpp"
+#include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
-#include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
+#include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/common/printer.hpp"
-#include "duckdb/common/string_util.hpp"
-
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/storage/write_ahead_log.hpp"
 namespace duckdb {
 class ReplayState {
 public:
@@ -45,6 +45,9 @@ private:
 
 	void ReplayCreateSchema();
 	void ReplayDropSchema();
+
+	void ReplayCreateType();
+	void ReplayDropType();
 
 	void ReplayCreateSequence();
 	void ReplayDropSequence();
@@ -202,6 +205,13 @@ void ReplayState::ReplayEntry(WALType entry_type) {
 	case WALType::CHECKPOINT:
 		ReplayCheckpoint();
 		break;
+	case WALType::CREATE_TYPE:
+		ReplayCreateType();
+		break;
+	case WALType::DROP_TYPE:
+		ReplayDropType();
+		break;
+
 	default:
 		throw InternalException("Invalid WAL entry type!");
 	}
@@ -290,6 +300,38 @@ void ReplayState::ReplayDropSchema() {
 	DropInfo info;
 
 	info.type = CatalogType::SCHEMA_ENTRY;
+	info.name = source.Read<string>();
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.DropEntry(context, &info);
+}
+
+//===--------------------------------------------------------------------===//
+// Replay Custom Type
+//===--------------------------------------------------------------------===//
+void ReplayState::ReplayCreateType() {
+	CreateTypeInfo info;
+
+	info.schema = source.Read<string>();
+	info.name = source.Read<string>();
+	info.type = make_unique<LogicalType>(LogicalType::Deserialize(source));
+
+	if (deserialize_only) {
+		return;
+	}
+
+	auto &catalog = Catalog::GetCatalog(context);
+	catalog.CreateType(context, &info);
+}
+
+void ReplayState::ReplayDropType() {
+	DropInfo info;
+
+	info.type = CatalogType::TYPE_ENTRY;
+	info.schema = source.Read<string>();
 	info.name = source.Read<string>();
 	if (deserialize_only) {
 		return;

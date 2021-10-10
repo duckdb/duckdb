@@ -26,6 +26,7 @@ public:
 
 	const vector<string> &Get();
 	const string &GetDefault();
+	const string &GetOrDefault(const string &name);
 
 private:
 	static vector<string> ParsePaths(const string &value);

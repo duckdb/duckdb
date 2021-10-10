@@ -3,7 +3,6 @@ import tempfile
 import gc
 import duckdb
 import os
-import sys
 try:
     import pyarrow
     import pyarrow.parquet

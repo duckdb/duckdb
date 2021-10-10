@@ -1,7 +1,8 @@
 # name: test/sql/catalog/did_you_mean.test
 # Description: The error messages suggest possible alternative
 # group: [catalog]
- 
+require test_helper
+
 statement ok
 CREATE TABLE hello(i INTEGER);
 
@@ -14,13 +15,15 @@ CREATE TABLE test.bye(i INTEGER);
 statement error
 SELECT * FROM helloo;
 
-# TODO(omo): Test the error message being like this:
-# > Catalog Error: Table with name helloo does not exist!
-# > Did you mean "hello"?
+query I
+SELECT test_helper_last_error() LIKE '%Did you mean "hello"?%'
+----
+true
 
 statement error
 SELECT * FROM bye;
 
-# TODO(omo): Test the error message being like this:
-# > Catalog Error: Table with name bye does not exist!
-# > Did you mean "test.bye"?
+query I
+SELECT test_helper_last_error() LIKE '%Did you mean "test.bye"?%'
+----
+true

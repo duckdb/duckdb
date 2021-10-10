@@ -667,7 +667,7 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 					table_type_str += ',';
 				}
 			}
-			table_type_str +=  ") AND ";
+			table_type_str += ") AND ";
 		}
 		if (schemaPattern == null) {
 			schemaPattern = "%";
@@ -676,7 +676,9 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 			tableNamePattern = "%";
 		}
 		PreparedStatement ps = conn.prepareStatement(
-				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM', NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' FROM information_schema.tables WHERE "+ table_type_str +" table_schema LIKE ? AND table_name LIKE ? ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\"");
+				"SELECT table_catalog AS 'TABLE_CAT', table_schema AS 'TABLE_SCHEM', table_name AS 'TABLE_NAME', table_type as 'TABLE_TYPE', NULL AS 'REMARKS', NULL AS 'TYPE_CAT', NULL AS 'TYPE_SCHEM', NULL AS 'TYPE_NAME', NULL as 'SELF_REFERENCING_COL_NAME', NULL as 'REF_GENERATION' FROM information_schema.tables WHERE "
+						+ table_type_str
+						+ " table_schema LIKE ? AND table_name LIKE ? ORDER BY \"TABLE_TYPE\", \"TABLE_CAT\", \"TABLE_SCHEM\", \"TABLE_NAME\"");
 		ps.setString(1, schemaPattern);
 		ps.setString(2, tableNamePattern);
 		return ps.executeQuery();
@@ -707,8 +709,8 @@ public class DuckDBDatabaseMetaData implements DatabaseMetaData {
 		ResultSet rs = gunky_statement
 				.executeQuery("SELECT DISTINCT data_type FROM information_schema.columns ORDER BY data_type");
 		while (rs.next()) {
-			values_str += ", ('" + rs.getString(1) + "', "
-					+ Integer.toString(DuckDBResultSetMetaData.type_to_int(rs.getString(1))) + ")";
+			values_str += ", ('" + rs.getString(1) + "', " + Integer.toString(
+					DuckDBResultSetMetaData.type_to_int(DuckDBResultSetMetaData.TypeNameToType(rs.getString(1)))) + ")";
 		}
 		rs.close();
 		gunky_statement.close();
