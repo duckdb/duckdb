@@ -1094,9 +1094,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			break;
 		}
 		case ExpressionType::WINDOW_NTILE: {
-			if (payload_collection.ColumnCount() != 1) {
-				throw BinderException("NTILE needs a parameter");
-			}
+			D_ASSERT(payload_collection.ColumnCount() == 1);
 			auto n_param = GetCell<int64_t>(payload_collection, 0, row_idx);
 			// With thanks from SQLite's ntileValueFunc()
 			int64_t n_total = bounds.partition_end - bounds.partition_start;
