@@ -106,7 +106,10 @@ if 'BUILD_HTTPFS' in os.environ:
     libraries += ['crypto', 'ssl']
     extensions += ['httpfs']
 
-extra_files = []
+extra_files = [
+    "duckdb.pyi",
+    "py.typed"
+]
 header_files = []
 
 script_path = os.path.dirname(os.path.abspath(__file__))
