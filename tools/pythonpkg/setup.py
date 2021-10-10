@@ -106,10 +106,7 @@ if 'BUILD_HTTPFS' in os.environ:
     libraries += ['crypto', 'ssl']
     extensions += ['httpfs']
 
-extra_files = [
-    "duckdb.pyi",
-    "py.typed"
-]
+extra_files = []
 header_files = []
 
 script_path = os.path.dirname(os.path.abspath(__file__))
@@ -235,7 +232,10 @@ setup(
          'numpy>=1.14'
     ],
     data_files = data_files,
-    packages=['duckdb_query_graph'],
+    packages=[
+        'duckdb_query_graph',
+        'duckdb-stubs'
+    ],
     include_package_data=True,
     setup_requires=setup_requires + ["setuptools_scm"] + ['pybind11>=2.6.0'],
     use_scm_version = setuptools_scm_conf,
