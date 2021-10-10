@@ -9,15 +9,15 @@
 namespace duckdb {
 
 //! The operator state of the window
-class PhysicalUnnestOperatorState : public PhysicalOperatorState {
+class UnnestOperatorState : public OperatorState {
 public:
-	PhysicalUnnestOperatorState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), parent_position(0), list_position(0), list_length(-1) {
+	UnnestOperatorState() : parent_position(0), list_position(0), list_length(-1), first_fetch(true) {
 	}
 
 	idx_t parent_position;
 	idx_t list_position;
-	int64_t list_length = -1;
+	int64_t list_length;
+	bool first_fetch;
 
 	DataChunk list_data;
 	vector<VectorData> list_vector_data;
@@ -28,7 +28,6 @@ public:
 PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                idx_t estimated_cardinality, PhysicalOperatorType type)
     : PhysicalOperator(type, move(types), estimated_cardinality), select_list(std::move(select_list)) {
-
 	D_ASSERT(!this->select_list.empty());
 }
 
@@ -146,20 +145,15 @@ static void UnnestVector(VectorData &vdata, Vector &source, idx_t list_size, idx
 	}
 }
 
-void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                      PhysicalOperatorState *state_p) const {
-	auto state = reinterpret_cast<PhysicalUnnestOperatorState *>(state_p);
-	while (true) { // repeat until we actually have produced some rows
-		if (state->child_chunk.size() == 0 || state->parent_position >= state->child_chunk.size()) {
-			// get the child data
-			children[0]->GetChunk(context, state->child_chunk, state->child_state.get());
-			if (state->child_chunk.size() == 0) {
-				return;
-			}
-			state->parent_position = 0;
-			state->list_position = 0;
-			state->list_length = -1;
+unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ClientContext &context) const {
+	return make_unique<UnnestOperatorState>();
+}
 
+OperatorResultType PhysicalUnnest::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+                                           OperatorState &state_p) const {
+	auto &state = (UnnestOperatorState &)state_p;
+	do {
+		if (state.first_fetch) {
 			// get the list data to unnest
 			ExpressionExecutor executor;
 			vector<LogicalType> list_data_types;
@@ -169,34 +163,42 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 				list_data_types.push_back(bue->child->return_type);
 				executor.AddExpression(*bue->child.get());
 			}
-			state->list_data.Destroy();
-			state->list_data.Initialize(list_data_types);
-			executor.Execute(state->child_chunk, state->list_data);
+			state.list_data.Destroy();
+			state.list_data.Initialize(list_data_types);
+			executor.Execute(input, state.list_data);
 
 			// paranoia aplenty
-			state->child_chunk.Verify();
-			state->list_data.Verify();
-			D_ASSERT(state->child_chunk.size() == state->list_data.size());
-			D_ASSERT(state->list_data.ColumnCount() == select_list.size());
+			state.list_data.Verify();
+			D_ASSERT(input.size() == state.list_data.size());
+			D_ASSERT(state.list_data.ColumnCount() == select_list.size());
 
 			// initialize VectorData object so the nullmask can accessed
-			state->list_vector_data.resize(state->list_data.ColumnCount());
-			state->list_child_data.resize(state->list_data.ColumnCount());
-			for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
-				auto &list_vector = state->list_data.data[col_idx];
-				list_vector.Orrify(state->list_data.size(), state->list_vector_data[col_idx]);
+			state.list_vector_data.resize(state.list_data.ColumnCount());
+			state.list_child_data.resize(state.list_data.ColumnCount());
+			for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
+				auto &list_vector = state.list_data.data[col_idx];
+				list_vector.Orrify(state.list_data.size(), state.list_vector_data[col_idx]);
 
 				auto &child_vector = ListVector::GetEntry(list_vector);
 				auto list_size = ListVector::GetListSize(list_vector);
-				child_vector.Orrify(list_size, state->list_child_data[col_idx]);
+				child_vector.Orrify(list_size, state.list_child_data[col_idx]);
 			}
+			state.first_fetch = false;
+		}
+		if (state.parent_position >= input.size()) {
+			// finished with this input chunk
+			state.parent_position = 0;
+			state.list_position = 0;
+			state.list_length = -1;
+			state.first_fetch = true;
+			return OperatorResultType::NEED_MORE_INPUT;
 		}
 
 		// need to figure out how many times we need to repeat for current row
-		if (state->list_length < 0) {
-			for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
-				auto &vdata = state->list_vector_data[col_idx];
-				auto current_idx = vdata.sel->get_index(state->parent_position);
+		if (state.list_length < 0) {
+			for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
+				auto &vdata = state.list_vector_data[col_idx];
+				auto current_idx = vdata.sel->get_index(state.parent_position);
 
 				int64_t list_length;
 				// deal with NULL values
@@ -208,50 +210,49 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 					list_length = (int64_t)list_entry.length;
 				}
 
-				if (list_length > state->list_length) {
-					state->list_length = list_length;
+				if (list_length > state.list_length) {
+					state.list_length = list_length;
 				}
 			}
 		}
 
-		D_ASSERT(state->list_length >= 0);
+		D_ASSERT(state.list_length >= 0);
 
-		auto this_chunk_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state->list_length - state->list_position);
+		auto this_chunk_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.list_length - state.list_position);
 
 		// first cols are from child, last n cols from unnest
 		chunk.SetCardinality(this_chunk_len);
 
-		for (idx_t col_idx = 0; col_idx < state->child_chunk.ColumnCount(); col_idx++) {
-			ConstantVector::Reference(chunk.data[col_idx], state->child_chunk.data[col_idx], state->parent_position,
-			                          state->child_chunk.size());
+		for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
+			ConstantVector::Reference(chunk.data[col_idx], input.data[col_idx], state.parent_position, input.size());
 		}
 
-		for (idx_t col_idx = 0; col_idx < state->list_data.ColumnCount(); col_idx++) {
-			auto &result_vector = chunk.data[col_idx + state->child_chunk.ColumnCount()];
+		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
+			auto &result_vector = chunk.data[col_idx + input.ColumnCount()];
 
-			auto &vdata = state->list_vector_data[col_idx];
-			auto &child_data = state->list_child_data[col_idx];
-			auto current_idx = vdata.sel->get_index(state->parent_position);
+			auto &vdata = state.list_vector_data[col_idx];
+			auto &child_data = state.list_child_data[col_idx];
+			auto current_idx = vdata.sel->get_index(state.parent_position);
 
 			auto list_data = (list_entry_t *)vdata.data;
 			auto list_entry = list_data[current_idx];
 
 			idx_t list_count;
-			if (state->list_position >= list_entry.length) {
+			if (state.list_position >= list_entry.length) {
 				list_count = 0;
 			} else {
-				list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state->list_position);
+				list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
 			}
 
-			if (list_entry.length > state->list_position) {
+			if (list_entry.length > state.list_position) {
 				if (!vdata.validity.RowIsValid(current_idx)) {
 					UnnestNull(0, list_count, result_vector);
 				} else {
-					auto &list_vector = state->list_data.data[col_idx];
+					auto &list_vector = state.list_data.data[col_idx];
 					auto &child_vector = ListVector::GetEntry(list_vector);
 					auto list_size = ListVector::GetListSize(list_vector);
 
-					auto base_offset = list_entry.offset + state->list_position;
+					auto base_offset = list_entry.offset + state.list_position;
 					UnnestVector(child_data, child_vector, list_size, base_offset, base_offset + list_count,
 					             result_vector);
 				}
@@ -259,22 +260,16 @@ void PhysicalUnnest::GetChunkInternal(ExecutionContext &context, DataChunk &chun
 			UnnestNull(list_count, this_chunk_len, result_vector);
 		}
 
-		state->list_position += this_chunk_len;
-		if ((int64_t)state->list_position == state->list_length) {
-			state->parent_position++;
-			state->list_length = -1;
-			state->list_position = 0;
+		state.list_position += this_chunk_len;
+		if ((int64_t)state.list_position == state.list_length) {
+			state.parent_position++;
+			state.list_length = -1;
+			state.list_position = 0;
 		}
 
 		chunk.Verify();
-		if (chunk.size() > 0) {
-			return;
-		}
-	}
-}
-
-unique_ptr<PhysicalOperatorState> PhysicalUnnest::GetOperatorState() {
-	return make_unique<PhysicalUnnestOperatorState>(*this, children[0].get());
+	} while (chunk.size() == 0);
+	return OperatorResultType::HAVE_MORE_OUTPUT;
 }
 
 } // namespace duckdb

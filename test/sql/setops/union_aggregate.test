@@ -1,0 +1,83 @@
+# name: test/sql/setops/union_aggregate.test
+# description: Test UNION aggregate
+# group: [setops]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT COUNT(*) FROM range(1)
+UNION ALL SELECT COUNT(*) FROM range(1)
+----
+1
+1
+
+query I
+SELECT COUNT(*) FROM range(1)
+UNION ALL SELECT COUNT(*) FROM range(1)
+UNION ALL SELECT COUNT(*) FROM range(1)
+UNION ALL SELECT COUNT(*) FROM range(1)
+UNION ALL SELECT COUNT(*) FROM range(1)
+----
+1
+1
+1
+1
+1
+
+query I
+SELECT COUNT(*) FROM range(1) UNION SELECT COUNT(*) FROM range(1)
+----
+1
+
+query I
+SELECT COUNT(*) FROM range(1)
+UNION SELECT COUNT(*) FROM range(2)
+ORDER BY 1
+----
+1
+2
+
+query I
+SELECT COUNT(*) FROM range(1)
+UNION SELECT COUNT(*) FROM range(2)
+UNION SELECT COUNT(*) FROM range(3)
+UNION SELECT COUNT(*) FROM range(4)
+UNION SELECT COUNT(*) FROM range(5)
+ORDER BY 1
+----
+1
+2
+3
+4
+5
+
+query I
+SELECT * FROM (
+	SELECT 1
+	UNION ALL
+	SELECT 1
+) tbl(i)
+----
+1
+1
+
+query I
+SELECT * FROM (
+	SELECT 1
+	UNION
+	SELECT 2
+	UNION
+	SELECT 3
+	UNION
+	SELECT 4
+	UNION
+	SELECT 5
+) tbl(i)
+ORDER BY 1
+----
+1
+2
+3
+4
+5

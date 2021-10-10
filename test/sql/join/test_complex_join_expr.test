@@ -35,3 +35,9 @@ SELECT * FROM test RIGHT JOIN test2 ON test.a+test2.c=test.b+test2.b ORDER BY 1
 NULL	NULL	1	2
 4	1	3	0
 
+query IIII
+SELECT * FROM test FULL OUTER JOIN test2 ON test.a+test2.c=test.b+test2.b ORDER BY 1
+----
+NULL	NULL	1	2
+2	2	NULL	NULL
+4	1	3	0

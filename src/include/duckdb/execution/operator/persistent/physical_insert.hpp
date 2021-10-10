@@ -8,31 +8,45 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 //! Physically insert a set of data into a table
-class PhysicalInsert : public PhysicalSink {
+class PhysicalInsert : public PhysicalOperator {
 public:
 	PhysicalInsert(vector<LogicalType> types, TableCatalogEntry *table, vector<idx_t> column_index_map,
-	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality)
-	    : PhysicalSink(PhysicalOperatorType::INSERT, move(types), estimated_cardinality),
-	      column_index_map(std::move(column_index_map)), table(table), bound_defaults(move(bound_defaults)) {
-	}
+	               vector<unique_ptr<Expression>> bound_defaults, idx_t estimated_cardinality);
 
+	//! The map from insert column index to table column index
 	vector<idx_t> column_index_map;
+	//! The table to insert into
 	TableCatalogEntry *table;
+	//! The default expressions of the columns for which no value is provided
 	vector<unique_ptr<Expression>> bound_defaults;
 
 public:
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &gstate, LocalSinkState &lstate) override;
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-	          DataChunk &input) const override;
+	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
+public:
+	// Sink interface
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	                    DataChunk &input) const override;
+
+	bool IsSink() const override {
+		return true;
+	}
+
+	bool ParallelSink() const override {
+		return false;
+	}
 };
 
 } // namespace duckdb

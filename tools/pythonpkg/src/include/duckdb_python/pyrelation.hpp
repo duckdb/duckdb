@@ -41,7 +41,9 @@ public:
 
 	static unique_ptr<DuckDBPyRelation> ProjectDf(py::object df, const string &expr);
 
-	unique_ptr<DuckDBPyRelation> Alias(const string &expr);
+	py::str GetAlias();
+
+	unique_ptr<DuckDBPyRelation> SetAlias(const string &expr);
 
 	static unique_ptr<DuckDBPyRelation> AliasDF(py::object df, const string &expr);
 
@@ -102,9 +104,11 @@ public:
 
 	void Create(const string &table);
 
-	string Print();
+	py::str Type();
+	py::list Columns();
+	py::list ColumnTypes();
 
-	py::object Getattr(const py::str &key);
+	string Print();
 
 private:
 	py::object map_function;

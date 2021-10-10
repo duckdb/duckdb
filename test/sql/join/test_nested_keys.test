@@ -352,13 +352,11 @@ UNION ALL
 	select list(r) as pk from range(1050) tbl(r)
 ) dim(pk);
 
-# mode output_hash
-
 query III
 SELECT i, pk, fk
 FROM longlists_dim, longlists
 WHERE fk = pk
-ORDER BY i
+ORDER BY 1, 2, 3
 ----
 15 values hashing to 9cf60d50bdcdf90da73b0fbdc873da5b
 
@@ -367,7 +365,7 @@ SELECT i, pk, fk
 FROM longlists_dim
 LEFT OUTER JOIN longlists
 ON longlists.fk = longlists_dim.pk
-ORDER BY i
+ORDER BY 1, 2, 3
 ----
 21 values hashing to 4220e1d4299da1bd2d8baa63e2714a05
 
@@ -376,7 +374,7 @@ SELECT i, pk, fk
 FROM longlists_dim
 RIGHT OUTER JOIN longlists
 ON longlists.fk = longlists_dim.pk
-ORDER BY i
+ORDER BY 1, 2, 3
 ----
 18 values hashing to 2cb5cda12f183cadc7ff1ac7fb599eed
 
@@ -385,9 +383,9 @@ SELECT i, pk, fk
 FROM longlists_dim
 FULL OUTER JOIN longlists
 ON longlists.fk = longlists_dim.pk
-ORDER BY i
+ORDER BY 1, 2, 3
 ----
-24 values hashing to 4b94f1aa9fb7bef0533aa9c43cc1ed24
+24 values hashing to 6df3ff46363f2676f8a97128fc0e7e34
 
 # Multiple key matches
 query II
