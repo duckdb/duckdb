@@ -1,11 +1,12 @@
 package org.duckdb.test;
 
 import java.lang.reflect.Method;
-import java.lang.ArrayIndexOutOfBoundsException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.sql.Blob;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Date;
@@ -14,8 +15,8 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
-import java.sql.Statement;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Time;
 import java.sql.Timestamp;
 import java.sql.Types;
@@ -23,8 +24,8 @@ import java.util.Properties;
 
 import org.duckdb.DuckDBAppender;
 import org.duckdb.DuckDBConnection;
-import org.duckdb.DuckDBDriver;
 import org.duckdb.DuckDBDatabase;
+import org.duckdb.DuckDBDriver;
 
 public class TestDuckDBJDBC {
 
@@ -179,22 +180,22 @@ public class TestDuckDBJDBC {
 		assertEquals(rs.getInt(1), 42);
 		assertEquals(rs.getString(1), "42");
 		assertEquals(rs.getDouble(1), 42.0, 0.001);
-		assertTrue(rs.getObject(1).equals(new Integer(42)));
+		assertTrue(rs.getObject(1).equals(42));
 
 		assertEquals(rs.getInt("a"), 42);
 		assertEquals(rs.getString("a"), "42");
 		assertEquals(rs.getDouble("a"), 42.0, 0.001);
-		assertTrue(rs.getObject("a").equals(new Integer(42)));
+		assertTrue(rs.getObject("a").equals(42));
 
 		assertEquals(rs.getInt(2), 4);
 		assertEquals(rs.getString(2), "4.2");
 		assertEquals(rs.getDouble(2), 4.2, 0.001);
-		assertTrue(rs.getObject(2).equals(new Double(4.2)));
+		assertTrue(rs.getObject(2).equals(4.2));
 
 		assertEquals(rs.getInt("b"), 4);
 		assertEquals(rs.getString("b"), "4.2");
 		assertEquals(rs.getDouble("b"), 4.2, 0.001);
-		assertTrue(rs.getObject("b").equals(new Double(4.2)));
+		assertTrue(rs.getObject("b").equals(4.2));
 
 		assertFalse(rs.next());
 
@@ -993,8 +994,7 @@ public class TestDuckDBJDBC {
 	public static void test_parquet_reader() throws Exception {
 		Connection conn = DriverManager.getConnection("jdbc:duckdb:");
 		Statement stmt = conn.createStatement();
-		ResultSet rs = stmt
-				.executeQuery("SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet')");
+		ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM parquet_scan('data/parquet-testing/userdata1.parquet')");
 		assertTrue(rs.next());
 		assertEquals(rs.getInt(1), 1000);
 		rs.close();
@@ -1310,6 +1310,80 @@ public class TestDuckDBJDBC {
 		pstmt = conn.prepareStatement("SELECT 42", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY, 0);
 		pstmt.close();
 
+		conn.close();
+	}
+
+	private static String blob_to_string(Blob b) throws SQLException {
+		return new String(b.getBytes(0, (int) b.length()), StandardCharsets.US_ASCII);
+	}
+
+	public static void test_blob_bug1090() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		String test_str1 = "asdf";
+		String test_str2 = "asdxxxxxxxxxxxxxxf";
+
+		ResultSet rs = stmt
+				.executeQuery("SELECT '" + test_str1 + "'::BLOB a, NULL::BLOB b, '" + test_str2 + "'::BLOB c");
+		assertTrue(rs.next());
+
+		assertTrue(test_str1.equals(blob_to_string(rs.getBlob(1))));
+		assertTrue(test_str1.equals(blob_to_string(rs.getBlob("a"))));
+
+		assertTrue(test_str2.equals(blob_to_string(rs.getBlob("c"))));
+
+		rs.getBlob("a");
+		assertFalse(rs.wasNull());
+
+		rs.getBlob("b");
+		assertTrue(rs.wasNull());
+
+		rs.close();
+		stmt.close();
+		conn.close();
+	}
+
+	public static void test_unsiged_integers() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery(
+				"SELECT 201::utinyint uint8, 40001::usmallint uint16, 4000000001::uinteger uint32, 18446744073709551615::ubigint uint64");
+		assertTrue(rs.next());
+
+		assertEquals(rs.getShort("uint8"), Short.valueOf((short) 201));
+		assertEquals(rs.getObject("uint8"), Short.valueOf((short) 201));
+		assertEquals(rs.getInt("uint8"), Integer.valueOf((int) 201));
+
+		assertEquals(rs.getInt("uint16"), Integer.valueOf((int) 40001));
+		assertEquals(rs.getObject("uint16"), Integer.valueOf((int) 40001));
+		assertEquals(rs.getLong("uint16"), Long.valueOf((long) 40001));
+
+		assertEquals(rs.getLong("uint32"), Long.valueOf((long) 4000000001L));
+		assertEquals(rs.getObject("uint32"), Long.valueOf((long) 4000000001L));
+
+		assertEquals(rs.getObject("uint64"), new BigInteger("18446744073709551615"));
+
+		rs.close();
+
+		rs = stmt.executeQuery(
+				"SELECT NULL::utinyint uint8, NULL::usmallint uint16, NULL::uinteger uint32, NULL::ubigint uint64");
+		assertTrue(rs.next());
+
+		rs.getObject(1);
+		assertTrue(rs.wasNull());
+
+		rs.getObject(2);
+		assertTrue(rs.wasNull());
+
+		rs.getObject(3);
+		assertTrue(rs.wasNull());
+
+		rs.getObject(4);
+		assertTrue(rs.wasNull());
+
+		stmt.close();
 		conn.close();
 	}
 

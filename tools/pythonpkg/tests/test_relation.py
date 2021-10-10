@@ -128,10 +128,10 @@ class TestRelation(object):
         conn = duckdb.connect()
         conn.execute("CREATE TABLE test (i INTEGER)")
         rel = conn.table("test")
-        assert rel.__getattr__('alias') == "test"
-        assert rel.__getattr__('type') == "TABLE_RELATION"
-        assert rel.__getattr__('columns') == ['i']
-        assert rel.__getattr__('types') == ['INTEGER']
+        assert rel.alias == "test"
+        assert rel.type == "TABLE_RELATION"
+        assert rel.columns == ['i']
+        assert rel.types == ['INTEGER']
 
     def test_query_fail(self,duckdb_cursor):
         conn = duckdb.connect()
@@ -155,7 +155,7 @@ class TestRelation(object):
     def test_df_alias(self,duckdb_cursor):
         test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})
         rel = duckdb.alias(test_df, 'dfzinho')
-        assert rel.__getattr__('alias') == "dfzinho"
+        assert rel.alias == "dfzinho"
 
     def test_df_filter(self,duckdb_cursor):
         test_df = pd.DataFrame.from_dict({"i":[1, 2, 3, 4], "j":["one", "two", "three", "four"]})

@@ -97,9 +97,6 @@ private:
 
 	void AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 
-	//! Asserts that current_memory is equal to the sum of loaded blocks (used for verification)
-	void VerifyCurrentMemory();
-
 	string InMemoryWarning();
 
 private:
@@ -125,12 +122,5 @@ private:
 	unique_ptr<EvictionQueue> queue;
 	//! The temporary id used for managed buffers
 	atomic<block_id_t> temporary_id;
-
-	//! Lock for current_memory (used for verification)
-	mutex current_memory_lock;
-	//! Lock for the set of the temp_blocks (used for verification)
-	mutex temp_blocks_lock;
-	//! A mapping of temp block id -> BlockHandle (used for verification)
-	unordered_map<block_id_t, BlockHandle *> temp_blocks;
 };
 } // namespace duckdb

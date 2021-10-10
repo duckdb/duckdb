@@ -52,7 +52,7 @@ static unique_ptr<FunctionData> StructExtractBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 	auto &struct_children = StructType::GetChildTypes(arguments[0]->return_type);
 	if (struct_children.empty()) {
-		throw Exception("Can't extract something from an empty struct");
+		throw InternalException("Can't extract something from an empty struct");
 	}
 
 	auto &key_child = arguments[1];

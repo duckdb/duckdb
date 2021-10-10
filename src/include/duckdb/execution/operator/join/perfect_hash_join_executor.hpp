@@ -17,6 +17,7 @@ namespace duckdb {
 
 class PhysicalHashJoinState;
 class HashJoinGlobalState;
+class PhysicalHashJoin;
 
 struct PerfectHashJoinStats {
 	Value build_min;
@@ -32,33 +33,44 @@ struct PerfectHashJoinStats {
 
 //! PhysicalHashJoin represents a hash loop join between two tables
 class PerfectHashJoinExecutor {
-public:
-	explicit PerfectHashJoinExecutor(PerfectHashJoinStats pjoin_stats);
 	using PerfectHashTable = std::vector<Vector>;
-	bool ProbePerfectHashTable(ExecutionContext &context, DataChunk &chunk, PhysicalHashJoinState *state,
-	                           JoinHashTable *ht_ptr, PhysicalOperator *operator_child);
+
+public:
+	explicit PerfectHashJoinExecutor(const PhysicalHashJoin &join, JoinHashTable &ht, PerfectHashJoinStats pjoin_stats);
+
+public:
 	bool CanDoPerfectHashJoin();
-	void BuildPerfectHashTable(JoinHashTable *ht_ptr, JoinHTScanState &join_ht_state, LogicalType &type);
+
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context);
+	OperatorResultType ProbePerfectHashTable(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                                         OperatorState &state);
+	bool BuildPerfectHashTable(LogicalType &type);
+
+private:
 	void FillSelectionVectorSwitchProbe(Vector &source, SelectionVector &build_sel_vec, SelectionVector &probe_sel_vec,
 	                                    idx_t count, idx_t &probe_sel_count);
 	template <typename T>
 	void TemplatedFillSelectionVectorProbe(Vector &source, SelectionVector &build_sel_vec,
 	                                       SelectionVector &probe_sel_vec, idx_t count, idx_t &prob_sel_count);
-	void FillSelectionVectorSwitchBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
+
+	bool FillSelectionVectorSwitchBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
 	                                    idx_t count);
 	template <typename T>
-	void TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
+	bool TemplatedFillSelectionVectorBuild(Vector &source, SelectionVector &sel_vec, SelectionVector &seq_sel_vec,
 	                                       idx_t count);
-	void FullScanHashTable(JoinHTScanState &state, LogicalType &key_type, JoinHashTable *hash_table);
-
-public:
-	bool has_duplicates = false;
+	bool FullScanHashTable(JoinHTScanState &state, LogicalType &key_type);
 
 private:
-	PerfectHashTable perfect_hash_table;          // columnar perfect hash table
-	PerfectHashJoinStats perfect_join_statistics; // build and probe statistics
-	unique_ptr<bool[]> bitmap_build_idx;          // stores the occurences of each value in the build side
-	size_t unique_keys = 0;                       // stores the number of unique keys in the build side
+	const PhysicalHashJoin &join;
+	JoinHashTable &ht;
+	//! Columnar perfect hash table
+	PerfectHashTable perfect_hash_table;
+	//! Build and probe statistics
+	PerfectHashJoinStats perfect_join_statistics;
+	//! Stores the occurences of each value in the build side
+	unique_ptr<bool[]> bitmap_build_idx;
+	//! Stores the number of unique keys in the build side
+	idx_t unique_keys = 0;
 };
 
 } // namespace duckdb

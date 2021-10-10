@@ -77,7 +77,7 @@ public:
 	int fd;
 };
 
-static FileType GetFileTypeInternal(int fd) {
+static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
 	struct stat s;
 	if (fstat(fd, &s) == -1) {
 		return FileType::FILE_TYPE_INVALID;
@@ -100,7 +100,7 @@ static FileType GetFileTypeInternal(int fd) {
 	default:
 		return FileType::FILE_TYPE_INVALID;
 	}
-}
+} // LCOV_EXCL_STOP
 
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
                                                  FileCompressionType compression, FileOpener *opener) {

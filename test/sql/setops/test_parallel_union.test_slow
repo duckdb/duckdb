@@ -1,0 +1,41 @@
+# name: test/sql/setops/test_parallel_union.test_slow
+# description: Test parallel UNION
+# group: [setops]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(1000000) tbl(i)
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM integers UNION ALL SELECT * FROM integers) tbl(i)
+----
+2000000
+
+query I
+SELECT COUNT(*) FROM (SELECT 1 UNION ALL SELECT * FROM integers) tbl(i)
+----
+1000001
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM integers UNION ALL SELECT 1) tbl(i)
+----
+1000001
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM integers UNION ALL SELECT * FROM integers) tbl(i) WHERE i < 500000
+----
+1000000
+
+# multiple unions
+query I
+SELECT COUNT(*) FROM (SELECT * FROM integers UNION ALL SELECT * FROM integers UNION ALL SELECT * FROM integers UNION ALL SELECT * FROM integers) tbl(i)
+----
+4000000

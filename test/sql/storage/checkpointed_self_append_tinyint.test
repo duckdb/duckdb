@@ -24,8 +24,10 @@ SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
 ----
 1	99	100000	200000
 
-statement ok
+query I
 INSERT INTO vals SELECT * FROM vals;
+----
+200000
 
 query IIII
 SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals

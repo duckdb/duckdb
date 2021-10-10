@@ -2,9 +2,6 @@
 # description: Incorrect recursive ctes
 # group: [cte]
 
-statement ok
-PRAGMA threads=1
-
 # recursive CTE without UNION is just a normal CTE
 query I
 WITH RECURSIVE cte AS (SELECT 42) SELECT * FROM cte;

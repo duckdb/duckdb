@@ -1,0 +1,70 @@
+# name: test/sql/tpch/q01_union.test_slow
+# description: Test TPC-H SF0.01 Q1 with unions
+# group: [tpch]
+
+require tpch
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+CALL dbgen(sf=0.01);
+
+query IIIII
+SELECT
+    l_returnflag,
+    l_linestatus,
+    sum(l_quantity) AS sum_qty,
+    sum(l_extendedprice) AS sum_base_price,
+    sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+    avg(l_quantity) AS avg_qty,
+    avg(l_extendedprice) AS avg_price,
+    avg(l_discount) AS avg_disc,
+    count(*) AS count_order
+FROM
+    (
+		SELECT * FROM lineitem WHERE l_shipdate <= DATE '1990-09-02'
+		UNION ALL
+		SELECT * FROM lineitem WHERE l_shipdate > DATE '1990-09-02' AND l_shipdate <= DATE '1992-09-02'
+		UNION ALL
+		SELECT * FROM lineitem WHERE l_shipdate > DATE '1992-09-02' AND l_shipdate <= DATE '1994-09-02'
+		UNION ALL
+		SELECT * FROM lineitem WHERE l_shipdate > DATE '1994-09-02' AND l_shipdate <= DATE '1996-09-02'
+		UNION ALL
+		SELECT * FROM lineitem WHERE l_shipdate > DATE '1996-09-02' AND l_shipdate <= DATE '1998-09-02'
+	) lineitem
+GROUP BY
+    l_returnflag,
+    l_linestatus
+ORDER BY
+    l_returnflag,
+    l_linestatus;
+----
+<FILE>:extension/tpch/dbgen/answers/sf0.01/q01.csv
+
+query I
+SELECT sum(l_quantity) AS sum FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT sum(l_extendedprice) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT sum(l_extendedprice * (1 - l_discount)) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT avg(l_quantity) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT avg(l_extendedprice) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT count(*) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+----
+1513678
+2120830299
+2015354671
+2096391169
+25
+35760
+59307

@@ -26,6 +26,7 @@ public:
 public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
+	bool Equals(const TableFilter &other) const override;
 };
 
 } // namespace duckdb

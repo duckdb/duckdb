@@ -14,10 +14,19 @@ statement ok
 CREATE TABLE strings(v VARCHAR, d DATE, PRIMARY KEY(d))
 
 statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE enums(current_mood mood)
+
+statement ok
 INSERT INTO integers VALUES (1, 3), (4, 2), (NULL, 1)
 
 statement ok
 INSERT INTO strings VALUES ('NULL', DATE '1992-01-01'), (NULL, DATE '1993-01-01');
+
+statement ok
+INSERT INTO enums VALUES ('sad'),('ok'),('sad'),('happy')
 
 statement ok
 CREATE TABLE "table.with-symbols"(i INTEGER)
@@ -69,6 +78,14 @@ SELECT * FROM integers ORDER BY 1
 NULL	1
 1	3
 4	2
+
+query I
+SELECT * FROM enums ORDER BY 1
+----
+sad
+sad
+ok
+happy
 
 query II
 SELECT * FROM strings ORDER BY 1
@@ -177,6 +194,14 @@ SELECT * FROM strings ORDER BY 1
 ----
 NULL	1993-01-01
 NULL	1992-01-01
+
+query I
+SELECT * FROM enums ORDER BY 1
+----
+sad
+sad
+ok
+happy
 
 query II
 SELECT * FROM v1 ORDER BY 1

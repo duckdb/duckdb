@@ -264,8 +264,8 @@ void Relation::Delete(const string &condition) {
 	throw Exception("DELETE can only be used on base tables!");
 }
 
-shared_ptr<Relation> Relation::TableFunction(const std::string &fname, vector<Value> values) {
-	return make_shared<TableFunctionRelation>(context, fname, move(values), shared_from_this());
+shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vector<Value> &values) {
+	return make_shared<TableFunctionRelation>(context, fname, values, shared_from_this());
 }
 
 string Relation::ToString() {
