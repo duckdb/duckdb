@@ -45,9 +45,21 @@ First, get the repository based version number and extract the source distributi
     export SETUPTOOLS_SCM_PRETEND_VERSION=$(python setup.py --version)
     python setup.py sdist
     cd ../..
- 
+
 Next, copy over the python package related files, and install the package.
 
     mkdir -p $DUCKDB_PREFIX/src/duckdb-pythonpkg
     tar --directory=$DUCKDB_PREFIX/src/duckdb-pythonpkg -xzpf tools/pythonpkg/dist/duckdb-${SETUPTOOLS_SCM_PRETEND_VERSION}.tar.gz
     pip3 install --prefix $DUCKDB_PREFIX -e $DUCKDB_PREFIX/src/duckdb-pythonpkg/duckdb-${SETUPTOOLS_SCM_PRETEND_VERSION}
+
+## Stubs
+
+`*.pyi` stubs can be generated with [Mypy's `stubgen`](https://mypy.readthedocs.io/en/stable/stubgen.html).
+There is a bit of a chicken and egg situation with this - the stubs should go in the package, but
+`stubgen` needs to look at the package to generate the stubs!
+
+Thus, the full process to generate new stubs and use the resultion package with them would look like:
+
+    BUILD_PYTHON=1 make debug # installs package without / with old stubs
+    make python-stubs
+    BUILD_PYTHON=1 make debug # installs package with up-to-date stubs.
