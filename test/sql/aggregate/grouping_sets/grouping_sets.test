@@ -40,8 +40,8 @@ select count(*), course, type
 ----
 1	NULL	Masters
 1	NULL	PhD
-2	Math	NULL
 2	NULL	Bachelor
+2	Math	NULL
 3	NULL	NULL
 5	CS	NULL
 

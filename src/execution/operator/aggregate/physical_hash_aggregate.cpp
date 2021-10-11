@@ -33,13 +33,6 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
     : PhysicalOperator(type, move(types), estimated_cardinality), groups(move(groups_p)), grouping_sets(move(grouping_sets_p)), all_combinable(true),
       any_distinct(false) {
 	// get a list of all aggregates to be computed
-	// fake a single group with a constant value for aggregation without groups
-	if (this->groups.empty()) {
-		group_types.push_back(LogicalType::TINYINT);
-		is_implicit_aggr = true;
-	} else {
-		is_implicit_aggr = false;
-	}
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
 	}
@@ -121,14 +114,8 @@ public:
 class HashAggregateLocalState : public LocalSinkState {
 public:
 	HashAggregateLocalState(const PhysicalHashAggregate &op, ExecutionContext &context) {
-		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
-		}
-
-		// if there are no groups we create a fake group so everything has the same group
-		if (op.groups.empty()) {
-			group_chunk.data[0].Reference(Value::TINYINT(42));
 		}
 
 		radix_states.reserve(op.radix_tables.size());
@@ -137,7 +124,6 @@ public:
 		}
 	}
 
-	DataChunk group_chunk;
 	DataChunk aggregate_input_chunk;
 
 	vector<unique_ptr<LocalSinkState>> radix_states;
@@ -163,15 +149,8 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 	auto &llstate = (HashAggregateLocalState &)lstate;
 	auto &gstate = (HashAggregateGlobalState &)state;
 
-	DataChunk &group_chunk = llstate.group_chunk;
 	DataChunk &aggregate_input_chunk = llstate.aggregate_input_chunk;
 
-	for (idx_t group_idx = 0; group_idx < groups.size(); group_idx++) {
-		auto &group = groups[group_idx];
-		D_ASSERT(group->type == ExpressionType::BOUND_REF);
-		auto &bound_ref_expr = (BoundReferenceExpression &)*group;
-		group_chunk.data[group_idx].Reference(input.data[bound_ref_expr.index]);
-	}
 	idx_t aggregate_input_idx = 0;
 	for (auto &aggregate : aggregates) {
 		auto &aggr = (BoundAggregateExpression &)*aggregate;
@@ -190,15 +169,11 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 		}
 	}
 
-	group_chunk.SetCardinality(input.size());
 	aggregate_input_chunk.SetCardinality(input.size());
-
-	group_chunk.Verify();
 	aggregate_input_chunk.Verify();
-	D_ASSERT(aggregate_input_chunk.ColumnCount() == 0 || group_chunk.size() == aggregate_input_chunk.size());
 
 	for(idx_t i = 0; i < radix_tables.size(); i++) {
-		radix_tables[i].Sink(context, *gstate.radix_states[i], *llstate.radix_states[i], group_chunk, aggregate_input_chunk);
+		radix_tables[i].Sink(context, *gstate.radix_states[i], *llstate.radix_states[i], input, aggregate_input_chunk);
 	}
 
 	return SinkResultType::NEED_MORE_INPUT;
@@ -258,19 +233,11 @@ class PhysicalHashAggregateState : public GlobalSourceState {
 public:
 	PhysicalHashAggregateState(const PhysicalHashAggregate &op)
 	  : scan_index(0) {
-		auto scan_chunk_types = op.group_types;
-		for (auto &aggr_type : op.aggregate_return_types) {
-			scan_chunk_types.push_back(aggr_type);
-		}
-		scan_chunk.Initialize(scan_chunk_types);
-
 		for(auto &rt : op.radix_tables) {
 			radix_states.push_back(rt.GetGlobalSourceState());
 		}
 	}
 
-	//! Materialized GROUP BY expressions & aggregates
-	DataChunk scan_chunk;
 	idx_t scan_index;
 
 	vector<unique_ptr<GlobalSourceState>> radix_states;
@@ -284,9 +251,8 @@ void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
                                     LocalSourceState &lstate) const {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
 	auto &state = (PhysicalHashAggregateState &)gstate_p;
-	state.scan_chunk.Reset();
 	while(state.scan_index < state.radix_states.size()) {
-		radix_tables[state.scan_index].GetData(context, state.scan_chunk, chunk, *gstate.radix_states[state.scan_index], *state.radix_states[state.scan_index]);
+		radix_tables[state.scan_index].GetData(context, chunk, *gstate.radix_states[state.scan_index], *state.radix_states[state.scan_index]);
 		if (chunk.size() != 0) {
 			return;
 		}
