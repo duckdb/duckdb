@@ -101,9 +101,9 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	auto grouping_set_count = source.Read<idx_t>();
 	for(idx_t set_idx = 0; set_idx < grouping_set_count; set_idx++) {
 		auto set_entries = source.Read<idx_t>();
-		vector<idx_t> grouping_set;
+		GroupingSet grouping_set;
 		for(idx_t i = 0; i < set_entries; i++) {
-			grouping_set.push_back(source.Read<idx_t>());
+			grouping_set.insert(source.Read<idx_t>());
 		}
 		result->groups.grouping_sets.push_back(grouping_set);
 	}

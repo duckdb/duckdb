@@ -15,6 +15,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
@@ -25,6 +26,7 @@ class ColumnDefinition;
 struct OrderByNode;
 struct CopyInfo;
 struct CommonTableExpressionInfo;
+struct GroupingExpressionMap;
 class GroupByNode;
 
 //! The transformer class is responsible for transforming the internal Postgres
@@ -226,6 +228,8 @@ private:
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
 	bool TransformGroupBy(duckdb_libpgquery::PGList *group, GroupByNode &result);
+	void TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result, vector<GroupingSet> &result_sets);
+	idx_t TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result);
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
 

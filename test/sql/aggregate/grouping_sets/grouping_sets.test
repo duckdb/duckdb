@@ -6,93 +6,209 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-create table nurses (
-	id integer,
-	full_name varchar,
-	medical_license varchar,   -- LVN, RN, etc.
-	radio_license varchar      -- Technician, General, Amateur Extra
-	)
-	;
+create table students (course VARCHAR, type VARCHAR);
 
 statement ok
-insert into nurses
-		(id, full_name, medical_license, radio_license)
+insert into students
+		(course, type)
 	values
-		(201, 'Thomas Leonard Vicente', 'LVN', 'Technician'),
-		(202, 'Tamara Lolita VanZant', 'LVN', 'Technician'),
-		(341, 'Georgeann Linda Vente', 'LVN', 'General'),
-		(471, 'Andrea Renee Nouveau', 'RN', 'Amateur Extra')
-		;
-
-# empty grouping
-query I
-select count(*) from nurses group by ();
-----
-4
-
-# multiple grouping sets
-query III
-select count(*), medical_license, radio_license
-	from nurses
-	group by grouping sets (medical_license, radio_license)
-	order by 1, 2, 3;
-----
-1	NULL	General
-1	NULL	Amateur Extra
-1	RN	NULL
-2	NULL	Technician
-3	LVN	NULL
-
-# multiple disjoint grouping sets
-query III
-select count(*), medical_license, radio_license
-	from nurses
-	group by grouping sets (medical_license), grouping sets(radio_license)
-	order by 1, 2, 3;
-----
-1	RN	Amateur Extra
-1	LVN	General
-2	LVN	Technician
-
-# now with some null values
-statement ok
-insert into nurses
-    (id, full_name, medical_license, radio_license)
-  values
-    (101, 'Lily Vine', 'LVN', null),
-    (102, 'Larry Vancouver', 'LVN', null),
-    (172, 'Rhonda Nova', 'RN', null)
-    ;
+		('CS', 'Bachelor'),
+		('CS', 'Bachelor'),
+		('CS', 'PhD'),
+		('Math', 'Masters'),
+		('CS', NULL),
+		('CS', NULL),
+		('Math', NULL);
 
 query I
-select count(*) from nurses group by ();
+select count(*) from students group by ();
 ----
 7
 
+query II
+select course, count(*) from students group by (), course, () ORDER BY 1;
+----
+CS	5
+Math	2
+
 # multiple grouping sets
 query III
-select count(*), medical_license, radio_license
-	from nurses
-	group by grouping sets (medical_license, radio_license)
+select count(*), course, type
+	from students
+	group by grouping sets ((course), (type))
 	order by 1, 2, 3;
 ----
-1	NULL	Amateur Extra
-1	NULL	General
-2	RN	NULL
-2	NULL	Technician
+1	NULL	Masters
+1	NULL	PhD
+2	Math	NULL
+2	NULL	Bachelor
 3	NULL	NULL
-5	LVN	NULL
+5	CS	NULL
 
-# multiple disjoint grouping sets
+# multiple grouping sets
+# these are combined as if they are regular GROUP BY expressions
+# i.e. the result is just GROUP BY course, type
+
+# If multiple grouping items are specified in a single GROUP BY clause,
+# then the final list of grouping sets is the cross product of the individual items.
 query III
-select count(*), medical_license, radio_license
-	from nurses
-	group by grouping sets (medical_license), grouping sets(radio_license)
+select count(*), course, type
+	from students
+	group by grouping sets (course), grouping sets(type)
 	order by 1, 2, 3;
 ----
-1	LVN	General
-1	RN	NULL
-1	RN	Amateur Extra
-2	LVN	NULL
-2	LVN	Technician
+1	CS	PhD
+1	Math	NULL
+1	Math	Masters
+2	CS	NULL
+2	CS	Bachelor
 
+# combining grouping sets with non-grouping sets
+query III
+select count(*), course, type
+	from students
+	group by course, grouping sets(type)
+	order by 1, 2, 3;
+----
+1	CS	PhD
+1	Math	NULL
+1	Math	Masters
+2	CS	NULL
+2	CS	Bachelor
+
+# with multiple grouping sets...
+query III
+select count(*), course, type
+	from students
+	group by course, grouping sets(type, ())
+	order by 1, 2, 3;
+----
+1	CS	PhD
+1	Math	NULL
+1	Math	Masters
+2	CS	NULL
+2	CS	Bachelor
+2	Math	NULL
+5	CS	NULL
+
+query III
+select count(*), course, type
+	from students
+	group by grouping sets((course, type), (course))
+	order by 1, 2, 3;
+----
+1	CS	PhD
+1	Math	NULL
+1	Math	Masters
+2	CS	NULL
+2	CS	Bachelor
+2	Math	NULL
+5	CS	NULL
+
+# nested grouping sets
+# If one GROUPING SETS clause is nested inside another,
+# the effect is the same as if all the elements of the inner clause had been written directly in the outer clause.
+query III
+select count(*), course, type
+	from students
+	group by grouping sets (grouping sets(course), grouping sets(type))
+	order by 1, 2, 3;
+----
+1	NULL	Masters
+1	NULL	PhD
+2	Math	NULL
+2	NULL	Bachelor
+3	NULL	NULL
+5	CS	NULL
+
+query III
+select count(*), course, type
+        from students
+        group by grouping sets (grouping sets(course, ()), grouping sets(type))
+        order by 1, 2, 3;
+----
+1	NULL	Masters
+1	NULL	PhD
+2	Math	NULL
+2	NULL	Bachelor
+3	NULL	NULL
+5	CS	NULL
+7	NULL	NULL
+
+query III
+select count(*), course, type
+        from students
+        group by grouping sets ((course), (), (type))
+        order by 1, 2, 3;
+----
+1	NULL	Masters
+1	NULL	PhD
+2	Math	NULL
+2	NULL	Bachelor
+3	NULL	NULL
+5	CS	NULL
+7	NULL	NULL
+
+# on the top-level grouping sets are combined as if they
+query III
+select count(*), course, type
+        from students
+        group by grouping sets(course, ()), grouping sets(type)
+        order by 1, 2, 3;
+----
+1	CS	PhD
+1	Math	Masters
+1	Math	NULL
+1	NULL	Masters
+1	NULL	PhD
+2	CS	Bachelor
+2	CS	NULL
+2	NULL	Bachelor
+3	NULL	NULL
+
+query III
+select count(*), course, type
+        from students
+        group by grouping sets(course, ()), type
+        order by 1, 2, 3;
+----
+1	CS	PhD
+1	Math	Masters
+1	Math	NULL
+1	NULL	Masters
+1	NULL	PhD
+2	CS	Bachelor
+2	CS	NULL
+2	NULL	Bachelor
+3	NULL	NULL
+
+query III
+select count(*), course, type
+        from students
+        group by grouping sets((course, type), (type))
+        order by 1, 2, 3;
+----
+1	CS	PhD
+1	Math	Masters
+1	Math	NULL
+1	NULL	Masters
+1	NULL	PhD
+2	CS	Bachelor
+2	CS	NULL
+2	NULL	Bachelor
+3	NULL	NULL
+
+query III
+select count(*), course, type
+        from students
+        group by grouping sets (grouping sets(course, ()), grouping sets(type, ()))
+        order by 1, 2, 3;
+----
+1	NULL	Masters
+1	NULL	PhD
+2	Math	NULL
+2	NULL	Bachelor
+3	NULL	NULL
+5	CS	NULL
+7	NULL	NULL
+7	NULL	NULL

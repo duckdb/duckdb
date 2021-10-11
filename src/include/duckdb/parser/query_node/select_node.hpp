@@ -13,6 +13,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/common/set.hpp"
 
 namespace duckdb {
 
@@ -22,12 +23,14 @@ enum class AggregateHandling : uint8_t {
 	FORCE_AGGREGATES       // force aggregates: any non-aggregate select list entry will become a GROUP
 };
 
+using GroupingSet = set<idx_t>;
+
 class GroupByNode {
 public:
 	//! The total set of all group expressions
 	vector<unique_ptr<ParsedExpression>> group_expressions;
 	//! The different grouping sets as they map to the group expressions
-	vector<vector<idx_t>> grouping_sets;
+	vector<GroupingSet> grouping_sets;
 };
 
 //! SelectNode represents a standard SELECT statement

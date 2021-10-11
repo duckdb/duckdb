@@ -229,6 +229,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
 	BoundGroupInformation info;
+	if (statement.groups.grouping_sets.size() > 1) {
+		throw InternalException("FIXME: >1 grouping set");
+	}
 	auto &group_expressions = statement.groups.group_expressions;
 	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it

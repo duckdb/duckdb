@@ -43,10 +43,10 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 		// explicit groups provided: use standard handling
 		select_node.aggregate_handling = AggregateHandling::STANDARD_HANDLING;
 		select_node.groups.group_expressions.clear();
-		vector<idx_t> grouping_set;
+		GroupingSet grouping_set;
 		for(idx_t i = 0; i < groups.size(); i++) {
 			select_node.groups.group_expressions.push_back(groups[i]->Copy());
-			grouping_set.push_back(i);
+			grouping_set.insert(i);
 		}
 		select_node.groups.grouping_sets.push_back(move(grouping_set));
 	} else {
