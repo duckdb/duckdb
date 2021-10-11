@@ -150,6 +150,16 @@ setMethod(
     # use Kirill's magic, convert rownames to additional column
     value <- sqlRownamesToColumn(value, row.names)
 
+    # convert factor levels to utf8
+    is_factor <- vapply(value, is.factor, logical(1))
+    value[is_factor] <- lapply(value[is_factor], function(x) {
+      levels(x) <- enc2utf8(levels(x))
+      x
+    })
+
+    # encode column names to utf8
+    names(data) <- enc2utf8(names((data))
+
     if (dbExistsTable(conn, name)) {
       if (overwrite) {
         dbRemoveTable(conn, name)

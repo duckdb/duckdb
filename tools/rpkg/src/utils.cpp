@@ -50,10 +50,9 @@ RStrings::RStrings() {
 	R_PreserveObject(strings);
 	MARK_NOT_MUTABLE(strings);
 
-	SEXP chars = r.Protect(Rf_allocVector(VECSXP, 7));
+	SEXP chars = r.Protect(Rf_allocVector(VECSXP, 8));
 	SET_VECTOR_ELT(chars, 0, UTC_str = Rf_mkString("UTC"));
 	SET_VECTOR_ELT(chars, 1, Date_str = Rf_mkString("Date"));
-	SET_VECTOR_ELT(chars, 1, factor_str = Rf_mkString("factor"));
 	SET_VECTOR_ELT(chars, 2, difftime_str = Rf_mkString("difftime"));
 	SET_VECTOR_ELT(chars, 3, secs_str = Rf_mkString("secs"));
 	SET_VECTOR_ELT(chars, 4, arrow_str = Rf_mkString("arrow"));
@@ -61,6 +60,8 @@ RStrings::RStrings() {
 	SET_VECTOR_ELT(chars, 6,
 	               str_ref_type_names_rtypes_n_param_str =
 	                   RApi::StringsToSexp({"str", "ref", "type", "names", "rtypes", "n_param"}));
+	SET_VECTOR_ELT(chars, 7, factor_str = Rf_mkString("factor"));
+
 	R_PreserveObject(chars);
 	MARK_NOT_MUTABLE(chars);
 
