@@ -107,6 +107,8 @@ struct DataTableInfo {
 struct ParallelTableScanState {
 	RowGroup *current_row_group;
 	idx_t vector_index;
+	idx_t max_row;
+	LocalScanState local_state;
 	bool transaction_local_data;
 };
 
@@ -138,7 +140,7 @@ public:
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context);
-	void InitializeParallelScan(ParallelTableScanState &state);
+	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
 	                      const vector<column_t> &column_ids);
 

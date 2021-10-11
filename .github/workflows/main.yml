@@ -709,7 +709,7 @@ jobs:
           build/coverage/test/unittest "[interquery]"
           python3 scripts/try_timeout.py --timeout=1200 --retry=3 build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[detailed_profiler]"
-          build/coverage/test/unittest "[tpch]"
+          build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
           python tools/shell/shell-test.py build/coverage/duckdb
 

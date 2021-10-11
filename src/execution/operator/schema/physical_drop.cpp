@@ -3,7 +3,27 @@
 
 namespace duckdb {
 
-void PhysicalDrop::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class DropSourceState : public GlobalSourceState {
+public:
+	DropSourceState() : finished(false) {
+	}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalDrop::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<DropSourceState>();
+}
+
+void PhysicalDrop::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                           LocalSourceState &lstate) const {
+	auto &state = (DropSourceState &)gstate;
+	if (state.finished) {
+		return;
+	}
 	switch (info->type) {
 	case CatalogType::PREPARED_STATEMENT: {
 		// DEALLOCATE silently ignores errors
@@ -17,7 +37,7 @@ void PhysicalDrop::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 		Catalog::GetCatalog(context.client).DropEntry(context.client, info.get());
 		break;
 	}
-	state->finished = true;
+	state.finished = true;
 }
 
 } // namespace duckdb

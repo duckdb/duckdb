@@ -1,0 +1,23 @@
+# name: test/sql/join/full_outer/full_outer_join_cache.test
+# description: Test full outer join with caches
+# group: [full_outer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE smalltable AS SELECT 1::INTEGER a;
+
+# values 1...1024 10x
+statement ok
+CREATE TABLE bigtable AS SELECT a::INTEGER a FROM generate_series(0, 9999, 1) tbl(a), generate_series(0, 9, 1) tbl2(b);
+
+query I
+SELECT COUNT(*) FROM bigtable FULL OUTER JOIN smalltable USING (a)
+----
+100000
+
+query I
+SELECT COUNT(*) FROM bigtable RIGHT OUTER JOIN smalltable USING (a)
+----
+10

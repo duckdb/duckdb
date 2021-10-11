@@ -216,13 +216,14 @@ unique_ptr<FunctionData> ArrowTableFunction::ArrowScanBind(ClientContext &contex
 	return move(res);
 }
 
-unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData &function, ArrowScanState &scan_state,
+unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData &function,
+                                                     const vector<column_t> &column_ids,
                                                      TableFilterCollection *filters) {
 	//! Generate Projection Pushdown Vector
 	pair<unordered_map<idx_t, string>, vector<string>> project_columns;
-	D_ASSERT(!scan_state.column_ids.empty());
-	for (idx_t idx = 0; idx < scan_state.column_ids.size(); idx++) {
-		auto col_idx = scan_state.column_ids[idx];
+	D_ASSERT(!column_ids.empty());
+	for (idx_t idx = 0; idx < column_ids.size(); idx++) {
+		auto col_idx = column_ids[idx];
 		if (col_idx != COLUMN_IDENTIFIER_ROW_ID) {
 			auto &schema = *function.schema_root.arrow_schema.children[col_idx];
 			project_columns.first[idx] = schema.name;
@@ -240,7 +241,7 @@ unique_ptr<FunctionOperatorData> ArrowTableFunction::ArrowScanInit(ClientContext
 	auto result = make_unique<ArrowScanState>(move(current_chunk));
 	result->column_ids = column_ids;
 	auto &data = (const ArrowScanFunctionData &)*bind_data;
-	result->stream = ProduceArrowScan(data, *result, filters);
+	result->stream = ProduceArrowScan(data, column_ids, filters);
 	return move(result);
 }
 
@@ -425,9 +426,9 @@ void ArrowToDuckDBBlob(Vector &vector, ArrowArray &array, ArrowScanState &scan_s
 		}
 	} else {
 		//! Check if last offset is higher than max uint32
-		if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) {
-			throw std::runtime_error("We do not support Blobs over 4GB");
-		}
+		if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
+			throw std::runtime_error("DuckDB does not support Blobs over 4GB");
+		} // LCOV_EXCL_STOP
 		auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 		if (nested_offset != -1) {
 			offsets = (uint64_t *)array.buffers[1] + array.offset + nested_offset;
@@ -624,9 +625,9 @@ void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowScanState &scan
 		auto original_type = arrow_convert_data[col_idx]->variable_sz_type[arrow_convert_idx.first++];
 		auto cdata = (char *)array.buffers[2];
 		if (original_type.first == ArrowVariableSizeType::SUPER_SIZE) {
-			if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) {
-				throw std::runtime_error("We do not support Strings over 4GB");
-			}
+			if (((uint64_t *)array.buffers[1])[array.length] > NumericLimits<uint32_t>::Maximum()) { // LCOV_EXCL_START
+				throw std::runtime_error("DuckDB does not support Strings over 4GB");
+			} // LCOV_EXCL_STOP
 			auto offsets = (uint64_t *)array.buffers[1] + array.offset + scan_state.chunk_offset;
 			if (nested_offset != -1) {
 				offsets = (uint64_t *)array.buffers[1] + array.offset + nested_offset;
@@ -980,6 +981,7 @@ void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowScanS
 	}
 	vector.Slice(*dict_vectors[col_idx], sel, size);
 }
+
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanState &scan_state,
                                        std::unordered_map<idx_t, unique_ptr<ArrowConvertData>> &arrow_convert_data,
                                        DataChunk &output, idx_t start) {
@@ -1055,39 +1057,22 @@ idx_t ArrowTableFunction::ArrowScanMaxThreads(ClientContext &context, const Func
 }
 
 unique_ptr<ParallelState> ArrowTableFunction::ArrowScanInitParallelState(ClientContext &context,
-                                                                         const FunctionData *bind_data_p) {
-	return make_unique<ParallelArrowScanState>();
+                                                                         const FunctionData *bind_data_p,
+                                                                         const vector<column_t> &column_ids,
+                                                                         TableFilterCollection *filters) {
+	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
+	auto result = make_unique<ParallelArrowScanState>();
+	result->stream = ProduceArrowScan(bind_data, column_ids, filters);
+	return move(result);
 }
 
 bool ArrowTableFunction::ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                                     FunctionOperatorData *operator_state,
                                                     ParallelState *parallel_state_p) {
-	auto &bind_data = (const ArrowScanFunctionData &)*bind_data_p;
 	auto &state = (ArrowScanState &)*operator_state;
 	auto &parallel_state = (ParallelArrowScanState &)*parallel_state_p;
-#ifndef DUCKDB_NO_THREADS
-	if (!parallel_state.stream) {
-		std::unique_lock<mutex> sync_lock(parallel_state.sync_mutex);
 
-		if (std::this_thread::get_id() == bind_data.thread_id) {
-			//! Generate a Stream
-			parallel_state.stream = ProduceArrowScan(bind_data, state, state.filters);
-			parallel_state.ready = true;
-			parallel_state.cv.notify_all();
-		} else {
-			parallel_state.cv.wait(sync_lock, [&parallel_state] { return parallel_state.ready; });
-		}
-	}
 	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
-
-#else
-	lock_guard<mutex> parallel_lock(parallel_state.main_mutex);
-	if (!parallel_state.stream) {
-		//! Generate a Stream
-		parallel_state.stream = ProduceArrowScan(bind_data, state, state.filters);
-	}
-#endif
-
 	state.chunk_offset = 0;
 
 	auto current_chunk = parallel_state.stream->GetNextChunk();
@@ -1109,9 +1094,7 @@ ArrowTableFunction::ArrowScanParallelInit(ClientContext &context, const Function
 	auto result = make_unique<ArrowScanState>(move(current_chunk));
 	result->column_ids = column_ids;
 	result->filters = filters;
-	if (!ArrowScanParallelStateNext(context, bind_data_p, result.get(), state)) {
-		return nullptr;
-	}
+	ArrowScanParallelStateNext(context, bind_data_p, result.get(), state);
 	return move(result);
 }
 

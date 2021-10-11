@@ -70,10 +70,10 @@ BoundStatement Binder::Bind(SQLStatement &statement) {
 		return Bind((SetStatement &)statement);
 	case StatementType::LOAD_STATEMENT:
 		return Bind((LoadStatement &)statement);
-	default:
+	default: // LCOV_EXCL_START
 		throw NotImplementedException("Unimplemented statement type \"%s\" for Bind",
 		                              StatementTypeToString(statement.type));
-	}
+	} // LCOV_EXCL_STOP
 }
 
 unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
@@ -119,7 +119,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundQueryNode &node) {
 	case QueryNodeType::RECURSIVE_CTE_NODE:
 		return CreatePlan((BoundRecursiveCTENode &)node);
 	default:
-		throw Exception("Unsupported bound query node type");
+		throw InternalException("Unsupported bound query node type");
 	}
 }
 
@@ -148,7 +148,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableRef &ref) {
 		result = Bind((ExpressionListRef &)ref);
 		break;
 	default:
-		throw Exception("Unknown table ref type");
+		throw InternalException("Unknown table ref type");
 	}
 	result->sample = move(ref.sample);
 	return result;
@@ -182,7 +182,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundTableRef &ref) {
 		root = CreatePlan((BoundCTERef &)ref);
 		break;
 	default:
-		throw Exception("Unsupported bound table ref type type");
+		throw InternalException("Unsupported bound table ref type type");
 	}
 	// plan the sample clause
 	if (ref.sample) {
@@ -196,7 +196,7 @@ void Binder::AddCTE(const string &name, CommonTableExpressionInfo *info) {
 	D_ASSERT(!name.empty());
 	auto entry = CTE_bindings.find(name);
 	if (entry != CTE_bindings.end()) {
-		throw BinderException("Duplicate CTE \"%s\" in query!", name);
+		throw InternalException("Duplicate CTE \"%s\" in query!", name);
 	}
 	CTE_bindings[name] = info;
 }

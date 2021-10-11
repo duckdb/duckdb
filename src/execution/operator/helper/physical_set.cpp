@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-void PhysicalSet::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
+void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                          LocalSourceState &lstate) const {
 	D_ASSERT(scope == SetScope::GLOBAL || scope == SetScope::SESSION);
 
 	auto normalized_name = ValidateInput(context);
@@ -15,8 +16,6 @@ void PhysicalSet::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, 
 	} else {
 		context.client.set_variables[normalized_name] = value;
 	}
-
-	state->finished = true;
 }
 
 string PhysicalSet::ValidateInput(ExecutionContext &context) const {

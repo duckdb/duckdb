@@ -10,16 +10,15 @@ namespace duckdb {
 
 PhysicalSimpleAggregate::PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
                                                  bool all_combinable, idx_t estimated_cardinality)
-    : PhysicalSink(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types), estimated_cardinality),
+    : PhysicalOperator(PhysicalOperatorType::SIMPLE_AGGREGATE, move(types), estimated_cardinality),
       aggregates(move(expressions)), all_combinable(all_combinable) {
 }
 
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-
 struct AggregateState {
-	explicit AggregateState(vector<unique_ptr<Expression>> &aggregate_expressions) {
+	explicit AggregateState(const vector<unique_ptr<Expression>> &aggregate_expressions) {
 		for (auto &aggregate : aggregate_expressions) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 			auto &aggr = (BoundAggregateExpression &)*aggregate;
@@ -53,20 +52,23 @@ struct AggregateState {
 	vector<aggregate_destructor_t> destructors;
 };
 
-class SimpleAggregateGlobalState : public GlobalOperatorState {
+class SimpleAggregateGlobalState : public GlobalSinkState {
 public:
-	explicit SimpleAggregateGlobalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
+	explicit SimpleAggregateGlobalState(const vector<unique_ptr<Expression>> &aggregates)
+	    : state(aggregates), finished(false) {
 	}
 
 	//! The lock for updating the global aggregate state
 	mutex lock;
 	//! The global aggregate state
 	AggregateState state;
+	//! Whether or not the aggregate is finished
+	bool finished;
 };
 
 class SimpleAggregateLocalState : public LocalSinkState {
 public:
-	explicit SimpleAggregateLocalState(vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
+	explicit SimpleAggregateLocalState(const vector<unique_ptr<Expression>> &aggregates) : state(aggregates) {
 		vector<LogicalType> payload_types;
 		for (auto &aggregate : aggregates) {
 			D_ASSERT(aggregate->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
@@ -95,16 +97,16 @@ public:
 	DataChunk payload_chunk;
 };
 
-unique_ptr<GlobalOperatorState> PhysicalSimpleAggregate::GetGlobalState(ClientContext &context) {
+unique_ptr<GlobalSinkState> PhysicalSimpleAggregate::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<SimpleAggregateGlobalState>(aggregates);
 }
 
-unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> PhysicalSimpleAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	return make_unique<SimpleAggregateLocalState>(aggregates);
 }
 
-void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                                   DataChunk &input) const {
+SinkResultType PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+                                             DataChunk &input) const {
 	auto &sink = (SimpleAggregateLocalState &)lstate;
 	// perform the aggregation inside the local state
 	idx_t payload_idx = 0, payload_expr_idx = 0;
@@ -142,14 +144,16 @@ void PhysicalSimpleAggregate::Sink(ExecutionContext &context, GlobalOperatorStat
 		                                 payload_chunk.size());
 		payload_idx += payload_cnt;
 	}
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
 	auto &gstate = (SimpleAggregateGlobalState &)state;
 	auto &source = (SimpleAggregateLocalState &)lstate;
+	D_ASSERT(!gstate.finished);
 
 	// finalize: combine the local state into the global state
 	if (all_combinable) {
@@ -173,12 +177,39 @@ void PhysicalSimpleAggregate::Combine(ExecutionContext &context, GlobalOperatorS
 	context.client.profiler->Flush(context.thread.profiler);
 }
 
+SinkFinalizeType PhysicalSimpleAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                   GlobalSinkState &gstate_p) const {
+	auto &gstate = (SimpleAggregateGlobalState &)gstate_p;
+
+	D_ASSERT(!gstate.finished);
+	gstate.finished = true;
+	return SinkFinalizeType::READY;
+}
+
 //===--------------------------------------------------------------------===//
-// GetChunkInternal
+// Source
 //===--------------------------------------------------------------------===//
-void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                               PhysicalOperatorState *state) const {
+class SimpleAggregateState : public GlobalSourceState {
+public:
+	SimpleAggregateState() : finished(false) {
+	}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalSimpleAggregate::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<SimpleAggregateState>();
+}
+
+void PhysicalSimpleAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                      LocalSourceState &lstate) const {
 	auto &gstate = (SimpleAggregateGlobalState &)*sink_state;
+	auto &state = (SimpleAggregateState &)gstate_p;
+	D_ASSERT(gstate.finished);
+	if (state.finished) {
+		return;
+	}
+
 	// initialize the result chunk with the aggregate values
 	chunk.SetCardinality(1);
 	for (idx_t aggr_idx = 0; aggr_idx < aggregates.size(); aggr_idx++) {
@@ -187,7 +218,7 @@ void PhysicalSimpleAggregate::GetChunkInternal(ExecutionContext &context, DataCh
 		Vector state_vector(Value::POINTER((uintptr_t)gstate.state.aggregates[aggr_idx].get()));
 		aggregate.function.finalize(state_vector, aggregate.bind_info.get(), chunk.data[aggr_idx], 1, 0);
 	}
-	state->finished = true;
+	state.finished = true;
 }
 
 string PhysicalSimpleAggregate::ParamsToString() const {
@@ -203,8 +234,6 @@ string PhysicalSimpleAggregate::ParamsToString() const {
 		}
 	}
 	return result;
-}
-void PhysicalSimpleAggregate::FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) {
 }
 
 } // namespace duckdb

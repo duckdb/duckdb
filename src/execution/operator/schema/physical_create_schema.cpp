@@ -3,10 +3,29 @@
 
 namespace duckdb {
 
-void PhysicalCreateSchema::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                            PhysicalOperatorState *state) const {
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class CreateSchemaSourceState : public GlobalSourceState {
+public:
+	CreateSchemaSourceState() : finished(false) {
+	}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalCreateSchema::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<CreateSchemaSourceState>();
+}
+
+void PhysicalCreateSchema::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                   LocalSourceState &lstate) const {
+	auto &state = (CreateSchemaSourceState &)gstate;
+	if (state.finished) {
+		return;
+	}
 	Catalog::GetCatalog(context.client).CreateSchema(context.client, info.get());
-	state->finished = true;
+	state.finished = true;
 }
 
 } // namespace duckdb

@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-LocalTableStorage::LocalTableStorage(DataTable &table) : table(table) {
+LocalTableStorage::LocalTableStorage(DataTable &table) : table(table), active_scans(0) {
 	Clear();
 }
 

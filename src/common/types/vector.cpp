@@ -32,7 +32,7 @@ Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(move(type_p), true, 
 Vector::Vector(LogicalType type_p, data_ptr_t dataptr)
     : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
 	if (dataptr && type.id() == LogicalTypeId::INVALID) {
-		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
+		throw InternalException("Cannot create a vector of type INVALID!");
 	}
 }
 
@@ -93,6 +93,11 @@ void Vector::Reference(const Value &value) {
 void Vector::Reference(Vector &other) {
 	D_ASSERT(other.GetType() == GetType());
 	Reinterpret(other);
+}
+
+void Vector::ReferenceAndSetType(Vector &other) {
+	type = other.GetType();
+	Reference(other);
 }
 
 void Vector::Reinterpret(Vector &other) {

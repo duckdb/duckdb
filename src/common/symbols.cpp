@@ -79,6 +79,7 @@ template class std::unique_ptr<SubqueryRef>;
 template class std::unique_ptr<TableFunctionRef>;
 template class std::unique_ptr<Pipeline>;
 template class std::shared_ptr<Pipeline>;
+template class std::weak_ptr<Pipeline>;
 template class std::shared_ptr<PreparedStatementData>;
 
 template class std::unique_ptr<Expression>;
@@ -108,7 +109,7 @@ template class std::unique_ptr<MaterializedQueryResult>;
 template class std::unique_ptr<StreamQueryResult>;
 template class std::unique_ptr<LogicalOperator>;
 template class std::unique_ptr<PhysicalOperator>;
-template class std::unique_ptr<PhysicalOperatorState>;
+template class std::unique_ptr<OperatorState>;
 template class std::unique_ptr<sel_t[]>;
 template class std::unique_ptr<StringHeap>;
 template class std::unique_ptr<GroupedAggregateHashTable>;

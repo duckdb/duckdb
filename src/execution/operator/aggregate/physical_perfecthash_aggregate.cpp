@@ -13,7 +13,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
                                                            vector<unique_ptr<Expression>> groups_p,
                                                            vector<unique_ptr<BaseStatistics>> group_stats,
                                                            vector<idx_t> required_bits_p, idx_t estimated_cardinality)
-    : PhysicalSink(PhysicalOperatorType::PERFECT_HASH_GROUP_BY, move(types_p), estimated_cardinality),
+    : PhysicalOperator(PhysicalOperatorType::PERFECT_HASH_GROUP_BY, move(types_p), estimated_cardinality),
       groups(move(groups_p)), aggregates(move(aggregates_p)), required_bits(move(required_bits_p)) {
 	D_ASSERT(groups.size() == group_stats.size());
 	group_minima.reserve(group_stats.size());
@@ -70,7 +70,7 @@ PhysicalPerfectHashAggregate::PhysicalPerfectHashAggregate(ClientContext &contex
 	}
 }
 
-unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(ClientContext &context) {
+unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(ClientContext &context) const {
 	return make_unique<PerfectAggregateHashTable>(BufferManager::GetBufferManager(context), group_types, payload_types,
 	                                              aggregate_objects, group_minima, required_bits);
 }
@@ -78,9 +78,9 @@ unique_ptr<PerfectAggregateHashTable> PhysicalPerfectHashAggregate::CreateHT(Cli
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class PerfectHashAggregateGlobalState : public GlobalOperatorState {
+class PerfectHashAggregateGlobalState : public GlobalSinkState {
 public:
-	PerfectHashAggregateGlobalState(PhysicalPerfectHashAggregate &op, ClientContext &context)
+	PerfectHashAggregateGlobalState(const PhysicalPerfectHashAggregate &op, ClientContext &context)
 	    : ht(op.CreateHT(context)) {
 	}
 
@@ -92,7 +92,7 @@ public:
 
 class PerfectHashAggregateLocalState : public LocalSinkState {
 public:
-	PerfectHashAggregateLocalState(PhysicalPerfectHashAggregate &op, ClientContext &context)
+	PerfectHashAggregateLocalState(const PhysicalPerfectHashAggregate &op, ClientContext &context)
 	    : ht(op.CreateHT(context)) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
@@ -106,16 +106,16 @@ public:
 	DataChunk aggregate_input_chunk;
 };
 
-unique_ptr<GlobalOperatorState> PhysicalPerfectHashAggregate::GetGlobalState(ClientContext &context) {
+unique_ptr<GlobalSinkState> PhysicalPerfectHashAggregate::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<PerfectHashAggregateGlobalState>(*this, context);
 }
 
-unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> PhysicalPerfectHashAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	return make_unique<PerfectHashAggregateLocalState>(*this, context.client);
 }
 
-void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p,
-                                        DataChunk &input) const {
+SinkResultType PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state,
+                                                  LocalSinkState &lstate_p, DataChunk &input) const {
 	auto &lstate = (PerfectHashAggregateLocalState &)lstate_p;
 	DataChunk &group_chunk = lstate.group_chunk;
 	DataChunk &aggregate_input_chunk = lstate.aggregate_input_chunk;
@@ -153,13 +153,14 @@ void PhysicalPerfectHashAggregate::Sink(ExecutionContext &context, GlobalOperato
 	D_ASSERT(aggregate_input_chunk.ColumnCount() == 0 || group_chunk.size() == aggregate_input_chunk.size());
 
 	lstate.ht->AddChunk(group_chunk, aggregate_input_chunk);
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-void PhysicalPerfectHashAggregate::Combine(ExecutionContext &context, GlobalOperatorState &gstate_p,
-                                           LocalSinkState &lstate_p) {
+void PhysicalPerfectHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &gstate_p,
+                                           LocalSinkState &lstate_p) const {
 	auto &lstate = (PerfectHashAggregateLocalState &)lstate_p;
 	auto &gstate = (PerfectHashAggregateGlobalState &)gstate_p;
 
@@ -168,27 +169,27 @@ void PhysicalPerfectHashAggregate::Combine(ExecutionContext &context, GlobalOper
 }
 
 //===--------------------------------------------------------------------===//
-// GetChunk
+// Source
 //===--------------------------------------------------------------------===//
-class PerfectHashAggregateState : public PhysicalOperatorState {
+class PerfectHashAggregateState : public GlobalSourceState {
 public:
-	PerfectHashAggregateState(PhysicalOperator &op, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), ht_scan_position(0) {
+	PerfectHashAggregateState() : ht_scan_position(0) {
 	}
+
 	//! The current position to scan the HT for output tuples
 	idx_t ht_scan_position;
 };
 
-void PhysicalPerfectHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                                    PhysicalOperatorState *state_p) const {
-	auto &state = (PerfectHashAggregateState &)*state_p;
+unique_ptr<GlobalSourceState> PhysicalPerfectHashAggregate::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<PerfectHashAggregateState>();
+}
+
+void PhysicalPerfectHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                           LocalSourceState &lstate) const {
+	auto &state = (PerfectHashAggregateState &)gstate_p;
 	auto &gstate = (PerfectHashAggregateGlobalState &)*sink_state;
 
 	gstate.ht->Scan(state.ht_scan_position, chunk);
-}
-
-unique_ptr<PhysicalOperatorState> PhysicalPerfectHashAggregate::GetOperatorState() {
-	return make_unique<PerfectHashAggregateState>(*this, children[0].get());
 }
 
 string PhysicalPerfectHashAggregate::ParamsToString() const {
