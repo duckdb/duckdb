@@ -22,6 +22,14 @@ enum class AggregateHandling : uint8_t {
 	FORCE_AGGREGATES       // force aggregates: any non-aggregate select list entry will become a GROUP
 };
 
+class GroupByNode {
+public:
+	//! The total set of all group expressions
+	vector<unique_ptr<ParsedExpression>> group_expressions;
+	//! The different grouping sets as they map to the group expressions
+	vector<vector<idx_t>> grouping_sets;
+};
+
 //! SelectNode represents a standard SELECT statement
 class SelectNode : public QueryNode {
 public:
@@ -35,7 +43,7 @@ public:
 	//! The WHERE clause
 	unique_ptr<ParsedExpression> where_clause;
 	//! list of groups
-	vector<unique_ptr<ParsedExpression>> groups;
+	GroupByNode groups;
 	//! HAVING clause
 	unique_ptr<ParsedExpression> having;
 	//! Aggregate handling during binding

@@ -25,6 +25,7 @@ class ColumnDefinition;
 struct OrderByNode;
 struct CopyInfo;
 struct CommonTableExpressionInfo;
+class GroupByNode;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
@@ -224,7 +225,7 @@ private:
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
-	bool TransformGroupBy(duckdb_libpgquery::PGList *group, vector<unique_ptr<ParsedExpression>> &result);
+	bool TransformGroupBy(duckdb_libpgquery::PGList *group, GroupByNode &result);
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
 

@@ -229,22 +229,23 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
 	BoundGroupInformation info;
-	if (!statement.groups.empty()) {
+	auto &group_expressions = statement.groups.group_expressions;
+	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it
-		unbound_groups.resize(statement.groups.size());
+		unbound_groups.resize(group_expressions.size());
 		GroupBinder group_binder(*this, context, statement, result->group_index, alias_map, info.alias_map);
-		for (idx_t i = 0; i < statement.groups.size(); i++) {
+		for (idx_t i = 0; i < group_expressions.size(); i++) {
 
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
 			// the reason we want the unbound copy is because we want to figure out whether an expression
 			// is a group reference BEFORE binding in the SELECT/HAVING binder
-			group_binder.unbound_expression = statement.groups[i]->Copy();
+			group_binder.unbound_expression = group_expressions[i]->Copy();
 			group_binder.bind_index = i;
 
 			// bind the groups
 			LogicalType group_type;
-			auto bound_expr = group_binder.Bind(statement.groups[i], &group_type);
+			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
 			D_ASSERT(bound_expr->return_type.id() != LogicalTypeId::INVALID);
 
 			// push a potential collation, if necessary

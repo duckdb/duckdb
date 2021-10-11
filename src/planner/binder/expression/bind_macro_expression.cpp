@@ -92,8 +92,8 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(ParsedExpression &expr, Q
 		for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
 			ReplaceMacroParametersRecursive(sel_node.select_list[i]);
 		}
-		for (idx_t i = 0; i < sel_node.groups.size(); i++) {
-			ReplaceMacroParametersRecursive(sel_node.groups[i]);
+		for (idx_t i = 0; i < sel_node.groups.group_expressions.size(); i++) {
+			ReplaceMacroParametersRecursive(sel_node.groups.group_expressions[i]);
 		}
 		if (sel_node.where_clause != nullptr) {
 			ReplaceMacroParametersRecursive(sel_node.where_clause);
