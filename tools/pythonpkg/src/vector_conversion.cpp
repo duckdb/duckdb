@@ -325,8 +325,10 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 	}
 }
 
-void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &bind_columns,
+void VectorConversion::BindPandas(py::handle original_df, vector<PandasColumnBindData> &bind_columns,
                                   vector<LogicalType> &return_types, vector<string> &names) {
+	// This performs a shallow copy that allows us to rename the dataframe
+	auto df = original_df.attr("copy")(false);
 	auto df_columns = py::list(df.attr("columns"));
 	auto df_types = py::list(df.attr("dtypes"));
 	auto get_fun = df.attr("__getitem__");
