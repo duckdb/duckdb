@@ -325,8 +325,10 @@ static void ConvertPandasType(const string &col_type, LogicalType &duckdb_col_ty
 	}
 }
 
-void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &bind_columns,
+void VectorConversion::BindPandas(py::handle original_df, vector<PandasColumnBindData> &bind_columns,
                                   vector<LogicalType> &return_types, vector<string> &names) {
+	// This performs a shallow copy that allows us to rename the dataframe
+	auto df = original_df.attr("copy")(false);
 	auto df_columns = py::list(df.attr("columns"));
 	auto df_types = py::list(df.attr("dtypes"));
 	auto get_fun = df.attr("__getitem__");
@@ -340,13 +342,16 @@ void VectorConversion::BindPandas(py::handle df, vector<PandasColumnBindData> &b
 	unordered_map<string, idx_t> pandas_column_names_map;
 	py::array column_attributes = df.attr("columns").attr("values");
 	for (idx_t col_idx = 0; col_idx < py::len(df_columns); col_idx++) {
-		auto column_name_py = std::string(py::str(column_attributes[py::cast(col_idx)]));
+		auto column_name_py = py::str(df_columns[col_idx]);
 		pandas_column_names_map[column_name_py]++;
 		if (pandas_column_names_map[column_name_py] > 1) {
 			// If the column name is repeated we start adding _x where x is the repetition number
-			column_name_py += "_" + to_string(pandas_column_names_map[column_name_py] - 1);
-			names.emplace_back(column_name_py);
-			pandas_column_names_map[column_name_py]++;
+			string column_name = column_name_py;
+			column_name += "_" + to_string(pandas_column_names_map[column_name_py] - 1);
+			auto new_column_name_py = py::str(column_name);
+			names.emplace_back(new_column_name_py);
+			column_attributes[py::cast(col_idx)] = new_column_name_py;
+			pandas_column_names_map[new_column_name_py]++;
 		} else {
 			names.emplace_back(column_name_py);
 		}
