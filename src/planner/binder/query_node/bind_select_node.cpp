@@ -229,9 +229,6 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
 	BoundGroupInformation info;
-	if (statement.groups.grouping_sets.size() > 1) {
-		throw InternalException("FIXME: >1 grouping set");
-	}
 	auto &group_expressions = statement.groups.group_expressions;
 	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it
@@ -254,7 +251,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			// push a potential collation, if necessary
 			bound_expr =
 			    ExpressionBinder::PushCollation(context, move(bound_expr), StringType::GetCollation(group_type), true);
-			result->groups.push_back(move(bound_expr));
+			result->groups.group_expressions.push_back(move(bound_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs
 			// we do this to make sure that "table.a" and "a" are treated the same
@@ -265,6 +262,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			info.map[unbound_groups[i].get()] = i;
 		}
 	}
+	result->groups.grouping_sets = move(statement.groups.grouping_sets);
 
 	// bind the HAVING clause, if any
 	if (statement.having) {
@@ -286,8 +284,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group
 			auto group_ref = make_unique<BoundColumnRefExpression>(
-			    expr->return_type, ColumnBinding(result->group_index, result->groups.size()));
-			result->groups.push_back(move(expr));
+			    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
+			result->groups.group_expressions.push_back(move(expr));
 			expr = move(group_ref);
 		}
 		result->select_list.push_back(move(expr));
@@ -305,7 +303,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column
 	// since we have an aggregation, we need to either (1) throw an error, or (2) wrap the column in a FIRST() aggregate
 	// we choose the former one [CONTROVERSIAL: this is the PostgreSQL behavior]
-	if (!result->groups.empty() || !result->aggregates.empty() || statement.having) {
+	if (!result->groups.group_expressions.empty() || !result->aggregates.empty() || statement.having) {
 		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
 			throw BinderException("Aggregates cannot be present in a Project relation!");
 		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {

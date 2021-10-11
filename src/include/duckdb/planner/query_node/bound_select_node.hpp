@@ -13,8 +13,17 @@
 #include "duckdb/parser/expression_map.hpp"
 #include "duckdb/planner/bound_tableref.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/parser/group_by_node.hpp"
 
 namespace duckdb {
+
+class BoundGroupByNode {
+public:
+	//! The total set of all group expressions
+	vector<unique_ptr<Expression>> group_expressions;
+	//! The different grouping sets as they map to the group expressions
+	vector<GroupingSet> grouping_sets;
+};
 
 //! Bound equivalent of SelectNode
 class BoundSelectNode : public BoundQueryNode {
@@ -33,7 +42,7 @@ public:
 	//! The WHERE clause
 	unique_ptr<Expression> where_clause;
 	//! list of groups
-	vector<unique_ptr<Expression>> groups;
+	BoundGroupByNode groups;
 	//! HAVING clause
 	unique_ptr<Expression> having;
 	//! SAMPLE clause

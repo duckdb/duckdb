@@ -15,7 +15,7 @@
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/tokens.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
-#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/group_by_node.hpp"
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
@@ -27,7 +27,6 @@ struct OrderByNode;
 struct CopyInfo;
 struct CommonTableExpressionInfo;
 struct GroupingExpressionMap;
-class GroupByNode;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation

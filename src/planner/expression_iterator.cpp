@@ -179,8 +179,8 @@ void ExpressionIterator::EnumerateQueryNodeChildren(BoundQueryNode &node,
 			EnumerateExpression(bound_select.select_list[i], callback);
 		}
 		EnumerateExpression(bound_select.where_clause, callback);
-		for (idx_t i = 0; i < bound_select.groups.size(); i++) {
-			EnumerateExpression(bound_select.groups[i], callback);
+		for (idx_t i = 0; i < bound_select.groups.group_expressions.size(); i++) {
+			EnumerateExpression(bound_select.groups.group_expressions[i], callback);
 		}
 		EnumerateExpression(bound_select.having, callback);
 		for (idx_t i = 0; i < bound_select.aggregates.size(); i++) {

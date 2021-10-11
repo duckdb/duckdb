@@ -11,6 +11,8 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/parser/group_by_node.hpp"
+
 namespace duckdb {
 
 //! LogicalAggregate represents an aggregate operation with (optional) GROUP BY
@@ -25,6 +27,8 @@ public:
 	idx_t aggregate_index;
 	//! The set of groups (optional).
 	vector<unique_ptr<Expression>> groups;
+	//! The set of grouping sets (optional).
+	vector<GroupingSet> grouping_sets;
 	//! Group statistics (optional)
 	vector<unique_ptr<BaseStatistics>> group_stats;
 

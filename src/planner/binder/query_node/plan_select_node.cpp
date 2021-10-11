@@ -30,10 +30,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = PlanFilter(move(statement.where_clause), move(root));
 	}
 
-	if (!statement.aggregates.empty() || !statement.groups.empty()) {
-		if (!statement.groups.empty()) {
+	if (!statement.aggregates.empty() || !statement.groups.group_expressions.empty()) {
+		if (!statement.groups.group_expressions.empty()) {
 			// visit the groups
-			for (auto &group : statement.groups) {
+			for (auto &group : statement.groups.group_expressions) {
 				PlanSubqueries(&group, &root);
 			}
 		}
@@ -44,7 +44,8 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		// finally create the aggregate node with the group_index and aggregate_index as obtained from the binder
 		auto aggregate =
 		    make_unique<LogicalAggregate>(statement.group_index, statement.aggregate_index, move(statement.aggregates));
-		aggregate->groups = move(statement.groups);
+		aggregate->groups = move(statement.groups.group_expressions);
+		aggregate->grouping_sets = move(statement.groups.grouping_sets);
 
 		aggregate->AddChild(move(root));
 		root = move(aggregate);

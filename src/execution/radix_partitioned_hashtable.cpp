@@ -1,0 +1,340 @@
+#include "duckdb/execution/radix_partitioned_hashtable.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/parallel/event.hpp"
+
+namespace duckdb {
+
+RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const PhysicalHashAggregate &op_p) :
+	grouping_set(grouping_set_p), op(op_p) {
+
+	// 10000 seems like a good compromise here
+	radix_limit = 10000;
+}
+
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class RadixHTGlobalState : public GlobalSinkState {
+public:
+	RadixHTGlobalState(ClientContext &context)
+	    : is_empty(true), multi_scan(true), total_groups(0),
+	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()) {
+	}
+
+	vector<unique_ptr<PartitionableHashTable>> intermediate_hts;
+	vector<unique_ptr<GroupedAggregateHashTable>> finalized_hts;
+
+	//! Whether or not any tuples were added to the HT
+	bool is_empty;
+	//! Whether or not the hash table should be scannable multiple times
+	bool multi_scan;
+	//! The lock for updating the global aggregate state
+	mutex lock;
+	//! a counter to determine if we should switch over to p
+	atomic<idx_t> total_groups;
+
+	bool is_finalized = false;
+	bool is_partitioned = false;
+
+	RadixPartitionInfo partition_info;
+};
+
+class RadixHTLocalState : public LocalSinkState {
+public:
+	RadixHTLocalState() : is_empty(true) {}
+
+	//! The aggregate HT
+	unique_ptr<PartitionableHashTable> ht;
+
+	//! Whether or not any tuples were added to the HT
+	bool is_empty;
+};
+
+void RadixPartitionedHashTable::SetMultiScan(GlobalSinkState &state) {
+	auto &gstate = (RadixHTGlobalState &)state;
+	gstate.multi_scan = true;
+}
+
+unique_ptr<GlobalSinkState> RadixPartitionedHashTable::GetGlobalSinkState(ClientContext &context) const {
+	return make_unique<RadixHTGlobalState>(context);
+}
+
+unique_ptr<LocalSinkState> RadixPartitionedHashTable::GetLocalSinkState(ExecutionContext &context) const {
+	return make_unique<RadixHTLocalState>();
+}
+
+void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate, DataChunk &group_chunk, DataChunk &aggregate_input_chunk) const {
+	auto &llstate = (RadixHTLocalState &)lstate;
+	auto &gstate = (RadixHTGlobalState &)state;
+	D_ASSERT(!gstate.is_finalized);
+
+	// if we have non-combinable aggregates (e.g. string_agg) or any distinct aggregates we cannot keep parallel hash
+	// tables
+	if (ForceSingleHT(state)) {
+		lock_guard<mutex> glock(gstate.lock);
+		gstate.is_empty = gstate.is_empty && group_chunk.size() == 0;
+		if (gstate.finalized_hts.empty()) {
+			gstate.finalized_hts.push_back(
+			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context.client), op.group_types,
+			                                           op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64));
+		}
+		D_ASSERT(gstate.finalized_hts.size() == 1);
+		D_ASSERT(gstate.finalized_hts[0]);
+		gstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, aggregate_input_chunk);
+		return;
+	}
+
+	D_ASSERT(op.all_combinable);
+	D_ASSERT(!op.any_distinct);
+
+	if (group_chunk.size() > 0) {
+		llstate.is_empty = false;
+	}
+
+	if (!llstate.ht) {
+		llstate.ht = make_unique<PartitionableHashTable>(BufferManager::GetBufferManager(context.client),
+		                                                 gstate.partition_info, op.group_types, op.payload_types, op.bindings);
+	}
+
+	gstate.total_groups +=
+	    llstate.ht->AddChunk(group_chunk, aggregate_input_chunk,
+	                         gstate.total_groups > radix_limit && gstate.partition_info.n_partitions > 1);
+}
+
+void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
+	auto &llstate = (RadixHTLocalState &)lstate;
+	auto &gstate = (RadixHTGlobalState &)state;
+	D_ASSERT(!gstate.is_finalized);
+
+	// this actually does not do a lot but just pushes the local HTs into the global state so we can later combine them
+	// in parallel
+
+	if (ForceSingleHT(state)) {
+		D_ASSERT(gstate.finalized_hts.size() <= 1);
+		return;
+	}
+
+	if (!llstate.ht) {
+		return; // no data
+	}
+
+	if (!llstate.ht->IsPartitioned() && gstate.partition_info.n_partitions > 1 && gstate.total_groups > radix_limit) {
+		llstate.ht->Partition();
+	}
+
+	lock_guard<mutex> glock(gstate.lock);
+	D_ASSERT(op.all_combinable);
+	D_ASSERT(!op.any_distinct);
+
+	if (!llstate.is_empty) {
+		gstate.is_empty = false;
+	}
+
+	// we will never add new values to these HTs so we can drop the first part of the HT
+	llstate.ht->Finalize();
+
+	// at this point we just collect them the PhysicalHashAggregateFinalizeTask (below) will merge them in parallel
+	gstate.intermediate_hts.push_back(move(llstate.ht));
+}
+
+bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState &gstate_p) const {
+	auto &gstate = (RadixHTGlobalState &)gstate_p;
+	D_ASSERT(!gstate.is_finalized);
+	gstate.is_finalized = true;
+
+	// special case if we have non-combinable aggregates
+	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
+	if (ForceSingleHT(gstate)) {
+		D_ASSERT(gstate.finalized_hts.size() <= 1);
+		D_ASSERT(gstate.finalized_hts.empty() || gstate.finalized_hts[0]);
+		return false;
+	}
+
+	// we can have two cases now, non-partitioned for few groups and radix-partitioned for very many groups.
+	// go through all of the child hts and see if we ever called partition() on any of them
+	// if we did, its the latter case.
+	bool any_partitioned = false;
+	for (auto &pht : gstate.intermediate_hts) {
+		if (pht->IsPartitioned()) {
+			any_partitioned = true;
+			break;
+		}
+	}
+
+	if (any_partitioned) {
+		// if one is partitioned, all have to be
+		// this should mostly have already happened in Combine, but if not we do it here
+		for (auto &pht : gstate.intermediate_hts) {
+			if (!pht->IsPartitioned()) {
+				pht->Partition();
+			}
+		}
+		// schedule additional tasks to combine the partial HTs
+		gstate.finalized_hts.resize(gstate.partition_info.n_partitions);
+		for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
+			gstate.finalized_hts[r] =
+			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context), op.group_types,
+			                                           op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64);
+		}
+		gstate.is_partitioned = true;
+		return true;
+	} else { // in the non-partitioned case we immediately combine all the unpartitioned hts created by the threads.
+		     // TODO possible optimization, if total count < limit for 32 bit ht, use that one
+		     // create this ht here so finalize needs no lock on gstate
+
+		gstate.finalized_hts.push_back(make_unique<GroupedAggregateHashTable>(
+		    BufferManager::GetBufferManager(context), op.group_types, op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64));
+		for (auto &pht : gstate.intermediate_hts) {
+			auto unpartitioned = pht->GetUnpartitioned();
+			for (auto &unpartitioned_ht : unpartitioned) {
+				D_ASSERT(unpartitioned_ht);
+				gstate.finalized_hts[0]->Combine(*unpartitioned_ht);
+				unpartitioned_ht.reset();
+			}
+			unpartitioned.clear();
+		}
+		D_ASSERT(gstate.finalized_hts[0]);
+		gstate.finalized_hts[0]->Finalize();
+		return false;
+	}
+}
+
+// this task is run in multiple threads and combines the radix-partitioned hash tables into a single onen and then
+// folds them into the global ht finally.
+class RadixAggregateFinalizeTask : public ExecutorTask {
+public:
+	RadixAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, RadixHTGlobalState &state_p,
+	                                  idx_t radix_p)
+	    : ExecutorTask(executor), event(move(event_p)), state(state_p), radix(radix_p) {
+	}
+	static void FinalizeHT(RadixHTGlobalState &gstate, idx_t radix) {
+		D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
+		D_ASSERT(gstate.finalized_hts[radix]);
+		for (auto &pht : gstate.intermediate_hts) {
+			for (auto &ht : pht->GetPartition(radix)) {
+				gstate.finalized_hts[radix]->Combine(*ht);
+				ht.reset();
+			}
+		}
+		gstate.finalized_hts[radix]->Finalize();
+	}
+
+	void ExecuteTask() override {
+		FinalizeHT(state, radix);
+		event->FinishTask();
+	}
+
+private:
+	shared_ptr<Event> event;
+	RadixHTGlobalState &state;
+	idx_t radix;
+};
+
+void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, shared_ptr<Event> event, GlobalSinkState &state, vector<unique_ptr<Task>> &tasks) const {
+	auto &gstate = (RadixHTGlobalState &)state;
+	if (!gstate.is_partitioned) {
+		return;
+	}
+	for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
+		D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
+		D_ASSERT(gstate.finalized_hts[r]);
+		tasks.push_back(
+			make_unique<RadixAggregateFinalizeTask>(executor, move(event), gstate, r));
+	}
+}
+
+bool RadixPartitionedHashTable::ForceSingleHT(GlobalSinkState &state) const {
+	auto &gstate = (RadixHTGlobalState &)state;
+	return !op.all_combinable || op.any_distinct || gstate.partition_info.n_partitions < 2;
+}
+
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class RadixHTGlobalSourceState : public GlobalSourceState {
+public:
+	RadixHTGlobalSourceState()
+	    : ht_index(0), ht_scan_position(0), finished(false) {
+	}
+
+	//! The current position to scan the HT for output tuples
+	idx_t ht_index;
+	idx_t ht_scan_position;
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> RadixPartitionedHashTable::GetGlobalSourceState() const {
+	return make_unique<RadixHTGlobalSourceState>();
+}
+
+void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &scan_chunk, DataChunk &chunk, GlobalSinkState &sink_state, GlobalSourceState &source_state) const {
+	auto &gstate = (RadixHTGlobalState &)sink_state;
+	auto &state = (RadixHTGlobalSourceState &)source_state;
+	D_ASSERT(gstate.is_finalized);
+	if (state.finished) {
+		return;
+	}
+
+	// special case hack to sort out aggregating from empty intermediates
+	// for aggregations without groups
+	if (gstate.is_empty && grouping_set.empty()) {
+		D_ASSERT(chunk.ColumnCount() == op.aggregates.size());
+		// for each column in the aggregates, set to initial state
+		chunk.SetCardinality(1);
+		for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
+			D_ASSERT(op.aggregates[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
+			auto &aggr = (BoundAggregateExpression &)*op.aggregates[i];
+			auto aggr_state = unique_ptr<data_t[]>(new data_t[aggr.function.state_size()]);
+			aggr.function.initialize(aggr_state.get());
+
+			Vector state_vector(Value::POINTER((uintptr_t)aggr_state.get()));
+			aggr.function.finalize(state_vector, aggr.bind_info.get(), chunk.data[i], 1, 0);
+			if (aggr.function.destructor) {
+				aggr.function.destructor(state_vector, 1);
+			}
+		}
+		state.finished = true;
+		return;
+	}
+	if (gstate.is_empty && !state.finished) {
+		state.finished = true;
+		return;
+	}
+	idx_t elements_found = 0;
+
+	while (true) {
+		if (state.ht_index == gstate.finalized_hts.size()) {
+			state.finished = true;
+			return;
+		}
+		D_ASSERT(gstate.finalized_hts[state.ht_index]);
+		elements_found = gstate.finalized_hts[state.ht_index]->Scan(state.ht_scan_position, scan_chunk);
+
+		if (elements_found > 0) {
+			break;
+		}
+		if (!gstate.multi_scan) {
+			gstate.finalized_hts[state.ht_index].reset();
+		}
+		state.ht_index++;
+		state.ht_scan_position = 0;
+	}
+
+	// compute the final projection list
+	idx_t chunk_index = 0;
+	chunk.SetCardinality(elements_found);
+	if (op.group_types.size() + op.aggregates.size() == chunk.ColumnCount()) {
+		for (idx_t col_idx = 0; col_idx < op.group_types.size(); col_idx++) {
+			chunk.data[chunk_index++].Reference(scan_chunk.data[col_idx]);
+		}
+	} else {
+		D_ASSERT(op.aggregates.size() == chunk.ColumnCount());
+	}
+
+	for (idx_t col_idx = 0; col_idx < op.aggregates.size(); col_idx++) {
+		chunk.data[chunk_index++].Reference(scan_chunk.data[op.group_types.size() + col_idx]);
+	}
+}
+
+}
