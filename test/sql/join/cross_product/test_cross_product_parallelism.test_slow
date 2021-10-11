@@ -1,6 +1,6 @@
-# name: test/sql/join/test_cross_product_parallelism.test_slow
+# name: test/sql/join/cross_product/test_cross_product_parallelism.test_slow
 # description: Test cross product with parallelism
-# group: [join]
+# group: [cross_product]
 
 statement ok
 PRAGMA enable_verification

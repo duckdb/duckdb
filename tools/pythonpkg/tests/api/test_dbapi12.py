@@ -2,13 +2,9 @@ import duckdb
 import tempfile
 import os
 import pandas as pd
-import sys
 
 class TestRelationApi(object):
     def test_readonly(self, duckdb_cursor):
-        if sys.version_info.major < 3:
-            return
-
         test_df = pd.DataFrame.from_dict({"i":[1, 2, 3], "j":["one", "two", "three"]})
 
         def test_rel(rel, duckdb_cursor):

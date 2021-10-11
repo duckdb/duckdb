@@ -26,7 +26,8 @@ void *dlsym(void *handle, const char *name) {
 }
 #endif
 
-void PhysicalLoad::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const {
+void PhysicalLoad::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                           LocalSourceState &lstate) const {
 	auto &fs = FileSystem::GetFileSystem(context.client);
 	auto filename = fs.ConvertSeparators(info->filename);
 	if (!fs.FileExists(filename)) {
@@ -66,7 +67,6 @@ void PhysicalLoad::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 		throw InvalidInputException("Initialization function %s from file %s threw an exception: %s", init_fun_name,
 		                            filename, e.what());
 	}
-	state->finished = true;
 }
 
 } // namespace duckdb

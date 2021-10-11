@@ -14,7 +14,7 @@ namespace duckdb {
 using ValidityBytes = JoinHashTable::ValidityBytes;
 using ScanStructure = JoinHashTable::ScanStructure;
 
-JoinHashTable::JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions,
+JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
                              vector<LogicalType> btypes, JoinType type)
     : buffer_manager(buffer_manager), build_types(move(btypes)), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false) {

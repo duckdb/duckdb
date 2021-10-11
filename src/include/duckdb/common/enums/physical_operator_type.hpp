@@ -76,6 +76,7 @@ enum class PhysicalOperatorType : uint8_t {
 	DROP,
 	PRAGMA,
 	TRANSACTION,
+	CREATE_TYPE,
 
 	// -----------------------------
 	// Helpers

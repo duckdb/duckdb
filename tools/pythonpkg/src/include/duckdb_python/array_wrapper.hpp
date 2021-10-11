@@ -46,7 +46,7 @@ class NumpyResultConversion {
 public:
 	NumpyResultConversion(vector<LogicalType> &types, idx_t initial_capacity);
 
-	void Append(DataChunk &chunk);
+	void Append(DataChunk &chunk, unordered_map<idx_t, py::list> *categories = nullptr);
 
 	py::object ToArray(idx_t col_idx) {
 		return owned_data[col_idx].ToArray(count);

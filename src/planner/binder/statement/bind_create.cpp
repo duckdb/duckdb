@@ -1,9 +1,11 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/main/database.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/parser/parsed_data/create_macro_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
@@ -11,7 +13,6 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
-#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
@@ -21,6 +22,7 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/parsed_data/bound_create_function_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 
 namespace duckdb {
@@ -112,6 +114,33 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	return BindSchema(info);
 }
 
+void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const string &schema) {
+	if (type.id() == LogicalTypeId::LIST) {
+		auto child_type = ListType::GetChildType(type);
+		BindLogicalType(context, child_type, schema);
+		type = LogicalType::LIST(child_type);
+	} else if (type.id() == LogicalTypeId::STRUCT || type.id() == LogicalTypeId::MAP) {
+		auto child_types = StructType::GetChildTypes(type);
+		for (auto &child_type : child_types) {
+			BindLogicalType(context, child_type.second, schema);
+		}
+		// Generate new Struct/Map Type
+		if (type.id() == LogicalTypeId::STRUCT) {
+			type = LogicalType::STRUCT(child_types);
+		} else {
+			type = LogicalType::MAP(child_types);
+		}
+	} else if (type.id() == LogicalTypeId::USER) {
+		auto &user_type_name = UserType::GetTypeName(type);
+		auto user_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
+		                                                                               schema, user_type_name, true);
+		if (!user_type_catalog) {
+			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
+		}
+		type = *user_type_catalog->user_type;
+	}
+}
+
 BoundStatement Binder::Bind(CreateStatement &stmt) {
 	BoundStatement result;
 	result.names = {"Count"};
@@ -175,6 +204,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 		break;
 	}
 	case CatalogType::TABLE_ENTRY: {
+		// We first check if there are any user types, if yes we check to which custom types they refer.
+		auto &create_table_info = (CreateTableInfo &)*stmt.info;
+		for (auto &column : create_table_info.columns) {
+			BindLogicalType(context, column.type, stmt.info->schema);
+		}
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);
 
@@ -185,6 +219,11 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			create_table->children.push_back(move(root));
 		}
 		result.plan = move(create_table);
+		break;
+	}
+	case CatalogType::TYPE_ENTRY: {
+		auto schema = BindSchema(*stmt.info);
+		result.plan = make_unique<LogicalCreate>(LogicalOperatorType::LOGICAL_CREATE_TYPE, move(stmt.info), schema);
 		break;
 	}
 	default:

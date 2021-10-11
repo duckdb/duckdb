@@ -56,7 +56,32 @@ SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE not i
 ----
 false	false	500	500
 
+# enum
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+INSERT INTO person VALUES ('Moe', 'happy');
+
+query TT
+select * from person
+----
+Moe	happy
+
+
 restart
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
 
 # restart and check all types again
 
@@ -92,3 +117,27 @@ query IIII
 SELECT MIN(i), MAX(i), COUNT(*), COUNT(i) FROM a_bool WHERE not i
 ----
 false	false	500	500
+
+
+query TT
+select * from person
+----
+Moe	happy
+
+statement ok
+begin transaction
+
+statement ok
+drop TYPE mood;
+
+statement ok
+commit
+
+
+restart
+
+statement error
+CREATE TABLE aliens (
+    name text,
+    current_mood mood
+);

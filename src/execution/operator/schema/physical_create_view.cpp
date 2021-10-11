@@ -3,10 +3,29 @@
 
 namespace duckdb {
 
-void PhysicalCreateView::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                          PhysicalOperatorState *state) const {
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class CreateViewSourceState : public GlobalSourceState {
+public:
+	CreateViewSourceState() : finished(false) {
+	}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalCreateView::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<CreateViewSourceState>();
+}
+
+void PhysicalCreateView::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                 LocalSourceState &lstate) const {
+	auto &state = (CreateViewSourceState &)gstate;
+	if (state.finished) {
+		return;
+	}
 	Catalog::GetCatalog(context.client).CreateView(context.client, info.get());
-	state->finished = true;
+	state.finished = true;
 }
 
 } // namespace duckdb

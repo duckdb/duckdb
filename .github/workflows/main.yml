@@ -708,7 +708,7 @@ jobs:
           build/coverage/test/unittest "[interquery]"
           python3 scripts/try_timeout.py --timeout=1200 --retry=3 build/coverage/test/unittest "[coverage]"
           build/coverage/test/unittest "[detailed_profiler]"
-          build/coverage/test/unittest "[tpch]"
+          build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
           build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
           python tools/shell/shell-test.py build/coverage/duckdb
 
@@ -1222,39 +1222,6 @@ jobs:
       run: |
         cat duckdb.Rcheck/00check.log
         cat duckdb.Rcheck/tests/testthat.Rout.fail
-
-
- linux-tarball-v2:
-    name: Python 2 Tarball
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '2.7'
-
-    - name: Install
-      run: |
-        pip install setuptools-scm==5.0.2
-        pip install numpy pytest pandas
-
-    - name: Build
-      run: |
-        python --version
-        git archive --format zip --output test-tarball.zip HEAD
-        mkdir duckdb-test-tarball
-        mv test-tarball.zip duckdb-test-tarball
-        cd duckdb-test-tarball
-        unzip test-tarball.zip
-        cd tools/pythonpkg
-        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-        python setup.py install --user
-        (cd tests/ && python -m pytest)
 
  linux-tarball:
     name: Python 3 Tarball

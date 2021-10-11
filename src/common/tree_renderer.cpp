@@ -4,6 +4,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/to_string.hpp"
+#include "duckdb/execution/operator/join/physical_delim_join.hpp"
+#include "duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 #include "utf8proc_wrapper.hpp"
 
@@ -229,6 +232,12 @@ string TreeRenderer::ToString(const QueryProfiler::TreeNode &op) {
 	return ss.str();
 }
 
+string TreeRenderer::ToString(const Pipeline &op) {
+	std::stringstream ss;
+	Render(op, ss);
+	return ss.str();
+}
+
 void TreeRenderer::Render(const LogicalOperator &op, std::ostream &ss) {
 	auto tree = CreateTree(op);
 	ToStream(*tree, ss);
@@ -240,6 +249,11 @@ void TreeRenderer::Render(const PhysicalOperator &op, std::ostream &ss) {
 }
 
 void TreeRenderer::Render(const QueryProfiler::TreeNode &op, std::ostream &ss) {
+	auto tree = CreateTree(op);
+	ToStream(*tree, ss);
+}
+
+void TreeRenderer::Render(const Pipeline &op, std::ostream &ss) {
 	auto tree = CreateTree(op);
 	ToStream(*tree, ss);
 }
@@ -344,9 +358,63 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateRenderNode(string name, string ex
 	return result;
 }
 
+class TreeChildrenIterator {
+public:
+	template <class T>
+	static bool HasChildren(const T &op) {
+		return !op.children.empty();
+	}
+	template <class T>
+	static void Iterate(const T &op, const std::function<void(const T &child)> &callback) {
+		for (auto &child : op.children) {
+			callback(*child);
+		}
+	}
+};
+
+template <>
+bool TreeChildrenIterator::HasChildren(const PhysicalOperator &op) {
+	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
+		return true;
+	}
+	return !op.children.empty();
+}
+template <>
+void TreeChildrenIterator::Iterate(const PhysicalOperator &op,
+                                   const std::function<void(const PhysicalOperator &child)> &callback) {
+	for (auto &child : op.children) {
+		callback(*child);
+	}
+	if (op.type == PhysicalOperatorType::DELIM_JOIN) {
+		auto &delim = (PhysicalDelimJoin &)op;
+		callback(*delim.join);
+	}
+}
+
+struct PipelineRenderNode {
+	explicit PipelineRenderNode(PhysicalOperator &op) : op(op) {
+	}
+
+	PhysicalOperator &op;
+	unique_ptr<PipelineRenderNode> child;
+};
+
+template <>
+bool TreeChildrenIterator::HasChildren(const PipelineRenderNode &op) {
+	return op.child.get();
+}
+
+template <>
+void TreeChildrenIterator::Iterate(const PipelineRenderNode &op,
+                                   const std::function<void(const PipelineRenderNode &child)> &callback) {
+	if (op.child) {
+		callback(*op.child);
+	}
+}
+
 template <class T>
 static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
-	if (op.children.empty()) {
+	if (!TreeChildrenIterator::HasChildren(op)) {
 		width = 1;
 		height = 1;
 		return;
@@ -354,12 +422,12 @@ static void GetTreeWidthHeight(const T &op, idx_t &width, idx_t &height) {
 	width = 0;
 	height = 0;
 
-	for (auto &child : op.children) {
+	TreeChildrenIterator::Iterate<T>(op, [&](const T &child) {
 		idx_t child_width, child_height;
-		GetTreeWidthHeight<T>(*child, child_width, child_height);
+		GetTreeWidthHeight<T>(child, child_width, child_height);
 		width += child_width;
 		height = MaxValue<idx_t>(height, child_height);
-	}
+	});
 	height++;
 }
 
@@ -368,14 +436,13 @@ idx_t TreeRenderer::CreateRenderTreeRecursive(RenderTree &result, const T &op, i
 	auto node = TreeRenderer::CreateNode(op);
 	result.SetNode(x, y, move(node));
 
-	if (op.children.empty()) {
+	if (!TreeChildrenIterator::HasChildren(op)) {
 		return 1;
 	}
 	idx_t width = 0;
 	// render the children of this node
-	for (auto &child : op.children) {
-		width += CreateRenderTreeRecursive<T>(result, *child, x + width, y + 1);
-	}
+	TreeChildrenIterator::Iterate<T>(
+	    op, [&](const T &child) { width += CreateRenderTreeRecursive<T>(result, child, x + width, y + 1); });
 	return width;
 }
 
@@ -397,6 +464,10 @@ unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const LogicalOperator &op) {
 
 unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PhysicalOperator &op) {
 	return CreateRenderNode(op.GetName(), op.ParamsToString());
+}
+
+unique_ptr<RenderTreeNode> TreeRenderer::CreateNode(const PipelineRenderNode &op) {
+	return CreateNode(op.op);
 }
 
 string TreeRenderer::ExtractExpressionsRecursive(ExpressionInfo &state) {
@@ -454,4 +525,17 @@ unique_ptr<RenderTree> TreeRenderer::CreateTree(const PhysicalOperator &op) {
 unique_ptr<RenderTree> TreeRenderer::CreateTree(const QueryProfiler::TreeNode &op) {
 	return CreateRenderTree<QueryProfiler::TreeNode>(op);
 }
+
+unique_ptr<RenderTree> TreeRenderer::CreateTree(const Pipeline &op) {
+	auto operators = op.GetOperators();
+	D_ASSERT(!operators.empty());
+	unique_ptr<PipelineRenderNode> node;
+	for (auto &op : operators) {
+		auto new_node = make_unique<PipelineRenderNode>(*op);
+		new_node->child = move(node);
+		node = move(new_node);
+	}
+	return CreateRenderTree<PipelineRenderNode>(*node);
+}
+
 } // namespace duckdb

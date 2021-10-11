@@ -1,7 +1,6 @@
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/local_storage.hpp"
@@ -59,14 +58,14 @@ static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &con
 	auto result = make_unique<TableScanOperatorData>();
 	result->column_ids = column_ids;
 	result->scan_state.table_filters = filters->table_filters;
-	if (!TableScanParallelStateNext(context, bind_data_p, result.get(), state)) {
-		return nullptr;
-	}
+	TableScanParallelStateNext(context, bind_data_p, result.get(), state);
 	return move(result);
 }
 
 static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_p, FunctionOperatorData *operator_state,
                           DataChunk *, DataChunk &output) {
+	D_ASSERT(bind_data_p);
+	D_ASSERT(operator_state);
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
@@ -80,19 +79,26 @@ struct ParallelTableFunctionScanState : public ParallelState {
 };
 
 idx_t TableScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
+	D_ASSERT(bind_data_p);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	return bind_data.table->storage->MaxThreads(context);
 }
 
-unique_ptr<ParallelState> TableScanInitParallelState(ClientContext &context, const FunctionData *bind_data_p) {
+unique_ptr<ParallelState> TableScanInitParallelState(ClientContext &context, const FunctionData *bind_data_p,
+                                                     const vector<column_t> &column_ids,
+                                                     TableFilterCollection *filters) {
+	D_ASSERT(bind_data_p);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto result = make_unique<ParallelTableFunctionScanState>();
-	bind_data.table->storage->InitializeParallelScan(result->state);
+	bind_data.table->storage->InitializeParallelScan(context, result->state);
 	return move(result);
 }
 
 bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
                                 FunctionOperatorData *operator_state, ParallelState *parallel_state_p) {
+	D_ASSERT(bind_data_p);
+	D_ASSERT(parallel_state_p);
+	D_ASSERT(operator_state);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
 	auto &parallel_state = (ParallelTableFunctionScanState &)*parallel_state_p;
 	auto &state = (TableScanOperatorData &)*operator_state;

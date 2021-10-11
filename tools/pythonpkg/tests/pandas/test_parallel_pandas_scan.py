@@ -4,7 +4,6 @@ import duckdb
 import pandas as pd
 import numpy
 import datetime
-import sys
 
 def run_parallel_queries(main_table, left_join_table, expected_df, iteration_count = 5):
     for i in range(0, iteration_count):
@@ -50,15 +49,11 @@ class TestParallelPandasScan(object):
         run_parallel_queries(main_table, left_join_table, left_join_table)
 
     def test_parallel_complex_unicode_text(self, duckdb_cursor):
-        if sys.version_info.major < 3:
-            return
         main_table = pd.DataFrame([{"join_column":u"鴨"}])
         left_join_table = pd.DataFrame([{"join_column": u"鴨","other_column":u"數據庫"}])
         run_parallel_queries(main_table, left_join_table, left_join_table)
 
     def test_parallel_emojis(self, duckdb_cursor):
-        if sys.version_info.major < 3:
-            return
         main_table = pd.DataFrame([{"join_column":u"🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️"}])
         left_join_table = pd.DataFrame([{"join_column": u"🤦🏼‍♂️ L🤦🏼‍♂️R 🤦🏼‍♂️","other_column":u"🦆🍞🦆"}])
         run_parallel_queries(main_table, left_join_table, left_join_table)

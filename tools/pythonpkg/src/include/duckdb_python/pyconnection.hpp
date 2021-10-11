@@ -87,12 +87,12 @@ public:
 
 	DuckDBPyConnection *Rollback();
 
-	py::object GetAttr(const py::str &key);
-
 	void Close();
 
 	// cursor() is stupid
 	shared_ptr<DuckDBPyConnection> Cursor();
+
+	py::object GetDescription();
 
 	// these should be functions on the result but well
 	py::object FetchOne();

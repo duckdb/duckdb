@@ -2,6 +2,9 @@
 # description: Test ORDER BY with large table
 # group: [order]
 
+statement ok
+PRAGMA verify_parallelism
+
 # order of a large table, with burgers and fries
 statement ok
 CREATE TABLE test AS SELECT a FROM range(10000, 0, -1) t1(a)

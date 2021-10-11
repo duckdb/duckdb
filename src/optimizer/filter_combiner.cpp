@@ -580,6 +580,10 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 		idx_t equivalence_set = GetEquivalenceSet(node);
 		auto scalar = left_is_scalar ? comparison.left.get() : comparison.right.get();
 		auto constant_value = ExpressionExecutor::EvaluateScalar(*scalar);
+		if (constant_value.is_null) {
+			// comparisons with null are always null (i.e. will never result in rows)
+			return FilterResult::UNSATISFIABLE;
+		}
 
 		// create the ExpressionValueInformation
 		ExpressionValueInformation info;
@@ -602,7 +606,6 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression *expr) {
 			}
 		}
 		return ret;
-
 	} else {
 		// comparison between two non-scalars
 		// only handle comparisons for now

@@ -111,7 +111,7 @@ private:
 	//! The timer used to time the execution time of the individual Physical Operators
 	Profiler<system_clock> op;
 	//! The stack of Physical Operators that are currently active
-	std::stack<const PhysicalOperator *> execution_stack;
+	const PhysicalOperator *active_operator;
 	//! A mapping of physical operators to recorded timings
 	unordered_map<const PhysicalOperator *, OperatorInformation> timings;
 };
@@ -126,6 +126,7 @@ public:
 
 public:
 	struct TreeNode {
+		PhysicalOperatorType type;
 		string name;
 		string extra_info;
 		OperatorInformation info;
@@ -193,6 +194,8 @@ public:
 	idx_t OperatorSize() {
 		return tree_map.size();
 	}
+
+	void Finalize(TreeNode &node);
 
 private:
 	//! Whether or not query profiling is enabled

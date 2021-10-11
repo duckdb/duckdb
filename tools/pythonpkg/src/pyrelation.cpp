@@ -6,11 +6,16 @@ namespace duckdb {
 
 void DuckDBPyRelation::Initialize(py::handle &m) {
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation", py::module_local())
+	    .def_property_readonly("type", &DuckDBPyRelation::Type, "Get the type of the relation.")
+	    .def_property_readonly("columns", &DuckDBPyRelation::Columns, "Get the names of the columns of this relation.")
+	    .def_property_readonly("types", &DuckDBPyRelation::ColumnTypes, "Get the columns types of the result.")
+	    .def_property_readonly("dtypes", &DuckDBPyRelation::ColumnTypes, "Get the columns types of the result.")
 	    .def("filter", &DuckDBPyRelation::Filter, "Filter the relation object by the filter in filter_expr",
 	         py::arg("filter_expr"))
 	    .def("project", &DuckDBPyRelation::Project, "Project the relation object by the projection in project_expr",
 	         py::arg("project_expr"))
-	    .def("set_alias", &DuckDBPyRelation::Alias, "Rename the relation object to new alias", py::arg("alias"))
+	    .def("set_alias", &DuckDBPyRelation::SetAlias, "Rename the relation object to new alias", py::arg("alias"))
+	    .def_property_readonly("alias", &DuckDBPyRelation::GetAlias, "Get the name of the current alias")
 	    .def("order", &DuckDBPyRelation::Order, "Reorder the relation object by order_expr", py::arg("order_expr"))
 	    .def("aggregate", &DuckDBPyRelation::Aggregate,
 	         "Compute the aggregate aggr_expr by the optional groups group_expr on the relation", py::arg("aggr_expr"),
@@ -53,8 +58,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("fetchall", &DuckDBPyRelation::Fetchall, "Execute and fetch all rows")
 	    .def("map", &DuckDBPyRelation::Map, py::arg("map_function"), "Calls the passed function on the relation")
 	    .def("__str__", &DuckDBPyRelation::Print)
-	    .def("__repr__", &DuckDBPyRelation::Print)
-	    .def("__getattr__", &DuckDBPyRelation::Getattr);
+	    .def("__repr__", &DuckDBPyRelation::Print);
 }
 
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
@@ -92,12 +96,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::ProjectDf(py::object df, const st
 	return DuckDBPyConnection::DefaultConnection()->FromDF(std::move(df))->Project(expr);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Alias(const string &expr) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::SetAlias(const string &expr) {
 	return make_unique<DuckDBPyRelation>(rel->Alias(expr));
 }
 
+py::str DuckDBPyRelation::GetAlias() {
+	return py::str(string(rel->GetAlias()));
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AliasDF(py::object df, const string &expr) {
-	return DuckDBPyConnection::DefaultConnection()->FromDF(std::move(df))->Alias(expr);
+	return DuckDBPyConnection::DefaultConnection()->FromDF(std::move(df))->SetAlias(expr);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Filter(const string &expr) {
@@ -259,10 +267,12 @@ void DuckDBPyRelation::InsertInto(const string &table) {
 
 void DuckDBPyRelation::Insert(py::object params) {
 	vector<vector<Value>> values {DuckDBPyConnection::TransformPythonParamList(move(params))};
+	py::gil_scoped_release release;
 	rel->Insert(values);
 }
 
 void DuckDBPyRelation::Create(const string &table) {
+	py::gil_scoped_release release;
 	rel->Create(table);
 }
 
@@ -285,26 +295,25 @@ string DuckDBPyRelation::Print() {
 	       rel_res_string + "\n";
 }
 
-py::object DuckDBPyRelation::Getattr(const py::str &key) {
-	auto key_s = key.cast<string>();
-	if (key_s == "alias") {
-		return py::str(string(rel->GetAlias()));
-	} else if (key_s == "type") {
-		return py::str(RelationTypeToString(rel->type));
-	} else if (key_s == "columns") {
-		py::list res;
-		for (auto &col : rel->Columns()) {
-			res.append(col.name);
-		}
-		return move(res);
-	} else if (key_s == "types" || key_s == "dtypes") {
-		py::list res;
-		for (auto &col : rel->Columns()) {
-			res.append(col.type.ToString());
-		}
-		return move(res);
+// TODO: RelationType to a python enum
+py::str DuckDBPyRelation::Type() {
+	return py::str(RelationTypeToString(rel->type));
+}
+
+py::list DuckDBPyRelation::Columns() {
+	py::list res;
+	for (auto &col : rel->Columns()) {
+		res.append(col.name);
 	}
-	return py::none();
+	return move(res);
+}
+
+py::list DuckDBPyRelation::ColumnTypes() {
+	py::list res;
+	for (auto &col : rel->Columns()) {
+		res.append(col.type.ToString());
+	}
+	return move(res);
 }
 
 } // namespace duckdb

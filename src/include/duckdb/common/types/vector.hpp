@@ -84,6 +84,9 @@ public:
 	//! Without changing the type of this vector
 	void Reinterpret(Vector &other);
 
+	//! Causes this vector to reference the data held by the other vector, changes the type if required.
+	void ReferenceAndSetType(Vector &other);
+
 	//! Resets a vector from a vector cache.
 	//! This turns the vector back into an empty FlatVector with STANDARD_VECTOR_SIZE entries.
 	//! The VectorCache is used so this can be done without requiring any allocations.

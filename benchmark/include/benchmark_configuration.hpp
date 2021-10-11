@@ -16,11 +16,12 @@
 namespace duckdb {
 
 enum class BenchmarkMetaType { NONE, INFO, QUERY };
+enum class BenchmarkProfileInfo { NONE, NORMAL, DETAILED };
 
 struct BenchmarkConfiguration {
 	std::string name_pattern {};
 	BenchmarkMetaType meta = BenchmarkMetaType::NONE;
-	bool print_profile_info = false;
+	BenchmarkProfileInfo profile_info = BenchmarkProfileInfo::NONE;
 };
 
 } // namespace duckdb

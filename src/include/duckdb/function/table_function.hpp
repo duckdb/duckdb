@@ -52,7 +52,9 @@ typedef void (*table_function_cleanup_t)(ClientContext &context, const FunctionD
                                          FunctionOperatorData *operator_state);
 typedef idx_t (*table_function_max_threads_t)(ClientContext &context, const FunctionData *bind_data);
 typedef unique_ptr<ParallelState> (*table_function_init_parallel_state_t)(ClientContext &context,
-                                                                          const FunctionData *bind_data);
+                                                                          const FunctionData *bind_data,
+                                                                          const vector<column_t> &column_ids,
+                                                                          TableFilterCollection *filters);
 typedef unique_ptr<FunctionOperatorData> (*table_function_init_parallel_t)(ClientContext &context,
                                                                            const FunctionData *bind_data,
                                                                            ParallelState *state,

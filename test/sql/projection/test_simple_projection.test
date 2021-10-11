@@ -15,8 +15,10 @@ SELECT * FROM a;
 ----
 
 # insertion: 1 affected row
-statement ok
+query I
 INSERT INTO a VALUES (42, 84);
+----
+1
 
 query II
 SELECT * FROM a;
