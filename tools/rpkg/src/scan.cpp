@@ -75,7 +75,8 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 	vector<RType> rtypes;
 
 	for (idx_t col_idx = 0; col_idx < (idx_t)Rf_length(df); col_idx++) {
-		names.push_back(string(CHAR(STRING_ELT(df_names, col_idx))));
+		auto column_name = string(CHAR(STRING_ELT(df_names, col_idx)));
+		names.push_back(column_name);
 		SEXP coldata = VECTOR_ELT(df, col_idx);
 		rtypes.push_back(RApiTypes::DetectRType(coldata));
 		LogicalType duckdb_col_type;
@@ -89,7 +90,15 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 		case RType::NUMERIC:
 			duckdb_col_type = LogicalType::DOUBLE;
 			break;
-		case RType::FACTOR:
+		case RType::FACTOR: {
+			auto levels = GET_LEVELS(coldata);
+			vector<string> duckdb_levels(LENGTH(levels));
+			for (idx_t level_idx = 0; level_idx < LENGTH(levels); level_idx++) {
+				duckdb_levels[level_idx] = string(CHAR(STRING_ELT(levels, level_idx)));
+			}
+			duckdb_col_type = LogicalType::ENUM(column_name, duckdb_levels);
+			break;
+		}
 		case RType::STRING:
 			duckdb_col_type = LogicalType::VARCHAR;
 			break;
@@ -163,9 +172,27 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 		case RType::STRING:
 			AppendStringSegment(coldata, v, state.position, this_count);
 			break;
-		case RType::FACTOR:
-			AppendFactor(coldata, v, state.position, this_count);
+		case RType::FACTOR: {
+			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			switch (v.GetType().InternalType()) {
+			case PhysicalType::UINT8:
+				AppendColumnSegment<int, uint8_t, RIntegerType>(data_ptr, v, this_count);
+				break;
+
+			case PhysicalType::UINT16:
+				AppendColumnSegment<int, uint16_t, RIntegerType>(data_ptr, v, this_count);
+				break;
+
+			case PhysicalType::UINT32:
+				AppendColumnSegment<int, uint32_t, RIntegerType>(data_ptr, v, this_count);
+				break;
+
+			default:
+				Rf_error("duckdb_execute_R: Unknown enum type for scan: %s",
+				         TypeIdToString(v.GetType().InternalType()).c_str());
+			}
 			break;
+		}
 		case RType::TIMESTAMP: {
 			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 			AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, v, this_count);

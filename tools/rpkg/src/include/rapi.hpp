@@ -79,6 +79,7 @@ struct RStrings {
 	SEXP POSIXt;
 	SEXP UTC_str; // Rf_mkString
 	SEXP Date_str;
+	SEXP factor_str;
 	SEXP difftime_str;
 	SEXP secs_str;
 	SEXP arrow_str; // StringsToSexp
