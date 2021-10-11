@@ -8,12 +8,14 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/expression.hpp"
+
 namespace duckdb {
 
 //! PhysicalSimpleAggregate is an aggregate operator that can only perform aggregates (1) without any groups, and (2)
 //! without any DISTINCT aggregates
-class PhysicalSimpleAggregate : public PhysicalSink {
+class PhysicalSimpleAggregate : public PhysicalOperator {
 public:
 	PhysicalSimpleAggregate(vector<LogicalType> types, vector<unique_ptr<Expression>> expressions, bool all_combinable,
 	                        idx_t estimated_cardinality);
@@ -25,17 +27,32 @@ public:
 	bool all_combinable;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-	          DataChunk &input) const override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) override;
+	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
 
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+public:
+	// Sink interface
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	                    DataChunk &input) const override;
+	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const override;
+	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                          GlobalSinkState &gstate) const override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
 	string ParamsToString() const override;
+
+	bool IsSink() const override {
+		return true;
+	}
+
+	bool ParallelSink() const override {
+		// we can only parallelize if all aggregates are combinable
+		return all_combinable;
+	}
 };
 
 } // namespace duckdb

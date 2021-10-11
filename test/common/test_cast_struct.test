@@ -73,3 +73,6 @@ select a::row(a integer, b string) r from (VALUES (ROW(1, 'asdf')), (ROW(4, 'fds
 ----
 {'a': 1, 'b': asdf}
 {'a': 4, 'b': fdsa}
+
+statement error
+select struct_extract({'a': a}, a) from range(10) tbl(a);

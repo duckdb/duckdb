@@ -32,7 +32,7 @@ Vector::Vector(LogicalType type_p, idx_t capacity) : Vector(move(type_p), true, 
 Vector::Vector(LogicalType type_p, data_ptr_t dataptr)
     : vector_type(VectorType::FLAT_VECTOR), type(move(type_p)), data(dataptr) {
 	if (dataptr && type.id() == LogicalTypeId::INVALID) {
-		throw InvalidTypeException(type, "Cannot create a vector of type INVALID!");
+		throw InternalException("Cannot create a vector of type INVALID!");
 	}
 }
 
@@ -62,7 +62,7 @@ Vector::Vector(Vector &&other) noexcept
 }
 
 void Vector::Reference(const Value &value) {
-	D_ASSERT(GetType() == value.type());
+	D_ASSERT(GetType().id() == value.type().id());
 	this->vector_type = VectorType::CONSTANT_VECTOR;
 	buffer = VectorBuffer::CreateConstantVector(value.type());
 	auto internal_type = value.type().InternalType();
@@ -93,6 +93,11 @@ void Vector::Reference(const Value &value) {
 void Vector::Reference(Vector &other) {
 	D_ASSERT(other.GetType() == GetType());
 	Reinterpret(other);
+}
+
+void Vector::ReferenceAndSetType(Vector &other) {
+	type = other.GetType();
+	Reference(other);
 }
 
 void Vector::Reinterpret(Vector &other) {
@@ -282,7 +287,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		auto &child = DictionaryVector::Child(*this);
 		return child.SetValue(sel_vector.get_index(index), val);
 	}
-	if (val.type() != GetType()) {
+	if (val.type().InternalType() != GetType().InternalType()) {
 		SetValue(index, val.CastAs(GetType()));
 		return;
 	}
@@ -401,6 +406,22 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		entry.offset = offset;
 		break;
 	}
+	case LogicalTypeId::ENUM: {
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			((uint8_t *)data)[index] = val.value_.utinyint;
+			break;
+		case PhysicalType::UINT16:
+			((uint16_t *)data)[index] = val.value_.usmallint;
+			break;
+		case PhysicalType::UINT32:
+			((uint32_t *)data)[index] = val.value_.uinteger;
+			break;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+		break;
+	}
 	default:
 		throw InternalException("Unimplemented type for Vector::SetValue");
 	}
@@ -480,6 +501,18 @@ Value Vector::GetValue(idx_t index) const {
 			return Value::DECIMAL(((hugeint_t *)data)[index], width, scale);
 		default:
 			throw InternalException("Widths bigger than 38 are not supported");
+		}
+	}
+	case LogicalTypeId::ENUM: {
+		switch (type.InternalType()) {
+		case PhysicalType::UINT8:
+			return Value::ENUM(((uint8_t *)data)[index], GetType());
+		case PhysicalType::UINT16:
+			return Value::ENUM(((uint16_t *)data)[index], GetType());
+		case PhysicalType::UINT32:
+			return Value::ENUM(((uint32_t *)data)[index], GetType());
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 	}
 	case LogicalTypeId::HASH:

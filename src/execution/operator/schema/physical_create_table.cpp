@@ -13,11 +13,30 @@ PhysicalCreateTable::PhysicalCreateTable(LogicalOperator &op, SchemaCatalogEntry
       info(move(info)) {
 }
 
-void PhysicalCreateTable::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                           PhysicalOperatorState *state) const {
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class CreateTableSourceState : public GlobalSourceState {
+public:
+	CreateTableSourceState() : finished(false) {
+	}
+
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalCreateTable::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<CreateTableSourceState>();
+}
+
+void PhysicalCreateTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                  LocalSourceState &lstate) const {
+	auto &state = (CreateTableSourceState &)gstate;
+	if (state.finished) {
+		return;
+	}
 	auto &catalog = Catalog::GetCatalog(context.client);
 	catalog.CreateTable(context.client, schema, info.get());
-	state->finished = true;
+	state.finished = true;
 }
 
 } // namespace duckdb

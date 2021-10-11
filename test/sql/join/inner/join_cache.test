@@ -1,0 +1,42 @@
+# name: test/sql/join/inner/join_cache.test
+# description: Test joins with few matches which should result in cache usage
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE smalltable AS SELECT 1::INTEGER a;
+
+# values 1...1024 10x
+statement ok
+CREATE TABLE bigtable AS SELECT a::INTEGER a FROM generate_series(0, 10000, 1) tbl(a), generate_series(0, 9, 1) tbl2(b);
+
+query I
+SELECT COUNT(*) FROM bigtable JOIN smalltable USING (a)
+----
+10
+
+query I
+SELECT COUNT(*) FROM bigtable JOIN smalltable USING (a) JOIN smalltable t3 USING (a)
+----
+10
+
+query I
+SELECT COUNT(*) FROM bigtable JOIN smalltable USING (a) JOIN smalltable t3 USING (a) JOIN smalltable t4 USING (a);
+----
+10
+
+query I
+SELECT * FROM bigtable JOIN smalltable USING (a)
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1

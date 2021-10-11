@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -23,10 +24,18 @@ public:
 	unique_ptr<Expression> expression;
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                           OperatorState &state) const override;
+
+	bool ParallelOperator() const override {
+		return true;
+	}
+	bool RequiresCache() const override {
+		return true;
+	}
+
 	string ParamsToString() const override;
-	void FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) override;
 };
 } // namespace duckdb

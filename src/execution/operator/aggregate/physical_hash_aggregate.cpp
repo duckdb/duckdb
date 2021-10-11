@@ -9,6 +9,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/parallel/event.hpp"
 #include "duckdb/common/atomic.hpp"
 
 namespace duckdb {
@@ -23,7 +24,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality,
                                              PhysicalOperatorType type)
-    : PhysicalSink(type, move(types), estimated_cardinality), groups(move(groups_p)), all_combinable(true),
+    : PhysicalOperator(type, move(types), estimated_cardinality), groups(move(groups_p)), all_combinable(true),
       any_distinct(false) {
 	// get a list of all aggregates to be computed
 	// fake a single group with a constant value for aggregation without groups
@@ -91,30 +92,34 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-class HashAggregateGlobalState : public GlobalOperatorState {
+class HashAggregateGlobalState : public GlobalSinkState {
 public:
-	HashAggregateGlobalState(PhysicalHashAggregate &op_p, ClientContext &context)
-	    : op(op_p), is_empty(true), total_groups(0),
+	HashAggregateGlobalState(const PhysicalHashAggregate &op_p, ClientContext &context)
+	    : op(op_p), is_empty(true), multi_scan(true), total_groups(0),
 	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()) {
 	}
 
-	PhysicalHashAggregate &op;
+	const PhysicalHashAggregate &op;
 	vector<unique_ptr<PartitionableHashTable>> intermediate_hts;
 	vector<unique_ptr<GroupedAggregateHashTable>> finalized_hts;
 
 	//! Whether or not any tuples were added to the HT
 	bool is_empty;
+	//! Whether or not the hash table should be scannable multiple times
+	bool multi_scan;
 	//! The lock for updating the global aggregate state
 	mutex lock;
 	//! a counter to determine if we should switch over to p
 	atomic<idx_t> total_groups;
+
+	bool is_finalized = false;
 
 	RadixPartitionInfo partition_info;
 };
 
 class HashAggregateLocalState : public LocalSinkState {
 public:
-	explicit HashAggregateLocalState(PhysicalHashAggregate &op_p) : op(op_p), is_empty(true) {
+	explicit HashAggregateLocalState(const PhysicalHashAggregate &op_p) : op(op_p), is_empty(true) {
 		group_chunk.InitializeEmpty(op.group_types);
 		if (!op.payload_types.empty()) {
 			aggregate_input_chunk.InitializeEmpty(op.payload_types);
@@ -126,7 +131,7 @@ public:
 		}
 	}
 
-	PhysicalHashAggregate &op;
+	const PhysicalHashAggregate &op;
 
 	DataChunk group_chunk;
 	DataChunk aggregate_input_chunk;
@@ -138,18 +143,24 @@ public:
 	bool is_empty;
 };
 
-unique_ptr<GlobalOperatorState> PhysicalHashAggregate::GetGlobalState(ClientContext &context) {
+void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
+	auto &gstate = (HashAggregateGlobalState &)state;
+	gstate.multi_scan = true;
+}
+
+unique_ptr<GlobalSinkState> PhysicalHashAggregate::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<HashAggregateGlobalState>(*this, context);
 }
 
-unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> PhysicalHashAggregate::GetLocalSinkState(ExecutionContext &context) const {
 	return make_unique<HashAggregateLocalState>(*this);
 }
 
-void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                                 DataChunk &input) const {
+SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+                                           DataChunk &input) const {
 	auto &llstate = (HashAggregateLocalState &)lstate;
 	auto &gstate = (HashAggregateGlobalState &)state;
+	D_ASSERT(!gstate.is_finalized);
 
 	DataChunk &group_chunk = llstate.group_chunk;
 	DataChunk &aggregate_input_chunk = llstate.aggregate_input_chunk;
@@ -196,8 +207,9 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64));
 		}
 		D_ASSERT(gstate.finalized_hts.size() == 1);
+		D_ASSERT(gstate.finalized_hts[0]);
 		gstate.total_groups += gstate.finalized_hts[0]->AddChunk(group_chunk, aggregate_input_chunk);
-		return;
+		return SinkResultType::NEED_MORE_INPUT;
 	}
 
 	D_ASSERT(all_combinable);
@@ -215,31 +227,13 @@ void PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalOperatorState 
 	gstate.total_groups +=
 	    llstate.ht->AddChunk(group_chunk, aggregate_input_chunk,
 	                         gstate.total_groups > radix_limit && gstate.partition_info.n_partitions > 1);
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
-class PhysicalHashAggregateState : public PhysicalOperatorState {
-public:
-	PhysicalHashAggregateState(PhysicalOperator &op, vector<LogicalType> &group_types,
-	                           vector<LogicalType> &aggregate_types, PhysicalOperator *child)
-	    : PhysicalOperatorState(op, child), ht_index(0), ht_scan_position(0) {
-		auto scan_chunk_types = group_types;
-		for (auto &aggr_type : aggregate_types) {
-			scan_chunk_types.push_back(aggr_type);
-		}
-		scan_chunk.Initialize(scan_chunk_types);
-	}
-
-	//! Materialized GROUP BY expressions & aggregates
-	DataChunk scan_chunk;
-
-	//! The current position to scan the HT for output tuples
-	idx_t ht_index;
-	idx_t ht_scan_position;
-};
-
-void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate) {
+void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
 	auto &gstate = (HashAggregateGlobalState &)state;
 	auto &llstate = (HashAggregateLocalState &)lstate;
+	D_ASSERT(!gstate.is_finalized);
 
 	// this actually does not do a lot but just pushes the local HTs into the global state so we can later combine them
 	// in parallel
@@ -274,12 +268,14 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalOperatorSta
 
 // this task is run in multiple threads and combines the radix-partitioned hash tables into a single onen and then
 // folds them into the global ht finally.
-class PhysicalHashAggregateFinalizeTask : public Task {
+class PhysicalHashAggregateFinalizeTask : public ExecutorTask {
 public:
-	PhysicalHashAggregateFinalizeTask(Pipeline &parent_p, HashAggregateGlobalState &state_p, idx_t radix_p)
-	    : parent(parent_p), state(state_p), radix(radix_p) {
+	PhysicalHashAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, HashAggregateGlobalState &state_p,
+	                                  idx_t radix_p)
+	    : ExecutorTask(executor), event(move(event_p)), state(state_p), radix(radix_p) {
 	}
 	static void FinalizeHT(HashAggregateGlobalState &gstate, idx_t radix) {
+		D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
 		D_ASSERT(gstate.finalized_hts[radix]);
 		for (auto &pht : gstate.intermediate_hts) {
 			for (auto &ht : pht->GetPartition(radix)) {
@@ -290,41 +286,49 @@ public:
 		gstate.finalized_hts[radix]->Finalize();
 	}
 
-	void Execute() override {
+	void ExecuteTask() override {
 		FinalizeHT(state, radix);
-		auto total_tasks = parent.total_tasks.load();
-		auto finished_tasks = ++parent.finished_tasks;
-		// finish the whole pipeline
-		if (total_tasks == finished_tasks) {
-			parent.Finish();
-		}
+		event->FinishTask();
 	}
 
 private:
-	Pipeline &parent;
+	shared_ptr<Event> event;
 	HashAggregateGlobalState &state;
 	idx_t radix;
 };
 
-bool PhysicalHashAggregate::Finalize(Pipeline &pipeline, ClientContext &context,
-                                     unique_ptr<GlobalOperatorState> state) {
-	return FinalizeInternal(context, move(state), false, &pipeline);
-}
+class HashAggregateFinalizeEvent : public Event {
+public:
+	HashAggregateFinalizeEvent(HashAggregateGlobalState &gstate_p, Pipeline *pipeline_p)
+	    : Event(pipeline_p->executor), gstate(gstate_p), pipeline(pipeline_p) {
+	}
 
-void PhysicalHashAggregate::FinalizeImmediate(ClientContext &context, unique_ptr<GlobalOperatorState> state) {
-	FinalizeInternal(context, move(state), true, nullptr);
-}
+	HashAggregateGlobalState &gstate;
+	Pipeline *pipeline;
 
-bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<GlobalOperatorState> state,
-                                             bool immediate, Pipeline *pipeline) {
-	this->sink_state = move(state);
-	auto &gstate = (HashAggregateGlobalState &)*this->sink_state;
+public:
+	void Schedule() override {
+		vector<unique_ptr<Task>> tasks;
+		for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
+			D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
+			D_ASSERT(gstate.finalized_hts[r]);
+			tasks.push_back(
+			    make_unique<PhysicalHashAggregateFinalizeTask>(pipeline->executor, shared_from_this(), gstate, r));
+		}
+		SetTasks(move(tasks));
+	}
+};
 
+SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                                 GlobalSinkState &gstate_p) const {
+	auto &gstate = (HashAggregateGlobalState &)gstate_p;
+	gstate.is_finalized = true;
 	// special case if we have non-combinable aggregates
 	// we have already aggreagted into a global shared HT that does not require any additional finalization steps
 	if (ForceSingleHT(gstate)) {
 		D_ASSERT(gstate.finalized_hts.size() <= 1);
-		return true;
+		D_ASSERT(gstate.finalized_hts.empty() || gstate.finalized_hts[0]);
+		return SinkFinalizeType::READY;
 	}
 
 	// we can have two cases now, non-partitioned for few groups and radix-partitioned for very many groups.
@@ -347,24 +351,15 @@ bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 			}
 		}
 		// schedule additional tasks to combine the partial HTs
-		if (!immediate) {
-			D_ASSERT(pipeline);
-			pipeline->total_tasks += gstate.partition_info.n_partitions;
-		}
 		gstate.finalized_hts.resize(gstate.partition_info.n_partitions);
 		for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
 			gstate.finalized_hts[r] =
 			    make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context), group_types,
 			                                           payload_types, bindings, HtEntryType::HT_WIDTH_64);
-			if (immediate) {
-				PhysicalHashAggregateFinalizeTask::FinalizeHT(gstate, r);
-			} else {
-				D_ASSERT(pipeline);
-				auto new_task = make_unique<PhysicalHashAggregateFinalizeTask>(*pipeline, gstate, r);
-				TaskScheduler::GetScheduler(context).ScheduleTask(pipeline->token, move(new_task));
-			}
 		}
-		return immediate;
+
+		auto new_event = make_shared<HashAggregateFinalizeEvent>(gstate, &pipeline);
+		event.InsertEvent(move(new_event));
 	} else { // in the non-partitioned case we immediately combine all the unpartitioned hts created by the threads.
 		     // TODO possible optimization, if total count < limit for 32 bit ht, use that one
 		     // create this ht here so finalize needs no lock on gstate
@@ -380,15 +375,47 @@ bool PhysicalHashAggregate::FinalizeInternal(ClientContext &context, unique_ptr<
 			}
 			unpartitioned.clear();
 		}
+		D_ASSERT(gstate.finalized_hts[0]);
 		gstate.finalized_hts[0]->Finalize();
-		return true;
 	}
+	return SinkFinalizeType::READY;
 }
 
-void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
-                                             PhysicalOperatorState *state_p) const {
+//===--------------------------------------------------------------------===//
+// Source
+//===--------------------------------------------------------------------===//
+class PhysicalHashAggregateState : public GlobalSourceState {
+public:
+	PhysicalHashAggregateState(const vector<LogicalType> &group_types, const vector<LogicalType> &aggregate_types)
+	    : ht_index(0), ht_scan_position(0), finished(false) {
+		auto scan_chunk_types = group_types;
+		for (auto &aggr_type : aggregate_types) {
+			scan_chunk_types.push_back(aggr_type);
+		}
+		scan_chunk.Initialize(scan_chunk_types);
+	}
+
+	//! Materialized GROUP BY expressions & aggregates
+	DataChunk scan_chunk;
+
+	//! The current position to scan the HT for output tuples
+	idx_t ht_index;
+	idx_t ht_scan_position;
+	bool finished;
+};
+
+unique_ptr<GlobalSourceState> PhysicalHashAggregate::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<PhysicalHashAggregateState>(group_types, aggregate_return_types);
+}
+
+void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                                    LocalSourceState &lstate) const {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
-	auto &state = (PhysicalHashAggregateState &)*state_p;
+	auto &state = (PhysicalHashAggregateState &)gstate_p;
+	D_ASSERT(gstate.is_finalized);
+	if (state.finished) {
+		return;
+	}
 
 	state.scan_chunk.Reset();
 
@@ -424,12 +451,15 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 			state.finished = true;
 			return;
 		}
+		D_ASSERT(gstate.finalized_hts[state.ht_index]);
 		elements_found = gstate.finalized_hts[state.ht_index]->Scan(state.ht_scan_position, state.scan_chunk);
 
 		if (elements_found > 0) {
 			break;
 		}
-		gstate.finalized_hts[state.ht_index].reset();
+		if (!gstate.multi_scan) {
+			gstate.finalized_hts[state.ht_index].reset();
+		}
 		state.ht_index++;
 		state.ht_scan_position = 0;
 	}
@@ -450,12 +480,7 @@ void PhysicalHashAggregate::GetChunkInternal(ExecutionContext &context, DataChun
 	}
 }
 
-unique_ptr<PhysicalOperatorState> PhysicalHashAggregate::GetOperatorState() {
-	return make_unique<PhysicalHashAggregateState>(*this, group_types, aggregate_return_types,
-	                                               children.empty() ? nullptr : children[0].get());
-}
-
-bool PhysicalHashAggregate::ForceSingleHT(GlobalOperatorState &state) const {
+bool PhysicalHashAggregate::ForceSingleHT(GlobalSinkState &state) const {
 	auto &gstate = (HashAggregateGlobalState &)state;
 
 	return !all_combinable || any_distinct || gstate.partition_info.n_partitions < 2;

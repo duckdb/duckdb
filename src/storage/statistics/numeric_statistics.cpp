@@ -104,6 +104,9 @@ void NumericStatistics::Merge(const BaseStatistics &other_p) {
 }
 
 FilterPropagateResult NumericStatistics::CheckZonemap(ExpressionType comparison_type, const Value &constant) {
+	if (constant.is_null) {
+		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+	}
 	if (min.is_null || max.is_null) {
 		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 	}
@@ -234,6 +237,18 @@ void NumericStatistics::Verify(Vector &vector, const SelectionVector &sel, idx_t
 		break;
 	case PhysicalType::INT64:
 		TemplatedVerify<int64_t>(vector, sel, count);
+		break;
+	case PhysicalType::UINT8:
+		TemplatedVerify<uint8_t>(vector, sel, count);
+		break;
+	case PhysicalType::UINT16:
+		TemplatedVerify<uint16_t>(vector, sel, count);
+		break;
+	case PhysicalType::UINT32:
+		TemplatedVerify<uint32_t>(vector, sel, count);
+		break;
+	case PhysicalType::UINT64:
+		TemplatedVerify<uint64_t>(vector, sel, count);
 		break;
 	case PhysicalType::INT128:
 		TemplatedVerify<hugeint_t>(vector, sel, count);

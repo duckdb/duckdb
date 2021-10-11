@@ -24,6 +24,7 @@ class SchemaCatalogEntry;
 class SequenceCatalogEntry;
 class TableCatalogEntry;
 class ViewCatalogEntry;
+class TypeCatalogEntry;
 
 struct PartialColumnSegment {
 	ColumnSegment *segment;
@@ -80,12 +81,14 @@ private:
 	void WriteView(ViewCatalogEntry &table);
 	void WriteSequence(SequenceCatalogEntry &table);
 	void WriteMacro(MacroCatalogEntry &table);
+	void WriteType(TypeCatalogEntry &table);
 
 	void ReadSchema(ClientContext &context, MetaBlockReader &reader);
 	void ReadTable(ClientContext &context, MetaBlockReader &reader);
 	void ReadView(ClientContext &context, MetaBlockReader &reader);
 	void ReadSequence(ClientContext &context, MetaBlockReader &reader);
 	void ReadMacro(ClientContext &context, MetaBlockReader &reader);
+	void ReadType(ClientContext &context, MetaBlockReader &reader);
 
 private:
 	//! A map of (available space -> PartialBlock) for partially filled blocks

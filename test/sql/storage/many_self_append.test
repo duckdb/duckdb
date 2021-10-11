@@ -1,0 +1,72 @@
+# name: test/sql/storage/many_self_append.test
+# description: Test self-append of tinyint
+# group: [storage]
+
+# load the DB from disk
+load __TEST_DIR__/checkpointed_self_append.db
+
+statement ok
+CREATE TABLE vals(i TINYINT)
+
+statement ok
+INSERT INTO vals SELECT (CASE WHEN i % 2 = 0 THEN NULL ELSE i % 100 END)::TINYINT i FROM range(10) tbl(i)
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+----
+1	9	5	10
+
+statement ok
+INSERT INTO vals SELECT * FROM vals;
+
+statement ok
+CHECKPOINT
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+----
+1	9	10	20
+
+statement ok
+INSERT INTO vals SELECT * FROM vals;
+
+statement ok
+CHECKPOINT
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+----
+1	9	20	40
+
+statement ok
+INSERT INTO vals SELECT * FROM vals;
+
+statement ok
+CHECKPOINT
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+----
+1	9	40	80
+
+statement ok
+INSERT INTO vals SELECT * FROM vals;
+
+statement ok
+CHECKPOINT
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+----
+1	9	80	160
+
+statement ok
+INSERT INTO vals SELECT * FROM vals;
+
+statement ok
+CHECKPOINT
+
+query IIII
+SELECT MIN(i), MAX(i), COUNT(i), COUNT(*) FROM vals
+----
+1	9	160	320

@@ -119,6 +119,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 	case LogicalOperatorType::LOGICAL_CREATE_SEQUENCE:
 	case LogicalOperatorType::LOGICAL_CREATE_SCHEMA:
 	case LogicalOperatorType::LOGICAL_CREATE_MACRO:
+	case LogicalOperatorType::LOGICAL_CREATE_TYPE:
 		return CreatePlan((LogicalCreate &)op);
 	case LogicalOperatorType::LOGICAL_PRAGMA:
 		return CreatePlan((LogicalPragma &)op);

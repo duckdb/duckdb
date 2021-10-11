@@ -14,11 +14,12 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/winapi.hpp"
 
+
 namespace duckdb {
 
 class Serializer;
 class Deserializer;
-
+class Value;
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t {
 	int32_t days;
@@ -308,12 +309,12 @@ enum class PhysicalType : uint8_t {
 	/// Like LIST, but with 64-bit offsets
 	LARGE_LIST = 33,
 
-	// DuckDB Extensions
+	/// DuckDB Extensions
 	VARCHAR = 200, // our own string representation, different from STRING and LARGE_STRING above
 	INT128 = 204, // 128-bit integers
-
+	UNKNOWN = 205, // Unknown physical type of user defined types
 	/// Boolean as 1 bit, LSB bit-packed ordering
-	BIT = 205,
+	BIT = 206,
 
 	INVALID = 255
 };
@@ -326,7 +327,7 @@ enum class LogicalTypeId : uint8_t {
 	SQLNULL = 1, /* NULL type, used for constant NULL */
 	UNKNOWN = 2, /* unknown type, used for parameter expressions */
 	ANY = 3,     /* ANY type, used for functions that accept any type as parameter */
-
+	USER = 4, /* A User Defined Type (e.g., ENUMs before the binder) */
 	BOOLEAN = 10,
 	TINYINT = 11,
 	SMALLINT = 12,
@@ -360,7 +361,8 @@ enum class LogicalTypeId : uint8_t {
 	STRUCT = 100,
 	LIST = 101,
 	MAP = 102,
-	TABLE = 103
+	TABLE = 103,
+	ENUM = 104
 };
 
 struct ExtraTypeInfo;
@@ -369,6 +371,7 @@ struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	DUCKDB_API LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info);
+
 	DUCKDB_API LogicalType(const LogicalType &other) :
 		id_(other.id_), physical_type_(other.physical_type_), type_info_(other.type_info_) {}
 
@@ -465,10 +468,11 @@ public:
 	// explicitly allowing these functions to be capitalized to be in-line with the remaining functions
 	DUCKDB_API static LogicalType DECIMAL(int width, int scale);                 // NOLINT
 	DUCKDB_API static LogicalType VARCHAR_COLLATION(string collation);           // NOLINT
-	DUCKDB_API static LogicalType LIST(LogicalType child);                       // NOLINT
-	DUCKDB_API static LogicalType STRUCT(child_list_t<LogicalType> children);    // NOLINT
-	DUCKDB_API static LogicalType MAP(child_list_t<LogicalType> children);       // NOLINT
-
+	DUCKDB_API static LogicalType LIST( LogicalType child);                       // NOLINT
+	DUCKDB_API static LogicalType STRUCT( child_list_t<LogicalType> children);    // NOLINT
+	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
+	DUCKDB_API static LogicalType ENUM(const string &enum_name, const vector<string> &ordered_data); // NOLINT
+	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
 	//! A list of all INTEGRAL types
@@ -488,6 +492,18 @@ struct StringType {
 
 struct ListType {
 	DUCKDB_API static const LogicalType &GetChildType(const LogicalType &type);
+};
+
+struct UserType{
+	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
+};
+
+struct EnumType{
+	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
+	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string& key);
+	DUCKDB_API static const vector<string> &GetValuesInsertOrder(const LogicalType &type);
+	DUCKDB_API static idx_t GetSize(const LogicalType &type);
+	DUCKDB_API static const string& GetValue(const Value &val);
 };
 
 struct StructType {

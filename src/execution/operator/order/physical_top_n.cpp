@@ -10,6 +10,12 @@
 
 namespace duckdb {
 
+PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
+                           idx_t estimated_cardinality)
+    : PhysicalOperator(PhysicalOperatorType::TOP_N, move(types), estimated_cardinality), orders(move(orders)),
+      limit(limit), offset(offset) {
+}
+
 //===--------------------------------------------------------------------===//
 // Heaps
 //===--------------------------------------------------------------------===//
@@ -380,7 +386,7 @@ void TopNHeap::Scan(TopNScanState &state, DataChunk &chunk) {
 	sort_state.Scan(state, chunk);
 }
 
-class TopNGlobalState : public GlobalOperatorState {
+class TopNGlobalState : public GlobalSinkState {
 public:
 	TopNGlobalState(ClientContext &context, const vector<LogicalType> &payload_types,
 	                const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
@@ -401,29 +407,30 @@ public:
 	TopNHeap heap;
 };
 
-unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &context) {
+unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &context) const {
 	return make_unique<TopNLocalState>(context.client, types, orders, limit, offset);
 }
 
-unique_ptr<GlobalOperatorState> PhysicalTopN::GetGlobalState(ClientContext &context) {
+unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<TopNGlobalState>(context, types, orders, limit, offset);
 }
 
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-                        DataChunk &input) const {
+SinkResultType PhysicalTopN::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+                                  DataChunk &input) const {
 	// append to the local sink state
 	auto &sink = (TopNLocalState &)lstate;
 	sink.heap.Sink(input);
 	sink.heap.Reduce();
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 //===--------------------------------------------------------------------===//
 // Combine
 //===--------------------------------------------------------------------===//
-void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate_p) {
+void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate_p) const {
 	auto &gstate = (TopNGlobalState &)state;
 	auto &lstate = (TopNLocalState &)lstate_p;
 
@@ -435,32 +442,33 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalOperatorState &state
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-bool PhysicalTopN::Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> state) {
-	auto &gstate = (TopNGlobalState &)*state;
+SinkFinalizeType PhysicalTopN::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                        GlobalSinkState &gstate_p) const {
+	auto &gstate = (TopNGlobalState &)gstate_p;
 	// global finalize: compute the final top N
 	gstate.heap.Finalize();
-
-	PhysicalSink::Finalize(pipeline, context, move(state));
-	return true;
+	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//
-// GetChunkInternal
+// Source
 //===--------------------------------------------------------------------===//
-class PhysicalTopNOperatorState : public PhysicalOperatorState {
+class TopNOperatorState : public GlobalSourceState {
 public:
-	PhysicalTopNOperatorState(PhysicalOperator &op, PhysicalOperator *child) : PhysicalOperatorState(op, child) {
-	}
-
 	TopNScanState state;
 	bool initialized = false;
 };
 
-void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state_p) const {
+unique_ptr<GlobalSourceState> PhysicalTopN::GetGlobalSourceState(ClientContext &context) const {
+	return make_unique<TopNOperatorState>();
+}
+
+void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
+                           LocalSourceState &lstate) const {
 	if (limit == 0) {
 		return;
 	}
-	auto &state = (PhysicalTopNOperatorState &)*state_p;
+	auto &state = (TopNOperatorState &)gstate_p;
 	auto &gstate = (TopNGlobalState &)*sink_state;
 
 	if (!state.initialized) {
@@ -468,10 +476,6 @@ void PhysicalTopN::GetChunkInternal(ExecutionContext &context, DataChunk &chunk,
 		state.initialized = true;
 	}
 	gstate.heap.Scan(state.state, chunk);
-}
-
-unique_ptr<PhysicalOperatorState> PhysicalTopN::GetOperatorState() {
-	return make_unique<PhysicalTopNOperatorState>(*this, children[0].get());
 }
 
 string PhysicalTopN::ParamsToString() const {

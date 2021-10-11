@@ -104,8 +104,8 @@ public:
 
 private:
 public:
-	JoinHashTable(BufferManager &buffer_manager, vector<JoinCondition> &conditions, vector<LogicalType> build_types,
-	              JoinType type);
+	JoinHashTable(BufferManager &buffer_manager, const vector<JoinCondition> &conditions,
+	              vector<LogicalType> build_types, JoinType type);
 	~JoinHashTable();
 
 	//! Add the given data to the HT

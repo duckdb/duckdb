@@ -8,28 +8,39 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 
 namespace duckdb {
 
 //! PhysicalReservoirSample represents a sample taken using reservoir sampling, which is a blocking sampling method
-class PhysicalReservoirSample : public PhysicalSink {
+class PhysicalReservoirSample : public PhysicalOperator {
 public:
 	PhysicalReservoirSample(vector<LogicalType> types, unique_ptr<SampleOptions> options, idx_t estimated_cardinality)
-	    : PhysicalSink(PhysicalOperatorType::RESERVOIR_SAMPLE, move(types), estimated_cardinality),
+	    : PhysicalOperator(PhysicalOperatorType::RESERVOIR_SAMPLE, move(types), estimated_cardinality),
 	      options(move(options)) {
 	}
 
 	unique_ptr<SampleOptions> options;
 
 public:
-	void Sink(ExecutionContext &context, GlobalOperatorState &state, LocalSinkState &lstate,
-	          DataChunk &input) const override;
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	// Source interface
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
 
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
+public:
+	// Sink interface
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	                    DataChunk &input) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+
+	bool ParallelSink() const override {
+		return true;
+	}
+
+	bool IsSink() const override {
+		return true;
+	}
 
 	string ParamsToString() const override;
 };
