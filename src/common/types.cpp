@@ -640,6 +640,10 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 	} else if (right.id() < left.id()) {
 		return left;
 	} else {
+		if (left != right && left.id() == LogicalTypeId::ENUM && right.id() == LogicalTypeId::ENUM) {
+			// If both types are different ENUMs we do a string comparison.
+			return LogicalType::VARCHAR;
+		}
 		if (left.id() == LogicalTypeId::VARCHAR) {
 			// varchar: use type that has collation (if any)
 			if (StringType::GetCollation(right).empty()) {

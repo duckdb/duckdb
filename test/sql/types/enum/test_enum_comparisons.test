@@ -1,0 +1,63 @@
+# name: test/sql/types/enum/test_enum_comparisons.test
+# description: ENUM tests
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'quackity-quack', 'happy', 'ok');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+insert into person values ('Pedro','happy'), ('Mark', NULL), ('Hannes', 'quackity-quack'), ('Tim', 'ok'), ('Diego', 'sad')
+
+statement ok
+CREATE TABLE robots (
+    name text,
+    current_mood mood
+);
+
+statement ok
+insert into robots values ('Timmynator','sad'), ('Tars', 'ok'), ('Diggernaut', NULL)
+
+# This just compares the actual uint value of the column since both are from the same mood type
+query II
+select person.name, robots.name from person inner join robots on (person.current_mood = robots.current_mood)
+----
+Tim	Tars
+Diego	Timmynator
+
+statement ok
+CREATE TYPE pet_mood AS ENUM ( 'happy','beaming', 'quackity-quack');
+
+statement ok
+CREATE TABLE pet (
+    name text,
+    current_mood pet_mood
+);
+
+statement ok
+insert into pet values ('Oogie','happy'), ('Wilbur', 'quackity-quack'), ('Chorizo', NULL), ('Vacilo', 'beaming')
+
+# This actually performs string comparison since they are both ENUMs but of different types.
+query II
+select person.name, pet.name from person inner join pet on (person.current_mood = pet.current_mood)
+----
+Pedro	Oogie
+Hannes	Wilbur
+
+
+query II
+select person_name,pet_name from
+(select person.name as person_name, pet.name as pet_name, person.current_mood as person_mood, pet.current_mood as pet_mood
+from person,pet) as t
+where person_mood = pet_mood
+----
+Pedro	Oogie
+Hannes	Wilbur
