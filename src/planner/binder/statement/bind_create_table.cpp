@@ -7,6 +7,8 @@
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
+
 #include <algorithm>
 
 namespace duckdb {
