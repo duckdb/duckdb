@@ -2,6 +2,7 @@
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/expression_map.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 
 namespace duckdb {
 
@@ -9,17 +10,31 @@ struct GroupingExpressionMap {
 	expression_map_t<idx_t> map;
 };
 
-idx_t Transformer::TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result) {
-	auto expression = TransformExpression(n, 0);
-	idx_t result_idx;
+void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map, GroupByNode &result, GroupingSet &result_set) {
+	if (expression->type == ExpressionType::FUNCTION) {
+		auto &func = (FunctionExpression &) *expression;
+		if (func.function_name == "row") {
+			for(auto &child : func.children) {
+				AddGroupByExpression(move(child), map, result, result_set);
+			}
+			return;
+		}
+	}
 	auto entry = map.map.find(expression.get());
+	idx_t result_idx;
 	if (entry == map.map.end()) {
 		result_idx = result.group_expressions.size();
-		result.group_expressions.push_back(TransformExpression(n, 0));
+		map.map[expression.get()] = result_idx;
+		result.group_expressions.push_back(move(expression));
 	} else {
 		result_idx = entry->second;
 	}
-	return result_idx;
+	result_set.insert(result_idx);
+}
+
+void Transformer::TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result, GroupingSet &result_set) {
+	auto expression = TransformExpression(n, 0);
+	AddGroupByExpression(move(expression), map, result, result_set);
 }
 
 // If one GROUPING SETS clause is nested inside another,
@@ -45,7 +60,7 @@ void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExp
 		}
 	} else {
 		GroupingSet result_set;
-		result_set.insert(TransformGroupByExpression(n, map, result));
+		TransformGroupByExpression(n, map, result, result_set);
 		result_sets.push_back(move(result_set));
 	}
 }

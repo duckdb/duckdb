@@ -228,7 +228,8 @@ private:
 	//! Transform a Postgres GROUP BY expression into a list of Expression
 	bool TransformGroupBy(duckdb_libpgquery::PGList *group, GroupByNode &result);
 	void TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result, vector<GroupingSet> &result_sets);
-	idx_t TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result);
+	void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map, GroupByNode &result, GroupingSet &result_set);
+	void TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result, GroupingSet &result_set);
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
 
