@@ -1,0 +1,37 @@
+# name: test/sql/types/enum/test_enum_constraints.test
+# description: ENUM tests
+# group: [enum]
+#
+#statement ok
+#PRAGMA enable_verification
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+# We can't drop mood because person depends on it
+statement error
+drop type mood
+
+# But if we drop person
+statement ok
+drop table person
+
+# We can drop mood
+statement ok
+drop type mood
+
+# We can recreate all of them again
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);

@@ -163,6 +163,11 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 	// bind collations to detect any unsupported collation errors
 	for (auto &column : base.columns) {
 		ExpressionBinder::TestCollation(context, StringType::GetCollation(column.type));
+		BindLogicalType(context, column.type);
+		if (column.type.id() == LogicalTypeId::ENUM) {
+			// We add a catalog dependency
+			result->dependencies.insert(EnumType::GetCatalog(column.type));
+		}
 	}
 	this->allow_stream_result = false;
 	return result;
