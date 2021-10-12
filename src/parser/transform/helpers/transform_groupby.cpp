@@ -10,7 +10,20 @@ struct GroupingExpressionMap {
 	expression_map_t<idx_t> map;
 };
 
-void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map, GroupByNode &result, GroupingSet &result_set) {
+static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes, idx_t start, idx_t end) {
+	D_ASSERT(start <= end);
+	GroupingSet result;
+	for(idx_t i = start; i < end; i++) {
+		result.insert(indexes[i]);
+	}
+	return result;
+}
+
+static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
+	return VectorToGroupingSet(indexes, 0, indexes.size());
+}
+
+void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map, GroupByNode &result, vector<idx_t> &result_set) {
 	if (expression->type == ExpressionType::FUNCTION) {
 		auto &func = (FunctionExpression &) *expression;
 		if (func.function_name == "row") {
@@ -29,12 +42,21 @@ void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, 
 	} else {
 		result_idx = entry->second;
 	}
-	result_set.insert(result_idx);
+	result_set.push_back(result_idx);
 }
 
-void Transformer::TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result, GroupingSet &result_set) {
+static void AddCubeSets(vector<idx_t> current_set, vector<idx_t> &result_set, vector<GroupingSet> &result_sets, idx_t start_idx = 0) {
+	result_sets.push_back(VectorToGroupingSet(current_set));
+	for(idx_t k = start_idx; k < result_set.size(); k++) {
+		vector<idx_t> child_set = current_set;
+		child_set.push_back(result_set[k]);
+		AddCubeSets(move(child_set), result_set, result_sets, k + 1);
+	}
+}
+
+void Transformer::TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result, vector<idx_t> &indexes) {
 	auto expression = TransformExpression(n, 0);
-	AddGroupByExpression(move(expression), map, result, result_set);
+	AddGroupByExpression(move(expression), map, result, indexes);
 }
 
 // If one GROUPING SETS clause is nested inside another,
@@ -53,15 +75,36 @@ void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExp
 			}
 			break;
 		}
-		case duckdb_libpgquery::GROUPING_SET_ROLLUP:
-		case duckdb_libpgquery::GROUPING_SET_CUBE:
+		case duckdb_libpgquery::GROUPING_SET_ROLLUP: {
+			vector<idx_t> rollup_set;
+			for(auto node = grouping_set->content->head; node; node = node->next) {
+				auto pg_node = (duckdb_libpgquery::PGNode*) node->data.ptr_value;
+				TransformGroupByExpression(pg_node, map, result, rollup_set);
+			}
+			// generate the subsets of the rollup set and add them to the grouping sets
+			for(idx_t i = 0; i <= rollup_set.size(); i++) {
+				result_sets.push_back(VectorToGroupingSet(rollup_set, 0, rollup_set.size() - i));
+			}
+			break;
+		}
+		case duckdb_libpgquery::GROUPING_SET_CUBE: {
+			vector<idx_t> cube_set;
+			for(auto node = grouping_set->content->head; node; node = node->next) {
+				auto pg_node = (duckdb_libpgquery::PGNode*) node->data.ptr_value;
+				TransformGroupByExpression(pg_node, map, result, cube_set);
+			}
+			// generate the subsets of the rollup set and add them to the grouping sets
+			vector<idx_t> current_set;
+			AddCubeSets(move(current_set), cube_set, result_sets, 0);
+			break;
+		}
 		default:
 			throw InternalException("Unsupported GROUPING SET type %d", grouping_set->kind);
 		}
 	} else {
-		GroupingSet result_set;
-		TransformGroupByExpression(n, map, result, result_set);
-		result_sets.push_back(move(result_set));
+		vector<idx_t> indexes;
+		TransformGroupByExpression(n, map, result, indexes);
+		result_sets.push_back(VectorToGroupingSet(indexes));
 	}
 }
 
