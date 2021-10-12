@@ -544,6 +544,10 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 		}
 		for (idx_t i = 0; i < count; i++) {
 			auto src_val = source.GetValue(i);
+			if (src_val.is_null) {
+				result.SetValue(i, Value());
+				continue;
+			}
 			auto str_vec = EnumType::GetValuesInsertOrder(source.GetType());
 			switch (enum_physical_type) {
 			case PhysicalType::UINT8:
