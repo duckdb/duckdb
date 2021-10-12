@@ -5,10 +5,10 @@
 
 namespace duckdb {
 
-RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const PhysicalHashAggregate &op_p) :
-	grouping_set(grouping_set_p), op(op_p) {
+RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p, const PhysicalHashAggregate &op_p)
+    : grouping_set(grouping_set_p), op(op_p) {
 
-	for(idx_t i = 0; i < op.groups.size(); i++) {
+	for (idx_t i = 0; i < op.groups.size(); i++) {
 		if (grouping_set.find(i) == grouping_set.end()) {
 			null_groups.push_back(i);
 		}
@@ -21,7 +21,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 		// fake a single group with a constant value for aggregation without groups
 		group_types.push_back(LogicalType::TINYINT);
 	}
-	for(auto &entry : grouping_set) {
+	for (auto &entry : grouping_set) {
 		D_ASSERT(entry < op.group_types.size());
 		group_types.push_back(op.group_types[entry]);
 	}
@@ -86,14 +86,15 @@ unique_ptr<LocalSinkState> RadixPartitionedHashTable::GetLocalSinkState(Executio
 	return make_unique<RadixHTLocalState>(*this);
 }
 
-void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate, DataChunk &input, DataChunk &aggregate_input_chunk) const {
+void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+                                     DataChunk &input, DataChunk &aggregate_input_chunk) const {
 	auto &llstate = (RadixHTLocalState &)lstate;
 	auto &gstate = (RadixHTGlobalState &)state;
 	D_ASSERT(!gstate.is_finalized);
 
 	DataChunk &group_chunk = llstate.group_chunk;
 	idx_t chunk_index = 0;
-	for(auto &group_idx : grouping_set) {
+	for (auto &group_idx : grouping_set) {
 		auto &group = op.groups[group_idx];
 		D_ASSERT(group->type == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = (BoundReferenceExpression &)*group;
@@ -126,8 +127,9 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 	}
 
 	if (!llstate.ht) {
-		llstate.ht = make_unique<PartitionableHashTable>(BufferManager::GetBufferManager(context.client),
-		                                                 gstate.partition_info, group_types, op.payload_types, op.bindings);
+		llstate.ht =
+		    make_unique<PartitionableHashTable>(BufferManager::GetBufferManager(context.client), gstate.partition_info,
+		                                        group_types, op.payload_types, op.bindings);
 	}
 
 	gstate.total_groups +=
@@ -135,7 +137,8 @@ void RadixPartitionedHashTable::Sink(ExecutionContext &context, GlobalSinkState 
 	                         gstate.total_groups > radix_limit && gstate.partition_info.n_partitions > 1);
 }
 
-void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const {
+void RadixPartitionedHashTable::Combine(ExecutionContext &context, GlobalSinkState &state,
+                                        LocalSinkState &lstate) const {
 	auto &llstate = (RadixHTLocalState &)lstate;
 	auto &gstate = (RadixHTGlobalState &)state;
 	D_ASSERT(!gstate.is_finalized);
@@ -216,8 +219,9 @@ bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 		     // TODO possible optimization, if total count < limit for 32 bit ht, use that one
 		     // create this ht here so finalize needs no lock on gstate
 
-		gstate.finalized_hts.push_back(make_unique<GroupedAggregateHashTable>(
-		    BufferManager::GetBufferManager(context), group_types, op.payload_types, op.bindings, HtEntryType::HT_WIDTH_64));
+		gstate.finalized_hts.push_back(make_unique<GroupedAggregateHashTable>(BufferManager::GetBufferManager(context),
+		                                                                      group_types, op.payload_types,
+		                                                                      op.bindings, HtEntryType::HT_WIDTH_64));
 		for (auto &pht : gstate.intermediate_hts) {
 			auto unpartitioned = pht->GetUnpartitioned();
 			for (auto &unpartitioned_ht : unpartitioned) {
@@ -238,7 +242,7 @@ bool RadixPartitionedHashTable::Finalize(ClientContext &context, GlobalSinkState
 class RadixAggregateFinalizeTask : public ExecutorTask {
 public:
 	RadixAggregateFinalizeTask(Executor &executor, shared_ptr<Event> event_p, RadixHTGlobalState &state_p,
-	                                  idx_t radix_p)
+	                           idx_t radix_p)
 	    : ExecutorTask(executor), event(move(event_p)), state(state_p), radix(radix_p) {
 	}
 	static void FinalizeHT(RadixHTGlobalState &gstate, idx_t radix) {
@@ -264,7 +268,8 @@ private:
 	idx_t radix;
 };
 
-void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, shared_ptr<Event> event, GlobalSinkState &state, vector<unique_ptr<Task>> &tasks) const {
+void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, shared_ptr<Event> event, GlobalSinkState &state,
+                                              vector<unique_ptr<Task>> &tasks) const {
 	auto &gstate = (RadixHTGlobalState &)state;
 	if (!gstate.is_partitioned) {
 		return;
@@ -272,8 +277,7 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, shared_ptr<Eve
 	for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
 		D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
 		D_ASSERT(gstate.finalized_hts[r]);
-		tasks.push_back(
-			make_unique<RadixAggregateFinalizeTask>(executor, move(event), gstate, r));
+		tasks.push_back(make_unique<RadixAggregateFinalizeTask>(executor, move(event), gstate, r));
 	}
 }
 
@@ -287,8 +291,7 @@ bool RadixPartitionedHashTable::ForceSingleHT(GlobalSinkState &state) const {
 //===--------------------------------------------------------------------===//
 class RadixHTGlobalSourceState : public GlobalSourceState {
 public:
-	RadixHTGlobalSourceState(const RadixPartitionedHashTable &ht)
-	    : ht_index(0), ht_scan_position(0), finished(false) {
+	RadixHTGlobalSourceState(const RadixPartitionedHashTable &ht) : ht_index(0), ht_scan_position(0), finished(false) {
 		auto scan_chunk_types = ht.group_types;
 		for (auto &aggr_type : ht.op.aggregate_return_types) {
 			scan_chunk_types.push_back(aggr_type);
@@ -308,7 +311,8 @@ unique_ptr<GlobalSourceState> RadixPartitionedHashTable::GetGlobalSourceState() 
 	return make_unique<RadixHTGlobalSourceState>(*this);
 }
 
-void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state, GlobalSourceState &source_state) const {
+void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
+                                        GlobalSourceState &source_state) const {
 	auto &gstate = (RadixHTGlobalState &)sink_state;
 	auto &state = (RadixHTGlobalSourceState &)source_state;
 	D_ASSERT(gstate.is_finalized);
@@ -366,10 +370,10 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 	chunk.SetCardinality(elements_found);
 
 	idx_t chunk_index = 0;
-	for(auto &entry : grouping_set) {
+	for (auto &entry : grouping_set) {
 		chunk.data[entry].Reference(state.scan_chunk.data[chunk_index++]);
 	}
-	for(auto null_group : null_groups) {
+	for (auto null_group : null_groups) {
 		chunk.data[null_group].SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(chunk.data[null_group], true);
 	}
@@ -378,4 +382,4 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 	}
 }
 
-}
+} // namespace duckdb

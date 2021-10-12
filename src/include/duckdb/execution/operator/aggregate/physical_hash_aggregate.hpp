@@ -28,8 +28,8 @@ public:
 	                      vector<unique_ptr<Expression>> groups, idx_t estimated_cardinality,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-	                      vector<unique_ptr<Expression>> groups, vector<GroupingSet> grouping_sets, idx_t estimated_cardinality,
-	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
+	                      vector<unique_ptr<Expression>> groups, vector<GroupingSet> grouping_sets,
+	                      idx_t estimated_cardinality, PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
 	//! The groups
 	vector<unique_ptr<Expression>> groups;

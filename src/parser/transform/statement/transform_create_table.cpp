@@ -27,7 +27,7 @@ string Transformer::TransformCollation(duckdb_libpgquery::PGCollateClause *colla
 }
 
 OnCreateConflict Transformer::TransformOnConflict(duckdb_libpgquery::PGOnCreateConflict conflict) {
-	switch(conflict) {
+	switch (conflict) {
 	case duckdb_libpgquery::PG_ERROR_ON_CONFLICT:
 		return OnCreateConflict::ERROR_ON_CONFLICT;
 	case duckdb_libpgquery::PG_IGNORE_ON_CONFLICT:

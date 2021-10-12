@@ -30,23 +30,27 @@ public:
 	vector<LogicalType> group_types;
 	//! how many groups can we have in the operator before we switch to radix partitioning
 	idx_t radix_limit;
+
 public:
 	//! Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;
 	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const;
 
-	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate, DataChunk &input, DataChunk &aggregate_input_chunk) const;
+	void Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate, DataChunk &input,
+	          DataChunk &aggregate_input_chunk) const;
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
 	bool Finalize(ClientContext &context, GlobalSinkState &gstate_p) const;
 
-	void ScheduleTasks(Executor &executor, shared_ptr<Event> event, GlobalSinkState &state, vector<unique_ptr<Task>> &tasks) const;
+	void ScheduleTasks(Executor &executor, shared_ptr<Event> event, GlobalSinkState &state,
+	                   vector<unique_ptr<Task>> &tasks) const;
 
 	//! Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState() const;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state, GlobalSourceState &gstate_p) const;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSinkState &sink_state,
+	             GlobalSourceState &gstate_p) const;
 
 	static void SetMultiScan(GlobalSinkState &state);
 	bool ForceSingleHT(GlobalSinkState &state) const;
 };
 
-}
+} // namespace duckdb

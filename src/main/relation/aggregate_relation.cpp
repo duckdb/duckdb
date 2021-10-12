@@ -44,7 +44,7 @@ unique_ptr<QueryNode> AggregateRelation::GetQueryNode() {
 		select_node.aggregate_handling = AggregateHandling::STANDARD_HANDLING;
 		select_node.groups.group_expressions.clear();
 		GroupingSet grouping_set;
-		for(idx_t i = 0; i < groups.size(); i++) {
+		for (idx_t i = 0; i < groups.size(); i++) {
 			select_node.groups.group_expressions.push_back(groups[i]->Copy());
 			grouping_set.insert(i);
 		}

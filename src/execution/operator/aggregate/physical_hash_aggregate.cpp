@@ -23,22 +23,24 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality,
-                                             PhysicalOperatorType type) :
-	PhysicalHashAggregate(context, move(types), move(expressions), move(groups_p), {}, estimated_cardinality, type) {
+                                             PhysicalOperatorType type)
+    : PhysicalHashAggregate(context, move(types), move(expressions), move(groups_p), {}, estimated_cardinality, type) {
 }
 
-PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
-						vector<unique_ptr<Expression>> groups_p, vector<GroupingSet> grouping_sets_p, idx_t estimated_cardinality,
-						PhysicalOperatorType type)
-    : PhysicalOperator(type, move(types), estimated_cardinality), groups(move(groups_p)), grouping_sets(move(grouping_sets_p)), all_combinable(true),
-      any_distinct(false) {
+PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
+                                             vector<unique_ptr<Expression>> expressions,
+                                             vector<unique_ptr<Expression>> groups_p,
+                                             vector<GroupingSet> grouping_sets_p, idx_t estimated_cardinality,
+                                             PhysicalOperatorType type)
+    : PhysicalOperator(type, move(types), estimated_cardinality), groups(move(groups_p)),
+      grouping_sets(move(grouping_sets_p)), all_combinable(true), any_distinct(false) {
 	// get a list of all aggregates to be computed
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);
 	}
 	if (grouping_sets.empty()) {
 		GroupingSet set;
-		for(idx_t i = 0; i < group_types.size(); i++) {
+		for (idx_t i = 0; i < group_types.size(); i++) {
 			set.insert(i);
 		}
 		grouping_sets.push_back(move(set));
@@ -91,7 +93,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 		}
 	}
 
-	for(auto &grouping_set : grouping_sets) {
+	for (auto &grouping_set : grouping_sets) {
 		radix_tables.push_back(RadixPartitionedHashTable(grouping_set, *this));
 	}
 }
@@ -103,7 +105,7 @@ class HashAggregateGlobalState : public GlobalSinkState {
 public:
 	HashAggregateGlobalState(const PhysicalHashAggregate &op, ClientContext &context) {
 		radix_states.reserve(op.radix_tables.size());
-		for(auto &rt : op.radix_tables) {
+		for (auto &rt : op.radix_tables) {
 			radix_states.push_back(rt.GetGlobalSinkState(context));
 		}
 	}
@@ -119,7 +121,7 @@ public:
 		}
 
 		radix_states.reserve(op.radix_tables.size());
-		for(auto &rt : op.radix_tables) {
+		for (auto &rt : op.radix_tables) {
 			radix_states.push_back(rt.GetLocalSinkState(context));
 		}
 	}
@@ -131,7 +133,7 @@ public:
 
 void PhysicalHashAggregate::SetMultiScan(GlobalSinkState &state) {
 	auto &gstate = (HashAggregateGlobalState &)state;
-	for(auto &radix_state : gstate.radix_states) {
+	for (auto &radix_state : gstate.radix_states) {
 		RadixPartitionedHashTable::SetMultiScan(*radix_state);
 	}
 }
@@ -172,7 +174,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, GlobalSink
 	aggregate_input_chunk.SetCardinality(input.size());
 	aggregate_input_chunk.Verify();
 
-	for(idx_t i = 0; i < radix_tables.size(); i++) {
+	for (idx_t i = 0; i < radix_tables.size(); i++) {
 		radix_tables[i].Sink(context, *gstate.radix_states[i], *llstate.radix_states[i], input, aggregate_input_chunk);
 	}
 
@@ -183,14 +185,15 @@ void PhysicalHashAggregate::Combine(ExecutionContext &context, GlobalSinkState &
 	auto &gstate = (HashAggregateGlobalState &)state;
 	auto &llstate = (HashAggregateLocalState &)lstate;
 
-	for(idx_t i = 0; i < radix_tables.size(); i++) {
+	for (idx_t i = 0; i < radix_tables.size(); i++) {
 		radix_tables[i].Combine(context, *gstate.radix_states[i], *llstate.radix_states[i]);
 	}
 }
 
 class HashAggregateFinalizeEvent : public Event {
 public:
-	HashAggregateFinalizeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p, Pipeline *pipeline_p)
+	HashAggregateFinalizeEvent(const PhysicalHashAggregate &op_p, HashAggregateGlobalState &gstate_p,
+	                           Pipeline *pipeline_p)
 	    : Event(pipeline_p->executor), op(op_p), gstate(gstate_p), pipeline(pipeline_p) {
 	}
 
@@ -201,7 +204,7 @@ public:
 public:
 	void Schedule() override {
 		vector<unique_ptr<Task>> tasks;
-		for(idx_t i = 0; i < op.radix_tables.size(); i++) {
+		for (idx_t i = 0; i < op.radix_tables.size(); i++) {
 			op.radix_tables[i].ScheduleTasks(pipeline->executor, shared_from_this(), *gstate.radix_states[i], tasks);
 		}
 		D_ASSERT(!tasks.empty());
@@ -213,7 +216,7 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
                                                  GlobalSinkState &gstate_p) const {
 	auto &gstate = (HashAggregateGlobalState &)gstate_p;
 	bool any_partitioned = false;
-	for(idx_t i = 0; i < gstate.radix_states.size(); i++) {
+	for (idx_t i = 0; i < gstate.radix_states.size(); i++) {
 		bool is_partitioned = radix_tables[i].Finalize(context, *gstate.radix_states[i]);
 		if (is_partitioned) {
 			any_partitioned = true;
@@ -231,9 +234,8 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 //===--------------------------------------------------------------------===//
 class PhysicalHashAggregateState : public GlobalSourceState {
 public:
-	PhysicalHashAggregateState(const PhysicalHashAggregate &op)
-	  : scan_index(0) {
-		for(auto &rt : op.radix_tables) {
+	PhysicalHashAggregateState(const PhysicalHashAggregate &op) : scan_index(0) {
+		for (auto &rt : op.radix_tables) {
 			radix_states.push_back(rt.GetGlobalSourceState());
 		}
 	}
@@ -251,8 +253,9 @@ void PhysicalHashAggregate::GetData(ExecutionContext &context, DataChunk &chunk,
                                     LocalSourceState &lstate) const {
 	auto &gstate = (HashAggregateGlobalState &)*sink_state;
 	auto &state = (PhysicalHashAggregateState &)gstate_p;
-	while(state.scan_index < state.radix_states.size()) {
-		radix_tables[state.scan_index].GetData(context, chunk, *gstate.radix_states[state.scan_index], *state.radix_states[state.scan_index]);
+	while (state.scan_index < state.radix_states.size()) {
+		radix_tables[state.scan_index].GetData(context, chunk, *gstate.radix_states[state.scan_index],
+		                                       *state.radix_states[state.scan_index]);
 		if (chunk.size() != 0) {
 			return;
 		}

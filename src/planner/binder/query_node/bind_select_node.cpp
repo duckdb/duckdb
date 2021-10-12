@@ -303,7 +303,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column
 	// since we have an aggregation, we need to either (1) throw an error, or (2) wrap the column in a FIRST() aggregate
 	// we choose the former one [CONTROVERSIAL: this is the PostgreSQL behavior]
-	if (!result->groups.group_expressions.empty() || !result->aggregates.empty() || statement.having || !result->groups.grouping_sets.empty()) {
+	if (!result->groups.group_expressions.empty() || !result->aggregates.empty() || statement.having ||
+	    !result->groups.grouping_sets.empty()) {
 		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
 			throw BinderException("Aggregates cannot be present in a Project relation!");
 		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {
