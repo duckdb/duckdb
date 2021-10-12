@@ -21,6 +21,11 @@ insert into students
 		('Math', NULL);
 
 query I
+select 1 from students group by ();
+----
+1
+
+query I
 select count(*) from students group by ();
 ----
 7
@@ -262,3 +267,7 @@ select count(*), course, type
 5	CS	NULL
 7	NULL	NULL
 7	NULL	NULL
+
+# course is not a group or aggregate column
+statement error
+select course from students group by ();

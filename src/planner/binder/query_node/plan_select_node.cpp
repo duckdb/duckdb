@@ -5,6 +5,7 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 
 namespace duckdb {
 
@@ -49,6 +50,11 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 
 		aggregate->AddChild(move(root));
 		root = move(aggregate);
+	} else if (!statement.groups.grouping_sets.empty()) {
+		// edge case: we have grouping sets but no groups or aggregates
+		// this can only happen if we have e.g. select 1 from tbl group by ();
+		// just output a dummy scan
+		root = make_unique_base<LogicalOperator, LogicalDummyScan>(statement.group_index);
 	}
 
 	if (statement.having) {
