@@ -157,9 +157,6 @@ setMethod(
       x
     })
 
-    # encode column names to utf8
-    names(data) <- enc2utf8(names((data))
-
     if (dbExistsTable(conn, name)) {
       if (overwrite) {
         dbRemoveTable(conn, name)

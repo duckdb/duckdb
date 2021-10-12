@@ -9,6 +9,8 @@ skip_if_not(arrow::arrow_with_parquet(), message = "The installed Arrow is not f
 
 test_that("duckdb_register_arrow() works", {
   con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
+
   res <- arrow::read_parquet("userdata1.parquet", as_data_frame=FALSE)
   duckdb::duckdb_register_arrow(con, "myreader", res)
   res1 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
@@ -23,12 +25,12 @@ test_that("duckdb_register_arrow() works", {
 
 #   # cant register something non-arrow
 #   expect_error(duckdb_register_arrow(con, "asdf", data.frame()))
-
-  dbDisconnect(con, shutdown = T)
 })
 
 test_that("duckdb_register_arrow() works with datasets", {
     con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
     # Registering a dataset + aggregation
     ds <- arrow::open_dataset("userdata1.parquet")
     duckdb::duckdb_register_arrow(con, "mydatasetreader", ds)
@@ -40,14 +42,12 @@ test_that("duckdb_register_arrow() works with datasets", {
     res3 <- dbGetQuery(con, "SELECT count(*) FROM mydatasetreader")
     expect_true(identical(res2, res3))
     duckdb::duckdb_unregister_arrow(con, "mydatasetreader")
-
-    dbDisconnect(con, shutdown = T)
-
 })
 
 
 test_that("duckdb_register_arrow() performs projection pushdown", {
     con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
 
     # Registering a dataset + aggregation
     ds <- arrow::open_dataset("userdata1.parquet")
@@ -61,12 +61,11 @@ test_that("duckdb_register_arrow() performs projection pushdown", {
     res3 <- dbGetQuery(con, "SELECT last_name, salary, first_name FROM mydatasetreader")
     expect_true(identical(res2, res3))
     duckdb::duckdb_unregister_arrow(con, "mydatasetreader")
-
-    dbDisconnect(con, shutdown = T)
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown", {
     con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
 
     # Registering a dataset + aggregation
     ds <- arrow::open_dataset("userdata1.parquet")
@@ -80,13 +79,13 @@ test_that("duckdb_register_arrow() performs selection pushdown", {
     res3 <- dbGetQuery(con, "SELECT last_name, first_name FROM mydatasetreader where salary > 130000")
     expect_true(identical(res2, res3))
     duckdb::duckdb_unregister_arrow(con, "mydatasetreader")
-
-    dbDisconnect(con, shutdown = T)
 })
 
 
 numeric_operators <- function(data_type) {
     con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
     dbExecute(con, paste0("CREATE TABLE test (a ",data_type,", b ",data_type,", c ",data_type,")"))
     dbExecute(con, "INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
@@ -115,7 +114,6 @@ numeric_operators <- function(data_type) {
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a = 100 or b =1")[[1]], 2)
 
     duckdb::duckdb_unregister_arrow(con, "testarrow")
-    dbDisconnect(con, shutdown = T)
 }
 
 
@@ -153,6 +151,8 @@ test_that("duckdb_register_arrow() performs selection pushdown decimal types", {
 
 test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
     con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
     dbExecute(con, paste0("CREATE TABLE test (a  VARCHAR, b VARCHAR, c VARCHAR)"))
     dbExecute(con, "INSERT INTO  test VALUES ('1','1','1'),('10','10','10'),('100','10','100'),(NULL,NULL,NULL)")
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
@@ -181,11 +181,12 @@ test_that("duckdb_register_arrow() performs selection pushdown varchar type", {
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a = '100' or b ='1'")[[1]], 2)
 
     duckdb::duckdb_unregister_arrow(con, "testarrow")
-    dbDisconnect(con, shutdown = T)
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown bool type", {
     con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
     dbExecute(con, paste0("CREATE TABLE test (a  BOOL, b BOOL)"))
     dbExecute(con, "INSERT INTO  test VALUES (TRUE,TRUE),(TRUE,FALSE),(FALSE,TRUE),(NULL,NULL)")
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
@@ -205,12 +206,13 @@ test_that("duckdb_register_arrow() performs selection pushdown bool type", {
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a = True or b =True")[[1]], 3)
 
     duckdb::duckdb_unregister_arrow(con, "testarrow")
-    dbDisconnect(con, shutdown = T)
 })
 
 # NotImplemented: Function equal has no kernel matching input types (array[time64[us]], scalar[time32[s]])
 test_that("duckdb_register_arrow() performs selection pushdown time type", {
     con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
     dbExecute(con, paste0("CREATE TABLE test (a  TIME, b TIME, c TIME)"))
     dbExecute(con, "INSERT INTO  test VALUES ('00:01:00','00:01:00','00:01:00'),('00:10:00','00:10:00','00:10:00'),('01:00:00','00:10:00','01:00:00'),(NULL,NULL,NULL)")
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
@@ -239,12 +241,12 @@ test_that("duckdb_register_arrow() performs selection pushdown time type", {
     # expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a = '01:00:00' or b ='00:01:00'")[[1]], 2)
 
     duckdb::duckdb_unregister_arrow(con, "testarrow")
-    dbDisconnect(con, shutdown = T)
-
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown timestamp type", {
     con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
     dbExecute(con, paste0("CREATE TABLE test (a  TIMESTAMP, b TIMESTAMP, c TIMESTAMP)"))
     dbExecute(con, "INSERT INTO  test VALUES ('2008-01-01 00:00:01','2008-01-01 00:00:01','2008-01-01 00:00:01'),('2010-01-01 10:00:01','2010-01-01 10:00:01','2010-01-01 10:00:01'),('2020-03-01 10:00:01','2010-01-01 10:00:01','2020-03-01 10:00:01'),(NULL,NULL,NULL)")
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
@@ -273,11 +275,12 @@ test_that("duckdb_register_arrow() performs selection pushdown timestamp type", 
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a = '2020-03-01 10:00:01' or b ='2008-01-01 00:00:01'")[[1]], 2)
 
     duckdb::duckdb_unregister_arrow(con, "testarrow")
-    dbDisconnect(con, shutdown = T)
 })
 
 test_that("duckdb_register_arrow() performs selection pushdown date type", {
     con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
     dbExecute(con, paste0("CREATE TABLE test (a  DATE, b DATE, c DATE)"))
     dbExecute(con, "INSERT INTO  test VALUES ('2000-01-01','2000-01-01','2000-01-01'),('2000-10-01','2000-10-01','2000-10-01'),('2010-01-01','2000-10-01','2010-01-01'),(NULL,NULL,NULL)")
     arrow_table <- duckdb::duckdb_fetch_arrow(dbSendQuery(con, "SELECT * FROM test", arrow=TRUE),return_table=TRUE)
@@ -306,22 +309,19 @@ test_that("duckdb_register_arrow() performs selection pushdown date type", {
     expect_equal(dbGetQuery(con, "SELECT count(*) from testarrow where a = '2010-01-01' or b ='2000-01-01'")[[1]], 2)
 
     duckdb::duckdb_unregister_arrow(con, "testarrow")
-    dbDisconnect(con, shutdown = T)
 })
 
 test_that("duckdb_register_arrow() under many threads", {
-    con <- DBI::dbConnect(duckdb::duckdb())
+    con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
     ds <- arrow::InMemoryDataset$create(mtcars)
     duckdb::duckdb_register_arrow(con, "mtcars_arrow", ds)
-    DBI::dbExecute(con, "PRAGMA threads=32")
-    DBI::dbExecute(con, "PRAGMA verify_parallelism")
-    expect_error(DBI::dbGetQuery(con, "SELECT cyl, COUNT(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
-
-    expect_error(DBI::dbGetQuery(con, "SELECT cyl, SUM(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
-
-
-    expect_error(DBI::dbGetQuery(con, "SELECT cyl, AVG(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
-
+    dbExecute(con, "PRAGMA threads=32")
+    dbExecute(con, "PRAGMA verify_parallelism")
+    expect_error(dbGetQuery(con, "SELECT cyl, COUNT(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
+    expect_error(dbGetQuery(con, "SELECT cyl, SUM(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
+    expect_error(dbGetQuery(con, "SELECT cyl, AVG(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
 })
 
 

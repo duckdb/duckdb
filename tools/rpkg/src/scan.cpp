@@ -32,21 +32,6 @@ static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx
 	}
 }
 
-static void AppendFactor(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
-	auto source_data = INTEGER_POINTER(coldata) + row_idx;
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Validity(result);
-	SEXP factor_levels = GET_LEVELS(coldata);
-	for (idx_t i = 0; i < count; i++) {
-		int val = source_data[i];
-		if (RIntegerType::IsNull(val)) {
-			result_mask.SetInvalid(i);
-		} else {
-			result_data[i] = string_t(CHAR(STRING_ELT(factor_levels, val - 1)));
-		}
-	}
-}
-
 struct DataFrameScanFunctionData : public TableFunctionData {
 	DataFrameScanFunctionData(SEXP df, idx_t row_count, vector<RType> rtypes)
 	    : df(df), row_count(row_count), rtypes(rtypes) {
