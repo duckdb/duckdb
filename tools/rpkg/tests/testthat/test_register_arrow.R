@@ -319,9 +319,34 @@ test_that("duckdb_register_arrow() under many threads", {
 
     expect_error(DBI::dbGetQuery(con, "SELECT cyl, SUM(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
 
-
     expect_error(DBI::dbGetQuery(con, "SELECT cyl, AVG(mpg) FROM mtcars_arrow GROUP BY cyl"),NA)
+})
 
+test_that("we can unregister in finalizers yay", {
+    con <- DBI::dbConnect(duckdb::duckdb())
+    ds <- arrow::InMemoryDataset$create(mtcars)
+
+    # Creates an environment that disconnects the database when it's GC'd
+    duckdb_disconnector <- function(con, table_name) {
+      # we need to force the name here
+      table_name_forced <- force(table_name)
+      reg.finalizer(environment(), function(...) {
+        duckdb::duckdb_unregister_arrow(con, table_name_forced)
+      })
+      environment()
+    }
+
+    for (i in 1:100) {
+      table_name <- paste0("mtcars_", i)
+      duckdb::duckdb_register_arrow(con, table_name, ds)
+      object_to_clean <- duckdb_disconnector(con, table_name)
+    }
+    object_to_clean <- NULL # otherwise we leak one
+    # force a gc run, now they should all be gone
+    gc()
+
+    # gehtto way of finding all the registered tables
+    expect_equal(length(attributes(con@driver@database_ref)), 0)
 })
 
 

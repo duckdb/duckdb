@@ -64,7 +64,6 @@ duckdb_register_arrow <- function(conn, name, arrow_scannable) {
 #' @rdname duckdb_register_arrow
 #' @export
 duckdb_unregister_arrow <- function(conn, name) {
-  stopifnot(dbIsValid(conn))
   .Call(duckdb_unregister_arrow_R, conn@conn_ref, as.character(name))
   invisible(TRUE)
 }
