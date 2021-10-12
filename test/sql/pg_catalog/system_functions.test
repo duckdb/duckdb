@@ -48,7 +48,7 @@ main
 query I
 SELECT current_schemas(false);
 ----
-[main]
+[temp, main, pg_catalog]
 
 query IIII
 SELECT inet_client_addr(), inet_client_port(), inet_server_addr(), inet_server_port();

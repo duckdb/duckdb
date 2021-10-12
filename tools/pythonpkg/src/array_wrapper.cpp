@@ -108,7 +108,6 @@ struct TimeConvert {
 };
 
 struct StringConvert {
-#if PY_MAJOR_VERSION >= 3
 	template <class T>
 	static void ConvertUnicodeValueTemplated(T *result, int32_t *codepoints, idx_t codepoint_count, const char *data,
 	                                         idx_t ascii_count) {
@@ -198,13 +197,6 @@ struct StringConvert {
 		memcpy(target_data, data, len);
 		return result;
 	}
-#else
-	template <class DUCKDB_T, class NUMPY_T>
-	static PyObject *ConvertValue(string_t val) {
-		return py::str(val.GetString()).release().ptr();
-	}
-#endif
-
 	template <class NUMPY_T>
 	static NUMPY_T NullValue() {
 		return nullptr;
@@ -270,6 +262,49 @@ static bool ConvertColumn(idx_t target_offset, data_ptr_t target_data, bool *tar
 			target_mask[offset] = false;
 		}
 		return false;
+	}
+}
+
+template <class DUCKDB_T, class NUMPY_T>
+static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t target_data, VectorData &idata,
+                                             idx_t count) {
+	auto src_ptr = (DUCKDB_T *)idata.data;
+	auto out_ptr = (NUMPY_T *)target_data;
+	if (!idata.validity.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
+				out_ptr[offset] = duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(-1);
+			} else {
+				out_ptr[offset] =
+				    duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
+			}
+		}
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			out_ptr[offset] =
+			    duckdb_py_convert::RegularConvert::template ConvertValue<DUCKDB_T, NUMPY_T>(src_ptr[src_idx]);
+		}
+	}
+	// Null values are encoded in the data itself
+	return false;
+}
+
+template <class NUMPY_T>
+static bool ConvertColumnCategorical(idx_t target_offset, data_ptr_t target_data, VectorData &idata, idx_t count,
+                                     PhysicalType physical_type) {
+	switch (physical_type) {
+	case PhysicalType::UINT8:
+		return ConvertColumnCategoricalTemplate<uint8_t, NUMPY_T>(target_offset, target_data, idata, count);
+	case PhysicalType::UINT16:
+		return ConvertColumnCategoricalTemplate<uint16_t, NUMPY_T>(target_offset, target_data, idata, count);
+	case PhysicalType::UINT32:
+		return ConvertColumnCategoricalTemplate<uint32_t, NUMPY_T>(target_offset, target_data, idata, count);
+	default:
+		throw InternalException("Enum Physical Type not Allowed");
 	}
 }
 
@@ -357,15 +392,11 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::BIGINT:
 		type_width = sizeof(int64_t);
 		break;
-	case LogicalTypeId::HUGEINT:
-		type_width = sizeof(double);
-		break;
 	case LogicalTypeId::FLOAT:
 		type_width = sizeof(float);
 		break;
+	case LogicalTypeId::HUGEINT:
 	case LogicalTypeId::DOUBLE:
-		type_width = sizeof(double);
-		break;
 	case LogicalTypeId::DECIMAL:
 		type_width = sizeof(double);
 		break;
@@ -378,12 +409,9 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 		type_width = sizeof(int64_t);
 		break;
 	case LogicalTypeId::TIME:
-		type_width = sizeof(PyObject *);
-		break;
 	case LogicalTypeId::VARCHAR:
-		type_width = sizeof(PyObject *);
-		break;
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::ENUM:
 		type_width = sizeof(PyObject *);
 		break;
 	default:
@@ -444,6 +472,18 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	case LogicalTypeId::BLOB:
 		dtype = "object";
 		break;
+	case LogicalTypeId::ENUM: {
+		auto size = EnumType::GetSize(type);
+		if (size <= (idx_t)NumericLimits<int8_t>::Maximum()) {
+			dtype = "int8";
+		} else if (size <= (idx_t)NumericLimits<int16_t>::Maximum()) {
+			dtype = "int16";
+		} else if (size <= (idx_t)NumericLimits<int32_t>::Maximum()) {
+			dtype = "int32";
+		} else {
+			throw InternalException("Size not supported on ENUM types");
+		}
+	} break;
 	default:
 		throw std::runtime_error("unsupported type " + type.ToString());
 	}
@@ -483,6 +523,19 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 	VectorData idata;
 	input.Orrify(count, idata);
 	switch (input.GetType().id()) {
+	case LogicalTypeId::ENUM: {
+		auto size = EnumType::GetSize(input.GetType());
+		auto physical_type = input.GetType().InternalType();
+		if (size <= (idx_t)NumericLimits<int8_t>::Maximum()) {
+			may_have_null = ConvertColumnCategorical<int8_t>(current_offset, dataptr, idata, count, physical_type);
+		} else if (size <= (idx_t)NumericLimits<int16_t>::Maximum()) {
+			may_have_null = ConvertColumnCategorical<int16_t>(current_offset, dataptr, idata, count, physical_type);
+		} else if (size <= (idx_t)NumericLimits<int32_t>::Maximum()) {
+			may_have_null = ConvertColumnCategorical<int32_t>(current_offset, dataptr, idata, count, physical_type);
+		} else {
+			throw InternalException("Size not supported on ENUM types");
+		}
+	} break;
 	case LogicalTypeId::BOOLEAN:
 		may_have_null = ConvertColumnRegular<bool>(current_offset, dataptr, maskptr, idata, count);
 		break;
@@ -607,12 +660,21 @@ void NumpyResultConversion::Resize(idx_t new_capacity) {
 	capacity = new_capacity;
 }
 
-void NumpyResultConversion::Append(DataChunk &chunk) {
+void NumpyResultConversion::Append(DataChunk &chunk, unordered_map<idx_t, py::list> *categories) {
 	if (count + chunk.size() > capacity) {
 		Resize(capacity * 2);
 	}
+	auto chunk_types = chunk.GetTypes();
 	for (idx_t col_idx = 0; col_idx < owned_data.size(); col_idx++) {
 		owned_data[col_idx].Append(count, chunk.data[col_idx], chunk.size());
+		if (chunk_types[col_idx].id() == LogicalTypeId::ENUM) {
+			D_ASSERT(categories);
+			// It's an ENUM type, in addition to converting the codes we must convert the categories
+			if (categories->find(col_idx) == categories->end()) {
+				auto categories_list = EnumType::GetValuesInsertOrder(chunk.data[col_idx].GetType());
+				(*categories)[col_idx] = py::cast(categories_list);
+			}
+		}
 	}
 	count += chunk.size();
 #ifdef DEBUG

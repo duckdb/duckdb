@@ -1,0 +1,38 @@
+# name: test/sql/join/full_outer/test_full_outer_join_parallel.test_slow
+# description: Test full outer join with parallelism
+# group: [full_outer]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(75000) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM range(100000) tbl(i) WHERE i%2 != 0;
+
+query I
+SELECT COUNT(*) FROM integers JOIN integers2 ON integers.i=integers2.i
+----
+37500
+
+query I
+SELECT COUNT(*) FROM integers LEFT OUTER JOIN integers2 ON integers.i=integers2.i
+----
+75000
+
+query I
+SELECT COUNT(*) FROM integers RIGHT OUTER JOIN integers2 ON integers.i=integers2.i
+----
+50000
+
+query I
+SELECT COUNT(*) FROM integers FULL OUTER JOIN integers2 ON integers.i=integers2.i
+----
+87500

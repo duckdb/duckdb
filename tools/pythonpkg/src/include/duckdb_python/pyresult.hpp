@@ -8,8 +8,9 @@
 
 #pragma once
 
-#include "duckdb_python/pybind_wrapper.hpp"
+#include "array_wrapper.hpp"
 #include "duckdb.hpp"
+#include "duckdb_python/pybind_wrapper.hpp"
 
 namespace duckdb {
 
@@ -19,6 +20,10 @@ public:
 
 	unique_ptr<QueryResult> result;
 	unique_ptr<DataChunk> current_chunk;
+	// Holds the categories of Categorical/ENUM types
+	unordered_map<idx_t, py::list> categories;
+	// Holds the categorical type of Categorical/ENUM types
+	unordered_map<idx_t, py::object> categories_type;
 
 public:
 	static void Initialize(py::handle &m);
@@ -44,6 +49,9 @@ public:
 	py::list Description();
 
 	void Close();
+
+private:
+	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 };
 
 } // namespace duckdb

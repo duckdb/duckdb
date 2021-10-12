@@ -63,12 +63,24 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	}
 }
 
+void QueryProfiler::Finalize(TreeNode &node) {
+	for (auto &child : node.children) {
+		Finalize(*child);
+		if (node.type == PhysicalOperatorType::UNION) {
+			node.info.elements += child->info.elements;
+		}
+	}
+}
+
 void QueryProfiler::EndQuery() {
 	if (!enabled || !running) {
 		return;
 	}
 
 	main_query.End();
+	if (root) {
+		Finalize(*root);
+	}
 	this->running = false;
 	// print or output the query profiling after termination, if this is enabled
 	if (automatic_print_format != ProfilerPrintFormat::NONE) {
@@ -151,8 +163,7 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 	}
 }
 
-OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p) {
-	execution_stack = std::stack<const PhysicalOperator *>();
+OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p), active_operator(nullptr) {
 }
 
 void OperatorProfiler::StartOperator(const PhysicalOperator *phys_op) {
@@ -160,14 +171,11 @@ void OperatorProfiler::StartOperator(const PhysicalOperator *phys_op) {
 		return;
 	}
 
-	if (!execution_stack.empty()) {
-		// add timing for the previous element
-		op.End();
-
-		AddTiming(execution_stack.top(), op.Elapsed(), 0);
+	if (active_operator) {
+		throw InternalException("OperatorProfiler: Attempting to call StartOperator while another operator is active");
 	}
 
-	execution_stack.push(phys_op);
+	active_operator = phys_op;
 
 	// start timing for current element
 	op.Start();
@@ -178,18 +186,15 @@ void OperatorProfiler::EndOperator(DataChunk *chunk) {
 		return;
 	}
 
+	if (!active_operator) {
+		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
+	}
+
 	// finish timing for the current element
 	op.End();
 
-	AddTiming(execution_stack.top(), op.Elapsed(), chunk ? chunk->size() : 0);
-
-	D_ASSERT(!execution_stack.empty());
-	execution_stack.pop();
-
-	// start timing again for the previous element, if any
-	if (!execution_stack.empty()) {
-		op.Start();
-	}
+	AddTiming(active_operator, op.Elapsed(), chunk ? chunk->size() : 0);
+	active_operator = nullptr;
 }
 
 void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t elements) {
@@ -248,6 +253,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			entry->second->info.executors_info[info_id] = move(info);
 		}
 	}
+	profiler.timings.clear();
 }
 
 static string DrawPadded(const string &str, idx_t width) {
@@ -520,6 +526,7 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 		this->query_requires_profiling = true;
 	}
 	auto node = make_unique<QueryProfiler::TreeNode>();
+	node->type = root->type;
 	node->name = root->GetName();
 	node->extra_info = root->ParamsToString();
 	node->depth = depth;

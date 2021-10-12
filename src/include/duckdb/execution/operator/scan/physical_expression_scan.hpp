@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -26,9 +27,20 @@ public:
 	vector<vector<unique_ptr<Expression>>> expressions;
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
+
+public:
+	// Sink interface
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
+	                    DataChunk &input) const override;
+
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+
+	bool IsSink() const override {
+		return true;
+	}
 };
 
 } // namespace duckdb

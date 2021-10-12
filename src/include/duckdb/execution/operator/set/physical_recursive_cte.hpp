@@ -12,6 +12,7 @@
 
 namespace duckdb {
 class Pipeline;
+class RecursiveCTEState;
 
 class PhysicalRecursiveCTE : public PhysicalOperator {
 public:
@@ -24,13 +25,24 @@ public:
 	vector<shared_ptr<Pipeline>> pipelines;
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	void FinalizeOperatorState(PhysicalOperatorState &state_p, ExecutionContext &context) override;
+	// Source interface
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
+
+public:
+	// Sink interface
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
+	                    DataChunk &input) const override;
+
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
+
+	bool IsSink() const override {
+		return true;
+	}
 
 private:
 	//! Probe Hash Table and eliminate duplicate rows
-	idx_t ProbeHT(DataChunk &chunk, PhysicalOperatorState *state) const;
+	idx_t ProbeHT(DataChunk &chunk, RecursiveCTEState &state) const;
 
 	void ExecuteRecursivePipelines(ExecutionContext &context) const;
 };

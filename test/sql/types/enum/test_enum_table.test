@@ -1,0 +1,336 @@
+# name: test/sql/types/enum/test_enum_table.test
+# description: ENUM types used in table tests
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+# Test with non existent enum type
+statement error
+CREATE TABLE person (
+    name text,
+    current_car car
+);
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+INSERT INTO person VALUES ('Moe', 'happy');
+
+statement error
+INSERT INTO person VALUES ('Moe', 'diego');
+
+query TT
+select * from person
+----
+Moe	happy
+
+statement ok
+INSERT INTO person VALUES ('Pedro', 'ok');
+
+statement ok
+INSERT INTO person VALUES ('Mark', 'sad');
+
+query TT
+select * from person where current_mood = 'sad'
+----
+Mark	sad
+
+query TT
+select * from person where current_mood > 'sad'
+----
+Moe	happy
+Pedro	ok
+
+statement ok
+CREATE TABLE pets (
+    name text,
+    current_mood mood
+);
+
+statement ok
+INSERT INTO pets VALUES ('Anne', 'happy');
+
+statement ok
+INSERT INTO pets VALUES ('Oogie Boogie', 'ok');
+
+#Null Values in the column are allowed
+statement ok
+INSERT INTO pets VALUES ('Mr. Fluffles McFluffingstein', NULL);
+
+query TT
+select * from pets;
+----
+Anne	happy
+Oogie Boogie	ok
+Mr. Fluffles McFluffingstein	NULL
+
+query TT
+select person.name, pets.name from person inner join pets on  (person.current_mood = pets.current_mood)
+----
+Moe	Anne
+Pedro	Oogie Boogie
+
+statement ok
+DROP TYPE mood;
+
+# Tables should still function
+
+query TT
+select person.name, pets.name from person inner join pets on  (person.current_mood = pets.current_mood)
+----
+Moe	Anne
+Pedro	Oogie Boogie
+
+# Creating a new table should not
+statement error
+CREATE TABLE aliens (
+    name text,
+    current_mood mood
+);
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TYPE intelligence AS ENUM ('dumb', 'smart', 'ehh');
+
+statement ok
+CREATE TABLE aliens (
+    name text,
+    current_mood mood
+);
+
+# ALTER TABLE ADD COLUMN with the enum type (see test/sql/alter/add_col/test_add_col.test)
+
+statement ok
+INSERT INTO aliens VALUES ('Alf o Eteimoso', 'happy'), ('Dr Zoidberg', 'sad')
+
+statement ok
+ALTER TABLE aliens ADD COLUMN iq_level intelligence
+
+query III
+select * from aliens
+----
+Alf o Eteimoso	happy	NULL
+Dr Zoidberg	sad	NULL
+
+statement ok
+INSERT INTO aliens VALUES ('The Borg', 'ok', 'ehh')
+
+query III
+select * from aliens
+----
+Alf o Eteimoso	happy	NULL
+Dr Zoidberg	sad	NULL
+The Borg	ok	ehh
+
+# ALTER TABLE SET DATA TYPE with the enum type (see test/sql/alter/alter_type/test_alter_type.test)
+statement ok
+ALTER TABLE aliens ALTER current_mood SET DATA TYPE VARCHAR
+
+query III
+select * from aliens
+----
+Alf o Eteimoso	happy	NULL
+Dr Zoidberg	sad	NULL
+The Borg	ok	ehh
+
+# Comparisons between enum columns with the same enum type
+statement ok
+CREATE TYPE car_brand AS ENUM ('Tesla', 'VW', 'Seat', 'Fiets');
+
+statement ok
+DROP TABLE person
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood,
+    last_year_mood mood,
+    car car_brand
+);
+
+statement ok
+INSERT INTO person VALUES ('Pedro', 'ok', 'ok','Seat'), ('Mark', 'sad', 'happy','Fiets');
+
+query IIII
+select * from person where current_mood = last_year_mood
+----
+Pedro	ok	ok	Seat
+
+# Comparisons between enums and strings
+
+query IIII
+select * from person where current_mood = 'ok'
+----
+Pedro	ok	ok	Seat
+
+# Comparison between two different enum types (Unimplemented type for cast (car_brand -> mood))
+statement error
+select * from person where current_mood = car
+
+#GROUP BY and ORDER BY on enums, both as keys and in the payload
+statement ok
+INSERT INTO person VALUES ('Diego', 'sad', 'happy','Seat'), ('Tim', 'happy', 'sad','Fiets');
+
+query II
+select count(*), current_mood from person group by current_mood
+----
+1	ok
+2	sad
+1	happy
+
+query II
+select name, current_mood from person order by current_mood
+----
+Mark	sad
+Diego	sad
+Pedro	ok
+Tim	happy
+
+#Explicit CAST and TRY_CAST from enum -> string
+query I
+SELECT CAST (current_mood as STRING) from person
+----
+ok
+sad
+sad
+happy
+
+query I
+SELECT TRY_CAST (current_mood as STRING) from person
+----
+ok
+sad
+sad
+happy
+
+#Explicit CAST and TRY_CAST from string -> enum (note that try_cast should return NULL instead of throwing an exception if the cast fails)
+query I
+SELECT CAST ('ok' as mood)
+----
+ok
+
+query I
+SELECT TRY_CAST ('ok' as mood)
+----
+ok
+
+statement error
+SELECT CAST ('bla' as mood)
+----
+ok
+
+query I
+SELECT TRY_CAST ('bla' as mood)
+----
+NULL
+
+
+# Create an enum
+statement ok
+create type breed AS ENUM ('Maltese', 'Shi-tzu', 'Samoyed', 'Robot');
+
+# Create a table with that enum
+statement ok
+CREATE TABLE dog (
+    name text,
+    type breed
+);
+
+statement ok
+INSERT INTO dog VALUES ('Oogie Boogie', 'Maltese'), ('Anne', 'Shi-tzu'),('Blaster', 'Samoyed'), ('Roomba', 'Robot')
+
+#drop the enum
+statement ok
+drop type breed
+
+#create the same enum again,
+statement ok
+create type breed AS ENUM ('Maltese', 'Shi-tzu', 'Samoyed', 'Robot');
+
+#create a new table with the new enum,
+statement ok
+CREATE TABLE dog_2 (
+    name text,
+    type breed
+);
+
+statement ok
+INSERT INTO dog_2 VALUES ('Teddy', 'Samoyed')
+
+#then compare between the two tables. What should happen?
+
+query IIII
+select * from dog_2 inner join dog on (dog_2.type = dog.type);
+----
+Teddy	Samoyed	Blaster	Samoyed
+
+#drop the enum
+statement ok
+drop type breed
+
+#create a diffferent enum
+statement ok
+create type breed AS ENUM ('Golden', 'Pomeranian');
+
+statement ok
+CREATE TABLE dog_3 (
+    name text,
+    type breed
+);
+
+statement ok
+INSERT INTO dog_3 VALUES ('Licity', 'Golden')
+
+# This should break because the enums are different (Although have the same name)
+statement error
+select * from dog_3 inner join dog on (dog_3.type = dog.type);
+
+# Lets do a dictionary vector type
+statement ok
+CREATE TABLE person_string (
+    name text,
+    current_mood text
+);
+
+statement ok
+INSERT INTO person_string VALUES ('Pedro', 'ok'), ('Mark', 'sad');
+
+query II
+select name,current_mood::mood from person_string where current_mood = 'sad'
+----
+Mark	sad
+
+statement ok
+create type midenum as enum ('0','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47','48','49','50','51','52','53','54','55','56','57','58','59','60','61','62','63','64','65','66','67','68','69','70','71','72','73','74','75','76','77','78','79','80','81','82','83','84','85','86','87','88','89','90','91','92','93','94','95','96','97','98','99','100','101','102','103','104','105','106','107','108','109','110','111','112','113','114','115','116','117','118','119','120','121','122','123','124','125','126','127','128','129','130','131','132','133','134','135','136','137','138','139','140','141','142','143','144','145','146','147','148','149','150','151','152','153','154','155','156','157','158','159','160','161','162','163','164','165','166','167','168','169','170','171','172','173','174','175','176','177','178','179','180','181','182','183','184','185','186','187','188','189','190','191','192','193','194','195','196','197','198','199','200','201','202','203','204','205','206','207','208','209','210','211','212','213','214','215','216','217','218','219','220','221','222','223','224','225','226','227','228','229','230','231','232','233','234','235','236','237','238','239','240','241','242','243','244','245','246','247','248','249','250','251','252','253','254','255')
+
+statement ok
+CREATE TABLE midenum_t (
+    test midenum
+);
+
+statement ok
+INSERT INTO midenum_t VALUES ('0')
+
+statement ok
+create type midenum_2 as enum ('0','1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','29','30','31','32','33','34','35','36','37','38','39','40','41','42','43','44','45','46','47','48','49','50','51','52','53','54','55','56','57','58','59','60','61','62','63','64','65','66','67','68','69','70','71','72','73','74','75','76','77','78','79','80','81','82','83','84','85','86','87','88','89','90','91','92','93','94','95','96','97','98','99','100','101','102','103','104','105','106','107','108','109','110','111','112','113','114','115','116','117','118','119','120','121','122','123','124','125','126','127','128','129','130','131','132','133','134','135','136','137','138','139','140','141','142','143','144','145','146','147','148','149','150','151','152','153','154','155','156','157','158','159','160','161','162','163','164','165','166','167','168','169','170','171','172','173','174','175','176','177','178','179','180','181','182','183','184','185','186','187','188','189','190','191','192','193','194','195','196','197','198','199','200','201','202','203','204','205','206','207','208','209','210','211','212','213','214','215','216','217','218','219','220','221','222','223','224','225','226','227','228','229','230','231','232','233','234','235','236','237','238','239','240','241','242','243','244','245','246','247','248','249','250','251','252','253','254','255')
+
+statement ok
+CREATE TABLE midenum_t2 (
+    test_2 midenum_2
+);
+
+statement ok
+INSERT INTO midenum_t2 VALUES ('0')
+
+statement error
+select * from midenum_t inner join midenum_t2 on (test = test_2)
