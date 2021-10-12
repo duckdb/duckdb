@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import glob
+import time
 import mimetypes
 import urllib.request
 
@@ -58,10 +59,18 @@ def gh_api(suburl, filename='', method='GET'):
 
 	req = urllib.request.Request(url, body_data, headers)
 	req.get_method = lambda: method
-	try:
-		raw_resp = urllib.request.urlopen(req).read().decode()
-	except urllib.error.HTTPError as e:
-		raw_resp = e.read().decode() # gah
+	timeout = 1
+	nretries = 10
+	for i in range(nretries):
+		success = True
+		try:
+			raw_resp = urllib.request.urlopen(req).read().decode()
+		except:
+			success = False
+		if success:
+			break
+		time.sleep(timeout)
+		timeout *= 2
 
 	if (method != 'DELETE'):
 		return json.loads(raw_resp)
@@ -95,7 +104,7 @@ for filename in files:
 		if len(paths) != 1:
 			raise ValueError("Could not find file for pattern %s" % parts[1])
 		local_filename = paths[0]
-	else :
+	else:
 		asset_filename = os.path.basename(filename)
 		local_filename = filename
 
