@@ -291,7 +291,7 @@ void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, shared_ptr<Eve
 	for (idx_t r = 0; r < gstate.partition_info.n_partitions; r++) {
 		D_ASSERT(gstate.partition_info.n_partitions <= gstate.finalized_hts.size());
 		D_ASSERT(gstate.finalized_hts[r]);
-		tasks.push_back(make_unique<RadixAggregateFinalizeTask>(executor, move(event), gstate, r));
+		tasks.push_back(make_unique<RadixAggregateFinalizeTask>(executor, event, gstate, r));
 	}
 }
 
