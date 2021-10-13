@@ -10,12 +10,13 @@ namespace duckdb {
 
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, unordered_map<string, idx_t> &alias_map,
                          expression_map_t<idx_t> &projection_map, idx_t max_count)
-    : node(nullptr), binders(move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
-      alias_map(alias_map), projection_map(projection_map) {
+    : node(nullptr), binders(move(binders)), projection_index(projection_index), max_count(max_count),
+      extra_list(nullptr), alias_map(alias_map), projection_map(projection_map) {
 }
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
                          unordered_map<string, idx_t> &alias_map, expression_map_t<idx_t> &projection_map)
-    : node(&node), binders(move(binders)), projection_index(projection_index), alias_map(alias_map), projection_map(projection_map) {
+    : node(&node), binders(move(binders)), projection_index(projection_index), alias_map(alias_map),
+      projection_map(projection_map) {
 	this->max_count = node.select_list.size();
 	this->extra_list = &node.select_list;
 }
@@ -45,9 +46,8 @@ void OrderBinder::ReplaceAliases(unique_ptr<ParsedExpression> &expr) {
 		}
 		return;
 	}
-	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
-		ReplaceAliases(child);
-	});
+	ParsedExpressionIterator::EnumerateChildren(*expr,
+	                                            [&](unique_ptr<ParsedExpression> &child) { ReplaceAliases(child); });
 }
 
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {

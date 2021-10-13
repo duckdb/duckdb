@@ -1,4 +1,4 @@
-# name: test/sql/order/test_limit_parameter.test
+# name: test/sql/order/order_alias.test
 # description: Test LIMIT with a parameter (issue 1866)
 # group: [order]
 
@@ -21,6 +21,11 @@ SELECT foo AS bar FROM (SELECT 1 AS foo) t ORDER BY bar + 1;
 1
 
 query I
+SELECT bar+bar AS bar FROM (SELECT 1 AS bar) t ORDER BY bar;
+----
+2
+
+query I
 SELECT foo AS bar FROM (SELECT i%2 foo FROM generate_series(0, 3, 1) t(i)) t ORDER BY bar + 1;
 ----
 0
@@ -38,6 +43,25 @@ SELECT foo AS bar FROM (SELECT i%2 foo FROM generate_series(0, 3, 1) t(i)) t ORD
 
 query I
 SELECT foo AS bar FROM (SELECT i%2 foo FROM generate_series(0, 3, 1) t(i)) t ORDER BY 1 - bar + bar + bar;
+----
+0
+0
+1
+1
+
+query I
+SELECT 1-i AS i FROM (SELECT i%2 foo FROM generate_series(0, 3, 1) t(i)) t(i) ORDER BY i;
+----
+0
+0
+1
+1
+
+# CONTROVERSIAL: sqlite reverses the order here
+# it seems that there is a different code path in SQLite
+# for binding the alias as root of the order by vs binding the alias as part of an expression
+query I
+SELECT 1-i AS i FROM (SELECT i%2 foo FROM generate_series(0, 3, 1) t(i)) t(i) ORDER BY i+1;
 ----
 0
 0
