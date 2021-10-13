@@ -10,7 +10,7 @@ OUTPUT_DIR="tools/pythonpkg/duckdb-stubs"
 
 # Unfortunately, stubgen is good but not quite perfect, and
 # the stubs it generates need a little bit of tweaking, which
-# this regeneration process will blow away. git add -a is your friend.
+# this regeneration process will blow away. git add -p is your friend.
 # To allow for this, please annotate any tweaks you subsequently
 # make with something like
 # # stubgen override
