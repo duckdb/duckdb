@@ -75,7 +75,7 @@ vim tools/pythonpkg/duckdb_python.cpp # or whatever
 # regerate stub once your changes have been installed.
 scripts/regenerate_python_stubs.sh
 # (re-apply our fixes on top of generate stubs,
-# hint: git add -p; git checkout HEAD tools/pythonpkg/stubs)
+# hint: git add -p; git checkout HEAD tools/pythonpkg/duckdb-stubs)
 
 # check tests
 pytest tests/stubs
