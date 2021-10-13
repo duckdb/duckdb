@@ -209,7 +209,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 		result->names.push_back(expr->GetName());
 		ExpressionBinder::BindTableNames(*this, *expr);
 		if (!expr->alias.empty()) {
-			alias_map[expr->alias] = i;
+			if (alias_map.find(expr->alias) == alias_map.end()) {
+				alias_map[expr->alias] = i;
+			}
 			result->names[i] = expr->alias;
 		}
 		projection_map[expr.get()] = i;

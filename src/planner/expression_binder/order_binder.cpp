@@ -4,17 +4,18 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/parser/parsed_expression_iterator.hpp"
 
 namespace duckdb {
 
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, unordered_map<string, idx_t> &alias_map,
                          expression_map_t<idx_t> &projection_map, idx_t max_count)
-    : binders(move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
+    : node(nullptr), binders(move(binders)), projection_index(projection_index), max_count(max_count), extra_list(nullptr),
       alias_map(alias_map), projection_map(projection_map) {
 }
 OrderBinder::OrderBinder(vector<Binder *> binders, idx_t projection_index, SelectNode &node,
                          unordered_map<string, idx_t> &alias_map, expression_map_t<idx_t> &projection_map)
-    : binders(move(binders)), projection_index(projection_index), alias_map(alias_map), projection_map(projection_map) {
+    : node(&node), binders(move(binders)), projection_index(projection_index), alias_map(alias_map), projection_map(projection_map) {
 	this->max_count = node.select_list.size();
 	this->extra_list = &node.select_list;
 }
@@ -24,14 +25,38 @@ unique_ptr<Expression> OrderBinder::CreateProjectionReference(ParsedExpression &
 	                                             ColumnBinding(projection_index, index));
 }
 
+void OrderBinder::ReplaceAliases(unique_ptr<ParsedExpression> &expr) {
+	if (!node) {
+		return;
+	}
+	if (expr->expression_class == ExpressionClass::COLUMN_REF) {
+		// COLUMN REF expression
+		// check if we can bind it to an alias in the select list
+		auto &colref = (ColumnRefExpression &)*expr;
+		// if there is an explicit table name we can't bind to an alias
+		if (!colref.table_name.empty()) {
+			return;
+		}
+		// check the alias list
+		auto entry = alias_map.find(colref.column_name);
+		if (entry != alias_map.end()) {
+			// it does! point it to that entry
+			expr = node->select_list[entry->second]->Copy();
+		}
+		return;
+	}
+	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child) {
+		ReplaceAliases(child);
+	});
+}
+
 unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// in the ORDER BY clause we do not bind children
 	// we bind ONLY to the select list
 	// if there is no matching entry in the SELECT list already, we add the expression to the SELECT list and refer the
 	// new expression the new entry will then be bound later during the binding of the SELECT list we also don't do type
 	// resolution here: this only happens after the SELECT list has been bound
-	switch (expr->expression_class) {
-	case ExpressionClass::CONSTANT: {
+	if (expr->expression_class == ExpressionClass::CONSTANT) {
 		// ORDER BY constant
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)
 		auto &constant = (ConstantExpression &)*expr;
@@ -49,26 +74,10 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		}
 		return CreateProjectionReference(*expr, index - 1);
 	}
-	case ExpressionClass::COLUMN_REF: {
-		// COLUMN REF expression
-		// check if we can bind it to an alias in the select list
-		auto &colref = (ColumnRefExpression &)*expr;
-		// if there is an explicit table name we can't bind to an alias
-		if (!colref.table_name.empty()) {
-			break;
-		}
-		// check the alias list
-		auto entry = alias_map.find(colref.column_name);
-		if (entry != alias_map.end()) {
-			// it does! point it to that entry
-			return CreateProjectionReference(*expr, entry->second);
-		}
-		break;
-	}
-	default:
-		break;
-	}
 	// general case
+	// replace aliases in the expression
+	ReplaceAliases(expr);
+
 	// first bind the table names of this entry
 	for (auto &binder : binders) {
 		ExpressionBinder::BindTableNames(*binder, *expr);

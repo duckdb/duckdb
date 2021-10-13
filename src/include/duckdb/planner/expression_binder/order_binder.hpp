@@ -30,7 +30,10 @@ public:
 
 private:
 	unique_ptr<Expression> CreateProjectionReference(ParsedExpression &expr, idx_t index);
+	void ReplaceAliases(unique_ptr<ParsedExpression> &expr);
 
+private:
+	SelectNode *node;
 	vector<Binder *> binders;
 	idx_t projection_index;
 	idx_t max_count;
