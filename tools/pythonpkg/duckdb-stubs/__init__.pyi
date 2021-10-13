@@ -7,7 +7,7 @@ from typing import Any, ClassVar
 
 from typing import overload
 
-# This should probably not be exposed
+# stubgen override - This should probably not be exposed
 #_clean_default_connection: Any
 comment: token_type
 identifier: token_type
@@ -114,6 +114,7 @@ class DuckDBPyResult:
     def fetchone(self) -> object: ...
 
 class token_type:
+    # stubgen override - these make mypy sad
     #__doc__: ClassVar[str] = ...  # read-only
     #__members__: ClassVar[dict] = ...  # read-only
     __entries: ClassVar[dict] = ...
