@@ -10,17 +10,16 @@ struct GroupingExpressionMap {
 	expression_map_t<idx_t> map;
 };
 
-static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes, idx_t start, idx_t end) {
-	D_ASSERT(start <= end);
+static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
 	GroupingSet result;
-	for (idx_t i = start; i < end; i++) {
+	for (idx_t i = 0; i < indexes.size(); i++) {
 		result.insert(indexes[i]);
 	}
 	return result;
 }
 
-static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
-	return VectorToGroupingSet(indexes, 0, indexes.size());
+static void MergeGroupingSet(GroupingSet &result, GroupingSet &other) {
+	result.insert(other.begin(), other.end());
 }
 
 void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
@@ -46,12 +45,12 @@ void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, 
 	result_set.push_back(result_idx);
 }
 
-static void AddCubeSets(vector<idx_t> current_set, vector<idx_t> &result_set, vector<GroupingSet> &result_sets,
+static void AddCubeSets(GroupingSet current_set, vector<GroupingSet> &result_set, vector<GroupingSet> &result_sets,
                         idx_t start_idx = 0) {
-	result_sets.push_back(VectorToGroupingSet(current_set));
+	result_sets.push_back(current_set);
 	for (idx_t k = start_idx; k < result_set.size(); k++) {
-		vector<idx_t> child_set = current_set;
-		child_set.push_back(result_set[k]);
+		auto child_set = current_set;
+		MergeGroupingSet(child_set, result_set[k]);
 		AddCubeSets(move(child_set), result_set, result_sets, k + 1);
 	}
 }
@@ -80,26 +79,33 @@ void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExp
 			break;
 		}
 		case duckdb_libpgquery::GROUPING_SET_ROLLUP: {
-			vector<idx_t> rollup_set;
+			vector<GroupingSet> rollup_sets;
 			for (auto node = grouping_set->content->head; node; node = node->next) {
 				auto pg_node = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
+				vector<idx_t> rollup_set;
 				TransformGroupByExpression(pg_node, map, result, rollup_set);
+				rollup_sets.push_back(VectorToGroupingSet(rollup_set));
 			}
 			// generate the subsets of the rollup set and add them to the grouping sets
-			for (idx_t i = 0; i <= rollup_set.size(); i++) {
-				result_sets.push_back(VectorToGroupingSet(rollup_set, 0, rollup_set.size() - i));
+			GroupingSet current_set;
+			result_sets.push_back(current_set);
+			for (idx_t i = 0; i < rollup_sets.size(); i++) {
+				MergeGroupingSet(current_set, rollup_sets[i]);
+				result_sets.push_back(current_set);
 			}
 			break;
 		}
 		case duckdb_libpgquery::GROUPING_SET_CUBE: {
-			vector<idx_t> cube_set;
+			vector<GroupingSet> cube_sets;
 			for (auto node = grouping_set->content->head; node; node = node->next) {
 				auto pg_node = (duckdb_libpgquery::PGNode *)node->data.ptr_value;
+				vector<idx_t> cube_set;
 				TransformGroupByExpression(pg_node, map, result, cube_set);
+				cube_sets.push_back(VectorToGroupingSet(cube_set));
 			}
 			// generate the subsets of the rollup set and add them to the grouping sets
-			vector<idx_t> current_set;
-			AddCubeSets(move(current_set), cube_set, result_sets, 0);
+			GroupingSet current_set;
+			AddCubeSets(move(current_set), cube_sets, result_sets, 0);
 			break;
 		}
 		default:

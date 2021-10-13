@@ -43,6 +43,18 @@ Math	NULL	1
 Math	NULL	2
 Math	Masters	1
 
+# if we have brackets in a CUBE group, it counts as one unit within the CUBE statement
+# i.e. in this case (course, type) are not cubed up
+query III
+select course, type, count(*) from students group by cube ((course, type)) order by 1, 2, 3;
+----
+NULL	NULL	7
+CS	NULL	2
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	Masters	1
+
 # duplicate group expressions in cube
 query III
 select course, type, count(*) from students group by cube (course, type, course) order by 1, 2, 3;
