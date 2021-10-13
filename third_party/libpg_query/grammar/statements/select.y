@@ -660,6 +660,11 @@ grouping_sets_clause:
 				}
 		;
 
+grouping_or_grouping_id:
+		GROUPING								{ $$ = NULL; }
+		| GROUPING_ID							{ $$ = NULL; }
+		;
+
 having_clause:
 			HAVING a_expr							{ $$ = $2; }
 			| /*EMPTY*/								{ $$ = NULL; }
@@ -2257,7 +2262,7 @@ c_expr:		columnref								{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| GROUPING '(' expr_list ')'
+			| grouping_or_grouping_id '(' expr_list ')'
 			  {
 				  PGGroupingFunc *g = makeNode(PGGroupingFunc);
 				  g->args = $3;

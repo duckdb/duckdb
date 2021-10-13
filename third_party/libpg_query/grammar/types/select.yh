@@ -28,7 +28,7 @@
 			 group_clause select_limit
 				opt_select_limit 			 			 TableFuncElementList opt_type_modifiers
 %type <list>	group_by_list
-%type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause
+%type <node>	group_by_item empty_grouping_set rollup_clause cube_clause grouping_sets_clause grouping_or_grouping_id
 %type <range>	OptTempTableName
 %type <into>	into_clause
 

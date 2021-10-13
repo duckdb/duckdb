@@ -26,6 +26,12 @@ SELECT GROUPING(course), course, COUNT(*) FROM students GROUP BY course ORDER BY
 0	CS	5
 0	Math	2
 
+query III
+SELECT GROUPING_ID(course), course, COUNT(*) FROM students GROUP BY course ORDER BY 1, 2, 3;
+----
+0	CS	5
+0	Math	2
+
 query IIIII
 SELECT GROUPING(course), GROUPING(type), course, type, COUNT(*) FROM students GROUP BY course, type ORDER BY 1, 2, 3, 4, 5;
 ----
