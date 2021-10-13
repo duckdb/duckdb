@@ -56,7 +56,8 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// if there is no matching entry in the SELECT list already, we add the expression to the SELECT list and refer the
 	// new expression the new entry will then be bound later during the binding of the SELECT list we also don't do type
 	// resolution here: this only happens after the SELECT list has been bound
-	if (expr->expression_class == ExpressionClass::CONSTANT) {
+	switch (expr->expression_class) {
+	case ExpressionClass::CONSTANT: {
 		// ORDER BY constant
 		// is the ORDER BY expression a constant integer? (e.g. ORDER BY 1)
 		auto &constant = (ConstantExpression &)*expr;
@@ -73,6 +74,25 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 			throw BinderException("ORDER term out of range - should be between 1 and %lld", (idx_t)max_count);
 		}
 		return CreateProjectionReference(*expr, index - 1);
+	}
+	case ExpressionClass::COLUMN_REF: {
+		// COLUMN REF expression
+		// check if we can bind it to an alias in the select list
+		auto &colref = (ColumnRefExpression &)*expr;
+		// if there is an explicit table name we can't bind to an alias
+		if (!colref.table_name.empty()) {
+			break;
+		}
+		// check the alias list
+		auto entry = alias_map.find(colref.column_name);
+		if (entry != alias_map.end()) {
+			// it does! point it to that entry
+			return CreateProjectionReference(*expr, entry->second);
+		}
+		break;
+	}
+	default:
+		break;
 	}
 	// general case
 	// replace aliases in the expression
