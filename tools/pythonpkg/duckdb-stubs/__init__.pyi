@@ -1,9 +1,9 @@
-# AUTOMATICALLY GENERATED FILE
-# to regenerate, run scripts/generate_python_stubs.sh
 from typing import Any, ClassVar
 
 from typing import overload
-_clean_default_connection: PyCapsule
+
+# This should probably not be exposed
+#_clean_default_connection: Any
 comment: token_type
 identifier: token_type
 keyword: token_type
@@ -99,8 +99,8 @@ class DuckDBPyResult:
     def fetchone(self) -> object: ...
 
 class token_type:
-    __doc__: ClassVar[str] = ...  # read-only
-    __members__: ClassVar[dict] = ...  # read-only
+    #__doc__: ClassVar[str] = ...  # read-only
+    #__members__: ClassVar[dict] = ...  # read-only
     __entries: ClassVar[dict] = ...
     comment: ClassVar[token_type] = ...
     identifier: ClassVar[token_type] = ...
@@ -120,6 +120,7 @@ class token_type:
     def name(self) -> str: ...
     @property
     def value(self) -> int: ...
+
 
 def aggregate(df: object, aggr_expr: str, group_expr: str = ...) -> DuckDBPyRelation: ...
 def alias(df: object, alias: str) -> DuckDBPyRelation: ...
