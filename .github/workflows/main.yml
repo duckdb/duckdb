@@ -702,7 +702,8 @@ jobs:
         run: |
           mkdir -p build/coverage
           (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
-          (cd tools/pythonpkg/tests && python3 -m pytest)
+          (cd tools/pythonpkg/tests/fast && python3 -m pytest)
+          (cd tools/pythonpkg/tests/coverage && python3 -m pytest)
           build/coverage/test/unittest
           build/coverage/test/unittest "[intraquery]"
           build/coverage/test/unittest "[interquery]"
@@ -950,7 +951,7 @@ jobs:
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
       CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow>=5.0" || true)'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests && python -m pytest {project}/tests_slow'
+      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
