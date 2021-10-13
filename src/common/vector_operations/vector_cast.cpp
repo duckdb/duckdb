@@ -640,7 +640,6 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 				throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 			}
 		}
-		int x = 0;
 		break;
 	}
 	default:

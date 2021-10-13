@@ -19,7 +19,7 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
     : buffer_manager(buffer_manager), build_types(move(btypes)), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type), finalized(false), has_null(false) {
 	for (auto &condition : conditions) {
-		D_ASSERT(condition.left->return_type == condition.right->return_type);
+		D_ASSERT(condition.left->return_type.id() == condition.right->return_type.id());
 		auto type = condition.left->return_type;
 		if (condition.comparison == ExpressionType::COMPARE_EQUAL ||
 		    condition.comparison == ExpressionType::COMPARE_NOT_DISTINCT_FROM) {

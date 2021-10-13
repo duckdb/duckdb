@@ -584,6 +584,9 @@ bool TypeIsIntegral(PhysicalType type);
 bool TypeIsNumeric(PhysicalType type);
 bool TypeIsInteger(PhysicalType type);
 
+bool TypeIsNumeric(LogicalTypeId type);
+bool TypeIsInteger(LogicalTypeId type);
+
 template <class T>
 bool IsIntegerType() {
 	return TypeIsIntegral(GetTypeId<T>());

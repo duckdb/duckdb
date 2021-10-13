@@ -5,7 +5,7 @@
 namespace duckdb {
 
 bool ExpressionMatcher::Match(Expression *expr, vector<Expression *> &bindings) {
-	if (type && !type->Match(expr->return_type.InternalType())) {
+	if (type && !type->Match(expr->return_type.id())) {
 		return false;
 	}
 	if (expr_type && !expr_type->Match(expr->type)) {
@@ -50,6 +50,17 @@ bool ComparisonExpressionMatcher::Match(Expression *expr_p, vector<Expression *>
 	auto expr = (BoundComparisonExpression *)expr_p;
 	vector<Expression *> expressions = {expr->left.get(), expr->right.get()};
 	return SetMatcher::Match(matchers, expressions, bindings, policy);
+}
+
+bool CastExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {
+	if (!ExpressionMatcher::Match(expr_p, bindings)) {
+		return false;
+	}
+	if (!matcher) {
+		return true;
+	}
+	auto expr = (BoundCastExpression *)expr_p;
+	return matcher->Match(expr->child.get(), bindings);
 }
 
 bool InClauseExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bindings) {

@@ -330,6 +330,23 @@ bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
 }
 
+bool TypeIsNumeric(LogicalTypeId type) {
+	for (auto &integral_type : LogicalType::NUMERIC) {
+		if (type == integral_type.id()) {
+			return true;
+		}
+	}
+	return false;
+}
+bool TypeIsInteger(LogicalTypeId type) {
+	for (auto &integral_type : LogicalType::INTEGRAL) {
+		if (type == integral_type.id()) {
+			return true;
+		}
+	}
+	return false;
+}
+
 // LCOV_EXCL_START
 string LogicalTypeIdToString(LogicalTypeId id) {
 	switch (id) {

@@ -76,6 +76,11 @@ void StatisticsPropagator::UpdateFilterStatistics(BaseStatistics &lstats, BaseSt
 	// any comparison filter removes all null values
 	lstats.validity_stats = make_unique<ValidityStatistics>(false);
 	rstats.validity_stats = make_unique<ValidityStatistics>(false);
+	if (lstats.type.id() == LogicalTypeId::ENUM && rstats.type.id() == LogicalTypeId::ENUM &&
+	    lstats.type != rstats.type) {
+		// dont handle statistics on enum comparisons of different types
+		return;
+	}
 	D_ASSERT(lstats.type == rstats.type);
 	if (!lstats.type.IsNumeric()) {
 		// don't handle non-numeric columns here (yet)
