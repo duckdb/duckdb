@@ -107,8 +107,8 @@ template <class OP, class T>
 AggregateFunction GetArgMinMaxFunctionArg2(LogicalTypeId arg_2, const LogicalType &arg) {
 	switch (arg_2) {
 	case LogicalTypeId::INTEGER:
-		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, int32_t>, T, int32_t, T, OP>(arg, LogicalType::INTEGER,
-		                                                                                 arg);
+		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, int32_t>, T, int32_t, T, OP>(
+		    arg, LogicalType::INTEGER, arg);
 	case LogicalTypeId::BIGINT:
 		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, int64_t>, T, int64_t, T, OP>(
 		    arg, LogicalType::BIGINT, arg);
@@ -119,8 +119,8 @@ AggregateFunction GetArgMinMaxFunctionArg2(LogicalTypeId arg_2, const LogicalTyp
 		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, string_t>, T, string_t, T, OP>(
 		    arg, LogicalType::VARCHAR, arg);
 	case LogicalTypeId::DATE:
-		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, date_t>, T, date_t, T, OP>(
-		    arg, LogicalType::DATE, arg);
+		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, date_t>, T, date_t, T, OP>(arg, LogicalType::DATE,
+		                                                                                       arg);
 	case LogicalTypeId::TIMESTAMP:
 		return AggregateFunction::BinaryAggregate<ArgMinMaxState<T, timestamp_t>, T, timestamp_t, T, OP>(
 		    arg, LogicalType::TIMESTAMP, arg);
