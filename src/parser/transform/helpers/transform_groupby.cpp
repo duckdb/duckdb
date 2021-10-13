@@ -45,8 +45,8 @@ void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, 
 	result_set.push_back(result_idx);
 }
 
-static void AddCubeSets(const GroupingSet &current_set, vector<GroupingSet> &result_set, vector<GroupingSet> &result_sets,
-                        idx_t start_idx = 0) {
+static void AddCubeSets(const GroupingSet &current_set, vector<GroupingSet> &result_set,
+                        vector<GroupingSet> &result_sets, idx_t start_idx = 0) {
 	result_sets.push_back(current_set);
 	for (idx_t k = start_idx; k < result_set.size(); k++) {
 		auto child_set = current_set;

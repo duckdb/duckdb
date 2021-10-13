@@ -282,8 +282,8 @@ private:
 	idx_t radix;
 };
 
-void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_ptr<Event> &event, GlobalSinkState &state,
-                                              vector<unique_ptr<Task>> &tasks) const {
+void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_ptr<Event> &event,
+                                              GlobalSinkState &state, vector<unique_ptr<Task>> &tasks) const {
 	auto &gstate = (RadixHTGlobalState &)state;
 	if (!gstate.is_partitioned) {
 		return;
@@ -305,7 +305,8 @@ bool RadixPartitionedHashTable::ForceSingleHT(GlobalSinkState &state) const {
 //===--------------------------------------------------------------------===//
 class RadixHTGlobalSourceState : public GlobalSourceState {
 public:
-	explicit RadixHTGlobalSourceState(const RadixPartitionedHashTable &ht) : ht_index(0), ht_scan_position(0), finished(false) {
+	explicit RadixHTGlobalSourceState(const RadixPartitionedHashTable &ht)
+	    : ht_index(0), ht_scan_position(0), finished(false) {
 		auto scan_chunk_types = ht.group_types;
 		for (auto &aggr_type : ht.op.aggregate_return_types) {
 			scan_chunk_types.push_back(aggr_type);
