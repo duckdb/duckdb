@@ -10,7 +10,7 @@ You would normally install the DuckDB released version using `pip` as follows:
 For development, you may need a DuckDB python package that is installed from source. In order to install from source, the simplest way is by cloning the git repo, and running the make command with `BUILD_PYTHON` set:
 
     BUILD_PYTHON=1 make debug
-    
+
 Note that this will override any existing DuckDB installation you might have. You might also run into conflicts depending on your Python environment. In order to remedy that, it is possible to use virtualenv for installation, e.g. by running the following commands:
 
     virtualenv .venv --python=python3.8
@@ -54,12 +54,32 @@ Next, copy over the python package related files, and install the package.
 
 ## Stubs
 
-`*.pyi` stubs can be generated with [Mypy's `stubgen`](https://mypy.readthedocs.io/en/stable/stubgen.html).
-There is a bit of a chicken and egg situation with this - the stubs should go in the package, but
+`*.pyi` stubs are generated with [Mypy's `stubgen`](https://mypy.readthedocs.io/en/stable/stubgen.html) and tweaked.
+If you want to regenerate the stubs, there is a bit of a chicken and egg situation with this - the stubs should go in the package, but
 `stubgen` needs to look at the package to generate the stubs!
 
-Thus, the full process to generate new stubs and use the resultion package with them would look like:
+Thus, the full process to generate new stubs and use/test the resulting package with them would look like:
 
     BUILD_PYTHON=1 make debug # installs package without / with old stubs
-    make python-stubs
+    scripts/regenerate_python_stubs.sh
+    # (re-apply our fixes on top of generate stubs)
     BUILD_PYTHON=1 make debug # installs package with up-to-date stubs.
+
+There is a test that you can run to check the stubs match the real duckdb package - this runs in CI (sorry in advance...). If you add a method to the duckdb py library
+and forget to add it to the stub, this test will helpfully fail.
+
+The workflow for getting the stubs right will look something like
+
+    # an egg install will mean stubtest reads the installed stubs
+    # instead of the ones in this directory, which is probably not
+    # what you want when you're fixing them, so pip install -e
+    # instead.
+    (cd tools/pythonpkg; pip install -e .)
+    # (add method to python duckdb)
+    # regerate stub
+    scripts/regenerate_python_stubs.sh
+    # (re-apply our fixes on top of generate stubs,
+    # hint: git add -p; git checkout HEAD tools/pythonpkg/stubs)
+    # check tests
+    pytest tests/stubs # or python -m mypy.stubtest duckdb
+
