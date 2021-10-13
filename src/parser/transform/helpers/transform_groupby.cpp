@@ -51,7 +51,7 @@ static void AddCubeSets(const GroupingSet &current_set, vector<GroupingSet> &res
 	for (idx_t k = start_idx; k < result_set.size(); k++) {
 		auto child_set = current_set;
 		MergeGroupingSet(child_set, result_set[k]);
-		AddCubeSets(move(child_set), result_set, result_sets, k + 1);
+		AddCubeSets(child_set, result_set, result_sets, k + 1);
 	}
 }
 
@@ -105,7 +105,7 @@ void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExp
 			}
 			// generate the subsets of the rollup set and add them to the grouping sets
 			GroupingSet current_set;
-			AddCubeSets(move(current_set), cube_sets, result_sets, 0);
+			AddCubeSets(current_set, cube_sets, result_sets, 0);
 			break;
 		}
 		default:
