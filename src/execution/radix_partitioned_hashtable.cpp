@@ -29,9 +29,9 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 	// for each parameter to the GROUPING clause, we check if the hash table groups on this particular group
 	// if it does, we return 0, otherwise we return 1
 	// we then use bitshifts to combine these values
-	for(auto &grouping : op.grouping_functions) {
+	for (auto &grouping : op.grouping_functions) {
 		int64_t grouping_value = 0;
-		for(idx_t i = 0; i < grouping.size(); i++) {
+		for (idx_t i = 0; i < grouping.size(); i++) {
 			if (grouping_set.find(grouping[i]) == grouping_set.end()) {
 				// we don't group on this value!
 				grouping_value += 1 << (grouping.size() - (i + 1));
@@ -395,7 +395,7 @@ void RadixPartitionedHashTable::GetData(ExecutionContext &context, DataChunk &ch
 		chunk.data[op.groups.size() + col_idx].Reference(state.scan_chunk.data[group_types.size() + col_idx]);
 	}
 	D_ASSERT(op.grouping_functions.size() == grouping_values.size());
-	for(idx_t i = 0; i < op.grouping_functions.size(); i++) {
+	for (idx_t i = 0; i < op.grouping_functions.size(); i++) {
 		chunk.data[op.groups.size() + op.aggregates.size() + i].Reference(grouping_values[i]);
 	}
 }

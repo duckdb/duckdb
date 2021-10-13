@@ -73,11 +73,12 @@ BindResult SelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t dept
 	}
 	vector<idx_t> group_indexes;
 	group_indexes.reserve(op.children.size());
-	for(auto &child : op.children) {
+	for (auto &child : op.children) {
 		ExpressionBinder::BindTableNames(binder, *child);
 		auto idx = TryBindGroup(*child, depth);
 		if (idx == INVALID_INDEX) {
-			return BindResult(binder.FormatError(op, StringUtil::Format("GROUPING child \"%s\" must be a grouping column", child->GetName())));
+			return BindResult(binder.FormatError(
+			    op, StringUtil::Format("GROUPING child \"%s\" must be a grouping column", child->GetName())));
 		}
 		group_indexes.push_back(idx);
 	}

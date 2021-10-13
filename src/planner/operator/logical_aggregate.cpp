@@ -17,7 +17,7 @@ void LogicalAggregate::ResolveTypes() {
 	for (auto &expr : expressions) {
 		types.push_back(expr->return_type);
 	}
-	for(idx_t i = 0; i < grouping_functions.size(); i++) {
+	for (idx_t i = 0; i < grouping_functions.size(); i++) {
 		types.push_back(LogicalType::BIGINT);
 	}
 }
@@ -31,7 +31,7 @@ vector<ColumnBinding> LogicalAggregate::GetColumnBindings() {
 	for (idx_t i = 0; i < expressions.size(); i++) {
 		result.emplace_back(aggregate_index, i);
 	}
-	for(idx_t i = 0; i < grouping_functions.size(); i++) {
+	for (idx_t i = 0; i < grouping_functions.size(); i++) {
 		result.emplace_back(groupings_index, i);
 	}
 	return result;

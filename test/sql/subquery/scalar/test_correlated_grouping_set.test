@@ -1,4 +1,4 @@
-# name: test/sql/subquery/scalar/test_correlated_aggregate_subquery.test
+# name: test/sql/subquery/scalar/test_correlated_grouping_set.test
 # description: Test correlated aggregate subqueries
 # group: [scalar]
 

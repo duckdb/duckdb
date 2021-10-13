@@ -163,10 +163,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 			    context, op.types, move(op.expressions), move(op.groups), move(op.group_stats), move(required_bits),
 			    op.estimated_cardinality);
 		} else {
-			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),
-			                                                                    move(op.groups), move(op.grouping_sets),
-																				move(op.grouping_functions),
-			                                                                    op.estimated_cardinality);
+			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(
+			    context, op.types, move(op.expressions), move(op.groups), move(op.grouping_sets),
+			    move(op.grouping_functions), op.estimated_cardinality);
 		}
 	}
 	groupby->children.push_back(move(plan));

@@ -21,7 +21,8 @@ bool SubqueryExpression::Equals(const SubqueryExpression *a, const SubqueryExpre
 	if (!BaseExpression::Equals(a->child.get(), b->child.get())) {
 		return false;
 	}
-	return a->comparison_type == b->comparison_type && a->subquery_type == b->subquery_type && a->subquery->Equals(b->subquery.get());
+	return a->comparison_type == b->comparison_type && a->subquery_type == b->subquery_type &&
+	       a->subquery->Equals(b->subquery.get());
 }
 
 unique_ptr<ParsedExpression> SubqueryExpression::Copy() const {
