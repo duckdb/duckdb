@@ -5,4 +5,3 @@ setuptools>=58
 pytest
 pandas
 pyarrow
-pytest-mypy-plugins
