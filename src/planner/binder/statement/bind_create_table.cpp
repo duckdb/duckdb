@@ -168,7 +168,11 @@ unique_ptr<BoundCreateTableInfo> Binder::BindCreateTableInfo(unique_ptr<CreateIn
 		BindLogicalType(context, column.type);
 		if (column.type.id() == LogicalTypeId::ENUM) {
 			// We add a catalog dependency
-			result->dependencies.insert(EnumType::GetCatalog(column.type));
+			auto enum_dependency = EnumType::GetCatalog(column.type);
+			if (enum_dependency) {
+				// Only if the ENUM comes from a create type
+				result->dependencies.insert(enum_dependency);
+			}
 		}
 	}
 	this->allow_stream_result = false;

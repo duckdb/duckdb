@@ -34,6 +34,8 @@ def check_create_table(category):
     assert res == conn.execute("SELECT x FROM t1").fetchall()
     # Triggering the cast with ENUM as a src
     conn.execute("ALTER TABLE t1 ALTER x SET DATA TYPE VARCHAR")
+    # We should be able to drop the table without any dependencies
+    conn.execute("DROP TABLE t1")
 
 class TestCategory(object):
 
