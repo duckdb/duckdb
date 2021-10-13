@@ -46,7 +46,7 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 //===--------------------------------------------------------------------===//
 class RadixHTGlobalState : public GlobalSinkState {
 public:
-	RadixHTGlobalState(ClientContext &context)
+	explicit RadixHTGlobalState(ClientContext &context)
 	    : is_empty(true), multi_scan(true), total_groups(0),
 	      partition_info((idx_t)TaskScheduler::GetScheduler(context).NumberOfThreads()) {
 	}
@@ -71,7 +71,7 @@ public:
 
 class RadixHTLocalState : public LocalSinkState {
 public:
-	RadixHTLocalState(const RadixPartitionedHashTable &ht) : is_empty(true) {
+	explicit RadixHTLocalState(const RadixPartitionedHashTable &ht) : is_empty(true) {
 		// if there are no groups we create a fake group so everything has the same group
 		group_chunk.InitializeEmpty(ht.group_types);
 		if (ht.grouping_set.empty()) {
@@ -282,7 +282,7 @@ private:
 	idx_t radix;
 };
 
-void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, shared_ptr<Event> event, GlobalSinkState &state,
+void RadixPartitionedHashTable::ScheduleTasks(Executor &executor, const shared_ptr<Event> &event, GlobalSinkState &state,
                                               vector<unique_ptr<Task>> &tasks) const {
 	auto &gstate = (RadixHTGlobalState &)state;
 	if (!gstate.is_partitioned) {
@@ -305,7 +305,7 @@ bool RadixPartitionedHashTable::ForceSingleHT(GlobalSinkState &state) const {
 //===--------------------------------------------------------------------===//
 class RadixHTGlobalSourceState : public GlobalSourceState {
 public:
-	RadixHTGlobalSourceState(const RadixPartitionedHashTable &ht) : ht_index(0), ht_scan_position(0), finished(false) {
+	explicit RadixHTGlobalSourceState(const RadixPartitionedHashTable &ht) : ht_index(0), ht_scan_position(0), finished(false) {
 		auto scan_chunk_types = ht.group_types;
 		for (auto &aggr_type : ht.op.aggregate_return_types) {
 			scan_chunk_types.push_back(aggr_type);

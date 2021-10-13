@@ -45,7 +45,7 @@ void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, 
 	result_set.push_back(result_idx);
 }
 
-static void AddCubeSets(GroupingSet current_set, vector<GroupingSet> &result_set, vector<GroupingSet> &result_sets,
+static void AddCubeSets(const GroupingSet &current_set, vector<GroupingSet> &result_set, vector<GroupingSet> &result_sets,
                         idx_t start_idx = 0) {
 	result_sets.push_back(current_set);
 	for (idx_t k = start_idx; k < result_set.size(); k++) {
@@ -69,7 +69,7 @@ void Transformer::TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExp
 		auto grouping_set = (duckdb_libpgquery::PGGroupingSet *)n;
 		switch (grouping_set->kind) {
 		case duckdb_libpgquery::GROUPING_SET_EMPTY:
-			result_sets.push_back(GroupingSet {});
+			result_sets.emplace_back();
 			break;
 		case duckdb_libpgquery::GROUPING_SET_SETS: {
 			for (auto node = grouping_set->content->head; node; node = node->next) {

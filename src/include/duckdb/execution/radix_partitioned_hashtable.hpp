@@ -44,7 +44,7 @@ public:
 	void Combine(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate) const;
 	bool Finalize(ClientContext &context, GlobalSinkState &gstate_p) const;
 
-	void ScheduleTasks(Executor &executor, shared_ptr<Event> event, GlobalSinkState &state,
+	void ScheduleTasks(Executor &executor, const shared_ptr<Event> &event, GlobalSinkState &state,
 	                   vector<unique_ptr<Task>> &tasks) const;
 
 	//! Source interface

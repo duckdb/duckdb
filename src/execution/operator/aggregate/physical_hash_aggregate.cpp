@@ -97,7 +97,7 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
 	}
 
 	for (auto &grouping_set : grouping_sets) {
-		radix_tables.push_back(RadixPartitionedHashTable(grouping_set, *this));
+		radix_tables.emplace_back(grouping_set, *this);
 	}
 }
 
@@ -237,7 +237,7 @@ SinkFinalizeType PhysicalHashAggregate::Finalize(Pipeline &pipeline, Event &even
 //===--------------------------------------------------------------------===//
 class PhysicalHashAggregateState : public GlobalSourceState {
 public:
-	PhysicalHashAggregateState(const PhysicalHashAggregate &op) : scan_index(0) {
+	explicit PhysicalHashAggregateState(const PhysicalHashAggregate &op) : scan_index(0) {
 		for (auto &rt : op.radix_tables) {
 			radix_states.push_back(rt.GetGlobalSourceState());
 		}
