@@ -24,16 +24,19 @@ PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<Logi
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p, idx_t estimated_cardinality,
                                              PhysicalOperatorType type)
-    : PhysicalHashAggregate(context, move(types), move(expressions), move(groups_p), {}, estimated_cardinality, type) {
+    : PhysicalHashAggregate(context, move(types), move(expressions), move(groups_p), {}, {}, estimated_cardinality, type) {
 }
 
 PhysicalHashAggregate::PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types,
                                              vector<unique_ptr<Expression>> expressions,
                                              vector<unique_ptr<Expression>> groups_p,
-                                             vector<GroupingSet> grouping_sets_p, idx_t estimated_cardinality,
+                                             vector<GroupingSet> grouping_sets_p,
+											 vector<vector<idx_t>> grouping_functions_p,
+											 idx_t estimated_cardinality,
                                              PhysicalOperatorType type)
     : PhysicalOperator(type, move(types), estimated_cardinality), groups(move(groups_p)),
-      grouping_sets(move(grouping_sets_p)), all_combinable(true), any_distinct(false) {
+      grouping_sets(move(grouping_sets_p)), grouping_functions(move(grouping_functions_p)),
+	  all_combinable(true), any_distinct(false) {
 	// get a list of all aggregates to be computed
 	for (auto &expr : groups) {
 		group_types.push_back(expr->return_type);

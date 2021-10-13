@@ -29,7 +29,8 @@ public:
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups, vector<GroupingSet> grouping_sets,
-	                      idx_t estimated_cardinality, PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
+						  vector<vector<idx_t>> grouping_functions, idx_t estimated_cardinality,
+						  PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
 	//! The groups
 	vector<unique_ptr<Expression>> groups;
@@ -37,6 +38,8 @@ public:
 	vector<GroupingSet> grouping_sets;
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
+	//! The set of GROUPING functions
+	vector<vector<idx_t>> grouping_functions;
 	//! Whether or not all aggregates are combinable
 	bool all_combinable;
 

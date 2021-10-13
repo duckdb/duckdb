@@ -173,6 +173,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	result->projection_index = GenerateTableIndex();
 	result->group_index = GenerateTableIndex();
 	result->aggregate_index = GenerateTableIndex();
+	result->groupings_index = GenerateTableIndex();
 	result->window_index = GenerateTableIndex();
 	result->unnest_index = GenerateTableIndex();
 	result->prune_index = GenerateTableIndex();

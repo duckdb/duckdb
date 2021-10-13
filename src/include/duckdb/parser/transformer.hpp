@@ -162,7 +162,7 @@ private:
 
 	//! Transform a Postgres constant value into an Expression
 	unique_ptr<ParsedExpression> TransformConstant(duckdb_libpgquery::PGAConst *c, idx_t depth);
-
+	unique_ptr<ParsedExpression> TransformGroupingFunction(duckdb_libpgquery::PGGroupingFunc *n, idx_t depth);
 	unique_ptr<ParsedExpression> TransformResTarget(duckdb_libpgquery::PGResTarget *root, idx_t depth);
 	unique_ptr<ParsedExpression> TransformNullTest(duckdb_libpgquery::PGNullTest *root, idx_t depth);
 	unique_ptr<ParsedExpression> TransformParamRef(duckdb_libpgquery::PGParamRef *node, idx_t depth);

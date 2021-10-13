@@ -31,6 +31,9 @@ public:
 	//! how many groups can we have in the operator before we switch to radix partitioning
 	idx_t radix_limit;
 
+	//! The GROUPING values that belong to this hash table
+	vector<Value> grouping_values;
+
 public:
 	//! Sink Interface
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const;

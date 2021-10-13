@@ -2257,6 +2257,13 @@ c_expr:		columnref								{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
+			| GROUPING '(' expr_list ')'
+			  {
+				  PGGroupingFunc *g = makeNode(PGGroupingFunc);
+				  g->args = $3;
+				  g->location = @1;
+				  $$ = (PGNode *)g;
+			  }
 		;
 
 func_application: func_name '(' ')'

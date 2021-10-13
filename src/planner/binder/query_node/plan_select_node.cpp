@@ -46,7 +46,9 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		auto aggregate =
 		    make_unique<LogicalAggregate>(statement.group_index, statement.aggregate_index, move(statement.aggregates));
 		aggregate->groups = move(statement.groups.group_expressions);
+		aggregate->groupings_index = statement.groupings_index;
 		aggregate->grouping_sets = move(statement.groups.grouping_sets);
+		aggregate->grouping_functions = move(statement.grouping_functions);
 
 		aggregate->AddChild(move(root));
 		root = move(aggregate);

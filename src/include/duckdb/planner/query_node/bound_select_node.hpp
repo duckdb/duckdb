@@ -60,8 +60,13 @@ public:
 	idx_t group_projection_index;
 	//! Aggregate index used by the LogicalAggregate (only used if HasAggregation is true)
 	idx_t aggregate_index;
+	//! Index used for GROUPINGS column references
+	idx_t groupings_index;
 	//! Aggregate functions to compute (only used if HasAggregation is true)
 	vector<unique_ptr<Expression>> aggregates;
+
+	//! GROUPING function calls
+	vector<vector<idx_t>> grouping_functions;
 
 	//! Map from aggregate function to aggregate index (used to eliminate duplicate aggregates)
 	expression_map_t<idx_t> aggregate_map;
