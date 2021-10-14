@@ -89,8 +89,6 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 			break;
 		case PhysicalType::INT128:
 			throw InternalException("PhysicalType::INT128 not yet implemented for Perfect HJ");
-			//			join_state.build_range = build_range.GetValue<idx_t>();
-			//			break;
 		default:
 			throw InternalException("Invalid Physical Type for Decimals");
 		}
