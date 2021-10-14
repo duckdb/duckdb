@@ -442,8 +442,6 @@ template <>
 bool TryCast::Operation(date_t input, date_t &result, bool strict);
 template <>
 bool TryCast::Operation(date_t input, timestamp_t &result, bool strict);
-template <>
-bool TryCast::Operation(date_t input, uint64_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
 // Time Casts

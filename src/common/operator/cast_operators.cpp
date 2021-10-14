@@ -1148,12 +1148,6 @@ bool TryCast::Operation(date_t input, timestamp_t &result, bool strict) {
 	return Timestamp::TryFromDatetime(input, Time::FromTime(0, 0, 0), result);
 }
 
-template <>
-bool TryCast::Operation(date_t input, uint64_t &result, bool strict) {
-	result = input.days;
-	return true;
-}
-
 //===--------------------------------------------------------------------===//
 // Cast From Time
 //===--------------------------------------------------------------------===//
