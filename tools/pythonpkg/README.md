@@ -56,6 +56,21 @@ Next, copy over the python package related files, and install the package.
 
 `*.pyi` stubs are generated with [Mypy's `stubgen`](https://mypy.readthedocs.io/en/stable/stubgen.html) and tweaked. These are important for autocomplete in many IDEs, as static-analysis based language servers can't introspect `duckdb`'s binary module.
 
+The stubs from stubgen are pretty good, but not perfect. In some cases, you can help stubgen out: for example, function annotation types that it can't figure out should be specified in the cpp where necessary, as in the example
+```cpp
+// without this change, the generated stub is
+// def query_df(self, df: object, virtual_table_name: str, sql_query: str) -> DuckDBPyRelation: ...
+pybind_opts.disable_function_signatures();
+m.def("query_df", &DuckDBPyRelation::QueryDF,
+      "query_df(self, df: pandas.DataFrame, virtual_table_name: str, sql_query: str) -> DuckDBPyRelation \n"
+      "Run the given SQL query in sql_query on the view named virtual_table_name that contains the content of "
+      "Data.Frame df",
+      py::arg("df"), py::arg("virtual_table_name"), py::arg("sql_query"));
+pybind_opts.enable_function_signatures();
+// now the generated stub is
+// def query_df(self, df: pandas.DataFrame, virtual_table_name: str, sql_query: str) -> DuckDBPyRelation: ...
+```
+
 If you want to regenerate the stubs, there is a bit of a chicken and egg situation - the stubs should go in the package, but
 `stubgen` needs to look at the package to generate the stubs!
 
