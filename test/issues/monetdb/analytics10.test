@@ -1,0 +1,994 @@
+# name: test/issues/monetdb/analytics10.test
+# description: MonetDB Test for grouping sets
+# group: [monetdb]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl_ProductSales (ColID int, Product_Category  varchar(64), Product_Name  varchar(64), TotalSales int)
+
+statement ok
+INSERT INTO tbl_ProductSales VALUES (1,'Game','Mobo Game',200),(2,'Game','PKO Game',400),(3,'Fashion','Shirt',500),(4,'Fashion','Shorts',100)
+
+query I rowsort
+SELECT CAST(SUM(TotalSales) as BIGINT) AS TotalSales FROM tbl_ProductSales
+----
+1200
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ()
+----
+1200
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY (), ()
+----
+1200
+
+statement error
+SELECT
+    *
+FROM tbl_ProductSales
+GROUP BY ()
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY Product_Category
+----
+600
+600
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY Product_Category, ()
+----
+600
+600
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY Product_Name
+----
+100
+200
+400
+500
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY Product_Category, Product_Name
+----
+100
+200
+400
+500
+
+statement error
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP ()
+
+query TI rowsort
+SELECT
+    Product_Category, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP(Product_Category)
+----
+Fashion
+600
+Game
+600
+NULL
+1200
+
+query TI rowsort
+SELECT
+    Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP(Product_Name)
+----
+Mobo Game
+200
+NULL
+1200
+PKO Game
+400
+Shirt
+500
+Shorts
+100
+
+query TTI rowsort
+SELECT
+    Product_Category, Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP(Product_Category, Product_Name)
+----
+Fashion
+NULL
+600
+Fashion
+Shirt
+500
+Fashion
+Shorts
+100
+Game
+Mobo Game
+200
+Game
+NULL
+600
+Game
+PKO Game
+400
+NULL
+NULL
+1200
+
+query TTI rowsort
+SELECT
+    Product_Category, Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP(Product_Category, Product_Name) HAVING SUM(TotalSales) > 400
+----
+Fashion
+NULL
+600
+Fashion
+Shirt
+500
+Game
+NULL
+600
+NULL
+NULL
+1200
+
+statement error
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY CUBE()
+
+query TI rowsort
+SELECT
+    Product_Category, CAST(SUM(TotalSales) as BIGINT) AS TotalSales FROM tbl_ProductSales
+GROUP BY CUBE(Product_Category)
+----
+Fashion
+600
+Game
+600
+NULL
+1200
+
+query TI rowsort
+SELECT
+    Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY CUBE(Product_Name)
+----
+Mobo Game
+200
+NULL
+1200
+PKO Game
+400
+Shirt
+500
+Shorts
+100
+
+query TTI rowsort
+SELECT
+    Product_Category, Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY CUBE(Product_Category, Product_Name)
+----
+Fashion
+NULL
+600
+Fashion
+Shirt
+500
+Fashion
+Shorts
+100
+Game
+Mobo Game
+200
+Game
+NULL
+600
+Game
+PKO Game
+400
+NULL
+Mobo Game
+200
+NULL
+NULL
+1200
+NULL
+PKO Game
+400
+NULL
+Shirt
+500
+NULL
+Shorts
+100
+
+query TTI rowsort
+SELECT
+    Product_Category, Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY CUBE(Product_Category, Product_Name) ORDER BY Product_Category, Product_Name
+----
+Fashion
+NULL
+600
+Fashion
+Shirt
+500
+Fashion
+Shorts
+100
+Game
+Mobo Game
+200
+Game
+NULL
+600
+Game
+PKO Game
+400
+NULL
+Mobo Game
+200
+NULL
+NULL
+1200
+NULL
+PKO Game
+400
+NULL
+Shirt
+500
+NULL
+Shorts
+100
+
+query II
+SELECT
+    Product_Category, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP(Product_Category), 1+1
+ORDER BY 1, 2
+----
+NULL	1200
+Fashion	600
+Game	600
+
+query TTI rowsort
+SELECT
+    Product_Category, Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ColID, ROLLUP(Product_Category, Product_Name)
+----
+Fashion
+NULL
+100
+Fashion
+NULL
+500
+Fashion
+Shirt
+500
+Fashion
+Shorts
+100
+Game
+Mobo Game
+200
+Game
+NULL
+200
+Game
+NULL
+400
+Game
+PKO Game
+400
+NULL
+NULL
+100
+NULL
+NULL
+200
+NULL
+NULL
+400
+NULL
+NULL
+500
+
+query TTI rowsort
+SELECT
+    Product_Category, Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY (ColID), ROLLUP(Product_Category, Product_Name)
+----
+Fashion
+NULL
+100
+Fashion
+NULL
+500
+Fashion
+Shirt
+500
+Fashion
+Shorts
+100
+Game
+Mobo Game
+200
+Game
+NULL
+200
+Game
+NULL
+400
+Game
+PKO Game
+400
+NULL
+NULL
+100
+NULL
+NULL
+200
+NULL
+NULL
+400
+NULL
+NULL
+500
+
+query TTI rowsort
+SELECT
+    Product_Category, Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY (ColID), CUBE(Product_Category, Product_Name)
+----
+Fashion
+NULL
+100
+Fashion
+NULL
+500
+Fashion
+Shirt
+500
+Fashion
+Shorts
+100
+Game
+Mobo Game
+200
+Game
+NULL
+200
+Game
+NULL
+400
+Game
+PKO Game
+400
+NULL
+Mobo Game
+200
+NULL
+NULL
+100
+NULL
+NULL
+200
+NULL
+NULL
+400
+NULL
+NULL
+500
+NULL
+PKO Game
+400
+NULL
+Shirt
+500
+NULL
+Shorts
+100
+
+query TI rowsort
+SELECT
+    Product_Category, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP(Product_Category), ROLLUP(Product_Category)
+----
+Fashion
+600
+Fashion
+600
+Fashion
+600
+Game
+600
+Game
+600
+Game
+600
+NULL
+1200
+
+query TI rowsort
+SELECT
+    Product_Category, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY CUBE(Product_Category), CUBE(Product_Category)
+----
+Fashion
+600
+Fashion
+600
+Fashion
+600
+Game
+600
+Game
+600
+Game
+600
+NULL
+1200
+
+query TTI rowsort
+SELECT
+    Product_Category, Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP(Product_Category, Product_Name), ROLLUP(Product_Category, Product_Name)
+----
+Fashion
+NULL
+600
+Fashion
+NULL
+600
+Fashion
+NULL
+600
+Fashion
+Shirt
+500
+Fashion
+Shirt
+500
+Fashion
+Shirt
+500
+Fashion
+Shirt
+500
+Fashion
+Shirt
+500
+Fashion
+Shorts
+100
+Fashion
+Shorts
+100
+Fashion
+Shorts
+100
+Fashion
+Shorts
+100
+Fashion
+Shorts
+100
+Game
+Mobo Game
+200
+Game
+Mobo Game
+200
+Game
+Mobo Game
+200
+Game
+Mobo Game
+200
+Game
+Mobo Game
+200
+Game
+NULL
+600
+Game
+NULL
+600
+Game
+NULL
+600
+Game
+PKO Game
+400
+Game
+PKO Game
+400
+Game
+PKO Game
+400
+Game
+PKO Game
+400
+Game
+PKO Game
+400
+NULL
+NULL
+1200
+
+query TTI rowsort
+SELECT
+    Product_Category, Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY CUBE(Product_Category, Product_Name), CUBE(Product_Category, Product_Name)
+----
+165 values hashing to 4830997d5df2eb81b7b9155f4902b4df
+
+query TTI rowsort
+SELECT
+    Product_Category, Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP(Product_Category, Product_Name), CUBE(Product_Category, Product_Name)
+----
+117 values hashing to 58a2e9e8748cc0488ecca1227621241f
+
+query TI rowsort
+SELECT
+    Product_Name, CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY CUBE((Product_Name))
+----
+Mobo Game
+200
+NULL
+1200
+PKO Game
+400
+Shirt
+500
+Shorts
+100
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY CUBE((Product_Category, Product_Name, ColID))
+----
+100
+1200
+200
+400
+500
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP((Product_Category, Product_Name), ColID)
+----
+100
+100
+1200
+200
+200
+400
+400
+500
+500
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ROLLUP((Product_Category, Product_Name), ColID), ColID
+----
+100
+100
+100
+200
+200
+200
+400
+400
+400
+500
+500
+500
+
+query II rowsort
+SELECT
+    COUNT(*), CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY CUBE((Product_Category, Product_Name), ColID), ColID, ROLLUP((Product_Category, ColID), Product_Name)
+----
+1
+100
+1
+100
+1
+100
+1
+100
+1
+100
+1
+100
+1
+100
+1
+100
+1
+100
+1
+100
+1
+100
+1
+100
+1
+200
+1
+200
+1
+200
+1
+200
+1
+200
+1
+200
+1
+200
+1
+200
+1
+200
+1
+200
+1
+200
+1
+200
+1
+400
+1
+400
+1
+400
+1
+400
+1
+400
+1
+400
+1
+400
+1
+400
+1
+400
+1
+400
+1
+400
+1
+400
+1
+500
+1
+500
+1
+500
+1
+500
+1
+500
+1
+500
+1
+500
+1
+500
+1
+500
+1
+500
+1
+500
+1
+500
+
+query I rowsort
+SELECT
+    DISTINCT CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY CUBE((Product_Category, Product_Name), ColID), ColID, ROLLUP((Product_Category, ColID), Product_Name)
+----
+100
+200
+400
+500
+
+statement error
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY GROUPING SETS()
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY GROUPING SETS(())
+----
+1200
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY GROUPING SETS((Product_Category))
+----
+600
+600
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY GROUPING SETS((Product_Category, Product_Name), (ColID))
+----
+100
+100
+200
+200
+400
+400
+500
+500
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY GROUPING SETS((Product_Category), ())
+----
+1200
+600
+600
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY GROUPING SETS((Product_Category), (Product_Category))
+----
+600
+600
+600
+600
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ColID, GROUPING SETS ((Product_Name), (Product_Category))
+----
+100
+100
+200
+200
+400
+400
+500
+500
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ColID, CUBE (Product_Category, ColID), GROUPING SETS ((Product_Name), (Product_Category))
+----
+100
+100
+100
+100
+100
+100
+100
+100
+200
+200
+200
+200
+200
+200
+200
+200
+400
+400
+400
+400
+400
+400
+400
+400
+500
+500
+500
+500
+500
+500
+500
+500
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY GROUPING SETS(CUBE(Product_Category, Product_Name), ROLLUP(ColID, Product_Name))
+----
+100
+100
+100
+100
+1200
+1200
+200
+200
+200
+200
+400
+400
+400
+400
+500
+500
+500
+500
+600
+600
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ColID, GROUPING SETS (GROUPING SETS (()), (Product_Name), (Product_Category))
+----
+100
+100
+100
+200
+200
+200
+400
+400
+400
+500
+500
+500
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY GROUPING SETS (ROLLUP(ColID), (), GROUPING SETS ((Product_Category, Product_Name), CUBE(ColID), ColID))
+----
+100
+100
+100
+100
+1200
+1200
+1200
+200
+200
+200
+200
+400
+400
+400
+400
+500
+500
+500
+500
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales
+GROUP BY ColID, GROUPING SETS (GROUPING SETS (()), (Product_Name), (Product_Category)) LIMIT 1 OFFSET 2
+----
+500
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales GROUP BY ROLLUP (Product_Category, ColID)
+ORDER BY SUM(TotalSales)
+----
+100
+1200
+200
+400
+500
+600
+600
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales GROUP BY ROLLUP (Product_Category, ColID)
+HAVING SUM(TotalSales) > 600
+----
+1200
+
+query I rowsort
+SELECT
+    DISTINCT CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales GROUP BY ROLLUP (Product_Category, ColID)
+ORDER BY SUM(TotalSales)
+----
+100
+1200
+200
+400
+500
+600
+
+query I rowsort
+SELECT
+    CAST(SUM(TotalSales) as BIGINT) AS TotalSales
+FROM tbl_ProductSales GROUP BY ROLLUP (Product_Category, ColID)
+HAVING SUM(TotalSales) > 600
+ORDER BY AVG(TotalSales)
+----
+1200
+
+statement ok
+DROP TABLE tbl_ProductSales
+

@@ -24,6 +24,7 @@
 	PGJoinType			jtype;
 	PGDropBehavior		dbehavior;
 	PGOnCommitAction		oncommit;
+	PGOnCreateConflict		oncreateconflict;
 	PGList				*list;
 	PGNode				*node;
 	PGValue				*value;

@@ -10,7 +10,7 @@ CreateSchemaStmt:
 					/* ...but not both */
 					n->schemaname = $3;
 					n->schemaElts = $4;
-					n->if_not_exists = false;
+					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 			| CREATE_P SCHEMA IF_P NOT EXISTS ColId OptSchemaEltList
@@ -24,7 +24,7 @@ CreateSchemaStmt:
 								 errmsg("CREATE SCHEMA IF NOT EXISTS cannot include schema elements"),
 								 parser_errposition(@7)));
 					n->schemaElts = $7;
-					n->if_not_exists = true;
+					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		;

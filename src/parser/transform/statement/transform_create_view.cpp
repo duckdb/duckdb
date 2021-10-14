@@ -23,7 +23,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateView(duckdb_libpgquery::
 	if (info->temporary) {
 		info->schema = TEMP_SCHEMA;
 	}
-	info->on_conflict = stmt->replace ? OnCreateConflict::REPLACE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict = TransformOnConflict(stmt->onconflict);
 
 	info->query = TransformSelect(stmt->query, false);
 

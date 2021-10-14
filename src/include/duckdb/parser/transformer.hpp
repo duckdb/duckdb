@@ -14,6 +14,8 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/tokens.hpp"
+#include "duckdb/parser/parsed_data/create_info.hpp"
+#include "duckdb/parser/group_by_node.hpp"
 
 #include "pg_definitions.hpp"
 #include "nodes/parsenodes.hpp"
@@ -24,6 +26,7 @@ class ColumnDefinition;
 struct OrderByNode;
 struct CopyInfo;
 struct CommonTableExpressionInfo;
+struct GroupingExpressionMap;
 
 //! The transformer class is responsible for transforming the internal Postgres
 //! parser representation into the DuckDB representation
@@ -159,7 +162,7 @@ private:
 
 	//! Transform a Postgres constant value into an Expression
 	unique_ptr<ParsedExpression> TransformConstant(duckdb_libpgquery::PGAConst *c, idx_t depth);
-
+	unique_ptr<ParsedExpression> TransformGroupingFunction(duckdb_libpgquery::PGGroupingFunc *n, idx_t depth);
 	unique_ptr<ParsedExpression> TransformResTarget(duckdb_libpgquery::PGResTarget *root, idx_t depth);
 	unique_ptr<ParsedExpression> TransformNullTest(duckdb_libpgquery::PGNullTest *root, idx_t depth);
 	unique_ptr<ParsedExpression> TransformParamRef(duckdb_libpgquery::PGParamRef *node, idx_t depth);
@@ -187,6 +190,7 @@ private:
 	//===--------------------------------------------------------------------===//
 	// Helpers
 	//===--------------------------------------------------------------------===//
+	OnCreateConflict TransformOnConflict(duckdb_libpgquery::PGOnCreateConflict conflict);
 	string TransformAlias(duckdb_libpgquery::PGAlias *root, vector<string> &column_name_alias);
 	void TransformCTE(duckdb_libpgquery::PGWithClause *de_with_clause, QueryNode &select);
 	unique_ptr<SelectStatement> TransformRecursiveCTE(duckdb_libpgquery::PGCommonTableExpr *node,
@@ -222,7 +226,13 @@ private:
 	LogicalType TransformTypeName(duckdb_libpgquery::PGTypeName *name);
 
 	//! Transform a Postgres GROUP BY expression into a list of Expression
-	bool TransformGroupBy(duckdb_libpgquery::PGList *group, vector<unique_ptr<ParsedExpression>> &result);
+	bool TransformGroupBy(duckdb_libpgquery::PGList *group, GroupByNode &result);
+	void TransformGroupByNode(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result,
+	                          vector<GroupingSet> &result_sets);
+	void AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map, GroupByNode &result,
+	                          vector<idx_t> &result_set);
+	void TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map, GroupByNode &result,
+	                                vector<idx_t> &result_set);
 	//! Transform a Postgres ORDER BY expression into an OrderByDescription
 	bool TransformOrderBy(duckdb_libpgquery::PGList *order, vector<OrderByNode> &result);
 

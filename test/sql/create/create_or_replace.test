@@ -1,0 +1,21 @@
+# name: test/sql/create/create_or_replace.test
+# description: Test CREATE OR REPLACE TABLE
+# group: [create]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER)
+
+statement ok
+CREATE OR REPLACE TABLE integers(i INTEGER, j INTEGER)
+
+statement ok
+CREATE TABLE IF NOT EXISTS integers(i INTEGER)
+
+statement ok
+INSERT INTO integers VALUES (1, 2);
+
+statement error
+CREATE OR REPLACE TABLE IF NOT EXISTS integers(i INTEGER)
