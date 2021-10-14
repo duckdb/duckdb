@@ -527,7 +527,7 @@ static bool ListCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	}
 }
 
-template <class src_type, class res_type>
+template <class SRC_TYPE, class RES_TYPE>
 void FillEnum(Vector &source, Vector &result, idx_t count) {
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -538,11 +538,11 @@ void FillEnum(Vector &source, Vector &result, idx_t count) {
 	VectorData vdata;
 	source.Orrify(count, vdata);
 
-	auto source_data = (src_type *)vdata.data;
+	auto source_data = (SRC_TYPE *)vdata.data;
 	auto source_sel = vdata.sel;
 	auto source_mask = vdata.validity;
 
-	auto result_data = FlatVector::GetData<res_type>(result);
+	auto result_data = FlatVector::GetData<RES_TYPE>(result);
 	auto &result_mask = FlatVector::Validity(result);
 
 	for (idx_t i = 0; i < count; i++) {
@@ -562,17 +562,17 @@ void FillEnum(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-template <class src_type>
+template <class SRC_TYPE>
 void FillEnumResultTemplate(Vector &source, Vector &result, idx_t count) {
 	switch (source.GetType().InternalType()) {
 	case PhysicalType::UINT8:
-		FillEnum<src_type, uint8_t>(source, result, count);
+		FillEnum<SRC_TYPE, uint8_t>(source, result, count);
 		break;
 	case PhysicalType::UINT16:
-		FillEnum<src_type, uint16_t>(source, result, count);
+		FillEnum<SRC_TYPE, uint16_t>(source, result, count);
 		break;
 	case PhysicalType::UINT32:
-		FillEnum<src_type, uint32_t>(source, result, count);
+		FillEnum<SRC_TYPE, uint32_t>(source, result, count);
 		break;
 	default:
 		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");

@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
@@ -25,8 +26,10 @@ unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<Exp
 	auto root = (BoundComparisonExpression *)bindings[0];
 	auto left_child = (BoundCastExpression *)bindings[1];
 	auto right_child = (BoundCastExpression *)bindings[3];
+	auto cast_left_to_right =
+	    make_unique<BoundCastExpression>(left_child->child->Copy(), right_child->child->return_type);
 
-	return make_unique<BoundComparisonExpression>(root->type, left_child->child->Copy(), right_child->child->Copy());
+	return make_unique<BoundComparisonExpression>(root->type, move(cast_left_to_right), right_child->child->Copy());
 }
 
 } // namespace duckdb
