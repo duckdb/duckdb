@@ -6,10 +6,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE integers(i INTEGER)
+CREATE TABLE integers(i INTEGER);
 
 statement ok
-INSERT INTO integers VALUES (1), (2), (3), (NULL)
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
 
 # use alias in HAVING clause
 # CONTROVERSIAL: this query DOES NOT work in PostgreSQL
@@ -46,6 +46,14 @@ NULL	NULL	NULL
 2	0	2.000000
 1	1	1.000000
 3	1	3.000000
+
+query IIR
+SELECT i % 2 AS i, i, SUM(i) FROM integers GROUP BY i ORDER BY i, 3;
+----
+NULL	NULL	NULL
+0	2	2.000000
+1	1	1.000000
+1	3	3.000000
 
 # changing the name of the alias makes it more explicit what should happen
 query IIR
