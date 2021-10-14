@@ -35,3 +35,105 @@ CREATE TABLE person (
     name text,
     current_mood mood
 );
+
+#Cascading drops (i.e. DROP TYPE mood CASCADE)
+statement ok
+DROP TYPE mood CASCADE
+
+#DROP TYPE after we alter the table so the dependency is gone (ALTER)
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+ALTER TABLE person ALTER current_mood SET DATA TYPE VARCHAR
+
+statement ok
+DROP TYPE mood
+
+statement ok
+DROP TABLE person
+
+#DROP TYPE after we alter the table so the dependency is gone (DROP COLUMN)
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+ALTER TABLE person DROP COLUMN current_mood
+
+statement ok
+DROP TYPE mood
+
+statement ok
+DROP TABLE person
+
+#Dependencies introduced by alter statements, i.e. ADD COLUMN with ENUM type
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text
+);
+
+statement ok
+ALTER TABLE person ADD COLUMN current_mood mood
+
+statement error
+DROP TYPE mood
+
+#Dropping the table and type in the same transaction
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE mood
+
+statement ok
+COMMIT;
+
+# Try with two dependencies to the same type ( Delete One column, try do delete type, change type of the other column,
+# delete type, recreate type, add column with type, try to delete type)
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    past_mood mood,
+    current_mood mood
+);
+
+statement ok
+ALTER TABLE person DROP COLUMN current_mood
+
+statement error
+DROP TYPE mood
+
+statement ok
+ALTER TABLE person ALTER past_mood SET DATA TYPE VARCHAR
+
+statement ok
+DROP TYPE mood
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+ALTER TABLE person ADD COLUMN current_mood mood
+
+statement error
+DROP TYPE mood
