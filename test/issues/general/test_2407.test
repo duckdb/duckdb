@@ -1,0 +1,39 @@
+# name: test/issues/general/test_2407.test
+# description: Issue 2407: arg_max/arg_min doesn't work properly with DATE
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test(d DATE, i INTEGER);
+
+statement ok
+INSERT INTO test VALUES ('2021-01-01', 1), ('2021-02-01', 2), ('2021-03-01', 3), ('2021-04-01', 4);
+
+query II
+select arg_max(i, d), arg_max(d, i) from test;
+----
+4	2021-04-01
+
+query II
+select arg_min(i, d), arg_min(d, i) from test;
+----
+1	2021-01-01
+
+# bigint
+statement ok
+CREATE TABLE test2(d BIGINT, i INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (-9223372036854775807, 1), (-1, 2), (1, 3), (9223372036854775807, 4);
+
+query II
+select arg_max(i, d), arg_max(d, i) from test2;
+----
+4	9223372036854775807
+
+query II
+select arg_min(i, d), arg_min(d, i) from test2;
+----
+1	-9223372036854775807
