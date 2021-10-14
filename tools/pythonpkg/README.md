@@ -59,8 +59,7 @@ Next, copy over the python package related files, and install the package.
 If you want to regenerate the stubs, there is a bit of a chicken and egg situation - the stubs should go in the package, but
 `stubgen` needs to look at the package to generate the stubs!
 
-There is a test that you can run to check the stubs match the real duckdb package - this runs in CI (sorry in advance...). If you add a method to the duckdb py library
-and forget to add it to the stub, this test will helpfully fail. The test is a run of [mypy.stubtest](https://github.com/python/mypy/issues/5028#issuecomment-740101546).
+There is a test that you can run to check the stubs match the real duckdb package - this runs in CI (sorry in advance...). If you add a method to the duckdb py library and forget to add it to the stub, this test will helpfully fail. The test is a run of [mypy.stubtest](https://github.com/python/mypy/issues/5028#issuecomment-740101546).
 
 The workflow for getting the stubs right will look something like
 
