@@ -1,0 +1,90 @@
+# name: test/issues/general/test_2416.test
+# description: Issue 2416: Segmentation fault on macro creation
+# group: [general]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select list_extract(null, null);
+----
+NULL
+
+query I
+select list_extract(null, 1);
+----
+NULL
+
+query I
+select list_extract([1, 2, 3], NULL);
+----
+NULL
+
+query I
+SELECT list_extract([1, 2, 3], 1)
+----
+2
+
+statement ok
+PREPARE v1 AS SELECT list_extract($1::int[], 1)
+
+query I
+EXECUTE v1([1, 2, 3])
+----
+2
+
+query I
+EXECUTE v1(NULL)
+----
+NULL
+
+statement ok
+PREPARE v2 AS SELECT list_extract([1, 2, 3], $1)
+
+query I
+EXECUTE v2(1)
+----
+2
+
+query I
+EXECUTE v2(NULL)
+----
+NULL
+
+statement ok
+create macro extract_field(my_struct, my_field) as my_struct[my_field];
+
+query I
+SELECT extract_field([1, 2, 3], 1)
+----
+2
+
+# the same but with array_length
+query I
+select array_length(null);
+----
+NULL
+
+statement ok
+PREPARE v3 AS SELECT array_length($1::int[])
+
+query I
+EXECUTE v3([1, 2, 3])
+----
+3
+
+query I
+EXECUTE v3(NULL)
+----
+NULL
+
+statement error
+PREPARE v4 AS SELECT array_length($1)
+
+statement ok
+create macro array_l(my_arr) as array_length(my_arr);
+
+query I
+SELECT array_l([1, 2, 3])
+----
+3
