@@ -6,8 +6,8 @@
 
 #include "flatbuffers/flatbuffers.h"
 
-#include "Schema_generated.h"
 #include "Literal_generated.h"
+#include "Schema_generated.h"
 
 namespace org {
 namespace apache {
@@ -63,6 +63,9 @@ struct CurrentRowBuilder;
 struct WindowCall;
 struct WindowCallBuilder;
 
+struct Cast;
+struct CastBuilder;
+
 struct Expression;
 struct ExpressionBuilder;
 
@@ -97,6 +100,8 @@ inline const flatbuffers::TypeTable *FollowingTypeTable();
 inline const flatbuffers::TypeTable *CurrentRowTypeTable();
 
 inline const flatbuffers::TypeTable *WindowCallTypeTable();
+
+inline const flatbuffers::TypeTable *CastTypeTable();
 
 inline const flatbuffers::TypeTable *ExpressionTypeTable();
 
@@ -362,11 +367,12 @@ enum ExpressionImpl : uint8_t {
   ExpressionImpl_ConditionalCase = 4,
   ExpressionImpl_SimpleCase = 5,
   ExpressionImpl_WindowCall = 6,
+  ExpressionImpl_Cast = 7,
   ExpressionImpl_MIN = ExpressionImpl_NONE,
-  ExpressionImpl_MAX = ExpressionImpl_WindowCall
+  ExpressionImpl_MAX = ExpressionImpl_Cast
 };
 
-inline const ExpressionImpl (&EnumValuesExpressionImpl())[7] {
+inline const ExpressionImpl (&EnumValuesExpressionImpl())[8] {
   static const ExpressionImpl values[] = {
     ExpressionImpl_NONE,
     ExpressionImpl_Literal,
@@ -374,13 +380,14 @@ inline const ExpressionImpl (&EnumValuesExpressionImpl())[7] {
     ExpressionImpl_Call,
     ExpressionImpl_ConditionalCase,
     ExpressionImpl_SimpleCase,
-    ExpressionImpl_WindowCall
+    ExpressionImpl_WindowCall,
+    ExpressionImpl_Cast
   };
   return values;
 }
 
 inline const char * const *EnumNamesExpressionImpl() {
-  static const char * const names[8] = {
+  static const char * const names[9] = {
     "NONE",
     "Literal",
     "FieldRef",
@@ -388,13 +395,14 @@ inline const char * const *EnumNamesExpressionImpl() {
     "ConditionalCase",
     "SimpleCase",
     "WindowCall",
+    "Cast",
     nullptr
   };
   return names;
 }
 
 inline const char *EnumNameExpressionImpl(ExpressionImpl e) {
-  if (flatbuffers::IsOutRange(e, ExpressionImpl_NONE, ExpressionImpl_WindowCall)) return "";
+  if (flatbuffers::IsOutRange(e, ExpressionImpl_NONE, ExpressionImpl_Cast)) return "";
   const size_t index = static_cast<size_t>(e);
   return EnumNamesExpressionImpl()[index];
 }
@@ -425,6 +433,10 @@ template<> struct ExpressionImplTraits<org::apache::arrow::computeir::flatbuf::S
 
 template<> struct ExpressionImplTraits<org::apache::arrow::computeir::flatbuf::WindowCall> {
   static const ExpressionImpl enum_value = ExpressionImpl_WindowCall;
+};
+
+template<> struct ExpressionImplTraits<org::apache::arrow::computeir::flatbuf::Cast> {
+  static const ExpressionImpl enum_value = ExpressionImpl_Cast;
 };
 
 bool VerifyExpressionImpl(flatbuffers::Verifier &verifier, const void *obj, ExpressionImpl type);
@@ -1562,6 +1574,71 @@ inline flatbuffers::Offset<WindowCall> CreateWindowCallDirect(
       upper_bound);
 }
 
+/// A cast expression
+struct Cast FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef CastBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return CastTypeTable();
+  }
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_OPERAND = 4,
+    VT_TO = 6
+  };
+  /// The expression to cast
+  const org::apache::arrow::computeir::flatbuf::Expression *operand() const {
+    return GetPointer<const org::apache::arrow::computeir::flatbuf::Expression *>(VT_OPERAND);
+  }
+  /// The type to cast to. This value is a `Field` to allow complete representation
+  /// of arrow types.
+  ///
+  /// `Type` is unable to completely represent complex types like lists and
+  /// maps.
+  const org::apache::arrow::flatbuf::Field *to() const {
+    return GetPointer<const org::apache::arrow::flatbuf::Field *>(VT_TO);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyOffsetRequired(verifier, VT_OPERAND) &&
+           verifier.VerifyTable(operand()) &&
+           VerifyOffsetRequired(verifier, VT_TO) &&
+           verifier.VerifyTable(to()) &&
+           verifier.EndTable();
+  }
+};
+
+struct CastBuilder {
+  typedef Cast Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_operand(flatbuffers::Offset<org::apache::arrow::computeir::flatbuf::Expression> operand) {
+    fbb_.AddOffset(Cast::VT_OPERAND, operand);
+  }
+  void add_to(flatbuffers::Offset<org::apache::arrow::flatbuf::Field> to) {
+    fbb_.AddOffset(Cast::VT_TO, to);
+  }
+  explicit CastBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  flatbuffers::Offset<Cast> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<Cast>(end);
+    fbb_.Required(o, Cast::VT_OPERAND);
+    fbb_.Required(o, Cast::VT_TO);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<Cast> CreateCast(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    flatbuffers::Offset<org::apache::arrow::computeir::flatbuf::Expression> operand = 0,
+    flatbuffers::Offset<org::apache::arrow::flatbuf::Field> to = 0) {
+  CastBuilder builder_(_fbb);
+  builder_.add_to(to);
+  builder_.add_operand(operand);
+  return builder_.Finish();
+}
+
 /// Expression types
 ///
 /// Expressions have a concrete `impl` value, which is a specific operation.
@@ -1602,6 +1679,9 @@ struct Expression FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   const org::apache::arrow::computeir::flatbuf::WindowCall *impl_as_WindowCall() const {
     return impl_type() == org::apache::arrow::computeir::flatbuf::ExpressionImpl_WindowCall ? static_cast<const org::apache::arrow::computeir::flatbuf::WindowCall *>(impl()) : nullptr;
   }
+  const org::apache::arrow::computeir::flatbuf::Cast *impl_as_Cast() const {
+    return impl_type() == org::apache::arrow::computeir::flatbuf::ExpressionImpl_Cast ? static_cast<const org::apache::arrow::computeir::flatbuf::Cast *>(impl()) : nullptr;
+  }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint8_t>(verifier, VT_IMPL_TYPE) &&
@@ -1633,6 +1713,10 @@ template<> inline const org::apache::arrow::computeir::flatbuf::SimpleCase *Expr
 
 template<> inline const org::apache::arrow::computeir::flatbuf::WindowCall *Expression::impl_as<org::apache::arrow::computeir::flatbuf::WindowCall>() const {
   return impl_as_WindowCall();
+}
+
+template<> inline const org::apache::arrow::computeir::flatbuf::Cast *Expression::impl_as<org::apache::arrow::computeir::flatbuf::Cast>() const {
+  return impl_as_Cast();
 }
 
 struct ExpressionBuilder {
@@ -1799,6 +1883,10 @@ inline bool VerifyExpressionImpl(flatbuffers::Verifier &verifier, const void *ob
       auto ptr = reinterpret_cast<const org::apache::arrow::computeir::flatbuf::WindowCall *>(obj);
       return verifier.VerifyTable(ptr);
     }
+    case ExpressionImpl_Cast: {
+      auto ptr = reinterpret_cast<const org::apache::arrow::computeir::flatbuf::Cast *>(obj);
+      return verifier.VerifyTable(ptr);
+    }
     default: return true;
   }
 }
@@ -1938,7 +2026,8 @@ inline const flatbuffers::TypeTable *ExpressionImplTypeTable() {
     { flatbuffers::ET_SEQUENCE, 0, 2 },
     { flatbuffers::ET_SEQUENCE, 0, 3 },
     { flatbuffers::ET_SEQUENCE, 0, 4 },
-    { flatbuffers::ET_SEQUENCE, 0, 5 }
+    { flatbuffers::ET_SEQUENCE, 0, 5 },
+    { flatbuffers::ET_SEQUENCE, 0, 6 }
   };
   static const flatbuffers::TypeFunction type_refs[] = {
     org::apache::arrow::computeir::flatbuf::LiteralTypeTable,
@@ -1946,7 +2035,8 @@ inline const flatbuffers::TypeTable *ExpressionImplTypeTable() {
     org::apache::arrow::computeir::flatbuf::CallTypeTable,
     org::apache::arrow::computeir::flatbuf::ConditionalCaseTypeTable,
     org::apache::arrow::computeir::flatbuf::SimpleCaseTypeTable,
-    org::apache::arrow::computeir::flatbuf::WindowCallTypeTable
+    org::apache::arrow::computeir::flatbuf::WindowCallTypeTable,
+    org::apache::arrow::computeir::flatbuf::CastTypeTable
   };
   static const char * const names[] = {
     "NONE",
@@ -1955,10 +2045,11 @@ inline const flatbuffers::TypeTable *ExpressionImplTypeTable() {
     "Call",
     "ConditionalCase",
     "SimpleCase",
-    "WindowCall"
+    "WindowCall",
+    "Cast"
   };
   static const flatbuffers::TypeTable tt = {
-    flatbuffers::ST_UNION, 7, type_codes, type_refs, nullptr, nullptr, names
+    flatbuffers::ST_UNION, 8, type_codes, type_refs, nullptr, nullptr, names
   };
   return &tt;
 }
@@ -2230,6 +2321,25 @@ inline const flatbuffers::TypeTable *WindowCallTypeTable() {
   };
   static const flatbuffers::TypeTable tt = {
     flatbuffers::ST_TABLE, 8, type_codes, type_refs, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
+inline const flatbuffers::TypeTable *CastTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 1 }
+  };
+  static const flatbuffers::TypeFunction type_refs[] = {
+    org::apache::arrow::computeir::flatbuf::ExpressionTypeTable,
+    org::apache::arrow::flatbuf::FieldTypeTable
+  };
+  static const char * const names[] = {
+    "operand",
+    "to"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
   };
   return &tt;
 }

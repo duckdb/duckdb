@@ -6,10 +6,10 @@
 
 #include "flatbuffers/flatbuffers.h"
 
+#include "Literal_generated.h"
 #include "Expression_generated.h"
 #include "Schema_generated.h"
 #include "Relation_generated.h"
-#include "Literal_generated.h"
 
 namespace org {
 namespace apache {

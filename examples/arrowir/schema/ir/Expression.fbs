@@ -181,6 +181,18 @@ table WindowCall {
   upper_bound: Bound (required);
 }
 
+/// A cast expression
+table Cast {
+  /// The expression to cast
+  operand: Expression (required);
+  /// The type to cast to. This value is a `Field` to allow complete representation
+  /// of arrow types.
+  ///
+  /// `Type` is unable to completely represent complex types like lists and
+  /// maps.
+  to: org.apache.arrow.flatbuf.Field (required);
+}
+
 /// Various expression types
 ///
 /// WindowCall is a separate variant
@@ -194,6 +206,7 @@ union ExpressionImpl {
   ConditionalCase,
   SimpleCase,
   WindowCall,
+  Cast,
 }
 
 /// Expression types

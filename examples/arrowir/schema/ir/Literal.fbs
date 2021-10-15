@@ -23,13 +23,10 @@ table ListLiteral {
   values: [Literal] (required);
 }
 
-table StructLiteralField {
-  name: string (required);
-  value: Literal (required);
-}
-
 table StructLiteral {
-  values: [StructLiteralField] (required);
+  /// Values for each struct field; the order must match the order of fields
+  /// in the `type` field of `Literal`.
+  values: [Literal] (required);
 }
 
 table KeyValue {
@@ -86,40 +83,24 @@ table Float64Literal {
 }
 
 table DecimalLiteral {
-  /// These bytes must be in little-endian order.
+  /// Bytes of a Decimal value; bytes must be in little-endian order.
   value: [byte] (required);
-  scale: int32;
-  precision: int32;
 }
 
 table BooleanLiteral {
   value: bool;
 }
 
-table NullLiteral {}
-
 table DateLiteral {
   value: int64;
-
-  // unit of `value`
-  unit: org.apache.arrow.flatbuf.DateUnit = MILLISECOND;
 }
 
 table TimeLiteral {
   value: int64;
-
-  // unit of `value`
-  unit: org.apache.arrow.flatbuf.TimeUnit = MILLISECOND;
 }
 
 table TimestampLiteral {
   value: int64;
-
-  // unit of `value`
-  unit: org.apache.arrow.flatbuf.TimeUnit;
-
-  // timezone value, same definition as used in Schema.fbs.
-  timezone: string;
 }
 
 table IntervalLiteralMonths {
@@ -142,9 +123,6 @@ table IntervalLiteral {
 
 table DurationLiteral {
   value: int64;
-
-  // unit of `value`
-  unit: org.apache.arrow.flatbuf.TimeUnit = MILLISECOND;
 }
 
 table BinaryLiteral {
@@ -153,7 +131,6 @@ table BinaryLiteral {
 
 table FixedSizeBinaryLiteral {
   value: [byte] (required);
-  size: int32;
 }
 
 table StringLiteral {
@@ -164,7 +141,6 @@ table StringLiteral {
 // no literals for large string/binary types as flatbuffer is limited to 2gb.
 
 union LiteralImpl {
-  NullLiteral,
   BooleanLiteral,
 
   Int8Literal,
@@ -199,7 +175,10 @@ union LiteralImpl {
 }
 
 table Literal {
-  impl: LiteralImpl (required);
+  /// Literal value data; for null literals do not include this field.
+  impl: LiteralImpl;
+  /// Type of the literal value. This must match `impl`.
+  type: org.apache.arrow.flatbuf.Field (required);
 }
 
 root_type Literal;

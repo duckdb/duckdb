@@ -41,10 +41,21 @@ union Emit {
   PassThrough,
 }
 
+/// An identifier for relations in a query.
+///
+/// A table is used here to allow plan implementations optionality.
+table RelId {
+  id: uint64;
+}
+
 /// Fields common to every relational operator
 table RelBase {
   /// Output remapping of ordinal columns for a given operation
   output_mapping: Emit (required);
+
+  /// An identifiier for a relation. The identifier should be unique over the
+  /// entire plan. Optional.
+  id: RelId;
 }
 
 /// Filter operation
@@ -182,8 +193,8 @@ table LiteralRelation {
   columns: [LiteralColumn] (required);
 }
 
-/// A table read
-table ATable {
+/// An external source of tabular data
+table Source {
   base: RelBase (required);
   name: string (required);
   schema: org.apache.arrow.flatbuf.Schema (required);
@@ -192,14 +203,14 @@ table ATable {
 /// The varieties of relations
 union RelationImpl {
   Aggregate,
-  SetOperation,
   Filter,
+  Join,
   Limit,
   LiteralRelation,
   OrderBy,
   Project,
-  ATable,
-  Join,
+  SetOperation,
+  Source,
 }
 
 /// A table holding an instance of the possible relation types.

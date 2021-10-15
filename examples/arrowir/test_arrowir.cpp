@@ -41,7 +41,7 @@ struct DuckDBPlanToArrow {
 	DuckDBPlanToArrow(flatbuffers::FlatBufferBuilder &fbb_p) : fbb(fbb_p) {
 	}
 
-	static arrow::Type TransformType(duckdb::LogicalType &type) {
+	static arrow::Type TransformType(const duckdb::LogicalType &type) {
 		switch (type.id()) {
 		case duckdb::LogicalTypeId::UTINYINT:
 		case duckdb::LogicalTypeId::USMALLINT:
@@ -64,43 +64,54 @@ struct DuckDBPlanToArrow {
 	}
 
 	flatbuffers::Offset<arrowir::Expression> TransformConstant(duckdb::Value &value) {
-		flatbuffers::Offset<arrowir::Literal> literal;
-		auto &type = value.type();
-		switch (type.id()) {
+		flatbuffers::Offset<void> impl;
+		arrowir::LiteralImpl impl_type;
+		flatbuffers::Offset<void> arrow_type;
+
+		auto &duckdb_type = value.type();
+		switch (duckdb_type.id()) {
 		case duckdb::LogicalTypeId::BOOLEAN: {
-			auto boolean = arrowir::CreateInt64Literal(fbb, value.value_.boolean);
-			literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_BooleanLiteral, boolean.Union());
-			break;
-		}
-		case duckdb::LogicalTypeId::BIGINT: {
-			auto bigint = arrowir::CreateInt64Literal(fbb, value.value_.bigint);
-			literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Int64Literal, bigint.Union());
+			impl = arrowir::CreateInt64Literal(fbb, value.value_.boolean).Union();
+			impl_type = arrowir::LiteralImpl::LiteralImpl_BooleanLiteral;
+			arrow_type = arrow::CreateBool(fbb).Union();
 			break;
 		}
 		case duckdb::LogicalTypeId::INTEGER: {
-			auto integer = arrowir::CreateInt32Literal(fbb, value.value_.integer);
-			literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Int32Literal, integer.Union());
+			impl = arrowir::CreateInt32Literal(fbb, value.value_.integer).Union();
+			impl_type = arrowir::LiteralImpl::LiteralImpl_Int32Literal;
+			arrow_type = arrow::CreateInt(fbb, 32).Union();
+
 			break;
 		}
+		case duckdb::LogicalTypeId::BIGINT: {
+			impl = arrowir::CreateInt64Literal(fbb, value.value_.bigint).Union();
+			impl_type = arrowir::LiteralImpl::LiteralImpl_Int64Literal;
+			arrow_type = arrow::CreateInt(fbb, 64).Union();
+			break;
+		}
+
 		case duckdb::LogicalTypeId::DOUBLE: {
-			auto dbl = arrowir::CreateFloat64Literal(fbb, value.value_.double_);
-			literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_Float64Literal, dbl.Union());
+			impl = arrowir::CreateFloat64Literal(fbb, value.value_.double_).Union();
+			impl_type = arrowir::LiteralImpl::LiteralImpl_Float64Literal;
+			arrow_type = arrow::CreateFloatingPoint(fbb, arrow::Precision_DOUBLE).Union();
 			break;
 		}
 		case duckdb::LogicalTypeId::VARCHAR: {
-			auto str = arrowir::CreateStringLiteral(fbb, fbb.CreateString(value.str_value));
-			literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_StringLiteral, str.Union());
+			impl = arrowir::CreateStringLiteral(fbb, fbb.CreateString(value.str_value)).Union();
+			impl_type = arrowir::LiteralImpl::LiteralImpl_StringLiteral;
+			arrow_type = arrow::CreateBinary(fbb).Union(); // TODO this correct?
 			break;
 		}
 		case duckdb::LogicalTypeId::DATE: {
-			auto date = arrowir::CreateDateLiteral(fbb, duckdb::Date::Epoch(value.value_.date) * 1000);
-			literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_DateLiteral, date.Union());
+			impl = arrowir::CreateDateLiteral(fbb, duckdb::Date::Epoch(value.value_.date) * 1000).Union();
+			impl_type = arrowir::LiteralImpl::LiteralImpl_DateLiteral;
+			arrow_type = arrow::CreateDate(fbb).Union();
 			break;
 		}
 		case duckdb::LogicalTypeId::DECIMAL: {
 			std::vector<int8_t> decimal_bytes_vec;
 
-			switch (type.InternalType()) {
+			switch (duckdb_type.InternalType()) {
 			case duckdb::PhysicalType::INT16:
 				decimal_bytes_vec.resize(2);
 				memcpy(decimal_bytes_vec.data(), &value.value_.smallint, sizeof(int16_t));
@@ -118,18 +129,23 @@ struct DuckDBPlanToArrow {
 				memcpy(decimal_bytes_vec.data(), &value.value_.hugeint, sizeof(duckdb::hugeint_t));
 				break;
 			default:
-				throw std::runtime_error(duckdb::TypeIdToString(type.InternalType()));
+				throw std::runtime_error(duckdb::TypeIdToString(duckdb_type.InternalType()));
 			}
 
-			auto decimal =
-			    arrowir::CreateDecimalLiteral(fbb, fbb.CreateVector(decimal_bytes_vec),
-			                                  duckdb::DecimalType::GetScale(type), duckdb::DecimalType::GetWidth(type));
-			literal = arrowir::CreateLiteral(fbb, arrowir::LiteralImpl::LiteralImpl_DecimalLiteral, decimal.Union());
+			impl = arrowir::CreateDecimalLiteral(fbb, fbb.CreateVector(decimal_bytes_vec)).Union();
+			impl_type = arrowir::LiteralImpl::LiteralImpl_DecimalLiteral;
+			arrow_type = arrow::CreateDecimal(fbb, duckdb::DecimalType::GetWidth(duckdb_type),
+			                                  duckdb::DecimalType::GetScale(duckdb_type))
+			                 .Union();
 			break;
 		}
 		default:
-			throw std::runtime_error(type.ToString());
+			throw std::runtime_error(duckdb_type.ToString());
 		}
+
+		// TODO why does this need a name
+		auto field = arrow::CreateField(fbb, fbb.CreateString(""), true, TransformType(duckdb_type), arrow_type);
+		auto literal = arrowir::CreateLiteral(fbb, impl_type, impl, field);
 		return arrowir::CreateExpression(fbb, arrowir::ExpressionImpl::ExpressionImpl_Literal, literal.Union());
 	}
 
@@ -594,27 +610,30 @@ struct ArrowPlanToDuckDB {
 		}
 		case arrowir::ExpressionImpl::ExpressionImpl_Literal: {
 			auto arrow_expr = expr->impl_as_Literal();
+			duckdb::Value val;
 			switch (arrow_expr->impl_type()) {
 			case arrowir::LiteralImpl::LiteralImpl_DecimalLiteral: {
 				auto arrow_decimal = arrow_expr->impl_as_DecimalLiteral();
+				auto arrow_decimal_type = arrow_expr->type()->type_as_Decimal();
 				int64_t raw_val;
 				memcpy(&raw_val, arrow_decimal->value()->Data(), arrow_decimal->value()->size());
-				auto val = duckdb::Value::DECIMAL(raw_val, arrow_decimal->precision(), arrow_decimal->scale());
-				return duckdb::make_unique<duckdb::ConstantExpression>(val);
+				val = duckdb::Value::DECIMAL(raw_val, arrow_decimal_type->precision(), arrow_decimal_type->scale());
+				break;
 			}
 			case arrowir::LiteralImpl::LiteralImpl_DateLiteral: {
 				auto arrow_date = arrow_expr->impl_as_DateLiteral();
-				auto val = duckdb::Value::DATE(duckdb::Date::EpochToDate(arrow_date->value() / 1000));
-				return duckdb::make_unique<duckdb::ConstantExpression>(val);
+				val = duckdb::Value::DATE(duckdb::Date::EpochToDate(arrow_date->value() / 1000));
+				break;
 			}
 			case arrowir::LiteralImpl::LiteralImpl_StringLiteral: {
 				auto arrow_string = arrow_expr->impl_as_StringLiteral();
-				auto val = duckdb::Value(arrow_string->value()->str());
-				return duckdb::make_unique<duckdb::ConstantExpression>(val);
+				val = duckdb::Value(arrow_string->value()->str());
+				break;
 			}
 			default:
 				throw std::runtime_error(arrowir::EnumNameLiteralImpl(arrow_expr->impl_type()));
 			}
+			return duckdb::make_unique<duckdb::ConstantExpression>(val);
 		}
 		default:
 			throw std::runtime_error(arrowir::EnumNameExpressionImpl(expr->impl_type()));

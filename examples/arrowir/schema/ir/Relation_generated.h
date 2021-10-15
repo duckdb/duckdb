@@ -6,9 +6,9 @@
 
 #include "flatbuffers/flatbuffers.h"
 
+#include "Literal_generated.h"
 #include "Expression_generated.h"
 #include "Schema_generated.h"
-#include "Literal_generated.h"
 
 namespace org {
 namespace apache {
@@ -21,6 +21,9 @@ struct RemapBuilder;
 
 struct PassThrough;
 struct PassThroughBuilder;
+
+struct RelId;
+struct RelIdBuilder;
 
 struct RelBase;
 struct RelBaseBuilder;
@@ -64,6 +67,8 @@ struct RelationBuilder;
 inline const flatbuffers::TypeTable *RemapTypeTable();
 
 inline const flatbuffers::TypeTable *PassThroughTypeTable();
+
+inline const flatbuffers::TypeTable *RelIdTypeTable();
 
 inline const flatbuffers::TypeTable *RelBaseTypeTable();
 
@@ -412,6 +417,53 @@ inline flatbuffers::Offset<PassThrough> CreatePassThrough(
   return builder_.Finish();
 }
 
+/// An identifier for relations in a query.
+///
+/// A table is used here to allow plan implementations optionality.
+struct RelId FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
+  typedef RelIdBuilder Builder;
+  static const flatbuffers::TypeTable *MiniReflectTypeTable() {
+    return RelIdTypeTable();
+  }
+  enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
+    VT_ID = 4
+  };
+  uint64_t id() const {
+    return GetField<uint64_t>(VT_ID, 0);
+  }
+  bool Verify(flatbuffers::Verifier &verifier) const {
+    return VerifyTableStart(verifier) &&
+           VerifyField<uint64_t>(verifier, VT_ID) &&
+           verifier.EndTable();
+  }
+};
+
+struct RelIdBuilder {
+  typedef RelId Table;
+  flatbuffers::FlatBufferBuilder &fbb_;
+  flatbuffers::uoffset_t start_;
+  void add_id(uint64_t id) {
+    fbb_.AddElement<uint64_t>(RelId::VT_ID, id, 0);
+  }
+  explicit RelIdBuilder(flatbuffers::FlatBufferBuilder &_fbb)
+        : fbb_(_fbb) {
+    start_ = fbb_.StartTable();
+  }
+  flatbuffers::Offset<RelId> Finish() {
+    const auto end = fbb_.EndTable(start_);
+    auto o = flatbuffers::Offset<RelId>(end);
+    return o;
+  }
+};
+
+inline flatbuffers::Offset<RelId> CreateRelId(
+    flatbuffers::FlatBufferBuilder &_fbb,
+    uint64_t id = 0) {
+  RelIdBuilder builder_(_fbb);
+  builder_.add_id(id);
+  return builder_.Finish();
+}
+
 /// Fields common to every relational operator
 struct RelBase FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   typedef RelBaseBuilder Builder;
@@ -420,7 +472,8 @@ struct RelBase FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   }
   enum FlatBuffersVTableOffset FLATBUFFERS_VTABLE_UNDERLYING_TYPE {
     VT_OUTPUT_MAPPING_TYPE = 4,
-    VT_OUTPUT_MAPPING = 6
+    VT_OUTPUT_MAPPING = 6,
+    VT_ID = 8
   };
   org::apache::arrow::computeir::flatbuf::Emit output_mapping_type() const {
     return static_cast<org::apache::arrow::computeir::flatbuf::Emit>(GetField<uint8_t>(VT_OUTPUT_MAPPING_TYPE, 0));
@@ -436,11 +489,18 @@ struct RelBase FLATBUFFERS_FINAL_CLASS : private flatbuffers::Table {
   const org::apache::arrow::computeir::flatbuf::PassThrough *output_mapping_as_PassThrough() const {
     return output_mapping_type() == org::apache::arrow::computeir::flatbuf::Emit_PassThrough ? static_cast<const org::apache::arrow::computeir::flatbuf::PassThrough *>(output_mapping()) : nullptr;
   }
+  /// An identifiier for a relation. The identifier should be unique over the
+  /// entire plan. Optional.
+  const org::apache::arrow::computeir::flatbuf::RelId *id() const {
+    return GetPointer<const org::apache::arrow::computeir::flatbuf::RelId *>(VT_ID);
+  }
   bool Verify(flatbuffers::Verifier &verifier) const {
     return VerifyTableStart(verifier) &&
            VerifyField<uint8_t>(verifier, VT_OUTPUT_MAPPING_TYPE) &&
            VerifyOffsetRequired(verifier, VT_OUTPUT_MAPPING) &&
            VerifyEmit(verifier, output_mapping(), output_mapping_type()) &&
+           VerifyOffset(verifier, VT_ID) &&
+           verifier.VerifyTable(id()) &&
            verifier.EndTable();
   }
 };
@@ -463,6 +523,9 @@ struct RelBaseBuilder {
   void add_output_mapping(flatbuffers::Offset<void> output_mapping) {
     fbb_.AddOffset(RelBase::VT_OUTPUT_MAPPING, output_mapping);
   }
+  void add_id(flatbuffers::Offset<org::apache::arrow::computeir::flatbuf::RelId> id) {
+    fbb_.AddOffset(RelBase::VT_ID, id);
+  }
   explicit RelBaseBuilder(flatbuffers::FlatBufferBuilder &_fbb)
         : fbb_(_fbb) {
     start_ = fbb_.StartTable();
@@ -478,8 +541,10 @@ struct RelBaseBuilder {
 inline flatbuffers::Offset<RelBase> CreateRelBase(
     flatbuffers::FlatBufferBuilder &_fbb,
     org::apache::arrow::computeir::flatbuf::Emit output_mapping_type = org::apache::arrow::computeir::flatbuf::Emit_NONE,
-    flatbuffers::Offset<void> output_mapping = 0) {
+    flatbuffers::Offset<void> output_mapping = 0,
+    flatbuffers::Offset<org::apache::arrow::computeir::flatbuf::RelId> id = 0) {
   RelBaseBuilder builder_(_fbb);
+  builder_.add_id(id);
   builder_.add_output_mapping(output_mapping);
   builder_.add_output_mapping_type(output_mapping_type);
   return builder_.Finish();
@@ -1741,20 +1806,36 @@ inline const flatbuffers::TypeTable *PassThroughTypeTable() {
   return &tt;
 }
 
+inline const flatbuffers::TypeTable *RelIdTypeTable() {
+  static const flatbuffers::TypeCode type_codes[] = {
+    { flatbuffers::ET_ULONG, 0, -1 }
+  };
+  static const char * const names[] = {
+    "id"
+  };
+  static const flatbuffers::TypeTable tt = {
+    flatbuffers::ST_TABLE, 1, type_codes, nullptr, nullptr, nullptr, names
+  };
+  return &tt;
+}
+
 inline const flatbuffers::TypeTable *RelBaseTypeTable() {
   static const flatbuffers::TypeCode type_codes[] = {
     { flatbuffers::ET_UTYPE, 0, 0 },
-    { flatbuffers::ET_SEQUENCE, 0, 0 }
+    { flatbuffers::ET_SEQUENCE, 0, 0 },
+    { flatbuffers::ET_SEQUENCE, 0, 1 }
   };
   static const flatbuffers::TypeFunction type_refs[] = {
-    org::apache::arrow::computeir::flatbuf::EmitTypeTable
+    org::apache::arrow::computeir::flatbuf::EmitTypeTable,
+    org::apache::arrow::computeir::flatbuf::RelIdTypeTable
   };
   static const char * const names[] = {
     "output_mapping_type",
-    "output_mapping"
+    "output_mapping",
+    "id"
   };
   static const flatbuffers::TypeTable tt = {
-    flatbuffers::ST_TABLE, 2, type_codes, type_refs, nullptr, nullptr, names
+    flatbuffers::ST_TABLE, 3, type_codes, type_refs, nullptr, nullptr, names
   };
   return &tt;
 }
