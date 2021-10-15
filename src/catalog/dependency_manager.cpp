@@ -114,15 +114,14 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 	}
 
 	// We might have to add a type dependency
+	vector<CatalogEntry *> to_add;
 	if (new_obj->type == CatalogType::TABLE_ENTRY) {
 		auto table = (TableCatalogEntry *)new_obj;
 		for (auto &column : table->columns) {
 			if (column.type.id() == LogicalTypeId::ENUM) {
-				auto &enum_type_name = EnumType::GetTypeName(column.type);
-				auto enum_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(
-				    context, CatalogType::TYPE_ENTRY, DEFAULT_SCHEMA, enum_type_name, true);
+				auto enum_type_catalog = EnumType::GetCatalog(column.type);
 				if (enum_type_catalog) {
-					dependents_map[enum_type_catalog].insert(new_obj);
+					to_add.push_back(enum_type_catalog);
 				}
 			}
 		}
@@ -130,6 +129,11 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 	// add the new object to the dependency manager
 	dependents_map[new_obj] = dependency_set_t();
 	dependencies_map[new_obj] = old_dependencies;
+
+	for (auto &dependency : to_add) {
+		dependencies_map[new_obj].insert(dependency);
+		dependents_map[dependency].insert(new_obj);
+	}
 }
 
 void DependencyManager::EraseObject(CatalogEntry *object) {

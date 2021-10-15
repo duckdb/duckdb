@@ -1,5 +1,5 @@
 # name: test/sql/types/enum/test_enum_constraints.test
-# description: ENUM tests
+# description: ENUM tests on table constraints
 # group: [enum]
 
 statement ok
@@ -137,3 +137,92 @@ ALTER TABLE person ADD COLUMN current_mood mood
 
 statement error
 DROP TYPE mood
+
+# Clean-up
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE mood
+
+# Transactions with rollbacks
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+BEGIN TRANSACTION;
+
+
+statement ok
+ALTER TABLE person ALTER current_mood SET DATA TYPE VARCHAR;
+
+statement ok
+ROLLBACK;
+
+#Fails, mood should still be dependent on by the table
+statement error
+DROP TYPE mood;
+
+
+#CLEANUP
+statement ok
+DROP TABLE person;
+
+statement ok
+DROP TYPE mood;
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+
+statement ok
+BEGIN TRANSACTION;
+
+
+statement ok
+ALTER TABLE person DROP COLUMN current_mood
+
+statement ok
+ROLLBACK;
+
+#Fails, mood should still be dependent on by the table
+statement error
+DROP TYPE mood;
+
+#CLEANUP
+statement ok
+DROP TABLE person;
+
+statement ok
+DROP TYPE mood;
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text );
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+ALTER TABLE person ADD COLUMN current_mood mood
+
+statement ok
+ROLLBACK;
+
+statement ok
+DROP TYPE mood;
