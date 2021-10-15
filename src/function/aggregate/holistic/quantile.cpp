@@ -158,6 +158,11 @@ string_t CastInterpolation::Cast(const std::string &src, Vector &result) {
 	return StringVector::AddString(result, src);
 }
 
+template <>
+string_t CastInterpolation::Cast(const string_t &src, Vector &result) {
+	return StringVector::AddString(result, src);
+}
+
 template <class INPUT_TYPE, class TARGET_TYPE, bool DISCRETE>
 struct Interpolator {
 	Interpolator(const double q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(ceil(RN)) {
