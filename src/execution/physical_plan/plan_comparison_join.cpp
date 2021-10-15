@@ -51,10 +51,10 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 			return;
 		}
 	}
-	// with integral types
+	// with integral internal types
 	for (auto &&join_stat : op.join_stats) {
-		if (!TypeIsInteger(join_stat->type.InternalType()) || join_stat->type.InternalType() == PhysicalType::INT128) {
-			// perfect join not possible for non-integral types or hugeint
+		if (!TypeIsInteger(join_stat->type.InternalType()) {
+			// perfect join not possible for non-integral types
 			return;
 		}
 	}
@@ -96,10 +96,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	} else {
 		join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
 	}
-	if (join_state.build_range > MAX_BUILD_SIZE) {
-		return;
-	}
-	if (stats_probe->max.is_null || stats_probe->min.is_null) {
+	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->max.is_null || stats_probe->min.is_null) {
 		return;
 	}
 	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
