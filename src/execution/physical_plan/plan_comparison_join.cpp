@@ -88,7 +88,8 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 			join_state.build_range = build_range.value_.bigint;
 			break;
 		case PhysicalType::INT128:
-			throw InternalException("PhysicalType::INT128 not yet implemented for Perfect HJ");
+			// we do not support hugeint for this optimization
+			return;
 		default:
 			throw InternalException("Invalid Physical Type for Decimals");
 		}
