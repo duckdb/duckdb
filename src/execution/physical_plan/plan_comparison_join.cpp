@@ -76,8 +76,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	join_state.build_min = stats_build->min;
 	join_state.build_max = stats_build->max;
 	join_state.estimated_cardinality = op.estimated_cardinality;
-	if (build_range.type().id() == LogicalTypeId::DECIMAL || build_range.type().id() == LogicalTypeId::DATE ||
-	    build_range.type().id() == LogicalTypeId::TIMESTAMP) {
+	if (!build_range.type().IsIntegral()) {
 		switch (build_range.type().InternalType()) {
 		case PhysicalType::INT16:
 			join_state.build_range = build_range.value_.smallint;
