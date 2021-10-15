@@ -1,0 +1,175 @@
+# name: test/sql/aggregate/grouping_sets/cube.test
+# description: Test CUBE
+# group: [grouping_sets]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table students (course VARCHAR, type VARCHAR, highest_grade INTEGER);
+
+statement ok
+insert into students
+		(course, type, highest_grade)
+	values
+		('CS', 'Bachelor', 8),
+		('CS', 'Bachelor', 8),
+		('CS', 'PhD', 10),
+		('Math', 'Masters', NULL),
+		('CS', NULL, 7),
+		('CS', NULL, 7),
+		('Math', NULL, 8);
+
+query II
+select course, count(*) from students group by cube (course) order by 1, 2;
+----
+NULL	7
+CS	5
+Math	2
+
+query III
+select course, type, count(*) from students group by cube (course, type) order by 1, 2, 3;
+----
+NULL	NULL	3
+NULL	NULL	7
+NULL	Bachelor	2
+NULL	Masters	1
+NULL	PhD	1
+CS	NULL	2
+CS	NULL	5
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	NULL	2
+Math	Masters	1
+
+# if we have brackets in a CUBE group, it counts as one unit within the CUBE statement
+# i.e. in this case (course, type) are not cubed up
+query III
+select course, type, count(*) from students group by cube ((course, type)) order by 1, 2, 3;
+----
+NULL	NULL	7
+CS	NULL	2
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	Masters	1
+
+# duplicate group expressions in cube
+query III
+select course, type, count(*) from students group by cube (course, type, course) order by 1, 2, 3;
+----
+NULL	NULL	3
+NULL	NULL	7
+NULL	Bachelor	2
+NULL	Masters	1
+NULL	PhD	1
+CS	NULL	2
+CS	NULL	2
+CS	NULL	2
+CS	NULL	5
+CS	NULL	5
+CS	NULL	5
+CS	Bachelor	2
+CS	Bachelor	2
+CS	Bachelor	2
+CS	PhD	1
+CS	PhD	1
+CS	PhD	1
+Math	NULL	1
+Math	NULL	1
+Math	NULL	1
+Math	NULL	2
+Math	NULL	2
+Math	NULL	2
+Math	Masters	1
+Math	Masters	1
+Math	Masters	1
+
+query IIII
+select course, type, highest_grade, count(*) from students group by cube (course, type, highest_grade) order by 1, 2, 3, 4;
+----
+NULL	NULL	NULL	1
+NULL	NULL	NULL	3
+NULL	NULL	NULL	7
+NULL	NULL	7	2
+NULL	NULL	7	2
+NULL	NULL	8	1
+NULL	NULL	8	3
+NULL	NULL	10	1
+NULL	Bachelor	NULL	2
+NULL	Bachelor	8	2
+NULL	Masters	NULL	1
+NULL	Masters	NULL	1
+NULL	PhD	NULL	1
+NULL	PhD	10	1
+CS	NULL	NULL	2
+CS	NULL	NULL	5
+CS	NULL	7	2
+CS	NULL	7	2
+CS	NULL	8	2
+CS	NULL	10	1
+CS	Bachelor	NULL	2
+CS	Bachelor	8	2
+CS	PhD	NULL	1
+CS	PhD	10	1
+Math	NULL	NULL	1
+Math	NULL	NULL	1
+Math	NULL	NULL	2
+Math	NULL	8	1
+Math	NULL	8	1
+Math	Masters	NULL	1
+Math	Masters	NULL	1
+
+# multiple cubes ups causes a cross product of them
+query III
+select course, type, count(*) from students group by cube (course), cube (type) order by 1, 2, 3;
+----
+NULL	NULL	3
+NULL	NULL	7
+NULL	Bachelor	2
+NULL	Masters	1
+NULL	PhD	1
+CS	NULL	2
+CS	NULL	5
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	NULL	2
+Math	Masters	1
+
+query III
+select course as crs, type, count(*) from students group by cube (crs), (), type order by 1, 2, 3;
+----
+NULL	NULL	3
+NULL	Bachelor	2
+NULL	Masters	1
+NULL	PhD	1
+CS	NULL	2
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	Masters	1
+
+# we can also use cube within a grouping set
+query III
+select course as crs, type as tp, count(*) from students group by grouping sets (cube (crs)), (), tp order by 1, 2, 3;
+----
+NULL	NULL	3
+NULL	Bachelor	2
+NULL	Masters	1
+NULL	PhD	1
+CS	NULL	2
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	Masters	1
+
+statement error
+select course, count(*) from students group by cube () order by 1, 2;
+
+statement error
+select course, count(*) from students group by cube (cube (course)) order by 1, 2;
+
+statement error
+select course, count(*) from students group by cube (grouping_sets (course)) order by 1, 2;

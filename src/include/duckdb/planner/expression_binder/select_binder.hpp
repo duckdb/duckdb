@@ -51,6 +51,7 @@ protected:
 	BoundGroupInformation &info;
 
 protected:
+	BindResult BindGroupingFunction(OperatorExpression &op, idx_t depth) override;
 	BindResult BindWindow(WindowExpression &expr, idx_t depth);
 
 	idx_t TryBindGroup(ParsedExpression &expr, idx_t depth);

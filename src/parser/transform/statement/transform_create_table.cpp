@@ -26,6 +26,19 @@ string Transformer::TransformCollation(duckdb_libpgquery::PGCollateClause *colla
 	return collation;
 }
 
+OnCreateConflict Transformer::TransformOnConflict(duckdb_libpgquery::PGOnCreateConflict conflict) {
+	switch (conflict) {
+	case duckdb_libpgquery::PG_ERROR_ON_CONFLICT:
+		return OnCreateConflict::ERROR_ON_CONFLICT;
+	case duckdb_libpgquery::PG_IGNORE_ON_CONFLICT:
+		return OnCreateConflict::IGNORE_ON_CONFLICT;
+	case duckdb_libpgquery::PG_REPLACE_ON_CONFLICT:
+		return OnCreateConflict::REPLACE_ON_CONFLICT;
+	default:
+		throw InternalException("Unrecognized OnConflict type");
+	}
+}
+
 unique_ptr<ParsedExpression> Transformer::TransformCollateExpr(duckdb_libpgquery::PGCollateClause *collate,
                                                                idx_t depth) {
 	auto child = TransformExpression(collate->arg, depth + 1);
@@ -65,8 +78,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTable(duckdb_libpgquery:
 		info->schema = stmt->relation->schemaname;
 	}
 	info->table = stmt->relation->relname;
-	info->on_conflict =
-	    stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict = TransformOnConflict(stmt->onconflict);
 	info->temporary =
 	    stmt->relation->relpersistence == duckdb_libpgquery::PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
 

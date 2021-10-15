@@ -22,7 +22,7 @@ ExecuteStmt: EXECUTE name execute_param_clause
 					ctas->into = $4;
 					ctas->relkind = PG_OBJECT_TABLE;
 					ctas->is_select_into = false;
-					ctas->if_not_exists = false;
+					ctas->onconflict = PG_ERROR_ON_CONFLICT;
 					/* cram additional flags into the PGIntoClause */
 					$4->rel->relpersistence = $2;
 					$4->skipData = !($9);
@@ -39,7 +39,7 @@ ExecuteStmt: EXECUTE name execute_param_clause
 					ctas->into = $7;
 					ctas->relkind = PG_OBJECT_TABLE;
 					ctas->is_select_into = false;
-					ctas->if_not_exists = true;
+					ctas->onconflict = PG_IGNORE_ON_CONFLICT;
 					/* cram additional flags into the PGIntoClause */
 					$7->rel->relpersistence = $2;
 					$7->skipData = !($12);

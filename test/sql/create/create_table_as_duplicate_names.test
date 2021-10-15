@@ -2,6 +2,9 @@
 # description: Test CREATE TABLE AS with duplicate column names
 # group: [create]
 
+statement ok
+PRAGMA enable_verification
+
 query II
 SELECT * FROM range(5) tbl1(i) JOIN range(5) tbl2(i) ON tbl1.i=tbl2.i;
 ----

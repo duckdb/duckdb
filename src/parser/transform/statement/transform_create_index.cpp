@@ -26,8 +26,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateIndex(duckdb_libpgquery:
 	auto info = make_unique<CreateIndexInfo>();
 
 	info->unique = stmt->unique;
-	info->on_conflict =
-	    stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict = TransformOnConflict(stmt->onconflict);
 
 	for (auto cell = stmt->indexParams->head; cell != nullptr; cell = cell->next) {
 		auto index_element = (duckdb_libpgquery::PGIndexElem *)cell->data.ptr_value;

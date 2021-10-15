@@ -70,7 +70,47 @@ FROM range(0,100) tbl(d)
 
 endloop
 
-# multiple groups
+#
+# VARCHAR. Remember, this is dictionary ordering, not numeric ordering!
+#
+query III
+SELECT quantile_disc(d::VARCHAR, 0.1), quantile_disc(d::VARCHAR, 0.5), quantile_disc(d::VARCHAR, 0.9)
+FROM range(0,100) tbl(d)
+----
+17	53	9
+
+# A string column that has only NULL values
+query I
+SELECT quantile_disc(NULL::VARCHAR, 0.1)
+FROM range(0,100) tbl(d)
+----
+NULL
+
+# A string column that has long strings (>12 characters)
+query I
+SELECT quantile_disc('prefix-' || d::VARCHAR || '-suffix', 0.1)
+FROM range(0,100) tbl(d)
+----
+prefix-17-suffix
+
+# Using median itself on a string (just an alias for quantile_disc)
+query I
+SELECT median(d::VARCHAR)
+FROM range(0,100) tbl(d)
+----
+53
+
+# Median on an empty table
+query I
+SELECT median(d::VARCHAR)
+FROM range(0,100) tbl(d)
+WHERE d > 100
+----
+NULL
+
+#
+# Multiple groups
+#
 query II
 SELECT mod(r,10) as g, quantile_disc(r, 0.1) FROM quantile GROUP BY 1 ORDER BY 1
 ----
@@ -107,7 +147,6 @@ SELECT quantile_disc(interval (r) second, 0.5) FROM quantile
 ----
 01:23:19
 
-
 # constant input
 query I
 SELECT quantile_disc(1, 0.1) FROM quantile
@@ -132,9 +171,6 @@ SELECT quantile_disc(r, "string") FROM quantile
 
 statement error
 SELECT quantile_disc(r, NULL) FROM quantile
-
-statement error
-SELECT quantile_disc(r::string, 0.5) FROM quantile
 
 statement error
 SELECT quantile_disc(r) FROM quantile
