@@ -7,7 +7,7 @@
 namespace duckdb {
 
 ColumnAliasBinder::ColumnAliasBinder(BoundSelectNode &node, const unordered_map<string, idx_t> &alias_map)
-    : node(node), alias_map(alias_map), in_alias(false), detected_unrecoverable(false) {
+    : node(node), alias_map(alias_map), in_alias(false) {
 }
 
 BindResult ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, ColumnRefExpression &expr, idx_t depth,
@@ -21,12 +21,8 @@ BindResult ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, Colu
 		return BindResult(StringUtil::Format("Alias %s is not found.", expr.ToString()));
 	}
 
-	if (in_alias) {
-		detected_unrecoverable = true;
-		return BindResult(StringUtil::Format("Alias %s is recursively used.", expr.ToString()));
-	}
-
 	// found an alias: bind the alias expression
+	D_ASSERT(!in_alias);
 	auto expression = node.original_expressions[alias_entry->second]->Copy();
 	in_alias = true;
 	auto result = enclosing_binder.BindExpression(&expression, depth, root_expression);

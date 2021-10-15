@@ -24,15 +24,10 @@ public:
 	BindResult BindAlias(ExpressionBinder &enclosing_binder, ColumnRefExpression &expr, idx_t depth,
 	                     bool root_expression);
 
-	bool HadUnrecoverableError() const {
-		return detected_unrecoverable;
-	}
-
 private:
 	BoundSelectNode &node;
 	const unordered_map<string, idx_t> &alias_map;
 	bool in_alias;
-	bool detected_unrecoverable;
 };
 
 } // namespace duckdb
