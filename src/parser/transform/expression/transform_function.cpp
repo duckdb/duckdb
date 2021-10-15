@@ -212,16 +212,23 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("Cannot use multiple ORDER BY clauses with WITHIN GROUP");
 		}
 		if (lowercase_name == "percentile_cont") {
+			if (children.size() != 1) {
+				throw ParserException("Wrong number of arguments for PERCENTILE_CONT");
+			}
 			lowercase_name = "quantile_cont";
 		} else if (lowercase_name == "percentile_disc") {
+			if (children.size() != 1) {
+				throw ParserException("Wrong number of arguments for PERCENTILE_DISC");
+			}
 			lowercase_name = "quantile_disc";
 		} else if (lowercase_name == "mode") {
+			if (!children.empty()) {
+				throw ParserException("Wrong number of arguments for MODE");
+			}
 			lowercase_name = "mode";
 		} else {
 			throw ParserException("Unknown ordered aggregate \"%s\".", function_name);
 		}
-		children.insert(children.begin(), move(order_bys->orders[0].expression));
-		order_bys->orders.clear();
 	}
 
 	// star gets eaten in the parser
