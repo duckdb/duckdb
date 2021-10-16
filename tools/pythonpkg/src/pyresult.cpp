@@ -263,7 +263,8 @@ py::object DuckDBPyResult::FetchDFChunk(idx_t num_of_vectors) {
 }
 
 bool FetchArrowChunk(QueryResult *result, py::list &batches,
-                     pybind11::detail::accessor<pybind11::detail::accessor_policies::str_attr> &batch_import_func) {
+                     pybind11::detail::accessor<pybind11::detail::accessor_policies::str_attr> &batch_import_func,
+                     bool copy = false) {
 	if (result->type == QueryResultType::STREAM_RESULT) {
 		auto stream_result = (StreamQueryResult *)result;
 		if (!stream_result->is_open) {
@@ -273,6 +274,12 @@ bool FetchArrowChunk(QueryResult *result, py::list &batches,
 	auto data_chunk = result->Fetch();
 	if (!data_chunk || data_chunk->size() == 0) {
 		return false;
+	}
+	if (result->type == QueryResultType::STREAM_RESULT && copy) {
+		auto new_chunk = make_unique<DataChunk>();
+		new_chunk->Initialize(data_chunk->GetTypes());
+		data_chunk->Copy(*new_chunk);
+		data_chunk = move(new_chunk);
 	}
 	ArrowArray data;
 	data_chunk->ToArrowArray(&data);
@@ -299,11 +306,14 @@ py::object DuckDBPyResult::FetchArrowTable(bool stream, idx_t num_of_vectors, bo
 	py::list batches;
 	if (stream) {
 		for (idx_t i = 0; i < num_of_vectors; i++) {
-			if (!FetchArrowChunk(result.get(), batches, batch_import_func)) {
+			if (!FetchArrowChunk(result.get(), batches, batch_import_func, true)) {
 				break;
 			}
 		}
 	} else {
+		if (result->type == QueryResultType::STREAM_RESULT) {
+			result = ((StreamQueryResult *)result.get())->Materialize();
+		}
 		while (FetchArrowChunk(result.get(), batches, batch_import_func)) {
 		}
 	}
