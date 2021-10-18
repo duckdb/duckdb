@@ -27,8 +27,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCase(duckdb_libpgquery::PGCas
 	}
 
 	if (root->defresult) {
-		case_node->else_expr =
-		    TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->defresult));
+		case_node->else_expr = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(root->defresult));
 	} else {
 		case_node->else_expr = make_unique<ConstantExpression>(Value(LogicalType::SQLNULL));
 	}

@@ -33,7 +33,9 @@ void Transformer::StackCheck(idx_t extra_stack) {
 	}
 	idx_t stack_size = root - &current_stack_var + extra_stack;
 	if (stack_size > MAX_STACK_SIZE) {
-		throw ParserException("Stack usage in parsing is too high: the query tree is too deep (stack usage %lld, max stack usage %lld)", stack_size, MAX_STACK_SIZE);
+		throw ParserException(
+		    "Stack usage in parsing is too high: the query tree is too deep (stack usage %lld, max stack usage %lld)",
+		    stack_size, MAX_STACK_SIZE);
 	}
 }
 

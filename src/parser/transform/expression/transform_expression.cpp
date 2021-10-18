@@ -82,7 +82,8 @@ unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery:
 	}
 }
 
-void Transformer::TransformExpressionList(duckdb_libpgquery::PGList &list, vector<unique_ptr<ParsedExpression>> &result) {
+void Transformer::TransformExpressionList(duckdb_libpgquery::PGList &list,
+                                          vector<unique_ptr<ParsedExpression>> &result) {
 	for (auto node = list.head; node != nullptr; node = node->next) {
 		auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
 		D_ASSERT(target);

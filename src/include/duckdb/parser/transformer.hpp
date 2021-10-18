@@ -247,7 +247,7 @@ private:
 
 private:
 	//! Default stack limit of the transformer
-	constexpr static idx_t MAX_STACK_SIZE = 1024*100;
+	constexpr static idx_t MAX_STACK_SIZE = 1024 * 100;
 	//! For iterative functions that create recursive objects, this is our default stack size per element
 	constexpr static idx_t DEFAULT_ENTRY_STACK_SIZE = 100;
 	int *root = nullptr;

@@ -14,8 +14,7 @@ unique_ptr<ParsedExpression> Transformer::TransformCoalesce(duckdb_libpgquery::P
 	auto coalesce_op = make_unique<OperatorExpression>(ExpressionType::OPERATOR_COALESCE);
 	for (auto cell = coalesce_args->head; cell; cell = cell->next) {
 		// get the value of the COALESCE
-		auto value_expr =
-		    TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value));
+		auto value_expr = TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value));
 		coalesce_op->children.push_back(move(value_expr));
 	}
 	return move(coalesce_op);

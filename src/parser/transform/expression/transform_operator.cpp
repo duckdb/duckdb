@@ -143,10 +143,10 @@ unique_ptr<ParsedExpression> Transformer::TransformAExpr(duckdb_libpgquery::PGAE
 		}
 
 		auto input = TransformExpression(root->lexpr);
-		auto between_left = TransformExpression(
-		    reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->head->data.ptr_value));
-		auto between_right = TransformExpression(
-		    reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->tail->data.ptr_value));
+		auto between_left =
+		    TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->head->data.ptr_value));
+		auto between_right =
+		    TransformExpression(reinterpret_cast<duckdb_libpgquery::PGNode *>(between_args->tail->data.ptr_value));
 
 		auto compare_between = make_unique<BetweenExpression>(move(input), move(between_left), move(between_right));
 		if (root->kind == duckdb_libpgquery::PG_AEXPR_BETWEEN) {
