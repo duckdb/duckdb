@@ -1,4 +1,4 @@
-add_library_unity(
+add_library(
   duckdb_vector_operations
   OBJECT
   boolean_operators.cpp
