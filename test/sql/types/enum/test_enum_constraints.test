@@ -226,3 +226,59 @@ ROLLBACK;
 
 statement ok
 DROP TYPE mood;
+
+statement ok
+DROP TABLE person
+
+# Test Column Rename
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+ALTER TABLE person RENAME COLUMN current_mood TO past_mood
+
+# Check if constraint still there
+statement error
+DROP TYPE mood
+
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE mood
+
+
+# Test Table Multiple Columns Same Type
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood,
+    past_mood mood
+);
+
+# Check if constraint still there
+statement error
+DROP TYPE mood
+
+statement ok
+ALTER TABLE person DROP COLUMN current_mood
+
+statement error
+DROP TYPE mood
+
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE mood
