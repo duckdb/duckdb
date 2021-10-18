@@ -11,12 +11,12 @@
 #include "duckdb/common/enums/index_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/storage/index.hpp"
-#include "duckdb/storage/table_statistics.hpp"
+#include "duckdb/storage/table/table_statistics.hpp"
 #include "duckdb/storage/block.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/transaction/local_storage.hpp"
 #include "duckdb/storage/table/persistent_table_data.hpp"
-#include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
 
 #include "duckdb/common/atomic.hpp"
@@ -214,9 +214,6 @@ public:
 
 	idx_t GetTotalRows();
 
-	//! Appends an empty row_group to the table
-	void AppendRowGroup(idx_t start_row);
-
 	vector<vector<Value>> GetStorageInfo();
 
 private:
@@ -239,14 +236,10 @@ private:
 private:
 	//! Lock for appending entries to the table
 	mutex append_lock;
-	//! The number of rows in the table
-	atomic<idx_t> total_rows;
-	//! The segment trees holding the various row_groups of the table
-	shared_ptr<SegmentTree> row_groups;
-	//! Column statistics
-	vector<unique_ptr<BaseStatistics>> column_stats;
-	//! The statistics lock
-	mutex stats_lock;
+	//! The row groups of the table
+	shared_ptr<RowGroupCollection> row_groups;
+	//! Table statistics
+	TableStatistics stats;
 	//! Whether or not the data table is the root DataTable for this table; the root DataTable is the newest version
 	//! that can be appended to
 	atomic<bool> is_root;

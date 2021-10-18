@@ -107,7 +107,7 @@ bool RowGroup::InitializeScan(RowGroupScanState &state) {
 	return true;
 }
 
-unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalType &target_type, idx_t changed_idx,
+unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t changed_idx,
                                          ExpressionExecutor &executor, TableScanState &scan_state,
                                          DataChunk &scan_chunk) {
 	Verify();
@@ -153,7 +153,7 @@ unique_ptr<RowGroup> RowGroup::AlterType(ClientContext &context, const LogicalTy
 	return row_group;
 }
 
-unique_ptr<RowGroup> RowGroup::AddColumn(ClientContext &context, ColumnDefinition &new_column,
+unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column,
                                          ExpressionExecutor &executor, Expression *default_value, Vector &result) {
 	Verify();
 
