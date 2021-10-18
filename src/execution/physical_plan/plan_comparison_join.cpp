@@ -53,7 +53,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 	// with integral internal types
 	for (auto &&join_stat : op.join_stats) {
-		if (!TypeIsInteger(join_stat->type.InternalType()) {
+		if (!TypeIsInteger(join_stat->type.InternalType())) {
 			// perfect join not possible for non-integral types
 			return;
 		}
