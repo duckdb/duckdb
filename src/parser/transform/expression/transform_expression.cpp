@@ -27,14 +27,18 @@ unique_ptr<ParsedExpression> Transformer::TransformNamedArg(duckdb_libpgquery::P
 	return expr;
 }
 
+void Transformer::DepthCheck(idx_t depth) {
+	if (depth > max_expression_depth) {
+		throw ParserException("Expression tree is too deep (maximum depth %d)", max_expression_depth);
+	}
+}
+
 unique_ptr<ParsedExpression> Transformer::TransformExpression(duckdb_libpgquery::PGNode *node, idx_t depth) {
 	if (!node) {
 		return nullptr;
 	}
 
-	if (depth > max_expression_depth) {
-		throw ParserException("Expression tree is too deep (maximum depth %d)", max_expression_depth);
-	}
+	DepthCheck(depth);
 
 	switch (node->type) {
 	case duckdb_libpgquery::T_PGColumnRef:

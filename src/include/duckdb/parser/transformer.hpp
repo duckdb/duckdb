@@ -246,6 +246,8 @@ private:
 	void TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr, idx_t depth);
 
 	unique_ptr<SampleOptions> TransformSampleOptions(duckdb_libpgquery::PGNode *options);
+
+	void DepthCheck(idx_t depth);
 };
 
 } // namespace duckdb
