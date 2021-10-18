@@ -7,6 +7,8 @@
 namespace duckdb {
 
 bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<unique_ptr<SQLStatement>> &statements) {
+	int stack_check_var;
+	InitializeStackCheck(&stack_check_var);
 	for (auto entry = tree->head; entry != nullptr; entry = entry->next) {
 		SetParamCount(0);
 		auto stmt = TransformStatement((duckdb_libpgquery::PGNode *)entry->data.ptr_value);
@@ -15,6 +17,24 @@ bool Transformer::TransformParseTree(duckdb_libpgquery::PGList *tree, vector<uni
 		statements.push_back(move(stmt));
 	}
 	return true;
+}
+
+void Transformer::InitializeStackCheck(int *stack_check_var) {
+	this->root = stack_check_var;
+}
+
+void Transformer::StackCheck(idx_t extra_stack) {
+	if (!root) {
+		return;
+	}
+	int current_stack_var;
+	if (&current_stack_var > root) {
+		throw InternalException("Transformer::StackCheck variables are incorrectly set up");
+	}
+	idx_t stack_size = root - &current_stack_var + extra_stack;
+	if (stack_size > MAX_STACK_SIZE) {
+		throw ParserException("Stack usage in parsing is too high: the query tree is too deep (stack usage %lld, max stack usage %lld)", stack_size, MAX_STACK_SIZE);
+	}
 }
 
 unique_ptr<SQLStatement> Transformer::TransformStatement(duckdb_libpgquery::PGNode *stmt) {

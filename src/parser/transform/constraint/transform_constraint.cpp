@@ -18,11 +18,11 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 		return make_unique<UniqueConstraint>(columns, is_primary_key);
 	}
 	case duckdb_libpgquery::PG_CONSTR_CHECK: {
-		auto expression = TransformExpression(constraint->raw_expr, 0);
+		auto expression = TransformExpression(constraint->raw_expr);
 		if (expression->HasSubquery()) {
 			throw ParserException("subqueries prohibited in CHECK constraints");
 		}
-		return make_unique<CheckConstraint>(TransformExpression(constraint->raw_expr, 0));
+		return make_unique<CheckConstraint>(TransformExpression(constraint->raw_expr));
 	}
 	default:
 		throw NotImplementedException("Constraint type not handled yet!");
@@ -45,7 +45,7 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	case duckdb_libpgquery::PG_CONSTR_NULL:
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
-		column.default_value = TransformExpression(constraint->raw_expr, 0);
+		column.default_value = TransformExpression(constraint->raw_expr);
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
 	default:

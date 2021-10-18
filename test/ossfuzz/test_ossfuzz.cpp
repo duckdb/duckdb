@@ -23,7 +23,13 @@ static void test_runner() {
 	std::stringstream buffer;
 	buffer << t.rdbuf();
 	auto query = buffer.str();
-	con.Query(query.c_str());
+	result = con.Query(query.c_str());
+	if (!result->success) {
+		if (TestIsInternalError(result->error)) {
+			REQUIRE(result->error.empty());
+		}
+	}
+
 	// we don't know whether the query fails or not and we don't know the
 	// correct result we just don't want it to crash
 	REQUIRE(1 == 1);

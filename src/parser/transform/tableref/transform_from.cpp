@@ -13,6 +13,7 @@ unique_ptr<TableRef> Transformer::TransformFrom(duckdb_libpgquery::PGList *root)
 		// Cross Product
 		auto result = make_unique<CrossProductRef>();
 		CrossProductRef *cur_root = result.get();
+		idx_t list_size = 0;
 		for (auto node = root->head; node != nullptr; node = node->next) {
 			auto n = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
 			unique_ptr<TableRef> next = TransformTableRefNode(n);
@@ -27,6 +28,8 @@ unique_ptr<TableRef> Transformer::TransformFrom(duckdb_libpgquery::PGList *root)
 				result->right = move(next);
 				cur_root = result.get();
 			}
+			list_size++;
+			StackCheck(list_size * DEFAULT_ENTRY_STACK_SIZE);
 		}
 		return move(result);
 	}

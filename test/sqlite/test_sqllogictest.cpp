@@ -731,8 +731,7 @@ void Statement::ExecuteInternal() {
 		// even in the case of "statement error", we do not accept ALL errors
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
-		bool internal_error = StringUtil::Contains(result->error, "Unoptimized Result differs from original result!");
-		internal_error = internal_error || StringUtil::Contains(result->error, "INTERNAL");
+		bool internal_error = TestIsInternalError(result->error);
 		if (!internal_error) {
 			error = !error;
 		} else {
