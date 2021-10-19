@@ -305,7 +305,7 @@ py::list DuckDBPyRelation::Columns() {
 	for (auto &col : rel->Columns()) {
 		res.append(col.name);
 	}
-	return move(res);
+	return res;
 }
 
 py::list DuckDBPyRelation::ColumnTypes() {
@@ -313,7 +313,7 @@ py::list DuckDBPyRelation::ColumnTypes() {
 	for (auto &col : rel->Columns()) {
 		res.append(col.type.ToString());
 	}
-	return move(res);
+	return res;
 }
 
 } // namespace duckdb
