@@ -204,9 +204,12 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 					out_mask.SetInvalid(row);
 					continue;
 				}
-				py::handle object_handle = val;
-				str_val = py::str(object_handle);
-				val = str_val.ptr();
+				if (!py::isinstance<py::str>(val)) {
+					py::gil_scoped_acquire acquire;
+					py::handle object_handle = val;
+					str_val = py::str(object_handle);
+					val = str_val.ptr();
+				}
 			}
 			// Python 3 string representation:
 			// https://github.com/python/cpython/blob/3a8fdb28794b2f19f6c8464378fb8b46bce1f5f4/Include/cpython/unicodeobject.h#L79
