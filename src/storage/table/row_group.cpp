@@ -60,9 +60,11 @@ void RowGroup::InitializeEmpty(const vector<LogicalType> &types) {
 }
 
 bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_offset) {
-	auto &column_ids = state.parent.column_ids;
-	if (state.parent.table_filters) {
-		if (!CheckZonemap(*state.parent.table_filters, column_ids)) {
+	auto &column_ids = state.GetColumnIds();
+	auto filters = state.GetFilters();
+	auto parent_max_row = state.GetParentMaxRow();
+	if (filters) {
+		if (!CheckZonemap(*filters, column_ids)) {
 			return false;
 		}
 	}
@@ -70,7 +72,7 @@ bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 	state.row_group = this;
 	state.vector_index = vector_offset;
 	state.max_row =
-	    this->start > state.parent.max_row ? 0 : MinValue<idx_t>(this->count, state.parent.max_row - this->start);
+	    this->start > parent_max_row ? 0 : MinValue<idx_t>(this->count, parent_max_row - this->start);
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -85,16 +87,18 @@ bool RowGroup::InitializeScanWithOffset(RowGroupScanState &state, idx_t vector_o
 }
 
 bool RowGroup::InitializeScan(RowGroupScanState &state) {
-	auto &column_ids = state.parent.column_ids;
-	if (state.parent.table_filters) {
-		if (!CheckZonemap(*state.parent.table_filters, column_ids)) {
+	auto &column_ids = state.GetColumnIds();
+	auto filters = state.GetFilters();
+	auto parent_max_row = state.GetParentMaxRow();
+	if (filters) {
+		if (!CheckZonemap(*filters, column_ids)) {
 			return false;
 		}
 	}
 	state.row_group = this;
 	state.vector_index = 0;
 	state.max_row =
-	    this->start > state.parent.max_row ? 0 : MinValue<idx_t>(this->count, state.parent.max_row - this->start);
+	    this->start > parent_max_row ? 0 : MinValue<idx_t>(this->count, parent_max_row - this->start);
 	state.column_scans = unique_ptr<ColumnScanState[]>(new ColumnScanState[column_ids.size()]);
 	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto column = column_ids[i];
@@ -108,7 +112,7 @@ bool RowGroup::InitializeScan(RowGroupScanState &state) {
 }
 
 unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t changed_idx,
-                                         ExpressionExecutor &executor, TableScanState &scan_state,
+                                         ExpressionExecutor &executor, RowGroupScanState &scan_state,
                                          DataChunk &scan_chunk) {
 	Verify();
 
@@ -119,14 +123,14 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 	column_data->InitializeAppend(append_state);
 
 	// scan the original table, and fill the new column with the transformed value
-	InitializeScan(scan_state.row_group_scan_state);
+	InitializeScan(scan_state);
 
 	Vector append_vector(target_type);
 	auto altered_col_stats = make_shared<SegmentStatistics>(target_type);
 	while (true) {
 		// scan the table
 		scan_chunk.Reset();
-		ScanCommitted(scan_state.row_group_scan_state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		ScanCommitted(scan_state, scan_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		if (scan_chunk.size() == 0) {
 			break;
 		}
@@ -220,8 +224,9 @@ void RowGroup::CommitDropColumn(idx_t column_idx) {
 
 void RowGroup::NextVector(RowGroupScanState &state) {
 	state.vector_index++;
-	for (idx_t i = 0; i < state.parent.column_ids.size(); i++) {
-		auto column = state.parent.column_ids[i];
+	auto &column_ids = state.GetColumnIds();
+	for (idx_t i = 0; i < column_ids.size(); i++) {
+		auto column = column_ids[i];
 		if (column == COLUMN_IDENTIFIER_ROW_ID) {
 			continue;
 		}
@@ -246,11 +251,12 @@ bool RowGroup::CheckZonemap(TableFilterSet &filters, const vector<column_t> &col
 }
 
 bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
-	if (!state.parent.table_filters) {
+	auto &column_ids = state.GetColumnIds();
+	auto filters = state.GetFilters();
+	if (!filters) {
 		return true;
 	}
-	auto &column_ids = state.parent.column_ids;
-	for (auto &entry : state.parent.table_filters->filters) {
+	for (auto &entry : filters->filters) {
 		D_ASSERT(entry.first < column_ids.size());
 		auto column_idx = entry.first;
 		auto base_column_idx = column_ids[column_idx];
@@ -284,9 +290,9 @@ template <TableScanType TYPE>
 void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result) {
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
 	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
-	auto &table_filters = state.parent.table_filters;
-	auto &column_ids = state.parent.column_ids;
-	auto &adaptive_filter = state.parent.adaptive_filter;
+	auto table_filters = state.GetFilters();
+	auto &column_ids = state.GetColumnIds();
+	auto adaptive_filter = state.GetAdaptiveFilter();
 	while (true) {
 		if (state.vector_index * STANDARD_VECTOR_SIZE >= state.max_row) {
 			// exceeded the amount of rows to scan

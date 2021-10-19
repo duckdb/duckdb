@@ -11,12 +11,13 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
-
+#include "duckdb/common/enums/scan_options.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
 
 namespace duckdb {
 class ColumnSegment;
 class LocalTableStorage;
+class CollectionScanState;
 class Index;
 class RowGroup;
 class UpdateSegment;
@@ -88,11 +89,9 @@ private:
 
 class RowGroupScanState {
 public:
-	RowGroupScanState(TableScanState &parent_p) : parent(parent_p), vector_index(0), max_row(0) {
+	RowGroupScanState(CollectionScanState &parent_p) : vector_index(0), max_row(0), parent(parent_p) {
 	}
 
-	//! The parent scan state
-	TableScanState &parent;
 	//! The current row_group we are scanning
 	RowGroup *row_group;
 	//! The vector index within the row_group
@@ -103,30 +102,50 @@ public:
 	unique_ptr<ColumnScanState[]> column_scans;
 
 public:
-	//! Move to the next vector, skipping past the current one
-	void NextVector();
+	const vector<column_t> &GetColumnIds();
+	TableFilterSet *GetFilters();
+	AdaptiveFilter *GetAdaptiveFilter();
+	idx_t GetParentMaxRow();
+
+private:
+	//! The parent scan state
+	CollectionScanState &parent;
+};
+
+class CollectionScanState {
+public:
+	CollectionScanState(TableScanState &parent_p) : row_group_state(*this), max_row(0), parent(parent_p) {};
+
+	//! The row_group scan state
+	RowGroupScanState row_group_state;
+	//! The total maximum row index
+	idx_t max_row;
+
+public:
+	const vector<column_t> &GetColumnIds();
+	TableFilterSet *GetFilters();
+	AdaptiveFilter *GetAdaptiveFilter();
+	bool Scan(Transaction &transaction, DataChunk &result);
+	bool ScanCommitted(DataChunk &result, TableScanType type);
+
+private:
+	TableScanState &parent;
 };
 
 class TableScanState {
 public:
-	TableScanState() : row_group_scan_state(*this), max_row(0) {};
+	TableScanState() : table_state(*this), table_filters(nullptr) {};
 
-	//! The row_group scan state
-	RowGroupScanState row_group_scan_state;
-	//! The total maximum row index
-	idx_t max_row;
+	//! The underlying table scan state
+	CollectionScanState table_state;
 	//! The column identifiers of the scan
 	vector<column_t> column_ids;
 	//! The table filters (if any)
-	TableFilterSet *table_filters = nullptr;
+	TableFilterSet *table_filters;
 	//! Adaptive filter info (if any)
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	//! Transaction-local scan state
 	LocalScanState local_state;
-
-public:
-	//! Move to the next vector
-	void NextVector();
 };
 
 class CreateIndexScanState : public TableScanState {

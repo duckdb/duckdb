@@ -175,34 +175,6 @@ void ColumnData::Skip(ColumnScanState &state, idx_t count) {
 	state.Next(count);
 }
 
-void ColumnScanState::NextInternal(idx_t count) {
-	if (!current) {
-		//! There is no column segment
-		return;
-	}
-	row_index += count;
-	while (row_index >= current->start + current->count) {
-		current = (ColumnSegment *)current->next.get();
-		initialized = false;
-		segment_checked = false;
-		if (!current) {
-			break;
-		}
-	}
-	D_ASSERT(!current || (row_index >= current->start && row_index < current->start + current->count));
-}
-
-void ColumnScanState::Next(idx_t count) {
-	NextInternal(count);
-	for (auto &child_state : child_states) {
-		child_state.Next(count);
-	}
-}
-
-void ColumnScanState::NextVector() {
-	Next(STANDARD_VECTOR_SIZE);
-}
-
 void ColumnData::Append(BaseStatistics &stats, ColumnAppendState &state, Vector &vector, idx_t count) {
 	VectorData vdata;
 	vector.Orrify(count, vdata);

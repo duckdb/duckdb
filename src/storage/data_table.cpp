@@ -125,7 +125,13 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
-	row_groups->InitializeScan(state, column_ids, table_filters);
+	state.column_ids = column_ids;
+	state.table_filters = table_filters;
+	if (table_filters) {
+		D_ASSERT(table_filters->filters.size() > 0);
+		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
+	}
+	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 }
 
 void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
@@ -136,7 +142,9 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
                                          idx_t end_row) {
-	row_groups->InitializeScanWithOffset(state, column_ids, start_row, end_row);
+	state.column_ids = column_ids;
+	state.table_filters = nullptr;
+	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
 }
 
 idx_t DataTable::MaxThreads(ClientContext &context) {
@@ -156,14 +164,14 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
                                  const vector<column_t> &column_ids) {
-	while (row_groups->NextParallelScan(context, state, scan_state, column_ids)) {
+	while (row_groups->NextParallelScan(context, state, scan_state.table_state, column_ids)) {
 		return true;
 	}
 	if (!state.transaction_local_data) {
 		auto &transaction = Transaction::GetTransaction(context);
 		// create a task for scanning the local data
-		scan_state.row_group_scan_state.max_row = 0;
-		scan_state.max_row = 0;
+		scan_state.table_state.row_group_state.max_row = 0;
+		scan_state.table_state.max_row = 0;
 		transaction.storage.InitializeScan(this, scan_state.local_state, scan_state.table_filters);
 		scan_state.local_state.max_index = state.local_state.max_index;
 		scan_state.local_state.last_chunk_count = state.local_state.last_chunk_count;
@@ -177,35 +185,13 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 
 void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids) {
 	// scan the persistent segments
-	if (ScanBaseTable(transaction, result, state)) {
+	if (state.table_state.Scan(transaction, result)) {
 		D_ASSERT(result.size() > 0);
 		return;
 	}
 
 	// scan the transaction-local segments
 	transaction.storage.Scan(state.local_state, column_ids, result);
-}
-
-bool DataTable::ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state) {
-	auto current_row_group = state.row_group_scan_state.row_group;
-	while (current_row_group) {
-		current_row_group->Scan(transaction, state.row_group_scan_state, result);
-		if (result.size() > 0) {
-			return true;
-		} else {
-			do {
-				current_row_group = state.row_group_scan_state.row_group = (RowGroup *)current_row_group->next.get();
-				if (current_row_group) {
-					bool scan_row_group = current_row_group->InitializeScan(state.row_group_scan_state);
-					if (scan_row_group) {
-						// skip this row group
-						break;
-					}
-				}
-			} while (current_row_group);
-		}
-	}
-	return false;
 }
 
 //===--------------------------------------------------------------------===//
@@ -332,7 +318,7 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 
 	idx_t current_row = row_start_aligned;
 	while (current_row < end) {
-		ScanCreateIndex(state, chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		state.table_state.ScanCommitted(chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
 		if (chunk.size() == 0) {
 			break;
 		}
@@ -633,22 +619,6 @@ void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vec
 	InitializeScan(state, column_ids);
 }
 
-bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, TableScanType type) {
-	auto current_row_group = state.row_group_scan_state.row_group;
-	while (current_row_group) {
-		current_row_group->ScanCommitted(state.row_group_scan_state, result, type);
-		if (result.size() > 0) {
-			return true;
-		} else {
-			current_row_group = state.row_group_scan_state.row_group = (RowGroup *)current_row_group->next.get();
-			if (current_row_group) {
-				current_row_group->InitializeScan(state.row_group_scan_state);
-			}
-		}
-	}
-	return false;
-}
-
 void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expression>> &expressions) {
 	DataChunk result;
 	result.Initialize(index->logical_types);
@@ -679,7 +649,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 		while (true) {
 			intermediate.Reset();
 			// scan a new chunk from the table to index
-			ScanCreateIndex(state, intermediate, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
+			state.table_state.ScanCommitted(intermediate, TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED);
 			if (intermediate.size() == 0) {
 				// finished scanning for index creation
 				// release all locks

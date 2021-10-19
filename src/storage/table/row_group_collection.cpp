@@ -49,17 +49,11 @@ void RowGroupCollection::Verify() {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
+void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector<column_t> &column_ids,
                                         TableFilterSet *table_filters) {
 	auto row_group = (RowGroup *)row_groups->GetRootSegment();
-	state.column_ids = column_ids;
 	state.max_row = total_rows;
-	state.table_filters = table_filters;
-	if (table_filters) {
-		D_ASSERT(table_filters->filters.size() > 0);
-		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
-	}
-	while (row_group && !row_group->InitializeScan(state.row_group_scan_state)) {
+	while (row_group && !row_group->InitializeScan(state.row_group_state)) {
 		row_group = (RowGroup *)row_group->next.get();
 	}
 }
@@ -68,29 +62,20 @@ void RowGroupCollection::InitializeCreateIndexScan(CreateIndexScanState &state) 
 	state.delete_lock = std::unique_lock<mutex>(row_groups->node_lock);
 }
 
-void RowGroupCollection::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids,
+void RowGroupCollection::InitializeScanWithOffset(CollectionScanState &state, const vector<column_t> &column_ids,
                                                   idx_t start_row, idx_t end_row) {
 	auto row_group = (RowGroup *)row_groups->GetSegment(start_row);
-	state.column_ids = column_ids;
 	state.max_row = end_row;
-	state.table_filters = nullptr;
 	idx_t start_vector = (start_row - row_group->start) / STANDARD_VECTOR_SIZE;
-	if (!row_group->InitializeScanWithOffset(state.row_group_scan_state, start_vector)) {
+	if (!row_group->InitializeScanWithOffset(state.row_group_state, start_vector)) {
 		throw InternalException("Failed to initialize row group scan with offset");
 	}
 }
 
-bool RowGroupCollection::InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
-                                                  TableFilterSet *table_filters, RowGroup *row_group,
+bool RowGroupCollection::InitializeScanInRowGroup(CollectionScanState &state, RowGroup *row_group,
                                                   idx_t vector_index, idx_t max_row) {
-	state.column_ids = column_ids;
 	state.max_row = max_row;
-	state.table_filters = table_filters;
-	if (table_filters) {
-		D_ASSERT(table_filters->filters.size() > 0);
-		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
-	}
-	return row_group->InitializeScanWithOffset(state.row_group_scan_state, vector_index);
+	return row_group->InitializeScanWithOffset(state.row_group_state, vector_index);
 }
 
 void RowGroupCollection::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
@@ -102,7 +87,7 @@ void RowGroupCollection::InitializeParallelScan(ClientContext &context, Parallel
 }
 
 bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelTableScanState &state,
-                                          TableScanState &scan_state, const vector<column_t> &column_ids) {
+                                          CollectionScanState &scan_state, const vector<column_t> &column_ids) {
 	while (state.current_row_group) {
 		idx_t vector_index;
 		idx_t max_row;
@@ -116,8 +101,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelTableS
 			max_row = state.current_row_group->start + state.current_row_group->count;
 		}
 		max_row = MinValue<idx_t>(max_row, state.max_row);
-		bool need_to_scan = InitializeScanInRowGroup(scan_state, column_ids, scan_state.table_filters,
-		                                             state.current_row_group, vector_index, max_row);
+		bool need_to_scan = InitializeScanInRowGroup(scan_state, state.current_row_group, vector_index, max_row);
 		if (context.verify_parallelism) {
 			state.vector_index++;
 			if (state.vector_index * STANDARD_VECTOR_SIZE >= state.current_row_group->count) {
@@ -345,15 +329,15 @@ void RowGroupCollection::RemoveFromIndexes(Vector &row_identifiers, idx_t count)
 	// now fetch the columns from that row_group
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
 	TableScanState state;
-	state.max_row = total_rows;
+	state.table_state.max_row = total_rows;
 	for (idx_t i = 0; i < types.size(); i++) {
 		state.column_ids.push_back(i);
 	}
 	DataChunk result;
 	result.Initialize(types);
 
-	row_group->InitializeScanWithOffset(state.row_group_scan_state, row_group_vector_idx);
-	row_group->ScanCommitted(state.row_group_scan_state, result,
+	row_group->InitializeScanWithOffset(state.table_state.row_group_state, row_group_vector_idx);
+	row_group->ScanCommitted(state.table_state.row_group_state, result,
 	                         TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES);
 	result.Slice(sel, count);
 
@@ -501,12 +485,12 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 
 	TableScanState scan_state;
 	scan_state.column_ids = bound_columns;
-	scan_state.max_row = total_rows;
+	scan_state.table_state.max_row = total_rows;
 
 	// now alter the type of the column within all of the row_groups individually
 	auto current_row_group = (RowGroup *)row_groups->GetRootSegment();
 	while (current_row_group) {
-		auto new_row_group = current_row_group->AlterType(target_type, changed_idx, executor, scan_state, scan_chunk);
+		auto new_row_group = current_row_group->AlterType(target_type, changed_idx, executor, scan_state.table_state.row_group_state, scan_chunk);
 		stats.Merge(*new_row_group->GetStatistics(changed_idx));
 		result->row_groups->AppendSegment(move(new_row_group));
 		current_row_group = (RowGroup *)current_row_group->next.get();

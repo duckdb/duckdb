@@ -12,6 +12,7 @@ add_library_unity(
   segment_tree.cpp
   row_group.cpp
   row_group_collection.cpp
+  scan_state.cpp
   standard_column_data.cpp
   struct_column_data.cpp
   table_statistics.cpp

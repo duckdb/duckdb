@@ -26,15 +26,14 @@ public:
 	void AppendRowGroup(idx_t start_row);
 	void Verify();
 
-	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters);
+	void InitializeScan(CollectionScanState &state, const vector<column_t> &column_ids, TableFilterSet *table_filters);
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
-	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
+	void InitializeScanWithOffset(CollectionScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);
-	static bool InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
-	                                     TableFilterSet *table_filters, RowGroup *row_group, idx_t vector_index,
+	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroup *row_group, idx_t vector_index,
 	                                     idx_t max_row);
 	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
+	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, CollectionScanState &scan_state,
 	                      const vector<column_t> &column_ids);
 
 	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_identifiers,

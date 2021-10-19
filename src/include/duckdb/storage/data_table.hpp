@@ -224,14 +224,9 @@ private:
 
 	void InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
 	                              idx_t end_row);
-	bool InitializeScanInRowGroup(TableScanState &state, const vector<column_t> &column_ids,
-	                              TableFilterSet *table_filters, RowGroup *row_group, idx_t vector_index,
-	                              idx_t max_row);
-	bool ScanBaseTable(Transaction &transaction, DataChunk &result, TableScanState &state);
 
 	//! The CreateIndexScan is a special scan that is used to create an index on the table, it keeps locks on the table
 	void InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids);
-	bool ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, TableScanType type);
 
 private:
 	//! Lock for appending entries to the table
