@@ -27,11 +27,9 @@ def check_create_table(category):
     res =  conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.x)").fetchall()
     assert res == conn.execute("SELECT x FROM t1").fetchall()
     
-    # Can't compare different ENUMs
-    with pytest.raises(Exception):
-        conn.execute("SELECT * FROM t1 inner join t2 on (t1.x = t2.y)").fetchall()
-    
-    assert res == conn.execute("SELECT x FROM t1").fetchall()
+    res = conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.y) order by t1.x").fetchall()
+    correct_res = conn.execute("SELECT x FROM t1 order by x").fetchall()
+    assert res == correct_res
     # Triggering the cast with ENUM as a src
     conn.execute("ALTER TABLE t1 ALTER x SET DATA TYPE VARCHAR")
     # We should be able to drop the table without any dependencies
