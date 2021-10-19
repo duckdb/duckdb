@@ -375,7 +375,10 @@ vector<vector<Value>> RowGroupCollection::GetStorageInfo() {
 //===--------------------------------------------------------------------===//
 shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ColumnDefinition &new_column, Expression *default_value, BaseStatistics &stats) {
 	idx_t new_column_idx = types.size();
-	auto result = make_shared<RowGroupCollection>(info, types, row_start);
+	auto new_types = types;
+	new_types.push_back(new_column.type);
+	auto result = make_shared<RowGroupCollection>(info, move(new_types), row_start);
+
 	ExpressionExecutor executor;
 	DataChunk dummy_chunk;
 	Vector default_vector(new_column.type);
@@ -400,7 +403,10 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ColumnDefinition &n
 }
 
 shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
-	auto result = make_shared<RowGroupCollection>(info, types, row_start);
+	D_ASSERT(col_idx < types.size());
+	auto new_types = types;
+	new_types.erase(new_types.begin() + col_idx);
+	auto result = make_shared<RowGroupCollection>(info, move(new_types), row_start);
 	auto current_row_group = (RowGroup *)row_groups->GetRootSegment();
 	while (current_row_group) {
 		auto new_row_group = current_row_group->RemoveColumn(col_idx);
@@ -411,7 +417,11 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 }
 
 shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, const LogicalType &target_type, vector<column_t> bound_columns, Expression &cast_expr, BaseStatistics &stats) {
-	auto result = make_shared<RowGroupCollection>(info, types, row_start);
+	D_ASSERT(changed_idx < types.size());
+	auto new_types = types;
+	new_types[changed_idx] = target_type;
+
+	auto result = make_shared<RowGroupCollection>(info, move(new_types), row_start);
 
 	vector<LogicalType> scan_types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
