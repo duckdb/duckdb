@@ -32,7 +32,10 @@ bool SelectNode::Equals(const QueryNode *other_p) const {
 		return false;
 	}
 	// GROUP BY
-	if (!ExpressionUtil::ListEquals(groups, other->groups)) {
+	if (!ExpressionUtil::ListEquals(groups.group_expressions, other->groups.group_expressions)) {
+		return false;
+	}
+	if (groups.grouping_sets != other->groups.grouping_sets) {
 		return false;
 	}
 	if (!SampleOptions::Equals(sample.get(), other->sample.get())) {
@@ -53,9 +56,10 @@ unique_ptr<QueryNode> SelectNode::Copy() {
 	result->from_table = from_table ? from_table->Copy() : nullptr;
 	result->where_clause = where_clause ? where_clause->Copy() : nullptr;
 	// groups
-	for (auto &group : groups) {
-		result->groups.push_back(group->Copy());
+	for (auto &group : groups.group_expressions) {
+		result->groups.group_expressions.push_back(group->Copy());
 	}
+	result->groups.grouping_sets = groups.grouping_sets;
 	result->having = having ? having->Copy() : nullptr;
 	result->sample = sample ? sample->Copy() : nullptr;
 	this->CopyProperties(*result);
@@ -70,8 +74,16 @@ void SelectNode::Serialize(Serializer &serializer) {
 	serializer.WriteOptional(from_table);
 	// where_clause
 	serializer.WriteOptional(where_clause);
-	// group by / having
-	serializer.WriteList(groups);
+	// group by
+	serializer.WriteList(groups.group_expressions);
+	serializer.Write<idx_t>(groups.grouping_sets.size());
+	for (auto &grouping_set : groups.grouping_sets) {
+		serializer.Write<idx_t>(grouping_set.size());
+		for (auto &idx : grouping_set) {
+			serializer.Write<idx_t>(idx);
+		}
+	}
+	// having / sample
 	serializer.WriteOptional(having);
 	serializer.WriteOptional(sample);
 }
@@ -84,8 +96,18 @@ unique_ptr<QueryNode> SelectNode::Deserialize(Deserializer &source) {
 	result->from_table = source.ReadOptional<TableRef>();
 	// where_clause
 	result->where_clause = source.ReadOptional<ParsedExpression>();
-	// group by / having
-	source.ReadList<ParsedExpression>(result->groups);
+	// group by
+	source.ReadList<ParsedExpression>(result->groups.group_expressions);
+	auto grouping_set_count = source.Read<idx_t>();
+	for (idx_t set_idx = 0; set_idx < grouping_set_count; set_idx++) {
+		auto set_entries = source.Read<idx_t>();
+		GroupingSet grouping_set;
+		for (idx_t i = 0; i < set_entries; i++) {
+			grouping_set.insert(source.Read<idx_t>());
+		}
+		result->groups.grouping_sets.push_back(grouping_set);
+	}
+	// having / sample
 	result->having = source.ReadOptional<ParsedExpression>();
 	result->sample = source.ReadOptional<SampleOptions>();
 	return move(result);

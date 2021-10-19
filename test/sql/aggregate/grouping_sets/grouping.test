@@ -1,0 +1,206 @@
+# name: test/sql/aggregate/grouping_sets/grouping.test
+# description: Test GROUPING statement
+# group: [grouping_sets]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table students (course VARCHAR, type VARCHAR);
+
+statement ok
+insert into students
+		(course, type)
+	values
+		('CS', 'Bachelor'),
+		('CS', 'Bachelor'),
+		('CS', 'PhD'),
+		('Math', 'Masters'),
+		('CS', NULL),
+		('CS', NULL),
+		('Math', NULL);
+
+query III
+SELECT GROUPING(course), course, COUNT(*) FROM students GROUP BY course ORDER BY 1, 2, 3;
+----
+0	CS	5
+0	Math	2
+
+query III
+SELECT GROUPING_ID(course), course, COUNT(*) FROM students GROUP BY course ORDER BY 1, 2, 3;
+----
+0	CS	5
+0	Math	2
+
+query IIIII
+SELECT GROUPING(course), GROUPING(type), course, type, COUNT(*) FROM students GROUP BY course, type ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	CS	NULL	2
+0	0	CS	Bachelor	2
+0	0	CS	PhD	1
+0	0	Math	NULL	1
+0	0	Math	Masters	1
+
+query IIIII
+SELECT GROUPING(course), GROUPING(type), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	CS	NULL	2
+0	0	CS	Bachelor	2
+0	0	CS	PhD	1
+0	0	Math	NULL	1
+0	0	Math	Masters	1
+0	1	CS	NULL	5
+0	1	Math	NULL	2
+1	0	NULL	NULL	3
+1	0	NULL	Bachelor	2
+1	0	NULL	Masters	1
+1	0	NULL	PhD	1
+1	1	NULL	NULL	7
+
+query IIII
+SELECT GROUPING(course, type), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4;
+----
+0	CS	NULL	2
+0	CS	Bachelor	2
+0	CS	PhD	1
+0	Math	NULL	1
+0	Math	Masters	1
+1	CS	NULL	5
+1	Math	NULL	2
+2	NULL	NULL	3
+2	NULL	Bachelor	2
+2	NULL	Masters	1
+2	NULL	PhD	1
+3	NULL	NULL	7
+
+query IIIIII
+SELECT GROUPING(course), GROUPING(type), GROUPING(course)+GROUPING(type), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	0	CS	NULL	2
+0	0	0	CS	Bachelor	2
+0	0	0	CS	PhD	1
+0	0	0	Math	NULL	1
+0	0	0	Math	Masters	1
+0	1	1	CS	NULL	5
+0	1	1	Math	NULL	2
+1	0	1	NULL	NULL	3
+1	0	1	NULL	Bachelor	2
+1	0	1	NULL	Masters	1
+1	0	1	NULL	PhD	1
+1	1	2	NULL	NULL	7
+
+# many repeated groupings
+query IIII
+SELECT GROUPING(course, type, course, course, type, type, course), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4;
+----
+0	CS	NULL	2
+0	CS	Bachelor	2
+0	CS	PhD	1
+0	Math	NULL	1
+0	Math	Masters	1
+38	CS	NULL	5
+38	Math	NULL	2
+89	NULL	NULL	3
+89	NULL	Bachelor	2
+89	NULL	Masters	1
+89	NULL	PhD	1
+127	NULL	NULL	7
+
+# GROUPING with different table qualifications
+query IIIIII
+SELECT GROUPING(students.course), GROUPING(students.type), GROUPING(course)+GROUPING(type), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	0	CS	NULL	2
+0	0	0	CS	Bachelor	2
+0	0	0	CS	PhD	1
+0	0	0	Math	NULL	1
+0	0	0	Math	Masters	1
+0	1	1	CS	NULL	5
+0	1	1	Math	NULL	2
+1	0	1	NULL	NULL	3
+1	0	1	NULL	Bachelor	2
+1	0	1	NULL	Masters	1
+1	0	1	NULL	PhD	1
+1	1	2	NULL	NULL	7
+
+query IIIIII
+SELECT GROUPING(course), GROUPING(type), GROUPING(course)+GROUPING(type), course, type, COUNT(*) FROM students GROUP BY CUBE(students.course, students.type) ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	0	CS	NULL	2
+0	0	0	CS	Bachelor	2
+0	0	0	CS	PhD	1
+0	0	0	Math	NULL	1
+0	0	0	Math	Masters	1
+0	1	1	CS	NULL	5
+0	1	1	Math	NULL	2
+1	0	1	NULL	NULL	3
+1	0	1	NULL	Bachelor	2
+1	0	1	NULL	Masters	1
+1	0	1	NULL	PhD	1
+1	1	2	NULL	NULL	7
+
+# GROUPING in HAVING clause
+query IIIII
+SELECT GROUPING(course), GROUPING(type), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) HAVING GROUPING(course)=0 ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	CS	NULL	2
+0	0	CS	Bachelor	2
+0	0	CS	PhD	1
+0	0	Math	NULL	1
+0	0	Math	Masters	1
+0	1	CS	NULL	5
+0	1	Math	NULL	2
+
+query IIIII
+SELECT GROUPING(course), GROUPING(type), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) HAVING GROUPING(students.course)=0 ORDER BY 1, 2, 3, 4, 5;
+----
+0	0	CS	NULL	2
+0	0	CS	Bachelor	2
+0	0	CS	PhD	1
+0	0	Math	NULL	1
+0	0	Math	Masters	1
+0	1	CS	NULL	5
+0	1	Math	NULL	2
+
+# GROUPING in ORDER BY clause
+query III
+SELECT course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY GROUPING(course), GROUPING(type), 1, 2, 3;
+----
+CS	NULL	2
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	Masters	1
+CS	NULL	5
+Math	NULL	2
+NULL	NULL	3
+NULL	Bachelor	2
+NULL	Masters	1
+NULL	PhD	1
+NULL	NULL	7
+
+# test incorrect grouping usage
+statement error
+SELECT GROUPING();
+
+statement error
+SELECT GROUPING() FROM students;
+
+statement error
+SELECT GROUPING(NULL) FROM students;
+
+statement error
+SELECT GROUPING(course) FROM students;
+
+statement error
+SELECT GROUPING(course) FROM students GROUP BY ();
+
+statement error
+SELECT GROUPING(type) FROM students GROUP BY course;
+
+statement error
+SELECT GROUPING(course) FROM students WHERE GROUPING(course)=0 GROUP BY course;
+
+# we have a limit on how many children the grouping clause can contain
+statement error
+SELECT GROUPING(course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course, course), course, type, COUNT(*) FROM students GROUP BY CUBE(course, type) ORDER BY 1, 2, 3, 4;

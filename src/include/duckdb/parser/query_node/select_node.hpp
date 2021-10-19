@@ -13,6 +13,7 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/parser/tableref.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/parser/group_by_node.hpp"
 
 namespace duckdb {
 
@@ -35,7 +36,7 @@ public:
 	//! The WHERE clause
 	unique_ptr<ParsedExpression> where_clause;
 	//! list of groups
-	vector<unique_ptr<ParsedExpression>> groups;
+	GroupByNode groups;
 	//! HAVING clause
 	unique_ptr<ParsedExpression> having;
 	//! Aggregate handling during binding

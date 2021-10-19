@@ -72,7 +72,7 @@ static unique_ptr<FunctionData> ListLengthBind(ClientContext &context, ScalarFun
 
 void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunction array_length_unary = ScalarFunction(
-	    {LogicalTypeId::LIST}, LogicalType::BIGINT,
+	    {LogicalType::LIST(LogicalType::ANY)}, LogicalType::BIGINT,
 	    ScalarFunction::UnaryFunction<list_entry_t, int64_t, ArrayLengthOperator>, false, ListLengthBind);
 	ScalarFunctionSet length("length");
 	length.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::BIGINT,
@@ -86,7 +86,7 @@ void LengthFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet array_length("array_length");
 	array_length.AddFunction(array_length_unary);
 	array_length.AddFunction(
-	    ScalarFunction({LogicalTypeId::LIST, LogicalType::BIGINT}, LogicalType::BIGINT,
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::BIGINT}, LogicalType::BIGINT,
 	                   ScalarFunction::BinaryFunction<list_entry_t, int64_t, int64_t, ArrayLengthBinaryOperator>, false,
 	                   ListLengthBind));
 	set.AddFunction(array_length);

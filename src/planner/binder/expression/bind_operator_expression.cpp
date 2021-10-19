@@ -44,13 +44,21 @@ static LogicalType ResolveOperatorType(OperatorExpression &op, vector<BoundExpre
 	case ExpressionType::COMPARE_NOT_IN:
 	case ExpressionType::OPERATOR_COALESCE:
 		return ResolveInType(op, children);
-	default:
-		D_ASSERT(op.type == ExpressionType::OPERATOR_NOT);
+	case ExpressionType::OPERATOR_NOT:
 		return ResolveNotType(op, children);
+	default:
+		throw InternalException("Unrecognized expression type for ResolveOperatorType");
 	}
 }
 
+BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t depth) {
+	return BindResult("GROUPING function is not supported here");
+}
+
 BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth) {
+	if (op.type == ExpressionType::GROUPING_FUNCTION) {
+		return BindGroupingFunction(op, depth);
+	}
 	// bind the children of the operator expression
 	string error;
 	for (idx_t i = 0; i < op.children.size(); i++) {

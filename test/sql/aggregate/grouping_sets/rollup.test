@@ -1,0 +1,135 @@
+# name: test/sql/aggregate/grouping_sets/rollup.test
+# description: Test ROLLUP
+# group: [grouping_sets]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table students (course VARCHAR, type VARCHAR);
+
+statement ok
+insert into students
+		(course, type)
+	values
+		('CS', 'Bachelor'),
+		('CS', 'Bachelor'),
+		('CS', 'PhD'),
+		('Math', 'Masters'),
+		('CS', NULL),
+		('CS', NULL),
+		('Math', NULL);
+
+query II
+select course, count(*) from students group by rollup (course) order by 1, 2;
+----
+NULL	7
+CS	5
+Math	2
+
+query III
+select course, type, count(*) from students group by rollup (course, type) order by 1, 2, 3;
+----
+NULL	NULL	7
+CS	NULL	2
+CS	NULL	5
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	NULL	2
+Math	Masters	1
+
+# if we have brackets in a ROLLUP group, it counts as one unit within the ROLLUP statement
+# i.e. in this case (course, type) are not individually rolled up
+query III
+select course, type, count(*) from students group by rollup ((course, type)) order by 1, 2, 3;
+----
+NULL	NULL	7
+CS	NULL	2
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	Masters	1
+
+# duplicate group expressions in rollup
+query III
+select course, type, count(*) from students group by rollup (course, type, course) order by 1, 2, 3;
+----
+NULL	NULL	7
+CS	NULL	2
+CS	NULL	2
+CS	NULL	5
+CS	Bachelor	2
+CS	Bachelor	2
+CS	PhD	1
+CS	PhD	1
+Math	NULL	1
+Math	NULL	1
+Math	NULL	2
+Math	Masters	1
+Math	Masters	1
+
+query III
+select course, type, count(*) from students group by grouping sets ((course, type), (course), ()) order by 1, 2, 3;
+----
+NULL	NULL	7
+CS	NULL	2
+CS	NULL	5
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	NULL	2
+Math	Masters	1
+
+# multiple roll ups causes a cross product of them
+query III
+select course, type, count(*) from students group by rollup (course), rollup (type) order by 1, 2, 3;
+----
+NULL	NULL	3
+NULL	NULL	7
+NULL	Bachelor	2
+NULL	Masters	1
+NULL	PhD	1
+CS	NULL	2
+CS	NULL	5
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	NULL	2
+Math	Masters	1
+
+query III
+select course as crs, type, count(*) from students group by rollup (crs), (), type order by 1, 2, 3;
+----
+NULL	NULL	3
+NULL	Bachelor	2
+NULL	Masters	1
+NULL	PhD	1
+CS	NULL	2
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	Masters	1
+
+# we can also use rollup within a grouping set
+query III
+select course as crs, type as tp, count(*) from students group by grouping sets (rollup (crs)), (), tp order by 1, 2, 3;
+----
+NULL	NULL	3
+NULL	Bachelor	2
+NULL	Masters	1
+NULL	PhD	1
+CS	NULL	2
+CS	Bachelor	2
+CS	PhD	1
+Math	NULL	1
+Math	Masters	1
+
+statement error
+select course, count(*) from students group by rollup () order by 1, 2;
+
+statement error
+select course, count(*) from students group by rollup (rollup (course)) order by 1, 2;
+
+statement error
+select course, count(*) from students group by rollup (grouping_sets (course)) order by 1, 2;

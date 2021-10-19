@@ -17,13 +17,13 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNo
 	if (stmt->args) {
 		for (auto cell = stmt->args->head; cell != nullptr; cell = cell->next) {
 			auto node = reinterpret_cast<duckdb_libpgquery::PGNode *>(cell->data.ptr_value);
-			auto expr = TransformExpression(node, 0);
+			auto expr = TransformExpression(node);
 
 			if (expr->type == ExpressionType::COMPARE_EQUAL) {
 				auto &comp = (ComparisonExpression &)*expr;
 				info.named_parameters[comp.left->ToString()] = Value(comp.right->ToString());
 			} else if (node->type == duckdb_libpgquery::T_PGAConst) {
-				auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)node, 0);
+				auto constant = TransformConstant((duckdb_libpgquery::PGAConst *)node);
 				info.parameters.push_back(((ConstantExpression &)*constant).value);
 			} else {
 				info.parameters.emplace_back(expr->ToString());

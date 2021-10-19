@@ -16,16 +16,16 @@ static string ExtractColumnFromLambda(ParsedExpression &expr) {
 	return colref.column_name;
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGLambdaFunction *node, idx_t depth) {
+unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGLambdaFunction *node) {
 	vector<unique_ptr<ParsedExpression>> parameter_expressions;
-	TransformExpressionList(*node->parameters, parameter_expressions, depth + 1);
+	TransformExpressionList(*node->parameters, parameter_expressions);
 	vector<string> parameters;
 	parameters.reserve(parameter_expressions.size());
 	for (auto &expr : parameter_expressions) {
 		parameters.push_back(ExtractColumnFromLambda(*expr));
 	}
 
-	auto lambda_function = TransformExpression(node->function, depth + 1);
+	auto lambda_function = TransformExpression(node->function);
 	return make_unique<LambdaExpression>(move(parameters), move(lambda_function));
 }
 

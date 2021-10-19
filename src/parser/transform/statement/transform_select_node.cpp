@@ -40,7 +40,7 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 			auto target = reinterpret_cast<duckdb_libpgquery::PGNode *>(stmt->distinctClause->head->data.ptr_value);
 			if (target) {
 				//  add the columns defined in the ON clause to the select list
-				TransformExpressionList(*stmt->distinctClause, modifier->distinct_on_targets, 0);
+				TransformExpressionList(*stmt->distinctClause, modifier->distinct_on_targets);
 			}
 			result->modifiers.push_back(move(modifier));
 		}
@@ -56,16 +56,16 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 				throw ParserException("SELECT clause without selection list");
 			}
 			// select list
-			TransformExpressionList(*stmt->targetList, result->select_list, 0);
+			TransformExpressionList(*stmt->targetList, result->select_list);
 			result->from_table = TransformFrom(stmt->fromClause);
 		}
 
 		// where
-		result->where_clause = TransformExpression(stmt->whereClause, 0);
+		result->where_clause = TransformExpression(stmt->whereClause);
 		// group by
 		TransformGroupBy(stmt->groupClause, result->groups);
 		// having
-		result->having = TransformExpression(stmt->havingClause, 0);
+		result->having = TransformExpression(stmt->havingClause);
 		// sample
 		result->sample = TransformSampleOptions(stmt->sampleOptions);
 		break;
@@ -122,10 +122,10 @@ unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSele
 	if (stmt->limitCount || stmt->limitOffset) {
 		auto limit_modifier = make_unique<LimitModifier>();
 		if (stmt->limitCount) {
-			limit_modifier->limit = TransformExpression(stmt->limitCount, 0);
+			limit_modifier->limit = TransformExpression(stmt->limitCount);
 		}
 		if (stmt->limitOffset) {
-			limit_modifier->offset = TransformExpression(stmt->limitOffset, 0);
+			limit_modifier->offset = TransformExpression(stmt->limitOffset);
 		}
 		node->modifiers.push_back(move(limit_modifier));
 	}
