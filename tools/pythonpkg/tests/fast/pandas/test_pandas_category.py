@@ -10,6 +10,10 @@ def check_category_equal(category):
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
     assert df_in.equals(df_out)
 
+def check_result_list(category,res):
+    for i in range (len(category)):
+        assert category[i][0] == res[i]
+
 def check_create_table(category):
     conn = duckdb.connect()
 
@@ -24,6 +28,10 @@ def check_create_table(category):
 
     conn.execute("CREATE TABLE t1 AS SELECT * FROM df_in")
     conn.execute("CREATE TABLE t2 AS SELECT * FROM df_in")
+
+    # Check fetchall
+    res =  conn.execute("SELECT t1.x FROM t1").fetchall()
+    check_result_list(res,category)
 
     # Do a insert to trigger string -> cat 
     conn.execute("INSERT INTO t1 VALUES ('2','2')")
