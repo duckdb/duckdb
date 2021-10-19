@@ -57,7 +57,7 @@ static void AddCubeSets(const GroupingSet &current_set, vector<GroupingSet> &res
 
 void Transformer::TransformGroupByExpression(duckdb_libpgquery::PGNode *n, GroupingExpressionMap &map,
                                              GroupByNode &result, vector<idx_t> &indexes) {
-	auto expression = TransformExpression(n, 0);
+	auto expression = TransformExpression(n);
 	AddGroupByExpression(move(expression), map, result, indexes);
 }
 

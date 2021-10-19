@@ -20,6 +20,7 @@ namespace duckdb {
 class Serializer;
 class Deserializer;
 class Value;
+class TypeCatalogEntry;
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t {
 	int32_t days;
@@ -504,6 +505,8 @@ struct EnumType{
 	DUCKDB_API static const vector<string> &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
 	DUCKDB_API static const string& GetValue(const Value &val);
+	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
+	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
 };
 
 struct StructType {
