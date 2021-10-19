@@ -66,13 +66,14 @@ select * from person
 ----
 Moe	happy
 
-statement ok
-DROP TYPE mood;
-
 # reload the database from disk a few times, and check that the data in the table is still there
 loop i 0 2
 
 restart
+
+# We cant drop mood and we verify the constraint is still there after reloading the database
+statement error
+DROP TYPE mood;
 
 query TT
 select * from person

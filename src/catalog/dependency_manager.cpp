@@ -1,6 +1,10 @@
 #include "duckdb/catalog/dependency_manager.hpp"
-
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/database.hpp"
 
 namespace duckdb {
 
@@ -83,14 +87,53 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 		                       "depend on it.",
 		                       old_obj->name);
 	}
-	// add the new object to the dependents_map of each object that it depents on
+	// add the new object to the dependents_map of each object that it depends on
 	auto &old_dependencies = dependencies_map[old_obj];
+	vector<CatalogEntry *> to_delete;
 	for (auto &dependency : old_dependencies) {
+		if (dependency->type == CatalogType::TYPE_ENTRY) {
+			auto user_type = (TypeCatalogEntry *)dependency;
+			auto table = (TableCatalogEntry *)new_obj;
+			bool deleted_dependency = true;
+			for (auto &column : table->columns) {
+				if (column.type == *user_type->user_type) {
+					deleted_dependency = false;
+					break;
+				}
+			}
+			if (deleted_dependency) {
+				to_delete.push_back(dependency);
+				continue;
+			}
+		}
 		dependents_map[dependency].insert(new_obj);
+	}
+	for (auto &dependency : to_delete) {
+		old_dependencies.erase(dependency);
+		dependents_map[dependency].erase(old_obj);
+	}
+
+	// We might have to add a type dependency
+	vector<CatalogEntry *> to_add;
+	if (new_obj->type == CatalogType::TABLE_ENTRY) {
+		auto table = (TableCatalogEntry *)new_obj;
+		for (auto &column : table->columns) {
+			if (column.type.id() == LogicalTypeId::ENUM) {
+				auto enum_type_catalog = EnumType::GetCatalog(column.type);
+				if (enum_type_catalog) {
+					to_add.push_back(enum_type_catalog);
+				}
+			}
+		}
 	}
 	// add the new object to the dependency manager
 	dependents_map[new_obj] = dependency_set_t();
 	dependencies_map[new_obj] = old_dependencies;
+
+	for (auto &dependency : to_add) {
+		dependencies_map[new_obj].insert(dependency);
+		dependents_map[dependency].insert(new_obj);
+	}
 }
 
 void DependencyManager::EraseObject(CatalogEntry *object) {
