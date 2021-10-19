@@ -109,7 +109,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	// set up the statistics for the table
 	// the column that had its type changed will have the new statistics computed during conversion
 	stats.InitializeAlterType(parent.stats, changed_idx, target_type);
-	this->row_groups = parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr, stats.GetStats(changed_idx));
+	this->row_groups =
+	    parent.row_groups->AlterType(changed_idx, target_type, bound_columns, cast_expr, stats.GetStats(changed_idx));
 
 	// scan the original table, and fill the new column with the transformed value
 	auto &transaction = Transaction::GetTransaction(context);
@@ -459,41 +460,7 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 
 void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	D_ASSERT(is_root);
-	// auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
-
-	throw InternalException("FIXME: Remove from Indexes");
-	// // figure out which row_group to fetch from
-	// auto row_group = (RowGroup *)row_groups->GetSegment(row_ids[0]);
-	// auto row_group_vector_idx = (row_ids[0] - row_group->start) / STANDARD_VECTOR_SIZE;
-	// auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE + row_group->start;
-
-	// // create a selection vector from the row_ids
-	// SelectionVector sel(STANDARD_VECTOR_SIZE);
-	// for (idx_t i = 0; i < count; i++) {
-	// 	auto row_in_vector = row_ids[i] - base_row_id;
-	// 	D_ASSERT(row_in_vector < STANDARD_VECTOR_SIZE);
-	// 	sel.set_index(i, row_in_vector);
-	// }
-
-	// // now fetch the columns from that row_group
-	// // FIXME: we do not need to fetch all columns, only the columns required by the indices!
-	// TableScanState state;
-	// state.max_row = total_rows;
-	// for (idx_t i = 0; i < types.size(); i++) {
-	// 	state.column_ids.push_back(i);
-	// }
-	// DataChunk result;
-	// result.Initialize(types);
-
-	// row_group->InitializeScanWithOffset(state.row_group_scan_state, row_group_vector_idx);
-	// row_group->ScanCommitted(state.row_group_scan_state, result,
-	//                          TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES);
-	// result.Slice(sel, count);
-
-	// info->indexes.Scan([&](Index &index) {
-	// 	index.Delete(result, row_identifiers);
-	// 	return false;
-	// });
+	row_groups->RemoveFromIndexes(row_identifiers, count);
 }
 
 //===--------------------------------------------------------------------===//
@@ -546,7 +513,7 @@ static bool CreateMockChunk(TableCatalogEntry &table, const vector<column_t> &co
 		return false;
 	}
 	if (found_columns != desired_column_ids.size()) {
-		// FIXME: not all columns in UPDATE clause are present!
+		// not all columns in UPDATE clause are present!
 		// this should not be triggered at all as the binder should add these columns
 		throw InternalException("Not all columns required for the CHECK constraint are present in the UPDATED chunk!");
 	}
@@ -654,18 +621,7 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 
 	updates.Normalify();
 	row_ids.Normalify(updates.size());
-	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
-	if (first_id >= MAX_ROW_ID) {
-		throw NotImplementedException("Cannot update a column-path on transaction local data");
-	}
-	// find the row_group this id belongs to
-	throw InternalException("FIXME: update column");
-	// auto primary_column_idx = column_path[0];
-	// auto row_group = (RowGroup *)row_groups->GetSegment(first_id);
-	// row_group->UpdateColumn(transaction, updates, row_ids, column_path);
-
-	// lock_guard<mutex> stats_guard(stats_lock);
-	// column_stats[primary_column_idx]->Merge(*row_group->GetStatistics(primary_column_idx));
+	row_groups->UpdateColumn(transaction, row_ids, column_path, updates, stats);
 }
 
 //===--------------------------------------------------------------------===//
@@ -673,11 +629,9 @@ void DataTable::UpdateColumn(TableCatalogEntry &table, ClientContext &context, V
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeCreateIndexScan(CreateIndexScanState &state, const vector<column_t> &column_ids) {
 	// we grab the append lock to make sure nothing is appended until AFTER we finish the index scan
-	throw InternalException("CreateIndexScan");
-	// state.append_lock = std::unique_lock<mutex>(append_lock);
-	// state.delete_lock = std::unique_lock<mutex>(row_groups->node_lock);
-
-	// InitializeScan(state, column_ids);
+	state.append_lock = std::unique_lock<mutex>(append_lock);
+	row_groups->InitializeCreateIndexScan(state);
+	InitializeScan(state, column_ids);
 }
 
 bool DataTable::ScanCreateIndex(CreateIndexScanState &state, DataChunk &result, TableScanType type) {

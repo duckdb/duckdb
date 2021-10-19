@@ -153,8 +153,8 @@ unique_ptr<RowGroup> RowGroup::AlterType(const LogicalType &target_type, idx_t c
 	return row_group;
 }
 
-unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column,
-                                         ExpressionExecutor &executor, Expression *default_value, Vector &result) {
+unique_ptr<RowGroup> RowGroup::AddColumn(ColumnDefinition &new_column, ExpressionExecutor &executor,
+                                         Expression *default_value, Vector &result) {
 	Verify();
 
 	// construct a new column data for the new column

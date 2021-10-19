@@ -72,8 +72,8 @@ public:
 		return 0;
 	}
 
-	unique_ptr<RowGroup> AlterType(const LogicalType &target_type, idx_t changed_idx,
-	                               ExpressionExecutor &executor, TableScanState &scan_state, DataChunk &scan_chunk);
+	unique_ptr<RowGroup> AlterType(const LogicalType &target_type, idx_t changed_idx, ExpressionExecutor &executor,
+	                               TableScanState &scan_state, DataChunk &scan_chunk);
 	unique_ptr<RowGroup> AddColumn(ColumnDefinition &new_column, ExpressionExecutor &executor,
 	                               Expression *default_value, Vector &intermediate);
 	unique_ptr<RowGroup> RemoveColumn(idx_t removed_column);

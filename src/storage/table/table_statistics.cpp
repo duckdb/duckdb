@@ -2,7 +2,6 @@
 
 namespace duckdb {
 
-
 void TableStatistics::Initialize(const vector<LogicalType> &types, PersistentTableData &data) {
 	D_ASSERT(Empty());
 
@@ -54,7 +53,6 @@ void TableStatistics::InitializeAlterType(TableStatistics &parent, idx_t changed
 	}
 }
 
-
 void TableStatistics::MergeStats(idx_t i, BaseStatistics &stats) {
 	auto l = GetLock();
 	MergeStats(*l, i, stats);
@@ -81,5 +79,4 @@ bool TableStatistics::Empty() {
 	return column_stats.empty();
 }
 
-
-}
+} // namespace duckdb

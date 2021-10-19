@@ -17,7 +17,8 @@ class PersistentTableData;
 
 class TableStatisticsLock {
 public:
-	TableStatisticsLock(mutex &l) : guard(l) {}
+	TableStatisticsLock(mutex &l) : guard(l) {
+	}
 
 	lock_guard<mutex> guard;
 };
@@ -40,6 +41,7 @@ public:
 	bool Empty();
 
 	unique_ptr<TableStatisticsLock> GetLock();
+
 private:
 	//! The statistics lock
 	mutex stats_lock;
