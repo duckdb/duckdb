@@ -87,7 +87,7 @@ void RowGroupCollection::InitializeParallelScan(ClientContext &context, Parallel
 }
 
 bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelTableScanState &state,
-                                          CollectionScanState &scan_state, const vector<column_t> &column_ids) {
+                                          CollectionScanState &scan_state) {
 	while (state.current_row_group) {
 		idx_t vector_index;
 		idx_t max_row;
@@ -327,12 +327,17 @@ void RowGroupCollection::RemoveFromIndexes(Vector &row_identifiers, idx_t count)
 	}
 
 	// now fetch the columns from that row_group
-	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
 	TableScanState state;
 	state.table_state.max_row = total_rows;
+
+	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
+	vector<column_t> column_ids;
+	column_ids.reserve(types.size());
 	for (idx_t i = 0; i < types.size(); i++) {
-		state.column_ids.push_back(i);
+		column_ids.push_back(i);
 	}
+	state.Initialize(move(column_ids));
+
 	DataChunk result;
 	result.Initialize(types);
 
@@ -484,7 +489,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 	executor.AddExpression(cast_expr);
 
 	TableScanState scan_state;
-	scan_state.column_ids = bound_columns;
+	scan_state.Initialize(bound_columns);
 	scan_state.table_state.max_row = total_rows;
 
 	// now alter the type of the column within all of the row_groups individually

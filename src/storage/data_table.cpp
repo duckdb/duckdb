@@ -125,12 +125,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 //===--------------------------------------------------------------------===//
 void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
                                TableFilterSet *table_filters) {
-	state.column_ids = column_ids;
-	state.table_filters = table_filters;
-	if (table_filters) {
-		D_ASSERT(table_filters->filters.size() > 0);
-		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
-	}
+	state.Initialize(column_ids, table_filters);
 	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 }
 
@@ -142,8 +137,7 @@ void DataTable::InitializeScan(Transaction &transaction, TableScanState &state, 
 
 void DataTable::InitializeScanWithOffset(TableScanState &state, const vector<column_t> &column_ids, idx_t start_row,
                                          idx_t end_row) {
-	state.column_ids = column_ids;
-	state.table_filters = nullptr;
+	state.Initialize(column_ids);
 	row_groups->InitializeScanWithOffset(state.table_state, column_ids, start_row, end_row);
 }
 
@@ -162,9 +156,8 @@ void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScan
 	transaction.storage.InitializeScan(this, state.local_state, nullptr);
 }
 
-bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
-                                 const vector<column_t> &column_ids) {
-	while (row_groups->NextParallelScan(context, state, scan_state.table_state, column_ids)) {
+bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state) {
+	if (row_groups->NextParallelScan(context, state, scan_state.table_state)) {
 		return true;
 	}
 	if (!state.transaction_local_data) {
@@ -172,7 +165,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 		// create a task for scanning the local data
 		scan_state.table_state.row_group_state.max_row = 0;
 		scan_state.table_state.max_row = 0;
-		transaction.storage.InitializeScan(this, scan_state.local_state, scan_state.table_filters);
+		transaction.storage.InitializeScan(this, scan_state.local_state, scan_state.GetFilters());
 		scan_state.local_state.max_index = state.local_state.max_index;
 		scan_state.local_state.last_chunk_count = state.local_state.last_chunk_count;
 		state.transaction_local_data = true;
@@ -183,7 +176,7 @@ bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState 
 	}
 }
 
-void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state, vector<column_t> &column_ids) {
+void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState &state) {
 	// scan the persistent segments
 	if (state.table_state.Scan(transaction, result)) {
 		D_ASSERT(result.size() > 0);
@@ -191,7 +184,7 @@ void DataTable::Scan(Transaction &transaction, DataChunk &result, TableScanState
 	}
 
 	// scan the transaction-local segments
-	transaction.storage.Scan(state.local_state, column_ids, result);
+	transaction.storage.Scan(state.local_state, state.GetColumnIds(), result);
 }
 
 //===--------------------------------------------------------------------===//

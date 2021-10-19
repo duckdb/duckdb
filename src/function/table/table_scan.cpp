@@ -25,7 +25,6 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 struct TableScanOperatorData : public FunctionOperatorData {
 	//! The current position in the scan
 	TableScanState scan_state;
-	vector<column_t> column_ids;
 };
 
 static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, const FunctionData *bind_data_p,
@@ -34,9 +33,8 @@ static unique_ptr<FunctionOperatorData> TableScanInit(ClientContext &context, co
 	auto result = make_unique<TableScanOperatorData>();
 	auto &transaction = Transaction::GetTransaction(context);
 	auto &bind_data = (const TableScanBindData &)*bind_data_p;
-	result->column_ids = column_ids;
-	result->scan_state.table_filters = filters->table_filters;
-	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->column_ids,
+	result->scan_state.Initialize(column_ids, filters->table_filters);
+	bind_data.table->storage->InitializeScan(transaction, result->scan_state, result->scan_state.GetColumnIds(),
 	                                         filters->table_filters);
 	return move(result);
 }
@@ -56,8 +54,7 @@ static unique_ptr<FunctionOperatorData> TableScanParallelInit(ClientContext &con
                                                               ParallelState *state, const vector<column_t> &column_ids,
                                                               TableFilterCollection *filters) {
 	auto result = make_unique<TableScanOperatorData>();
-	result->column_ids = column_ids;
-	result->scan_state.table_filters = filters->table_filters;
+	result->scan_state.Initialize(column_ids, filters->table_filters);
 	TableScanParallelStateNext(context, bind_data_p, result.get(), state);
 	return move(result);
 }
@@ -69,7 +66,7 @@ static void TableScanFunc(ClientContext &context, const FunctionData *bind_data_
 	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	auto &state = (TableScanOperatorData &)*operator_state;
 	auto &transaction = Transaction::GetTransaction(context);
-	bind_data.table->storage->Scan(transaction, output, state.scan_state, state.column_ids);
+	bind_data.table->storage->Scan(transaction, output, state.scan_state);
 	bind_data.chunk_count++;
 }
 
@@ -104,8 +101,7 @@ bool TableScanParallelStateNext(ClientContext &context, const FunctionData *bind
 	auto &state = (TableScanOperatorData &)*operator_state;
 
 	lock_guard<mutex> parallel_lock(parallel_state.lock);
-	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state,
-	                                                  state.column_ids);
+	return bind_data.table->storage->NextParallelScan(context, parallel_state.state, state.scan_state);
 }
 
 int TableScanProgress(ClientContext &context, const FunctionData *bind_data_p) {

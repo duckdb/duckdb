@@ -89,7 +89,7 @@ private:
 
 class RowGroupScanState {
 public:
-	RowGroupScanState(CollectionScanState &parent_p) : vector_index(0), max_row(0), parent(parent_p) {
+	RowGroupScanState(CollectionScanState &parent_p) : row_group(nullptr), vector_index(0), max_row(0), parent(parent_p) {
 	}
 
 	//! The current row_group we are scanning
@@ -138,14 +138,22 @@ public:
 
 	//! The underlying table scan state
 	CollectionScanState table_state;
+	//! Transaction-local scan state
+	LocalScanState local_state;
+
+public:
+	void Initialize(vector<column_t> column_ids, TableFilterSet *table_filters = nullptr);
+
+	const vector<column_t> &GetColumnIds();
+	TableFilterSet *GetFilters();
+	AdaptiveFilter *GetAdaptiveFilter();
+private:
 	//! The column identifiers of the scan
 	vector<column_t> column_ids;
 	//! The table filters (if any)
 	TableFilterSet *table_filters;
 	//! Adaptive filter info (if any)
 	unique_ptr<AdaptiveFilter> adaptive_filter;
-	//! Transaction-local scan state
-	LocalScanState local_state;
 };
 
 class CreateIndexScanState : public TableScanState {

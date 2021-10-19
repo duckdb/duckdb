@@ -33,8 +33,7 @@ public:
 	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroup *row_group, idx_t vector_index,
 	                                     idx_t max_row);
 	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, CollectionScanState &scan_state,
-	                      const vector<column_t> &column_ids);
+	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, CollectionScanState &scan_state);
 
 	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_identifiers,
 	           idx_t fetch_count, ColumnFetchState &state);

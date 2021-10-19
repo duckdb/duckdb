@@ -3,6 +3,31 @@
 
 namespace duckdb {
 
+
+void TableScanState::Initialize(vector<column_t> column_ids, TableFilterSet *table_filters) {
+	this->column_ids = column_ids;
+	this->table_filters = table_filters;
+	if (table_filters) {
+		D_ASSERT(table_filters->filters.size() > 0);
+		this->adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
+	}
+}
+
+const vector<column_t> &TableScanState::GetColumnIds() {
+	D_ASSERT(!column_ids.empty());
+	return column_ids;
+}
+
+TableFilterSet *TableScanState::GetFilters() {
+	D_ASSERT(!table_filters || adaptive_filter.get());
+	return table_filters;
+}
+
+AdaptiveFilter *TableScanState::GetAdaptiveFilter() {
+	return adaptive_filter.get();
+}
+
+
 void ColumnScanState::NextInternal(idx_t count) {
 	if (!current) {
 		//! There is no column segment
@@ -48,15 +73,15 @@ idx_t RowGroupScanState::GetParentMaxRow() {
 }
 
 const vector<column_t> &CollectionScanState::GetColumnIds() {
-	return parent.column_ids;
+	return parent.GetColumnIds();
 }
 
 TableFilterSet *CollectionScanState::GetFilters() {
-	return parent.table_filters;
+	return parent.GetFilters();
 }
 
 AdaptiveFilter *CollectionScanState::GetAdaptiveFilter() {
-	return parent.adaptive_filter.get();
+	return parent.GetAdaptiveFilter();
 }
 
 bool CollectionScanState::Scan(Transaction &transaction, DataChunk &result) {

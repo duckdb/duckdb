@@ -362,6 +362,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 			//! get runtime statistics
 			auto start_time = high_resolution_clock::now();
 			if (table_filters) {
+				D_ASSERT(adaptive_filter);
 				D_ASSERT(ALLOW_UPDATES);
 				for (idx_t i = 0; i < table_filters->filters.size(); i++) {
 					auto tf_idx = adaptive_filter->permutation[i];
