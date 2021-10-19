@@ -57,7 +57,7 @@ unique_ptr<TableRef> Transformer::TransformJoin(duckdb_libpgquery::PGJoinExpr *r
 		cross->right = move(result->right);
 		return move(cross);
 	}
-	result->condition = TransformExpression(root->quals, 0);
+	result->condition = TransformExpression(root->quals);
 	return move(result);
 }
 

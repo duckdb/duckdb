@@ -4,8 +4,7 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformPositionalReference(duckdb_libpgquery::PGPositionalReference *node,
-                                                                       idx_t depth) {
+unique_ptr<ParsedExpression> Transformer::TransformPositionalReference(duckdb_libpgquery::PGPositionalReference *node) {
 	if (node->position <= 0) {
 		throw ParserException("Positional reference node needs to be >= 1");
 	}
