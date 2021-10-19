@@ -45,13 +45,20 @@ CREATE TABLE pet (
 statement ok
 insert into pet values ('Oogie','happy'), ('Wilbur', 'quackity-quack'), ('Chorizo', NULL), ('Vacilo', 'beaming')
 
-# This actually performs string comparison since they are both ENUMs but of different types.
+# String Comparison
+query II
+select person.name, pet.name from person inner join pet on (person.current_mood > pet.current_mood) where person.name = 'Pedro'
+----
+Pedro	Vacilo
+
+
+# This actually performs the optimized comparison since they are both ENUMs but of different types.
+
 query II
 select person.name, pet.name from person inner join pet on (person.current_mood = pet.current_mood)
 ----
 Pedro	Oogie
 Hannes	Wilbur
-
 
 query II
 select person_name,pet_name from
