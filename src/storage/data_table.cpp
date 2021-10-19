@@ -303,7 +303,6 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
-	state.current_row = state.row_start;
 	state.remaining_append_count = append_count;
 
 	row_groups->InitializeAppend(transaction, state, append_count);

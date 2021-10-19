@@ -15,7 +15,7 @@ struct ParallelTableScanState;
 
 class RowGroupCollection {
 public:
-	RowGroupCollection(shared_ptr<DataTableInfo> info, vector<LogicalType> types, idx_t row_start);
+	RowGroupCollection(shared_ptr<DataTableInfo> info, vector<LogicalType> types, idx_t row_start, idx_t total_rows = 0);
 
 public:
 	idx_t GetTotalRows();

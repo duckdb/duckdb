@@ -5,8 +5,8 @@
 
 namespace duckdb {
 
-RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, vector<LogicalType> types_p, idx_t row_start_p)
-    : total_rows(0), info(move(info_p)), types(move(types_p)), row_start(row_start_p) {
+RowGroupCollection::RowGroupCollection(shared_ptr<DataTableInfo> info_p, vector<LogicalType> types_p, idx_t row_start_p, idx_t total_rows_p)
+    : total_rows(total_rows_p), info(move(info_p)), types(move(types_p)), row_start(row_start_p) {
 	row_groups = make_shared<SegmentTree>();
 }
 
@@ -161,6 +161,7 @@ void RowGroupCollection::Fetch(Transaction &transaction, DataChunk &result, cons
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
 	state.row_start = total_rows;
+	state.current_row = state.row_start;
 
 	// start writing to the row_groups
 	lock_guard<mutex> row_group_lock(row_groups->node_lock);
@@ -434,7 +435,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ColumnDefinition &n
 	idx_t new_column_idx = types.size();
 	auto new_types = types;
 	new_types.push_back(new_column.type);
-	auto result = make_shared<RowGroupCollection>(info, move(new_types), row_start);
+	auto result = make_shared<RowGroupCollection>(info, move(new_types), row_start, total_rows.load());
 
 	ExpressionExecutor executor;
 	DataChunk dummy_chunk;
@@ -463,7 +464,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	D_ASSERT(col_idx < types.size());
 	auto new_types = types;
 	new_types.erase(new_types.begin() + col_idx);
-	auto result = make_shared<RowGroupCollection>(info, move(new_types), row_start);
+
+	auto result = make_shared<RowGroupCollection>(info, move(new_types), row_start, total_rows.load());
+
 	auto current_row_group = (RowGroup *)row_groups->GetRootSegment();
 	while (current_row_group) {
 		auto new_row_group = current_row_group->RemoveColumn(col_idx);
@@ -480,7 +483,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 	auto new_types = types;
 	new_types[changed_idx] = target_type;
 
-	auto result = make_shared<RowGroupCollection>(info, move(new_types), row_start);
+	auto result = make_shared<RowGroupCollection>(info, move(new_types), row_start, total_rows.load());
 
 	vector<LogicalType> scan_types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
@@ -501,12 +504,11 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 	scan_state.max_row = total_rows;
 
 	// now alter the type of the column within all of the row_groups individually
-	this->row_groups = make_shared<SegmentTree>();
 	auto current_row_group = (RowGroup *)row_groups->GetRootSegment();
 	while (current_row_group) {
 		auto new_row_group = current_row_group->AlterType(target_type, changed_idx, executor, scan_state, scan_chunk);
 		stats.Merge(*new_row_group->GetStatistics(changed_idx));
-		row_groups->AppendSegment(move(new_row_group));
+		result->row_groups->AppendSegment(move(new_row_group));
 		current_row_group = (RowGroup *)current_row_group->next.get();
 	}
 
