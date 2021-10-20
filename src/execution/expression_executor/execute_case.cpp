@@ -5,8 +5,6 @@
 
 namespace duckdb {
 
-void FillSwitch(Vector &vector, Vector &result, SelectionVector &sel, sel_t count);
-
 struct CaseExpressionState : public ExpressionState {
 	CaseExpressionState(const Expression &expr, ExpressionExecutorState &root)
 	    : ExpressionState(expr, root), true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE) {
@@ -113,7 +111,7 @@ void ValidityFillLoop(Vector &vector, Vector &result, SelectionVector &sel, sel_
 	}
 }
 
-void FillSwitch(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
+void ExpressionExecutor::FillSwitch(Vector &vector, Vector &result, SelectionVector &sel, sel_t count) {
 	switch (result.GetType().InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
