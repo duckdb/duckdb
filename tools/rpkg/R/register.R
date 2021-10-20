@@ -67,3 +67,9 @@ duckdb_unregister_arrow <- function(conn, name) {
   .Call(duckdb_unregister_arrow_R, conn@conn_ref, as.character(name))
   invisible(TRUE)
 }
+
+#' @rdname duckdb_register_arrow
+#' @export
+duckdb_list_arrow <- function(conn) {
+    sort(gsub("_registered_arrow_", "", names(attributes(conn@driver@database_ref)), fixed=TRUE))
+}

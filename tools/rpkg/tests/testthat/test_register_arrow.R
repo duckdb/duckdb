@@ -345,8 +345,25 @@ test_that("we can unregister in finalizers yay", {
     # force a gc run, now they should all be gone
     gc()
 
-    # gehtto way of finding all the registered tables
-    expect_equal(length(attributes(con@driver@database_ref)), 0)
+    expect_equal(length(duckdb::duckdb_list_arrow(con)), 0)
 })
 
 
+test_that("we can list registered arrow tables", {
+    con <- DBI::dbConnect(duckdb::duckdb())
+    ds <- arrow::InMemoryDataset$create(mtcars)
+
+    expect_equal(length(duckdb::duckdb_list_arrow(con)), 0)
+
+    duckdb::duckdb_register_arrow(con, "t1", ds)
+    duckdb::duckdb_register_arrow(con, "t2", ds)
+
+    expect_equal(duckdb::duckdb_list_arrow(con), c("t1", "t2"))
+
+    duckdb::duckdb_unregister_arrow(con, "t1")
+    expect_equal(duckdb::duckdb_list_arrow(con), c("t2"))
+    duckdb::duckdb_unregister_arrow(con, "t2")
+
+
+    expect_equal(length(duckdb::duckdb_list_arrow(con)), 0)
+})
