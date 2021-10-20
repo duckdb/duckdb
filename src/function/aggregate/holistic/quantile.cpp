@@ -2,6 +2,7 @@
 #include "duckdb/function/aggregate/holistic_functions.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
@@ -17,10 +18,6 @@ namespace duckdb {
 // Hugeint arithmetic
 hugeint_t operator*(const hugeint_t &h, const double &d) {
 	return Hugeint::Convert(Hugeint::Cast<double>(h) * d);
-}
-
-double operator-(const hugeint_t &h, const double &d) {
-	return Hugeint::Cast<double>(h) * d;
 }
 
 // Temporal arithmetic
@@ -40,31 +37,6 @@ inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
 inline interval_t operator-(const date_t &lhs, const timestamp_t &rhs) {
 	const auto d = Cast::Operation<date_t, timestamp_t>(lhs);
 	return SubtractOperator::Operation<timestamp_t, timestamp_t, interval_t>(d, rhs);
-}
-
-// Absolute value
-struct AbsOperator {
-	template <typename T>
-	static inline T Operation(const T &input) {
-		return std::abs(input);
-	}
-};
-
-template <>
-hugeint_t AbsOperator::Operation(const hugeint_t &input) {
-	const hugeint_t zero(0);
-	return (input < zero) ? (zero - input) : input;
-}
-
-template <>
-dtime_t AbsOperator::Operation(const dtime_t &input) {
-	return dtime_t(AbsOperator::Operation(input.micros));
-}
-
-template <>
-interval_t AbsOperator::Operation(const interval_t &input) {
-	return {AbsOperator::Operation(input.months), AbsOperator::Operation(input.days),
-	        AbsOperator::Operation(input.micros)};
 }
 
 using FrameBounds = std::pair<idx_t, idx_t>;
@@ -202,6 +174,11 @@ struct CastInterpolation {
 		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(src);
 	}
 };
+
+template <>
+interval_t CastInterpolation::Cast(const dtime_t &src, Vector &result) {
+	return {0, 0, src.micros};
+}
 
 template <>
 string_t CastInterpolation::Cast(const std::string &src, Vector &result) {
@@ -825,7 +802,37 @@ struct MadAccessor {
 
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto delta = input - median;
-		return AbsOperator::Operation(delta);
+		return AbsOperator::Operation<RESULT_TYPE, RESULT_TYPE>(delta);
+	}
+};
+
+// hugeint_t - double => undefined
+template <>
+struct MadAccessor<hugeint_t, double, double> {
+	using INPUT_TYPE = hugeint_t;
+	using RESULT_TYPE = double;
+	using MEDIAN_TYPE = double;
+	const MEDIAN_TYPE &median;
+	explicit MadAccessor(const MEDIAN_TYPE &median_p) : median(median_p) {
+	}
+	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
+		const auto delta = Hugeint::Cast<double>(input) - median;
+		return AbsOperator::Operation<double, double>(delta);
+	}
+};
+
+// date_t - date_t => date_t
+template <>
+struct MadAccessor<date_t, interval_t, timestamp_t> {
+	using INPUT_TYPE = date_t;
+	using RESULT_TYPE = interval_t;
+	using MEDIAN_TYPE = timestamp_t;
+	const MEDIAN_TYPE &median;
+	explicit MadAccessor(const MEDIAN_TYPE &median_p) : median(median_p) {
+	}
+	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
+		const auto delta = input - median;
+		return {0, AbsOperator::Operation<int32_t, int32_t>(delta.days), 0};
 	}
 };
 
@@ -840,7 +847,7 @@ struct MadAccessor<timestamp_t, interval_t, timestamp_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto delta = input - median;
-		return {0, 0, AbsOperator::Operation(delta)};
+		return {0, 0, AbsOperator::Operation<int64_t, int64_t>(delta)};
 	}
 };
 
@@ -855,7 +862,7 @@ struct MadAccessor<dtime_t, interval_t, dtime_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto delta = input - median;
-		return {0, 0, AbsOperator::Operation(delta)};
+		return {0, 0, AbsOperator::Operation<int64_t, int64_t>(delta)};
 	}
 };
 
