@@ -49,6 +49,8 @@ public:
 	void ExecuteExpression(idx_t expr_idx, Vector &result);
 	//! Evaluate a scalar expression and fold it into a single value
 	static Value EvaluateScalar(const Expression &expr);
+	//! Try to evaluate a scalar expression and fold it into a single value, returns false if an exception is thrown
+	static bool TryEvaluateScalar(const Expression &expr, Value &result);
 
 	//! Initialize the state of a given expression
 	static unique_ptr<ExpressionState> InitializeState(const Expression &expr, ExpressionExecutorState &state);
