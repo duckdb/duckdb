@@ -4,8 +4,8 @@ import numpy
 import pytest
 
 def check_result_list(res):
-    for i in range (len(res)):
-        assert res[i][1] == res[i][0]
+    for res_item in res:
+        assert res_item[0] == res_item[1]
 
 def check_create_table(category):
     conn = duckdb.connect()
