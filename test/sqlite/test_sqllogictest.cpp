@@ -1743,11 +1743,6 @@ void RegisterSqllogictests() {
 	});
 	listFiles(*fs, "test", [excludes](const string &path) {
 		if (endsWith(path, ".test") || endsWith(path, ".test_slow") || endsWith(path, ".test_coverage")) {
-			for (auto excl : excludes) {
-				if (path.find(excl) != string::npos) {
-					return;
-				}
-			}
 			// parse the name / group from the test
 			REGISTER_TEST_CASE(testRunner, StringUtil::Replace(path, "\\", "/"), ParseGroupFromPath(path));
 		}
