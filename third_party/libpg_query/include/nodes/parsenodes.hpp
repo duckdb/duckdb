@@ -1791,6 +1791,7 @@ typedef struct PGViewStmt {
 typedef struct PGLoadStmt {
 	PGNodeTag type;
 	char *filename; /* file to load */
+	int install; /* install or load */
 } PGLoadStmt;
 
 /* ----------------------

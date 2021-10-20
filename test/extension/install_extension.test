@@ -1,0 +1,25 @@
+# name: test/extension/install_extension.test
+# description: Try loading a shared object with an extension
+# group: [extension]
+
+require notmingw
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+INSTALL 'asdf';
+
+statement error
+INSTALL 'asdf/asdf.duckdb_extension';
+
+statement ok
+INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement ok
+LOAD 'loadable_extension_demo';
+
+query I
+SELECT hello('World');
+----
+Hello, World

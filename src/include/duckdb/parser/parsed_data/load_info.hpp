@@ -14,11 +14,13 @@ namespace duckdb {
 
 struct LoadInfo : public ParseInfo {
 	std::string filename;
+	bool install;
 
 public:
 	unique_ptr<LoadInfo> Copy() const {
 		auto result = make_unique<LoadInfo>();
 		result->filename = filename;
+		result->install = install;
 		return result;
 	}
 };

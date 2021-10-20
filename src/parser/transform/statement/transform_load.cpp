@@ -10,6 +10,7 @@ unique_ptr<LoadStatement> Transformer::TransformLoad(duckdb_libpgquery::PGNode *
 	auto load_stmt = make_unique<LoadStatement>();
 	auto load_info = make_unique<LoadInfo>();
 	load_info->filename = std::string(stmt->filename);
+	load_info->install = stmt->install;
 	load_stmt->info = move(load_info);
 	return load_stmt;
 }

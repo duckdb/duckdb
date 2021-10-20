@@ -52,4 +52,8 @@ const char *DuckDB::LibraryVersion() {
 	return DUCKDB_VERSION;
 }
 
+const char *DuckDB::Platform() {
+	return DUCKDB_PLATFORM;
+}
+
 } // namespace duckdb
