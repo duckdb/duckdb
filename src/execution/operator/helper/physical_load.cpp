@@ -73,12 +73,17 @@ void PhysicalLoad::DoInstall(ExecutionContext &context) const {
 		throw IOException("Failed to read extension from %s", info->filename);
 	}
 
-	auto url_local_part = string(string(DuckDB::SourceID()) + "/osx-arm64/" + extension_name + ".duckdb_extension");
-	auto url_base = "http://extension.duckdb.org";
+	auto url_local_part =
+	    string("/" + string(DuckDB::SourceID()) + "/osx-arm64/" + extension_name + ".duckdb_extension");
+	auto url_base = "http://extensions.duckdb.org";
 	httplib::Client cli(url_base);
-	auto res = cli.Get(url_local_part.c_str());
+
+	httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),
+	                                                              DuckDB::SourceID(), DuckDB::Platform())}};
+
+	auto res = cli.Get(url_local_part.c_str(), headers);
 	if (!res || res->status != 200) {
-		throw IOException("Failed to download extension %s/%s", url_base, url_local_part);
+		throw IOException("Failed to download extension %s%s", url_base, url_local_part);
 	}
 	std::ofstream out(local_extension_path, std::ios::binary);
 	out.write(res->body.c_str(), res->body.size());

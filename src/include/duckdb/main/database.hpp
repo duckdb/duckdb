@@ -82,7 +82,6 @@ public:
 	DUCKDB_API static const char *SourceID();
 	DUCKDB_API static const char *LibraryVersion();
 	DUCKDB_API static const char *Platform();
-
 };
 
 } // namespace duckdb

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#define DUCKDB_BUILD_LOADABLE_EXTENSION
 #include "duckdb.hpp"
 
 namespace duckdb {
@@ -23,3 +24,10 @@ public:
 };
 
 } // namespace duckdb
+
+extern "C" {
+// TODO use DUCKDB_EXTENSION_API here
+void tpch_init(duckdb::DatabaseInstance &db);
+
+const char *tpch_version();
+}

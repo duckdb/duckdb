@@ -152,8 +152,8 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 	return tpch::DBGenWrapper::GetQuery(index);
 }
 
-void TPCHExtension::Load(DuckDB &db) {
-	Connection con(db);
+static void LoadInternal(DatabaseInstance &instance) {
+	Connection con(instance);
 	con.BeginTransaction();
 
 	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind);
@@ -185,6 +185,10 @@ void TPCHExtension::Load(DuckDB &db) {
 	con.Commit();
 }
 
+void TPCHExtension::Load(DuckDB &db) {
+	LoadInternal(*db.instance);
+}
+
 std::string TPCHExtension::GetQuery(int query) {
 	return tpch::DBGenWrapper::GetQuery(query);
 }
@@ -194,3 +198,11 @@ std::string TPCHExtension::GetAnswer(double sf, int query) {
 }
 
 } // namespace duckdb
+
+void tpch_init(duckdb::DatabaseInstance &db) {
+	LoadInternal(db);
+}
+
+const char *tpch_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
