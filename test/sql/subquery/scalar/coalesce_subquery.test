@@ -1,5 +1,5 @@
-# name: test/sql/subquery/scalar/test_complex_nested_correlated_subquery.test
-# description: Test nested correlated subqueries with multiple columns
+# name: test/sql/subquery/scalar/coalesce_subquery.test
+# description: Issue #2452: Coalesce operator with subquery throws error
 # group: [scalar]
 
 statement ok

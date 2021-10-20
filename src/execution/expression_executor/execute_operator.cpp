@@ -65,7 +65,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		SelectionVector remaining_sel;
 		idx_t remaining_count = count;
 		idx_t next_count;
-		for(idx_t child = 0; child < expr.children.size(); child++) {
+		for (idx_t child = 0; child < expr.children.size(); child++) {
 			Vector vector_to_check(expr.children[child]->return_type);
 			Execute(*expr.children[child], state->child_states[child].get(), sel, count, vector_to_check);
 
@@ -74,7 +74,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 
 			idx_t result_count = 0;
 			next_count = 0;
-			for(idx_t i = 0; i < remaining_count; i++) {
+			for (idx_t i = 0; i < remaining_count; i++) {
 				auto base_idx = remaining_sel.get_index(i);
 				auto idx = vdata.sel->get_index(base_idx);
 				if (vdata.validity.RowIsValid(idx)) {

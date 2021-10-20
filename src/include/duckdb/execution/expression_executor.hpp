@@ -133,6 +133,7 @@ protected:
 	void Verify(const Expression &expr, Vector &result, idx_t count);
 
 	void FillSwitch(Vector &vector, Vector &result, SelectionVector &sel, sel_t count);
+
 private:
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;
