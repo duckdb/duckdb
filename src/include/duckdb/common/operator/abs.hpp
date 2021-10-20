@@ -38,4 +38,4 @@ inline interval_t AbsOperator::Operation(const interval_t &input) {
 	        AbsOperator::Operation<int64_t, int64_t>(input.micros)};
 }
 
-}; // namespace duckdb
+} // namespace duckdb
