@@ -91,7 +91,7 @@ void Vector::Reference(const Value &value) {
 }
 
 void Vector::Reference(Vector &other) {
-	D_ASSERT(other.GetType().id() == GetType().id());
+	D_ASSERT(other.GetType() == GetType());
 	Reinterpret(other);
 }
 

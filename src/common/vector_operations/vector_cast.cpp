@@ -9,7 +9,7 @@
 #include "duckdb/common/vector_operations/decimal_cast.hpp"
 #include "duckdb/common/operator/numeric_cast.hpp"
 #include "duckdb/common/likely.hpp"
-
+#include "duckdb/common/limits.hpp"
 namespace duckdb {
 
 template <class OP>
@@ -555,7 +555,19 @@ void FillEnum(Vector &source, Vector &result, idx_t count) {
 		auto key = EnumType::GetPos(res_enum_type, str);
 		if (key == -1) {
 			// key doesn't exist on result enum
-			result_mask.SetInvalid(i);
+			switch (result.GetType().InternalType()) {
+			case PhysicalType::UINT8:
+				result_data[i] = NumericLimits<uint8_t>::Maximum();
+				break;
+			case PhysicalType::UINT16:
+				result_data[i] = NumericLimits<uint16_t>::Maximum();
+				break;
+			case PhysicalType::UINT32:
+				result_data[i] = NumericLimits<uint32_t>::Maximum();
+				break;
+			default:
+				throw InternalException("Invalid Internal Type for ENUMs");
+			}
 			continue;
 		}
 		result_data[i] = key;
@@ -626,19 +638,25 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 				continue;
 			}
 			auto str_vec = EnumType::GetValuesInsertOrder(source.GetType());
+			uint64_t enum_idx = NumericLimits<uint64_t>::Maximum();
 			switch (enum_physical_type) {
 			case PhysicalType::UINT8:
-				result.SetValue(i, Value(str_vec[src_val.value_.utinyint]));
+				enum_idx = src_val.value_.utinyint;
 				break;
 			case PhysicalType::UINT16:
-				result.SetValue(i, Value(str_vec[src_val.value_.usmallint]));
+				enum_idx = src_val.value_.usmallint;
 				break;
 			case PhysicalType::UINT32:
-				result.SetValue(i, Value(str_vec[src_val.value_.uinteger]));
+				enum_idx = src_val.value_.uinteger;
 				break;
 			default:
 				throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 			}
+			if (enum_idx >= str_vec.size()) {
+				result.SetValue(i, Value());
+				continue;
+			}
+			result.SetValue(i, Value(str_vec[enum_idx]));
 		}
 		break;
 	}

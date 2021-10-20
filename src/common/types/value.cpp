@@ -1089,16 +1089,24 @@ string Value::ToString() const {
 	}
 	case LogicalTypeId::ENUM: {
 		auto &values_insert_order = EnumType::GetValuesInsertOrder(type_);
+		uint64_t enum_idx = NumericLimits<uint64_t>::Maximum();
 		switch (type_.InternalType()) {
 		case PhysicalType::UINT8:
-			return values_insert_order[value_.utinyint];
+			enum_idx = value_.utinyint;
+			break;
 		case PhysicalType::UINT16:
-			return values_insert_order[value_.usmallint];
+			enum_idx = value_.usmallint;
+			break;
 		case PhysicalType::UINT32:
-			return values_insert_order[value_.uinteger];
+			enum_idx = value_.uinteger;
+			break;
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
+		if (enum_idx >= values_insert_order.size()) {
+			return "NULL";
+		}
+		return values_insert_order[enum_idx];
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());

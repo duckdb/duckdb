@@ -111,15 +111,15 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::ENUM: {
 		D_ASSERT(type_info_);
 		auto size = EnumType::GetSize(*this);
-		if (size <= NumericLimits<uint8_t>::Maximum()) {
+		if (size <= NumericLimits<uint8_t>::Maximum() - 1) {
 			return PhysicalType::UINT8;
-		} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+		} else if (size <= NumericLimits<uint16_t>::Maximum() - 1) {
 			return PhysicalType::UINT16;
-		} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+		} else if (size <= NumericLimits<uint32_t>::Maximum() - 1) {
 			return PhysicalType::UINT32;
 		} else {
 			throw InternalException("Enum size must be lower than " +
-			                        std::to_string(NumericLimits<uint32_t>::Maximum()));
+			                        std::to_string(NumericLimits<uint32_t>::Maximum() - 1));
 		}
 	}
 	case LogicalTypeId::TABLE:
@@ -328,23 +328,6 @@ bool TypeIsNumeric(PhysicalType type) {
 }
 bool TypeIsInteger(PhysicalType type) {
 	return (type >= PhysicalType::UINT8 && type <= PhysicalType::INT64) || type == PhysicalType::INT128;
-}
-
-bool TypeIsNumeric(LogicalTypeId type) {
-	for (auto &integral_type : LogicalType::NUMERIC) {
-		if (type == integral_type.id()) {
-			return true;
-		}
-	}
-	return false;
-}
-bool TypeIsInteger(LogicalTypeId type) {
-	for (auto &integral_type : LogicalType::INTEGRAL) {
-		if (type == integral_type.id()) {
-			return true;
-		}
-	}
-	return false;
 }
 
 // LCOV_EXCL_START
@@ -657,27 +640,29 @@ LogicalType LogicalType::MaxLogicalType(const LogicalType &left, const LogicalTy
 	} else if (right.id() < left.id()) {
 		return left;
 	} else {
-		if (left != right && left.id() == LogicalTypeId::ENUM && right.id() == LogicalTypeId::ENUM) {
+		// Since both left and right are equal we get the left type as our type_id for checks
+		auto type_id = left.id();
+		if (type_id == LogicalTypeId::ENUM) {
 			// If both types are different ENUMs we do a string comparison.
-			return LogicalType::VARCHAR;
+			return left == right ? left : LogicalType::VARCHAR;
 		}
-		if (left.id() == LogicalTypeId::VARCHAR) {
+		if (type_id == LogicalTypeId::VARCHAR) {
 			// varchar: use type that has collation (if any)
 			if (StringType::GetCollation(right).empty()) {
 				return left;
 			} else {
 				return right;
 			}
-		} else if (left.id() == LogicalTypeId::DECIMAL) {
+		} else if (type_id == LogicalTypeId::DECIMAL) {
 			// use max width/scale of the two types
 			auto width = MaxValue<uint8_t>(DecimalType::GetWidth(left), DecimalType::GetWidth(right));
 			auto scale = MaxValue<uint8_t>(DecimalType::GetScale(left), DecimalType::GetScale(right));
 			return LogicalType::DECIMAL(width, scale);
-		} else if (left.id() == LogicalTypeId::LIST) {
+		} else if (type_id == LogicalTypeId::LIST) {
 			// list: perform max recursively on child type
 			auto new_child = MaxLogicalType(ListType::GetChildType(left), ListType::GetChildType(right));
 			return LogicalType::LIST(move(new_child));
-		} else if (left.id() == LogicalTypeId::STRUCT) {
+		} else if (type_id == LogicalTypeId::STRUCT) {
 			// struct: perform recursively
 			auto &left_child_types = StructType::GetChildTypes(left);
 			auto &right_child_types = StructType::GetChildTypes(right);
@@ -1068,14 +1053,15 @@ LogicalType LogicalType::ENUM(const string &enum_name, const vector<string> &ord
 	auto size = ordered_data.size();
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
-	if (size <= NumericLimits<uint8_t>::Maximum()) {
+	if (size <= NumericLimits<uint8_t>::Maximum() - 1) {
 		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data);
-	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+	} else if (size <= NumericLimits<uint16_t>::Maximum() - 1) {
 		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, ordered_data);
-	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+	} else if (size <= NumericLimits<uint32_t>::Maximum() - 1) {
 		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, ordered_data);
 	} else {
-		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+		throw InternalException("Enum size must be lower than " +
+		                        std::to_string(NumericLimits<uint32_t>::Maximum() - 1));
 	}
 
 	// Generate Actual Enum Type
@@ -1165,15 +1151,15 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 		return UserTypeInfo::Deserialize(source);
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
 		auto size = source.Read<uint32_t>();
-		if (size <= NumericLimits<uint8_t>::Maximum()) {
+		if (size <= NumericLimits<uint8_t>::Maximum() - 1) {
 			return EnumTypeInfoTemplated<uint8_t>::Deserialize(source);
-		} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+		} else if (size <= NumericLimits<uint16_t>::Maximum() - 1) {
 			return EnumTypeInfoTemplated<uint16_t>::Deserialize(source);
-		} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+		} else if (size <= NumericLimits<uint32_t>::Maximum() - 1) {
 			return EnumTypeInfoTemplated<uint32_t>::Deserialize(source);
 		} else {
 			throw InternalException("Enum size must be lower than " +
-			                        std::to_string(NumericLimits<uint32_t>::Maximum()));
+			                        std::to_string(NumericLimits<uint32_t>::Maximum() - 1));
 		}
 	}
 	default:

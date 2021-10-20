@@ -18,36 +18,36 @@ public:
 	virtual ~TypeMatcher() {
 	}
 
-	virtual bool Match(LogicalTypeId type) = 0;
+	virtual bool Match(LogicalType type) = 0;
 };
 
 //! The SpecificTypeMatcher class matches only a single specified type
 class SpecificTypeMatcher : public TypeMatcher {
 public:
-	explicit SpecificTypeMatcher(LogicalTypeId type) : type(type) {
+	explicit SpecificTypeMatcher(LogicalType type) : type(type) {
 	}
 
-	bool Match(LogicalTypeId type) override {
-		return type == this->type;
+	bool Match(LogicalType type_p) override {
+		return type_p == this->type;
 	}
 
 private:
-	LogicalTypeId type;
+	LogicalType type;
 };
 
 //! The NumericTypeMatcher class matches any numeric type (DECIMAL, INTEGER, etc...)
 class NumericTypeMatcher : public TypeMatcher {
 public:
-	bool Match(LogicalTypeId type) override {
-		return TypeIsNumeric(type);
+	bool Match(LogicalType type) override {
+		return type.IsNumeric();
 	}
 };
 
 //! The IntegerTypeMatcher class matches only integer types (INTEGER, SMALLINT, TINYINT, BIGINT)
 class IntegerTypeMatcher : public TypeMatcher {
 public:
-	bool Match(LogicalTypeId type) override {
-		return TypeIsInteger(type);
+	bool Match(LogicalType type) override {
+		return type.IsIntegral();
 	}
 };
 

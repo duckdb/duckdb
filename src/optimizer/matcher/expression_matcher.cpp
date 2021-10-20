@@ -5,7 +5,7 @@
 namespace duckdb {
 
 bool ExpressionMatcher::Match(Expression *expr, vector<Expression *> &bindings) {
-	if (type && !type->Match(expr->return_type.id())) {
+	if (type && !type->Match(expr->return_type)) {
 		return false;
 	}
 	if (expr_type && !expr_type->Match(expr->type)) {

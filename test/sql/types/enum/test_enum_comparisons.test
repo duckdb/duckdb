@@ -68,3 +68,154 @@ where person_mood = pet_mood
 ----
 Pedro	Oogie
 Hannes	Wilbur
+
+#SET Operations (e.g. SELECT enum_one UNION ALL SELECT enum_two)
+query I
+SELECT person.current_mood
+FROM person
+UNION ALL
+SELECT pet.current_mood
+FROM pet
+----
+happy
+NULL
+quackity-quack
+ok
+sad
+happy
+quackity-quack
+NULL
+beaming
+
+statement ok
+CREATE TABLE person_pet (
+    person_name text,
+    pet_name text
+);
+
+statement ok
+insert into person_pet values ('Pedro','Oogie'), ('Hannes', 'Wilbur'), ('Tim', 'Chorizo'), ('Diego', 'Vacilo')
+
+statement ok
+CREATE TABLE person_pet_den as select person_name,pet_name, person_mood, pet_mood from
+(select person.name as person_name, pet.name as pet_name, person.current_mood as person_mood, pet.current_mood as pet_mood
+from person inner join person_pet on (person.name = person_pet.person_name) inner join pet on (pet.name = person_pet.pet_name))
+
+query IIII
+SELECT * FROM person_pet_den
+----
+Pedro	Oogie	happy	happy
+Hannes	Wilbur	quackity-quack	quackity-quack
+Tim	Chorizo	ok	NULL
+Diego	Vacilo	sad	beaming
+
+#CASE expressions (e.g. SELECT CASE WHEN cond THEN enum_one ELSE enum_two END
+query I
+SELECT CASE WHEN person_name = 'Tim' THEN person_mood ELSE pet_mood END FROM person_pet_den
+----
+happy
+quackity-quack
+ok
+beaming
+
+#IN clause (e.g. SELECT enum_one IN (enum_two, enum_one, ....))
+query I
+SELECT person_mood in ('sad') FROM person_pet_den
+----
+False
+False
+False
+True
+
+query I
+SELECT person_mood in ('beaming'::pet_mood) FROM person_pet_den
+----
+False
+False
+False
+False
+
+# LISTS (e.g. SELECT [enum_one, enum_two])
+query I
+SELECT [person_mood, pet_mood] FROM person_pet_den
+----
+[happy, happy]
+[quackity-quack, quackity-quack]
+[ok, NULL]
+[sad, beaming]
+
+# Comparison in the SELECT clause
+query I
+SELECT person_mood == pet_mood FROM person_pet_den
+----
+True
+True
+NULL
+False
+
+# Explicit casts from one enum to another
+query I
+SELECT person_mood::pet_mood FROM person_pet_den
+----
+happy
+quackity-quack
+NULL
+NULL
+
+# Use enums as normal strings (testing e.g. substr, LIKE, REGEXP_MATCHES).
+query T
+SELECT substring(person_mood from 1 for 2) FROM person_pet_den
+----
+ha
+qu
+ok
+sa
+
+query T
+SELECT substring(pet_mood from 1 for 2) FROM person_pet_den
+----
+ha
+qu
+NULL
+be
+
+query T
+SELECT person_mood  FROM person_pet_den where person_mood like '%a%'
+----
+happy
+quackity-quack
+sad
+
+query T
+SELECT person_mood  FROM person_pet_den where person_mood like '%a%'
+----
+happy
+quackity-quack
+sad
+
+query T
+SELECT regexp_matches(person_mood, '.*a.*')  FROM person_pet_den
+----
+True
+True
+False
+True
+
+# Compare two different enum types
+statement ok
+CREATE TYPE wealth AS ENUM ('poor', 'medium-class', 'rich', 'very super rich');
+
+statement ok
+CREATE TABLE test (
+    a mood,
+    b wealth
+);
+
+statement ok
+insert into test values ('happy', 'rich'), ('ok', 'poor')
+
+query T
+SELECT a = b  FROM test
+----
+False
+False
