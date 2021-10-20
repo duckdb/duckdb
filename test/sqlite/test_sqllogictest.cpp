@@ -1678,7 +1678,7 @@ static string ParseGroupFromPath(string file) {
 
 namespace duckdb {
 
-void RegisterSqllogictests(string path) {
+void RegisterSqllogictests() {
 	vector<string> excludes = {
 	    "test/select1.test", // tested separately
 	    "test/select2.test", "test/select3.test", "test/select4.test",
@@ -1731,7 +1731,6 @@ void RegisterSqllogictests(string path) {
 	    "random/expr/slt_good_40.test", "random/expr/slt_good_42.test", "random/expr/slt_good_27.test",
 	    "random/expr/slt_good_103.test", "random/expr/slt_good_75.test"};
 	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
-	fs->SetWorkingDirectory(path);
 	listFiles(*fs, fs->JoinPath(fs->JoinPath("third_party", "sqllogictest"), "test"), [excludes](const string &path) {
 		if (endsWith(path, ".test")) {
 			for (auto excl : excludes) {
