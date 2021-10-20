@@ -1,0 +1,62 @@
+# name: test/sql/subquery/scalar/test_correlated_grouping_set.test
+# description: Test correlated aggregate subqueries
+# group: [scalar]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+# aggregate with correlation in GROUPING SET
+query II
+SELECT i, (SELECT COUNT(*) FROM (SELECT i1.i FROM integers GROUP BY GROUPING SETS(i1.i)) tbl) AS j FROM integers i1 ORDER BY i;
+----
+NULL	1
+1	1
+2	1
+3	1
+
+# many grouping sets
+query II
+SELECT i, (SELECT COUNT(*) FROM (SELECT i1.i FROM integers GROUP BY GROUPING SETS((i1.i), (), (i1.i), (i1.i, i1.i))) tbl) AS j FROM integers i1 ORDER BY i;
+----
+NULL	4
+1	4
+2	4
+3	4
+
+# rollup
+query II
+SELECT i, (SELECT COUNT(*) FROM (SELECT i1.i FROM integers GROUP BY ROLLUP (i1.i, i1.i, i1.i, i1.i)) tbl) AS j FROM integers i1 ORDER BY i;
+----
+NULL	5
+1	5
+2	5
+3	5
+
+# cube
+query II
+SELECT i, (SELECT COUNT(*) FROM (SELECT i1.i FROM integers GROUP BY CUBE (i1.i, i1.i, i1.i, i1.i)) tbl) AS j FROM integers i1 ORDER BY i;
+----
+NULL	16
+1	16
+2	16
+3	16
+
+# aggregate with correlation in GROUPING SET and HAVING
+# FIXME: this is borked, related to #2335
+mode skip
+
+query II
+SELECT i, (SELECT MIN(i) FROM integers GROUP BY GROUPING SETS(i1.i, i) HAVING i1.i=i) AS j FROM integers i1 ORDER BY i;
+----
+NULL	NULL
+1	NULL
+2	NULL
+3	NULL
+
+mode unskip

@@ -19,9 +19,15 @@ hugeint_t operator*(const hugeint_t &h, const double &d) {
 
 using FrameBounds = std::pair<idx_t, idx_t>;
 
+template <typename SAVE_TYPE>
 struct QuantileState {
-	data_ptr_t v;
-	idx_t len;
+	using SaveType = SAVE_TYPE;
+
+	// Regular aggregation
+	std::vector<SaveType> v;
+
+	// Windowed Aggregation
+	std::vector<idx_t> w;
 	idx_t pos;
 
 	// List temporaries
@@ -29,26 +35,17 @@ struct QuantileState {
 	std::vector<idx_t> lower;
 	std::vector<idx_t> upper;
 
-	QuantileState() : v(nullptr), len(0), pos(0) {
+	QuantileState() : pos(0) {
 	}
 
 	~QuantileState() {
-		if (v) {
-			free(v);
-			v = nullptr;
-		}
 	}
 
-	template <typename T>
-	void Resize(idx_t new_len) {
-		if (new_len <= len) {
-			return;
+	inline void SetPos(size_t pos_p) {
+		pos = pos_p;
+		if (pos >= w.size()) {
+			w.resize(pos);
 		}
-		v = (data_ptr_t)realloc(v, new_len * sizeof(T));
-		if (!v) {
-			throw InternalException("Memory allocation failure");
-		}
-		len = new_len;
 	}
 };
 
@@ -87,10 +84,8 @@ void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &pre
 	}
 }
 
-template <class STATE>
-static idx_t ReplaceIndex(STATE *state, const FrameBounds &frame, const FrameBounds &prev) {
-	D_ASSERT(state->v);
-	auto index = (idx_t *)state->v;
+static idx_t ReplaceIndex(idx_t *index, const FrameBounds &frame, const FrameBounds &prev) {
+	D_ASSERT(index);
 
 	idx_t j = 0;
 	for (idx_t p = 0; p < (prev.second - prev.first); ++p) {
@@ -108,12 +103,12 @@ static idx_t ReplaceIndex(STATE *state, const FrameBounds &frame, const FrameBou
 	return j;
 }
 
-template <class INPUT_TYPE, class STATE>
-static inline bool CanReplace(STATE *state, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0, const idx_t k1) {
+template <class INPUT_TYPE>
+static inline bool CanReplace(const idx_t *index, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0,
+                              const idx_t k1) {
 	auto same = false;
 
-	D_ASSERT(state->v);
-	auto index = (idx_t *)state->v;
+	D_ASSERT(index);
 
 	auto curr = fdata[index[j]];
 	if (k1 < j) {
@@ -150,31 +145,49 @@ struct IndirectLess {
 	const INPUT_TYPE *inputs;
 };
 
+struct CastInterpolation {
+
+	template <class INPUT_TYPE, class TARGET_TYPE>
+	static TARGET_TYPE Cast(const INPUT_TYPE &src, Vector &result) {
+		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(src);
+	}
+};
+
+template <>
+string_t CastInterpolation::Cast(const std::string &src, Vector &result) {
+	return StringVector::AddString(result, src);
+}
+
+template <>
+string_t CastInterpolation::Cast(const string_t &src, Vector &result) {
+	return StringVector::AddString(result, src);
+}
+
 template <class INPUT_TYPE, class TARGET_TYPE, bool DISCRETE>
 struct Interpolator {
 	Interpolator(const double q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(ceil(RN)) {
 	}
 
-	TARGET_TYPE operator()(INPUT_TYPE *v_t) const {
+	TARGET_TYPE operator()(INPUT_TYPE *v_t, Vector &result) const {
 		if (CRN == FRN) {
 			std::nth_element(v_t, v_t + FRN, v_t + n);
-			return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
+			return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(v_t[FRN], result);
 		} else {
 			std::nth_element(v_t, v_t + FRN, v_t + n);
 			std::nth_element(v_t + FRN, v_t + CRN, v_t + n);
-			auto lo = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
-			auto hi = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[CRN]);
+			auto lo = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(v_t[FRN], result);
+			auto hi = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(v_t[CRN], result);
 			auto delta = hi - lo;
 			return lo + delta * (RN - FRN);
 		}
 	}
 
-	TARGET_TYPE operator()(const INPUT_TYPE *v_t, const idx_t *index) const {
+	TARGET_TYPE operator()(const INPUT_TYPE *v_t, const idx_t *index, Vector &result) const {
 		if (CRN == FRN) {
-			return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]]);
+			return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]], result);
 		} else {
-			auto lo = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]]);
-			auto hi = Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[CRN]]);
+			auto lo = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]], result);
+			auto hi = CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(v_t[index[CRN]], result);
 			auto delta = hi - lo;
 			return lo + delta * (RN - FRN);
 		}
@@ -191,13 +204,13 @@ struct Interpolator<INPUT_TYPE, TARGET_TYPE, true> {
 	Interpolator(const double q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(FRN) {
 	}
 
-	TARGET_TYPE operator()(INPUT_TYPE *v_t) const {
+	TARGET_TYPE operator()(INPUT_TYPE *v_t, Vector &result) const {
 		std::nth_element(v_t, v_t + FRN, v_t + n);
-		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[FRN]);
+		return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(v_t[FRN], result);
 	}
 
-	TARGET_TYPE operator()(const INPUT_TYPE *v_t, const idx_t *index) {
-		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]]);
+	TARGET_TYPE operator()(const INPUT_TYPE *v_t, const idx_t *index, Vector &result) {
+		return CastInterpolation::Cast<INPUT_TYPE, TARGET_TYPE>(v_t[index[FRN]], result);
 	}
 
 	const idx_t n;
@@ -232,7 +245,6 @@ struct QuantileBindData : public FunctionData {
 	vector<idx_t> order;
 };
 
-template <typename SAVE_TYPE>
 struct QuantileOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
@@ -249,22 +261,15 @@ struct QuantileOperation {
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE *state, FunctionData *bind_data_p, INPUT_TYPE *data, ValidityMask &mask, idx_t idx) {
-		if (state->pos == state->len) {
-			// growing conservatively here since we could be running this on many small groups
-			state->template Resize<SAVE_TYPE>(state->len == 0 ? 1 : state->len * 2);
-		}
-		D_ASSERT(state->v);
-		((SAVE_TYPE *)state->v)[state->pos++] = data[idx];
+		state->v.emplace_back(data[idx]);
 	}
 
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE *target) {
-		if (source.pos == 0) {
+		if (source.v.empty()) {
 			return;
 		}
-		target->template Resize<SAVE_TYPE>(target->pos + source.pos);
-		memcpy(target->v + target->pos * sizeof(SAVE_TYPE), source.v, source.pos * sizeof(SAVE_TYPE));
-		target->pos += source.pos;
+		target->v.insert(target->v.end(), source.v.begin(), source.v.end());
 	}
 
 	template <class STATE>
@@ -319,23 +324,21 @@ static AggregateFunction QuantileListAggregate(const LogicalType &input_type, co
 	    AggregateFunction::StateDestroy<STATE, OP>);
 }
 
-template <class SAVE_TYPE, bool DISCRETE>
-struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
+template <bool DISCRETE>
+struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class RESULT_TYPE, class STATE>
 	static void Finalize(Vector &result, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
-		if (state->pos == 0) {
+		if (state->v.empty()) {
 			mask.SetInvalid(idx);
 			return;
 		}
-		D_ASSERT(state->v);
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
 		D_ASSERT(bind_data->quantiles.size() == 1);
-		Interpolator<SAVE_TYPE, RESULT_TYPE, DISCRETE> interp(bind_data->quantiles[0], state->pos);
-		auto v_t = (SAVE_TYPE *)state->v;
-		target[idx] = interp(v_t);
+		Interpolator<typename STATE::SaveType, RESULT_TYPE, DISCRETE> interp(bind_data->quantiles[0], state->v.size());
+		target[idx] = interp(state->v.data(), result);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -346,11 +349,10 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
 
 		//  Lazily initialise frame state
 		const auto prev_valid = state->pos == (prev.second - prev.first);
-		state->pos = frame.second - frame.first;
-		state->template Resize<idx_t>(state->pos);
+		state->SetPos(frame.second - frame.first);
 
-		D_ASSERT(state->v);
-		auto index = (idx_t *)state->v;
+		auto index = state->w.data();
+		D_ASSERT(index);
 
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
@@ -361,15 +363,16 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
 		bool same = false;
 		if (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
-			const auto j = ReplaceIndex(state, frame, prev);
+			const auto j = ReplaceIndex(index, frame, prev);
 			Interpolator<INPUT_TYPE, RESULT_TYPE, DISCRETE> interp(q, state->pos);
-			same = CanReplace(state, data, j, interp.FRN, interp.CRN);
+			same = CanReplace(index, data, j, interp.FRN, interp.CRN);
 		} else {
 			ReuseIndexes(index, frame, prev);
 		}
 
 		if (!same) {
 			if (!dmask.AllValid()) {
+				// Remove the NULLs
 				IndirectNotNull not_null(dmask, MinValue(frame.first, prev.first));
 				state->pos = std::partition(index, index + state->pos, not_null) - index;
 			}
@@ -380,21 +383,21 @@ struct QuantileScalarOperation : public QuantileOperation<SAVE_TYPE> {
 				if (interp.CRN != interp.FRN) {
 					std::nth_element(index + interp.CRN, index + interp.CRN, index + interp.n, lt);
 				}
-				rdata[ridx] = interp(data, index);
+				rdata[ridx] = interp(data, index, result);
 			} else {
 				rmask.Set(ridx, false);
 			}
 		} else {
 			Interpolator<INPUT_TYPE, RESULT_TYPE, DISCRETE> interp(q, state->pos);
-			rdata[ridx] = interp(data, index);
+			rdata[ridx] = interp(data, index, result);
 		}
 	}
 };
 
-template <typename INPUT_TYPE>
+template <typename INPUT_TYPE, typename SAVED_TYPE>
 AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &type) {
-	using STATE = QuantileState;
-	using OP = QuantileScalarOperation<INPUT_TYPE, true>;
+	using STATE = QuantileState<SAVED_TYPE>;
+	using OP = QuantileScalarOperation<true>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, INPUT_TYPE, OP>(type, type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, INPUT_TYPE, OP>;
 	return fun;
@@ -403,56 +406,59 @@ AggregateFunction GetTypedDiscreteQuantileAggregateFunction(const LogicalType &t
 AggregateFunction GetDiscreteQuantileAggregateFunction(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
-		return GetTypedDiscreteQuantileAggregateFunction<int8_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int8_t, int8_t>(type);
 	case LogicalTypeId::SMALLINT:
-		return GetTypedDiscreteQuantileAggregateFunction<int16_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int16_t, int16_t>(type);
 	case LogicalTypeId::INTEGER:
-		return GetTypedDiscreteQuantileAggregateFunction<int32_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int32_t, int32_t>(type);
 	case LogicalTypeId::BIGINT:
-		return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int64_t, int64_t>(type);
 	case LogicalTypeId::HUGEINT:
-		return GetTypedDiscreteQuantileAggregateFunction<hugeint_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<hugeint_t, hugeint_t>(type);
 
 	case LogicalTypeId::FLOAT:
-		return GetTypedDiscreteQuantileAggregateFunction<float>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<float, float>(type);
 	case LogicalTypeId::DOUBLE:
-		return GetTypedDiscreteQuantileAggregateFunction<double>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<double, double>(type);
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			return GetTypedDiscreteQuantileAggregateFunction<int16_t>(type);
+			return GetTypedDiscreteQuantileAggregateFunction<int16_t, int16_t>(type);
 		case PhysicalType::INT32:
-			return GetTypedDiscreteQuantileAggregateFunction<int32_t>(type);
+			return GetTypedDiscreteQuantileAggregateFunction<int32_t, int32_t>(type);
 		case PhysicalType::INT64:
-			return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
+			return GetTypedDiscreteQuantileAggregateFunction<int64_t, int64_t>(type);
 		case PhysicalType::INT128:
-			return GetTypedDiscreteQuantileAggregateFunction<hugeint_t>(type);
+			return GetTypedDiscreteQuantileAggregateFunction<hugeint_t, hugeint_t>(type);
 		default:
 			throw NotImplementedException("Unimplemented discrete quantile aggregate");
 		}
 		break;
 
 	case LogicalTypeId::DATE:
-		return GetTypedDiscreteQuantileAggregateFunction<int32_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int32_t, int32_t>(type);
 	case LogicalTypeId::TIMESTAMP:
-		return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int64_t, int64_t>(type);
 	case LogicalTypeId::TIME:
-		return GetTypedDiscreteQuantileAggregateFunction<int64_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<int64_t, int64_t>(type);
 	case LogicalTypeId::INTERVAL:
-		return GetTypedDiscreteQuantileAggregateFunction<interval_t>(type);
+		return GetTypedDiscreteQuantileAggregateFunction<interval_t, interval_t>(type);
+
+	case LogicalTypeId::VARCHAR:
+		return GetTypedDiscreteQuantileAggregateFunction<string_t, std::string>(type);
 
 	default:
 		throw NotImplementedException("Unimplemented discrete quantile aggregate");
 	}
 }
 
-template <class SAVE_TYPE, class CHILD_TYPE, bool DISCRETE>
-struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
+template <class CHILD_TYPE, bool DISCRETE>
+struct QuantileListOperation : public QuantileOperation {
 
 	template <class RESULT_TYPE, class STATE>
 	static void Finalize(Vector &result_list, FunctionData *bind_data_p, STATE *state, RESULT_TYPE *target,
 	                     ValidityMask &mask, idx_t idx) {
-		if (state->pos == 0) {
+		if (state->v.empty()) {
 			mask.SetInvalid(idx);
 			return;
 		}
@@ -465,13 +471,13 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 		ListVector::Reserve(result_list, ridx + bind_data->quantiles.size());
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
-		D_ASSERT(state->v);
-		auto v_t = (SAVE_TYPE *)state->v;
+		auto v_t = state->v.data();
+		D_ASSERT(v_t);
 
 		target[idx].offset = ridx;
 		for (const auto &quantile : bind_data->quantiles) {
-			Interpolator<SAVE_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);
-			rdata[ridx] = interp(v_t);
+			Interpolator<typename STATE::SaveType, CHILD_TYPE, DISCRETE> interp(quantile, state->v.size());
+			rdata[ridx] = interp(v_t, result);
 			++ridx;
 		}
 		target[idx].length = bind_data->quantiles.size();
@@ -498,18 +504,16 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
 		//  Lazily initialise frame state
-		const auto prev_valid = state->pos == (prev.second - prev.first);
-		state->pos = frame.second - frame.first;
-		state->template Resize<idx_t>(state->pos);
+		const auto prev_valid = state->w.size() == (prev.second - prev.first);
+		state->SetPos(frame.second - frame.first);
 
-		D_ASSERT(state->v);
-		auto index = (idx_t *)state->v;
+		auto index = state->w.data();
 
 		bool fixed = false;
 		auto j = state->pos;
 		if (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
-			j = ReplaceIndex(state, frame, prev);
+			j = ReplaceIndex(index, frame, prev);
 			fixed = true;
 		} else {
 			ReuseIndexes(index, frame, prev);
@@ -534,8 +538,8 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 			const auto &quantile = bind_data->quantiles[q];
 			Interpolator<INPUT_TYPE, CHILD_TYPE, DISCRETE> interp(quantile, state->pos);
 
-			if (fixed && CanReplace(state, data, j, interp.FRN, interp.CRN)) {
-				rdata[lentry.offset + q] = interp(data, index);
+			if (fixed && CanReplace(index, data, j, interp.FRN, interp.CRN)) {
+				rdata[lentry.offset + q] = interp(data, index, result);
 				state->upper.resize(state->lower.size(), interp.FRN);
 			} else {
 				state->disturbed.push_back(q);
@@ -556,15 +560,15 @@ struct QuantileListOperation : public QuantileOperation<SAVE_TYPE> {
 			if (interp.CRN != interp.FRN) {
 				std::nth_element(index + interp.CRN, index + interp.CRN, index + state->upper[i], lt);
 			}
-			rdata[lentry.offset + q] = interp(data, index);
+			rdata[lentry.offset + q] = interp(data, index, result);
 		}
 	}
 };
 
-template <typename INPUT_TYPE>
+template <typename INPUT_TYPE, typename SAVE_TYPE>
 AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalType &type) {
-	using STATE = QuantileState;
-	using OP = QuantileListOperation<INPUT_TYPE, INPUT_TYPE, true>;
+	using STATE = QuantileState<SAVE_TYPE>;
+	using OP = QuantileListOperation<INPUT_TYPE, true>;
 	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(type, type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
 	return fun;
@@ -573,43 +577,46 @@ AggregateFunction GetTypedDiscreteQuantileListAggregateFunction(const LogicalTyp
 AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::TINYINT:
-		return GetTypedDiscreteQuantileListAggregateFunction<int8_t>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<int8_t, int8_t>(type);
 	case LogicalTypeId::SMALLINT:
-		return GetTypedDiscreteQuantileListAggregateFunction<int16_t>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<int16_t, int16_t>(type);
 	case LogicalTypeId::INTEGER:
-		return GetTypedDiscreteQuantileListAggregateFunction<int32_t>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<int32_t, int32_t>(type);
 	case LogicalTypeId::BIGINT:
-		return GetTypedDiscreteQuantileListAggregateFunction<int64_t>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<int64_t, int64_t>(type);
 	case LogicalTypeId::HUGEINT:
-		return GetTypedDiscreteQuantileListAggregateFunction<hugeint_t>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<hugeint_t, hugeint_t>(type);
 
 	case LogicalTypeId::FLOAT:
-		return GetTypedDiscreteQuantileListAggregateFunction<float>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<float, float>(type);
 	case LogicalTypeId::DOUBLE:
-		return GetTypedDiscreteQuantileListAggregateFunction<double>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<double, double>(type);
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
-			return GetTypedDiscreteQuantileListAggregateFunction<int16_t>(type);
+			return GetTypedDiscreteQuantileListAggregateFunction<int16_t, int16_t>(type);
 		case PhysicalType::INT32:
-			return GetTypedDiscreteQuantileListAggregateFunction<int32_t>(type);
+			return GetTypedDiscreteQuantileListAggregateFunction<int32_t, int32_t>(type);
 		case PhysicalType::INT64:
-			return GetTypedDiscreteQuantileListAggregateFunction<int64_t>(type);
+			return GetTypedDiscreteQuantileListAggregateFunction<int64_t, int64_t>(type);
 		case PhysicalType::INT128:
-			return GetTypedDiscreteQuantileListAggregateFunction<hugeint_t>(type);
+			return GetTypedDiscreteQuantileListAggregateFunction<hugeint_t, hugeint_t>(type);
 		default:
 			throw NotImplementedException("Unimplemented discrete quantile list aggregate");
 		}
 		break;
 
 	case LogicalTypeId::DATE:
-		return GetTypedDiscreteQuantileListAggregateFunction<date_t>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<date_t, date_t>(type);
 	case LogicalTypeId::TIMESTAMP:
-		return GetTypedDiscreteQuantileListAggregateFunction<timestamp_t>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<timestamp_t, timestamp_t>(type);
 	case LogicalTypeId::TIME:
-		return GetTypedDiscreteQuantileListAggregateFunction<dtime_t>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<dtime_t, dtime_t>(type);
 	case LogicalTypeId::INTERVAL:
-		return GetTypedDiscreteQuantileListAggregateFunction<interval_t>(type);
+		return GetTypedDiscreteQuantileListAggregateFunction<interval_t, interval_t>(type);
+
+	case LogicalTypeId::VARCHAR:
+		return GetTypedDiscreteQuantileListAggregateFunction<string_t, std::string>(type);
 
 	default:
 		throw NotImplementedException("Unimplemented discrete quantile list aggregate");
@@ -619,8 +626,8 @@ AggregateFunction GetDiscreteQuantileListAggregateFunction(const LogicalType &ty
 template <typename INPUT_TYPE, typename TARGET_TYPE>
 AggregateFunction GetTypedContinuousQuantileAggregateFunction(const LogicalType &input_type,
                                                               const LogicalType &target_type) {
-	using STATE = QuantileState;
-	using OP = QuantileScalarOperation<INPUT_TYPE, false>;
+	using STATE = QuantileState<INPUT_TYPE>;
+	using OP = QuantileScalarOperation<false>;
 	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, TARGET_TYPE, OP>;
 	return fun;
@@ -673,8 +680,8 @@ AggregateFunction GetContinuousQuantileAggregateFunction(const LogicalType &type
 template <typename INPUT_TYPE, typename CHILD_TYPE>
 AggregateFunction GetTypedContinuousQuantileListAggregateFunction(const LogicalType &input_type,
                                                                   const LogicalType &result_type) {
-	using STATE = QuantileState;
-	using OP = QuantileListOperation<INPUT_TYPE, CHILD_TYPE, false>;
+	using STATE = QuantileState<INPUT_TYPE>;
+	using OP = QuantileListOperation<CHILD_TYPE, false>;
 	auto fun = QuantileListAggregate<STATE, INPUT_TYPE, list_entry_t, OP>(input_type, result_type);
 	fun.window = AggregateFunction::UnaryWindow<STATE, INPUT_TYPE, list_entry_t, OP>;
 	return fun;
@@ -799,9 +806,19 @@ unique_ptr<FunctionData> BindContinuousQuantileDecimalList(ClientContext &contex
 	return bind_data;
 }
 
+static bool CanInterpolate(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::VARCHAR:
+		return false;
+	default:
+		return true;
+	}
+}
+
 AggregateFunction GetMedianAggregate(const LogicalType &type) {
-	auto fun = (type.id() != LogicalTypeId::INTERVAL) ? GetContinuousQuantileAggregateFunction(type)
-	                                                  : GetDiscreteQuantileAggregateFunction(type);
+	auto fun = CanInterpolate(type) ? GetContinuousQuantileAggregateFunction(type)
+	                                : GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindMedian;
 	return fun;
 }
@@ -844,7 +861,7 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	const vector<LogicalType> QUANTILES = {LogicalType::TINYINT, LogicalType::SMALLINT, LogicalType::INTEGER,
 	                                       LogicalType::BIGINT,  LogicalType::HUGEINT,  LogicalType::FLOAT,
 	                                       LogicalType::DOUBLE,  LogicalType::DATE,     LogicalType::TIMESTAMP,
-	                                       LogicalType::TIME,    LogicalType::INTERVAL};
+	                                       LogicalType::TIME,    LogicalType::INTERVAL, LogicalType::VARCHAR};
 
 	AggregateFunctionSet median("median");
 	median.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
@@ -870,7 +887,7 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 		median.AddFunction(GetMedianAggregate(type));
 		quantile_disc.AddFunction(GetDiscreteQuantileAggregate(type));
 		quantile_disc.AddFunction(GetDiscreteQuantileListAggregate(type));
-		if (type.id() != LogicalTypeId::INTERVAL) {
+		if (CanInterpolate(type)) {
 			quantile_cont.AddFunction(GetContinuousQuantileAggregate(type));
 			quantile_cont.AddFunction(GetContinuousQuantileListAggregate(type));
 		}

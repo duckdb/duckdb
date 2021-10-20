@@ -1309,9 +1309,9 @@ typedef enum PGObjectType {
  */
 typedef struct PGCreateSchemaStmt {
 	PGNodeTag type;
-	char *schemaname;   /* the name of the schema to create */
-	PGList *schemaElts; /* schema components (list of parsenodes) */
-	bool if_not_exists; /* just do nothing if schema already exists? */
+	char *schemaname;                     /* the name of the schema to create */
+	PGList *schemaElts;                   /* schema components (list of parsenodes) */
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateSchemaStmt;
 
 typedef enum PGDropBehavior {
@@ -1515,16 +1515,16 @@ typedef struct PGVariableShowSelectStmt
 
 typedef struct PGCreateStmt {
 	PGNodeTag type;
-	PGRangeVar *relation;      /* relation to create */
-	PGList *tableElts;         /* column definitions (list of PGColumnDef) */
-	PGList *inhRelations;      /* relations to inherit from (list of
-								 * inhRelation) */
-	PGTypeName *ofTypename;    /* OF typename */
-	PGList *constraints;       /* constraints (list of PGConstraint nodes) */
-	PGList *options;           /* options from WITH clause */
-	PGOnCommitAction oncommit; /* what do we do at COMMIT? */
-	char *tablespacename;      /* table space to use, or NULL */
-	bool if_not_exists;        /* just do nothing if it already exists? */
+	PGRangeVar *relation;                 /* relation to create */
+	PGList *tableElts;                    /* column definitions (list of PGColumnDef) */
+	PGList *inhRelations;                 /* relations to inherit from (list of
+										* inhRelation) */
+	PGTypeName *ofTypename;               /* OF typename */
+	PGList *constraints;                  /* constraints (list of PGConstraint nodes) */
+	PGList *options;                      /* options from WITH clause */
+	PGOnCommitAction oncommit;            /* what do we do at COMMIT? */
+	char *tablespacename;                 /* table space to use, or NULL */
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateStmt;
 
 /* ----------
@@ -1643,7 +1643,7 @@ typedef struct PGCreateSeqStmt {
 	PGList *options;
 	PGOid ownerId; /* ID of owner, or InvalidOid for default */
 	bool for_identity;
-	bool if_not_exists; /* just do nothing if it already exists? */
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateSeqStmt;
 
 typedef struct PGAlterSeqStmt {
@@ -1711,7 +1711,7 @@ typedef struct PGIndexStmt {
 	bool initdeferred;      /* is the constraint INITIALLY DEFERRED? */
 	bool transformed;       /* true when transformIndexStmt is finished */
 	bool concurrent;        /* should this be a concurrent index build? */
-	bool if_not_exists;     /* just do nothing if index already exists? */
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGIndexStmt;
 
 /* ----------------------
@@ -1779,7 +1779,7 @@ typedef struct PGViewStmt {
 	PGRangeVar *view;                  /* the view to be created */
 	PGList *aliases;                   /* target column names */
 	PGNode *query;                     /* the SELECT query (as a raw parse tree) */
-	bool replace;                      /* replace an existing view? */
+	PGOnCreateConflict onconflict;     /* what to do on create conflict */
 	PGList *options;                   /* options from WITH clause */
 	PGViewCheckOption withCheckOption; /* WITH CHECK OPTION */
 } PGViewStmt;
@@ -1852,7 +1852,7 @@ typedef struct PGCreateTableAsStmt {
 	PGIntoClause *into;   /* destination table */
 	PGObjectType relkind; /* PG_OBJECT_TABLE or PG_OBJECT_MATVIEW */
 	bool is_select_into;  /* it was written as SELECT INTO */
-	bool if_not_exists;   /* just do nothing if it already exists? */
+	PGOnCreateConflict onconflict;        /* what to do on create conflict */
 } PGCreateTableAsStmt;
 
 /* ----------------------

@@ -10,6 +10,8 @@
 
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/storage/data_table.hpp"
+#include "duckdb/parser/group_by_node.hpp"
+#include "duckdb/execution/radix_partitioned_hashtable.hpp"
 
 namespace duckdb {
 
@@ -25,13 +27,19 @@ public:
 	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
 	                      vector<unique_ptr<Expression>> groups, idx_t estimated_cardinality,
 	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
+	PhysicalHashAggregate(ClientContext &context, vector<LogicalType> types, vector<unique_ptr<Expression>> expressions,
+	                      vector<unique_ptr<Expression>> groups, vector<GroupingSet> grouping_sets,
+	                      vector<vector<idx_t>> grouping_functions, idx_t estimated_cardinality,
+	                      PhysicalOperatorType type = PhysicalOperatorType::HASH_GROUP_BY);
 
 	//! The groups
 	vector<unique_ptr<Expression>> groups;
+	//! The grouping sets
+	vector<GroupingSet> grouping_sets;
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
-	//! Whether or not the aggregate is an implicit (i.e. ungrouped) aggregate
-	bool is_implicit_aggr;
+	//! The set of GROUPING functions
+	vector<vector<idx_t>> grouping_functions;
 	//! Whether or not all aggregates are combinable
 	bool all_combinable;
 
@@ -44,6 +52,9 @@ public:
 	vector<LogicalType> payload_types;
 	//! The aggregate return types
 	vector<LogicalType> aggregate_return_types;
+
+	//! The radix partitioned hash tables (one per grouping set)
+	vector<RadixPartitionedHashTable> radix_tables;
 
 	//! Pointers to the aggregates
 	vector<BoundAggregateExpression *> bindings;
@@ -80,13 +91,6 @@ public:
 	//! Toggle multi-scan capability on a hash table, which prevents the scan of the aggregate from being destructive
 	//! If this is not toggled the GetData method will destroy the hash table as it is scanning it
 	static void SetMultiScan(GlobalSinkState &state);
-
-private:
-	//! how many groups can we have in the operator before we switch to radix partitioning
-	idx_t radix_limit;
-
-private:
-	bool ForceSingleHT(GlobalSinkState &state) const;
 };
 
 } // namespace duckdb

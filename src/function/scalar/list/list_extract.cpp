@@ -187,6 +187,10 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 	case LogicalTypeId::VARCHAR:
 		ExecuteStringExtract(result, base, subscript, count);
 		break;
+	case LogicalTypeId::SQLNULL:
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		break;
 	default:
 		throw NotImplementedException("Specifier type not implemented");
 	}
@@ -195,10 +199,14 @@ static void ListExtractFunction(DataChunk &args, ExpressionState &state, Vector 
 static unique_ptr<FunctionData> ListExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                 vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(bound_function.arguments.size() == 2);
-	D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
-	// list extract returns the child type of the list as return type
-	bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
-
+	if (arguments[0]->return_type.id() == LogicalTypeId::SQLNULL) {
+		bound_function.arguments[0] = LogicalType::SQLNULL;
+		bound_function.return_type = LogicalType::SQLNULL;
+	} else {
+		D_ASSERT(LogicalTypeId::LIST == arguments[0]->return_type.id());
+		// list extract returns the child type of the list as return type
+		bound_function.return_type = ListType::GetChildType(arguments[0]->return_type);
+	}
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
 

@@ -12,6 +12,7 @@
 
 #include <cmath>
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -996,6 +997,7 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	}
 	string enum_name;
 	vector<string> values_insert_order;
+	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
 	bool Equals(ExtraTypeInfo *other_p) override {
@@ -1099,6 +1101,19 @@ idx_t EnumType::GetSize(const LogicalType &type) {
 	auto info = type.AuxInfo();
 	D_ASSERT(info);
 	return ((EnumTypeInfo &)*info).values_insert_order.size();
+}
+
+void EnumType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	((EnumTypeInfo &)*info).catalog_entry = catalog_entry;
+}
+TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((EnumTypeInfo &)*info).catalog_entry;
 }
 
 //===--------------------------------------------------------------------===//

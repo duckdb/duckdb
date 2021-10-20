@@ -138,6 +138,12 @@ void Binder::BindLogicalType(ClientContext &context, LogicalType &type, const st
 			throw NotImplementedException("DataType %s not supported yet...\n", user_type_name);
 		}
 		type = *user_type_catalog->user_type;
+		EnumType::SetCatalog(type, user_type_catalog);
+	} else if (type.id() == LogicalTypeId::ENUM) {
+		auto &enum_type_name = EnumType::GetTypeName(type);
+		auto enum_type_catalog = (TypeCatalogEntry *)context.db->GetCatalog().GetEntry(context, CatalogType::TYPE_ENTRY,
+		                                                                               schema, enum_type_name, true);
+		EnumType::SetCatalog(type, enum_type_catalog);
 	}
 }
 
@@ -205,10 +211,6 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	}
 	case CatalogType::TABLE_ENTRY: {
 		// We first check if there are any user types, if yes we check to which custom types they refer.
-		auto &create_table_info = (CreateTableInfo &)*stmt.info;
-		for (auto &column : create_table_info.columns) {
-			BindLogicalType(context, column.type, stmt.info->schema);
-		}
 		auto bound_info = BindCreateTableInfo(move(stmt.info));
 		auto root = move(bound_info->query);
 

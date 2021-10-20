@@ -4,6 +4,7 @@
 
 #include <fstream>
 #include <streambuf>
+#include <sstream>
 #include <string>
 
 using namespace duckdb;
@@ -14,14 +15,21 @@ constexpr const char *QUERY_DIRECTORY = "test/ossfuzz/cases";
 static void test_runner() {
 	unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	auto file_name = Catch::getResultCapture().getCurrentTestName();
-	auto fname = fs->JoinPath(QUERY_DIRECTORY, file_name);
 
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
 	Connection con(db);
-	ifstream t(fname);
-	string query((istreambuf_iterator<char>(t)), istreambuf_iterator<char>());
-	con.Query(query.c_str());
+	std::ifstream t(file_name);
+	std::stringstream buffer;
+	buffer << t.rdbuf();
+	auto query = buffer.str();
+	result = con.Query(query.c_str());
+	if (!result->success) {
+		if (TestIsInternalError(result->error)) {
+			REQUIRE(result->error.empty());
+		}
+	}
+
 	// we don't know whether the query fails or not and we don't know the
 	// correct result we just don't want it to crash
 	REQUIRE(1 == 1);

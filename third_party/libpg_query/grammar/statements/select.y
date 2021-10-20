@@ -621,6 +621,9 @@ group_by_list:
 group_by_item:
 			a_expr									{ $$ = $1; }
 			| empty_grouping_set					{ $$ = $1; }
+			| cube_clause							{ $$ = $1; }
+			| rollup_clause							{ $$ = $1; }
+			| grouping_sets_clause					{ $$ = $1; }
 		;
 
 empty_grouping_set:
@@ -635,6 +638,32 @@ empty_grouping_set:
  * so that they shift in these rules rather than reducing the conflicting
  * unreserved_keyword rule.
  */
+
+rollup_clause:
+			ROLLUP '(' expr_list ')'
+				{
+					$$ = (PGNode *) makeGroupingSet(GROUPING_SET_ROLLUP, $3, @1);
+				}
+		;
+
+cube_clause:
+			CUBE '(' expr_list ')'
+				{
+					$$ = (PGNode *) makeGroupingSet(GROUPING_SET_CUBE, $3, @1);
+				}
+		;
+
+grouping_sets_clause:
+			GROUPING SETS '(' group_by_list ')'
+				{
+					$$ = (PGNode *) makeGroupingSet(GROUPING_SET_SETS, $4, @1);
+				}
+		;
+
+grouping_or_grouping_id:
+		GROUPING								{ $$ = NULL; }
+		| GROUPING_ID							{ $$ = NULL; }
+		;
 
 having_clause:
 			HAVING a_expr							{ $$ = $2; }
@@ -2233,6 +2262,13 @@ c_expr:		columnref								{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
+			| grouping_or_grouping_id '(' expr_list ')'
+			  {
+				  PGGroupingFunc *g = makeNode(PGGroupingFunc);
+				  g->args = $3;
+				  g->location = @1;
+				  $$ = (PGNode *)g;
+			  }
 		;
 
 func_application: func_name '(' ')'

@@ -1,0 +1,165 @@
+# name: test/issues/monetdb/groupings.test
+# description: MonetDB Test for grouping sets
+# group: [monetdb]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+START TRANSACTION
+
+statement ok
+CREATE TABLE categories (id INTEGER, "description" TEXT)
+
+statement ok
+CREATE TABLE sections (id INTEGER, "description" TEXT)
+
+statement ok
+CREATE TABLE products (id INTEGER, categoryid int, sectionid INTEGER, "description" TEXT, price DECIMAL(6,2))
+
+statement ok
+CREATE TABLE sales (productid INTEGER, sale_day DATE, units INTEGER)
+
+statement ok
+INSERT INTO categories VALUES (1, 'fresh food'), (2, 'dry food'), (3, 'drinks')
+
+statement ok
+INSERT INTO sections VALUES (1, 'front'), (2, 'side'), (3, 'back')
+
+statement ok
+INSERT INTO products VALUES (1, 1, 1, 'apples', 1.5), (2, 1, 2, 'melons', 4.0), (3, 2, 2, 'peanuts', 2.0), (4, 3, 1, 'water', 1.0), (5, 3, 3, 'wine', 5.0), (6, 2, 3, 'walnuts', 1.5)
+
+statement ok
+INSERT INTO sales VALUES (1, date '2020-03-01', 10), (2, date '2020-03-01', 3), (4, date '2020-03-01', 4), (1, date '2020-03-02', 6), (4, date '2020-03-02', 5), (5, date '2020-03-02', 2), (1, date '2020-03-03', 7), (3, date '2020-03-03', 4), (2, date '2020-03-03', 3), (5, date '2020-03-03', 1), (6, date '2020-03-03', 1)
+
+query TTR rowsort
+SELECT COALESCE(products."description", 'all_products') AS "description",
+       COALESCE(sale_day, 'all_days') AS sale_day,
+       CAST(totals.total AS DECIMAL (12,4))
+FROM (
+    SELECT productid, sale_day, SUM(units * price) AS total
+    FROM products
+    LEFT JOIN sales ON sales.productid = products.id
+    GROUP BY ROLLUP(productid, sale_day)
+) AS totals
+LEFT JOIN products ON products.id = totals.productid
+ORDER BY sale_day NULLS LAST, productid NULLS LAST
+----
+all_products
+all_days
+92.000
+apples
+2020-03-01
+15.000
+apples
+2020-03-02
+9.000
+apples
+2020-03-03
+10.500
+apples
+all_days
+34.500
+melons
+2020-03-01
+12.000
+melons
+2020-03-03
+12.000
+melons
+all_days
+24.000
+peanuts
+2020-03-03
+8.000
+peanuts
+all_days
+8.000
+walnuts
+2020-03-03
+1.500
+walnuts
+all_days
+1.500
+water
+2020-03-01
+4.000
+water
+2020-03-02
+5.000
+water
+all_days
+9.000
+wine
+2020-03-02
+10.000
+wine
+2020-03-03
+5.000
+wine
+all_days
+15.000
+
+query TTR rowsort
+SELECT COALESCE(sections."description", 'all_sections') AS section,
+       COALESCE(categories."description", 'all_categories') AS category,
+       CAST(totals.total AS DECIMAL (12,4))
+FROM (
+    SELECT categoryid, sectionid, SUM(units * price) AS total
+    FROM products
+    LEFT JOIN sales ON sales.productid = products.id
+    GROUP BY GROUPING SETS ((categoryid), (sectionid), ())
+) AS totals
+LEFT JOIN categories ON totals.categoryid = categories.id
+LEFT JOIN sections ON totals.sectionid = sections.id
+----
+all_sections
+all_categories
+92.000
+all_sections
+drinks
+24.000
+all_sections
+dry food
+9.500
+all_sections
+fresh food
+58.500
+back
+all_categories
+16.500
+front
+all_categories
+43.500
+side
+all_categories
+32.000
+
+statement ok
+CREATE VIEW sales_totals AS
+    SELECT GROUPING(categoryid) AS category_aggregates,
+           GROUPING(sectionid) AS section_aggregates,
+           categoryid, sectionid, SUM(units * price) AS total
+    FROM products
+    LEFT JOIN sales ON sales.productid = products.id
+    GROUP BY GROUPING SETS ((categoryid), (sectionid), ())
+
+query TR rowsort
+SELECT "description", CAST(total AS DECIMAL (12,4))
+FROM sales_totals
+LEFT JOIN categories ON sales_totals.categoryid = categories.id
+WHERE category_aggregates = 0
+----
+drinks
+24.000
+dry food
+9.500
+fresh food
+58.500
+
+statement error
+SELECT * FROM categories GROUP BY ()
+
+statement ok
+ROLLBACK
+

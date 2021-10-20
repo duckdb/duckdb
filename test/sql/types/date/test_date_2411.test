@@ -1,0 +1,23 @@
+# name: test/sql/types/date/test_date_2411.test
+# description: Test bug described on issue 2411
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE dates(i DATE)
+
+statement ok
+CREATE TABLE timestamp(i TIMESTAMP)
+
+statement ok
+INSERT INTO dates VALUES ('1993-08-14')
+
+statement ok
+INSERT INTO timestamp VALUES ('1993-08-14 00:00:01')
+
+query I
+select count(*) from dates inner join timestamp on (timestamp.i::DATE = dates.i)
+----
+1

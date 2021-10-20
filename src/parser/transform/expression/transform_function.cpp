@@ -39,25 +39,24 @@ static ExpressionType WindowToExpressionType(string &fun_name) {
 	return ExpressionType::WINDOW_AGGREGATE;
 }
 
-void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr, idx_t depth) {
+void Transformer::TransformWindowDef(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
 	D_ASSERT(window_spec);
 	D_ASSERT(expr);
 
 	// next: partitioning/ordering expressions
 	if (window_spec->partitionClause) {
-		TransformExpressionList(*window_spec->partitionClause, expr->partitions, depth);
+		TransformExpressionList(*window_spec->partitionClause, expr->partitions);
 	}
 	TransformOrderBy(window_spec->orderClause, expr->orders);
 }
 
-void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr,
-                                       idx_t depth) {
+void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_spec, WindowExpression *expr) {
 	D_ASSERT(window_spec);
 	D_ASSERT(expr);
 
 	// finally: specifics of bounds
-	expr->start_expr = TransformExpression(window_spec->startOffset, depth + 1);
-	expr->end_expr = TransformExpression(window_spec->endOffset, depth + 1);
+	expr->start_expr = TransformExpression(window_spec->startOffset);
+	expr->end_expr = TransformExpression(window_spec->endOffset);
 
 	if ((window_spec->frameOptions & FRAMEOPTION_END_UNBOUNDED_PRECEDING) ||
 	    (window_spec->frameOptions & FRAMEOPTION_START_UNBOUNDED_FOLLOWING)) {
@@ -95,7 +94,7 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef *window_sp
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall *root, idx_t depth) {
+unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::PGFuncCall *root) {
 	auto name = root->funcname;
 	string schema, function_name;
 	if (name->length == 2) {
@@ -129,7 +128,7 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 
 		if (root->args) {
 			vector<unique_ptr<ParsedExpression>> function_list;
-			TransformExpressionList(*root->args, function_list, depth);
+			TransformExpressionList(*root->args, function_list);
 
 			if (win_fun_type == ExpressionType::WINDOW_AGGREGATE) {
 				for (auto &child : function_list) {
@@ -181,8 +180,8 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			window_ref = it->second;
 			D_ASSERT(window_ref);
 		}
-		TransformWindowDef(window_ref, expr.get(), depth);
-		TransformWindowFrame(window_spec, expr.get(), depth);
+		TransformWindowDef(window_ref, expr.get());
+		TransformWindowFrame(window_spec, expr.get());
 		expr->query_location = root->location;
 		return move(expr);
 	}
@@ -191,13 +190,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 	vector<unique_ptr<ParsedExpression>> children;
 	if (root->args != nullptr) {
 		for (auto node = root->args->head; node != nullptr; node = node->next) {
-			auto child_expr = TransformExpression((duckdb_libpgquery::PGNode *)node->data.ptr_value, depth + 1);
+			auto child_expr = TransformExpression((duckdb_libpgquery::PGNode *)node->data.ptr_value);
 			children.push_back(move(child_expr));
 		}
 	}
 	unique_ptr<ParsedExpression> filter_expr;
 	if (root->agg_filter) {
-		filter_expr = TransformExpression(root->agg_filter, depth + 1);
+		filter_expr = TransformExpression(root->agg_filter);
 	}
 
 	auto order_bys = make_unique<OrderModifier>();
@@ -212,16 +211,23 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("Cannot use multiple ORDER BY clauses with WITHIN GROUP");
 		}
 		if (lowercase_name == "percentile_cont") {
+			if (children.size() != 1) {
+				throw ParserException("Wrong number of arguments for PERCENTILE_CONT");
+			}
 			lowercase_name = "quantile_cont";
 		} else if (lowercase_name == "percentile_disc") {
+			if (children.size() != 1) {
+				throw ParserException("Wrong number of arguments for PERCENTILE_DISC");
+			}
 			lowercase_name = "quantile_disc";
 		} else if (lowercase_name == "mode") {
+			if (!children.empty()) {
+				throw ParserException("Wrong number of arguments for MODE");
+			}
 			lowercase_name = "mode";
 		} else {
 			throw ParserException("Unknown ordered aggregate \"%s\".", function_name);
 		}
-		children.insert(children.begin(), move(order_bys->orders[0].expression));
-		order_bys->orders.clear();
 	}
 
 	// star gets eaten in the parser
@@ -299,8 +305,7 @@ static string SQLValueOpToString(duckdb_libpgquery::PGSQLValueFunctionOp op) {
 	}
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node,
-                                                                    idx_t depth) {
+unique_ptr<ParsedExpression> Transformer::TransformSQLValueFunction(duckdb_libpgquery::PGSQLValueFunction *node) {
 	D_ASSERT(node);
 	vector<unique_ptr<ParsedExpression>> children;
 	auto fname = SQLValueOpToString(node->op);

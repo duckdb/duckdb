@@ -9,6 +9,7 @@ add_subdirectory(sequence)
 add_subdirectory(string)
 add_subdirectory(struct)
 add_subdirectory(system)
+add_subdirectory(uuid)
 
 add_library_unity(
   duckdb_func_scalar

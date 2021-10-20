@@ -1,0 +1,16 @@
+# name: test/sql/aggregate/grouping_sets/large_grouping_sets.test_slow
+# description: Test GROUPING sets with many groups to trigger radix partitioning
+# group: [grouping_sets]
+
+statement ok
+CREATE TABLE integers AS SELECT i, i::VARCHAR j FROM generate_series(0, 1000000, 1) tbl(i);
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM integers GROUP BY CUBE (i, j)) tbl;
+----
+3000004
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM integers GROUP BY ROLLUP (i, j)) tbl;
+----
+2000003
