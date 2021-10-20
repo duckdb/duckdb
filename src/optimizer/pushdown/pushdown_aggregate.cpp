@@ -32,8 +32,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownAggregate(unique_ptr<Logical
 	FilterPushdown child_pushdown(optimizer);
 	for (idx_t i = 0; i < filters.size(); i++) {
 		auto &f = *filters[i];
-		// check if the aggregate is in the set
-		if (f.bindings.find(aggr.aggregate_index) == f.bindings.end()) {
+		// check if any aggregate or GROUPING functions are in the set
+		if (f.bindings.find(aggr.aggregate_index) == f.bindings.end() &&
+		    f.bindings.find(aggr.groupings_index) == f.bindings.end()) {
 			// no aggregate! we can push this down
 			// rewrite any group bindings within the filter
 			f.filter = ReplaceGroupBindings(aggr, move(f.filter));

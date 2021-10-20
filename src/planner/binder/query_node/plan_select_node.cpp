@@ -5,6 +5,7 @@
 #include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 
 namespace duckdb {
 
@@ -30,10 +31,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		root = PlanFilter(move(statement.where_clause), move(root));
 	}
 
-	if (!statement.aggregates.empty() || !statement.groups.empty()) {
-		if (!statement.groups.empty()) {
+	if (!statement.aggregates.empty() || !statement.groups.group_expressions.empty()) {
+		if (!statement.groups.group_expressions.empty()) {
 			// visit the groups
-			for (auto &group : statement.groups) {
+			for (auto &group : statement.groups.group_expressions) {
 				PlanSubqueries(&group, &root);
 			}
 		}
@@ -44,10 +45,18 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		// finally create the aggregate node with the group_index and aggregate_index as obtained from the binder
 		auto aggregate =
 		    make_unique<LogicalAggregate>(statement.group_index, statement.aggregate_index, move(statement.aggregates));
-		aggregate->groups = move(statement.groups);
+		aggregate->groups = move(statement.groups.group_expressions);
+		aggregate->groupings_index = statement.groupings_index;
+		aggregate->grouping_sets = move(statement.groups.grouping_sets);
+		aggregate->grouping_functions = move(statement.grouping_functions);
 
 		aggregate->AddChild(move(root));
 		root = move(aggregate);
+	} else if (!statement.groups.grouping_sets.empty()) {
+		// edge case: we have grouping sets but no groups or aggregates
+		// this can only happen if we have e.g. select 1 from tbl group by ();
+		// just output a dummy scan
+		root = make_unique_base<LogicalOperator, LogicalDummyScan>(statement.group_index);
 	}
 
 	if (statement.having) {

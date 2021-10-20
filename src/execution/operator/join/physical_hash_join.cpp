@@ -171,10 +171,8 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		D_ASSERT(sink.hash_table->equality_types.size() == 1);
 		auto key_type = sink.hash_table->equality_types[0];
 		use_perfect_hash = sink.perfect_join_executor->BuildPerfectHashTable(key_type);
-	} else {
-		sink.perfect_join_executor.reset();
 	}
-	// In case large build side or duplicates, use regular hash join
+	// In case of a large build side or duplicates, use regular hash join
 	if (!use_perfect_hash) {
 		sink.perfect_join_executor.reset();
 		sink.hash_table->Finalize();

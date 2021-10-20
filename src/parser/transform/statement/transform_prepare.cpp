@@ -29,7 +29,7 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(duckdb_libpgquery::PG
 	result->name = string(stmt->name);
 
 	if (stmt->params) {
-		TransformExpressionList(*stmt->params, result->values, 0);
+		TransformExpressionList(*stmt->params, result->values);
 	}
 	for (auto &expr : result->values) {
 		if (!expr->IsScalar()) {
@@ -42,6 +42,9 @@ unique_ptr<ExecuteStatement> Transformer::TransformExecute(duckdb_libpgquery::PG
 unique_ptr<DropStatement> Transformer::TransformDeallocate(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGDeallocateStmt *>(node);
 	D_ASSERT(stmt);
+	if (!stmt->name) {
+		throw ParserException("DEALLOCATE requires a name");
+	}
 
 	auto result = make_unique<DropStatement>();
 	result->info->type = CatalogType::PREPARED_STATEMENT;

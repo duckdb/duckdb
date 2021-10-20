@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink *root, idx_t depth) {
+unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::PGSubLink *root) {
 	D_ASSERT(root);
 	auto subquery_expr = make_unique<SubqueryExpression>();
 
@@ -21,7 +21,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 	case duckdb_libpgquery::PG_ALL_SUBLINK: {
 		// comparison with ANY() or ALL()
 		subquery_expr->subquery_type = SubqueryType::ANY;
-		subquery_expr->child = TransformExpression(root->testexpr, depth + 1);
+		subquery_expr->child = TransformExpression(root->testexpr);
 		// get the operator name
 		if (!root->operName) {
 			// simple IN

@@ -81,6 +81,7 @@ enum class ExpressionType : uint8_t {
 	// -----------------------------
 	AGGREGATE = 100,
 	BOUND_AGGREGATE = 101,
+	GROUPING_FUNCTION = 102,
 
 	// -----------------------------
 	// Window Functions

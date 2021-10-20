@@ -9,6 +9,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/group_binder.hpp"
 #include "duckdb/planner/expression_binder/having_binder.hpp"
@@ -19,10 +20,6 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 
 namespace duckdb {
-unique_ptr<Expression> Binder::BindFilter(unique_ptr<ParsedExpression> condition) {
-	WhereBinder where_binder(*this, context);
-	return where_binder.Bind(condition);
-}
 
 unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr) {
 	// we treat the Distinct list as a order by
@@ -173,6 +170,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	result->projection_index = GenerateTableIndex();
 	result->group_index = GenerateTableIndex();
 	result->aggregate_index = GenerateTableIndex();
+	result->groupings_index = GenerateTableIndex();
 	result->window_index = GenerateTableIndex();
 	result->unnest_index = GenerateTableIndex();
 	result->prune_index = GenerateTableIndex();
@@ -220,7 +218,10 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// first visit the WHERE clause
 	// the WHERE clause happens before the GROUP BY, PROJECTION or HAVING clauses
 	if (statement.where_clause) {
-		result->where_clause = BindFilter(move(statement.where_clause));
+		ColumnAliasBinder alias_binder(*result, alias_map);
+		WhereBinder where_binder(*this, context, &alias_binder);
+		unique_ptr<ParsedExpression> condition = move(statement.where_clause);
+		result->where_clause = where_binder.Bind(condition);
 	}
 
 	// now bind all the result modifiers; including DISTINCT and ORDER BY targets
@@ -229,28 +230,29 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	vector<unique_ptr<ParsedExpression>> unbound_groups;
 	BoundGroupInformation info;
-	if (!statement.groups.empty()) {
+	auto &group_expressions = statement.groups.group_expressions;
+	if (!group_expressions.empty()) {
 		// the statement has a GROUP BY clause, bind it
-		unbound_groups.resize(statement.groups.size());
+		unbound_groups.resize(group_expressions.size());
 		GroupBinder group_binder(*this, context, statement, result->group_index, alias_map, info.alias_map);
-		for (idx_t i = 0; i < statement.groups.size(); i++) {
+		for (idx_t i = 0; i < group_expressions.size(); i++) {
 
 			// we keep a copy of the unbound expression;
 			// we keep the unbound copy around to check for group references in the SELECT and HAVING clause
 			// the reason we want the unbound copy is because we want to figure out whether an expression
 			// is a group reference BEFORE binding in the SELECT/HAVING binder
-			group_binder.unbound_expression = statement.groups[i]->Copy();
+			group_binder.unbound_expression = group_expressions[i]->Copy();
 			group_binder.bind_index = i;
 
 			// bind the groups
 			LogicalType group_type;
-			auto bound_expr = group_binder.Bind(statement.groups[i], &group_type);
+			auto bound_expr = group_binder.Bind(group_expressions[i], &group_type);
 			D_ASSERT(bound_expr->return_type.id() != LogicalTypeId::INVALID);
 
 			// push a potential collation, if necessary
 			bound_expr =
 			    ExpressionBinder::PushCollation(context, move(bound_expr), StringType::GetCollation(group_type), true);
-			result->groups.push_back(move(bound_expr));
+			result->groups.group_expressions.push_back(move(bound_expr));
 
 			// in the unbound expression we DO bind the table names of any ColumnRefs
 			// we do this to make sure that "table.a" and "a" are treated the same
@@ -261,6 +263,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			info.map[unbound_groups[i].get()] = i;
 		}
 	}
+	result->groups.grouping_sets = move(statement.groups.grouping_sets);
 
 	// bind the HAVING clause, if any
 	if (statement.having) {
@@ -282,8 +285,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			// we are forcing aggregates, and the node has columns bound
 			// this entry becomes a group
 			auto group_ref = make_unique<BoundColumnRefExpression>(
-			    expr->return_type, ColumnBinding(result->group_index, result->groups.size()));
-			result->groups.push_back(move(expr));
+			    expr->return_type, ColumnBinding(result->group_index, result->groups.group_expressions.size()));
+			result->groups.group_expressions.push_back(move(expr));
 			expr = move(group_ref);
 		}
 		result->select_list.push_back(move(expr));
@@ -301,7 +304,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// i.e. in the query [SELECT i, SUM(i) FROM integers;] the "i" will be bound as a normal column
 	// since we have an aggregation, we need to either (1) throw an error, or (2) wrap the column in a FIRST() aggregate
 	// we choose the former one [CONTROVERSIAL: this is the PostgreSQL behavior]
-	if (!result->groups.empty() || !result->aggregates.empty() || statement.having) {
+	if (!result->groups.group_expressions.empty() || !result->aggregates.empty() || statement.having ||
+	    !result->groups.grouping_sets.empty()) {
 		if (statement.aggregate_handling == AggregateHandling::NO_AGGREGATES_ALLOWED) {
 			throw BinderException("Aggregates cannot be present in a Project relation!");
 		} else if (statement.aggregate_handling == AggregateHandling::STANDARD_HANDLING) {

@@ -13,7 +13,7 @@ ViewStmt: CREATE_P OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->view->relpersistence = $2;
 					n->aliases = $5;
 					n->query = $8;
-					n->replace = false;
+					n->onconflict = PG_ERROR_ON_CONFLICT;
 					n->options = $6;
 					n->withCheckOption = $9;
 					$$ = (PGNode *) n;
@@ -26,7 +26,7 @@ ViewStmt: CREATE_P OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->view->relpersistence = $4;
 					n->aliases = $7;
 					n->query = $10;
-					n->replace = true;
+					n->onconflict = PG_REPLACE_ON_CONFLICT;
 					n->options = $8;
 					n->withCheckOption = $11;
 					$$ = (PGNode *) n;
@@ -39,7 +39,7 @@ ViewStmt: CREATE_P OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->view->relpersistence = $2;
 					n->aliases = $7;
 					n->query = makeRecursiveViewSelect(n->view->relname, n->aliases, $11);
-					n->replace = false;
+					n->onconflict = PG_ERROR_ON_CONFLICT;
 					n->options = $9;
 					n->withCheckOption = $12;
 					if (n->withCheckOption != PG_NO_CHECK_OPTION)
@@ -57,7 +57,7 @@ ViewStmt: CREATE_P OptTemp VIEW qualified_name opt_column_list opt_reloptions
 					n->view->relpersistence = $4;
 					n->aliases = $9;
 					n->query = makeRecursiveViewSelect(n->view->relname, n->aliases, $13);
-					n->replace = true;
+					n->onconflict = PG_REPLACE_ON_CONFLICT;
 					n->options = $11;
 					n->withCheckOption = $14;
 					if (n->withCheckOption != PG_NO_CHECK_OPTION)
