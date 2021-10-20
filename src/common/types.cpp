@@ -111,11 +111,11 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::ENUM: {
 		D_ASSERT(type_info_);
 		auto size = EnumType::GetSize(*this);
-		if (size <= NumericLimits<uint8_t>::Maximum() - 1) {
+		if (size <= (idx_t)(NumericLimits<uint8_t>::Maximum() - 1)) {
 			return PhysicalType::UINT8;
-		} else if (size <= NumericLimits<uint16_t>::Maximum() - 1) {
+		} else if (size <= (idx_t)(NumericLimits<uint16_t>::Maximum() - 1)) {
 			return PhysicalType::UINT16;
-		} else if (size <= NumericLimits<uint32_t>::Maximum() - 1) {
+		} else if (size <= (idx_t)(NumericLimits<uint32_t>::Maximum() - 1)) {
 			return PhysicalType::UINT32;
 		} else {
 			throw InternalException("Enum size must be lower than " +
@@ -1053,11 +1053,11 @@ LogicalType LogicalType::ENUM(const string &enum_name, const vector<string> &ord
 	auto size = ordered_data.size();
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
-	if (size <= NumericLimits<uint8_t>::Maximum() - 1) {
+	if (size <= (idx_t)(NumericLimits<uint8_t>::Maximum() - 1)) {
 		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data);
-	} else if (size <= NumericLimits<uint16_t>::Maximum() - 1) {
+	} else if (size <= (idx_t)(NumericLimits<uint16_t>::Maximum() - 1)) {
 		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, ordered_data);
-	} else if (size <= NumericLimits<uint32_t>::Maximum() - 1) {
+	} else if (size <= (idx_t)(NumericLimits<uint32_t>::Maximum() - 1)) {
 		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, ordered_data);
 	} else {
 		throw InternalException("Enum size must be lower than " +
@@ -1151,11 +1151,11 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 		return UserTypeInfo::Deserialize(source);
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
 		auto size = source.Read<uint32_t>();
-		if (size <= NumericLimits<uint8_t>::Maximum() - 1) {
+		if (size <= (idx_t)(NumericLimits<uint8_t>::Maximum() - 1)) {
 			return EnumTypeInfoTemplated<uint8_t>::Deserialize(source);
-		} else if (size <= NumericLimits<uint16_t>::Maximum() - 1) {
+		} else if (size <= (idx_t)(NumericLimits<uint16_t>::Maximum() - 1)) {
 			return EnumTypeInfoTemplated<uint16_t>::Deserialize(source);
-		} else if (size <= NumericLimits<uint32_t>::Maximum() - 1) {
+		} else if (size <= (idx_t)(NumericLimits<uint32_t>::Maximum() - 1)) {
 			return EnumTypeInfoTemplated<uint32_t>::Deserialize(source);
 		} else {
 			throw InternalException("Enum size must be lower than " +
