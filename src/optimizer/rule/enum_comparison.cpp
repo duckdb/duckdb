@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/optimizer/matcher/type_matcher_id.hpp"
 #include "duckdb/optimizer/expression_rewriter.hpp"
+#include "duckdb/common/types.hpp"
 
 namespace duckdb {
 
