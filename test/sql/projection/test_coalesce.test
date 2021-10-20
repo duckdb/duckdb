@@ -5,11 +5,16 @@
 statement ok
 PRAGMA enable_verification
 
-statement ok
-CREATE TABLE exprtest (a INTEGER, b INTEGER)
+foreach type <numeric> DECIMAL(4,0) DECIMAL(9,0) DECIMAL(18,0) DECIMAL(38,0)
 
 statement ok
-INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, -1)
+DROP TABLE IF EXISTS exprtest
+
+statement ok
+CREATE TABLE exprtest (a ${type}, b ${type})
+
+statement ok
+INSERT INTO exprtest VALUES (42, 10), (43, 100), (NULL, 1), (45, 0)
 
 # COALESCE
 statement error
@@ -21,7 +26,7 @@ SELECT COALESCE(NULL)
 NULL
 
 query I
-SELECT COALESCE(42)
+SELECT COALESCE(42::${type})
 ----
 42
 
@@ -69,6 +74,8 @@ SELECT COALESCE(NULL, NULL, NULL, a, NULL, b) FROM exprtest
 43
 1
 45
+
+endloop
 
 # test COALESCE on strings
 statement ok
