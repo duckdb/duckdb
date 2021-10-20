@@ -199,7 +199,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1execute(JNI
 		}
 	}
 
-	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, false);
+	res_ref->res = stmt_ref->stmt->Execute(duckdb_params, true);
 	if (!res_ref->res->success) {
 		string error_msg = string(res_ref->res->error);
 		res_ref->res = nullptr;

@@ -1387,6 +1387,29 @@ public class TestDuckDBJDBC {
 		conn.close();
 	}
 
+	// we can't have multiple open result sets at the same time, so fetching from an old one while a new one is open throws an error
+	public static void test_multiple_open_results() throws Exception {
+		DuckDBConnection conn = (DuckDBConnection) DriverManager.getConnection("jdbc:duckdb:");
+		Statement stmt = conn.createStatement();
+
+		ResultSet rs = stmt.executeQuery("SELECT * FROM range(100000)");
+		assertTrue(rs.next());
+
+		ResultSet rs2 = stmt.executeQuery("SELECT * FROM range(100000)");
+		assertTrue(rs2.next());
+
+		try {
+			rs.next();
+			fail();
+		} catch (Exception e) {
+		}
+
+		rs.close();
+		rs2.close();
+		stmt.close();
+		conn.close();
+	}
+
 	public static void main(String[] args) throws Exception {
 		// Woo I can do reflection too, take this, JUnit!
 		Method[] methods = TestDuckDBJDBC.class.getMethods();
