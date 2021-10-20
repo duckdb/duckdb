@@ -475,7 +475,7 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 	    lower_str == "integral" || lower_str == "int32") {
 		return LogicalTypeId::INTEGER;
 	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
-	           lower_str == "char") {
+	           lower_str == "char" || lower_str == "nvarchar") {
 		return LogicalTypeId::VARCHAR;
 	} else if (lower_str == "bytea" || lower_str == "blob" || lower_str == "varbinary" || lower_str == "binary") {
 		return LogicalTypeId::BLOB;
@@ -494,11 +494,11 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::TIMESTAMP_SEC;
 	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
 		return LogicalTypeId::BOOLEAN;
-	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
-		return LogicalTypeId::FLOAT;
 	} else if (lower_str == "decimal" || lower_str == "dec" || lower_str == "numeric") {
 		return LogicalTypeId::DECIMAL;
-	} else if (lower_str == "double" || lower_str == "float8" || lower_str == "decimal") {
+	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
+		return LogicalTypeId::FLOAT;
+	} else if (lower_str == "double" || lower_str == "float8") {
 		return LogicalTypeId::DOUBLE;
 	} else if (lower_str == "tinyint" || lower_str == "int1") {
 		return LogicalTypeId::TINYINT;
