@@ -34,8 +34,8 @@ inline dtime_t AbsOperator::Operation(const dtime_t &input) {
 template <>
 inline interval_t AbsOperator::Operation(const interval_t &input) {
 	return {AbsOperator::Operation<int32_t, int32_t>(input.months),
-			AbsOperator::Operation<int32_t, int32_t>(input.days),
+	        AbsOperator::Operation<int32_t, int32_t>(input.days),
 	        AbsOperator::Operation<int64_t, int64_t>(input.micros)};
 }
 
-};
+}; // namespace duckdb
