@@ -54,12 +54,12 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 		Rf_error("duckdb_prepare_R: No query");
 	}
 
-	Connection *conn = (Connection *)R_ExternalPtrAddr(connsexp);
-	if (!conn) {
+	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
+	if (!conn_wrapper || !conn_wrapper->conn) {
 		Rf_error("duckdb_prepare_R: Invalid connection");
 	}
 
-	auto stmt = conn->Prepare(query);
+	auto stmt = conn_wrapper->conn->Prepare(query);
 	if (!stmt->success) {
 		Rf_error("duckdb_prepare_R: Failed to prepare query %s\nError: %s", query, stmt->error.c_str());
 	}

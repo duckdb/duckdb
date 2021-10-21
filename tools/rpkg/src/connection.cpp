@@ -6,11 +6,11 @@ static SEXP duckdb_finalize_connection_R(SEXP connsexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_finalize_connection_R: Need external pointer parameter");
 	}
-	Connection *connaddr = (Connection *)R_ExternalPtrAddr(connsexp);
-	if (connaddr) {
+	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
+	if (conn_wrapper) {
 		Rf_warning("duckdb_finalize_connection_R: Connection is garbage-collected, use dbDisconnect() to avoid this.");
 		R_ClearExternalPtr(connsexp);
-		delete connaddr;
+		delete conn_wrapper;
 	}
 	return R_NilValue;
 }
@@ -19,13 +19,17 @@ SEXP RApi::Connect(SEXP dbsexp) {
 	if (TYPEOF(dbsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_connect_R: Need external pointer parameter");
 	}
-	DuckDB *dbaddr = (DuckDB *)R_ExternalPtrAddr(dbsexp);
-	if (!dbaddr) {
+	auto db_wrapper = (DBWrapper *)R_ExternalPtrAddr(dbsexp);
+	if (!db_wrapper || !db_wrapper->db) {
 		Rf_error("duckdb_connect_R: Invalid database reference");
 	}
 
 	RProtector r;
-	SEXP connsexp = r.Protect(R_MakeExternalPtr(new Connection(*dbaddr), R_NilValue, R_NilValue));
+	auto conn_wrapper = new ConnWrapper();
+	conn_wrapper->db_sexp = dbsexp;
+	conn_wrapper->conn = make_unique<Connection>(*db_wrapper->db);
+
+	SEXP connsexp = r.Protect(R_MakeExternalPtr(conn_wrapper, R_NilValue, R_NilValue));
 	R_RegisterCFinalizer(connsexp, (void (*)(SEXP))duckdb_finalize_connection_R);
 
 	return connsexp;
@@ -35,10 +39,10 @@ SEXP RApi::Disconnect(SEXP connsexp) {
 	if (TYPEOF(connsexp) != EXTPTRSXP) {
 		Rf_error("duckdb_disconnect_R: Need external pointer parameter");
 	}
-	Connection *connaddr = (Connection *)R_ExternalPtrAddr(connsexp);
-	if (connaddr) {
+	auto conn_wrapper = (ConnWrapper *)R_ExternalPtrAddr(connsexp);
+	if (conn_wrapper) {
 		R_ClearExternalPtr(connsexp);
-		delete connaddr;
+		delete conn_wrapper;
 	}
 	return R_NilValue;
 }
