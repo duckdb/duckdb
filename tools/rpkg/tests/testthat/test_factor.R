@@ -33,3 +33,32 @@ test_that("iris can be round-tripped", {
     df2 <- dbReadTable(con, "iris2")
     expect_identical(iris, df2)
 })
+
+
+
+test_that("non-utf factors can be read", {
+    con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
+    horrid_string <- iconv("Mühleisen", "utf8", "latin1")
+    Encoding(horrid_string) <- "latin1"
+
+    # both column name and factor level and plain string are latin1
+    df <- data.frame(a=factor(horrid_string), b=horrid_string, stringsAsFactors=FALSE)
+    names(df) <- c(horrid_string, "less_horrid")
+
+    duckdb::duckdb_register(con, "df", df)
+    df1 <- dbReadTable(con, "df")
+
+    dbWriteTable(con, "df2", df)
+    df2 <- dbReadTable(con, "df2")
+
+    # fix the encoding again
+    levels(df[[1]]) <- iconv(levels(df[[1]]), "latin1", "UTF8")
+    names(df) <- iconv(names(df), "latin1", "UTF8")
+    df$less_horrid <- iconv(df$less_horrid, "latin1", "UTF8")
+
+    expect_identical(df, df1)
+    expect_identical(df, df2)
+
+})
