@@ -6,6 +6,7 @@
 #include "httplib.hpp"
 
 #include <fstream>
+#include "miniz.hpp"
 
 #ifndef _WIN32
 #include <dlfcn.h>
@@ -74,7 +75,7 @@ void PhysicalLoad::DoInstall(ExecutionContext &context) const {
 	}
 
 	auto url_local_part =
-	    string("/" + string(DuckDB::SourceID()) + "/osx-arm64/" + extension_name + ".duckdb_extension");
+	    string("/" + string(DuckDB::SourceID()) + "/osx-arm64/" + extension_name + ".duckdb_extension.gz");
 	auto url_base = "http://extensions.duckdb.org";
 	httplib::Client cli(url_base);
 
@@ -85,8 +86,12 @@ void PhysicalLoad::DoInstall(ExecutionContext &context) const {
 	if (!res || res->status != 200) {
 		throw IOException("Failed to download extension %s%s", url_base, url_local_part);
 	}
+	string decompresssed_body;
+	decompresssed_body.resize(duckdb_miniz::mz_deflateBound(nullptr, res->body.size()));
+	duckdb_miniz::mz_ulong decompressed_size = decompresssed_body.size();
+	duckdb_miniz::mz_uncompress((unsigned char*) decompresssed_body.c_str(), &decompressed_size, (unsigned char*)res->body.c_str(), res->body.size());
 	std::ofstream out(local_extension_path, std::ios::binary);
-	out.write(res->body.c_str(), res->body.size());
+	out.write(decompresssed_body.c_str(), decompressed_size);
 	if (out.bad()) {
 		throw IOException("Failed to write extension to %s", local_extension_path);
 	}

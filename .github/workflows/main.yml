@@ -10,6 +10,9 @@ env:
   AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
   AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+  AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+  AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+  AWS_DEFAULT_REGION: us-east-1
 
 jobs:
  linux-debug:
@@ -205,7 +208,7 @@ jobs:
  xcode-release:
     name: OSX Release
     runs-on: macos-latest
-    needs: linux-debug
+#    needs: linux-debug
 
     env:
       BUILD_VISUALIZER: 1
@@ -248,6 +251,9 @@ jobs:
         zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
         zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        gzip -k build/release/extensions/tpch/tpch.duckdb_extension
+        pip install --user awscli
+        aws s3 cp build/release/extension/tpch/tpch.duckdb_extension.gz s3://duckdb-extensions/`git log -1 --format=%h`/osx-amd64/tpch.duckdb_extension.gz --acl public-read  
 
     - uses: actions/upload-artifact@v2
       with:
@@ -290,7 +296,7 @@ jobs:
     name: Linux (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
-    needs: linux-debug
+#    needs: linux-debug
 
     env:
       GEN: ninja
@@ -316,7 +322,7 @@ jobs:
         apt-get update -y -qq
         apt-get install -y -qq git ninja-build make gcc-multilib g++-multilib libssl-dev wget openjdk-8-jdk python3.7 zip python3-pip maven
         python3.7 -m pip install pip
-        python3.7 -m pip install requests
+        python3.7 -m pip install requests awscli
 
     - uses: actions/checkout@v2
       with:
@@ -364,6 +370,8 @@ jobs:
         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h
         zip -j duckdb_rest-linux-amd64.zip build/release/tools/rest/duckdb_rest_server
         python3.7 scripts/asset-upload-gha.py libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip duckdb_rest-linux-amd64.zip duckdb_jdbc-linux-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        gzip -k build/release/extensions/tpch/tpch.duckdb_extension
+        aws s3 cp build/release/extension/tpch/tpch.duckdb_extension.gz s3://duckdb-extensions/`git log -1 --format=%h`/linux-amd64/tpch.duckdb_extension.gz --acl public-read  
 
     - uses: actions/upload-artifact@v2
       with:

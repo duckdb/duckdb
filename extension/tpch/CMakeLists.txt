@@ -9,6 +9,7 @@ add_subdirectory(dbgen)
 add_library(tpch_extension STATIC tpch-extension.cpp ${DBGEN_OBJECT_FILES})
 # target_link_libraries(tpch_extension dbgen)
 
+# TODO make all this a support function
 # skip building extensions on mingw
 if(WIN32 AND NOT MSVC)
   return()
