@@ -23,12 +23,12 @@ query I
 SELECT hello('World');
 ----
 Hello, World
-
-statement ok
-INSTALL 'tpch';
-
-statement ok
-LOAD 'tpch';
-
-statement ok
-call dbgen(sf=0.01)
+#
+#statement ok
+#INSTALL 'tpch';
+#
+#statement ok
+#LOAD 'tpch';
+#
+#statement ok
+#call dbgen(sf=0.01)
