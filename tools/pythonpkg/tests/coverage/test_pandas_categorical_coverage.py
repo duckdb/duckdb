@@ -1,7 +1,6 @@
 import duckdb
 import pandas as pd
 import numpy
-import pytest
 
 def check_result_list(res):
     for res_item in res:
@@ -15,6 +14,12 @@ def check_create_table(category):
     'x': pd.Categorical(category, ordered=True),
     'y': pd.Categorical(category, ordered=True),
     'z': category
+    })
+
+    category.append('bla')
+
+    df_in_diff = pd.DataFrame({
+    'k': pd.Categorical(category, ordered=True),
     })
 
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
@@ -39,6 +44,16 @@ def check_create_table(category):
     res = conn.execute("SELECT t1.x FROM t1 inner join t2 on (t1.x = t2.y) order by t1.x").fetchall()
     correct_res = conn.execute("SELECT x FROM t1 order by x").fetchall()
     assert res == correct_res
+
+    # Run equal ENUM comparison
+    res = conn.execute("SELECT t1.x FROM t1,t2 where t1.x = t2.x order by t1.x").fetchall()
+    assert res == correct_res
+
+    # Run different ENUM comparison
+    conn.execute("CREATE TABLE t3 AS SELECT * FROM df_in_diff")
+    res = conn.execute("SELECT t1.x FROM t1,t3 where t3.k = t1.x order by t1.x").fetchall()
+    assert res == correct_res
+
     # Triggering the cast with ENUM as a src
     conn.execute("ALTER TABLE t1 ALTER x SET DATA TYPE VARCHAR")
     # We should be able to drop the table without any dependencies

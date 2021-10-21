@@ -595,33 +595,19 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 	auto enum_physical_type = source.GetType().InternalType();
 	switch (result.GetType().id()) {
 	case LogicalTypeId::ENUM: {
-		// If they are the same ENUM type we can compare the encoded value
-		if (result.GetType() == source.GetType()) {
-			switch (result.GetType().InternalType()) {
-			case PhysicalType::UINT8:
-				return NumericCastSwitch<uint8_t>(source, result, count, error_message);
-			case PhysicalType::UINT16:
-				return NumericCastSwitch<uint16_t>(source, result, count, error_message);
-			case PhysicalType::UINT32:
-				return NumericCastSwitch<uint32_t>(source, result, count, error_message);
-			default:
-				throw InternalException("Internal Type not allowed for ENUMs");
-			}
-		} else {
-			// This means they are both ENUMs, but of different types.
-			switch (enum_physical_type) {
-			case PhysicalType::UINT8:
-				FillEnumResultTemplate<uint8_t>(source, result, count);
-				break;
-			case PhysicalType::UINT16:
-				FillEnumResultTemplate<uint16_t>(source, result, count);
-				break;
-			case PhysicalType::UINT32:
-				FillEnumResultTemplate<uint32_t>(source, result, count);
-				break;
-			default:
-				throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
-			}
+		// This means they are both ENUMs, but of different types.
+		switch (enum_physical_type) {
+		case PhysicalType::UINT8:
+			FillEnumResultTemplate<uint8_t>(source, result, count);
+			break;
+		case PhysicalType::UINT16:
+			FillEnumResultTemplate<uint16_t>(source, result, count);
+			break;
+		case PhysicalType::UINT32:
+			FillEnumResultTemplate<uint32_t>(source, result, count);
+			break;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
 		break;
 	}
