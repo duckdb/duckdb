@@ -24,17 +24,17 @@ EnumComparisonRule::EnumComparisonRule(ExpressionRewriter &rewriter) : Rule(rewr
 }
 
 bool AreMatchesPossible(LogicalType &left, LogicalType &right) {
-	LogicalType *small, *big;
+	LogicalType *small_enum, *big_enum;
 	if (EnumType::GetSize(left) < EnumType::GetSize(right)) {
-		small = &left;
-		big = &right;
+		small_enum = &left;
+		big_enum = &right;
 	} else {
-		small = &right;
-		big = &left;
+		small_enum = &right;
+		big_enum = &left;
 	}
-	auto string_vec = EnumType::GetValuesInsertOrder(*small);
+	auto string_vec = EnumType::GetValuesInsertOrder(*small_enum);
 	for (auto &key : string_vec) {
-		if (EnumType::GetPos(*big, key) != -1) {
+		if (EnumType::GetPos(*big_enum, key) != -1) {
 			return true;
 		}
 	}
