@@ -1117,6 +1117,7 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	}
 
 	set.AddFunction(median);
+	set.AddFunction(mad);
 	set.AddFunction(quantile_disc);
 	set.AddFunction(quantile_cont);
 

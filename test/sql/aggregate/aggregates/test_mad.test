@@ -1,0 +1,95 @@
+# name: test/sql/aggregate/aggregates/test_mad.test
+# description: Test MAD (Moving Absolute Deviation) aggregate
+# group: [aggregates]
+
+statement ok
+PRAGMA enable_verification
+
+# scalar mad is zero
+query II
+SELECT mad(NULL), mad(1)
+----
+NULL	0
+
+# constant mad is zero
+query II
+SELECT mad(NULL), mad(1) FROM range(2000)
+----
+NULL	0
+
+#
+# Small numerics
+#
+statement ok
+create table tinys as
+	select range r, random()
+	from range(100)
+	union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9)
+	order by 2;
+
+foreach type tinyint decimal(4,1)
+
+query I
+SELECT mad(r::${type}) FROM tinys
+----
+25
+
+query I
+SELECT mad(NULL::${type}) FROM tinys
+----
+NULL
+
+query I
+SELECT mad(42::${type}) FROM tinys
+----
+0
+
+endloop
+
+#
+# Large numerics
+#
+statement ok
+create table numerics as
+	select range r, random()
+	from range(10000)
+	union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9)
+	order by 2;
+
+foreach type smallint integer bigint hugeint float double decimal(8,1) decimal(12,1) decimal(18,1) decimal(24,1)
+
+query I
+SELECT mad(r::${type}) FROM numerics
+----
+2500
+
+query I
+SELECT mad(NULL::${type}) FROM numerics
+----
+NULL
+
+query I
+SELECT mad(42::${type}) FROM numerics
+----
+0
+
+endloop
+
+#
+# Temporal
+#
+
+query I
+SELECT mad(('2018-01-01'::DATE + INTERVAL (r) DAY)::DATE) FROM numerics
+----
+2499 days 00:00:43.2
+
+query I
+SELECT mad('2018-01-01'::DATE + INTERVAL (r) HOUR) FROM numerics
+----
+104 days
+
+query I
+SELECT mad('00:00:00'::TIME + INTERVAL (r) SECONDS) FROM numerics
+----
+00:41:39.5005
