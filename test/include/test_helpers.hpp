@@ -19,6 +19,8 @@
 namespace duckdb {
 
 bool TestForceStorage();
+void RegisterSqllogictests();
+
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);

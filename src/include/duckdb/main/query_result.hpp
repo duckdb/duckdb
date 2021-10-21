@@ -52,9 +52,10 @@ public:
 	//! Fetches a DataChunk of normalized (flat) vectors from the query result.
 	//! Returns nullptr if there are no more results to fetch.
 	DUCKDB_API virtual unique_ptr<DataChunk> Fetch();
-	//! Fetches a DataChunk from the query result. The vector types
+	//! Fetches a DataChunk from the query result. The vectors are not normalized and hence any vector types can be
+	//! returned.
 	DUCKDB_API virtual unique_ptr<DataChunk> FetchRaw() = 0;
-	// Converts the QueryResult to a string
+	//! Converts the QueryResult to a string
 	DUCKDB_API virtual string ToString() = 0;
 	//! Prints the QueryResult to the console
 	DUCKDB_API void Print();
