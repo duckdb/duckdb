@@ -38,7 +38,6 @@ SELECT COALESCE(a) FROM exprtest
 NULL
 45
 
-
 query I
 SELECT COALESCE(NULL, NULL, 42, 43)
 ----
@@ -74,6 +73,39 @@ SELECT COALESCE(NULL, NULL, NULL, a, NULL, b) FROM exprtest
 43
 1
 45
+
+# OR/AND
+query II
+SELECT * FROM exprtest WHERE b=1 OR COALESCE(a, b)=42 ORDER BY 1
+----
+NULL	1
+42	10
+
+query II
+SELECT * FROM exprtest WHERE COALESCE(a, b)=1 OR COALESCE(a, b)=43 OR COALESCE(a, b)=45 ORDER BY 1
+----
+NULL	1
+43	100
+45	0
+
+query II
+SELECT * FROM exprtest WHERE COALESCE(a, b)=1 OR COALESCE(a, b)=42 OR COALESCE(a, b)=43 OR COALESCE(a, b)=45 ORDER BY 1
+----
+NULL	1
+42	10
+43	100
+45	0
+
+query II
+SELECT * FROM exprtest WHERE b=1 AND COALESCE(a, b)=1 ORDER BY 1
+----
+NULL	1
+
+query II
+SELECT * FROM exprtest WHERE (b=1 AND COALESCE(a, b)=1) OR (b=100 AND COALESCE(a, b)=43) ORDER BY 1
+----
+NULL	1
+43	100
 
 endloop
 

@@ -105,7 +105,9 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				result_mask.SetInvalid(current_sel->get_index(i));
 			}
 		}
-		if (count == 1) {
+		if (sel) {
+			result.Slice(*sel, count);
+		} else if (count == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	} else if (expr.children.size() == 1) {
