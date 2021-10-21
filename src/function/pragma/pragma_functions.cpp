@@ -277,6 +277,11 @@ static void PragmaDebugManyFreeListBlocks(ClientContext &context, const Function
 	config.debug_many_free_list_blocks = true;
 }
 
+static void PragmaForceCompressionHint(ClientContext &context, const FunctionParameters &parameters) {
+	auto &config = DBConfig::GetConfig(context);
+	config.force_compression_hint = true;
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -356,6 +361,7 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	    PragmaFunction::PragmaAssignment("force_compression", PragmaForceCompression, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("debug_many_free_list_blocks", PragmaDebugManyFreeListBlocks));
+	set.AddFunction(PragmaFunction::PragmaStatement("force_compression_hint", PragmaForceCompressionHint));
 }
 
 } // namespace duckdb

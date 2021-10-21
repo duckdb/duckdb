@@ -112,6 +112,8 @@ public:
 	CompressionType force_compression = CompressionType::COMPRESSION_INVALID;
 	//! Debug flag that adds additional (unnecessary) free_list blocks to the storage
 	bool debug_many_free_list_blocks = false;
+	//! It will use the compression hints given by the user to each column
+	bool force_compression_hint = false;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

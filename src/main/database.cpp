@@ -206,6 +206,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 		config.maximum_threads = new_config.maximum_threads;
 	}
 	config.force_compression = new_config.force_compression;
+	config.force_compression_hint = new_config.force_compression_hint;
 	config.allocator = move(new_config.allocator);
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;
 	config.use_direct_io = new_config.use_direct_io;

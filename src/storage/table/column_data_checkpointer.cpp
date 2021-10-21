@@ -56,6 +56,27 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
 	D_ASSERT(!compression_functions.empty());
 	auto &config = DBConfig::GetConfig(GetDatabase());
+	if (config.force_compression_hint) {
+		// force_compression_hint flag has been set
+		// check if this compression method is available
+		bool found = false;
+		for (idx_t i = 0; i < compression_functions.size(); i++) {
+			if (compression_functions[i]->type == config.force_compression) {
+				found = true;
+				break;
+			}
+		}
+		if (found) {
+			// the force_compression method is available
+			// clear all other compression methods
+			for (idx_t i = 0; i < compression_functions.size(); i++) {
+				if (compression_functions[i]->type != config.force_compression) {
+					compression_functions[i] = nullptr;
+				}
+			}
+		}
+	}
+
 	if (config.force_compression != CompressionType::COMPRESSION_INVALID) {
 		// force_compression flag has been set
 		// check if this compression method is available
