@@ -1,0 +1,77 @@
+# name: test/sql/create/create_table_compression.test
+# description: Test CREATE TABLE using Compression Option
+# group: [create]
+
+statement ok
+PRAGMA enable_verification
+
+
+
+statement ok
+CREATE TABLE T (a INTEGER COMPRESSION RLE)
+
+
+statement ok
+DROP TABLE T
+
+statement error
+CREATE TABLE T (a INTEGER COMPRESSION 'bla')
+
+statement error
+CREATE TABLE T (a INTEGER COMPRESSION )
+
+statement error
+CREATE TABLE T (a INTEGER NOT NULL COMPRESSION )
+
+statement ok
+CREATE TABLE T (a INTEGER NOT NULL COMPRESSION RLE)
+
+
+statement ok
+DROP TABLE T
+
+statement ok
+CREATE TABLE T (a INTEGER COMPRESSION RLE, b VARCHAR COMPRESSION RLE )
+
+statement ok
+DROP TABLE T
+
+statement ok
+CREATE TABLE T (a INTEGER COMPRESSION RLE, b VARCHAR )
+
+statement ok
+DROP TABLE T
+
+# load the DB from disk
+load __TEST_DIR__/test_compression_hint.db
+
+statement ok
+PRAGMA force_compression_hint
+
+statement ok
+CREATE TABLE T (a INTEGER COMPRESSION RLE)
+
+statement ok
+INSERT INTO T VALUES (1), (1), (1), (2), (2), (3)
+
+query I
+SELECT * FROM T
+----
+1
+1
+1
+2
+2
+3
+
+restart
+
+query I
+SELECT * FROM T
+----
+1
+1
+1
+2
+2
+3

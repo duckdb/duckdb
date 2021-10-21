@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/enums/compression_type.hpp"
 
 namespace duckdb {
 
@@ -31,6 +32,8 @@ public:
 	LogicalType type;
 	//! The default value of the column (if any)
 	unique_ptr<ParsedExpression> default_value;
+	//! Compression Type used for this column
+	CompressionType compression_type = CompressionType::COMPRESSION_UNCOMPRESSED;
 
 public:
 	ColumnDefinition Copy() const;
