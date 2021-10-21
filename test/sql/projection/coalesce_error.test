@@ -6,13 +6,13 @@ statement ok
 PRAGMA enable_verification
 
 # constant coalesce short-circuiting
-# query I
-# SELECT COALESCE(1, 'hello'::INT)
-# ----
-# 1
+query I
+SELECT COALESCE(1, 'hello'::INT)
+----
+1
 
-# statement error
-# SELECT COALESCE(NULL, 'hello'::INT)
+statement error
+SELECT COALESCE(NULL, 'hello'::INT)
 
 # non-constant
 statement ok

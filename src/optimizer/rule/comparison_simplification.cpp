@@ -24,10 +24,7 @@ unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, 
 	// the constant_expr is a scalar expression that we have to fold
 	// use an ExpressionExecutor to execute the expression
 	D_ASSERT(constant_expr->IsFoldable());
-	Value constant_value;
-	if (!ExpressionExecutor::TryEvaluateScalar(*constant_expr, constant_value)) {
-		return nullptr;
-	}
+	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
 	if (constant_value.is_null && !(expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
 	                                expr->type == ExpressionType::COMPARE_DISTINCT_FROM)) {
 		// comparison with constant NULL, return NULL
