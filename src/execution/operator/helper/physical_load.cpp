@@ -34,6 +34,87 @@ void *dlsym(void *handle, const char *name) {
 
 static vector<string> path_components = {".duckdb", "extensions", DuckDB::SourceID(), DuckDB::Platform()};
 
+static constexpr const uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
+
+static constexpr const uint8_t GZIP_FLAG_ASCII = 0x1;
+static constexpr const uint8_t GZIP_FLAG_MULTIPART = 0x2;
+static constexpr const uint8_t GZIP_FLAG_EXTRA = 0x4;
+static constexpr const uint8_t GZIP_FLAG_NAME = 0x8;
+static constexpr const uint8_t GZIP_FLAG_COMMENT = 0x10;
+static constexpr const uint8_t GZIP_FLAG_ENCRYPT = 0x20;
+
+static constexpr const uint8_t GZIP_HEADER_MINSIZE = 10;
+
+static constexpr const unsigned char GZIP_FLAG_UNSUPPORTED =
+    GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
+
+static string uncompress_gzip_string(string &in) {
+	// decompress file
+	auto body_ptr = in.data();
+
+	auto mz_stream_ptr = new duckdb_miniz::mz_stream();
+	memset(mz_stream_ptr, 0, sizeof(duckdb_miniz::mz_stream));
+
+	uint8_t gzip_hdr[GZIP_HEADER_MINSIZE];
+
+	// check for incorrectly formatted files
+	// LCOV_EXCL_START
+
+	// TODO this is mostly the same as gzip_file_system.cpp
+	if (in.size() < GZIP_HEADER_MINSIZE) {
+		throw IOException("Input is not a GZIP stream");
+	}
+	memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
+	body_ptr += GZIP_HEADER_MINSIZE;
+
+	if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B) { // magic header
+		throw Exception("Input is not a GZIP stream");
+	}
+	if (gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE) { // compression method
+		throw Exception("Unsupported GZIP compression method");
+	}
+	if (gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
+		throw Exception("Unsupported GZIP archive");
+	}
+	// LCOV_EXCL_STOP
+
+	if (gzip_hdr[3] & GZIP_FLAG_NAME) {
+		char c;
+		do {
+			c = *body_ptr;
+			body_ptr++;
+		} while (c != '\0' && (idx_t)(body_ptr - in.data()) < in.size());
+	}
+
+	// stream is now set to beginning of payload data
+	auto status = duckdb_miniz::mz_inflateInit2(mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+	if (status != duckdb_miniz::MZ_OK) {
+		throw InternalException("Failed to initialize miniz");
+	}
+
+	auto bytes_remaining = in.size() - (body_ptr - in.data());
+	mz_stream_ptr->next_in = (unsigned char *)body_ptr;
+	mz_stream_ptr->avail_in = bytes_remaining;
+
+	unsigned char decompress_buffer[BUFSIZ];
+	string decompressed;
+
+	while (status == duckdb_miniz::MZ_OK) {
+		mz_stream_ptr->next_out = decompress_buffer;
+		mz_stream_ptr->avail_out = sizeof(decompress_buffer);
+		status = mz_inflate(mz_stream_ptr, duckdb_miniz::MZ_NO_FLUSH);
+		if (status != duckdb_miniz::MZ_STREAM_END && status != duckdb_miniz::MZ_OK) {
+			throw IOException("Failed to uncompress");
+		}
+		decompressed.append((char *)decompress_buffer, mz_stream_ptr->total_out - decompressed.size());
+	}
+	duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
+	if (decompressed.size() == 0) {
+		throw IOException("Failed to uncompress");
+	}
+	return decompressed;
+}
+
 void PhysicalLoad::DoInstall(ExecutionContext &context) const {
 	auto &fs = FileSystem::GetFileSystem(context.client);
 
@@ -86,12 +167,9 @@ void PhysicalLoad::DoInstall(ExecutionContext &context) const {
 	if (!res || res->status != 200) {
 		throw IOException("Failed to download extension %s%s", url_base, url_local_part);
 	}
-	string decompresssed_body;
-	decompresssed_body.resize(duckdb_miniz::mz_deflateBound(nullptr, res->body.size()));
-	duckdb_miniz::mz_ulong decompressed_size = decompresssed_body.size();
-	duckdb_miniz::mz_uncompress((unsigned char*) decompresssed_body.c_str(), &decompressed_size, (unsigned char*)res->body.c_str(), res->body.size());
+	auto decompressed_body = uncompress_gzip_string(res->body);
 	std::ofstream out(local_extension_path, std::ios::binary);
-	out.write(decompresssed_body.c_str(), decompressed_size);
+	out.write(decompressed_body.data(), decompressed_body.size());
 	if (out.bad()) {
 		throw IOException("Failed to write extension to %s", local_extension_path);
 	}

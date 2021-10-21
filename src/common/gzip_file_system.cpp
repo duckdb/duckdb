@@ -142,7 +142,7 @@ void GZipFile::Initialize() {
 	Close();
 
 	D_ASSERT(BUFFER_SIZE >= 3); // found to work fine with 3
-	uint8_t gzip_hdr[10];
+	uint8_t gzip_hdr[GZIP_HEADER_MINSIZE];
 	data_start = GZIP_HEADER_MINSIZE;
 
 	in_buff = unique_ptr<data_t[]>(new data_t[BUFFER_SIZE]);
