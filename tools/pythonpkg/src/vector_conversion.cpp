@@ -88,6 +88,11 @@ void ScanPandasFpColumn(T *src_ptr, idx_t count, idx_t offset, Vector &out) {
 	}
 }
 
+struct PyStringGIL {
+	py::gil_scoped_acquire acquire;
+	py::str str_val;
+};
+
 template <class T>
 static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector &out) {
 	// first figure out how many bytes to allocate
@@ -192,9 +197,8 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
 		for (idx_t row = 0; row < count; row++) {
-			unique_ptr<py::gil_scoped_acquire> gil_lock;
+			unique_ptr<PyStringGIL> py_str;
 			auto source_idx = offset + row;
-			py::str str_val;
 			PyObject *val = src_ptr[source_idx];
 			if (bind_data.pandas_type == PandasType::OBJECT && !PyUnicode_CheckExact(val)) {
 				if (val == Py_None) {
@@ -206,10 +210,10 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 					continue;
 				}
 				if (!py::isinstance<py::str>(val)) {
-					gil_lock = make_unique<py::gil_scoped_acquire>();
+					py_str = make_unique<PyStringGIL>();
 					py::handle object_handle = val;
-					str_val = py::str(object_handle);
-					val = str_val.ptr();
+					py_str->str_val = py::str(object_handle);
+					val = py_str->str_val.ptr();
 				}
 			}
 			// Python 3 string representation:
