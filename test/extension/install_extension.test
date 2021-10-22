@@ -19,16 +19,87 @@ INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_exten
 statement ok
 LOAD 'loadable_extension_demo';
 
+# TODO this requires things having been deployed, so run after that
+mode skip
+
 query I
 SELECT hello('World');
 ----
 Hello, World
 
+statement ok
+INSTALL 'tpch';
+
+statement ok
+LOAD 'tpch';
+
+statement ok
+CREATE SCHEMA tpch;
+
+statement ok
+CALL dbgen(sf=0, schema='tpch')
+
+statement ok
+INSTALL 'tpcds';
+
+statement ok
+LOAD 'tpcds';
+
+statement ok
+CREATE SCHEMA tpcds;
+
+statement ok
+CALL dsdgen(sf=0, schema='tpcds')
+
+statement ok
+INSTALL 'fts';
+
+statement ok
+LOAD 'fts';
+
+statement ok
+CREATE TABLE documents(id VARCHAR, body VARCHAR)
+
+statement ok
+INSERT INTO documents VALUES ('doc1', ' QUÁCKING+QUÁCKING+QUÁCKING'), ('doc2', ' BÁRKING+BÁRKING+BÁRKING+BÁRKING'), ('doc3', ' MÉOWING+MÉOWING+MÉOWING+MÉOWING+MÉOWING+999')
+
+statement ok
+PRAGMA create_fts_index('documents', 'id', 'body')
+
+statement ok
+PRAGMA drop_fts_index('documents')
+
+statement ok
+DROP TABLE documents
+
+statement ok
+INSTALL 'icu';
+
+statement ok
+LOAD 'icu';
+
 #statement ok
-#INSTALL 'tpch';
-#
-#statement ok
-#LOAD 'tpch';
-#
-#statement ok
-#call dbgen(sf=0.01)
+#select icu_sort_key('Ş', 'ro');
+
+statement ok
+INSTALL 'httpfs';
+
+statement ok
+LOAD 'httpfs';
+
+require parquet
+
+# straightforward
+query IIII
+SELECT id, first_name, last_name, email FROM PARQUET_SCAN('https://raw.githubusercontent.com/cwida/duckdb/master/data/parquet-testing/userdata1.parquet') LIMIT 10;
+----
+1	Amanda	Jordan	ajordan0@com.com
+2	Albert	Freeman	afreeman1@is.gd
+3	Evelyn	Morgan	emorgan2@altervista.org
+4	Denise	Riley	driley3@gmpg.org
+5	Carlos	Burns	cburns4@miitbeian.gov.cn
+6	Kathryn	White	kwhite5@google.com
+7	Samuel	Holmes	sholmes6@foxnews.com
+8	Harry	Howell	hhowell7@eepurl.com
+9	Jose	Foster	jfoster8@yelp.com
+10	Emily	Stewart	estewart9@opensource.org

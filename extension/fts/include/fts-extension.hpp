@@ -8,6 +8,8 @@
 
 #pragma once
 
+#define DUCKDB_BUILD_LOADABLE_EXTENSION
+
 #include "duckdb.hpp"
 
 namespace duckdb {
@@ -18,3 +20,10 @@ public:
 };
 
 } // namespace duckdb
+
+extern "C" {
+// TODO use DUCKDB_EXTENSION_API here
+void fts_init(duckdb::DatabaseInstance &db);
+
+const char *fts_version();
+}

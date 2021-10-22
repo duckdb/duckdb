@@ -10,3 +10,10 @@ public:
 };
 
 } // namespace duckdb
+
+extern "C" {
+// TODO use DUCKDB_EXTENSION_API here
+void httpfs_init(duckdb::DatabaseInstance &db);
+
+const char *httpfs_version();
+}

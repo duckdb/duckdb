@@ -4,11 +4,23 @@
 #include "s3fs.hpp"
 namespace duckdb {
 
-void HTTPFsExtension::Load(DuckDB &db) {
+static void LoadInternal(DatabaseInstance &instance) {
 	S3FileSystem::Verify(); // run some tests to see if all the hashes work out
-	auto &fs = db.instance->GetFileSystem();
+	auto &fs = instance.GetFileSystem();
 	fs.RegisterSubSystem(make_unique<HTTPFileSystem>());
 	fs.RegisterSubSystem(make_unique<S3FileSystem>());
 }
 
+void HTTPFsExtension::Load(DuckDB &db) {
+	LoadInternal(*db.instance);
+}
+
 } // namespace duckdb
+
+void httpfs_init(duckdb::DatabaseInstance &db) {
+	LoadInternal(db);
+}
+
+const char *httpfs_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
