@@ -50,7 +50,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         "Fetch a chunk of the result as an Arrow Table following execute()", py::arg("vectors_per_chunk") = 1,
 	         py::arg("return_table") = false)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
-	         "Fetch an Arrow RecordBatchReader following execute()")
+	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("vectors_per_chunk") = 1)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
@@ -389,11 +389,11 @@ py::object DuckDBPyConnection::FetchArrowChunk(const idx_t vectors_per_chunk, bo
 	return result->FetchArrowTableChunk(vectors_per_chunk, return_table);
 }
 
-py::object DuckDBPyConnection::FetchRecordBatchReader() const {
+py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t vectors_per_chunk) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
-	return result->FetchRecordBatchReader();
+	return result->FetchRecordBatchReader(vectors_per_chunk);
 }
 
 static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str &table_name) {

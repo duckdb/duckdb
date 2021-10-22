@@ -105,13 +105,16 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 			return -1;
 		}
 	}
-	auto data_chunk = result.Fetch();
-	if (!data_chunk) {
-		//! Nothing to output
-		out->release = nullptr;
-		return 0;
+	for (idx_t i = 0; i < my_stream->vectors_per_chunk; i++) {
+		auto data_chunk = result.Fetch();
+		if (!data_chunk) {
+			//! Nothing to output
+			out->release = nullptr;
+			return 0;
+		}
+		data_chunk->ToArrowArray(out);
 	}
-	data_chunk->ToArrowArray(out);
+
 	return 0;
 }
 
@@ -131,8 +134,9 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	return my_stream->last_error.c_str();
 }
-ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p)
-    : result(move(result_p)) {
+ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p,
+                                                             idx_t vectors_per_chunk_p)
+    : result(move(result_p)), vectors_per_chunk(vectors_per_chunk_p) {
 	//! We first initialize the private data of the stream
 	stream.private_data = this;
 

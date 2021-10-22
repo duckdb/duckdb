@@ -34,5 +34,22 @@ class TestArrowFetchRecordBatch(object):
         record_batch_reader = query.fetch_record_batch()
         chunk = record_batch_reader.read_all()
         assert(len(chunk) == 3000)
+
+    def test_record_batch_next_batch_multiple_vectors_per_chunk(self, duckdb_cursor):
+        if not can_run:
+            return
+        duckdb_cursor = duckdb.connect()
+        duckdb_cursor.execute("CREATE table t as select range a from range(5000);")
+        query = duckdb_cursor.execute("SELECT a FROM t")
+        record_batch_reader = query.fetch_record_batch(2)
+        chunk = record_batch_reader.read_next_batch()
+        assert(len(chunk) == 2048)
+        chunk = record_batch_reader.read_next_batch()
+        assert(len(chunk) == 2048)
+        chunk = record_batch_reader.read_next_batch()
+        assert(len(chunk) == 904)
+        # StopIteration Exception
+        with pytest.raises(Exception):
+            chunk = record_batch_reader.read_next_batch()
        
 

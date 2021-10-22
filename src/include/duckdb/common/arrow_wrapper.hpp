@@ -51,10 +51,11 @@ public:
 
 class ResultArrowArrayStreamWrapper {
 public:
-	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result);
+	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result, idx_t vectors_per_chunk);
 	ArrowArrayStream stream;
 	unique_ptr<QueryResult> result;
 	std::string last_error;
+	idx_t vectors_per_chunk;
 
 private:
 	static int MyStreamGetSchema(struct ArrowArrayStream *stream, struct ArrowSchema *out);
