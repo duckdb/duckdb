@@ -1,7 +1,8 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
-
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/parser/column_definition.hpp"
 namespace duckdb {
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p,
