@@ -3,8 +3,6 @@
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
 #include "duckdb/common/operator/abs.hpp"
-#include "duckdb/common/operator/add.hpp"
-#include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 
@@ -20,23 +18,17 @@ hugeint_t operator*(const hugeint_t &h, const double &d) {
 	return Hugeint::Convert(Hugeint::Cast<double>(h) * d);
 }
 
-// Temporal arithmetic
+// Interval arithmetic
 interval_t operator*(const interval_t &i, const double &d) {
-	interval_t result = {0, 0, std::llround(Interval::GetNanoseconds(i) * d / Interval::NANOS_PER_MICRO)};
-	return result;
+	return Interval::FromMicro(std::llround(Interval::GetMicro(i) * d));
 }
 
 inline interval_t operator+(const interval_t &lhs, const interval_t &rhs) {
-	return AddOperator::Operation<interval_t, interval_t, interval_t>(lhs, rhs);
+	return Interval::FromMicro(Interval::GetMicro(lhs) + Interval::GetMicro(rhs));
 }
 
 inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
-	return SubtractOperator::Operation<interval_t, interval_t, interval_t>(lhs, rhs);
-}
-
-inline interval_t operator-(const date_t &lhs, const timestamp_t &rhs) {
-	const auto d = Cast::Operation<date_t, timestamp_t>(lhs);
-	return {0, 0, d - rhs};
+	return Interval::FromMicro(Interval::GetMicro(lhs) - Interval::GetMicro(rhs));
 }
 
 using FrameBounds = std::pair<idx_t, idx_t>;
@@ -821,7 +813,7 @@ struct MadAccessor<hugeint_t, double, double> {
 	}
 };
 
-// date_t - date_t => date_t
+// date_t - timestamp_t => interval_t
 template <>
 struct MadAccessor<date_t, interval_t, timestamp_t> {
 	using INPUT_TYPE = date_t;
@@ -831,9 +823,9 @@ struct MadAccessor<date_t, interval_t, timestamp_t> {
 	explicit MadAccessor(const MEDIAN_TYPE &median_p) : median(median_p) {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
-		const auto delta = input - median;
-		return {0, AbsOperator::Operation<int32_t, int32_t>(delta.days),
-		        AbsOperator::Operation<int64_t, int64_t>(delta.micros)};
+		const auto dt = Cast::Operation<date_t, timestamp_t>(input);
+		const auto delta = dt - median;
+		return Interval::FromMicro(AbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
 
@@ -848,7 +840,7 @@ struct MadAccessor<timestamp_t, interval_t, timestamp_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto delta = input - median;
-		return {0, 0, AbsOperator::Operation<int64_t, int64_t>(delta)};
+		return Interval::FromMicro(AbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
 
@@ -863,7 +855,7 @@ struct MadAccessor<dtime_t, interval_t, dtime_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto delta = input - median;
-		return {0, 0, AbsOperator::Operation<int64_t, int64_t>(delta)};
+		return Interval::FromMicro(AbsOperator::Operation<int64_t, int64_t>(delta));
 	}
 };
 
