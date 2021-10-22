@@ -105,21 +105,21 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 			return -1;
 		}
 	}
-	unique_ptr<DataChunk> chunk_result;
-	for (idx_t i = 0; i < my_stream->vectors_per_chunk; i++) {
-		if (!chunk_result){
-			chunk_result = result.Fetch();
-		} else{
-		    chunk_result->Append(*result.Fetch());
-		}
-		if (!chunk_result) {
-			//! Nothing to output
-			out->release = nullptr;
-			return 0;
+	unique_ptr<DataChunk> chunk_result = result.Fetch();
+	if (!chunk_result) {
+		// Nothing to output
+		out->release = nullptr;
+		return 0;
+	}
+	for (idx_t i = 1; i < my_stream->vectors_per_chunk; i++) {
+		auto new_chunk = result.Fetch();
+		if (!new_chunk) {
+			break;
+		} else {
+			chunk_result->Append(*new_chunk);
 		}
 	}
 	chunk_result->ToArrowArray(out);
-
 	return 0;
 }
 

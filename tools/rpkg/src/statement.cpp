@@ -583,7 +583,8 @@ SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP vector_per_chunksexp) 
 	SEXP arrow_namespace_call = r.Protect(Rf_lang2(RStrings::get().getNamespace_sym, RStrings::get().arrow_str));
 	SEXP arrow_namespace = r.Protect(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
 
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(query_result_holder->result),num_of_vectors);
+	ResultArrowArrayStreamWrapper *result_stream =
+	    new ResultArrowArrayStreamWrapper(move(query_result_holder->result), num_of_vectors);
 	auto stream_ptr_sexp =
 	    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
 	auto record_batch_reader = r.Protect(Rf_lang2(RStrings::get().ImportRecordBatchReader_sym, stream_ptr_sexp));
