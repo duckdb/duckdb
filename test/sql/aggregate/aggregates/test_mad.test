@@ -82,14 +82,14 @@ endloop
 query I
 SELECT mad(('2018-01-01'::DATE + INTERVAL (r) DAY)::DATE) FROM numerics
 ----
-2499 days 00:00:43.2
+60000:00:00
 
 query I
-SELECT mad('2018-01-01'::DATE + INTERVAL (r) HOUR) FROM numerics
+SELECT mad('2018-01-01'::TIMESTAMP + INTERVAL (r) HOUR) FROM numerics
 ----
-104 days
+2500:00:00
 
 query I
-SELECT mad('00:00:00'::TIME + INTERVAL (r) SECONDS) FROM numerics
+SELECT mad('00:00:00'::TIME + INTERVAL (r) SECOND) FROM numerics
 ----
-00:41:39.5005
+00:41:40

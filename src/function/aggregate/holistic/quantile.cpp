@@ -22,7 +22,7 @@ hugeint_t operator*(const hugeint_t &h, const double &d) {
 
 // Temporal arithmetic
 interval_t operator*(const interval_t &i, const double &d) {
-	interval_t result = {0, 0, int64_t(Interval::GetMilli(i) * d)};
+	interval_t result = {0, 0, std::llround(Interval::GetNanoseconds(i) * d / Interval::NANOS_PER_MICRO)};
 	return result;
 }
 
@@ -36,7 +36,7 @@ inline interval_t operator-(const interval_t &lhs, const interval_t &rhs) {
 
 inline interval_t operator-(const date_t &lhs, const timestamp_t &rhs) {
 	const auto d = Cast::Operation<date_t, timestamp_t>(lhs);
-	return SubtractOperator::Operation<timestamp_t, timestamp_t, interval_t>(d, rhs);
+	return {0, 0, d - rhs};
 }
 
 using FrameBounds = std::pair<idx_t, idx_t>;
@@ -832,7 +832,8 @@ struct MadAccessor<date_t, interval_t, timestamp_t> {
 	}
 	inline RESULT_TYPE operator()(const INPUT_TYPE &input) const {
 		const auto delta = input - median;
-		return {0, AbsOperator::Operation<int32_t, int32_t>(delta.days), 0};
+		return {0, AbsOperator::Operation<int32_t, int32_t>(delta.days),
+		        AbsOperator::Operation<int64_t, int64_t>(delta.micros)};
 	}
 };
 
