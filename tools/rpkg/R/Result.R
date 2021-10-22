@@ -121,9 +121,10 @@ duckdb_fetch_arrow <- function(res,stream=FALSE,vector_per_chunk=1,return_table=
 
 #' @rdname duckdb_result-class
 #' @param res Query result to be converted to an Arrow Table
+#' @param vector_per_chunk If streaming, how many vectors per chunk we should emit
 #' @export
-duckdb_fetch_record_batch <- function(res) {
-  result <- .Call(duckdb_fetch_record_batch_R, res@query_result)
+duckdb_fetch_record_batch <- function(res,vector_per_chunk=1) {
+  result <- .Call(duckdb_fetch_record_batch_R, res@query_result,vector_per_chunk)
   return (result)
 }
 
