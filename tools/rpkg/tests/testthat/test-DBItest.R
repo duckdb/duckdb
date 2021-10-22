@@ -24,5 +24,20 @@ DBItest::test_all(c(
   "append_roundtrip_64_bit_character",
   "append_roundtrip_64_bit_roundtrip",
 
-  "column_info_consistent" # won't fix: https://github.com/r-dbi/DBItest/issues/181
+  "column_info_consistent", # won't fix: https://github.com/r-dbi/DBItest/issues/181
+
+  "read_table", # these are temporarily skipped because factors can be round tripped
+  "read_table_empty",
+  "read_table_row_names_na_missing",
+  "write_table_error",
+  "overwrite_table",
+  "overwrite_table_missing",
+  "append_table",
+  "append_table_new",
+  "table_visible_in_other_connection",
+  "roundtrip_character",
+  "roundtrip_factor",
+  "write_table_row_names_true_missing",
+  "write_table_row_names_string_missing",
+  "write_table_row_names_na_missing"
 ))

@@ -26,6 +26,7 @@ void R_init_duckdb(DllInfo *dll) {
 	R_useDynamicSymbols(dll, FALSE);
 
 	AltrepString::Initialize(dll);
+	AltrepStringSubset::Initialize(dll);
 
 	// TODO implement SEXP (*R_altvec_Extract_subset_method_t)(SEXP, SEXP, SEXP);
 }
