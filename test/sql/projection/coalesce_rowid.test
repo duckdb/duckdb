@@ -1,4 +1,4 @@
-# name: test/sql/projection/select_star_replace.test
+# name: test/sql/projection/coalesce_rowid.test
 # description: SELECT * REPLACE
 # group: [projection]
 
