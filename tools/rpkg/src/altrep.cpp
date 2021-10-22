@@ -107,3 +107,32 @@ void AltrepString::Finalize(SEXP x) {
 		delete wrapper;
 	}
 }
+
+/// string subset
+
+R_altrep_class_t AltrepStringSubset::rclass;
+
+void AltrepStringSubset::Initialize(DllInfo *dll) {
+	rclass = R_make_altstring_class("duckdb_string_subset", "duckdb", dll);
+
+	/* override ALTREP methods */
+	R_set_altrep_Length_method(rclass, Length);
+
+	/* override ALTVEC methods */
+	R_set_altvec_Dataptr_method(rclass, Dataptr);
+
+	/* override ALTSTRING methods */
+	R_set_altstring_Elt_method(rclass, Elt);
+}
+
+void *AltrepStringSubset::Dataptr(SEXP x, Rboolean writeable) {
+	return STRING_PTR(R_altrep_data1(x)) + (idx_t)NUMERIC_POINTER(R_altrep_data2(x))[0];
+}
+
+R_xlen_t AltrepStringSubset::Length(SEXP x) {
+	return NUMERIC_POINTER(R_altrep_data2(x))[1];
+}
+
+SEXP AltrepStringSubset::Elt(SEXP x, R_xlen_t i) {
+	return STRING_PTR(R_altrep_data1(x))[(idx_t)NUMERIC_POINTER(R_altrep_data2(x))[0] + i];
+}

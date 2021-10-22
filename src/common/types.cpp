@@ -1086,7 +1086,16 @@ int64_t EnumType::GetPos(const LogicalType &type, const string &key) {
 const string &EnumType::GetValue(const Value &val) {
 	auto info = val.type().AuxInfo();
 	vector<string> &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
-	return values_insert_order[val.value_.utinyint];
+	switch (val.type().InternalType()) {
+	case PhysicalType::UINT8:
+		return values_insert_order[val.value_.utinyint];
+	case PhysicalType::UINT16:
+		return values_insert_order[val.value_.usmallint];
+	case PhysicalType::UINT32:
+		return values_insert_order[val.value_.uinteger];
+	default:
+		throw InternalException("Invalid Internal Type for ENUMs");
+	}
 }
 
 const vector<string> &EnumType::GetValuesInsertOrder(const LogicalType &type) {

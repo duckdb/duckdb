@@ -125,6 +125,9 @@ SEXP RApi::Prepare(SEXP connsexp, SEXP querysexp) {
 		case LogicalTypeId::LIST:
 			rtype = "list";
 			break;
+		case LogicalTypeId::ENUM:
+			rtype = "factor";
+			break;
 		default:
 			Rf_error("duckdb_prepare_R: Unknown column type for prepare: %s", stype.ToString().c_str());
 			break;
@@ -238,6 +241,9 @@ static SEXP allocate(const LogicalType &type, RProtector &r_varvalue, idx_t nrow
 
 	case LogicalTypeId::BLOB:
 		varvalue = r_varvalue.Protect(NEW_LIST(nrows));
+		break;
+	case LogicalTypeId::ENUM:
+		varvalue = r_varvalue.Protect(NEW_INTEGER(nrows));
 		break;
 	default:
 		Rf_error("duckdb_execute_R: Unknown column type for execute: %s", type.ToString().c_str());
@@ -410,6 +416,31 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 				SET_VECTOR_ELT(dest, dest_offset + row_idx, rawval);
 			}
 		}
+		break;
+	}
+	case LogicalTypeId::ENUM: {
+		auto physical_type = src_vec.GetType().InternalType();
+
+		switch (physical_type) {
+		case PhysicalType::UINT8:
+			VectorToR<uint8_t, uint32_t>(src_vec, n, INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
+			break;
+
+		case PhysicalType::UINT16:
+			VectorToR<uint16_t, uint32_t>(src_vec, n, INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
+			break;
+
+		case PhysicalType::UINT32:
+			VectorToR<uint8_t, uint32_t>(src_vec, n, INTEGER_POINTER(dest), dest_offset, NA_INTEGER);
+			break;
+
+		default:
+			Rf_error("duckdb_execute_R: Unknown enum type for convert: %s", TypeIdToString(physical_type).c_str());
+		}
+		RProtector r;
+		auto levels_sexp = r.Protect(RApi::StringsToSexp(EnumType::GetValuesInsertOrder(src_vec.GetType())));
+		SET_LEVELS(dest, levels_sexp);
+		SET_CLASS(dest, RStrings::get().factor_str);
 		break;
 	}
 	default:
