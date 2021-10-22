@@ -109,6 +109,10 @@ static string_t DecodePythonUnicode(T *codepoints, idx_t codepoint_count, Vector
 	return result;
 }
 
+struct GIL {
+	py::gil_scoped_acquire acquire;
+};
+
 void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array &numpy_col, idx_t count, idx_t offset,
                                      Vector &out) {
 	switch (bind_data.pandas_type) {
@@ -192,6 +196,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
 		for (idx_t row = 0; row < count; row++) {
+			unique_ptr<GIL> gil_lock;
 			auto source_idx = offset + row;
 			py::str str_val;
 			PyObject *val = src_ptr[source_idx];
@@ -205,7 +210,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 					continue;
 				}
 				if (!py::isinstance<py::str>(val)) {
-					py::gil_scoped_acquire acquire;
+					gil_lock = make_unique<GIL>();
 					py::handle object_handle = val;
 					str_val = py::str(object_handle);
 					val = str_val.ptr();
