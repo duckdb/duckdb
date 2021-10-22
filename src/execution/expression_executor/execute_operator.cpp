@@ -74,7 +74,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			        vector_to_check);
 
 			VectorData vdata;
-			vector_to_check.Orrify(count, vdata);
+			vector_to_check.Orrify(remaining_count, vdata);
 
 			idx_t result_count = 0;
 			next_count = 0;
