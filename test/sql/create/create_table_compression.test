@@ -5,11 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
-
-
 statement ok
 CREATE TABLE T (a INTEGER COMPRESSION RLE)
-
 
 statement ok
 DROP TABLE T
@@ -22,6 +19,9 @@ CREATE TABLE T (a INTEGER COMPRESSION )
 
 statement error
 CREATE TABLE T (a INTEGER NOT NULL COMPRESSION )
+
+statement error
+CREATE TABLE T (a INTEGER COMPRESSION bla)
 
 statement ok
 CREATE TABLE T (a INTEGER NOT NULL COMPRESSION RLE)
@@ -75,3 +75,8 @@ SELECT * FROM T
 2
 2
 3
+
+query I
+SELECT compression_type FROM pragma_storage_info('T') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+----
+RLE

@@ -113,7 +113,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 			if (names.empty()) {
 				throw BinderException("read_csv requires at least a single column as input!");
 			}
-		} else if (kv.first == "compression") {
+		} else if (kv.first == "compression_type") {
 			options.compression = kv.second.str_value;
 		} else if (kv.first == "filename") {
 			result->include_file_name = kv.second.value_.boolean;
@@ -220,7 +220,7 @@ static void ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["dateformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["timestampformat"] = LogicalType::VARCHAR;
 	table_function.named_parameters["normalize_names"] = LogicalType::BOOLEAN;
-	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
+	table_function.named_parameters["compression_type"] = LogicalType::VARCHAR;
 	table_function.named_parameters["filename"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["skip"] = LogicalType::BIGINT;
 }

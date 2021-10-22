@@ -83,8 +83,9 @@ private:
 };
 
 struct DataTableInfo {
-	DataTableInfo(DatabaseInstance &db, string schema, string table)
-	    : db(db), cardinality(0), schema(move(schema)), table(move(table)) {
+	DataTableInfo(DatabaseInstance &db, string schema, string table,
+	              vector<ColumnDefinition> *column_definitions_p = nullptr)
+	    : db(db), cardinality(0), schema(move(schema)), table(move(table)), column_definitions(column_definitions_p) {
 	}
 
 	//! The database instance of the table
@@ -96,6 +97,8 @@ struct DataTableInfo {
 	string schema;
 	// name of the table
 	string table;
+
+	vector<ColumnDefinition> *column_definitions;
 
 	TableIndexList indexes;
 
@@ -117,7 +120,7 @@ class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
 	DataTable(DatabaseInstance &db, const string &schema, const string &table, vector<LogicalType> types,
-	          unique_ptr<PersistentTableData> data = nullptr);
+	          unique_ptr<PersistentTableData> data = nullptr, vector<ColumnDefinition> *column_definitions_p = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
