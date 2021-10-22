@@ -21,17 +21,16 @@ class TestPandasString(object):
             assert numpy.all(df_out['string'] == strings)
 
     def test_bug_2467(self, duckdb_cursor):
-        return
-N = 1_000_000
-# Create DataFrame with string attribute
-df = pd.DataFrame({"city": ["Amsterdam", "New York", "London"] * N})
-# Copy Dataframe to DuckDB
-con = duckdb.connect()
-con.register("df", df)
-con.execute(f"""
-    CREATE TABLE t1 AS SELECT * FROM df
-"""
-)
-assert con.execute(f"""
-    SELECT count(*) from t1
-""").fetchall() == [(3000000,)]
+        N = 1_000_000
+        # Create DataFrame with string attribute
+        df = pd.DataFrame({"city": ["Amsterdam", "New York", "London"] * N})
+        # Copy Dataframe to DuckDB
+        con = duckdb.connect()
+        con.register("df", df)
+        con.execute(f"""
+            CREATE TABLE t1 AS SELECT * FROM df
+        """
+        )
+        assert con.execute(f"""
+            SELECT count(*) from t1
+        """).fetchall() == [(3000000,)]
