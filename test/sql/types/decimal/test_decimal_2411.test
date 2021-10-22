@@ -1,0 +1,23 @@
+# name: test/sql/types/decimal/test_decimal_2411.test
+# description: Test bug described on issue 2411
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE decimals(i DECIMAL(38,1))
+
+statement ok
+CREATE TABLE decimals2(i DECIMAL(38,1))
+
+statement ok
+INSERT INTO decimals VALUES (4642275147320176030871715840)
+
+statement ok
+INSERT INTO decimals2 VALUES (4642275147320176030871715840)
+
+query I
+select count(*) from decimals inner join decimals2 on (decimals.i = decimals2.i)
+----
+1
