@@ -23,7 +23,7 @@ query I
 SELECT hello('World');
 ----
 Hello, World
-#
+
 #statement ok
 #INSTALL 'tpch';
 #

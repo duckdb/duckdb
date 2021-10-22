@@ -3,6 +3,8 @@
 #include "duckdb/common/windows.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/gzip_file_system.hpp"
+
 #include "httplib.hpp"
 
 #include <fstream>
@@ -33,20 +35,6 @@ void *dlsym(void *handle, const char *name) {
 // TODO add force install / update install
 
 static vector<string> path_components = {".duckdb", "extensions", DuckDB::SourceID(), DuckDB::Platform()};
-
-static constexpr const uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
-
-static constexpr const uint8_t GZIP_FLAG_ASCII = 0x1;
-static constexpr const uint8_t GZIP_FLAG_MULTIPART = 0x2;
-static constexpr const uint8_t GZIP_FLAG_EXTRA = 0x4;
-static constexpr const uint8_t GZIP_FLAG_NAME = 0x8;
-static constexpr const uint8_t GZIP_FLAG_COMMENT = 0x10;
-static constexpr const uint8_t GZIP_FLAG_ENCRYPT = 0x20;
-
-static constexpr const uint8_t GZIP_HEADER_MINSIZE = 10;
-
-static constexpr const unsigned char GZIP_FLAG_UNSUPPORTED =
-    GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
 
 static string uncompress_gzip_string(string &in) {
 	// decompress file
@@ -118,8 +106,6 @@ static string uncompress_gzip_string(string &in) {
 void PhysicalLoad::DoInstall(ExecutionContext &context) const {
 	auto &fs = FileSystem::GetFileSystem(context.client);
 
-	// todo get platform from cmake like jdbc
-
 	string local_path = fs.GetHomeDirectory();
 	if (!fs.DirectoryExists(local_path)) {
 		throw InternalException("Can't find the home directory at " + local_path);
@@ -155,9 +141,9 @@ void PhysicalLoad::DoInstall(ExecutionContext &context) const {
 		throw IOException("Failed to read extension from %s", info->filename);
 	}
 
-	auto url_local_part =
-	    string("/" + string(DuckDB::SourceID()) + "/osx-arm64/" + extension_name + ".duckdb_extension.gz");
 	auto url_base = "http://extensions.duckdb.org";
+	auto url_local_part =
+	    StringUtil::Format("/%s/%s/%s.duckdb_extension.gz", DuckDB::SourceID(), DuckDB::Platform(), extension_name);
 	httplib::Client cli(url_base);
 
 	httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),

@@ -63,20 +63,6 @@ static idx_t GZipConsumeString(FileHandle &input) {
 	return size;
 }
 
-static constexpr const uint8_t GZIP_COMPRESSION_DEFLATE = 0x08;
-
-static constexpr const uint8_t GZIP_FLAG_ASCII = 0x1;
-static constexpr const uint8_t GZIP_FLAG_MULTIPART = 0x2;
-static constexpr const uint8_t GZIP_FLAG_EXTRA = 0x4;
-static constexpr const uint8_t GZIP_FLAG_NAME = 0x8;
-static constexpr const uint8_t GZIP_FLAG_COMMENT = 0x10;
-static constexpr const uint8_t GZIP_FLAG_ENCRYPT = 0x20;
-
-static constexpr const uint8_t GZIP_HEADER_MINSIZE = 10;
-
-static constexpr const unsigned char GZIP_FLAG_UNSUPPORTED =
-    GZIP_FLAG_ASCII | GZIP_FLAG_MULTIPART | GZIP_FLAG_EXTRA | GZIP_FLAG_COMMENT | GZIP_FLAG_ENCRYPT;
-
 struct MiniZStreamWrapper {
 	~MiniZStreamWrapper() {
 		Close();
