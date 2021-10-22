@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgquery::PGNode *node, idx_t depth) {
+unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgquery::PGNode *node) {
 	auto star = (duckdb_libpgquery::PGAStar *)node;
 	auto result = make_unique<StarExpression>(star->relation ? star->relation : string());
 	if (star->except_list) {
@@ -23,8 +23,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 		for (auto head = star->replace_list->head; head; head = head->next) {
 			auto list = (duckdb_libpgquery::PGList *)head->data.ptr_value;
 			D_ASSERT(list->length == 2);
-			auto replace_expression =
-			    TransformExpression((duckdb_libpgquery::PGNode *)list->head->data.ptr_value, depth + 1);
+			auto replace_expression = TransformExpression((duckdb_libpgquery::PGNode *)list->head->data.ptr_value);
 			auto value = (duckdb_libpgquery::PGValue *)list->tail->data.ptr_value;
 			D_ASSERT(value->type == duckdb_libpgquery::T_PGString);
 			string exclude_entry = value->val.str;
@@ -40,7 +39,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 	return move(result);
 }
 
-unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::PGColumnRef *root, idx_t depth) {
+unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::PGColumnRef *root) {
 	auto fields = root->fields;
 	auto head_node = (duckdb_libpgquery::PGNode *)fields->head->data.ptr_value;
 	switch (head_node->type) {
@@ -72,7 +71,7 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::
 		}
 	}
 	case duckdb_libpgquery::T_PGAStar: {
-		return TransformStarExpression(head_node, depth);
+		return TransformStarExpression(head_node);
 	}
 	default:
 		throw NotImplementedException("ColumnRef not implemented!");

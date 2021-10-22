@@ -4,6 +4,10 @@
 
 using namespace duckdb;
 
+SEXP RApi::ToUtf8(SEXP string_sexp) {
+	return RApi::REvalThrows(Rf_lang2(RStrings::get().enc2utf8_sym, string_sexp));
+}
+
 SEXP RApi::PointerToString(SEXP extptr) {
 	if (TYPEOF(extptr) != EXTPTRSXP) {
 		Rf_error("duckdb_ptr_to_str: Need external pointer parameter");
@@ -50,7 +54,7 @@ RStrings::RStrings() {
 	R_PreserveObject(strings);
 	MARK_NOT_MUTABLE(strings);
 
-	SEXP chars = r.Protect(Rf_allocVector(VECSXP, 7));
+	SEXP chars = r.Protect(Rf_allocVector(VECSXP, 8));
 	SET_VECTOR_ELT(chars, 0, UTC_str = Rf_mkString("UTC"));
 	SET_VECTOR_ELT(chars, 1, Date_str = Rf_mkString("Date"));
 	SET_VECTOR_ELT(chars, 2, difftime_str = Rf_mkString("difftime"));
@@ -60,10 +64,13 @@ RStrings::RStrings() {
 	SET_VECTOR_ELT(chars, 6,
 	               str_ref_type_names_rtypes_n_param_str =
 	                   RApi::StringsToSexp({"str", "ref", "type", "names", "rtypes", "n_param"}));
+	SET_VECTOR_ELT(chars, 7, factor_str = Rf_mkString("factor"));
+
 	R_PreserveObject(chars);
 	MARK_NOT_MUTABLE(chars);
 
 	// Symbols don't need to be protected
+	enc2utf8_sym = Rf_install("enc2utf8");
 	tzone_sym = Rf_install("tzone");
 	units_sym = Rf_install("units");
 	getNamespace_sym = Rf_install("getNamespace");
@@ -114,7 +121,7 @@ Value RApiTypes::SexpToValue(SEXP valsexp, R_len_t idx) {
 		break;
 	}
 	case RType::STRING: {
-		auto str_val = STRING_ELT(valsexp, idx);
+		auto str_val = STRING_ELT(RApi::ToUtf8(valsexp), idx);
 		val = Value(CHAR(str_val));
 		val.is_null = str_val == NA_STRING;
 		break;

@@ -150,12 +150,6 @@ setMethod(
     # use Kirill's magic, convert rownames to additional column
     value <- sqlRownamesToColumn(value, row.names)
 
-    is_factor <- vapply(value, is.factor, logical(1))
-    value[is_factor] <- lapply(value[is_factor], function(x) {
-      levels(x) <- enc2utf8(levels(x))
-      as.character(x)
-    })
-
     if (dbExistsTable(conn, name)) {
       if (overwrite) {
         dbRemoveTable(conn, name)
@@ -172,24 +166,33 @@ setMethod(
     table_name <- dbQuoteIdentifier(conn, name)
 
     if (!dbExistsTable(conn, name)) {
-      column_names <- dbQuoteIdentifier(conn, names(value))
-      column_types <-
-        vapply(value, dbDataType, dbObj = conn, FUN.VALUE = "character")
+        view_name <- sprintf("_duckdb_write_view_%s", duckdb_random_string())
+        on.exit(duckdb_unregister(conn, view_name))
+        duckdb_register(conn, view_name, value)
 
-      if (!is.null(field.types)) {
-        column_types[names(field.types)] <- field.types
-      }
+        temp_str <- ""
+        if (temporary) temp_str <- "TEMPORARY"
 
-      temp_str <- ""
-      if (temporary) temp_str <- "TEMPORARY"
+        col_names <- dbGetQuery(conn, SQL(sprintf(
+          "DESCRIBE %s", view_name
+        )))$Field
 
-      schema_str <- paste(column_names, column_types, collapse = ", ")
-      dbExecute(conn, SQL(sprintf(
-        "CREATE %s TABLE %s (%s)", temp_str, table_name, schema_str
-      )))
+        cols <- character()
+        col_idx <- 1
+        for (name in col_names) {
+            if (name %in% names(field.types)) {
+                cols <- c(cols, sprintf("#%d::%s %s", col_idx, field.types[name], name))
+            }
+            else {
+                cols <- c(cols, sprintf("#%d", col_idx))
+            }
+            col_idx <- col_idx + 1
+         }
+        dbExecute(conn, SQL(sprintf("CREATE %s TABLE %s AS SELECT %s FROM %s", temp_str, table_name, paste(cols, collapse=","), view_name)))
+        rs_on_connection_updated(conn, hint=paste0("Create table'", table_name,"'"))
+    } else {
+        dbAppendTable(conn, name, value)
     }
-
-    dbAppendTable(conn, name, value)
     invisible(TRUE)
   }
 )

@@ -871,6 +871,9 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 						return false;
 					}
 					pos++;
+					if (pos >= len) {
+						return false;
+					}
 					int64_t exponent = 0;
 					int negative = buf[pos] == '-';
 					if (negative) {

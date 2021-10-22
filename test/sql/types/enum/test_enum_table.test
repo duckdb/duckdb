@@ -79,15 +79,13 @@ Moe	Anne
 Pedro	Oogie Boogie
 
 statement ok
+DROP TABLE person;
+
+statement ok
+DROP TABLE pets;
+
+statement ok
 DROP TYPE mood;
-
-# Tables should still function
-
-query TT
-select person.name, pets.name from person inner join pets on  (person.current_mood = pets.current_mood)
-----
-Moe	Anne
-Pedro	Oogie Boogie
 
 # Creating a new table should not
 statement error
@@ -146,9 +144,6 @@ The Borg	ok	ehh
 # Comparisons between enum columns with the same enum type
 statement ok
 CREATE TYPE car_brand AS ENUM ('Tesla', 'VW', 'Seat', 'Fiets');
-
-statement ok
-DROP TABLE person
 
 statement ok
 CREATE TABLE person (
@@ -238,62 +233,6 @@ NULL
 # Create an enum
 statement ok
 create type breed AS ENUM ('Maltese', 'Shi-tzu', 'Samoyed', 'Robot');
-
-# Create a table with that enum
-statement ok
-CREATE TABLE dog (
-    name text,
-    type breed
-);
-
-statement ok
-INSERT INTO dog VALUES ('Oogie Boogie', 'Maltese'), ('Anne', 'Shi-tzu'),('Blaster', 'Samoyed'), ('Roomba', 'Robot')
-
-#drop the enum
-statement ok
-drop type breed
-
-#create the same enum again,
-statement ok
-create type breed AS ENUM ('Maltese', 'Shi-tzu', 'Samoyed', 'Robot');
-
-#create a new table with the new enum,
-statement ok
-CREATE TABLE dog_2 (
-    name text,
-    type breed
-);
-
-statement ok
-INSERT INTO dog_2 VALUES ('Teddy', 'Samoyed')
-
-#then compare between the two tables. What should happen?
-
-query IIII
-select * from dog_2 inner join dog on (dog_2.type = dog.type);
-----
-Teddy	Samoyed	Blaster	Samoyed
-
-#drop the enum
-statement ok
-drop type breed
-
-#create a diffferent enum
-statement ok
-create type breed AS ENUM ('Golden', 'Pomeranian');
-
-statement ok
-CREATE TABLE dog_3 (
-    name text,
-    type breed
-);
-
-statement ok
-INSERT INTO dog_3 VALUES ('Licity', 'Golden')
-
-# This should break because the enums are different (Although have the same name)
-statement error
-select * from dog_3 inner join dog on (dog_3.type = dog.type);
 
 # Lets do a dictionary vector type
 statement ok

@@ -20,13 +20,13 @@ unique_ptr<CreateStatement> Transformer::TransformCreateFunction(duckdb_libpgque
 	info->schema = qname.schema;
 	info->name = qname.name;
 
-	auto function = TransformExpression(stmt->function, 0);
+	auto function = TransformExpression(stmt->function);
 	D_ASSERT(function);
 	auto macro_func = make_unique<MacroFunction>(move(function));
 
 	if (stmt->params) {
 		vector<unique_ptr<ParsedExpression>> parameters;
-		TransformExpressionList(*stmt->params, parameters, 0);
+		TransformExpressionList(*stmt->params, parameters);
 		for (auto &param : parameters) {
 			if (param->type == ExpressionType::VALUE_CONSTANT) {
 				// parameters with default value (must have an alias)

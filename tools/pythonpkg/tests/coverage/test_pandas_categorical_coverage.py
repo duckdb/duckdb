@@ -3,13 +3,18 @@ import pandas as pd
 import numpy
 import pytest
 
+def check_result_list(res):
+    for res_item in res:
+        assert res_item[0] == res_item[1]
+
 def check_create_table(category):
     conn = duckdb.connect()
 
     conn.execute ("PRAGMA enable_verification")
     df_in = pd.DataFrame({
     'x': pd.Categorical(category, ordered=True),
-    'y': pd.Categorical(category, ordered=True)
+    'y': pd.Categorical(category, ordered=True),
+    'z': category
     })
 
     df_out = duckdb.query_df(df_in, "data", "SELECT * FROM data").df()
@@ -18,8 +23,12 @@ def check_create_table(category):
     conn.execute("CREATE TABLE t1 AS SELECT * FROM df_in")
     conn.execute("CREATE TABLE t2 AS SELECT * FROM df_in")
 
+    # Check fetchall
+    res =  conn.execute("SELECT x,z FROM t1").fetchall()
+    check_result_list(res)
+
     # Do a insert to trigger string -> cat 
-    conn.execute("INSERT INTO t1 VALUES ('2','2')")
+    conn.execute("INSERT INTO t1 VALUES ('2','2','2')")
 
     res = conn.execute("SELECT x FROM t1 where x = '1'").fetchall()
     assert res == [('1',)]
@@ -34,6 +43,8 @@ def check_create_table(category):
     assert res == conn.execute("SELECT x FROM t1").fetchall()
     # Triggering the cast with ENUM as a src
     conn.execute("ALTER TABLE t1 ALTER x SET DATA TYPE VARCHAR")
+    # We should be able to drop the table without any dependencies
+    conn.execute("DROP TABLE t1")
 
 class TestCategory(object):
 

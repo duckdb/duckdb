@@ -9,7 +9,7 @@ unique_ptr<DeleteStatement> Transformer::TransformDelete(duckdb_libpgquery::PGNo
 	D_ASSERT(stmt);
 	auto result = make_unique<DeleteStatement>();
 
-	result->condition = TransformExpression(stmt->whereClause, 0);
+	result->condition = TransformExpression(stmt->whereClause);
 	result->table = TransformRangeVar(stmt->relation);
 	if (result->table->type != TableReferenceType::BASE_TABLE) {
 		throw Exception("Can only delete from base tables!");

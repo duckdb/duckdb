@@ -1,0 +1,23 @@
+# name: test/sql/types/timestamp/test_timestamp_2411.test
+# description: Test bug described on issue 2411
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE timestamp1(i TIMESTAMP)
+
+statement ok
+CREATE TABLE timestamp2(i TIMESTAMP)
+
+statement ok
+INSERT INTO timestamp1 VALUES ('1993-08-14 00:00:01')
+
+statement ok
+INSERT INTO timestamp2 VALUES ('1993-08-14 00:00:01')
+
+query I
+select count(*) from timestamp2 inner join timestamp1 on (timestamp1.i = timestamp2.i)
+----
+1
