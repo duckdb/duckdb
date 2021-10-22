@@ -23,6 +23,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 	case ExpressionType::OPERATOR_COALESCE:
 		// COALESCE, merge stats of all children
 		for (idx_t i = 0; i < expr.children.size(); i++) {
+			D_ASSERT(child_stats[i]);
 			if (!child_stats[i]->CanHaveNoNull()) {
 				// this child is always NULL, we can remove it from the coalesce
 				// UNLESS there is only one node remaining
@@ -50,13 +51,8 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundOperat
 		} else {
 			// coalesce of multiple entries
 			// merge the stats
-			for (idx_t i = 0; i < expr.children.size(); i++) {
-				if (!child_stats[i]) {
-					return nullptr;
-				}
-				if (i > 0) {
-					child_stats[0]->Merge(*child_stats[i]);
-				}
+			for (idx_t i = 1; i < expr.children.size(); i++) {
+				child_stats[0]->Merge(*child_stats[i]);
 			}
 		}
 		return move(child_stats[0]);
