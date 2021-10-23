@@ -64,6 +64,11 @@ SQLRETURN OdbcFetch::FetchNext(OdbcHandleStmt *stmt) {
 			// it's need to reset the last_fetched_len
 			ResetLastFetchedVariableVal();
 			auto chunk = stmt->res->Fetch();
+			if (!stmt->res->success) {
+				stmt->open = false;
+				stmt->error_messages.emplace_back(stmt->res->error);
+				return SQL_ERROR;
+			}
 			if (!chunk) {
 				resultset_end = true;
 				return SQL_NO_DATA;
