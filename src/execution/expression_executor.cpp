@@ -90,6 +90,15 @@ Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {
 	return result_value;
 }
 
+bool ExpressionExecutor::TryEvaluateScalar(const Expression &expr, Value &result) {
+	try {
+		result = EvaluateScalar(expr);
+		return true;
+	} catch (...) {
+		return false;
+	}
+}
+
 void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t count) {
 	D_ASSERT(expr.return_type.id() == vector.GetType().id());
 	vector.Verify(count);

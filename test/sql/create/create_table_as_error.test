@@ -1,0 +1,9 @@
+# name: test/sql/create/create_table_as_error.test
+# description: Test incorrect usage of CREATE TABLE AS
+# group: [create]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+CREATE TABLE tbl AS EXECUTE tbl;

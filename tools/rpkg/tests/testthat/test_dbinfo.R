@@ -1,5 +1,3 @@
-library("testthat")
-library("DBI")
 test_that("dbGetInfo returns something meaningful", {
   dbdir <- tempfile()
   drv <- duckdb::duckdb(dbdir)
