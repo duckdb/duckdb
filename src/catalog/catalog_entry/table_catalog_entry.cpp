@@ -61,7 +61,12 @@ TableCatalogEntry::TableCatalogEntry(Catalog *catalog, SchemaCatalogEntry *schem
 	}
 	if (!storage) {
 		// create the physical storage
-		storage = make_shared<DataTable>(catalog->db, schema->name, name, GetTypes(), move(info->data), &columns);
+		vector<ColumnDefinition> colum_def_copy;
+		for (auto &col_def : columns) {
+			colum_def_copy.push_back(col_def.Copy());
+		}
+		storage =
+		    make_shared<DataTable>(catalog->db, schema->name, name, GetTypes(), move(colum_def_copy), move(info->data));
 
 		// create the unique indexes for the UNIQUE and PRIMARY KEY constraints
 		for (idx_t i = 0; i < bound_constraints.size(); i++) {

@@ -78,11 +78,12 @@ void ForceCompression(vector<CompressionFunction *> &compression_functions, Comp
 unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
 	D_ASSERT(!compression_functions.empty());
 	auto &config = DBConfig::GetConfig(GetDatabase());
-	if (config.force_compression_hint) {
-		auto compression_type = (*col_data.info.column_definitions)[col_data.column_index].compression_type;
+	auto compression_type = col_data.info.column_definitions[col_data.column_index].compression_type;
+	if (compression_type != CompressionType::COMPRESSION_AUTO) {
 		ForceCompression(compression_functions, compression_type);
 	}
-	if (!config.force_compression_hint && config.force_compression != CompressionType::COMPRESSION_INVALID) {
+	if (compression_type == CompressionType::COMPRESSION_AUTO &&
+	    config.force_compression != CompressionType::COMPRESSION_INVALID) {
 		ForceCompression(compression_functions, config.force_compression);
 	}
 	// set up the analyze states for each compression method

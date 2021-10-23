@@ -53,7 +53,7 @@ COPY lineitem FROM 'test/sql/copy/csv/data/test/test_comp.csv.gz' COMPRESSION 'n
 
 
 statement ok
-CREATE TABLE lineitem AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/test_comp.csv.gzz', compression_type='gzip');
+CREATE TABLE lineitem AS SELECT * FROM read_csv_auto('test/sql/copy/csv/data/test/test_comp.csv.gzz', compression='gzip');
 
 query I
 SELECT COUNT(*) FROM lineitem
@@ -70,7 +70,7 @@ statement ok
 DROP TABLE lineitem
 
 statement ok
-CREATE TABLE lineitem AS SELECT * FROM read_csv('test/sql/copy/csv/data/test/test_comp.csv.gzz', compression_type='gzip', AUTO_DETECT=TRUE);
+CREATE TABLE lineitem AS SELECT * FROM read_csv('test/sql/copy/csv/data/test/test_comp.csv.gzz', compression='gzip', AUTO_DETECT=TRUE);
 
 query I
 SELECT COUNT(*) FROM lineitem

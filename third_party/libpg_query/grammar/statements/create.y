@@ -182,12 +182,12 @@ ColConstraintElem:
 					n->initially_valid = true;
 					$$ = (PGNode *)n;
 				}
-			| COMPRESSION name
+			| USING COMPRESSION name
 				{
 					PGConstraint *n = makeNode(PGConstraint);
 					n->contype = PG_CONSTR_COMPRESSION;
 					n->location = @1;
-					n->compression_name = $2;
+					n->compression_name = $3;
 					$$ = (PGNode *)n;
 				}
 			| DEFAULT b_expr
