@@ -9,6 +9,7 @@
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/joinref.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/column_alias_binder.hpp"
 #include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/group_binder.hpp"
 #include "duckdb/planner/expression_binder/having_binder.hpp"
@@ -19,10 +20,6 @@
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 
 namespace duckdb {
-unique_ptr<Expression> Binder::BindFilter(unique_ptr<ParsedExpression> condition) {
-	WhereBinder where_binder(*this, context);
-	return where_binder.Bind(condition);
-}
 
 unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr) {
 	// we treat the Distinct list as a order by
@@ -221,7 +218,10 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// first visit the WHERE clause
 	// the WHERE clause happens before the GROUP BY, PROJECTION or HAVING clauses
 	if (statement.where_clause) {
-		result->where_clause = BindFilter(move(statement.where_clause));
+		ColumnAliasBinder alias_binder(*result, alias_map);
+		WhereBinder where_binder(*this, context, &alias_binder);
+		unique_ptr<ParsedExpression> condition = move(statement.where_clause);
+		result->where_clause = where_binder.Bind(condition);
 	}
 
 	// now bind all the result modifiers; including DISTINCT and ORDER BY targets

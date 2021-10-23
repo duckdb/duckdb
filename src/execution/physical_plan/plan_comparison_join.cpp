@@ -51,7 +51,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 			return;
 		}
 	}
-	// with integral types
+	// with integral internal types
 	for (auto &&join_stat : op.join_stats) {
 		if (!TypeIsInteger(join_stat->type.InternalType()) || join_stat->type.InternalType() == PhysicalType::INT128) {
 			// perfect join not possible for non-integral types or hugeint
@@ -76,7 +76,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	join_state.build_min = stats_build->min;
 	join_state.build_max = stats_build->max;
 	join_state.estimated_cardinality = op.estimated_cardinality;
-	if (build_range.type().id() == LogicalTypeId::DECIMAL) {
+	if (!build_range.type().IsIntegral()) {
 		switch (build_range.type().InternalType()) {
 		case PhysicalType::INT16:
 			join_state.build_range = build_range.value_.smallint;
@@ -88,19 +88,15 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 			join_state.build_range = build_range.value_.bigint;
 			break;
 		case PhysicalType::INT128:
-			throw InternalException("PhysicalType::INT128 not yet implemented for Perfect HJ");
-			//			join_state.build_range = build_range.GetValue<idx_t>();
-			//			break;
+			// we do not support hugeint for this optimization
+			return;
 		default:
 			throw InternalException("Invalid Physical Type for Decimals");
 		}
 	} else {
 		join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
 	}
-	if (join_state.build_range > MAX_BUILD_SIZE) {
-		return;
-	}
-	if (stats_probe->max.is_null || stats_probe->min.is_null) {
+	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->max.is_null || stats_probe->min.is_null) {
 		return;
 	}
 	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
