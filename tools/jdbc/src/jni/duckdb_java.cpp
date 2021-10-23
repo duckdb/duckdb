@@ -2,10 +2,7 @@
 #include "duckdb.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/appender.hpp"
-#include "parquet-extension.hpp"
-#ifdef BUILD_HTTPFS_EXTENSION
-#include "httpfs-extension.hpp"
-#endif
+#include "extension/extension_helper.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -51,12 +48,7 @@ JNIEXPORT jobject JNICALL Java_org_duckdb_DuckDBNative_duckdb_1jdbc_1startup(JNI
 	}
 	try {
 		auto db = new DuckDB(database, &config);
-		db->LoadExtension<ParquetExtension>();
-
-#ifdef BUILD_HTTPFS_EXTENSION
-		db->LoadExtension<HTTPFsExtension>();
-#endif
-
+		ExtensionHelper::LoadAllExtensions(*db);
 		return env->NewDirectByteBuffer(db, 0);
 	} catch (exception &e) {
 		env->ThrowNew(env->FindClass("java/sql/SQLException"), e.what());

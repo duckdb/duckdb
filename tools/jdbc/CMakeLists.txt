@@ -1,13 +1,6 @@
 find_package(Java 1.8)
 find_package(JNI)
 
-if(BUILD_HTTPFS_EXTENSION)
-  find_package(OpenSSL REQUIRED)
-  include_directories(CMAKE_SOURCE_DIR/extension/httpfs/include
-                      OPENSSL_INCLUDE_DIR)
-  add_definitions(-DBUILD_HTTPFS_EXTENSION=BUILD_HTTPFS_EXTENSION)
-endif()
-
 cmake_minimum_required(VERSION 3.11.0)
 
 if(NOT JNI_FOUND OR NOT Java_FOUND)
@@ -45,18 +38,11 @@ endif()
 
 # TODO handle 32 bit architectures
 
-include_directories(../../extension/parquet/include)
-if(BUILD_HTTPFS_EXTENSION)
-  include_directories(../../extension/httpfs/include)
-endif()
+add_extension_definitions()
 
 add_library(duckdb_java SHARED src/jni/duckdb_java.cpp)
 target_compile_options(duckdb_java PRIVATE -fexceptions)
-target_link_libraries(duckdb_java duckdb-native duckdb_static parquet_extension)
-if(BUILD_HTTPFS_EXTENSION)
-  target_link_libraries(duckdb_java duckdb-native duckdb_static
-                        httpfs_extension ${OPENSSL_LIBRARIES})
-endif()
+link_extension_libraries(duckdb_java duckdb-native duckdb_static)
 if(OS_NAME STREQUAL "linux")
   target_link_libraries(duckdb_java -static-libgcc -static-libstdc++
   )# static link to libstdc++ to target more linux distro
