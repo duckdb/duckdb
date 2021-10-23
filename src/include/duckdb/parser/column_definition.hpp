@@ -33,7 +33,7 @@ public:
 	//! The default value of the column (if any)
 	unique_ptr<ParsedExpression> default_value;
 	//! Compression Type used for this column
-	CompressionType compression_type = CompressionType::COMPRESSION_UNCOMPRESSED;
+	CompressionType compression_type = CompressionType::COMPRESSION_AUTO;
 
 public:
 	ColumnDefinition Copy() const;
