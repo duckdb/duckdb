@@ -1565,3 +1565,45 @@ TEST_CASE("Test C API examples from the website", "[capi]") {
 		duckdb_close(&db);
 	}
 }
+
+TEST_CASE("Test of math function", "[capi]") {
+	CAPITester tester;
+	unique_ptr<CAPIResult> result;
+
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	// even
+	result = tester.Query("SELECT even(19.4) = 20");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	result = tester.Query("SELECT even(9.9) = 10");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	result = tester.Query("SELECT even(-19.4) = -18");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	result = tester.Query("SELECT even(-9.9) = -8");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	result = tester.Query("SELECT even(5.0) = 6");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	result = tester.Query("SELECT even(-5.0) = -4");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	result = tester.Query("SELECT even(0.0) = 0");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	result = tester.Query("SELECT even(3) = 4");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	result = tester.Query("SELECT even(-3) = -2");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	result = tester.Query("SELECT even(0) = 0");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<bool>(0, 0) == true);
+	REQUIRE_FAIL(tester.Query("SELECT even('abcd')"));
+	REQUIRE_FAIL(tester.Query("SELECT even('')"));
+}
