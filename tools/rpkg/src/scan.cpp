@@ -1,5 +1,6 @@
 #include "rapi.hpp"
 #include "typesr.hpp"
+#include "altrepstring.hpp"
 
 #include "duckdb/main/client_context.hpp"
 
@@ -32,21 +33,6 @@ static void AppendStringSegment(SEXP coldata, Vector &result, idx_t row_idx, idx
 	}
 }
 
-static void AppendFactor(SEXP coldata, Vector &result, idx_t row_idx, idx_t count) {
-	auto source_data = INTEGER_POINTER(coldata) + row_idx;
-	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &result_mask = FlatVector::Validity(result);
-	SEXP factor_levels = GET_LEVELS(coldata);
-	for (idx_t i = 0; i < count; i++) {
-		int val = source_data[i];
-		if (RIntegerType::IsNull(val)) {
-			result_mask.SetInvalid(i);
-		} else {
-			result_data[i] = string_t(CHAR(STRING_ELT(factor_levels, val - 1)));
-		}
-	}
-}
-
 struct DataFrameScanFunctionData : public TableFunctionData {
 	DataFrameScanFunctionData(SEXP df, idx_t row_count, vector<RType> rtypes)
 	    : df(df), row_count(row_count), rtypes(rtypes) {
@@ -71,11 +57,12 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 	RProtector r;
 	SEXP df((SEXP)inputs[0].GetPointer());
 
-	auto df_names = r.Protect(GET_NAMES(df));
+	auto df_names = r.Protect(RApi::ToUtf8(GET_NAMES(df)));
 	vector<RType> rtypes;
 
 	for (idx_t col_idx = 0; col_idx < (idx_t)Rf_length(df); col_idx++) {
-		names.push_back(string(CHAR(STRING_ELT(df_names, col_idx))));
+		auto column_name = string(CHAR(STRING_ELT(df_names, col_idx)));
+		names.push_back(column_name);
 		SEXP coldata = VECTOR_ELT(df, col_idx);
 		rtypes.push_back(RApiTypes::DetectRType(coldata));
 		LogicalType duckdb_col_type;
@@ -89,7 +76,15 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 		case RType::NUMERIC:
 			duckdb_col_type = LogicalType::DOUBLE;
 			break;
-		case RType::FACTOR:
+		case RType::FACTOR: {
+			auto levels = r.Protect(RApi::ToUtf8(GET_LEVELS(coldata)));
+			vector<string> duckdb_levels(LENGTH(levels));
+			for (idx_t level_idx = 0; level_idx < LENGTH(levels); level_idx++) {
+				duckdb_levels[level_idx] = string(CHAR(STRING_ELT(levels, level_idx)));
+			}
+			duckdb_col_type = LogicalType::ENUM(column_name, duckdb_levels);
+			break;
+		}
 		case RType::STRING:
 			duckdb_col_type = LogicalType::VARCHAR;
 			break;
@@ -137,6 +132,9 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 	}
 	idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - state.position);
 
+	RProtector r;
+	auto poscount = r.Protect(NEW_NUMERIC(2));
+
 	output.SetCardinality(this_count);
 
 	// TODO this is quite similar to append, unify!
@@ -160,12 +158,37 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 			AppendColumnSegment<double, double, RDoubleType>(data_ptr, v, this_count);
 			break;
 		}
-		case RType::STRING:
-			AppendStringSegment(coldata, v, state.position, this_count);
+		case RType::STRING: {
+			// fun: we need an altrep string wrapper just to feed enc2utf8 without copying all ze strings
+			// although that may be preferable...
+			NUMERIC_POINTER(poscount)[0] = state.position;
+			NUMERIC_POINTER(poscount)[1] = this_count;
+			auto coldata_subset = r.Protect(R_new_altrep(AltrepStringSubset::rclass, coldata, poscount));
+			auto coldata_subset_utf = r.Protect(RApi::ToUtf8(coldata_subset));
+			AppendStringSegment(coldata_subset_utf, v, 0, this_count);
 			break;
-		case RType::FACTOR:
-			AppendFactor(coldata, v, state.position, this_count);
+		}
+		case RType::FACTOR: {
+			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
+			switch (v.GetType().InternalType()) {
+			case PhysicalType::UINT8:
+				AppendColumnSegment<int, uint8_t, RIntegerType>(data_ptr, v, this_count);
+				break;
+
+			case PhysicalType::UINT16:
+				AppendColumnSegment<int, uint16_t, RIntegerType>(data_ptr, v, this_count);
+				break;
+
+			case PhysicalType::UINT32:
+				AppendColumnSegment<int, uint32_t, RIntegerType>(data_ptr, v, this_count);
+				break;
+
+			default:
+				Rf_error("duckdb_execute_R: Unknown enum type for scan: %s",
+				         TypeIdToString(v.GetType().InternalType()).c_str());
+			}
 			break;
+		}
 		case RType::TIMESTAMP: {
 			auto data_ptr = NUMERIC_POINTER(coldata) + state.position;
 			AppendColumnSegment<double, timestamp_t, RTimestampType>(data_ptr, v, this_count);

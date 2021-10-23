@@ -108,5 +108,5 @@ test_that("duckdb_read_csv() works as expected", {
   res$Species <- as.factor(res$Species)
   expect_true(identical(res, iris))
 
-  dbDisconnect(con, shutdown = T)
+  dbDisconnect(con, shutdown = TRUE)
 })

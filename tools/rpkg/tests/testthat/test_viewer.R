@@ -1,6 +1,3 @@
-library("duckdb")
-library("testthat")
-
 test_that("rs_list_object_types", {
   con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
@@ -31,7 +28,6 @@ test_that("rs_list_objects", {
 
   expect_equal(duckdb:::rs_list_objects(con, schema="fuu"), data.frame(name=c("x"), type=c("table"), stringsAsFactors=FALSE))
 })
-
 
 test_that("rs_list_columns", {
   con <- dbConnect(duckdb())
@@ -64,7 +60,6 @@ test_that("rs_viewer", {
   expect_equal(head(mtcars, 5), duckdb:::rs_preview(con, 5, table="mtcars"))
 })
 
-
 test_that("rs_actions", {
   con <- dbConnect(duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
@@ -94,7 +89,7 @@ test_that("mock observer hooray", {
   called_connection_updated <- FALSE
   dbRemoveTable(con, "mtcars")
   expect_true(called_connection_updated)
-  dbDisconnect(con)
+  dbDisconnect(con, shutdown=TRUE)
   expect_true(called_connection_closed)
 
   options(connectionObserver=NULL, duckdb.force_rstudio_connection_pane=FALSE)

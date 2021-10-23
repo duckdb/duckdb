@@ -59,6 +59,57 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			// directly use the result
 			result.Reference(intermediate);
 		}
+	} else if (expr.type == ExpressionType::OPERATOR_COALESCE) {
+		SelectionVector sel_a(count);
+		SelectionVector sel_b(count);
+		SelectionVector slice_sel(count);
+		SelectionVector result_sel(count);
+		SelectionVector *next_sel = &sel_a;
+		const SelectionVector *current_sel = sel;
+		idx_t remaining_count = count;
+		idx_t next_count;
+		for (idx_t child = 0; child < expr.children.size(); child++) {
+			Vector vector_to_check(expr.children[child]->return_type);
+			Execute(*expr.children[child], state->child_states[child].get(), current_sel, remaining_count,
+			        vector_to_check);
+
+			VectorData vdata;
+			vector_to_check.Orrify(remaining_count, vdata);
+
+			idx_t result_count = 0;
+			next_count = 0;
+			for (idx_t i = 0; i < remaining_count; i++) {
+				auto base_idx = current_sel ? current_sel->get_index(i) : i;
+				auto idx = vdata.sel->get_index(i);
+				if (vdata.validity.RowIsValid(idx)) {
+					slice_sel.set_index(result_count, i);
+					result_sel.set_index(result_count++, base_idx);
+				} else {
+					next_sel->set_index(next_count++, base_idx);
+				}
+			}
+			if (result_count > 0) {
+				vector_to_check.Slice(slice_sel, result_count);
+				FillSwitch(vector_to_check, result, result_sel, result_count);
+			}
+			current_sel = next_sel;
+			next_sel = next_sel == &sel_a ? &sel_b : &sel_a;
+			remaining_count = next_count;
+			if (next_count == 0) {
+				break;
+			}
+		}
+		if (remaining_count > 0) {
+			auto &result_mask = FlatVector::Validity(result);
+			for (idx_t i = 0; i < remaining_count; i++) {
+				result_mask.SetInvalid(current_sel->get_index(i));
+			}
+		}
+		if (sel) {
+			result.Slice(*sel, count);
+		} else if (count == 1) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 	} else if (expr.children.size() == 1) {
 		state->intermediate_chunk.Reset();
 		auto &child = state->intermediate_chunk.data[0];

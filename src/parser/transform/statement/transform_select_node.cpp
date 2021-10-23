@@ -9,6 +9,9 @@
 namespace duckdb {
 
 unique_ptr<QueryNode> Transformer::TransformSelectNode(duckdb_libpgquery::PGSelectStmt *stmt) {
+	D_ASSERT(stmt->type == duckdb_libpgquery::T_PGSelectStmt);
+	StackCheck();
+
 	unique_ptr<QueryNode> node;
 
 	switch (stmt->op) {
