@@ -20,12 +20,13 @@
 
 namespace duckdb {
 
-DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &table, vector<LogicalType> types_p,
+DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &table,
                      vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data)
-    : info(make_shared<DataTableInfo>(db, schema, table, move(column_definitions_p))), types(move(types_p)), db(db),
+    : info(make_shared<DataTableInfo>(db, schema, table)), column_definitions(move(column_definitions_p)), db(db),
       total_rows(0), is_root(true) {
 	// initialize the table with the existing data from disk, if any
 	this->row_groups = make_shared<SegmentTree>();
+	auto types = GetTypes();
 	if (data && !data->row_groups.empty()) {
 		for (auto &row_group_pointer : data->row_groups) {
 			auto new_row_group = make_unique<RowGroup>(db, *info, types, row_group_pointer);
@@ -54,20 +55,22 @@ DataTable::DataTable(DatabaseInstance &db, const string &schema, const string &t
 }
 
 void DataTable::AppendRowGroup(idx_t start_row) {
+	auto types = GetTypes();
 	auto new_row_group = make_unique<RowGroup>(db, *info, start_row, 0);
 	new_row_group->InitializeEmpty(types);
 	row_groups->AppendSegment(move(new_row_group));
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value)
-    : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
+    : info(parent.info), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
+	for (auto &column_def : parent.column_definitions) {
+		column_definitions.emplace_back(column_def.Copy());
+	}
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
 	// add the new column to this DataTable
 	auto new_column_type = new_column.type;
-	auto new_column_idx = parent.types.size();
-
-	types.push_back(new_column_type);
+	auto new_column_idx = parent.column_definitions.size();
 
 	// set up the statistics
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
@@ -76,7 +79,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	column_stats.push_back(BaseStatistics::CreateEmpty(new_column_type));
 
 	// add the column definitions from this DataTable
-	info->column_definitions.emplace_back(new_column.Copy());
+	column_definitions.emplace_back(new_column.Copy());
 
 	auto &transaction = Transaction::GetTransaction(context);
 
@@ -110,9 +113,13 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 }
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_column)
-    : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
+    : info(parent.info), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
 	// prevent any new tuples from being added to the parent
 	lock_guard<mutex> parent_lock(parent.append_lock);
+
+	for (auto &column_def : parent.column_definitions) {
+		column_definitions.emplace_back(column_def.Copy());
+	}
 	// first check if there are any indexes that exist that point to the removed column
 	info->indexes.Scan([&](Index &index) {
 		for (auto &column_id : index.column_ids) {
@@ -125,9 +132,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 		return false;
 	});
 
-	// erase the stats and type from this DataTable
-	D_ASSERT(removed_column < types.size());
-	types.erase(types.begin() + removed_column);
+	// erase the stats from this DataTable
 	for (idx_t i = 0; i < parent.column_stats.size(); i++) {
 		if (i != removed_column) {
 			column_stats.push_back(parent.column_stats[i]->Copy());
@@ -135,8 +140,8 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	}
 
 	// erase the column definitions from this DataTable
-	D_ASSERT(removed_column < info->column_definitions.size());
-	info->column_definitions.erase(info->column_definitions.begin() + removed_column);
+	D_ASSERT(removed_column < column_definitions.size());
+	column_definitions.erase(column_definitions.begin() + removed_column);
 
 	// alter the row_groups and remove the column from each of them
 	this->row_groups = make_shared<SegmentTree>();
@@ -153,10 +158,12 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 
 DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_idx, const LogicalType &target_type,
                      vector<column_t> bound_columns, Expression &cast_expr)
-    : info(parent.info), types(parent.types), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
+    : info(parent.info), db(parent.db), total_rows(parent.total_rows.load()), is_root(true) {
 	// prevent any tuples from being added to the parent
 	lock_guard<mutex> lock(append_lock);
-
+	for (auto &column_def : parent.column_definitions) {
+		column_definitions.emplace_back(column_def.Copy());
+	}
 	// first check if there are any indexes that exist that point to the changed column
 	info->indexes.Scan([&](Index &index) {
 		for (auto &column_id : index.column_ids) {
@@ -168,13 +175,13 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	});
 
 	// change the type in this DataTable
-	types[changed_idx] = target_type;
+	column_definitions[changed_idx].type = target_type;
 
 	// set up the statistics for the table
 	// the column that had its type changed will have the new statistics computed during conversion
-	for (idx_t i = 0; i < types.size(); i++) {
+	for (idx_t i = 0; i < column_definitions.size(); i++) {
 		if (i == changed_idx) {
-			column_stats.push_back(BaseStatistics::CreateEmpty(types[i]));
+			column_stats.push_back(BaseStatistics::CreateEmpty(column_definitions[i].type));
 		} else {
 			column_stats.push_back(parent.column_stats[i]->Copy());
 		}
@@ -188,7 +195,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 		if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
 			scan_types.push_back(LOGICAL_ROW_TYPE);
 		} else {
-			scan_types.push_back(parent.types[bound_columns[i]]);
+			scan_types.push_back(parent.column_definitions[bound_columns[i]].type);
 		}
 	}
 	DataChunk scan_chunk;
@@ -218,6 +225,14 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	parent.is_root = false;
 }
 
+vector<LogicalType> DataTable::GetTypes() {
+	vector<LogicalType> types;
+	for (auto &it : column_definitions) {
+		types.push_back(it.type);
+	}
+	return types;
+}
+
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
@@ -230,7 +245,7 @@ void DataTable::InitializeScan(TableScanState &state, const vector<column_t> &co
 	state.max_row = total_rows;
 	state.table_filters = table_filters;
 	if (table_filters) {
-		D_ASSERT(table_filters->filters.size() > 0);
+		D_ASSERT(!table_filters->filters.empty());
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
 	while (row_group && !row_group->InitializeScan(state.row_group_scan_state)) {
@@ -264,7 +279,7 @@ bool DataTable::InitializeScanInRowGroup(TableScanState &state, const vector<col
 	state.max_row = max_row;
 	state.table_filters = table_filters;
 	if (table_filters) {
-		D_ASSERT(table_filters->filters.size() > 0);
+		D_ASSERT(!table_filters->filters.empty());
 		state.adaptive_filter = make_unique<AdaptiveFilter>(table_filters);
 	}
 	return row_group->InitializeScanWithOffset(state.row_group_scan_state, vector_index);
@@ -492,7 +507,7 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 
 void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state) {
 	D_ASSERT(is_root);
-	D_ASSERT(chunk.ColumnCount() == types.size());
+	D_ASSERT(chunk.ColumnCount() == column_definitions.size());
 	chunk.Verify();
 
 	idx_t append_count = chunk.size();
@@ -506,7 +521,7 @@ void DataTable::Append(Transaction &transaction, DataChunk &chunk, TableAppendSt
 			current_row_group->Append(state.row_group_append_state, chunk, append_count);
 			// merge the stats
 			lock_guard<mutex> stats_guard(stats_lock);
-			for (idx_t i = 0; i < types.size(); i++) {
+			for (idx_t i = 0; i < column_definitions.size(); i++) {
 				column_stats[i]->Merge(*current_row_group->GetStatistics(i));
 			}
 		}
@@ -543,9 +558,9 @@ void DataTable::ScanTableSegment(idx_t row_start, idx_t count, const std::functi
 
 	vector<column_t> column_ids;
 	vector<LogicalType> types;
-	for (idx_t i = 0; i < this->types.size(); i++) {
+	for (idx_t i = 0; i < this->column_definitions.size(); i++) {
 		column_ids.push_back(i);
-		types.push_back(this->types[i]);
+		types.push_back(column_definitions[i].type);
 	}
 	DataChunk chunk;
 	chunk.Initialize(types);
@@ -739,6 +754,7 @@ void DataTable::RemoveFromIndexes(Vector &row_identifiers, idx_t count) {
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
 	TableScanState state;
 	state.max_row = total_rows;
+	auto types = GetTypes();
 	for (idx_t i = 0; i < types.size(); i++) {
 		state.column_ids.push_back(i);
 	}
@@ -1011,7 +1027,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 	auto column_ids = index->column_ids;
 	column_ids.push_back(COLUMN_IDENTIFIER_ROW_ID);
 	for (auto &id : index->column_ids) {
-		intermediate_types.push_back(types[id]);
+		intermediate_types.push_back(column_definitions[id].type);
 	}
 	intermediate_types.push_back(LOGICAL_ROW_TYPE);
 	intermediate.Initialize(intermediate_types);
@@ -1066,8 +1082,8 @@ BlockPointer DataTable::Checkpoint(TableDataWriter &writer) {
 	// checkpoint each individual row group
 	// FIXME: we might want to combine adjacent row groups in case they have had deletions...
 	vector<unique_ptr<BaseStatistics>> global_stats;
-	for (idx_t i = 0; i < types.size(); i++) {
-		global_stats.push_back(BaseStatistics::CreateEmpty(types[i]));
+	for (idx_t i = 0; i < column_definitions.size(); i++) {
+		global_stats.push_back(BaseStatistics::CreateEmpty(column_definitions[i].type));
 	}
 
 	auto row_group = (RowGroup *)row_groups->GetRootSegment();

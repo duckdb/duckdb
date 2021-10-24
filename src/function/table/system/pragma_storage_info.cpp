@@ -59,7 +59,7 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, ve
 	names.emplace_back("count");
 	return_types.push_back(LogicalType::BIGINT);
 
-	names.emplace_back("compression_type");
+	names.emplace_back("compression");
 	return_types.push_back(LogicalType::VARCHAR);
 
 	names.emplace_back("stats");

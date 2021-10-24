@@ -16,7 +16,7 @@ namespace duckdb {
 class ColumnDataCheckpointer {
 public:
 	ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p, ColumnCheckpointState &state_p,
-	                       idx_t compression_column_index);
+	                       ColumnCheckpointInfo &checkpoint_info);
 
 public:
 	DatabaseInstance &GetDatabase();
@@ -38,11 +38,11 @@ private:
 	ColumnData &col_data;
 	RowGroup &row_group;
 	ColumnCheckpointState &state;
-	idx_t compression_column_index;
 	bool is_validity;
 	Vector intermediate;
 	unique_ptr<SegmentBase> owned_segment;
 	vector<CompressionFunction *> compression_functions;
+	ColumnCheckpointInfo &checkpoint_info;
 };
 
 } // namespace duckdb

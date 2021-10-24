@@ -28,6 +28,11 @@ class Transaction;
 
 struct DataTableInfo;
 
+struct ColumnCheckpointInfo {
+	ColumnCheckpointInfo(CompressionType compression_type_p) : compression_type(compression_type_p) {};
+	CompressionType compression_type;
+};
+
 class ColumnData {
 	friend class ColumnDataCheckpointer;
 
@@ -100,7 +105,7 @@ public:
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
 	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
-	                                                     idx_t compression_column_index);
+	                                                     ColumnCheckpointInfo &checkpoint_info);
 
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
