@@ -175,9 +175,10 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::CreateCheckpointState(RowG
 	return make_unique<StandardColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
-	auto validity_state = validity.Checkpoint(row_group, writer);
-	auto base_state = ColumnData::Checkpoint(row_group, writer);
+unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+                                                                 idx_t compression_column_index) {
+	auto validity_state = validity.Checkpoint(row_group, writer, compression_column_index);
+	auto base_state = ColumnData::Checkpoint(row_group, writer, compression_column_index);
 	auto &checkpoint_state = (StandardColumnCheckpointState &)*base_state;
 	checkpoint_state.validity_state = move(validity_state);
 	return base_state;

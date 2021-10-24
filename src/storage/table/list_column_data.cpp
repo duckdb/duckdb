@@ -310,10 +310,11 @@ unique_ptr<ColumnCheckpointState> ListColumnData::CreateCheckpointState(RowGroup
 	return make_unique<ListColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
-	auto validity_state = validity.Checkpoint(row_group, writer);
-	auto base_state = ColumnData::Checkpoint(row_group, writer);
-	auto child_state = child_column->Checkpoint(row_group, writer);
+unique_ptr<ColumnCheckpointState> ListColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+                                                             idx_t compression_column_index) {
+	auto validity_state = validity.Checkpoint(row_group, writer, compression_column_index);
+	auto base_state = ColumnData::Checkpoint(row_group, writer, compression_column_index);
+	auto child_state = child_column->Checkpoint(row_group, writer, compression_column_index);
 
 	auto &checkpoint_state = (ListColumnCheckpointState &)*base_state;
 	checkpoint_state.validity_state = move(validity_state);
