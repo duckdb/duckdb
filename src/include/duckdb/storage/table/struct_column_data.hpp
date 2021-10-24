@@ -51,7 +51,7 @@ public:
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
 	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
-	                                             idx_t compression_column_index) override;
+	                                             ColumnCheckpointInfo &checkpoint_info) override;
 
 	void DeserializeColumn(Deserializer &source) override;
 

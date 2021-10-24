@@ -15,6 +15,6 @@ statement ok
 INSERT INTO test VALUES (11, 22), (11, 22), (12, 21), (NULL, NULL)
 
 query I
-SELECT compression_type FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
 ----
 RLE

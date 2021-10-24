@@ -18,7 +18,7 @@ statement ok
 INSERT INTO test SELECT (5000 + i)::VARCHAR id, 2 b FROM range(5000) tbl(i)
 
 query I
-SELECT compression_type FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
 ----
 RLE
 

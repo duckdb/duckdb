@@ -74,7 +74,7 @@ SELECT * FROM T
 3	3
 
 query I
-SELECT compression_type FROM pragma_storage_info('T') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
+SELECT compression FROM pragma_storage_info('T') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
 ----
 RLE
 Uncompressed
@@ -99,7 +99,7 @@ SELECT * FROM T
 3	3
 
 query I
-SELECT compression_type FROM pragma_storage_info('T') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
+SELECT compression FROM pragma_storage_info('T') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
 ----
 RLE
 Uncompressed
@@ -120,7 +120,7 @@ SELECT * FROM T_1
 3	3
 
 query I
-SELECT compression_type FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
+SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
 ----
 RLE
 Uncompressed
@@ -142,7 +142,7 @@ SELECT * FROM T_1
 3
 
 query I
-SELECT compression_type FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
 ----
 RLE
 
@@ -163,7 +163,7 @@ SELECT * FROM T_1
 3	2
 
 query I
-SELECT compression_type FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
+SELECT compression FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
 ----
 RLE
 Constant

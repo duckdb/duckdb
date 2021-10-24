@@ -6,10 +6,11 @@
 namespace duckdb {
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p,
-                                               ColumnCheckpointState &state_p, idx_t compression_column_index_p)
+                                               ColumnCheckpointState &state_p, ColumnCheckpointInfo &checkpoint_info_p)
     : col_data(col_data_p), row_group(row_group_p), state(state_p),
-      compression_column_index(compression_column_index_p), is_validity(GetType().id() == LogicalTypeId::VALIDITY),
-      intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity) {
+      is_validity(GetType().id() == LogicalTypeId::VALIDITY),
+      intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity),
+      checkpoint_info(checkpoint_info_p) {
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	compression_functions = config.GetCompressionFunctions(GetType().InternalType());
 }
@@ -78,13 +79,13 @@ void ForceCompression(vector<CompressionFunction *> &compression_functions, Comp
 unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
 	D_ASSERT(!compression_functions.empty());
 	auto &config = DBConfig::GetConfig(GetDatabase());
-	D_ASSERT(col_data.info.column_definitions.size() > compression_column_index);
-	auto compression_type = col_data.info.column_definitions[compression_column_index].compression_type;
+
+	auto compression_type = checkpoint_info.compression_type;
 	if (compression_type != CompressionType::COMPRESSION_AUTO) {
 		ForceCompression(compression_functions, compression_type);
 	}
 	if (compression_type == CompressionType::COMPRESSION_AUTO &&
-	    config.force_compression != CompressionType::COMPRESSION_INVALID) {
+	    config.force_compression != CompressionType::COMPRESSION_AUTO) {
 		ForceCompression(compression_functions, config.force_compression);
 	}
 	// set up the analyze states for each compression method
