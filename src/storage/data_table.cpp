@@ -75,6 +75,9 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, ColumnDefinition
 	}
 	column_stats.push_back(BaseStatistics::CreateEmpty(new_column_type));
 
+	// add the column definitions from this DataTable
+	info->column_definitions.emplace_back(new_column.Copy());
+
 	auto &transaction = Transaction::GetTransaction(context);
 
 	ExpressionExecutor executor;
@@ -130,6 +133,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 			column_stats.push_back(parent.column_stats[i]->Copy());
 		}
 	}
+
+	// erase the column definitions from this DataTable
+	D_ASSERT(removed_column < info->column_definitions.size());
+	info->column_definitions.erase(info->column_definitions.begin() + removed_column);
 
 	// alter the row_groups and remove the column from each of them
 	this->row_groups = make_shared<SegmentTree>();
