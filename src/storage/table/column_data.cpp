@@ -355,7 +355,8 @@ void ColumnData::CheckpointScan(ColumnSegment *segment, ColumnScanState &state, 
 	}
 }
 
-unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
+unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+                                                         idx_t compression_column_index) {
 	// scan the segments of the column data
 	// set up the checkpoint state
 	auto checkpoint_state = CreateCheckpointState(row_group, writer);
@@ -367,7 +368,7 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Ta
 	}
 	lock_guard<mutex> update_guard(update_lock);
 
-	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state);
+	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, compression_column_index);
 	checkpointer.Checkpoint(move(data.root_node));
 
 	// replace the old tree with the new one

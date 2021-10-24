@@ -99,7 +99,8 @@ public:
 	virtual void CommitDropColumn();
 
 	virtual unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer);
-	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer);
+	virtual unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+	                                                     idx_t compression_column_index);
 
 	virtual void CheckpointScan(ColumnSegment *segment, ColumnScanState &state, idx_t row_group_start, idx_t count,
 	                            Vector &scan_vector);
