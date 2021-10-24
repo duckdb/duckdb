@@ -124,3 +124,46 @@ SELECT compression_type FROM pragma_storage_info('T_1') WHERE segment_type ILIKE
 ----
 RLE
 Uncompressed
+
+# Test Drop Column
+statement ok
+ALTER TABLE T_1 DROP COLUMN b_1
+
+restart
+
+query I
+SELECT * FROM T_1
+----
+1
+1
+1
+2
+2
+3
+
+query I
+SELECT compression_type FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
+----
+RLE
+
+# Test Add Column
+statement ok
+ALTER TABLE T_1 ADD COLUMN b INTEGER DEFAULT 2
+
+restart
+
+query II
+SELECT * FROM T_1
+----
+1	2
+1	2
+1	2
+2	2
+2	2
+3	2
+
+query I
+SELECT compression_type FROM pragma_storage_info('T_1') WHERE segment_type ILIKE 'INTEGER' LIMIT 2
+----
+RLE
+Constant
