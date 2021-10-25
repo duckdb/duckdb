@@ -65,6 +65,15 @@ SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
 		do {
 			ret = SingleExecuteStmt(stmt);
 		} while (ret == SQL_STILL_EXECUTING);
+
+		// now, fetching the first chunk to verify constant folding (See: PR #2462 and issue #2452)
+		if (ret == SQL_SUCCESS) {
+			auto fetch_ret = stmt->odbc_fetcher->FetchFirst(statement_handle, stmt);
+			if (fetch_ret == SQL_ERROR) {
+				return fetch_ret;
+			}
+		}
+
 		return ret;
 	});
 }
@@ -83,7 +92,7 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 
 	std::vector<Value> values;
 	SQLRETURN ret = stmt->param_wrapper->GetValues(values);
-	if (ret == SQL_NEED_DATA) {
+	if (ret == SQL_NEED_DATA || ret == SQL_ERROR) {
 		return ret;
 	}
 	stmt->res = stmt->stmt->Execute(values);
