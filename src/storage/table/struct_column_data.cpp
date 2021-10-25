@@ -251,11 +251,12 @@ unique_ptr<ColumnCheckpointState> StructColumnData::CreateCheckpointState(RowGro
 	return make_unique<StructColumnCheckpointState>(row_group, *this, writer);
 }
 
-unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer) {
+unique_ptr<ColumnCheckpointState> StructColumnData::Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+                                                               ColumnCheckpointInfo &checkpoint_info) {
 	auto checkpoint_state = make_unique<StructColumnCheckpointState>(row_group, *this, writer);
-	checkpoint_state->validity_state = validity.Checkpoint(row_group, writer);
+	checkpoint_state->validity_state = validity.Checkpoint(row_group, writer, checkpoint_info);
 	for (auto &sub_column : sub_columns) {
-		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, writer));
+		checkpoint_state->child_states.push_back(sub_column->Checkpoint(row_group, writer, checkpoint_info));
 	}
 	return move(checkpoint_state);
 }

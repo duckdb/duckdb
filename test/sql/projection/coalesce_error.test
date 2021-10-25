@@ -1,0 +1,32 @@
+# name: test/sql/projection/coalesce_error.test
+# description: Test COALESCE error short-circuiting
+# group: [projection]
+
+statement ok
+PRAGMA enable_verification
+
+# constant coalesce short-circuiting
+query I
+SELECT COALESCE(1, 'hello'::INT)
+----
+1
+
+statement error
+SELECT COALESCE(NULL, 'hello'::INT)
+
+# non-constant
+statement ok
+CREATE TABLE vals AS SELECT * FROM (
+	VALUES (1, 'hello'), (NULL, '2'), (3, NULL)
+) tbl(a, b)
+
+query I
+SELECT COALESCE(a, b::INT) FROM vals
+----
+1
+2
+3
+
+statement error
+SELECT COALESCE(NULL, b::INT) FROM vals
+
