@@ -297,7 +297,6 @@ SQLRETURN OdbcFetch::FetchFirst(SQLHSTMT statement_handle, OdbcHandleStmt *stmt)
 	return ret;
 }
 
-
 SQLRETURN OdbcFetch::ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt) {
 	SQLRETURN ret = SQL_SUCCESS;
 
