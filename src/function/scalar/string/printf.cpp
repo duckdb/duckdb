@@ -53,7 +53,9 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 template <class FORMAT_FUN, class CTX>
 static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &format_string = args.data[0];
+	auto &result_validity = FlatVector::Validity(result);
 	result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	result_validity.Initialize(args.size());
 	for (idx_t i = 0; i < args.ColumnCount(); i++) {
 		switch (args.data[i].GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR:
@@ -68,7 +70,7 @@ static void PrintfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 			// FLAT VECTOR, we can directly OR the nullmask
 			args.data[i].Normalify(args.size());
 			result.SetVectorType(VectorType::FLAT_VECTOR);
-			FlatVector::Validity(result).Combine(FlatVector::Validity(args.data[i]), args.size());
+			result_validity.Combine(FlatVector::Validity(args.data[i]), args.size());
 			break;
 		}
 	}

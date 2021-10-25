@@ -21,7 +21,7 @@ SEXP RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
 		Rf_error("duckdb_register_R: Need single string parameter for name");
 	}
-	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+	auto name = string(CHAR(STRING_ELT(RApi::ToUtf8(namesexp), 0)));
 	if (name.empty()) {
 		Rf_error("duckdb_register_R: name parameter cannot be empty");
 	}
@@ -51,7 +51,7 @@ SEXP RApi::UnregisterDataFrame(SEXP connsexp, SEXP namesexp) {
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
 		Rf_error("duckdb_unregister_R: Need single string parameter for name");
 	}
-	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+	auto name = string(CHAR(STRING_ELT(RApi::ToUtf8(namesexp), 0)));
 	auto key = Rf_install(("_registered_df_" + name).c_str());
 	Rf_setAttrib(connsexp, key, R_NilValue);
 	auto res = conn_wrapper->conn->Query("DROP VIEW IF EXISTS \"" + name + "\"");
@@ -252,7 +252,7 @@ SEXP RApi::RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP
 	if (TYPEOF(namesexp) != STRSXP || Rf_length(namesexp) != 1) {
 		Rf_error("duckdb_register_R: Need single string parameter for name");
 	}
-	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+	auto name = string(CHAR(STRING_ELT(RApi::ToUtf8(namesexp), 0)));
 	if (name.empty()) {
 		Rf_error("duckdb_register_R: name parameter cannot be empty");
 	}
@@ -297,7 +297,7 @@ SEXP RApi::UnregisterArrow(SEXP connsexp, SEXP namesexp) {
 		Rf_error("duckdb_unregister_R: Need single string parameter for name");
 	}
 
-	auto name = string(CHAR(STRING_ELT(namesexp, 0)));
+	auto name = string(CHAR(STRING_ELT(RApi::ToUtf8(namesexp), 0)));
 	{
 		auto *db_wrapper = (DBWrapper *)R_ExternalPtrAddr(conn_wrapper->db_sexp);
 		lock_guard<mutex> arrow_scans_lock(db_wrapper->lock);

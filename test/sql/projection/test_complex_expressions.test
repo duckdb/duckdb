@@ -61,58 +61,6 @@ SELECT CASE WHEN a = 42 THEN 100 WHEN a = 43 THEN 200 END FROM exprtest
 NULL
 NULL
 
-# COALESCE
-statement error
-SELECT COALESCE()
-
-
-query I
-SELECT COALESCE(NULL)
-----
-NULL
-
-query I
-SELECT COALESCE(42)
-----
-42
-
-query I
-SELECT COALESCE(a) FROM exprtest
-----
-42
-43
-NULL
-45
-
-
-query I
-SELECT COALESCE(NULL, NULL, 42, 43)
-----
-42
-
-query I
-SELECT COALESCE(NULL, NULL, 42)
-----
-42
-
-query I
-SELECT COALESCE(42, NULL, 43)
-----
-42
-
-query I
-SELECT COALESCE(NULL, NULL, NULL)
-----
-NULL
-
-query I
-SELECT COALESCE(a, b) FROM exprtest
-----
-42
-43
-1
-45
-
 # ABS
 query III
 SELECT ABS(1), ABS(-1), ABS(NULL)

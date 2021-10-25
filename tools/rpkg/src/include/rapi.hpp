@@ -2,6 +2,7 @@
 
 #define R_NO_REMAP
 #include <Rdefines.h>
+
 #include <R_ext/Altrep.h>
 
 #include "duckdb.hpp"
@@ -62,6 +63,8 @@ struct RApi {
 
 	static SEXP REvalThrows(SEXP call, SEXP env = R_GlobalEnv);
 	static SEXP REvalRerror(SEXP call, SEXP env = R_GlobalEnv);
+
+	static SEXP ToUtf8(SEXP string_sexp);
 };
 
 struct RProtector {
@@ -96,12 +99,14 @@ struct RStrings {
 	SEXP POSIXt;
 	SEXP UTC_str; // Rf_mkString
 	SEXP Date_str;
+	SEXP factor_str;
 	SEXP difftime_str;
 	SEXP secs_str;
 	SEXP arrow_str; // StringsToSexp
 	SEXP POSIXct_POSIXt_str;
 	SEXP str_ref_type_names_rtypes_n_param_str;
-	SEXP tzone_sym; // Rf_install
+	SEXP enc2utf8_sym; // Rf_install
+	SEXP tzone_sym;
 	SEXP units_sym;
 	SEXP getNamespace_sym;
 	SEXP Table__from_record_batches_sym;
