@@ -289,6 +289,15 @@ SQLRETURN OdbcFetch::Fetch(SQLHSTMT statement_handle, OdbcHandleStmt *stmt, SQLU
 	return SQL_SUCCESS;
 }
 
+SQLRETURN OdbcFetch::FetchFirst(SQLHSTMT statement_handle, OdbcHandleStmt *stmt) {
+	auto cursor_type_before = cursor_type;
+	cursor_type = SQL_CURSOR_DYNAMIC;
+	auto ret = FetchNextChunk(SQL_FETCH_FIRST, stmt, 0);
+	cursor_type = cursor_type_before;
+	return ret;
+}
+
+
 SQLRETURN OdbcFetch::ColumnWise(SQLHSTMT statement_handle, OdbcHandleStmt *stmt) {
 	SQLRETURN ret = SQL_SUCCESS;
 
