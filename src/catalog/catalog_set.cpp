@@ -9,6 +9,7 @@
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/column_definition.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
 
@@ -119,30 +120,33 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	// lock this catalog set to disallow reading
 	lock_guard<mutex> read_lock(catalog_lock);
 
-	// create a new entry and replace the currently stored one
-	// set the timestamp to the timestamp of the current transaction
-	// and point it to the updated table node
-	string original_name = entry->name;
-	auto value = entry->AlterEntry(context, alter_info);
-	if (!value) {
-		// alter failed, but did not result in an error
-		return true;
-	}
-	if (value->name != original_name) {
-		auto mapping_value = GetMapping(context, value->name);
-		if (mapping_value && !mapping_value->deleted) {
-			auto entry = GetEntryForTransaction(context, entries[mapping_value->index].get());
-			if (!entry->deleted) {
-				string rename_err_msg =
-				    "Could not rename \"%s\" to \"%s\": another entry with this name already exists!";
-				throw CatalogException(rename_err_msg, original_name, value->name);
-			}
-		}
-		PutMapping(context, value->name, entry_index);
-		DeleteMapping(context, original_name);
-	}
-	//! Check the dependency manager to verify that there are no conflicting dependencies with this alter
-	catalog.dependency_manager->AlterObject(context, entry, value.get());
+    // create a new entry and replace the currently stored one
+    // set the timestamp to the timestamp of the current transaction
+    // and point it to the updated table node
+    string original_name = entry->name;
+    auto value = entry->AlterEntry(context, alter_info);
+    if (!value) {
+        // alter failed, but did not result in an error
+        return true;
+    }
+
+    if (value->name != original_name) {
+        auto mapping_value = GetMapping(context, value->name);
+        if (mapping_value && !mapping_value->deleted) {
+            auto entry = GetEntryForTransaction(context, entries[mapping_value->index].get());
+            if (!entry->deleted) {
+                string rename_err_msg =
+                        "Could not rename \"%s\" to \"%s\": another entry with this name already exists!";
+                throw CatalogException(rename_err_msg, original_name, value->name);
+            }
+        }
+        PutMapping(context, value->name, entry_index);
+        DeleteMapping(context, original_name);
+    }
+    if (alter_info->type != AlterType::ALTER_SEQUENCE) {
+        //! Check the dependency manager to verify that there are no conflicting dependencies with this alter
+        catalog.dependency_manager->AlterObject(context, entry, value.get());
+    }
 
 	value->timestamp = transaction.transaction_id;
 	value->child = move(entries[entry_index]);
@@ -161,11 +165,67 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	return true;
 }
 
+void CatalogSet::RemoveDefaultValues(ClientContext &context, CatalogEntry &entry){
+    if(entry.type != CatalogType::SEQUENCE_ENTRY){
+        return;
+    }
+
+    auto &sequence = (SequenceCatalogEntry &) entry;
+
+    auto &dm = sequence.catalog->dependency_manager;
+
+    auto &owned_by = dm->owned_by_map;
+    D_ASSERT( owned_by.find(&sequence)!= owned_by.end());
+
+    auto &transaction = Transaction::GetTransaction(context);
+
+    for(auto &owner : owned_by[&sequence]) {
+        if(owner->type == CatalogType::TABLE_ENTRY){
+            auto table = (TableCatalogEntry *) owner;
+            for(auto &col : table->columns){
+                auto default_value = (FunctionExpression*) col.default_value.get();
+                for (auto &child : default_value->children){
+                    auto exp = (ConstantExpression *) child.get();
+                    if (exp->value.str_value == sequence.name){
+
+                        const string name = string(table->name);
+                        auto map = table->set->GetMapping(context, name, true);
+                        idx_t entry_index = map->index;
+
+                        auto info = make_unique<SetDefaultInfo>(
+                                table->schema->name,
+                                table->name,
+                                col.name,
+                                nullptr
+                        );
+                        auto value = owner->AlterEntry(context, info.get());
+                        value->timestamp = transaction.transaction_id;
+                        value->child = move(table->set->entries[entry_index]);
+                        value->child->parent = value.get();
+                        value->set = table->set;
+
+                        dm->CopyDependencies(context, table, value.get());
+                        dm->RemoveDependencyFromObject(context, value.get(), &sequence);
+
+                        // push the old entry in the undo buffer for this transaction
+                        transaction.PushCatalogEntry(value->child.get());
+
+                        table->set->entries[entry_index] = move(value);
+                    }
+                }
+            }
+        }
+    }
+}
+
 void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
                                    set_lock_map_t &lock_set) {
 	auto &transaction = Transaction::GetTransaction(context);
 	// check any dependencies of this object
 	entry.catalog->dependency_manager->DropObject(context, &entry, cascade, lock_set);
+
+    // We need to remove the default value from the columns that use it
+    RemoveDefaultValues(context, entry);
 
 	// add this catalog to the lock set, if it is not there yet
 	if (lock_set.find(this) == lock_set.end()) {
@@ -392,11 +452,11 @@ void CatalogSet::AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &col
 	CatalogEntry *enum_type_catalog = (CatalogEntry *)EnumType::GetCatalog(column.type);
 	if (enum_type_catalog) {
 		if (remove) {
-			catalog.dependency_manager->dependents_map[enum_type_catalog].erase(entry->parent);
-			catalog.dependency_manager->dependencies_map[entry->parent].erase(enum_type_catalog);
+			catalog.dependency_manager->owns_map[enum_type_catalog].erase(entry->parent);
+			catalog.dependency_manager->owned_by_map[entry->parent].erase(enum_type_catalog);
 		} else {
-			catalog.dependency_manager->dependents_map[enum_type_catalog].insert(entry);
-			catalog.dependency_manager->dependencies_map[entry].insert(enum_type_catalog);
+			catalog.dependency_manager->owns_map[enum_type_catalog].insert(entry);
+			catalog.dependency_manager->owned_by_map[entry].insert(enum_type_catalog);
 		}
 	}
 }
@@ -416,9 +476,45 @@ void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table,
 		}
 	}
 }
+
+void CatalogSet::AdjustSequenceDependencies(SequenceCatalogEntry *old_sequence, SequenceCatalogEntry *new_sequence){
+
+    // The new sequence shouldn't own anything
+    D_ASSERT(catalog.dependency_manager->owns_map[new_sequence].empty());
+    // We only expect the new_sequence to be owned by the table and by the schema
+    D_ASSERT(catalog.dependency_manager->owned_by_map[new_sequence].size() == 2);
+
+    // Move the entries from the new sequence to the old sequence
+    auto owned_by_new_sequence = catalog.dependency_manager->owned_by_map[new_sequence];
+    for(auto entry : owned_by_new_sequence){
+        switch (entry->type) {
+            case CatalogType::SCHEMA_ENTRY:{
+                catalog.dependency_manager->owns_map[entry].emplace(old_sequence);
+                catalog.dependency_manager->owned_by_map[old_sequence].emplace(entry);
+
+                catalog.dependency_manager->owns_map[entry].erase(new_sequence);
+                catalog.dependency_manager->owned_by_map[new_sequence].erase(entry);
+                break;
+            }
+            case CatalogType::TABLE_ENTRY:{
+                catalog.dependency_manager->owns_map[old_sequence].emplace(entry);
+                catalog.dependency_manager->owned_by_map[entry].emplace(old_sequence);
+
+                catalog.dependency_manager->owns_map[entry].erase(new_sequence);
+                catalog.dependency_manager->owned_by_map[new_sequence].erase(entry);
+                break;
+            }
+            default: {
+                throw InternalException("Unexpected entry type during rollback sequence dependencies");
+            }
+        }
+    }
+}
+
+
 void CatalogSet::AdjustTableDependencies(CatalogEntry *entry) {
-	if (entry->type == CatalogType::TABLE_ENTRY && entry->parent->type == CatalogType::TABLE_ENTRY) {
-		// If its a table entry we have to check for possibly removing or adding user type dependencies
+    if (entry->type == CatalogType::TABLE_ENTRY && entry->parent->type == CatalogType::TABLE_ENTRY) {
+		// If it's a table entry we have to check for possibly removing or adding user type dependencies
 		auto old_table = (TableCatalogEntry *)entry->parent;
 		auto new_table = (TableCatalogEntry *)entry;
 
@@ -429,6 +525,10 @@ void CatalogSet::AdjustTableDependencies(CatalogEntry *entry) {
 			AdjustDependency(entry, new_table, old_column, true);
 		}
 	}
+
+    if(entry->type == CatalogType::SEQUENCE_ENTRY && entry->parent->type == CatalogType::SEQUENCE_ENTRY){
+        AdjustSequenceDependencies((SequenceCatalogEntry *) entry, (SequenceCatalogEntry *) entry->parent);
+    }
 }
 
 void CatalogSet::Undo(CatalogEntry *entry) {

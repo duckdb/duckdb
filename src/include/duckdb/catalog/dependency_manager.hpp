@@ -31,14 +31,20 @@ public:
 	//! Scans all dependencies, returning pairs of (object, dependent)
 	void Scan(const std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> &callback);
 
+    void AddDependencyToObject(ClientContext &context, CatalogEntry *object, CatalogEntry *entry);
+	void RemoveDependencyFromObject(ClientContext &context, CatalogEntry *object, CatalogEntry *entry);
+    dependency_set_t GetOwns(ClientContext &context, CatalogEntry *object);
+    std::unordered_set<CatalogEntry *> GetOwnedBy(ClientContext &context, CatalogEntry *object);
+    void CopyDependencies(ClientContext &context, CatalogEntry *from, CatalogEntry *to);
+
 private:
 	Catalog &catalog;
-	//! Map of objects that DEPEND on [object], i.e. [object] can only be deleted when all entries in the dependency map
+	//! Map of entries that [object] owns, i.e. [object] can only be deleted when all entries in the dependency map
 	//! are deleted.
-	unordered_map<CatalogEntry *, dependency_set_t> dependents_map;
-	//! Map of objects that the source object DEPENDS on, i.e. when any of the entries in the vector perform a CASCADE
+	unordered_map<CatalogEntry *, dependency_set_t> owns_map;
+	//! Map of entries that own [object], i.e. when any of the entries in the vector perform a CASCADE
 	//! drop then [object] is deleted as wel
-	unordered_map<CatalogEntry *, unordered_set<CatalogEntry *>> dependencies_map;
+	unordered_map<CatalogEntry *, unordered_set<CatalogEntry *>> owned_by_map;
 
 private:
 	void AddObject(ClientContext &context, CatalogEntry *object, unordered_set<CatalogEntry *> &dependencies);

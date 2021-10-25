@@ -114,7 +114,7 @@ public:
 	CatalogEntry *CreateFunction(ClientContext &context, CreateFunctionInfo *info);
 	//! Creates a table in the catalog.
 	CatalogEntry *CreateView(ClientContext &context, CreateViewInfo *info);
-	//! Creates a table in the catalog.
+	//! Creates a sequence in the catalog.
 	CatalogEntry *CreateSequence(ClientContext &context, CreateSequenceInfo *info);
 	//! Creates a Enum in the catalog.
 	CatalogEntry *CreateType(ClientContext &context, CreateTypeInfo *info);

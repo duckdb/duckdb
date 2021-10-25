@@ -14,7 +14,7 @@
 
 namespace duckdb {
 
-enum class AlterType : uint8_t { INVALID = 0, ALTER_TABLE = 1, ALTER_VIEW = 2 };
+enum class AlterType : uint8_t { INVALID = 0, ALTER_TABLE = 1, ALTER_VIEW = 2, ALTER_SEQUENCE = 3 };
 
 struct AlterInfo : public ParseInfo {
 	AlterInfo(AlterType type, string schema, string name) : type(type), schema(schema), name(name) {
@@ -34,7 +34,6 @@ public:
 	virtual void Serialize(Serializer &serializer);
 	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
-
 //===--------------------------------------------------------------------===//
 // Alter Table
 //===--------------------------------------------------------------------===//

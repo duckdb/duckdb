@@ -47,7 +47,7 @@ public:
 	atomic<transaction_t> timestamp;
 	//! Child entry
 	unique_ptr<CatalogEntry> child;
-	//! Parent entry (the node that owns this node)
+	//! Parent entry (the node that owns_map this node)
 	CatalogEntry *parent;
 
 public:

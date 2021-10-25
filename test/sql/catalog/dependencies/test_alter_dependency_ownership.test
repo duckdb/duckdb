@@ -1,0 +1,296 @@
+# name: test/sql/catalog/dependencies/test_alter_dependency_ownership.test
+# description: Tests alter of ownership of sequences
+# group: [dependencies]
+
+# TEST: If the table is dropped, then the sequence is also droppped
+statement ok
+CREATE SEQUENCE tablename_colname_seq;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement ok
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement error
+DROP TABLE tablename;
+
+statement ok
+DROP TABLE tablename CASCADE;
+
+statement error
+SELECT nextval('tablename_colname_seq');
+
+statement ok
+CREATE SEQUENCE tablename_colname_seq;
+
+statement ok
+DROP SEQUENCE tablename_colname_seq;
+
+# TEST: If the sequence is owned by the table, inserts work normally
+statement ok
+CREATE SEQUENCE tablename_colname_seq;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement ok
+INSERT INTO tablename VALUES (default);
+
+query I
+SELECT colname FROM tablename;
+----
+1
+
+statement ok
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement ok
+INSERT INTO tablename VALUES (default);
+
+statement ok
+INSERT INTO tablename VALUES (default);
+
+query I
+SELECT colname FROM tablename;
+----
+1
+2
+3
+
+statement ok
+DROP TABLE tablename CASCADE;
+
+# TEST: the sequence can be droppped but then the table loses its default value
+statement ok
+CREATE SEQUENCE tablename_colname_seq;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement ok
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement ok
+DROP SEQUENCE tablename_colname_seq;
+
+statement error
+SELECT nextval('tablename_colname_seq');
+
+statement ok
+INSERT INTO tablename VALUES (default);
+
+query I
+SELECT colname FROM tablename;
+----
+NULL
+
+statement ok
+DROP TABLE tablename CASCADE;
+
+# TEST: if a sequence is used by more than one table, then it cannot be owned
+statement ok
+CREATE SEQUENCE tablename_colname_seq;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement ok
+CREATE TABLE tablename2 (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement error
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement ok
+DROP TABLE tablename CASCADE;
+
+statement ok
+DROP TABLE tablename2 CASCADE;
+
+statement ok
+DROP SEQUENCE tablename_colname_seq;
+
+# TEST: The sequence can be droppped with CASCADE and the table remains intact
+statement ok
+CREATE SEQUENCE tablename_colname_seq;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement ok
+INSERT INTO tablename VALUES (default)
+
+query I
+SELECT colname FROM tablename
+----
+1
+
+statement ok
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement ok
+DROP SEQUENCE tablename_colname_seq CASCADE;
+
+statement error
+SELECT nextval('tablename_colname_seq');
+
+query I
+SELECT colname FROM tablename;
+----
+1
+
+statement ok
+DROP TABLE tablename CASCADE;
+
+# TEST: If sequence is already owned by other table throw an error
+statement ok
+CREATE SEQUENCE tablename_colname_seq;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement ok
+CREATE TABLE tablename2 (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement error
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement error
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename2;
+
+statement ok
+DROP TABLE tablename CASCADE;
+
+statement ok
+DROP TABLE tablename2 CASCADE;
+
+statement ok
+DROP SEQUENCE tablename_colname_seq;
+
+# TEST: If there is a rollback during the ownership change, then the sequence returns to its old state
+statement ok
+CREATE SEQUENCE tablename_colname_seq;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement ok
+INSERT INTO tablename VALUES (default)
+
+query I
+SELECT colname FROM tablename
+----
+1
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement ok
+INSERT INTO tablename VALUES (default)
+
+query I
+SELECT colname FROM tablename
+----
+1
+2
+
+statement error
+DROP TABLE tablename;
+
+statement ok
+DROP TABLE tablename CASCADE;
+
+statement ok
+ROLLBACK;
+
+statement ok
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement ok
+INSERT INTO tablename VALUES (default)
+
+query I
+SELECT colname FROM tablename
+----
+1
+2
+
+statement ok
+DROP TABLE tablename CASCADE;
+
+# TEST: If owning the sequence twice shouldn't return any error
+statement ok
+CREATE SEQUENCE tablename_colname_seq;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement ok
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement ok
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement ok
+DROP TABLE tablename CASCADE;
+
+# TEST: If there is a rollback during dropping of an owned sequence, the sequence returns back to its original state
+statement ok
+CREATE SEQUENCE tablename_colname_seq;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('tablename_colname_seq')
+);
+
+statement ok
+ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DROP SEQUENCE tablename_colname_seq;
+
+statement error
+select nextval('tablename_colname_seq')
+
+statement ok
+ROLLBACK;
+
+statement ok
+INSERT INTO tablename VALUES (default)
+
+query I
+SELECT colname FROM tablename
+----
+1
+
+statement ok
+DROP TABLE tablename CASCADE;
+
+statement error
+select nextval('tablename_colname_seq')

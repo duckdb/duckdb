@@ -17,6 +17,8 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/parser/column_definition.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/sequence_catalog_entry.hpp"
+#include "duckdb/transaction/transaction.hpp"
 #include <functional>
 #include <memory>
 
@@ -88,10 +90,14 @@ public:
 private:
 	//! Adjusts table dependencies on the event of an UNDO
 	void AdjustTableDependencies(CatalogEntry *entry);
+    //! Adjusts sequence dependencies on the event of an UNDO
+    void AdjustSequenceDependencies(SequenceCatalogEntry* old_sequence, SequenceCatalogEntry* new_sequence);
 	//! Adjust one dependency
 	void AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table, ColumnDefinition &column, bool remove);
 	//! Adjust Enum dependency
 	void AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove);
+    //! Removes the default values of all tables that use the sequence
+    void RemoveDefaultValues(ClientContext &context, CatalogEntry &entry);
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(ClientContext &context, CatalogEntry *current);
 	CatalogEntry *GetCommittedEntry(CatalogEntry *current);

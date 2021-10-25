@@ -202,5 +202,4 @@ unique_ptr<AlterInfo> RenameViewInfo::Deserialize(Deserializer &source, string s
 	auto new_name = source.Read<string>();
 	return make_unique<RenameViewInfo>(move(schema), move(view), new_name);
 }
-
 } // namespace duckdb
