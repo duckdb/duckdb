@@ -151,24 +151,17 @@ idx_t DataTable::MaxThreads(ClientContext &context) {
 }
 
 void DataTable::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
-	row_groups->InitializeParallelScan(context, state);
+	row_groups->InitializeParallelScan(state.scan_state);
 	auto &transaction = Transaction::GetTransaction(context);
-	transaction.storage.InitializeScan(this, state.local_state, nullptr);
+	transaction.storage.InitializeParallelScan(this, state.local_state);
 }
 
 bool DataTable::NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state) {
-	if (row_groups->NextParallelScan(context, state, scan_state.table_state)) {
+	if (row_groups->NextParallelScan(context, state.scan_state, scan_state.table_state)) {
 		return true;
 	}
-	if (!state.transaction_local_data) {
-		auto &transaction = Transaction::GetTransaction(context);
-		// create a task for scanning the local data
-		scan_state.table_state.row_group_state.max_row = 0;
-		scan_state.table_state.max_row = 0;
-		transaction.storage.InitializeScan(this, scan_state.local_state, scan_state.GetFilters());
-		scan_state.local_state.max_index = state.local_state.max_index;
-		scan_state.local_state.last_chunk_count = state.local_state.last_chunk_count;
-		state.transaction_local_data = true;
+	auto &transaction = Transaction::GetTransaction(context);
+	if (transaction.storage.NextParallelScan(context, this, state.local_state, scan_state.local_state)) {
 		return true;
 	} else {
 		// finished all scans: no more scans remaining
@@ -282,8 +275,6 @@ void DataTable::InitializeAppend(Transaction &transaction, TableAppendState &sta
 	if (!is_root) {
 		throw TransactionException("Transaction conflict: adding entries to a table that has been altered!");
 	}
-	state.remaining_append_count = append_count;
-
 	row_groups->InitializeAppend(transaction, state, append_count);
 }
 
@@ -381,9 +372,8 @@ void DataTable::RevertAppend(idx_t start_row, idx_t count) {
 //===--------------------------------------------------------------------===//
 // Indexes
 //===--------------------------------------------------------------------===//
-bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
-	D_ASSERT(is_root);
-	if (info->indexes.Empty()) {
+bool DataTable::AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start) {
+	if (indexes.Empty()) {
 		return true;
 	}
 	// first generate the vector of row identifiers
@@ -393,7 +383,7 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 	vector<Index *> already_appended;
 	bool append_failed = false;
 	// now append the entries to the indices
-	info->indexes.Scan([&](Index &index) {
+	indexes.Scan([&](Index &index) {
 		if (!index.Append(chunk, row_identifiers)) {
 			append_failed = true;
 			return true;
@@ -405,7 +395,6 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 	if (append_failed) {
 		// constraint violation!
 		// remove any appended entries from previous indexes (if any)
-
 		for (auto *index : already_appended) {
 			index->Delete(chunk, row_identifiers);
 		}
@@ -413,6 +402,11 @@ bool DataTable::AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t
 		return false;
 	}
 	return true;
+}
+
+bool DataTable::AppendToIndexes(DataChunk &chunk, row_t row_start) {
+	D_ASSERT(is_root);
+	return AppendToIndexes(info->indexes, chunk, row_start);
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {

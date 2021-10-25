@@ -18,6 +18,7 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/storage/table/table_index_list.hpp"
 
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -32,55 +33,6 @@ class TableCatalogEntry;
 class Transaction;
 class WriteAheadLog;
 class TableDataWriter;
-
-class TableIndexList {
-public:
-	//! Scan the catalog set, invoking the callback method for every entry
-	template <class T>
-	void Scan(T &&callback) {
-		// lock the catalog set
-		lock_guard<mutex> lock(indexes_lock);
-		for (auto &index : indexes) {
-			if (callback(*index)) {
-				break;
-			}
-		}
-	}
-
-	void AddIndex(unique_ptr<Index> index) {
-		D_ASSERT(index);
-		lock_guard<mutex> lock(indexes_lock);
-		indexes.push_back(move(index));
-	}
-
-	void RemoveIndex(Index *index) {
-		D_ASSERT(index);
-		lock_guard<mutex> lock(indexes_lock);
-
-		for (idx_t index_idx = 0; index_idx < indexes.size(); index_idx++) {
-			auto &index_entry = indexes[index_idx];
-			if (index_entry.get() == index) {
-				indexes.erase(indexes.begin() + index_idx);
-				break;
-			}
-		}
-	}
-
-	bool Empty() {
-		lock_guard<mutex> lock(indexes_lock);
-		return indexes.empty();
-	}
-
-	idx_t Count() {
-		lock_guard<mutex> lock(indexes_lock);
-		return indexes.size();
-	}
-
-private:
-	//! Indexes associated with the current table
-	mutex indexes_lock;
-	vector<unique_ptr<Index>> indexes;
-};
 
 struct DataTableInfo {
 	DataTableInfo(DatabaseInstance &db, string schema, string table)
@@ -102,14 +54,6 @@ struct DataTableInfo {
 	bool IsTemporary() {
 		return schema == TEMP_SCHEMA;
 	}
-};
-
-struct ParallelTableScanState {
-	RowGroup *current_row_group;
-	idx_t vector_index;
-	idx_t max_row;
-	LocalScanState local_state;
-	bool transaction_local_data;
 };
 
 //! DataTable represents a physical table on disk
@@ -192,7 +136,8 @@ public:
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table, returns
 	//! whether or not the append succeeded
-	bool AppendToIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
+	bool AppendToIndexes(DataChunk &chunk, row_t row_start);
+	static bool AppendToIndexes(TableIndexList &indexes, DataChunk &chunk, row_t row_start);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table

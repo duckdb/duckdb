@@ -1,4 +1,5 @@
 #include "duckdb/storage/table/table_statistics.hpp"
+#include "duckdb/storage/table/persistent_table_data.hpp"
 
 namespace duckdb {
 

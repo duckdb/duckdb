@@ -70,23 +70,6 @@ struct ColumnFetchState {
 	vector<unique_ptr<ColumnFetchState>> child_states;
 };
 
-struct LocalScanState {
-	~LocalScanState();
-
-	void SetStorage(LocalTableStorage *storage);
-	LocalTableStorage *GetStorage() {
-		return storage;
-	}
-
-	idx_t chunk_index;
-	idx_t max_index;
-	idx_t last_chunk_count;
-	TableFilterSet *table_filters;
-
-private:
-	LocalTableStorage *storage = nullptr;
-};
-
 class RowGroupScanState {
 public:
 	RowGroupScanState(CollectionScanState &parent_p) : row_group(nullptr), vector_index(0), max_row(0), parent(parent_p) {
@@ -134,12 +117,12 @@ private:
 
 class TableScanState {
 public:
-	TableScanState() : table_state(*this), table_filters(nullptr) {};
+	TableScanState() : table_state(*this), local_state(*this), table_filters(nullptr) {};
 
 	//! The underlying table scan state
 	CollectionScanState table_state;
 	//! Transaction-local scan state
-	LocalScanState local_state;
+	CollectionScanState local_state;
 
 public:
 	void Initialize(vector<column_t> column_ids, TableFilterSet *table_filters = nullptr);
@@ -154,6 +137,19 @@ private:
 	TableFilterSet *table_filters;
 	//! Adaptive filter info (if any)
 	unique_ptr<AdaptiveFilter> adaptive_filter;
+};
+
+struct ParallelCollectionScanState {
+	RowGroup *current_row_group;
+	idx_t vector_index;
+	idx_t max_row;
+};
+
+struct ParallelTableScanState {
+	//! Parallel scan state for the table
+	ParallelCollectionScanState scan_state;
+	//! Parallel scan state for the transaction-local state
+	ParallelCollectionScanState local_state;
 };
 
 class CreateIndexScanState : public TableScanState {

@@ -142,7 +142,6 @@ struct IndexScanOperatorData : public FunctionOperatorData {
 
 	Vector row_ids;
 	ColumnFetchState fetch_state;
-	LocalScanState local_storage_state;
 	vector<column_t> column_ids;
 	bool finished;
 };
@@ -158,8 +157,9 @@ static unique_ptr<FunctionOperatorData> IndexScanInit(ClientContext &context, co
 	auto result = make_unique<IndexScanOperatorData>(row_id_data);
 	auto &transaction = Transaction::GetTransaction(context);
 	result->column_ids = column_ids;
-	transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state,
-	                                   filters->table_filters);
+	throw InternalException("FIXME: initialize scan");
+	// transaction.storage.InitializeScan(bind_data.table->storage.get(), result->local_storage_state,
+	//                                    filters->table_filters);
 
 	result->finished = false;
 	return move(result);
@@ -176,7 +176,8 @@ static void IndexScanFunction(ClientContext &context, const FunctionData *bind_d
 		state.finished = true;
 	}
 	if (output.size() == 0) {
-		transaction.storage.Scan(state.local_storage_state, state.column_ids, output);
+		throw InternalException("FIXME: transaction-local scan");
+		// transaction.storage.Scan(state.local_storage_state, state.column_ids, output);
 	}
 }
 

@@ -2,6 +2,8 @@
 #include "duckdb/storage/table/persistent_table_data.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
@@ -14,6 +16,9 @@ idx_t RowGroupCollection::GetTotalRows() {
 	return total_rows.load();
 }
 
+const vector<LogicalType> &RowGroupCollection::GetTypes() const {
+	return types;
+}
 //===--------------------------------------------------------------------===//
 // Initialize
 //===--------------------------------------------------------------------===//
@@ -52,7 +57,7 @@ void RowGroupCollection::Verify() {
 void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector<column_t> &column_ids,
                                         TableFilterSet *table_filters) {
 	auto row_group = (RowGroup *)row_groups->GetRootSegment();
-	state.max_row = total_rows;
+	state.max_row = row_start + total_rows;
 	while (row_group && !row_group->InitializeScan(state.row_group_state)) {
 		row_group = (RowGroup *)row_group->next.get();
 	}
@@ -78,15 +83,13 @@ bool RowGroupCollection::InitializeScanInRowGroup(CollectionScanState &state, Ro
 	return row_group->InitializeScanWithOffset(state.row_group_state, vector_index);
 }
 
-void RowGroupCollection::InitializeParallelScan(ClientContext &context, ParallelTableScanState &state) {
+void RowGroupCollection::InitializeParallelScan(ParallelCollectionScanState &state) {
 	state.current_row_group = (RowGroup *)row_groups->GetRootSegment();
-	state.transaction_local_data = false;
-	// figure out the max row we can scan for both the regular and the transaction-local storage
-	state.max_row = total_rows;
-	state.local_state.max_index = 0;
+	state.vector_index = 0;
+	state.max_row = row_start + total_rows;
 }
 
-bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelTableScanState &state,
+bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollectionScanState &state,
                                           CollectionScanState &scan_state) {
 	while (state.current_row_group) {
 		idx_t vector_index;
@@ -144,13 +147,14 @@ void RowGroupCollection::Fetch(Transaction &transaction, DataChunk &result, cons
 // Append
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
+	state.remaining_append_count = append_count;
 	state.row_start = total_rows;
 	state.current_row = state.row_start;
 
 	// start writing to the row_groups
 	lock_guard<mutex> row_group_lock(row_groups->node_lock);
 	auto last_row_group = (RowGroup *)row_groups->GetLastSegment();
-	D_ASSERT(total_rows == last_row_group->start + last_row_group->count);
+	D_ASSERT(this->row_start + total_rows == last_row_group->start + last_row_group->count);
 	last_row_group->InitializeAppend(transaction, state.row_group_append_state, state.remaining_append_count);
 	total_rows += append_count;
 }

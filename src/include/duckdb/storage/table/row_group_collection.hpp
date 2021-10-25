@@ -9,9 +9,13 @@
 #pragma once
 
 #include "duckdb/storage/table/row_group.hpp"
+#include "duckdb/storage/table/segment_tree.hpp"
 
 namespace duckdb {
 struct ParallelTableScanState;
+
+class PersistentTableData;
+class TableStatistics;
 
 class RowGroupCollection {
 public:
@@ -32,8 +36,8 @@ public:
 	                              idx_t end_row);
 	static bool InitializeScanInRowGroup(CollectionScanState &state, RowGroup *row_group, idx_t vector_index,
 	                                     idx_t max_row);
-	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
-	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, CollectionScanState &scan_state);
+	void InitializeParallelScan(ParallelCollectionScanState &state);
+	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
 	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_identifiers,
 	           idx_t fetch_count, ColumnFetchState &state);
@@ -58,6 +62,7 @@ public:
 	void CommitDropTable();
 
 	vector<vector<Value>> GetStorageInfo();
+	const vector<LogicalType> &GetTypes() const;
 
 	shared_ptr<RowGroupCollection> AddColumn(ColumnDefinition &new_column, Expression *default_value,
 	                                         BaseStatistics &stats);
