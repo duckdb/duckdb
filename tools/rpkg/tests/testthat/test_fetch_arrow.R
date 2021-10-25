@@ -208,8 +208,8 @@ test_that("duckdb_fetch_arrow() record_batch_reader multiple vectors per chunk",
     cur_batch <- record_batch_reader$read_next_batch()
     expect_equal(904,cur_batch$num_rows)
 
-    cur_batch <- record_batch_reader$read_next_batch()
-    expect_equal(NULL,cur_batch)
+    expect_error(record_batch_reader$read_next_batch())
+    
     dbDisconnect(con, shutdown = T)
 })
 
