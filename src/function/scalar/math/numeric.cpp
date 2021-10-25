@@ -913,78 +913,29 @@ void FactorialFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // even
 //===--------------------------------------------------------------------===//
-struct EvenIntegralOperator {
-	template <class TA, class TR>
-	static inline TR Operation(TA left) {
-		if (left / 2 * 2 == left)
-		{
-			return left;
-		}
-		return left + 1;
-	}
-};
-
 struct EvenOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
-		TR ceiled_value = std::ceil(left);
-		if (ceiled_value / 2 * 2 == ceiled_value)
-		{
-			return ceiled_value;
+		int64_t value;
+		if (left >= 0) {
+			value = std::ceil(left);
+		} else {
+			value = std::ceil(-left);
+			value = -value;
 		}
-		return ceiled_value + 1;
-	}
-};
-
-struct EvenDecimalOperator {
-	template <class T, class POWERS_OF_TEN_CLASS>
-	static void Operation(DataChunk &input, uint8_t scale, Vector &result) {
-		T power_of_ten = POWERS_OF_TEN_CLASS::POWERS_OF_TEN[scale];
-		UnaryExecutor::Execute<T, T>(input.data[0], result, input.size(), [&](T input) {
-			T ceiled_value;
-			if (input <= 0) {
-				// below 0 we floor the number (e.g. -10.5 -> -10)
-				ceiled_value = input / power_of_ten;
+		if (value / 2 * 2 != value) {
+			if (left >= 0) {
+				return value += 1;
 			}
-			else {
-				// above 0 we ceil the number
-				ceiled_value = ((input - 1) / power_of_ten) + 1;
-			}
-			if (ceiled_value / 2 * 2 == ceiled_value)
-			{
-				return ceiled_value;
-			}
-			return (T)(ceiled_value + 1);
-		});
+			return value -= 1;
+		}
+		return value;
 	}
 };
 
 void EvenFun::RegisterFunction(BuiltinFunctions &set) {
-	ScalarFunctionSet even("even");
-	for (auto &type : LogicalType::NUMERIC) {
-		scalar_function_t func = nullptr;
-		bind_scalar_function_t bind_func = nullptr;
-		if (type.IsIntegral()) {
-			even.AddFunction(ScalarFunction({ type }, type, ScalarFunction::GetScalarUnaryFunction<EvenIntegralOperator>(type)));
-			continue;
-		}
-		switch (type.id()) {
-		case LogicalTypeId::FLOAT:
-			func = ScalarFunction::UnaryFunction<float, float, EvenOperator>;
-			break;
-		case LogicalTypeId::DOUBLE:
-			func = ScalarFunction::UnaryFunction<double, double, EvenOperator>;
-			break;
-		case LogicalTypeId::DECIMAL:
-			bind_func = BindGenericRoundFunctionDecimal<EvenDecimalOperator>;
-			break;
-		default:
-			throw InternalException("Unimplemented numeric type for function \"even\"");
-		}
-		even.AddFunction(ScalarFunction({ type }, type, func, false, bind_func));
-	}
-
-	set.AddFunction(even);
+	set.AddFunction(ScalarFunction("even", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, EvenOperator>));
 }
 
 } // namespace duckdb
