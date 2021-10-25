@@ -916,14 +916,14 @@ void FactorialFun::RegisterFunction(BuiltinFunctions &set) {
 struct EvenOperator {
 	template <class TA, class TR>
 	static inline TR Operation(TA left) {
-		int64_t value;
+		double value;
 		if (left >= 0) {
 			value = std::ceil(left);
 		} else {
 			value = std::ceil(-left);
 			value = -value;
 		}
-		if (value / 2 * 2 != value) {
+		if (std::floor(value / 2) * 2 != value) {
 			if (left >= 0) {
 				return value += 1;
 			}
