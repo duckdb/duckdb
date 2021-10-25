@@ -646,7 +646,8 @@ RowGroupPointer RowGroup::Checkpoint(TableDataWriter &writer, vector<unique_ptr<
 	// checkpoint the individual columns of the row group
 	for (idx_t column_idx = 0; column_idx < columns.size(); column_idx++) {
 		auto &column = columns[column_idx];
-		auto checkpoint_state = column->Checkpoint(*this, writer);
+		ColumnCheckpointInfo checkpoint_info {writer.GetColumnCompressionType(column_idx)};
+		auto checkpoint_state = column->Checkpoint(*this, writer, checkpoint_info);
 		D_ASSERT(checkpoint_state);
 
 		auto stats = checkpoint_state->GetStatistics();

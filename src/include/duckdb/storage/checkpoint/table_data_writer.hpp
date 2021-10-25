@@ -37,6 +37,8 @@ public:
 		return checkpoint_manager;
 	}
 
+	CompressionType GetColumnCompressionType(idx_t i);
+
 private:
 	CheckpointManager &checkpoint_manager;
 	TableCatalogEntry &table;
