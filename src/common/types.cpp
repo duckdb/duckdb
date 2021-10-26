@@ -111,16 +111,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::ENUM: {
 		D_ASSERT(type_info_);
 		auto size = EnumType::GetSize(*this);
-		if (size <= (idx_t)(NumericLimits<uint8_t>::Maximum() - 1)) {
-			return PhysicalType::UINT8;
-		} else if (size <= (idx_t)(NumericLimits<uint16_t>::Maximum() - 1)) {
-			return PhysicalType::UINT16;
-		} else if (size <= (idx_t)(NumericLimits<uint32_t>::Maximum() - 1)) {
-			return PhysicalType::UINT32;
-		} else {
-			throw InternalException("Enum size must be lower than " +
-			                        std::to_string(NumericLimits<uint32_t>::Maximum() - 1));
-		}
+		return EnumType::GetPhysicalType(size);
 	}
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
@@ -1053,17 +1044,20 @@ LogicalType LogicalType::ENUM(const string &enum_name, const vector<string> &ord
 	auto size = ordered_data.size();
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
-	if (size <= (idx_t)(NumericLimits<uint8_t>::Maximum() - 1)) {
+	auto enum_internal_type = EnumType::GetPhysicalType(size);
+	switch (enum_internal_type) {
+	case PhysicalType::UINT8:
 		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data);
-	} else if (size <= (idx_t)(NumericLimits<uint16_t>::Maximum() - 1)) {
+		break;
+	case PhysicalType::UINT16:
 		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, ordered_data);
-	} else if (size <= (idx_t)(NumericLimits<uint32_t>::Maximum() - 1)) {
+		break;
+	case PhysicalType::UINT32:
 		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, ordered_data);
-	} else {
-		throw InternalException("Enum size must be lower than " +
-		                        std::to_string(NumericLimits<uint32_t>::Maximum() - 1));
+		break;
+	default:
+		throw InternalException("Invalid Physical Type for ENUMs");
 	}
-
 	// Generate Actual Enum Type
 	return LogicalType(LogicalTypeId::ENUM, info);
 }
@@ -1132,6 +1126,18 @@ TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
 	return ((EnumTypeInfo &)*info).catalog_entry;
 }
 
+PhysicalType EnumType::GetPhysicalType(idx_t size) {
+	if (size <= NumericLimits<uint8_t>::Maximum()) {
+		return PhysicalType::UINT8;
+	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+		return PhysicalType::UINT16;
+	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+		return PhysicalType::UINT32;
+	} else {
+		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
@@ -1159,16 +1165,16 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 	case ExtraTypeInfoType::USER_TYPE_INFO:
 		return UserTypeInfo::Deserialize(source);
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
-		auto size = source.Read<uint32_t>();
-		if (size <= (idx_t)(NumericLimits<uint8_t>::Maximum() - 1)) {
+		auto enum_internal_type = EnumType::GetPhysicalType(source.Read<uint32_t>());
+		switch (enum_internal_type) {
+		case PhysicalType::UINT8:
 			return EnumTypeInfoTemplated<uint8_t>::Deserialize(source);
-		} else if (size <= (idx_t)(NumericLimits<uint16_t>::Maximum() - 1)) {
+		case PhysicalType::UINT16:
 			return EnumTypeInfoTemplated<uint16_t>::Deserialize(source);
-		} else if (size <= (idx_t)(NumericLimits<uint32_t>::Maximum() - 1)) {
+		case PhysicalType::UINT32:
 			return EnumTypeInfoTemplated<uint32_t>::Deserialize(source);
-		} else {
-			throw InternalException("Enum size must be lower than " +
-			                        std::to_string(NumericLimits<uint32_t>::Maximum() - 1));
+		default:
+			throw InternalException("Invalid Physical Type for ENUMs");
 		}
 	}
 	default:

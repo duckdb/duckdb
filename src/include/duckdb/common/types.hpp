@@ -507,6 +507,7 @@ struct EnumType{
 	DUCKDB_API static const string& GetValue(const Value &val);
 	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
 	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
+	DUCKDB_API static PhysicalType GetPhysicalType(idx_t size);
 };
 
 struct StructType {
@@ -583,9 +584,6 @@ bool TypeIsConstantSize(PhysicalType type);
 bool TypeIsIntegral(PhysicalType type);
 bool TypeIsNumeric(PhysicalType type);
 bool TypeIsInteger(PhysicalType type);
-
-bool TypeIsNumeric(LogicalTypeId type);
-bool TypeIsInteger(LogicalTypeId type);
 
 template <class T>
 bool IsIntegerType() {

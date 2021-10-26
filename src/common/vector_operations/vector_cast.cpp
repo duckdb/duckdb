@@ -555,19 +555,7 @@ void FillEnum(Vector &source, Vector &result, idx_t count) {
 		auto key = EnumType::GetPos(res_enum_type, str);
 		if (key == -1) {
 			// key doesn't exist on result enum
-			switch (result.GetType().InternalType()) {
-			case PhysicalType::UINT8:
-				result_data[i] = NumericLimits<uint8_t>::Maximum();
-				break;
-			case PhysicalType::UINT16:
-				result_data[i] = NumericLimits<uint16_t>::Maximum();
-				break;
-			case PhysicalType::UINT32:
-				result_data[i] = NumericLimits<uint32_t>::Maximum();
-				break;
-			default:
-				throw InternalException("Invalid Internal Type for ENUMs");
-			}
+			result_mask.SetInvalid(i);
 			continue;
 		}
 		result_data[i] = key;
@@ -624,7 +612,7 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 				continue;
 			}
 			auto str_vec = EnumType::GetValuesInsertOrder(source.GetType());
-			uint64_t enum_idx = NumericLimits<uint64_t>::Maximum();
+			uint64_t enum_idx;
 			switch (enum_physical_type) {
 			case PhysicalType::UINT8:
 				enum_idx = src_val.value_.utinyint;
@@ -637,10 +625,6 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 				break;
 			default:
 				throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
-			}
-			if (enum_idx >= str_vec.size()) {
-				result.SetValue(i, Value());
-				continue;
 			}
 			result.SetValue(i, Value(str_vec[enum_idx]));
 		}

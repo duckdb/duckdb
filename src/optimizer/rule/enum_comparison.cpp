@@ -10,7 +10,7 @@
 namespace duckdb {
 
 EnumComparisonRule::EnumComparisonRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
-	// match on a CaseExpression that has a ConstantExpression as a check
+	// match on a ComparisonExpression that is an Equality and has a VARCHAR and ENUM as its children
 	auto op = make_unique<ComparisonExpressionMatcher>();
 	op->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
 	for (idx_t i = 0; i < 2; i++) {
@@ -42,7 +42,9 @@ bool AreMatchesPossible(LogicalType &left, LogicalType &right) {
 }
 unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                  bool &changes_made) {
-
+	if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
+		return nullptr;
+	}
 	auto root = (BoundComparisonExpression *)bindings[0];
 	auto left_child = (BoundCastExpression *)bindings[1];
 	auto right_child = (BoundCastExpression *)bindings[3];
