@@ -41,6 +41,9 @@ public:
 	bool IsSink() const override {
 		return true;
 	}
+
+public:
+	void EvaluateExpression(idx_t expression_idx, DataChunk *child_chunk, DataChunk &result) const;
 };
 
 } // namespace duckdb
