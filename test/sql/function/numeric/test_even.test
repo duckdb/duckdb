@@ -50,18 +50,17 @@ SELECT even(45::DOUBLE), even(-35::DOUBLE)
 46	-36
 
 query I
+SELECT even(-1.7976931348623159e308)
+----
+-1.7976931348623159e308
+
+query I
 SELECT even(NULL)
 ----
 NULL
 
 statement error
-query I
 SELECT even('abcd')
 
 statement error
-query I
 SELECT even(1.7976931348623159e308)
-
-statement error
-query I
-SELECT even(-1.7976931348623159e308)
