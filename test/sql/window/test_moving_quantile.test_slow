@@ -73,15 +73,6 @@ from (
     ) q;
 
 # Checksum the queries
-query I
-execute fixed_median(100)
-----
-494997500
-
-query I
-execute variable_median(47, 511, 100)
-----
-494989867
 
 query II
 execute fixed_disc_iqr(97)
