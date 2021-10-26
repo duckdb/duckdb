@@ -39,20 +39,20 @@ public:
 	void InitializeParallelScan(ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelCollectionScanState &state, CollectionScanState &scan_state);
 
-	void Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_identifiers,
+	void Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids, Vector &row_identifiers,
 	           idx_t fetch_count, ColumnFetchState &state);
 
-	void InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count);
-	void Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
+	void InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count);
+	void Append(TransactionData transaction, DataChunk &chunk, TableAppendState &state, TableStatistics &stats);
 	void CommitAppend(transaction_t commit_id, idx_t row_start, idx_t count);
 	void RevertAppendInternal(idx_t start_row, idx_t count);
 
 	void RemoveFromIndexes(Vector &row_identifiers, idx_t count);
 
-	idx_t Delete(Transaction &transaction, DataTable *table, row_t *ids, idx_t count);
-	void Update(Transaction &transaction, row_t *ids, const vector<column_t> &column_ids, DataChunk &updates,
+	idx_t Delete(TransactionData transaction, DataTable *table, row_t *ids, idx_t count);
+	void Update(TransactionData transaction, row_t *ids, const vector<column_t> &column_ids, DataChunk &updates,
 	            TableStatistics &stats);
-	void UpdateColumn(Transaction &transaction, Vector &row_ids, const vector<column_t> &column_path,
+	void UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
 	                  DataChunk &updates, TableStatistics &stats);
 
 	void Checkpoint(TableDataWriter &writer, vector<RowGroupPointer> &row_group_pointers,

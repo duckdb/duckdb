@@ -287,7 +287,7 @@ bool RowGroup::CheckZonemapSegments(RowGroupScanState &state) {
 }
 
 template <TableScanType TYPE>
-void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state, DataChunk &result) {
+void RowGroup::TemplatedScan(TransactionData transaction, RowGroupScanState &state, DataChunk &result) {
 	const bool ALLOW_UPDATES = TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES &&
 	                           TYPE != TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED;
 	auto table_filters = state.GetFilters();
@@ -309,19 +309,14 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 		idx_t count;
 		SelectionVector valid_sel(STANDARD_VECTOR_SIZE);
 		if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-			D_ASSERT(transaction);
-			count = state.row_group->GetSelVector(*transaction, state.vector_index, valid_sel, max_count);
+			count = state.row_group->GetSelVector(transaction, state.vector_index, valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
 				NextVector(state);
 				continue;
 			}
 		} else if (TYPE == TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED) {
-			auto &transaction_manager = TransactionManager::Get(db);
-			auto lowest_active_start = transaction_manager.LowestActiveStart();
-			auto lowest_active_id = transaction_manager.LowestActiveId();
-
-			count = state.row_group->GetCommittedSelVector(lowest_active_start, lowest_active_id, state.vector_index,
+			count = state.row_group->GetCommittedSelVector(transaction.start_time, transaction.transaction_id, state.vector_index,
 			                                               valid_sel, max_count);
 			if (count == 0) {
 				// nothing to scan for this vector, skip the entire vector
@@ -344,8 +339,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 						columns[column]->ScanCommitted(state.vector_index, state.column_scans[i], result.data[i],
 						                               ALLOW_UPDATES);
 					} else {
-						D_ASSERT(transaction);
-						columns[column]->Scan(*transaction, state.vector_index, state.column_scans[i], result.data[i]);
+						columns[column]->Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
 					}
 				}
 			}
@@ -367,7 +361,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 				for (idx_t i = 0; i < table_filters->filters.size(); i++) {
 					auto tf_idx = adaptive_filter->permutation[i];
 					auto col_idx = column_ids[tf_idx];
-					columns[col_idx]->Select(*transaction, state.vector_index, state.column_scans[tf_idx],
+					columns[col_idx]->Select(transaction, state.vector_index, state.column_scans[tf_idx],
 					                         result.data[tf_idx], sel, approved_tuple_count,
 					                         *table_filters->filters[tf_idx]);
 				}
@@ -405,11 +399,9 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 						}
 					} else {
 						if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-							D_ASSERT(transaction);
-							columns[column]->FilterScan(*transaction, state.vector_index, state.column_scans[i],
+							columns[column]->FilterScan(transaction, state.vector_index, state.column_scans[i],
 							                            result.data[i], sel, approved_tuple_count);
 						} else {
-							D_ASSERT(!transaction);
 							columns[column]->FilterScanCommitted(state.vector_index, state.column_scans[i],
 							                                     result.data[i], sel, approved_tuple_count,
 							                                     ALLOW_UPDATES);
@@ -430,20 +422,24 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 	}
 }
 
-void RowGroup::Scan(Transaction &transaction, RowGroupScanState &state, DataChunk &result) {
-	TemplatedScan<TableScanType::TABLE_SCAN_REGULAR>(&transaction, state, result);
+void RowGroup::Scan(TransactionData transaction, RowGroupScanState &state, DataChunk &result) {
+	TemplatedScan<TableScanType::TABLE_SCAN_REGULAR>(transaction, state, result);
 }
 
 void RowGroup::ScanCommitted(RowGroupScanState &state, DataChunk &result, TableScanType type) {
+	auto &transaction_manager = TransactionManager::Get(db);
+	auto lowest_active_start = transaction_manager.LowestActiveStart();
+	auto lowest_active_id = transaction_manager.LowestActiveId();
+	TransactionData data(lowest_active_id, lowest_active_start);
 	switch (type) {
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS:
-		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS>(nullptr, state, result);
+		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS>(data, state, result);
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES:
-		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES>(nullptr, state, result);
+		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_DISALLOW_UPDATES>(data, state, result);
 		break;
 	case TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED:
-		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED>(nullptr, state, result);
+		TemplatedScan<TableScanType::TABLE_SCAN_COMMITTED_ROWS_OMIT_PERMANENTLY_DELETED>(data, state, result);
 		break;
 	default:
 		throw InternalException("Unrecognized table scan type");
@@ -457,7 +453,7 @@ ChunkInfo *RowGroup::GetChunkInfo(idx_t vector_idx) {
 	return version_info->info[vector_idx].get();
 }
 
-idx_t RowGroup::GetSelVector(Transaction &transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count) {
+idx_t RowGroup::GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count) {
 	lock_guard<mutex> lock(row_group_lock);
 
 	auto info = GetChunkInfo(vector_idx);
@@ -478,7 +474,7 @@ idx_t RowGroup::GetCommittedSelVector(transaction_t start_time, transaction_t tr
 	return info->GetCommittedSelVector(start_time, transaction_id, sel_vector, max_count);
 }
 
-bool RowGroup::Fetch(Transaction &transaction, idx_t row) {
+bool RowGroup::Fetch(TransactionData transaction, idx_t row) {
 	D_ASSERT(row < this->count);
 	lock_guard<mutex> lock(row_group_lock);
 
@@ -490,7 +486,7 @@ bool RowGroup::Fetch(Transaction &transaction, idx_t row) {
 	return info->Fetch(transaction, row - vector_index * STANDARD_VECTOR_SIZE);
 }
 
-void RowGroup::FetchRow(Transaction &transaction, ColumnFetchState &state, const vector<column_t> &column_ids,
+void RowGroup::FetchRow(TransactionData transaction, ColumnFetchState &state, const vector<column_t> &column_ids,
                         row_t row_id, DataChunk &result, idx_t result_idx) {
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
 		auto column = column_ids[col_idx];
@@ -507,7 +503,7 @@ void RowGroup::FetchRow(Transaction &transaction, ColumnFetchState &state, const
 	}
 }
 
-void RowGroup::AppendVersionInfo(Transaction &transaction, idx_t row_group_start, idx_t count,
+void RowGroup::AppendVersionInfo(TransactionData transaction, idx_t row_group_start, idx_t count,
                                  transaction_t commit_id) {
 	idx_t row_group_end = row_group_start + count;
 	lock_guard<mutex> lock(row_group_lock);
@@ -582,7 +578,7 @@ void RowGroup::RevertAppend(idx_t row_group_start) {
 	Verify();
 }
 
-void RowGroup::InitializeAppend(Transaction &transaction, RowGroupAppendState &append_state,
+void RowGroup::InitializeAppend(TransactionData transaction, RowGroupAppendState &append_state,
                                 idx_t remaining_append_count) {
 	append_state.row_group = this;
 	append_state.offset_in_row_group = this->count;
@@ -604,7 +600,7 @@ void RowGroup::Append(RowGroupAppendState &state, DataChunk &chunk, idx_t append
 	state.offset_in_row_group += append_count;
 }
 
-void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, row_t *ids, idx_t offset, idx_t count,
+void RowGroup::Update(TransactionData transaction, DataChunk &update_chunk, row_t *ids, idx_t offset, idx_t count,
                       const vector<column_t> &column_ids) {
 #ifdef DEBUG
 	for (size_t i = offset; i < offset + count; i++) {
@@ -620,7 +616,7 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, row_t *
 	}
 }
 
-void RowGroup::UpdateColumn(Transaction &transaction, DataChunk &updates, Vector &row_ids,
+void RowGroup::UpdateColumn(TransactionData transaction, DataChunk &updates, Vector &row_ids,
                             const vector<column_t> &column_path) {
 	D_ASSERT(updates.ColumnCount() == 1);
 	auto ids = FlatVector::GetData<row_t>(row_ids);
@@ -778,13 +774,13 @@ void RowGroup::GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &resu
 //===--------------------------------------------------------------------===//
 class VersionDeleteState {
 public:
-	VersionDeleteState(RowGroup &info, Transaction &transaction, DataTable *table, idx_t base_row)
-	    : info(info), transaction(transaction), table(table), current_info(nullptr), current_chunk(INVALID_INDEX),
+	VersionDeleteState(RowGroup &info, TransactionData transaction_p, DataTable *table, idx_t base_row)
+	    : info(info), transaction(transaction_p), table(table), current_info(nullptr), current_chunk(INVALID_INDEX),
 	      count(0), base_row(base_row), delete_count(0) {
 	}
 
 	RowGroup &info;
-	Transaction &transaction;
+	TransactionData transaction;
 	DataTable *table;
 	ChunkVectorInfo *current_info;
 	idx_t current_chunk;
@@ -799,7 +795,7 @@ public:
 	void Flush();
 };
 
-idx_t RowGroup::Delete(Transaction &transaction, DataTable *table, row_t *ids, idx_t count) {
+idx_t RowGroup::Delete(TransactionData transaction, DataTable *table, row_t *ids, idx_t count) {
 	lock_guard<mutex> lock(row_group_lock);
 	VersionDeleteState del_state(*this, transaction, table, this->start);
 
@@ -859,9 +855,11 @@ void VersionDeleteState::Flush() {
 		return;
 	}
 	// delete in the current info
-	delete_count += current_info->Delete(transaction, rows, count);
+	delete_count += current_info->Delete(transaction.transaction_id, rows, count);
 	// now push the delete into the undo buffer
-	transaction.PushDelete(table, current_info, rows, count, base_row + chunk_row);
+	if (transaction.transaction) {
+		transaction.transaction->PushDelete(table, current_info, rows, count, base_row + chunk_row);
+	}
 	count = 0;
 }
 

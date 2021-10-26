@@ -158,7 +158,7 @@ static UpdateSegment::fetch_update_function_t GetFetchUpdateFunction(PhysicalTyp
 	}
 }
 
-void UpdateSegment::FetchUpdates(Transaction &transaction, idx_t vector_index, Vector &result) {
+void UpdateSegment::FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result) {
 	auto lock_handle = lock.GetSharedLock();
 	if (!root) {
 		return;
@@ -421,7 +421,7 @@ static UpdateSegment::fetch_row_function_t GetFetchRowFunction(PhysicalType type
 	}
 }
 
-void UpdateSegment::FetchRow(Transaction &transaction, idx_t row_id, Vector &result, idx_t result_idx) {
+void UpdateSegment::FetchRow(TransactionData transaction, idx_t row_id, Vector &result, idx_t result_idx) {
 	if (!root) {
 		return;
 	}
@@ -521,7 +521,7 @@ void UpdateSegment::CleanupUpdate(UpdateInfo *info) {
 //===--------------------------------------------------------------------===//
 // Check for conflicts in update
 //===--------------------------------------------------------------------===//
-static void CheckForConflicts(UpdateInfo *info, Transaction &transaction, row_t *ids, idx_t count, row_t offset,
+static void CheckForConflicts(UpdateInfo *info, TransactionData transaction, row_t *ids, idx_t count, row_t offset,
                               UpdateInfo *&node) {
 	if (!info) {
 		return;
@@ -1045,7 +1045,17 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 	return pos;
 }
 
-void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector &update, row_t *ids, idx_t offset,
+UpdateInfo *CreateEmptyUpdateInfo(TransactionData transaction, idx_t type_size, idx_t count, unique_ptr<char[]> &data) {
+	data = unique_ptr<char[]>(new char[sizeof(UpdateInfo) + (sizeof(sel_t) + type_size) * STANDARD_VECTOR_SIZE]);
+	auto update_info = (UpdateInfo *) data.get();
+	update_info->max = STANDARD_VECTOR_SIZE;
+	update_info->tuples = (sel_t *)(((data_ptr_t)update_info) + sizeof(UpdateInfo));
+	update_info->tuple_data = ((data_ptr_t)update_info) + sizeof(UpdateInfo) + sizeof(sel_t) * update_info->max;
+	update_info->version_number = transaction.transaction_id;
+	return update_info;
+}
+
+void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids, idx_t offset,
                            idx_t count, Vector &base_data) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
@@ -1102,9 +1112,14 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 			}
 			node = node->next;
 		}
+		unique_ptr<char[]> update_info_data;
 		if (!node) {
 			// no updates made yet by this transaction: initially the update info to empty
-			node = transaction.CreateUpdateInfo(type_size, count);
+			if (transaction.transaction) {
+				node = transaction.transaction->CreateUpdateInfo(type_size, count);
+			} else {
+				node = CreateEmptyUpdateInfo(transaction, type_size, count, update_info_data);
+			}
 			node->segment = this;
 			node->vector_index = vector_index;
 			node->N = 0;
@@ -1116,7 +1131,7 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 				node->next->prev = node;
 			}
 			node->prev = base_info;
-			base_info->next = node;
+			base_info->next = transaction.transaction ? node : nullptr;
 		}
 		base_info->Verify();
 		node->Verify();
@@ -1140,13 +1155,20 @@ void UpdateSegment::Update(Transaction &transaction, idx_t column_index, Vector 
 		InitializeUpdateInfo(*result->info, ids, sel, count, vector_index, vector_offset);
 
 		// now create the transaction level update info in the undo log
-		auto transaction_node = transaction.CreateUpdateInfo(type_size, count);
+		unique_ptr<char[]> update_info_data;
+		UpdateInfo *transaction_node;
+		if (transaction.transaction) {
+			transaction_node = transaction.transaction->CreateUpdateInfo(type_size, count);
+		} else {
+			transaction_node = CreateEmptyUpdateInfo(transaction, type_size, count, update_info_data);
+		}
+
 		InitializeUpdateInfo(*transaction_node, ids, sel, count, vector_index, vector_offset);
 
-		// we write the updates in the
+		// we write the updates in the update node data, and write the updates in the info
 		initialize_update_function(transaction_node, base_data, result->info.get(), update, sel);
 
-		result->info->next = transaction_node;
+		result->info->next = transaction.transaction ? transaction_node : nullptr;
 		result->info->prev = nullptr;
 		transaction_node->next = nullptr;
 		transaction_node->prev = result->info.get();

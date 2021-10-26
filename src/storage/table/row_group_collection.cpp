@@ -126,7 +126,7 @@ bool RowGroupCollection::NextParallelScan(ClientContext &context, ParallelCollec
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::Fetch(Transaction &transaction, DataChunk &result, const vector<column_t> &column_ids,
+void RowGroupCollection::Fetch(TransactionData transaction, DataChunk &result, const vector<column_t> &column_ids,
                                Vector &row_identifiers, idx_t fetch_count, ColumnFetchState &state) {
 	// figure out which row_group to fetch from
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
@@ -146,7 +146,7 @@ void RowGroupCollection::Fetch(Transaction &transaction, DataChunk &result, cons
 //===--------------------------------------------------------------------===//
 // Append
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::InitializeAppend(Transaction &transaction, TableAppendState &state, idx_t append_count) {
+void RowGroupCollection::InitializeAppend(TransactionData transaction, TableAppendState &state, idx_t append_count) {
 	state.remaining_append_count = append_count;
 	state.row_start = total_rows;
 	state.current_row = state.row_start;
@@ -159,7 +159,7 @@ void RowGroupCollection::InitializeAppend(Transaction &transaction, TableAppendS
 	total_rows += append_count;
 }
 
-void RowGroupCollection::Append(Transaction &transaction, DataChunk &chunk, TableAppendState &state,
+void RowGroupCollection::Append(TransactionData transaction, DataChunk &chunk, TableAppendState &state,
                                 TableStatistics &stats) {
 	D_ASSERT(chunk.ColumnCount() == types.size());
 	chunk.Verify();
@@ -254,7 +254,7 @@ void RowGroupCollection::RevertAppendInternal(idx_t start_row, idx_t count) {
 //===--------------------------------------------------------------------===//
 // Delete
 //===--------------------------------------------------------------------===//
-idx_t RowGroupCollection::Delete(Transaction &transaction, DataTable *table, row_t *ids, idx_t count) {
+idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable *table, row_t *ids, idx_t count) {
 	idx_t delete_count = 0;
 	// delete is in the row groups
 	// we need to figure out for each id to which row group it belongs
@@ -284,7 +284,7 @@ idx_t RowGroupCollection::Delete(Transaction &transaction, DataTable *table, row
 //===--------------------------------------------------------------------===//
 // Update
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::Update(Transaction &transaction, row_t *ids, const vector<column_t> &column_ids,
+void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const vector<column_t> &column_ids,
                                 DataChunk &updates, TableStatistics &stats) {
 	idx_t pos = 0;
 	do {
@@ -356,7 +356,7 @@ void RowGroupCollection::RemoveFromIndexes(Vector &row_identifiers, idx_t count)
 	});
 }
 
-void RowGroupCollection::UpdateColumn(Transaction &transaction, Vector &row_ids, const vector<column_t> &column_path,
+void RowGroupCollection::UpdateColumn(TransactionData transaction, Vector &row_ids, const vector<column_t> &column_path,
                                       DataChunk &updates, TableStatistics &stats) {
 	auto first_id = FlatVector::GetValue<row_t>(row_ids, 0);
 	if (first_id >= MAX_ROW_ID) {

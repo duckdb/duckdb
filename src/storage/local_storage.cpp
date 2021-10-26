@@ -105,8 +105,9 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 
 	//! Append to the chunk
 	TableAppendState state;
-	storage->row_groups.InitializeAppend(transaction, state, chunk.size());
-	storage->row_groups.Append(transaction, chunk, state, storage->stats);
+	TransactionData transaction_data(0, 0);
+	storage->row_groups.InitializeAppend(transaction_data, state, chunk.size());
+	storage->row_groups.Append(transaction_data, chunk, state, storage->stats);
 }
 
 LocalTableStorage *LocalStorage::GetStorage(DataTable *table) {
@@ -123,11 +124,21 @@ idx_t LocalStorage::EstimatedSize() {
 }
 
 idx_t LocalStorage::Delete(DataTable *table, Vector &row_ids, idx_t count) {
-	throw InternalException("FIXME: LocalStorage::Delete");
+	auto storage = GetStorage(table);
+	D_ASSERT(storage);
+
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	idx_t delete_count = storage->row_groups.Delete(TransactionData(0, 0), table, ids, count);
+	storage->deleted_rows += delete_count;
+	return delete_count;
 }
 
-void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &data) {
-	throw InternalException("FIXME: LocalStorage::Update");
+void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column_t> &column_ids, DataChunk &updates) {
+	auto storage = GetStorage(table);
+	D_ASSERT(storage);
+
+	auto ids = FlatVector::GetData<row_t>(row_ids);
+	storage->row_groups.Update(TransactionData(0, 0), ids, column_ids, updates, storage->stats);
 }
 
 template <class T>

@@ -26,6 +26,12 @@ SELECT * FROM integers ORDER BY 1
 statement ok
 UPDATE integers SET j=5 WHERE i=2
 
+statement ok
+UPDATE integers SET j=5 WHERE i=2
+
+statement ok
+UPDATE integers SET j=5 WHERE i=2
+
 query II
 SELECT * FROM integers ORDER BY 1
 ----

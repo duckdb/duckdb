@@ -1,5 +1,6 @@
 #include "duckdb/storage/table/list_column_data.hpp"
 #include "duckdb/storage/statistics/list_statistics.hpp"
+#include "duckdb/transaction/transaction.hpp"
 
 namespace duckdb {
 
@@ -66,7 +67,7 @@ void ListColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t row_
 	state.child_states.push_back(move(child_state));
 }
 
-idx_t ListColumnData::Scan(Transaction &transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
+idx_t ListColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result) {
 	return ScanCount(state, result, STANDARD_VECTOR_SIZE);
 }
 
@@ -217,12 +218,12 @@ idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result
 	throw NotImplementedException("List Fetch");
 }
 
-void ListColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
+void ListColumnData::Update(TransactionData transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
                             idx_t offset, idx_t update_count) {
 	throw NotImplementedException("List Update is not supported.");
 }
 
-void ListColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector,
+void ListColumnData::UpdateColumn(TransactionData transaction, const vector<column_t> &column_path, Vector &update_vector,
                                   row_t *row_ids, idx_t update_count, idx_t depth) {
 	throw NotImplementedException("List Update Column is not supported");
 }
@@ -231,7 +232,7 @@ unique_ptr<BaseStatistics> ListColumnData::GetUpdateStatistics() {
 	return nullptr;
 }
 
-void ListColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row_t row_id, Vector &result,
+void ListColumnData::FetchRow(TransactionData transaction, ColumnFetchState &state, row_t row_id, Vector &result,
                               idx_t result_idx) {
 	// insert any child states that are required
 	// we need two (validity & list child)
