@@ -76,7 +76,7 @@ SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINT
 			ret = SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, &len_ptr);
 			*string_length_ptr = len_ptr;
 		} else {
-			ret = SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, NULL);
+			ret = SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, nullptr);
 		}
 		if (!SQL_SUCCEEDED(ret)) {
 			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
