@@ -69,11 +69,20 @@ SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINT
 			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
-		if (!SQL_SUCCEEDED(
-		        SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, (SQLLEN *)string_length_ptr))) {
+
+		SQLRETURN ret;
+		if (string_length_ptr) {
+			SQLLEN len_ptr;
+			ret = SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, &len_ptr);
+			*string_length_ptr = len_ptr;
+		} else {
+			ret = SQLGetData(stmt, 1, SQL_C_CHAR, info_value_ptr, buffer_length, NULL);
+		}
+		if (!SQL_SUCCEEDED(ret)) {
 			SQLFreeHandle(SQL_HANDLE_STMT, stmt);
 			return SQL_ERROR;
 		}
+
 		SQLFreeHandle(SQL_HANDLE_STMT, stmt);
 		return SQL_SUCCESS;
 	}
