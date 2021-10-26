@@ -209,3 +209,21 @@ NULL	NULL	5.000000
 17	NULL	5.000000
 18	18	5.000000
 19	NULL	5.000000
+
+#
+# ReplaceIndex coverage
+#
+statement ok
+CREATE TABLE coverage AS SELECT * FROM (VALUES
+	(1), (2), (3), (1)
+	) tbl(r)
+
+query II
+SELECT r, mad(r) OVER (ORDER BY r ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING)
+FROM coverage
+ORDER BY 1
+----
+1	0.000000
+1	0.000000
+2	1.000000
+3	0.500000
