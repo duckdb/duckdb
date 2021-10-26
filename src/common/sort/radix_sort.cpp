@@ -106,39 +106,41 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 }
 
 //! Textbook LSD radix sort
-static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const idx_t &count, const idx_t &col_offset,
-                      const idx_t &sorting_size, const SortLayout &sort_layout) {
+static void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count,
+                      const idx_t &col_offset, const idx_t &sorting_size, const SortLayout &sort_layout) {
 	auto temp_block = buffer_manager.Allocate(MaxValue(count * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
-	data_ptr_t temp = temp_block->Ptr();
 	bool swap = false;
 
 	idx_t counts[256];
-	uint8_t byte;
-	for (idx_t offset = col_offset + sorting_size - 1; offset + 1 > col_offset; offset--) {
+	for (idx_t r = 1; r <= sorting_size; r++) {
 		// Init counts to 0
 		memset(counts, 0, sizeof(counts));
+		// Const some values for convenience
+		const data_ptr_t source_ptr = swap ? temp_block->Ptr() : dataptr;
+		const data_ptr_t target_ptr = swap ? dataptr : temp_block->Ptr();
+		const idx_t offset = col_offset + sorting_size - r;
 		// Collect counts
+		data_ptr_t offset_ptr = source_ptr + offset;
 		for (idx_t i = 0; i < count; i++) {
-			byte = *(dataptr + i * sort_layout.entry_size + offset);
-			counts[byte]++;
+			counts[*offset_ptr]++;
+			offset_ptr += sort_layout.entry_size;
 		}
 		// Compute offsets from counts
 		for (idx_t val = 1; val < 256; val++) {
 			counts[val] = counts[val] + counts[val - 1];
 		}
 		// Re-order the data in temporary array
+		data_ptr_t row_ptr = source_ptr + (count - 1) * sort_layout.entry_size;
 		for (idx_t i = count; i > 0; i--) {
-			byte = *(dataptr + (i - 1) * sort_layout.entry_size + offset);
-			memcpy(temp + (counts[byte] - 1) * sort_layout.entry_size, dataptr + (i - 1) * sort_layout.entry_size,
-			       sort_layout.entry_size);
-			counts[byte]--;
+			idx_t &radix_offset = --counts[*(row_ptr + offset)];
+			memcpy(target_ptr + radix_offset * sort_layout.entry_size, row_ptr, sort_layout.entry_size);
+			row_ptr -= sort_layout.entry_size;
 		}
-		std::swap(dataptr, temp);
 		swap = !swap;
 	}
 	// Move data back to original buffer (if it was swapped)
 	if (swap) {
-		memcpy(temp, dataptr, count * sort_layout.entry_size);
+		memcpy(dataptr, temp_block->Ptr(), count * sort_layout.entry_size);
 	}
 }
 
