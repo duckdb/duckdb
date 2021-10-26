@@ -116,7 +116,7 @@ int ResultArrowArrayStreamWrapper::MyStreamGetNext(struct ArrowArrayStream *stre
 		if (!new_chunk) {
 			break;
 		} else {
-			chunk_result->Append(*new_chunk);
+			chunk_result->Append(*new_chunk, true);
 		}
 	}
 	chunk_result->ToArrowArray(out);
