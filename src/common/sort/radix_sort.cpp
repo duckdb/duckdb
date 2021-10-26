@@ -131,7 +131,7 @@ static void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, 
 		}
 		// Re-order the data in temporary array
 		data_ptr_t row_ptr = source_ptr + (count - 1) * sort_layout.entry_size;
-		for (idx_t i = count; i > 0; i--) {
+		for (idx_t i = 0; i < count; i++) {
 			idx_t &radix_offset = --counts[*(row_ptr + offset)];
 			memcpy(target_ptr + radix_offset * sort_layout.entry_size, row_ptr, sort_layout.entry_size);
 			row_ptr -= sort_layout.entry_size;
