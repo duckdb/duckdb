@@ -56,10 +56,3 @@ NULL
 
 statement error
 SELECT even('abcd')
-
-# overflow
-statement error
-SELECT even(1.7976931348623159e308 * 2)
-
-statement error
-SELECT even(-1.7976931348623159e308 * 2)
