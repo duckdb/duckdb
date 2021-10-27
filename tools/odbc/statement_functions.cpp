@@ -65,6 +65,15 @@ SQLRETURN duckdb::BatchExecuteStmt(SQLHSTMT statement_handle) {
 		do {
 			ret = SingleExecuteStmt(stmt);
 		} while (ret == SQL_STILL_EXECUTING);
+
+		// now, fetching the first chunk to verify constant folding (See: PR #2462 and issue #2452)
+		if (ret == SQL_SUCCESS) {
+			auto fetch_ret = stmt->odbc_fetcher->FetchFirst(statement_handle, stmt);
+			if (fetch_ret == SQL_ERROR) {
+				return fetch_ret;
+			}
+		}
+
 		return ret;
 	});
 }
@@ -83,7 +92,7 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 
 	std::vector<Value> values;
 	SQLRETURN ret = stmt->param_wrapper->GetValues(values);
-	if (ret == SQL_NEED_DATA) {
+	if (ret == SQL_NEED_DATA || ret == SQL_ERROR) {
 		return ret;
 	}
 	stmt->res = stmt->stmt->Execute(values);
@@ -788,4 +797,37 @@ SQLRETURN duckdb::ExecDirectStmt(SQLHSTMT statement_handle, SQLCHAR *statement_t
 		return SQL_ERROR;
 	}
 	return SQL_SUCCESS;
+}
+
+SQLRETURN duckdb::ExecuteStmt(SQLHSTMT statement_handle) {
+	return duckdb::WithStatement(statement_handle,
+	                             [&](duckdb::OdbcHandleStmt *stmt) { return duckdb::BatchExecuteStmt(stmt); });
+}
+
+SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number,
+                                    SQLSMALLINT input_output_type, SQLSMALLINT value_type, SQLSMALLINT parameter_type,
+                                    SQLULEN column_size, SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr,
+                                    SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
+	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
+		if (input_output_type != SQL_PARAM_INPUT) {
+			return SQL_ERROR;
+		}
+
+		if (parameter_number > stmt->param_wrapper->param_descriptors.size()) {
+			// need to resize because SQLFreeStmt might clear it before
+			stmt->param_wrapper->param_descriptors.resize(parameter_number);
+		}
+		idx_t param_idx = parameter_number - 1;
+		stmt->param_wrapper->param_descriptors[param_idx].io_type = input_output_type;
+		stmt->param_wrapper->param_descriptors[param_idx].idx = param_idx;
+		stmt->param_wrapper->param_descriptors[param_idx].apd.value_type = value_type;
+		stmt->param_wrapper->param_descriptors[param_idx].apd.param_value_ptr = parameter_value_ptr;
+		stmt->param_wrapper->param_descriptors[param_idx].apd.buffer_len = buffer_length;
+		stmt->param_wrapper->param_descriptors[param_idx].apd.str_len_or_ind_ptr = str_len_or_ind_ptr;
+		stmt->param_wrapper->param_descriptors[param_idx].ipd.param_type = parameter_type;
+		stmt->param_wrapper->param_descriptors[param_idx].ipd.col_size = column_size;
+		stmt->param_wrapper->param_descriptors[param_idx].ipd.dec_digits = decimal_digits;
+
+		return SQL_SUCCESS;
+	});
 }
