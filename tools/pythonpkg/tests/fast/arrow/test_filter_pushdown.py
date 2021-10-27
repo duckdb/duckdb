@@ -59,14 +59,16 @@ class TestArrowFilterPushdown(object):
         if not can_run:
             return
         with pytest.raises(Exception):
-            numeric_operators('HUGEINT','DECIMAL(30,12)')
+            numeric_operators('HUGEINT')
 
     def test_filter_pushdown_decimal(self,duckdb_cursor):
         if not can_run:
             return
-        numeric_types = ['DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)']
+        numeric_types = ['DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)','DECIMAL(30,12)']
+
         for data_type in numeric_types:
-            numeric_operators(data_type)
+            with pytest.raises(Exception):
+                numeric_operators(data_type)
 
     def test_filter_pushdown_varchar(self,duckdb_cursor):
         if not can_run:
