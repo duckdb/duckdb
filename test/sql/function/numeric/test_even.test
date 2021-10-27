@@ -50,11 +50,6 @@ SELECT even(45::DOUBLE), even(-35::DOUBLE)
 46	-36
 
 query I
-SELECT even(-1.7976931348623159e308)
-----
--1.7976931348623159e308
-
-query I
 SELECT even(NULL)
 ----
 NULL
@@ -62,5 +57,9 @@ NULL
 statement error
 SELECT even('abcd')
 
+# overflow
 statement error
-SELECT even(1.7976931348623159e308)
+SELECT even(1.7976931348623159e308 * 2)
+
+statement error
+SELECT even(-1.7976931348623159e308 * 2)
