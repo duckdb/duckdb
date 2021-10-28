@@ -119,6 +119,19 @@ jobs:
     - name: Install ODBC
       run: tools\\odbc\\bin\\Release\\odbc_install.exe //CI //Install
 
+    - name: Install psqlodbc
+      run: |
+        curl -L https://github.com/Mytherin/psqlodbc/archive/refs/heads/main.zip -o psqlodbc-main.zip
+        tar -xf psqlodbc-main.zip
+        (cd psqlodbc-main && make debug)
+
+    - name: Test psqlodbc
+      run: |
+        cd psqlodbc-main
+        setx PSQLODBC_TEST_DSN DuckDB
+        ./build/debug/reset-db.exe < sampletables.sql
+        ./build/debug/psqlodbc_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
+
     - uses: actions/upload-artifact@v2
       with:
         name: duckdb-binaries-windows
