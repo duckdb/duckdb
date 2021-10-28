@@ -43,6 +43,7 @@ public:
 	}
 
 public:
+	bool IsFoldable() const;
 	void EvaluateExpression(idx_t expression_idx, DataChunk *child_chunk, DataChunk &result) const;
 };
 

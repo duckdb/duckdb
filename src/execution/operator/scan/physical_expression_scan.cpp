@@ -52,6 +52,17 @@ void PhysicalExpressionScan::GetData(ExecutionContext &context, DataChunk &chunk
 	}
 }
 
+bool PhysicalExpressionScan::IsFoldable() const {
+	for(auto &expr_list : expressions) {
+		for(auto &expr : expr_list) {
+			if (!expr->IsFoldable()) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 SinkResultType PhysicalExpressionScan::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
                                             LocalSinkState &lstate, DataChunk &input) const {
 	auto &gstate = (ExpressionSinkState &)gstate_p;

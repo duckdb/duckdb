@@ -24,57 +24,58 @@ SELECT lhs.i, rhs.i,
 	lhs.i = rhs.i, lhs.i <> rhs.i,
 	lhs.i > rhs.i, lhs.i >= rhs.i,
 	lhs.i IS NOT DISTINCT FROM rhs.i, lhs.i IS DISTINCT FROM rhs.i
-FROM struct_int lhs, struct_int rhs;
+FROM struct_int lhs, struct_int rhs
+ORDER BY 1, 2;
 ----
-{'x': 1, 'y': 0}	{'x': 1, 'y': 0}	False	True	True	False	False	True	True	False
-{'x': 1, 'y': 0}	{'x': 1, 'y': 2}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': 0}	{'x': 1, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': 0}	{'x': NULL, 'y': 2}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': 0}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': 0}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-{'x': 1, 'y': 2}	{'x': 1, 'y': 0}	False	False	False	True	True	True	False	True
-{'x': 1, 'y': 2}	{'x': 1, 'y': 2}	False	True	True	False	False	True	True	False
-{'x': 1, 'y': 2}	{'x': 1, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': 2}	{'x': NULL, 'y': 2}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': 2}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': 2}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-{'x': 1, 'y': NULL}	{'x': 1, 'y': 0}	False	False	False	True	True	True	False	True
-{'x': 1, 'y': NULL}	{'x': 1, 'y': 2}	False	False	False	True	True	True	False	True
-{'x': 1, 'y': NULL}	{'x': 1, 'y': NULL}	False	True	True	False	False	True	True	False
-{'x': 1, 'y': NULL}	{'x': NULL, 'y': 2}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': NULL}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': NULL}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
-{'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-{'x': NULL, 'y': 2}	{'x': 1, 'y': 0}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': 2}	{'x': 1, 'y': 2}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': 2}	{'x': 1, 'y': NULL}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': 2}	{'x': NULL, 'y': 2}	False	True	True	False	False	True	True	False
-{'x': NULL, 'y': 2}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': NULL, 'y': 2}	{'x': NULL, 'y': 0}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-{'x': NULL, 'y': NULL}	{'x': 1, 'y': 0}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': NULL}	{'x': 1, 'y': 2}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': NULL}	{'x': 1, 'y': NULL}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 2}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	False	True	True	False	False	True	True	False
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-{'x': NULL, 'y': 0}	{'x': 1, 'y': 0}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': 0}	{'x': 1, 'y': 2}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': 0}	{'x': 1, 'y': NULL}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': 2}	True	True	False	True	False	False	False	True
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	False	True	True	False	False	True	True	False
-{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	True	False
 NULL	{'x': 1, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 NULL	{'x': 1, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 NULL	{'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+NULL	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 NULL	{'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 NULL	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-NULL	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	True	False
+{'x': 1, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': 1, 'y': 0}	{'x': 1, 'y': 0}	False	True	True	False	False	True	True	False
+{'x': 1, 'y': 0}	{'x': 1, 'y': 2}	False	False	False	False	False	False	False	True
+{'x': 1, 'y': 0}	{'x': 1, 'y': NULL}	False	False	False	True	True	True	False	True
+{'x': 1, 'y': 0}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
+{'x': 1, 'y': 0}	{'x': NULL, 'y': 2}	False	False	False	True	True	True	False	True
+{'x': 1, 'y': 0}	{'x': NULL, 'y': NULL}	False	True	True	False	False	True	False	True
+{'x': 1, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': 1, 'y': 2}	{'x': 1, 'y': 0}	False	False	False	True	True	True	False	True
+{'x': 1, 'y': 2}	{'x': 1, 'y': 2}	True	True	False	True	False	False	True	False
+{'x': 1, 'y': 2}	{'x': 1, 'y': NULL}	False	False	False	False	False	False	False	True
+{'x': 1, 'y': 2}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
+{'x': 1, 'y': 2}	{'x': NULL, 'y': 2}	False	False	False	True	True	True	False	True
+{'x': 1, 'y': 2}	{'x': NULL, 'y': NULL}	False	False	False	True	True	True	False	True
+{'x': 1, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': 1, 'y': NULL}	{'x': 1, 'y': 0}	False	False	False	True	True	True	False	True
+{'x': 1, 'y': NULL}	{'x': 1, 'y': 2}	False	True	True	False	False	True	False	True
+{'x': 1, 'y': NULL}	{'x': 1, 'y': NULL}	True	True	False	True	False	False	True	False
+{'x': 1, 'y': NULL}	{'x': NULL, 'y': 0}	False	True	True	False	False	True	False	True
+{'x': 1, 'y': NULL}	{'x': NULL, 'y': 2}	False	False	False	False	False	False	False	True
+{'x': 1, 'y': NULL}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': NULL, 'y': 0}	{'x': 1, 'y': 0}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': 0}	{'x': 1, 'y': 2}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': 0}	{'x': 1, 'y': NULL}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	True	False
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': 2}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': 2}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': NULL, 'y': 2}	{'x': 1, 'y': 0}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': 2}	{'x': 1, 'y': 2}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': 2}	{'x': 1, 'y': NULL}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': 2}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': 2}	{'x': NULL, 'y': 2}	True	True	False	True	False	False	True	False
+{'x': NULL, 'y': 2}	{'x': NULL, 'y': NULL}	False	False	False	False	False	False	False	True
+{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': NULL, 'y': NULL}	{'x': 1, 'y': 0}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': NULL}	{'x': 1, 'y': 2}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': NULL}	{'x': 1, 'y': NULL}	False	True	True	False	False	True	False	True
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	False	False	False	False	False	False	False	True
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 2}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	True	False
 
 # String STRUCTs with NULLs in various positions
 statement ok
@@ -95,54 +96,55 @@ SELECT lhs.i, rhs.i,
 	lhs.i = rhs.i, lhs.i <> rhs.i,
 	lhs.i > rhs.i, lhs.i >= rhs.i,
 	lhs.i IS NOT DISTINCT FROM rhs.i, lhs.i IS DISTINCT FROM rhs.i
-FROM list_str lhs, list_str rhs;
+FROM list_str lhs, list_str rhs
+ORDER BY 1, 2;
 ----
-{'x': duck, 'y': }	{'x': duck, 'y': }	False	True	True	False	False	True	True	False
-{'x': duck, 'y': }	{'x': duck, 'y': goose}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': }	{'x': duck, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': }	{'x': NULL, 'y': goose}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': }	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': }	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': }	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-{'x': duck, 'y': goose}	{'x': duck, 'y': }	False	False	False	True	True	True	False	True
-{'x': duck, 'y': goose}	{'x': duck, 'y': goose}	False	True	True	False	False	True	True	False
-{'x': duck, 'y': goose}	{'x': duck, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': goose}	{'x': NULL, 'y': goose}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': goose}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': goose}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-{'x': duck, 'y': NULL}	{'x': duck, 'y': }	False	False	False	True	True	True	False	True
-{'x': duck, 'y': NULL}	{'x': duck, 'y': goose}	False	False	False	True	True	True	False	True
-{'x': duck, 'y': NULL}	{'x': duck, 'y': NULL}	False	True	True	False	False	True	True	False
-{'x': duck, 'y': NULL}	{'x': NULL, 'y': goose}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': NULL}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': NULL}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
-{'x': duck, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-{'x': NULL, 'y': goose}	{'x': duck, 'y': }	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': goose}	{'x': duck, 'y': goose}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': goose}	{'x': duck, 'y': NULL}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': goose}	{'x': NULL, 'y': goose}	False	True	True	False	False	True	True	False
-{'x': NULL, 'y': goose}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': NULL, 'y': goose}	{'x': NULL, 'y': 0}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-{'x': NULL, 'y': NULL}	{'x': duck, 'y': }	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': NULL}	{'x': duck, 'y': goose}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': NULL}	{'x': duck, 'y': NULL}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': goose}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	False	True	True	False	False	True	True	False
-{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-{'x': NULL, 'y': 0}	{'x': duck, 'y': }	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': 0}	{'x': duck, 'y': goose}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': 0}	{'x': duck, 'y': NULL}	False	False	False	True	True	True	False	True
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': goose}	True	True	False	True	False	False	False	True
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
-{'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	False	True	True	False	False	True	True	False
-{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	True	False
 NULL	{'x': duck, 'y': }	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 NULL	{'x': duck, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 NULL	{'x': duck, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+NULL	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 NULL	{'x': NULL, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
 NULL	{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-NULL	{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	False	True
-NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	True	False
+{'x': duck, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': duck, 'y': goose}	{'x': duck, 'y': }	False	False	False	True	True	True	False	True
+{'x': duck, 'y': goose}	{'x': duck, 'y': goose}	True	True	False	True	False	False	True	False
+{'x': duck, 'y': goose}	{'x': duck, 'y': NULL}	False	False	False	False	False	False	False	True
+{'x': duck, 'y': goose}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
+{'x': duck, 'y': goose}	{'x': NULL, 'y': goose}	False	False	False	True	True	True	False	True
+{'x': duck, 'y': goose}	{'x': NULL, 'y': NULL}	False	False	False	True	True	True	False	True
+{'x': duck, 'y': }	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': duck, 'y': }	{'x': duck, 'y': }	False	True	True	False	False	True	True	False
+{'x': duck, 'y': }	{'x': duck, 'y': goose}	False	False	False	False	False	False	False	True
+{'x': duck, 'y': }	{'x': duck, 'y': NULL}	False	False	False	True	True	True	False	True
+{'x': duck, 'y': }	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
+{'x': duck, 'y': }	{'x': NULL, 'y': goose}	False	False	False	True	True	True	False	True
+{'x': duck, 'y': }	{'x': NULL, 'y': NULL}	False	True	True	False	False	True	False	True
+{'x': duck, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': duck, 'y': NULL}	{'x': duck, 'y': }	False	False	False	True	True	True	False	True
+{'x': duck, 'y': NULL}	{'x': duck, 'y': goose}	False	True	True	False	False	True	False	True
+{'x': duck, 'y': NULL}	{'x': duck, 'y': NULL}	True	True	False	True	False	False	True	False
+{'x': duck, 'y': NULL}	{'x': NULL, 'y': 0}	False	True	True	False	False	True	False	True
+{'x': duck, 'y': NULL}	{'x': NULL, 'y': goose}	False	False	False	False	False	False	False	True
+{'x': duck, 'y': NULL}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': 0}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': NULL, 'y': 0}	{'x': duck, 'y': }	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': 0}	{'x': duck, 'y': goose}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': 0}	{'x': duck, 'y': NULL}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	True	False
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': goose}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': 0}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': goose}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': NULL, 'y': goose}	{'x': duck, 'y': }	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': goose}	{'x': duck, 'y': goose}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': goose}	{'x': duck, 'y': NULL}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': goose}	{'x': NULL, 'y': 0}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': goose}	{'x': NULL, 'y': goose}	True	True	False	True	False	False	True	False
+{'x': NULL, 'y': goose}	{'x': NULL, 'y': NULL}	False	False	False	False	False	False	False	True
+{'x': NULL, 'y': NULL}	NULL	NULL	NULL	NULL	NULL	NULL	NULL	False	True
+{'x': NULL, 'y': NULL}	{'x': duck, 'y': }	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': NULL}	{'x': duck, 'y': goose}	False	False	False	True	True	True	False	True
+{'x': NULL, 'y': NULL}	{'x': duck, 'y': NULL}	False	True	True	False	False	True	False	True
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': 0}	False	False	False	False	False	False	False	True
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': goose}	True	True	False	True	False	False	False	True
+{'x': NULL, 'y': NULL}	{'x': NULL, 'y': NULL}	True	True	False	True	False	False	True	False
