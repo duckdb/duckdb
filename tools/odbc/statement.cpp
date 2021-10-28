@@ -131,22 +131,26 @@ SQLRETURN SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLIN
 		return SQL_ERROR;
 	}
 
-	if (!SQL_SUCCEEDED(SQLBindParameter(statement_handle, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_UNKNOWN_TYPE, 0, 0,
-	                                    schema_name, name_length2, nullptr))) {
+	SQLLEN null_indicator = SQL_NULL_DATA;
+	if (!SQL_SUCCEEDED(duckdb::BindParameterStmt(statement_handle, 1, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_UNKNOWN_TYPE, 0,
+	                                             0, schema_name, name_length2,
+	                                             schema_name ? nullptr : &null_indicator))) {
 		return SQL_ERROR;
 	}
 
-	if (!SQL_SUCCEEDED(SQLBindParameter(statement_handle, 2, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_UNKNOWN_TYPE, 0, 0,
-	                                    table_name, name_length3, nullptr))) {
+	if (!SQL_SUCCEEDED(duckdb::BindParameterStmt(statement_handle, 2, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_UNKNOWN_TYPE, 0,
+	                                             0, table_name, name_length3,
+	                                             table_name ? nullptr : &null_indicator))) {
 		return SQL_ERROR;
 	}
 
-	if (!SQL_SUCCEEDED(SQLBindParameter(statement_handle, 3, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_UNKNOWN_TYPE, 0, 0,
-	                                    table_type, name_length4, nullptr))) {
+	if (!SQL_SUCCEEDED(duckdb::BindParameterStmt(statement_handle, 3, SQL_PARAM_INPUT, SQL_C_CHAR, SQL_UNKNOWN_TYPE, 0,
+	                                             0, table_type, name_length4,
+	                                             table_type ? nullptr : &null_indicator))) {
 		return SQL_ERROR;
 	}
 
-	if (!SQL_SUCCEEDED(SQLExecute(statement_handle))) {
+	if (!SQL_SUCCEEDED(duckdb::ExecuteStmt(statement_handle))) {
 		return SQL_ERROR;
 	}
 

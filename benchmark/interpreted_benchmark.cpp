@@ -354,10 +354,17 @@ string InterpretedBenchmark::Verify(BenchmarkState *state_p) {
 			if (result_values[r][c] == "NULL" && value.is_null) {
 				continue;
 			}
+
 			Value verify_val(result_values[r][c]);
-			verify_val = verify_val.CastAs(state.result->types[c]);
-			if (result_values[r][c] == "(empty)" && (verify_val.ToString() == "" || value.is_null)) {
-				continue;
+			try {
+				if (result_values[r][c] == value.ToString()) {
+					continue;
+				}
+				verify_val = verify_val.CastAs(state.result->types[c]);
+				if (result_values[r][c] == "(empty)" && (verify_val.ToString() == "" || value.is_null)) {
+					continue;
+				}
+			} catch (...) {
 			}
 			if (!Value::ValuesAreEqual(value, verify_val)) {
 				return StringUtil::Format(
