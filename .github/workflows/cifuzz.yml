@@ -10,14 +10,12 @@ jobs:
       with:
         oss-fuzz-project-name: 'duckdb'
         dry-run: false
-        language: c++
     - name: Run Fuzzers
       uses: google/oss-fuzz/infra/cifuzz/actions/run_fuzzers@master
       with:
         oss-fuzz-project-name: 'duckdb'
         fuzz-seconds: 600
         dry-run: false
-        language: c++
     - name: Upload Crash
       uses: actions/upload-artifact@v1
       if: failure() && steps.build.outcome == 'success'
