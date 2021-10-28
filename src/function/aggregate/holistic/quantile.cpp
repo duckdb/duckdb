@@ -15,11 +15,13 @@ namespace duckdb {
 
 // Hugeint arithmetic
 hugeint_t operator*(const hugeint_t &h, const double &d) {
+	D_ASSERT(d >= 0 && d <= 1);
 	return Hugeint::Convert(Hugeint::Cast<double>(h) * d);
 }
 
 // Interval arithmetic
 interval_t operator*(const interval_t &i, const double &d) {
+	D_ASSERT(d >= 0 && d <= 1);
 	return Interval::FromMicro(std::llround(Interval::GetMicro(i) * d));
 }
 
@@ -165,11 +167,31 @@ struct CastInterpolation {
 	static inline TARGET_TYPE Cast(const INPUT_TYPE &src, Vector &result) {
 		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(src);
 	}
+	template <typename TARGET_TYPE>
+	static inline TARGET_TYPE Interpolate(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
+		const auto delta = hi - lo;
+		return lo + delta * d;
+	}
 };
 
 template <>
 interval_t CastInterpolation::Cast(const dtime_t &src, Vector &result) {
 	return {0, 0, src.micros};
+}
+
+template <>
+double CastInterpolation::Interpolate(const double &lo, const double d, const double &hi) {
+	return lo * (1.0 - d) + hi * d;
+}
+
+template <>
+dtime_t CastInterpolation::Interpolate(const dtime_t &lo, const double d, const dtime_t &hi) {
+	return dtime_t(std::llround(lo.micros * (1.0 - d) + hi.micros * d));
+}
+
+template <>
+timestamp_t CastInterpolation::Interpolate(const timestamp_t &lo, const double d, const timestamp_t &hi) {
+	return timestamp_t(std::llround(lo.value * (1.0 - d) + hi.value * d));
 }
 
 template <>
@@ -256,8 +278,7 @@ struct Interpolator {
 			std::nth_element(v_t + FRN, v_t + CRN, v_t + n, comp);
 			auto lo = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
 			auto hi = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[CRN]), result);
-			auto delta = hi - lo;
-			return lo + delta * (RN - FRN);
+			return CastInterpolation::Interpolate<TARGET_TYPE>(lo, RN - FRN, hi);
 		}
 	}
 
@@ -351,8 +372,8 @@ struct QuantileOperation {
 };
 
 template <class STATE_TYPE, class RESULT_TYPE, class OP>
-static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count,
-                                idx_t offset) { // NOLINT
+static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count, // NOLINT
+                                idx_t offset) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	D_ASSERT(bind_data_p);
@@ -946,17 +967,6 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 
 AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type) {
 	switch (type.id()) {
-	case LogicalTypeId::TINYINT:
-		return GetTypedMedianAbsoluteDeviationAggregateFunction<int8_t, double, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::SMALLINT:
-		return GetTypedMedianAbsoluteDeviationAggregateFunction<int16_t, double, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::INTEGER:
-		return GetTypedMedianAbsoluteDeviationAggregateFunction<int32_t, double, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::BIGINT:
-		return GetTypedMedianAbsoluteDeviationAggregateFunction<int64_t, double, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::HUGEINT:
-		return GetTypedMedianAbsoluteDeviationAggregateFunction<hugeint_t, double, double>(type, LogicalType::DOUBLE);
-
 	case LogicalTypeId::FLOAT:
 		return GetTypedMedianAbsoluteDeviationAggregateFunction<float, float, float>(type, type);
 	case LogicalTypeId::DOUBLE:
@@ -1134,10 +1144,6 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	median.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                     nullptr, nullptr, nullptr, BindMedianDecimal));
 
-	AggregateFunctionSet mad("mad");
-	mad.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, nullptr, BindMedianAbsoluteDeviationDecimal));
-
 	AggregateFunctionSet quantile_disc("quantile_disc");
 	quantile_disc.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::DOUBLE}, LogicalTypeId::DECIMAL,
 	                                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
@@ -1161,17 +1167,26 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 		if (CanInterpolate(type)) {
 			quantile_cont.AddFunction(GetContinuousQuantileAggregate(type));
 			quantile_cont.AddFunction(GetContinuousQuantileListAggregate(type));
-			mad.AddFunction(GetMedianAbsoluteDeviationAggregateFunction(type));
 		}
 	}
 
 	set.AddFunction(median);
-	set.AddFunction(mad);
 	set.AddFunction(quantile_disc);
 	set.AddFunction(quantile_cont);
 
 	quantile_disc.name = "quantile";
 	set.AddFunction(quantile_disc);
+
+	AggregateFunctionSet mad("mad");
+	mad.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
+	                                  nullptr, nullptr, nullptr, BindMedianAbsoluteDeviationDecimal));
+
+	const vector<LogicalType> MADS = {LogicalType::FLOAT, LogicalType::DOUBLE, LogicalType::DATE,
+	                                  LogicalType::TIMESTAMP, LogicalType::TIME};
+	for (const auto &type : MADS) {
+		mad.AddFunction(GetMedianAbsoluteDeviationAggregateFunction(type));
+	}
+	set.AddFunction(mad);
 }
 
 } // namespace duckdb
