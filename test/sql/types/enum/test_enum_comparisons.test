@@ -163,6 +163,12 @@ True
 NULL
 False
 
+# Tests in the WHERE clause where null-ness matters
+query IIII
+SELECT * FROM person_pet_den WHERE (person_mood == pet_mood) IS NULL
+----
+Tim	Chorizo	ok	NULL
+
 # Explicit casts from one enum to another
 query I
 SELECT person_mood::pet_mood FROM person_pet_den
@@ -229,3 +235,17 @@ SELECT a = b  FROM test
 ----
 False
 False
+
+# Repeat test with where clause
+query TT
+SELECT * FROM test where a = b
+----
+
+statement ok
+insert into test values (NULL, 'very super rich')
+
+# Repeat test with where clause
+query TT
+SELECT * FROM test where (a = b) is NULL
+----
+NULL	very super rich

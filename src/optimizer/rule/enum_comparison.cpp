@@ -12,6 +12,8 @@ namespace duckdb {
 EnumComparisonRule::EnumComparisonRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a ComparisonExpression that is an Equality and has a VARCHAR and ENUM as its children
 	auto op = make_unique<ComparisonExpressionMatcher>();
+	// Enum requires expression to be root
+	requires_root = true;
 	op->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
 	for (idx_t i = 0; i < 2; i++) {
 		auto child = make_unique<CastExpressionMatcher>();
@@ -41,20 +43,23 @@ bool AreMatchesPossible(LogicalType &left, LogicalType &right) {
 	return false;
 }
 unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                 bool &changes_made) {
-	if (op.type != LogicalOperatorType::LOGICAL_FILTER) {
-		return nullptr;
-	}
+                                                 bool &changes_made, bool is_root) {
+
 	auto root = (BoundComparisonExpression *)bindings[0];
 	auto left_child = (BoundCastExpression *)bindings[1];
 	auto right_child = (BoundCastExpression *)bindings[3];
 
 	if (!AreMatchesPossible(left_child->child->return_type, right_child->child->return_type)) {
-		auto new_left = ExpressionRewriter::ConstantOrNull(move(root->left), Value::Numeric(LogicalType::UTINYINT, 0));
-		auto new_right =
-		    ExpressionRewriter::ConstantOrNull(move(root->right), Value::Numeric(LogicalType::UTINYINT, 1));
-		return make_unique<BoundComparisonExpression>(root->type, move(new_left), move(new_right));
+		vector<unique_ptr<Expression>> children;
+		children.push_back(move(root->left));
+		children.push_back(move(root->right));
+		return ExpressionRewriter::ConstantOrNull(move(children), Value::BOOLEAN(false));
 	}
+
+	if ((requires_root && !is_root) || op.type != LogicalOperatorType::LOGICAL_FILTER) {
+		return nullptr;
+	}
+
 	auto cast_left_to_right =
 	    make_unique<BoundCastExpression>(move(left_child->child), right_child->child->return_type);
 

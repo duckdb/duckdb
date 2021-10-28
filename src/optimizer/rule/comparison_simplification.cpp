@@ -15,7 +15,7 @@ ComparisonSimplificationRule::ComparisonSimplificationRule(ExpressionRewriter &r
 }
 
 unique_ptr<Expression> ComparisonSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                           bool &changes_made) {
+                                                           bool &changes_made, bool is_root) {
 	D_ASSERT(bindings[0]->expression_class == ExpressionClass::BOUND_COMPARISON);
 	auto expr = (BoundComparisonExpression *)bindings[0];
 	auto constant_expr = bindings[1];

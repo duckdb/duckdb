@@ -18,7 +18,7 @@ public:
 	explicit TypeMatcherId(LogicalTypeId type_id_p) : type_id(type_id_p) {
 	}
 
-	bool Match(LogicalType type) override {
+	bool Match(const LogicalType &type) override {
 		return type.id() == this->type_id;
 	}
 

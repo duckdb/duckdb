@@ -18,7 +18,7 @@ public:
 	virtual ~TypeMatcher() {
 	}
 
-	virtual bool Match(LogicalType type) = 0;
+	virtual bool Match(const LogicalType &type) = 0;
 };
 
 //! The SpecificTypeMatcher class matches only a single specified type
@@ -27,7 +27,7 @@ public:
 	explicit SpecificTypeMatcher(LogicalType type) : type(type) {
 	}
 
-	bool Match(LogicalType type_p) override {
+	bool Match(const LogicalType &type_p) override {
 		return type_p == this->type;
 	}
 
@@ -38,7 +38,7 @@ private:
 //! The NumericTypeMatcher class matches any numeric type (DECIMAL, INTEGER, etc...)
 class NumericTypeMatcher : public TypeMatcher {
 public:
-	bool Match(LogicalType type) override {
+	bool Match(const LogicalType &type) override {
 		return type.IsNumeric();
 	}
 };
@@ -46,7 +46,7 @@ public:
 //! The IntegerTypeMatcher class matches only integer types (INTEGER, SMALLINT, TINYINT, BIGINT)
 class IntegerTypeMatcher : public TypeMatcher {
 public:
-	bool Match(LogicalType type) override {
+	bool Match(const LogicalType &type) override {
 		return type.IsIntegral();
 	}
 };
