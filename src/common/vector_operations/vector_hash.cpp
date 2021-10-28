@@ -89,7 +89,7 @@ static inline void ListLoopHash(Vector &input, Vector &hashes, const SelectionVe
 	VectorData idata;
 	input.Orrify(count, idata);
 	const auto ldata = (const list_entry_t *)idata.data;
-	for(idx_t i = 0; i < count; i++) {
+	for (idx_t i = 0; i < count; i++) {
 		const idx_t ridx = HAS_RSEL ? rsel->get_index(i) : i;
 		const auto lidx = idata.sel->get_index(ridx);
 		const auto &entry = ldata[lidx];

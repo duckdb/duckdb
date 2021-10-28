@@ -17,7 +17,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExpression
 	// simple expression scan (i.e. no subqueries to evaluate and no prepared statement parameters)
 	// we can evaluate all the expressions right now and turn this into a chunk collection scan
 	auto chunk_scan =
-		make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN, expr_scan->expressions.size());
+	    make_unique<PhysicalChunkScan>(op.types, PhysicalOperatorType::CHUNK_SCAN, expr_scan->expressions.size());
 	chunk_scan->owned_collection = make_unique<ChunkCollection>();
 	chunk_scan->collection = chunk_scan->owned_collection.get();
 

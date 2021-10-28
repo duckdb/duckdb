@@ -53,8 +53,8 @@ void PhysicalExpressionScan::GetData(ExecutionContext &context, DataChunk &chunk
 }
 
 bool PhysicalExpressionScan::IsFoldable() const {
-	for(auto &expr_list : expressions) {
-		for(auto &expr : expr_list) {
+	for (auto &expr_list : expressions) {
+		for (auto &expr : expr_list) {
 			if (!expr->IsFoldable()) {
 				return false;
 			}
