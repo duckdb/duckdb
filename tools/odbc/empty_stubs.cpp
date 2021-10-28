@@ -10,148 +10,148 @@ SQLRETURN SQL_API SQLCloseCursor(SQLHSTMT statement_handle) {
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLCopyDesc(SQLHDESC SourceDescHandle, SQLHDESC TargetDescHandle) {
+SQLRETURN SQL_API SQLCopyDesc(SQLHDESC source_desc_handle, SQLHDESC target_desc_handle) {
 	std::cout << "***** SQLCopyDesc" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLDataSources(SQLHENV EnvironmentHandle, SQLUSMALLINT Direction, SQLCHAR *ServerName,
-                                 SQLSMALLINT BufferLength1, SQLSMALLINT *NameLength1Ptr, SQLCHAR *Description,
-                                 SQLSMALLINT BufferLength2, SQLSMALLINT *NameLength2Ptr) {
+SQLRETURN SQL_API SQLDataSources(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *server_name,
+                                 SQLSMALLINT buffer_length1, SQLSMALLINT *name_length1_ptr, SQLCHAR *description,
+                                 SQLSMALLINT buffer_length2, SQLSMALLINT *name_length2_ptr) {
 	std::cout << "***** SQLDataSources" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLDrivers(SQLHENV EnvironmentHandle, SQLUSMALLINT Direction, SQLCHAR *DriverDescription,
-                             SQLSMALLINT BufferLength1, SQLSMALLINT *DescriptionLengthPtr, SQLCHAR *DriverAttributes,
-                             SQLSMALLINT BufferLength2, SQLSMALLINT *AttributesLengthPtr) {
+SQLRETURN SQL_API SQLDrivers(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *driver_description,
+                             SQLSMALLINT buffer_length1, SQLSMALLINT *description_length_ptr, SQLCHAR *driver_attributes,
+                             SQLSMALLINT buffer_length2, SQLSMALLINT *attributes_length_ptr) {
 	std::cout << "***** SQLDrivers" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLGetCursorName(SQLHSTMT StatementHandle, SQLCHAR *CursorName, SQLSMALLINT BufferLength,
-                                   SQLSMALLINT *NameLengthPtr) {
+SQLRETURN SQL_API SQLGetCursorName(SQLHSTMT statement_handle, SQLCHAR *cursor_name, SQLSMALLINT buffer_length,
+                                   SQLSMALLINT *name_length_ptr) {
 	std::cout << "***** SQLGetCursorName" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLGetDescField(SQLHDESC DescriptorHandle, SQLSMALLINT RecNumber, SQLSMALLINT FieldIdentifier,
-                                  SQLPOINTER ValuePtr, SQLINTEGER BufferLength, SQLINTEGER *StringLengthPtr) {
+SQLRETURN SQL_API SQLGetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
+                                  SQLPOINTER value_ptr, SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 	std::cout << "***** SQLGetDescField" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV EnvironmentHandle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
-                                SQLINTEGER BufferLength, SQLINTEGER *StringLengthPtr) {
+SQLRETURN SQL_API SQLGetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                                SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 	std::cout << "***** SQLGetEnvAttr" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLNativeSql(SQLHDBC ConnectionHandle, SQLCHAR *InStatementText, SQLINTEGER TextLength1,
-                               SQLCHAR *OutStatementText, SQLINTEGER BufferLength, SQLINTEGER *TextLength2Ptr) {
+SQLRETURN SQL_API SQLNativeSql(SQLHDBC connection_handle, SQLCHAR *in_statement_text, SQLINTEGER text_length1,
+                               SQLCHAR *out_statement_text, SQLINTEGER buffer_length, SQLINTEGER *text_length2_ptr) {
 	std::cout << "***** SQLNativeSql" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLSetCursorName(SQLHSTMT StatementHandle, SQLCHAR *CursorName, SQLSMALLINT NameLength) {
+SQLRETURN SQL_API SQLSetCursorName(SQLHSTMT statement_handle, SQLCHAR *cursor_name, SQLSMALLINT name_length) {
 	std::cout << "***** SQLSetCursorName" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLSetDescField(SQLHDESC DescriptorHandle, SQLSMALLINT RecNumber, SQLSMALLINT FieldIdentifier,
-                                  SQLPOINTER ValuePtr, SQLINTEGER BufferLength) {
+SQLRETURN SQL_API SQLSetDescField(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT field_identifier,
+                                  SQLPOINTER value_ptr, SQLINTEGER buffer_length) {
 	std::cout << "***** SQLSetDescField" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLSpecialColumns(SQLHSTMT StatementHandle, SQLSMALLINT IdentifierType, SQLCHAR *CatalogName,
-                                    SQLSMALLINT NameLength1, SQLCHAR *SchemaName, SQLSMALLINT NameLength2,
-                                    SQLCHAR *TableName, SQLSMALLINT NameLength3, SQLSMALLINT Scope,
-                                    SQLSMALLINT Nullable) {
+SQLRETURN SQL_API SQLSpecialColumns(SQLHSTMT statement_handle, SQLSMALLINT identifier_type, SQLCHAR *catalog_name,
+                                    SQLSMALLINT name_length1, SQLCHAR *schema_name, SQLSMALLINT name_length2,
+                                    SQLCHAR *table_name, SQLSMALLINT name_length3, SQLSMALLINT scope,
+                                    SQLSMALLINT nullable) {
 	std::cout << "***** SQLSpecialColumns" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLStatistics(SQLHSTMT StatementHandle, SQLCHAR *CatalogName, SQLSMALLINT NameLength1,
-                                SQLCHAR *SchemaName, SQLSMALLINT NameLength2, SQLCHAR *TableName,
-                                SQLSMALLINT NameLength3, SQLUSMALLINT Unique, SQLUSMALLINT Reserved) {
+SQLRETURN SQL_API SQLStatistics(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
+                                SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
+                                SQLSMALLINT name_length3, SQLUSMALLINT unique, SQLUSMALLINT reserved) {
 	std::cout << "***** SQLStatistics" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLBrowseConnect(SQLHDBC ConnectionHandle, SQLCHAR *InConnectionString, SQLSMALLINT StringLength1,
-                                   SQLCHAR *OutConnectionString, SQLSMALLINT BufferLength,
-                                   SQLSMALLINT *StringLength2Ptr) {
+SQLRETURN SQL_API SQLBrowseConnect(SQLHDBC connection_handle, SQLCHAR *in_connection_string, SQLSMALLINT string_length1,
+                                   SQLCHAR *out_connection_string, SQLSMALLINT buffer_length,
+                                   SQLSMALLINT *string_length2_ptr) {
 	std::cout << "***** SQLBrowseConnect" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLBulkOperations(SQLHSTMT StatementHandle, SQLUSMALLINT Operation) {
+SQLRETURN SQL_API SQLBulkOperations(SQLHSTMT statement_handle, SQLUSMALLINT operation) {
 	std::cout << "***** SQLBulkOperations" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLColumnPrivileges(SQLHSTMT StatementHandle, SQLCHAR *CatalogName, SQLSMALLINT NameLength1,
-                                      SQLCHAR *SchemaName, SQLSMALLINT NameLength2, SQLCHAR *TableName,
-                                      SQLSMALLINT NameLength3, SQLCHAR *ColumnName, SQLSMALLINT NameLength4) {
+SQLRETURN SQL_API SQLColumnPrivileges(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
+                                      SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
+                                      SQLSMALLINT name_length3, SQLCHAR *column_name, SQLSMALLINT name_length4) {
 	std::cout << "***** SQLColumnPrivileges" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLForeignKeys(SQLHSTMT StatementHandle, SQLCHAR *PKCatalogName, SQLSMALLINT NameLength1,
-                                 SQLCHAR *PKSchemaName, SQLSMALLINT NameLength2, SQLCHAR *PKTableName,
-                                 SQLSMALLINT NameLength3, SQLCHAR *FKCatalogName, SQLSMALLINT NameLength4,
-                                 SQLCHAR *FKSchemaName, SQLSMALLINT NameLength5, SQLCHAR *FKTableName,
-                                 SQLSMALLINT NameLength6) {
+SQLRETURN SQL_API SQLForeignKeys(SQLHSTMT statement_handle, SQLCHAR *pk_catalog_name, SQLSMALLINT name_length1,
+                                 SQLCHAR *pk_schema_name, SQLSMALLINT name_length2, SQLCHAR *pk_table_name,
+                                 SQLSMALLINT name_length3, SQLCHAR *fk_catalog_name, SQLSMALLINT name_length4,
+                                 SQLCHAR *fk_schema_name, SQLSMALLINT name_length5, SQLCHAR *fk_table_name,
+                                 SQLSMALLINT name_length6) {
 	std::cout << "***** SQLForeignKeys" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLGetDescRec(SQLHDESC DescriptorHandle, SQLSMALLINT RecNumber, SQLCHAR *Name,
-                                SQLSMALLINT BufferLength, SQLSMALLINT *StringLengthPtr, SQLSMALLINT *TypePtr,
-                                SQLSMALLINT *SubTypePtr, SQLLEN *LengthPtr, SQLSMALLINT *PrecisionPtr,
-                                SQLSMALLINT *ScalePtr, SQLSMALLINT *NullablePtr) {
+SQLRETURN SQL_API SQLGetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLCHAR *name,
+                                SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr, SQLSMALLINT *type_ptr,
+                                SQLSMALLINT *sub_type_ptr, SQLLEN *length_ptr, SQLSMALLINT *precision_ptr,
+                                SQLSMALLINT *scale_ptr, SQLSMALLINT *nullable_ptr) {
 	std::cout << "***** SQLGetDescRec" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLPrimaryKeys(SQLHSTMT StatementHandle, SQLCHAR *CatalogName, SQLSMALLINT NameLength1,
-                                 SQLCHAR *SchemaName, SQLSMALLINT NameLength2, SQLCHAR *TableName,
-                                 SQLSMALLINT NameLength3) {
+SQLRETURN SQL_API SQLPrimaryKeys(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
+                                 SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
+                                 SQLSMALLINT name_length3) {
 	std::cout << "***** SQLPrimaryKeys" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLProcedureColumns(SQLHSTMT StatementHandle, SQLCHAR *CatalogName, SQLSMALLINT NameLength1,
-                                      SQLCHAR *SchemaName, SQLSMALLINT NameLength2, SQLCHAR *ProcName,
-                                      SQLSMALLINT NameLength3, SQLCHAR *ColumnName, SQLSMALLINT NameLength4) {
+SQLRETURN SQL_API SQLProcedureColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
+                                      SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *proc_name,
+                                      SQLSMALLINT name_length3, SQLCHAR *column_name, SQLSMALLINT name_length4) {
 	std::cout << "***** SQLProcedureColumns" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLProcedures(SQLHSTMT StatementHandle, SQLCHAR *CatalogName, SQLSMALLINT NameLength1,
-                                SQLCHAR *SchemaName, SQLSMALLINT NameLength2, SQLCHAR *ProcName,
-                                SQLSMALLINT NameLength3) {
+SQLRETURN SQL_API SQLProcedures(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
+                                SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *proc_name,
+                                SQLSMALLINT name_length3) {
 	std::cout << "***** SQLProcedures" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLSetDescRec(SQLHDESC DescriptorHandle, SQLSMALLINT RecNumber, SQLSMALLINT Type, SQLSMALLINT SubType,
-                                SQLLEN Length, SQLSMALLINT Precision, SQLSMALLINT Scale, SQLPOINTER DataPtr,
-                                SQLLEN *StringLengthPtr, SQLLEN *IndicatorPtr) {
+SQLRETURN SQL_API SQLSetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT type, SQLSMALLINT sub_type,
+                                SQLLEN length, SQLSMALLINT precision, SQLSMALLINT scale, SQLPOINTER data_ptr,
+                                SQLLEN *string_length_ptr, SQLLEN *indicator_ptr) {
 	std::cout << "***** SQLSetDescRec" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLSetPos(SQLHSTMT StatementHandle, SQLSETPOSIROW RowNumber, SQLUSMALLINT Operation,
-                            SQLUSMALLINT LockType) {
+SQLRETURN SQL_API SQLSetPos(SQLHSTMT statement_handle, SQLSETPOSIROW row_number, SQLUSMALLINT operation,
+                            SQLUSMALLINT lock_type) {
 	std::cout << "***** SQLSetPos" << std::endl;
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLTablePrivileges(SQLHSTMT StatementHandle, SQLCHAR *CatalogName, SQLSMALLINT NameLength1,
-                                     SQLCHAR *SchemaName, SQLSMALLINT NameLength2, SQLCHAR *TableName,
-                                     SQLSMALLINT NameLength3) {
+SQLRETURN SQL_API SQLTablePrivileges(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
+                                     SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
+                                     SQLSMALLINT name_length3) {
 	std::cout << "***** SQLTablePrivileges" << std::endl;
 	return SQL_ERROR;
 }
