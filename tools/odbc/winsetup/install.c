@@ -12,17 +12,17 @@
 #include <string.h>
 #include <stdbool.h>
 
-static const char *DriverName = "DuckDB Driver";
-static const char *DataSourceName = "DuckDB";
-static const char *DriverDLL = "duckdb_odbc.dll";
-static const char *DriverDLLs = "duckdb_odbc_setup.dll";
-static const char *DUCKDB_ODBC_VER = "3.0";
+static const char *driver_name = "DuckDB Driver";
+static const char *data_source_name = "DuckDB";
+static const char *driver_dll = "duckdb_odbc.dll";
+static const char *driver_dl_ls = "duckdb_odbc_setup.dll";
+static const char *duckdb_odbc_ver = "3.0";
 
 // global option do show or not message box, useful on the CI
-static bool SHOW_MSG_BOX = true;
+static bool show_msg_box = true;
 
-void print_msg(const char *func, const char *msg, int errnr) {
-	if (SHOW_MSG_BOX) {
+void PrintMsg(const char *func, const char *msg, int errnr) {
+	if (show_msg_box) {
 		MessageBox(NULL, msg, func, MB_ICONSTOP | MB_OK | MB_TASKMODAL | MB_SETFOREGROUND);
 	} else {
 		printf("%d - %s: %s\n", errnr, func, msg);
@@ -41,7 +41,7 @@ static BOOL ProcessSQLErrorMessages(const char *func) {
 		errmsg[0] = '\0';
 		rc = SQLInstallerError(errnr, &errcode, errmsg, sizeof(errmsg), &errmsglen);
 		if (rc == SQL_SUCCESS || rc == SQL_SUCCESS_WITH_INFO) {
-			print_msg(func, errmsg, errnr);
+			PrintMsg(func, errmsg, errnr);
 			func_rc = TRUE;
 		}
 		errnr++;
@@ -50,11 +50,11 @@ static BOOL ProcessSQLErrorMessages(const char *func) {
 }
 
 static void ProcessSysErrorMessage(DWORD err, const char *func) {
-	char *lpMsgBuf;
+	char *lp_msg_buf;
 
 	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL,
 	              err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&lpMsgBuf, 0, NULL);
-	print_msg(func, lpMsgBuf, 0);
+	PrintMsg(func, lp_msg_buf, 0);
 	LocalFree(lpMsgBuf);
 }
 
@@ -73,12 +73,12 @@ static BOOL InstallMyDriver(const char *driverpath, const char *drivername) {
 
 	/* the correct format of driver keywords are
 	 * "DriverName\0Driver=...\xxxxxx.DLL\0Setup=...\xxxxxx.DLL\0\0" */
-	size_t driverlen = strlen(drivername) + 2 * strlen(driverpath) + strlen(DriverDLL) + strlen(DriverDLLs) + 90;
+	size_t driverlen = strlen(drivername) + 2 * strlen(driverpath) + strlen(driver_dll) + strlen(driver_dl_ls) + 90;
 	char *driver = (char *)malloc(driverlen);
 	snprintf(driver, driverlen,
 	         "%s;Driver=%s\\%s;Setup=%s\\%s;APILevel=1;"
 	         "ConnectFunctions=YYN;DriverODBCVer=%s;SQLLevel=3;",
-	         drivername, driverpath, DriverDLL, driverpath, DriverDLLs, DUCKDB_ODBC_VER);
+	         drivername, driverpath, driver_dll, driverpath, driver_dl_ls, duckdb_odbc_ver);
 
 	for (p = driver; *p; p++) {
 		if (*p == ';') {
@@ -159,10 +159,10 @@ static BOOL AddMyDSN(const char *dsn, const char *drivername) {
 	CreateAttributeString(attrs, sizeof(attrs), dsn);
 
 	/* I choose to remove the DSN if it already existed */
-	SQLConfigDataSource(NULL, ODBC_REMOVE_SYS_DSN, drivername, attrs);
+	SQLConfigDataSource(nullptr, ODBC_REMOVE_SYS_DSN, drivername, attrs);
 
 	/* then create a new DSN */
-	if (!SQLConfigDataSource(NULL, ODBC_ADD_SYS_DSN, drivername, attrs) &&
+	if (!SQLConfigDataSource(nullptr, ODBC_ADD_SYS_DSN, drivername, attrs) &&
 	    ProcessSQLErrorMessages("SQLConfigDataSource")) {
 		return FALSE;
 	}
@@ -180,7 +180,7 @@ static BOOL RemoveMyDSN(const char *dsn, const char *drivername) {
 			*p = 0;
 		}
 	}
-	SQLConfigDataSource(NULL, ODBC_REMOVE_SYS_DSN, drivername, buf);
+	SQLConfigDataSource(nullptr, ODBC_REMOVE_SYS_DSN, drivername, buf);
 	return TRUE;
 }
 
@@ -197,7 +197,7 @@ static BOOL Install(const char *driverpath, const char *dsn, const char *drivern
 	}
 
 	if (!CheckIfFileExists(path, "odbc32.dll")) {
-		print_msg("Install", "You must install MDAC before you can use the ODBC driver", 0);
+		PrintMsg("Install", "You must install MDAC before you can use the ODBC driver", 0);
 		SQLRemoveDriverManager(&usagecount);
 		return FALSE;
 	}
@@ -227,14 +227,14 @@ static BOOL Uninstall(const char *dsn, const char *drivername) {
 
 int main(int argc, char **argv) {
 	if (argc < 2 || argc > 5) {
-		print_msg(argv[0], "[/Install | /Uninstall]", 0);
+		PrintMsg(argv[0], "[/Install | /Uninstall]", 0);
 		exit(1);
 	}
 
-	bool is_CI = (strcmp("/CI", argv[1]) == 0) ? true : false;
-	char *cmd = is_CI ? argv[2] : argv[1];
-	if (is_CI) {
-		SHOW_MSG_BOX = false;
+	bool is_ci = (strcmp("/CI", argv[1]) == 0) ? true : false;
+	char *cmd = is_ci ? argv[2] : argv[1];
+	if (is_ci) {
+		show_msg_box = false;
 	}
 
 	/* after /Install or /Uninstall we optionally accept the DSN and the driver name */
@@ -242,32 +242,32 @@ int main(int argc, char **argv) {
 	if (argc > 2) {
 		dsn = argv[2];
 		// /CI option was provided
-		if (is_CI) {
-			dsn = (argc == 3) ? DataSourceName : argv[3];
+		if (is_ci) {
+			dsn = (argc == 3) ? data_source_name : argv[3];
 		}
 	} else {
-		dsn = DataSourceName;
+		dsn = data_source_name;
 	}
 
 	const char *drivername;
 	if (argc > 3) {
 		drivername = argv[3];
 		// /CI option was provided
-		if (is_CI) {
-			drivername = (argc == 4) ? DriverName : argv[4];
+		if (is_ci) {
+			drivername = (argc == 4) ? driver_name : argv[4];
 		}
 	} else {
-		drivername = DriverName;
+		drivername = driver_name;
 	}
 
 	char buf[MAX_PATH];
 	if (GetModuleFileName(NULL, buf, (DWORD)sizeof(buf)) == 0) {
-		print_msg(argv[0], "Cannot retrieve file location", 0);
+		PrintMsg(argv[0], "Cannot retrieve file location", 0);
 		exit(1);
 	}
 
 	char *p = strrchr(buf, '\\');
-	if (p != NULL) {
+	if (p != nullptr) {
 		// remove last component
 		*p = '\0';
 		if (p > buf + 4 && strcmp(p - 4, "\\bin") == 0) {
@@ -279,7 +279,7 @@ int main(int argc, char **argv) {
 
 	if (strcmp("/Install", cmd) == 0) {
 		if (!Install(buf, dsn, drivername)) {
-			print_msg(argv[0], "ODBC Install Failed", 0);
+			PrintMsg(argv[0], "ODBC Install Failed", 0);
 			exit(1);
 		}
 	} else if (strcmp("/Uninstall", cmd) == 0) {
@@ -288,11 +288,11 @@ int main(int argc, char **argv) {
 		(void)DeleteFile(buf);
 
 		if (!Uninstall(dsn, drivername)) {
-			print_msg(argv[0], "ODBC Uninstall Failed", 0);
+			PrintMsg(argv[0], "ODBC Uninstall Failed", 0);
 			exit(1);
 		}
 	} else {
-		print_msg(argv[0], "[/Install | /Uninstall]", 0);
+		PrintMsg(argv[0], "[/Install | /Uninstall]", 0);
 		exit(1);
 	}
 	return 0;

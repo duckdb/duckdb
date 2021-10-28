@@ -22,7 +22,7 @@
 #include <odbcinst.h>
 #include "resource.h"
 
-static char *DriverName = "DuckDB Driver";
+static char *driver_name = "DuckDB Driver";
 static HINSTANCE instance;
 
 static void ODBCLOG(const char *fmt, ...) {
@@ -37,8 +37,9 @@ static void ODBCLOG(const char *fmt, ...) {
 		if (f) {
 			vfprintf(f, fmt, ap);
 			fclose(f);
-		} else
+		} else {
 			vfprintf(stderr, fmt, ap);
+}
 	}
 	va_end(ap);
 }
@@ -68,7 +69,7 @@ BOOL INSTAPI ConfigDriver(HWND hwnd, WORD request, LPCSTR driver, LPCSTR args, L
 	return TRUE;
 }
 
-struct data {
+struct Data {
 	char *dsn;
 	char *database;
 	HWND parent;
@@ -78,9 +79,10 @@ struct data {
 static void MergeFromProfileString(const char *dsn, char **datap, const char *entry, const char *defval) {
 	char buf[256];
 
-	if (*datap != NULL)
+	if (*datap != nullptr) {
 		return;
-	if (dsn == NULL || *dsn == 0) {
+}
+	if (dsn == nullptr || *dsn == 0) {
 		*datap = strdup(defval);
 		return;
 	}
