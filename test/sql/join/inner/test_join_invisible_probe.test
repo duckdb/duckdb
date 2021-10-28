@@ -16,7 +16,7 @@ CREATE TABLE test4 AS SELECT range r FROM range(0, 1024, 1);
 loop i 0 9
 
 statement ok
-INSERT INTO test4 SELECT * FROM test3;  
+INSERT INTO test4 SELECT * FROM test3;
 
 endloop
 
@@ -29,7 +29,7 @@ select test3.r, test4.r from test3,test4 where test3.r=test4.r order by test3.r,
 loop i 0 90
 
 statement ok
-INSERT INTO test4 SELECT * FROM test3;  
+INSERT INTO test4 SELECT * FROM test3;
 
 endloop
 

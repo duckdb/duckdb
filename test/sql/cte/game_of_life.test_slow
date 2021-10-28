@@ -3,9 +3,6 @@
 # group: [cte]
 
 statement ok
-PRAGMA threads=1
-
-statement ok
 create table series as select * from generate_series(-1,1) x(n);
 
 # conway

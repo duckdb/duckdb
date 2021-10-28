@@ -1,0 +1,106 @@
+# name: test/optimizer/statistics/statistics_coalesce.test
+# description: Test statistics propagation in COALESCE expression
+# group: [statistics]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
+
+# "i" does not contain null values, so the coalesce expression is short-circuited
+# "17" is never output
+query II
+EXPLAIN SELECT * FROM integers WHERE (COALESCE(i, 17)=17);
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# adding NULLs randomly into the coalesce does not change anything
+query II
+EXPLAIN SELECT * FROM integers WHERE (COALESCE(NULL, NULL, NULL, i, NULL, 17)=17);
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+# same here, i is never output, the expression is a constant false
+query II
+EXPLAIN SELECT * FROM integers WHERE (COALESCE(4, i, 17)=3);
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM integers WHERE (COALESCE(i, 4, 17)=3);
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# execute the queries
+query I
+SELECT * FROM integers WHERE (COALESCE(i, 17)=17);
+----
+
+query I
+SELECT * FROM integers WHERE (COALESCE(NULL, NULL, NULL, i, NULL, 17)=17);
+----
+
+query I
+SELECT * FROM integers WHERE (COALESCE(4, i, 17)=3);
+----
+
+query I
+SELECT * FROM integers WHERE (COALESCE(i, 4, 17)=3);
+----
+3
+
+statement ok
+INSERT INTO integers VALUES (NULL);
+
+# after inserting a NULL, the coalesce result changes
+query II
+EXPLAIN SELECT * FROM integers WHERE (COALESCE(i, 17)=17);
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM integers WHERE (COALESCE(NULL, NULL, NULL, i, NULL, 17)=17);
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM integers WHERE (COALESCE(4, i, 17)=3);
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
+
+query II
+EXPLAIN SELECT * FROM integers WHERE (COALESCE(i, 4, 17)=3);
+----
+logical_opt	<!REGEX>:.*EMPTY_RESULT.*
+
+# execute the queries
+query I
+SELECT * FROM integers WHERE (COALESCE(i, 17)=17);
+----
+NULL
+
+query I
+SELECT * FROM integers WHERE (COALESCE(NULL, NULL, NULL, i, NULL, 17)=17);
+----
+NULL
+
+query I
+SELECT * FROM integers WHERE (COALESCE(4, i, 17)=3);
+----
+
+query I
+SELECT * FROM integers WHERE (COALESCE(i, 4, 17)=3);
+----
+3
+
+# random needs disabled verification
+statement ok
+PRAGMA disable_verification
+
+# coalesce without stats
+statement ok
+SELECT COALESCE(CASE WHEN RANDOM()<100 THEN RANDOM() ELSE NULL END, NULL, 42) FROM range(10)

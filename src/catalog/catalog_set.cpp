@@ -8,6 +8,7 @@
 #include "duckdb/parser/parsed_data/alter_table_info.hpp"
 #include "duckdb/catalog/dependency_manager.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/parser/column_definition.hpp"
 
 namespace duckdb {
 
@@ -307,7 +308,7 @@ CatalogEntry *CatalogSet::GetCommittedEntry(CatalogEntry *current) {
 	return current;
 }
 
-string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
+pair<string, idx_t> CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 	lock_guard<mutex> lock(catalog_lock);
 
 	string result;
@@ -322,7 +323,7 @@ string CatalogSet::SimilarEntry(ClientContext &context, const string &name) {
 			}
 		}
 	}
-	return result;
+	return {result, current_score};
 }
 
 CatalogEntry *CatalogSet::CreateEntryInternal(ClientContext &context, unique_ptr<CatalogEntry> entry) {
@@ -387,6 +388,49 @@ void CatalogSet::UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp) {
 	mapping[entry->name]->timestamp = timestamp;
 }
 
+void CatalogSet::AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove) {
+	CatalogEntry *enum_type_catalog = (CatalogEntry *)EnumType::GetCatalog(column.type);
+	if (enum_type_catalog) {
+		if (remove) {
+			catalog.dependency_manager->dependents_map[enum_type_catalog].erase(entry->parent);
+			catalog.dependency_manager->dependencies_map[entry->parent].erase(enum_type_catalog);
+		} else {
+			catalog.dependency_manager->dependents_map[enum_type_catalog].insert(entry);
+			catalog.dependency_manager->dependencies_map[entry].insert(enum_type_catalog);
+		}
+	}
+}
+
+void CatalogSet::AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table, ColumnDefinition &column,
+                                  bool remove) {
+	bool found = false;
+	if (column.type.id() == LogicalTypeId::ENUM) {
+		for (auto &old_column : table->columns) {
+			if (old_column.name == column.name && old_column.type.id() != LogicalTypeId::ENUM) {
+				AdjustEnumDependency(entry, column, remove);
+				found = true;
+			}
+		}
+		if (!found) {
+			AdjustEnumDependency(entry, column, remove);
+		}
+	}
+}
+void CatalogSet::AdjustTableDependencies(CatalogEntry *entry) {
+	if (entry->type == CatalogType::TABLE_ENTRY && entry->parent->type == CatalogType::TABLE_ENTRY) {
+		// If its a table entry we have to check for possibly removing or adding user type dependencies
+		auto old_table = (TableCatalogEntry *)entry->parent;
+		auto new_table = (TableCatalogEntry *)entry;
+
+		for (auto &new_column : new_table->columns) {
+			AdjustDependency(entry, old_table, new_column, false);
+		}
+		for (auto &old_column : old_table->columns) {
+			AdjustDependency(entry, new_table, old_column, true);
+		}
+	}
+}
+
 void CatalogSet::Undo(CatalogEntry *entry) {
 	lock_guard<mutex> write_lock(catalog.write_lock);
 
@@ -397,6 +441,9 @@ void CatalogSet::Undo(CatalogEntry *entry) {
 
 	// i.e. we have to place (entry) as (entry->parent) again
 	auto &to_be_removed_node = entry->parent;
+
+	AdjustTableDependencies(entry);
+
 	if (!to_be_removed_node->deleted) {
 		// delete the entry from the dependency manager as well
 		catalog.dependency_manager->EraseObject(to_be_removed_node);

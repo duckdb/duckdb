@@ -15,7 +15,7 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->constraints = NIL;
 					n->options = $8;
 					n->oncommit = $9;
-					n->if_not_exists = false;
+					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		| CREATE_P OptTemp TABLE IF_P NOT EXISTS qualified_name '('
@@ -30,7 +30,22 @@ CreateStmt:	CREATE_P OptTemp TABLE qualified_name '(' OptTableElementList ')'
 					n->constraints = NIL;
 					n->options = $11;
 					n->oncommit = $12;
-					n->if_not_exists = true;
+					n->onconflict = PG_IGNORE_ON_CONFLICT;
+					$$ = (PGNode *)n;
+				}
+		| CREATE_P OR REPLACE OptTemp TABLE qualified_name '('
+			OptTableElementList ')' OptWith
+			OnCommitOption
+				{
+					PGCreateStmt *n = makeNode(PGCreateStmt);
+					$6->relpersistence = $4;
+					n->relation = $6;
+					n->tableElts = $8;
+					n->ofTypename = NULL;
+					n->constraints = NIL;
+					n->options = $10;
+					n->oncommit = $11;
+					n->onconflict = PG_REPLACE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		;
@@ -165,6 +180,14 @@ ColConstraintElem:
 					n->cooked_expr = NULL;
 					n->skip_validation = false;
 					n->initially_valid = true;
+					$$ = (PGNode *)n;
+				}
+			| USING COMPRESSION name
+				{
+					PGConstraint *n = makeNode(PGConstraint);
+					n->contype = PG_CONSTR_COMPRESSION;
+					n->location = @1;
+					n->compression_name = $3;
 					$$ = (PGNode *)n;
 				}
 			| DEFAULT b_expr

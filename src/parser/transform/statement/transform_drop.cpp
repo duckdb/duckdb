@@ -30,15 +30,23 @@ unique_ptr<SQLStatement> Transformer::TransformDrop(duckdb_libpgquery::PGNode *n
 	case duckdb_libpgquery::PG_OBJECT_FUNCTION:
 		info.type = CatalogType::MACRO_ENTRY;
 		break;
+	case duckdb_libpgquery::PG_OBJECT_TYPE:
+		info.type = CatalogType::TYPE_ENTRY;
+		break;
 	default:
 		throw NotImplementedException("Cannot drop this type yet");
 	}
 
 	switch (stmt->removeType) {
 	case duckdb_libpgquery::PG_OBJECT_SCHEMA:
-		D_ASSERT(stmt->objects && stmt->objects->length == 1);
 		info.name = ((duckdb_libpgquery::PGValue *)stmt->objects->head->data.ptr_value)->val.str;
 		break;
+	case duckdb_libpgquery::PG_OBJECT_TYPE: {
+		auto view_list = (duckdb_libpgquery::PGList *)stmt->objects;
+		auto target = (duckdb_libpgquery::PGTypeName *)(view_list->head->data.ptr_value);
+		info.name = (reinterpret_cast<duckdb_libpgquery::PGValue *>(target->names->tail->data.ptr_value)->val.str);
+		break;
+	}
 	default: {
 		auto view_list = (duckdb_libpgquery::PGList *)stmt->objects->head->data.ptr_value;
 		if (view_list->length == 2) {

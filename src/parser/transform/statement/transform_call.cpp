@@ -8,7 +8,7 @@ unique_ptr<CallStatement> Transformer::TransformCall(duckdb_libpgquery::PGNode *
 	D_ASSERT(stmt);
 
 	auto result = make_unique<CallStatement>();
-	result->function = TransformFuncCall((duckdb_libpgquery::PGFuncCall *)stmt->func, 0);
+	result->function = TransformFuncCall((duckdb_libpgquery::PGFuncCall *)stmt->func);
 	return result;
 }
 

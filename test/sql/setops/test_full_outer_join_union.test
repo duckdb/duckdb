@@ -1,0 +1,92 @@
+# name: test/sql/setops/test_full_outer_join_union.test
+# description: Test full outer joins on unions
+# group: [setops]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2);
+
+statement ok
+CREATE TABLE integers2(i INTEGER);
+
+statement ok
+INSERT INTO integers2 VALUES (2), (3);
+
+statement ok
+CREATE VIEW v1 AS SELECT * FROM integers UNION ALL SELECT * FROM integers;
+
+statement ok
+CREATE VIEW v2 AS SELECT * FROM integers2 UNION ALL SELECT * FROM integers2;
+
+query I
+SELECT COUNT(*) FROM v1 JOIN v2 USING (i);
+----
+4
+
+query I
+SELECT COUNT(*) FROM v1 LEFT JOIN v2 USING (i);
+----
+6
+
+query I
+SELECT COUNT(*) FROM v1 RIGHT JOIN v2 USING (i);
+----
+6
+
+query I
+SELECT COUNT(*) FROM v1 FULL OUTER JOIN v2 USING (i);
+----
+8
+
+# self joins
+query I
+SELECT COUNT(*) FROM v1 JOIN v1 v2 USING (i);
+----
+8
+
+query I
+SELECT COUNT(*) FROM v1 FULL OUTER JOIN v1 v2 USING (i);
+----
+8
+
+# add some correlated subqueries for good measure
+statement ok
+CREATE VIEW v3 AS SELECT (SELECT integers2.i-1) i FROM integers2 UNION ALL SELECT (SELECT integers2.i-1) i FROM integers2;
+
+statement ok
+CREATE VIEW v4 AS SELECT (SELECT integers.i+1) i FROM integers UNION ALL SELECT (SELECT integers.i+1) i FROM integers;
+
+query I
+SELECT COUNT(*) FROM v3
+----
+4
+
+query I
+SELECT COUNT(*) FROM v4
+----
+4
+
+query I
+SELECT COUNT(*) FROM v3 JOIN v4 USING (i);
+----
+4
+
+query I
+SELECT COUNT(*) FROM v3 LEFT JOIN v4 USING (i);
+----
+6
+
+query I
+SELECT COUNT(*) FROM v3 RIGHT JOIN v4 USING (i);
+----
+6
+
+query I
+SELECT COUNT(*) FROM v3 FULL OUTER JOIN v4 USING (i);
+----
+8

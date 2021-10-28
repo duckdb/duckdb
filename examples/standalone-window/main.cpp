@@ -6,7 +6,6 @@
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/parallel/thread_context.hpp"
-#include "duckdb/parallel/task_context.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
 #endif
 
@@ -59,12 +58,11 @@ int main() {
 	// first set up some contexts
 	auto &client_context = *con.context;
 	ThreadContext thread_context(client_context);
-	TaskContext task_context;
-	ExecutionContext econtext(client_context, thread_context, task_context);
+	ExecutionContext econtext(client_context, thread_context);
 
 	// global state needs to be shared amongst all threads
 	// local_state is thread-local - every thread should have their own
-	auto global_state = window->GetGlobalState(client_context);
+	auto global_state = window->GetGlobalSinkState(client_context);
 	auto local_state = window->GetLocalSinkState(econtext);
 
 	// the actual computation
@@ -99,9 +97,10 @@ int main() {
 	// after the window function is finalized we can pull the result from it using the GetChunk method
 	DataChunk result;
 	result.Initialize(result_types);
-	auto pull_state = window->GetOperatorState();
+	auto global_source_state = window->GetGlobalSourceState(client_context);
+	auto local_source_state = window->GetLocalSourceState(econtext, *global_source_state);
 	while (true) {
-		window->GetChunk(econtext, result, pull_state.get());
+		window->GetData(econtext, result, *global_source_state, *local_source_state);
 		if (result.size() == 0) {
 			break;
 		}

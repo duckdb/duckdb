@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-LocalTableStorage::LocalTableStorage(DataTable &table) : table(table) {
+LocalTableStorage::LocalTableStorage(DataTable &table) : table(table), active_scans(0) {
 	Clear();
 }
 
@@ -344,12 +344,12 @@ void LocalStorage::Update(DataTable *table, Vector &row_ids, const vector<column
 template <class T>
 bool LocalStorage::ScanTableStorage(DataTable &table, LocalTableStorage &storage, T &&fun) {
 	vector<column_t> column_ids;
-	for (idx_t i = 0; i < table.types.size(); i++) {
+	for (idx_t i = 0; i < table.column_definitions.size(); i++) {
 		column_ids.push_back(i);
 	}
 
 	DataChunk chunk;
-	chunk.Initialize(table.types);
+	chunk.Initialize(table.GetTypes());
 
 	// initialize the scan
 	LocalScanState state;

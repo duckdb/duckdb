@@ -20,6 +20,7 @@
 
 namespace duckdb {
 class BoundResultModifier;
+class BoundSelectNode;
 class ClientContext;
 class ExpressionBinder;
 class LimitModifier;
@@ -140,6 +141,8 @@ public:
 		return FormatErrorRecursive(query_location, msg, values, params...);
 	}
 
+	static void BindLogicalType(ClientContext &context, LogicalType &type, const string &schema = "");
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
@@ -231,7 +234,6 @@ private:
 
 	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
-	unique_ptr<Expression> BindFilter(unique_ptr<ParsedExpression> condition);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
 
 	unique_ptr<LogicalOperator> PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root);

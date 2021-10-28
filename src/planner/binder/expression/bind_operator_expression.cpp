@@ -16,7 +16,7 @@ static LogicalType ResolveNotType(OperatorExpression &op, vector<BoundExpression
 
 static LogicalType ResolveInType(OperatorExpression &op, vector<BoundExpression *> &children) {
 	if (children.empty()) {
-		return LogicalType::BOOLEAN;
+		throw InternalException("IN requires at least a single child node");
 	}
 	// get the maximum type from the children
 	LogicalType max_type = children[0]->expr->return_type;
@@ -42,15 +42,26 @@ static LogicalType ResolveOperatorType(OperatorExpression &op, vector<BoundExpre
 		return LogicalType::BOOLEAN;
 	case ExpressionType::COMPARE_IN:
 	case ExpressionType::COMPARE_NOT_IN:
-	case ExpressionType::OPERATOR_COALESCE:
 		return ResolveInType(op, children);
-	default:
-		D_ASSERT(op.type == ExpressionType::OPERATOR_NOT);
+	case ExpressionType::OPERATOR_COALESCE: {
+		ResolveInType(op, children);
+		return children[0]->expr->return_type;
+	}
+	case ExpressionType::OPERATOR_NOT:
 		return ResolveNotType(op, children);
+	default:
+		throw InternalException("Unrecognized expression type for ResolveOperatorType");
 	}
 }
 
+BindResult ExpressionBinder::BindGroupingFunction(OperatorExpression &op, idx_t depth) {
+	return BindResult("GROUPING function is not supported here");
+}
+
 BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth) {
+	if (op.type == ExpressionType::GROUPING_FUNCTION) {
+		return BindGroupingFunction(op, depth);
+	}
 	// bind the children of the operator expression
 	string error;
 	for (idx_t i = 0; i < op.children.size(); i++) {
@@ -98,23 +109,11 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	LogicalType result_type = ResolveOperatorType(op, children);
 	if (op.type == ExpressionType::OPERATOR_COALESCE) {
 		if (children.empty()) {
-			return BindResult("COALESCE needs at least one child");
+			throw BinderException("COALESCE needs at least one child");
 		}
-		unique_ptr<Expression> current_node;
-		for (size_t i = children.size(); i > 0; i--) {
-			auto child = move(children[i - 1]->expr);
-			if (!current_node) {
-				// no node yet: simply move the child
-				current_node = move(child);
-			} else {
-				// create a case statement
-				auto check =
-				    make_unique<BoundOperatorExpression>(ExpressionType::OPERATOR_IS_NOT_NULL, LogicalType::BOOLEAN);
-				check->children.push_back(child->Copy());
-				current_node = make_unique<BoundCaseExpression>(move(check), move(child), move(current_node));
-			}
+		if (children.size() == 1) {
+			return BindResult(move(children[0]->expr));
 		}
-		return BindResult(move(current_node));
 	}
 
 	auto result = make_unique<BoundOperatorExpression>(op.type, result_type);

@@ -19,6 +19,7 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 namespace duckdb {
 
@@ -316,25 +317,38 @@ idx_t Function::BindFunction(const string &name, vector<TableFunction> &function
 	return Function::BindFunction(name, functions, types, error);
 }
 
+enum class LogicalTypeComparisonResult { IDENTICAL_TYPE, TARGET_IS_ANY, DIFFERENT_TYPES };
+
+LogicalTypeComparisonResult RequiresCast(const LogicalType &source_type, const LogicalType &target_type) {
+	if (target_type.id() == LogicalTypeId::ANY) {
+		return LogicalTypeComparisonResult::TARGET_IS_ANY;
+	}
+	if (source_type == target_type) {
+		return LogicalTypeComparisonResult::IDENTICAL_TYPE;
+	}
+	if (source_type.id() == LogicalTypeId::LIST && target_type.id() == LogicalTypeId::LIST) {
+		return RequiresCast(ListType::GetChildType(source_type), ListType::GetChildType(target_type));
+	}
+	return LogicalTypeComparisonResult::DIFFERENT_TYPES;
+}
+
 void BaseScalarFunction::CastToFunctionArguments(vector<unique_ptr<Expression>> &children) {
 	for (idx_t i = 0; i < children.size(); i++) {
 		auto target_type = i < this->arguments.size() ? this->arguments[i] : this->varargs;
 		target_type.Verify();
 		// check if the type of child matches the type of function argument
 		// if not we need to add a cast
-		bool require_cast = children[i]->return_type != target_type;
+		auto cast_result = RequiresCast(children[i]->return_type, target_type);
 		// except for one special case: if the function accepts ANY argument
 		// in that case we don't add a cast
-		if (target_type.id() == LogicalTypeId::ANY) {
+		if (cast_result == LogicalTypeComparisonResult::TARGET_IS_ANY) {
 			if (children[i]->return_type.id() == LogicalTypeId::UNKNOWN) {
 				// UNLESS the child is a prepared statement parameter
 				// in that case we default the prepared statement parameter to VARCHAR
-				target_type = LogicalType::VARCHAR;
-			} else {
-				require_cast = false;
+				children[i]->return_type =
+				    ExpressionBinder::ExchangeType(target_type, LogicalTypeId::ANY, LogicalType::VARCHAR);
 			}
-		}
-		if (require_cast) {
+		} else if (cast_result == LogicalTypeComparisonResult::DIFFERENT_TYPES) {
 			children[i] = BoundCastExpression::AddCastToType(move(children[i]), target_type);
 		}
 	}

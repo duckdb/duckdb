@@ -5,6 +5,8 @@
 namespace duckdb {
 
 unique_ptr<TableRef> Transformer::TransformTableRefNode(duckdb_libpgquery::PGNode *n) {
+	StackCheck();
+
 	switch (n->type) {
 	case duckdb_libpgquery::T_PGRangeVar:
 		return TransformRangeVar(reinterpret_cast<duckdb_libpgquery::PGRangeVar *>(n));

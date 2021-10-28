@@ -24,7 +24,6 @@ void Leaf::Insert(row_t row_id) {
 	row_ids[num_elements++] = row_id;
 }
 
-//! TODO: Maybe shrink array dynamically?
 void Leaf::Remove(row_t row_id) {
 	idx_t entry_offset = INVALID_INDEX;
 	for (idx_t i = 0; i < num_elements; i++) {
@@ -37,8 +36,19 @@ void Leaf::Remove(row_t row_id) {
 		return;
 	}
 	num_elements--;
-	for (idx_t j = entry_offset; j < num_elements; j++) {
-		row_ids[j] = row_ids[j + 1];
+	if (capacity > 2 && num_elements < capacity / 2) {
+		// Shrink array, if less than half full
+		auto new_row_id = unique_ptr<row_t[]>(new row_t[capacity / 2]);
+		memcpy(new_row_id.get(), row_ids.get(), entry_offset * sizeof(row_t));
+		memcpy(new_row_id.get() + entry_offset, row_ids.get() + entry_offset + 1,
+		       (num_elements - entry_offset) * sizeof(row_t));
+		capacity /= 2;
+		row_ids = move(new_row_id);
+	} else {
+		// Copy the rest
+		for (idx_t j = entry_offset; j < num_elements; j++) {
+			row_ids[j] = row_ids[j + 1];
+		}
 	}
 }
 

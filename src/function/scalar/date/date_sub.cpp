@@ -44,7 +44,7 @@ struct DateSub {
 			// Our interval difference will now give the correct result.
 			// Note that PG gives different interval subtraction results,
 			// so if we change this we will have to reimplement.
-			return Interval::GetDifference(end_ts, start_ts).months;
+			return Interval::GetAge(end_ts, start_ts).months;
 		}
 	};
 

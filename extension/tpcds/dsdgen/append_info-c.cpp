@@ -32,7 +32,7 @@ void append_row_end(append_info info) {
 void append_varchar(append_info info, const char *value) {
 	auto append_info = (tpcds_append_information *)info;
 	if (!nullCheck(append_info->appender.CurrentColumn())) {
-		append_info->appender.Append<const char *>(value);
+		append_info->appender.Append<duckdb::string_t>(duckdb::string_t(value));
 	} else {
 		append_info->appender.Append(nullptr);
 	}
@@ -41,7 +41,7 @@ void append_varchar(append_info info, const char *value) {
 // TODO: use direct array manipulation for speed, but not now
 static void append_value(append_info info, duckdb::Value v) {
 	auto append_info = (tpcds_append_information *)info;
-	append_info->appender.Append<duckdb::Value>(v);
+	append_info->appender.AppendValue(v);
 }
 
 void append_key(append_info info, int64_t value) {

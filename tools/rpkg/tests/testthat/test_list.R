@@ -1,8 +1,6 @@
-library("testthat")
-library("DBI")
-
 test_that("one-level lists can be read", {
   con <- dbConnect(duckdb::duckdb())
+  on.exit(dbDisconnect(con, shutdown = TRUE))
 
   res <- dbGetQuery(con, "SELECT [] a")$a
   expect_equal(res, list(integer(0)))
@@ -27,6 +25,4 @@ test_that("one-level lists can be read", {
 
   res <- dbGetQuery(con, "SELECT ['Hello', 'World'] a union all select ['There']")$a
   expect_equal(res, list(c("Hello", "World"), c("There")))
-
-  dbDisconnect(con, shutdown = T)
 })

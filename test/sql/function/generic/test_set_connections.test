@@ -55,12 +55,16 @@ SELECT CURRENT_SETTING('b');
 ----
 43
 
-# Currently the default scope is GLOBAL,
-# but it should be SESSION. See https://github.com/duckdb/duckdb/pull/2247
+# Default (SESSION) scoping
 statement ok con1
 SET c = 42;
 
-query I con2
+query I con1
+SELECT CURRENT_SETTING('c');
+----
+42
+
+statement error
 SELECT CURRENT_SETTING('c');
 ----
 42

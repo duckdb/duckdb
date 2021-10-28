@@ -27,7 +27,7 @@ IndexStmt:	CREATE_P opt_unique INDEX opt_concurrently opt_index_name
 					n->deferrable = false;
 					n->initdeferred = false;
 					n->transformed = false;
-					n->if_not_exists = false;
+					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 			| CREATE_P opt_unique INDEX opt_concurrently IF_P NOT EXISTS index_name
@@ -52,7 +52,7 @@ IndexStmt:	CREATE_P opt_unique INDEX opt_concurrently opt_index_name
 					n->deferrable = false;
 					n->initdeferred = false;
 					n->transformed = false;
-					n->if_not_exists = true;
+					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
 		;

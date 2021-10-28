@@ -14,14 +14,16 @@ unique_ptr<CreateStatement> Transformer::TransformCreateTableAs(duckdb_libpgquer
 		throw NotImplementedException("Unimplemented features for CREATE TABLE as");
 	}
 	auto qname = TransformQualifiedName(stmt->into->rel);
+	if (stmt->query->type != duckdb_libpgquery::T_PGSelectStmt) {
+		throw ParserException("CREATE TABLE AS requires a SELECT clause");
+	}
 	auto query = TransformSelect(stmt->query, false);
 
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateTableInfo>();
 	info->schema = qname.schema;
 	info->table = qname.name;
-	info->on_conflict =
-	    stmt->if_not_exists ? OnCreateConflict::IGNORE_ON_CONFLICT : OnCreateConflict::ERROR_ON_CONFLICT;
+	info->on_conflict = TransformOnConflict(stmt->onconflict);
 	info->temporary =
 	    stmt->into->rel->relpersistence == duckdb_libpgquery::PGPostgresRelPersistence::PG_RELPERSISTENCE_TEMP;
 	info->query = move(query);

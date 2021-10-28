@@ -8,6 +8,9 @@
 namespace duckdb {
 
 LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_name) {
+	if (type_name->type != duckdb_libpgquery::T_PGTypeName) {
+		throw ParserException("Expected a type");
+	}
 	auto name = (reinterpret_cast<duckdb_libpgquery::PGValue *>(type_name->names->tail->data.ptr_value)->val.str);
 	// transform it to the SQL type
 	LogicalTypeId base_type = TransformStringToLogicalType(name);
@@ -22,7 +25,9 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 
 		for (auto node = type_name->typmods->head; node; node = node->next) {
 			auto &type_val = *((duckdb_libpgquery::PGList *)node->data.ptr_value);
-			D_ASSERT(type_val.length == 2);
+			if (type_val.length != 2) {
+				throw ParserException("Struct entry needs an entry name and a type name");
+			}
 
 			auto entry_name_node = (duckdb_libpgquery::PGValue *)(type_val.head->data.ptr_value);
 			D_ASSERT(entry_name_node->type == duckdb_libpgquery::T_PGString);
@@ -119,6 +124,11 @@ LogicalType Transformer::TransformTypeName(duckdb_libpgquery::PGTypeName *type_n
 			width = 0;
 			result_type = LogicalType::INTERVAL;
 			break;
+		case LogicalTypeId::USER: {
+			string user_type_name {name};
+			result_type = LogicalType::USER(user_type_name);
+			break;
+		}
 		default:
 			if (modifier_idx > 0) {
 				throw ParserException("Type %s does not support any modifiers!", LogicalType(base_type).ToString());

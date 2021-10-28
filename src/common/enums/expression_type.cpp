@@ -121,6 +121,8 @@ string ExpressionTypeToString(ExpressionType type) {
 		return "BOUND_FUNCTION";
 	case ExpressionType::BOUND_AGGREGATE:
 		return "BOUND_AGGREGATE";
+	case ExpressionType::GROUPING_FUNCTION:
+		return "GROUPING";
 	case ExpressionType::ARRAY_CONSTRUCTOR:
 		return "ARRAY_CONSTRUCTOR";
 	case ExpressionType::TABLE_STAR:

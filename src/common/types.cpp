@@ -7,7 +7,12 @@
 #include "duckdb/common/types/hash.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
+#include "duckdb/common/limits.hpp"
+#include "duckdb/common/types/value.hpp"
+
 #include <cmath>
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 
 namespace duckdb {
 
@@ -54,6 +59,7 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::UBIGINT:
 		return PhysicalType::UINT64;
 	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UUID:
 		return PhysicalType::INT128;
 	case LogicalTypeId::FLOAT:
 		return PhysicalType::FLOAT;
@@ -102,11 +108,27 @@ PhysicalType LogicalType::GetInternalType() {
 		// LCOV_EXCL_STOP
 	case LogicalTypeId::VALIDITY:
 		return PhysicalType::BIT;
+	case LogicalTypeId::ENUM: {
+		D_ASSERT(type_info_);
+		auto size = EnumType::GetSize(*this);
+		if (size <= NumericLimits<uint8_t>::Maximum()) {
+			return PhysicalType::UINT8;
+		} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+			return PhysicalType::UINT16;
+		} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+			return PhysicalType::UINT32;
+		} else {
+			throw InternalException("Enum size must be lower than " +
+			                        std::to_string(NumericLimits<uint32_t>::Maximum()));
+		}
+	}
 	case LogicalTypeId::TABLE:
 	case LogicalTypeId::ANY:
 	case LogicalTypeId::INVALID:
 	case LogicalTypeId::UNKNOWN:
 		return PhysicalType::INVALID;
+	case LogicalTypeId::USER:
+		return PhysicalType::UNKNOWN;
 	default:
 		throw InternalException("Invalid LogicalType %s", ToString());
 	}
@@ -124,6 +146,7 @@ const LogicalType LogicalType::UINTEGER = LogicalType(LogicalTypeId::UINTEGER);
 const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
 const LogicalType LogicalType::UBIGINT = LogicalType(LogicalTypeId::UBIGINT);
 const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
+const LogicalType LogicalType::UUID = LogicalType(LogicalTypeId::UUID);
 const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
 const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
 const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
@@ -162,7 +185,7 @@ const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,      LogicalType::INTERVAL,
     LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,  LogicalType::USMALLINT,
     LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,      LogicalTypeId::LIST,
-    LogicalTypeId::STRUCT, LogicalTypeId::MAP};
+    LogicalTypeId::STRUCT, LogicalTypeId::MAP,     LogicalType::UUID};
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
 const PhysicalType ROW_TYPE = PhysicalType::INT64;
@@ -244,6 +267,8 @@ string TypeIdToString(PhysicalType type) {
 		return "LARGE_BINARY";
 	case PhysicalType::LARGE_LIST:
 		return "LARGE_LIST";
+	case PhysicalType::UNKNOWN:
+		return "UNKNOWN";
 	}
 	return "INVALID";
 }
@@ -281,6 +306,7 @@ idx_t GetTypeIdSize(PhysicalType type) {
 	case PhysicalType::INTERVAL:
 		return sizeof(interval_t);
 	case PhysicalType::STRUCT:
+	case PhysicalType::UNKNOWN:
 		return 0; // no own payload
 	case PhysicalType::LIST:
 		return sizeof(list_entry_t); // offset + len
@@ -319,6 +345,8 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "BIGINT";
 	case LogicalTypeId::HUGEINT:
 		return "HUGEINT";
+	case LogicalTypeId::UUID:
+		return "UUID";
 	case LogicalTypeId::UTINYINT:
 		return "UTINYINT";
 	case LogicalTypeId::USMALLINT:
@@ -375,6 +403,10 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "INVALID";
 	case LogicalTypeId::UNKNOWN:
 		return "UNKNOWN";
+	case LogicalTypeId::ENUM:
+		return "ENUM";
+	case LogicalTypeId::USER:
+		return "USER";
 	}
 	return "UNDEFINED";
 }
@@ -427,6 +459,9 @@ string LogicalType::ToString() const {
 		}
 		return StringUtil::Format("DECIMAL(%d,%d)", width, scale);
 	}
+	case LogicalTypeId::ENUM: {
+		return EnumType::GetTypeName(*this);
+	}
 	default:
 		return LogicalTypeIdToString(id_);
 	}
@@ -440,7 +475,7 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 	    lower_str == "integral" || lower_str == "int32") {
 		return LogicalTypeId::INTEGER;
 	} else if (lower_str == "varchar" || lower_str == "bpchar" || lower_str == "text" || lower_str == "string" ||
-	           lower_str == "char") {
+	           lower_str == "char" || lower_str == "nvarchar") {
 		return LogicalTypeId::VARCHAR;
 	} else if (lower_str == "bytea" || lower_str == "blob" || lower_str == "varbinary" || lower_str == "binary") {
 		return LogicalTypeId::BLOB;
@@ -459,11 +494,11 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::TIMESTAMP_SEC;
 	} else if (lower_str == "bool" || lower_str == "boolean" || lower_str == "logical") {
 		return LogicalTypeId::BOOLEAN;
-	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
-		return LogicalTypeId::FLOAT;
 	} else if (lower_str == "decimal" || lower_str == "dec" || lower_str == "numeric") {
 		return LogicalTypeId::DECIMAL;
-	} else if (lower_str == "double" || lower_str == "float8" || lower_str == "decimal") {
+	} else if (lower_str == "real" || lower_str == "float4" || lower_str == "float") {
+		return LogicalTypeId::FLOAT;
+	} else if (lower_str == "double" || lower_str == "float8") {
 		return LogicalTypeId::DOUBLE;
 	} else if (lower_str == "tinyint" || lower_str == "int1") {
 		return LogicalTypeId::TINYINT;
@@ -475,6 +510,8 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::INTERVAL;
 	} else if (lower_str == "hugeint" || lower_str == "int128") {
 		return LogicalTypeId::HUGEINT;
+	} else if (lower_str == "uuid" || lower_str == "guid") {
+		return LogicalTypeId::UUID;
 	} else if (lower_str == "struct" || lower_str == "row") {
 		return LogicalTypeId::STRUCT;
 	} else if (lower_str == "map") {
@@ -488,7 +525,9 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 	} else if (lower_str == "ubigint" || lower_str == "uint64") {
 		return LogicalTypeId::UBIGINT;
 	} else {
-		throw NotImplementedException("DataType %s not supported yet...\n", str);
+		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
+		// It is checked in the binder
+		return LogicalTypeId::USER;
 	}
 }
 
@@ -666,7 +705,9 @@ enum class ExtraTypeInfoType : uint8_t {
 	DECIMAL_TYPE_INFO = 1,
 	STRING_TYPE_INFO = 2,
 	LIST_TYPE_INFO = 3,
-	STRUCT_TYPE_INFO = 4
+	STRUCT_TYPE_INFO = 4,
+	ENUM_TYPE_INFO = 5,
+	USER_TYPE_INFO = 6
 };
 
 struct ExtraTypeInfo {
@@ -903,6 +944,188 @@ LogicalType LogicalType::MAP(child_list_t<LogicalType> children) {
 }
 
 //===--------------------------------------------------------------------===//
+// User Type
+//===--------------------------------------------------------------------===//
+struct UserTypeInfo : public ExtraTypeInfo {
+	explicit UserTypeInfo(string name_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::USER_TYPE_INFO), user_type_name(move(name_p)) {
+	}
+
+	string user_type_name;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (UserTypeInfo &)*other_p;
+		return other.user_type_name == user_type_name;
+	}
+
+	void Serialize(Serializer &serializer) const override {
+		serializer.WriteString(user_type_name);
+	}
+
+	static shared_ptr<ExtraTypeInfo> Deserialize(Deserializer &source) {
+		auto enum_name = source.Read<string>();
+		return make_shared<UserTypeInfo>(move(enum_name));
+	}
+};
+
+const string &UserType::GetTypeName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::USER);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((UserTypeInfo &)*info).user_type_name;
+}
+
+LogicalType LogicalType::USER(const string &user_type_name) {
+	auto info = make_shared<UserTypeInfo>(user_type_name);
+	return LogicalType(LogicalTypeId::USER, move(info));
+}
+
+//===--------------------------------------------------------------------===//
+// Enum Type
+//===--------------------------------------------------------------------===//
+struct EnumTypeInfo : public ExtraTypeInfo {
+	explicit EnumTypeInfo(string enum_name_p, vector<string> values_insert_order_p)
+	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)),
+	      values_insert_order(std::move(values_insert_order_p)) {
+	}
+	string enum_name;
+	vector<string> values_insert_order;
+	TypeCatalogEntry *catalog_entry = nullptr;
+
+public:
+	bool Equals(ExtraTypeInfo *other_p) override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (EnumTypeInfo &)*other_p;
+		return other.enum_name == enum_name && other.values_insert_order == values_insert_order;
+	}
+
+	void Serialize(Serializer &serializer) const override {
+		serializer.Write<uint32_t>(values_insert_order.size());
+		serializer.WriteString(enum_name);
+		serializer.WriteStringVector(values_insert_order);
+	}
+};
+
+template <class T>
+struct EnumTypeInfoTemplated : public EnumTypeInfo {
+	explicit EnumTypeInfoTemplated(const string &enum_name_p, const vector<string> &values_insert_order_p)
+	    : EnumTypeInfo(enum_name_p, values_insert_order_p) {
+		idx_t count = 0;
+		for (auto &value : values_insert_order) {
+			values[value] = count++;
+		}
+	}
+	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &source) {
+		auto enum_name = source.Read<string>();
+		vector<string> values_insert_order;
+		source.ReadStringVector(values_insert_order);
+		return make_shared<EnumTypeInfoTemplated>(move(enum_name), move(values_insert_order));
+	}
+	unordered_map<string, T> values;
+};
+
+const string &EnumType::GetTypeName(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((EnumTypeInfo &)*info).enum_name;
+}
+
+LogicalType LogicalType::ENUM(const string &enum_name, const vector<string> &ordered_data) {
+	auto size = ordered_data.size();
+	// Generate EnumTypeInfo
+	shared_ptr<ExtraTypeInfo> info;
+	if (size <= NumericLimits<uint8_t>::Maximum()) {
+		info = make_shared<EnumTypeInfoTemplated<uint8_t>>(enum_name, ordered_data);
+	} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+		info = make_shared<EnumTypeInfoTemplated<uint16_t>>(enum_name, ordered_data);
+	} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+		info = make_shared<EnumTypeInfoTemplated<uint32_t>>(enum_name, ordered_data);
+	} else {
+		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
+	}
+
+	// Generate Actual Enum Type
+	return LogicalType(LogicalTypeId::ENUM, info);
+}
+
+template <class T>
+int64_t TemplatedGetPos(unordered_map<string, T> &map, const string &key) {
+	auto it = map.find(key);
+	if (it == map.end()) {
+		return -1;
+	}
+	return it->second;
+}
+int64_t EnumType::GetPos(const LogicalType &type, const string &key) {
+	auto info = type.AuxInfo();
+	switch (type.InternalType()) {
+	case PhysicalType::UINT8:
+		return TemplatedGetPos(((EnumTypeInfoTemplated<uint8_t> &)*info).values, key);
+	case PhysicalType::UINT16:
+		return TemplatedGetPos(((EnumTypeInfoTemplated<uint16_t> &)*info).values, key);
+	case PhysicalType::UINT32:
+		return TemplatedGetPos(((EnumTypeInfoTemplated<uint32_t> &)*info).values, key);
+	default:
+		throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+	}
+}
+
+const string &EnumType::GetValue(const Value &val) {
+	auto info = val.type().AuxInfo();
+	vector<string> &values_insert_order = ((EnumTypeInfo &)*info).values_insert_order;
+	switch (val.type().InternalType()) {
+	case PhysicalType::UINT8:
+		return values_insert_order[val.value_.utinyint];
+	case PhysicalType::UINT16:
+		return values_insert_order[val.value_.usmallint];
+	case PhysicalType::UINT32:
+		return values_insert_order[val.value_.uinteger];
+	default:
+		throw InternalException("Invalid Internal Type for ENUMs");
+	}
+}
+
+const vector<string> &EnumType::GetValuesInsertOrder(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((EnumTypeInfo &)*info).values_insert_order;
+}
+
+idx_t EnumType::GetSize(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((EnumTypeInfo &)*info).values_insert_order.size();
+}
+
+void EnumType::SetCatalog(LogicalType &type, TypeCatalogEntry *catalog_entry) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	((EnumTypeInfo &)*info).catalog_entry = catalog_entry;
+}
+TypeCatalogEntry *EnumType::GetCatalog(const LogicalType &type) {
+	D_ASSERT(type.id() == LogicalTypeId::ENUM);
+	auto info = type.AuxInfo();
+	D_ASSERT(info);
+	return ((EnumTypeInfo &)*info).catalog_entry;
+}
+
+//===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
 void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, Serializer &serializer) {
@@ -913,7 +1136,6 @@ void ExtraTypeInfo::Serialize(ExtraTypeInfo *info, Serializer &serializer) {
 		info->Serialize(serializer);
 	}
 }
-
 shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 	auto type = source.Read<ExtraTypeInfoType>();
 	switch (type) {
@@ -927,6 +1149,21 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 		return ListTypeInfo::Deserialize(source);
 	case ExtraTypeInfoType::STRUCT_TYPE_INFO:
 		return StructTypeInfo::Deserialize(source);
+	case ExtraTypeInfoType::USER_TYPE_INFO:
+		return UserTypeInfo::Deserialize(source);
+	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
+		auto size = source.Read<uint32_t>();
+		if (size <= NumericLimits<uint8_t>::Maximum()) {
+			return EnumTypeInfoTemplated<uint8_t>::Deserialize(source);
+		} else if (size <= NumericLimits<uint16_t>::Maximum()) {
+			return EnumTypeInfoTemplated<uint16_t>::Deserialize(source);
+		} else if (size <= NumericLimits<uint32_t>::Maximum()) {
+			return EnumTypeInfoTemplated<uint32_t>::Deserialize(source);
+		} else {
+			throw InternalException("Enum size must be lower than " +
+			                        std::to_string(NumericLimits<uint32_t>::Maximum()));
+		}
+	}
 	default:
 		throw InternalException("Unimplemented type info in ExtraTypeInfo::Deserialize");
 	}
@@ -948,7 +1185,6 @@ void LogicalType::Serialize(Serializer &serializer) const {
 LogicalType LogicalType::Deserialize(Deserializer &source) {
 	auto id = source.Read<LogicalTypeId>();
 	auto info = ExtraTypeInfo::Deserialize(source);
-
 	return LogicalType(id, move(info));
 }
 

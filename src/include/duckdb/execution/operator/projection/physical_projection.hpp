@@ -9,24 +9,25 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
 class PhysicalProjection : public PhysicalOperator {
 public:
 	PhysicalProjection(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
-	                   idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::PROJECTION, move(types), estimated_cardinality),
-	      select_list(move(select_list)) {
-	}
+	                   idx_t estimated_cardinality);
 
 	vector<unique_ptr<Expression>> select_list;
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                           OperatorState &state) const override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	void FinalizeOperatorState(PhysicalOperatorState &state, ExecutionContext &context) override;
+	bool ParallelOperator() const override {
+		return true;
+	}
 
 	string ParamsToString() const override;
 };

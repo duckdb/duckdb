@@ -35,6 +35,7 @@ struct CreateSequenceInfo;
 struct CreateSchemaInfo;
 struct CreateTableFunctionInfo;
 struct CreateCopyFunctionInfo;
+struct CreateTypeInfo;
 
 struct DropInfo;
 
@@ -62,12 +63,10 @@ private:
 	CatalogSet sequences;
 	//! The catalog set holding the collations
 	CatalogSet collations;
+	//! The catalog set holding the types
+	CatalogSet types;
 
 public:
-	//! Gets a catalog entry from the given catalog set matching the given name
-	CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &name, bool if_exists,
-	                       QueryErrorContext error_context = QueryErrorContext());
-
 	//! Scan the specified catalog set, invoking the callback method for every entry
 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry *)> &callback);
 	//! Scan the specified catalog set, invoking the callback method for every committed entry
@@ -100,6 +99,8 @@ private:
 	CatalogEntry *CreatePragmaFunction(ClientContext &context, CreatePragmaFunctionInfo *info);
 	//! Create a collation within the given schema
 	CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
+	//! Create a enum within the given schema
+	CatalogEntry *CreateType(ClientContext &context, CreateTypeInfo *info);
 
 	//! Drops an entry from the schema
 	void DropEntry(ClientContext &context, DropInfo *info);

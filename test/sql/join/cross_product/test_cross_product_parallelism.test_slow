@@ -1,0 +1,31 @@
+# name: test/sql/join/cross_product/test_cross_product_parallelism.test_slow
+# description: Test cross product with parallelism
+# group: [cross_product]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA threads=4
+
+statement ok
+PRAGMA verify_parallelism
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(0, 5000) tbl(i)
+
+# test if order remains the same
+query I
+SELECT count(*) FROM integers i1, integers i2
+----
+25000000
+
+query II
+SELECT MIN(i1.i), MAX(i2.i) FROM integers i1, integers i2
+----
+0	4999
+
+query II
+SELECT MAX(i1.i), MIN(i2.i) FROM integers i1, integers i2
+----
+4999	0

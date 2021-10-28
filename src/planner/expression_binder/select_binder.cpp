@@ -7,6 +7,9 @@
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/planner/expression_binder/aggregate_binder.hpp"
 #include "duckdb/planner/query_node/bound_select_node.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -58,8 +61,35 @@ idx_t SelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 	return INVALID_INDEX;
 }
 
+BindResult SelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t depth) {
+	if (op.children.empty()) {
+		throw InternalException("GROUPING requires at least one child");
+	}
+	if (node.groups.group_expressions.empty()) {
+		return BindResult(binder.FormatError(op, "GROUPING statement cannot be used without groups"));
+	}
+	if (op.children.size() >= 64) {
+		return BindResult(binder.FormatError(op, "GROUPING statement cannot have more than 64 groups"));
+	}
+	vector<idx_t> group_indexes;
+	group_indexes.reserve(op.children.size());
+	for (auto &child : op.children) {
+		ExpressionBinder::BindTableNames(binder, *child);
+		auto idx = TryBindGroup(*child, depth);
+		if (idx == INVALID_INDEX) {
+			return BindResult(binder.FormatError(
+			    op, StringUtil::Format("GROUPING child \"%s\" must be a grouping column", child->GetName())));
+		}
+		group_indexes.push_back(idx);
+	}
+	auto col_idx = node.grouping_functions.size();
+	node.grouping_functions.push_back(move(group_indexes));
+	return BindResult(make_unique<BoundColumnRefExpression>(op.GetName(), LogicalType::BIGINT,
+	                                                        ColumnBinding(node.groupings_index, col_idx), depth));
+}
+
 BindResult SelectBinder::BindGroup(ParsedExpression &expr, idx_t depth, idx_t group_index) {
-	auto &group = node.groups[group_index];
+	auto &group = node.groups.group_expressions[group_index];
 	return BindResult(make_unique<BoundColumnRefExpression>(expr.GetName(), group->return_type,
 	                                                        ColumnBinding(node.group_index, group_index), depth));
 }

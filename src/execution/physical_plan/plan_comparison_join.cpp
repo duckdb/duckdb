@@ -51,7 +51,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 			return;
 		}
 	}
-	// with integral types
+	// with integral internal types
 	for (auto &&join_stat : op.join_stats) {
 		if (!TypeIsInteger(join_stat->type.InternalType()) || join_stat->type.InternalType() == PhysicalType::INT128) {
 			// perfect join not possible for non-integral types or hugeint
@@ -76,7 +76,7 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	join_state.build_min = stats_build->min;
 	join_state.build_max = stats_build->max;
 	join_state.estimated_cardinality = op.estimated_cardinality;
-	if (build_range.type().id() == LogicalTypeId::DECIMAL) {
+	if (!build_range.type().IsIntegral()) {
 		switch (build_range.type().InternalType()) {
 		case PhysicalType::INT16:
 			join_state.build_range = build_range.value_.smallint;
@@ -88,19 +88,15 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 			join_state.build_range = build_range.value_.bigint;
 			break;
 		case PhysicalType::INT128:
-			throw InternalException("PhysicalType::INT128 not yet implemented for Perfect HJ");
-			//			join_state.build_range = build_range.GetValue<idx_t>();
-			//			break;
+			// we do not support hugeint for this optimization
+			return;
 		default:
 			throw InternalException("Invalid Physical Type for Decimals");
 		}
 	} else {
 		join_state.build_range = build_range.GetValue<idx_t>(); // cast integer types into idx_t
 	}
-	if (join_state.build_range > MAX_BUILD_SIZE) {
-		return;
-	}
-	if (stats_probe->max.is_null || stats_probe->min.is_null) {
+	if (join_state.build_range > MAX_BUILD_SIZE || stats_probe->max.is_null || stats_probe->min.is_null) {
 		return;
 	}
 	if (stats_build->min <= stats_probe->min && stats_probe->max <= stats_build->max) {
@@ -108,6 +104,19 @@ void CheckForPerfectJoinOpt(LogicalComparisonJoin &op, PerfectHashJoinStats &joi
 	}
 	join_state.is_build_small = true;
 	return;
+}
+
+static void CanUseIndexJoin(TableScanBindData *tbl, Expression &expr, Index **result_index) {
+	tbl->table->storage->info->indexes.Scan([&](Index &index) {
+		if (index.unbound_expressions.size() != 1) {
+			return false;
+		}
+		if (expr.alias == index.unbound_expressions[0]->alias) {
+			*result_index = &index;
+			return true;
+		}
+		return false;
+	});
 }
 
 void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index **left_index, Index **right_index,
@@ -121,26 +130,14 @@ void TransformIndexJoin(ClientContext &context, LogicalComparisonJoin &op, Index
 			auto &tbl_scan = (PhysicalTableScan &)*left;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
 			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
-				tbl->table->storage->info->indexes.Scan([&](Index &index) {
-					if (index.unbound_expressions[0]->alias == op.conditions[0].left->alias) {
-						*left_index = &index;
-						return true;
-					}
-					return false;
-				});
+				CanUseIndexJoin(tbl, *op.conditions[0].left, left_index);
 			}
 		}
 		if (right->type == PhysicalOperatorType::TABLE_SCAN) {
 			auto &tbl_scan = (PhysicalTableScan &)*right;
 			auto tbl = dynamic_cast<TableScanBindData *>(tbl_scan.bind_data.get());
 			if (CanPlanIndexJoin(transaction, tbl, tbl_scan)) {
-				tbl->table->storage->info->indexes.Scan([&](Index &index) {
-					if (index.unbound_expressions[0]->alias == op.conditions[0].right->alias) {
-						*right_index = &index;
-						return true;
-					}
-					return false;
-				});
+				CanUseIndexJoin(tbl, *op.conditions[0].right, right_index);
 			}
 		}
 	}

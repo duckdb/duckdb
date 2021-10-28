@@ -1,0 +1,284 @@
+# name: test/sql/types/enum/test_enum_constraints.test
+# description: ENUM tests on table constraints
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+# We can't drop mood because person depends on it
+statement error
+drop type mood
+
+# But if we drop person
+statement ok
+drop table person
+
+# We can drop mood
+statement ok
+drop type mood
+
+# We can recreate all of them again
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+#Cascading drops (i.e. DROP TYPE mood CASCADE)
+statement ok
+DROP TYPE mood CASCADE
+
+#DROP TYPE after we alter the table so the dependency is gone (ALTER)
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+ALTER TABLE person ALTER current_mood SET DATA TYPE VARCHAR
+
+statement ok
+DROP TYPE mood
+
+statement ok
+DROP TABLE person
+
+#DROP TYPE after we alter the table so the dependency is gone (DROP COLUMN)
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+ALTER TABLE person DROP COLUMN current_mood
+
+statement ok
+DROP TYPE mood
+
+statement ok
+DROP TABLE person
+
+#Dependencies introduced by alter statements, i.e. ADD COLUMN with ENUM type
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text
+);
+
+statement ok
+ALTER TABLE person ADD COLUMN current_mood mood
+
+statement error
+DROP TYPE mood
+
+#Dropping the table and type in the same transaction
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE mood
+
+statement ok
+COMMIT;
+
+# Try with two dependencies to the same type ( Delete One column, try do delete type, change type of the other column,
+# delete type, recreate type, add column with type, try to delete type)
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    past_mood mood,
+    current_mood mood
+);
+
+statement ok
+ALTER TABLE person DROP COLUMN current_mood
+
+statement error
+DROP TYPE mood
+
+statement ok
+ALTER TABLE person ALTER past_mood SET DATA TYPE VARCHAR
+
+statement ok
+DROP TYPE mood
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+ALTER TABLE person ADD COLUMN current_mood mood
+
+statement error
+DROP TYPE mood
+
+# Clean-up
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE mood
+
+# Transactions with rollbacks
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+BEGIN TRANSACTION;
+
+
+statement ok
+ALTER TABLE person ALTER current_mood SET DATA TYPE VARCHAR;
+
+statement ok
+ROLLBACK;
+
+#Fails, mood should still be dependent on by the table
+statement error
+DROP TYPE mood;
+
+
+#CLEANUP
+statement ok
+DROP TABLE person;
+
+statement ok
+DROP TYPE mood;
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+
+statement ok
+BEGIN TRANSACTION;
+
+
+statement ok
+ALTER TABLE person DROP COLUMN current_mood
+
+statement ok
+ROLLBACK;
+
+#Fails, mood should still be dependent on by the table
+statement error
+DROP TYPE mood;
+
+#CLEANUP
+statement ok
+DROP TABLE person;
+
+statement ok
+DROP TYPE mood;
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text );
+
+statement ok
+BEGIN TRANSACTION;
+
+statement ok
+ALTER TABLE person ADD COLUMN current_mood mood
+
+statement ok
+ROLLBACK;
+
+statement ok
+DROP TYPE mood;
+
+statement ok
+DROP TABLE person
+
+# Test Column Rename
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+statement ok
+ALTER TABLE person RENAME COLUMN current_mood TO past_mood
+
+# Check if constraint still there
+statement error
+DROP TYPE mood
+
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE mood
+
+
+# Test Table Multiple Columns Same Type
+
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood,
+    past_mood mood
+);
+
+# Check if constraint still there
+statement error
+DROP TYPE mood
+
+statement ok
+ALTER TABLE person DROP COLUMN current_mood
+
+statement error
+DROP TYPE mood
+
+statement ok
+DROP TABLE person
+
+statement ok
+DROP TYPE mood

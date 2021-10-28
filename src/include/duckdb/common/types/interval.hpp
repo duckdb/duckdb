@@ -62,7 +62,10 @@ public:
 	//! Get Interval in Nanoseconds
 	static int64_t GetNanoseconds(interval_t val);
 
-	//! Returns the difference between two timestamps
+	//! Returns the age between two timestamps (including 30 day months)
+	static interval_t GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2);
+
+	//! Returns the exact difference between two timestamps (days and seconds)
 	static interval_t GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2);
 
 	//! Comparison operators

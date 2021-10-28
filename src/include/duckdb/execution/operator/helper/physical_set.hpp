@@ -17,18 +17,24 @@ namespace duckdb {
 //! PhysicalSet represents a SET operation (e.g. SET a = 42)
 class PhysicalSet : public PhysicalOperator {
 public:
-	PhysicalSet(std::string name_p, Value value_p, SetScope scope_p, idx_t estimated_cardinality)
+	PhysicalSet(const std::string &name_p, Value value_p, SetScope scope_p, idx_t estimated_cardinality)
 	    : PhysicalOperator(PhysicalOperatorType::SET, {LogicalType::BOOLEAN}, estimated_cardinality), name(name_p),
 	      value(value_p), scope(scope_p) {
 	}
 
 public:
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
+	// Source interface
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
 
 public:
-	std::string name;
-	Value value;
-	SetScope scope;
+	const std::string name;
+	const Value value;
+	const SetScope scope;
+
+private:
+	//! Returns the normalized key name.
+	string ValidateInput(ExecutionContext &context) const;
 };
 
 } // namespace duckdb

@@ -10,7 +10,7 @@ if(NOT PythonLibs_FOUND)
 endif()
 include_directories(../../)
 include_directories(src/include)
-
+include_directories(${pybind11_INCLUDE_DIR})
 # this is used for clang-tidy checks
 add_library(
   python_duckdb

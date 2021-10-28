@@ -2,12 +2,29 @@
 
 #define R_NO_REMAP
 #include <Rdefines.h>
+
 #include <R_ext/Altrep.h>
 
 #include "duckdb.hpp"
 #include "duckdb/function/table_function.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
+
+typedef unordered_map<std::string, SEXP> arrow_scans_t;
+
+struct DBWrapper {
+	unique_ptr<DuckDB> db;
+	arrow_scans_t arrow_scans;
+	mutex lock;
+};
+
+struct ConnWrapper {
+	unique_ptr<Connection> conn;
+	SEXP db_sexp;
+};
 
 struct RApi {
 
@@ -39,12 +56,15 @@ struct RApi {
 	static SEXP RegisterArrow(SEXP connsexp, SEXP namesexp, SEXP export_funsexp, SEXP valuesexp);
 
 	static SEXP UnregisterArrow(SEXP connsexp, SEXP namesexp);
+	static unique_ptr<TableFunctionRef> ArrowScanReplacement(const string &table_name, void *data);
 
 	static SEXP PointerToString(SEXP extptr);
 	static SEXP StringsToSexp(vector<string> s);
 
 	static SEXP REvalThrows(SEXP call, SEXP env = R_GlobalEnv);
 	static SEXP REvalRerror(SEXP call, SEXP env = R_GlobalEnv);
+
+	static SEXP ToUtf8(SEXP string_sexp);
 };
 
 struct RProtector {
@@ -79,12 +99,14 @@ struct RStrings {
 	SEXP POSIXt;
 	SEXP UTC_str; // Rf_mkString
 	SEXP Date_str;
+	SEXP factor_str;
 	SEXP difftime_str;
 	SEXP secs_str;
 	SEXP arrow_str; // StringsToSexp
 	SEXP POSIXct_POSIXt_str;
 	SEXP str_ref_type_names_rtypes_n_param_str;
-	SEXP tzone_sym; // Rf_install
+	SEXP enc2utf8_sym; // Rf_install
+	SEXP tzone_sym;
 	SEXP units_sym;
 	SEXP getNamespace_sym;
 	SEXP Table__from_record_batches_sym;

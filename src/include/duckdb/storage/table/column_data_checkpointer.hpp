@@ -15,7 +15,8 @@ namespace duckdb {
 
 class ColumnDataCheckpointer {
 public:
-	ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p, ColumnCheckpointState &state_p);
+	ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p, ColumnCheckpointState &state_p,
+	                       ColumnCheckpointInfo &checkpoint_info);
 
 public:
 	DatabaseInstance &GetDatabase();
@@ -41,6 +42,7 @@ private:
 	Vector intermediate;
 	unique_ptr<SegmentBase> owned_segment;
 	vector<CompressionFunction *> compression_functions;
+	ColumnCheckpointInfo &checkpoint_info;
 };
 
 } // namespace duckdb

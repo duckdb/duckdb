@@ -22,6 +22,7 @@ struct DSDGenFunctionData : public TableFunctionData {
 	string schema = DEFAULT_SCHEMA;
 	string suffix;
 	bool overwrite = false;
+	bool keys = false;
 };
 
 static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value> &inputs,
@@ -38,6 +39,8 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value>
 			result->suffix = kv.second.str_value;
 		} else if (kv.first == "overwrite") {
 			result->overwrite = kv.second.GetValue<bool>();
+		} else if (kv.first == "keys") {
+			result->keys = kv.second.GetValue<bool>();
 		}
 	}
 	return_types.push_back(LogicalType::BOOLEAN);
@@ -51,6 +54,7 @@ static void DsdgenFunction(ClientContext &context, const FunctionData *bind_data
 	if (data.finished) {
 		return;
 	}
+	tpcds::DSDGenWrapper::CreateTPCDSSchema(context, data.schema, data.suffix, data.keys, data.overwrite);
 	tpcds::DSDGenWrapper::DSDGen(data.sf, context, data.schema, data.suffix);
 
 	data.finished = true;
@@ -158,10 +162,10 @@ void TPCDSExtension::Load(DuckDB &db) {
 
 	TableFunction dsdgen_func("dsdgen", {}, DsdgenFunction, DsdgenBind);
 	dsdgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
-	// FIXME: no support for these parameters for now
-	//	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
-	//	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
-	//	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
+	dsdgen_func.named_parameters["overwrite"] = LogicalType::BOOLEAN;
+	dsdgen_func.named_parameters["keys"] = LogicalType::BOOLEAN;
+	dsdgen_func.named_parameters["schema"] = LogicalType::VARCHAR;
+	dsdgen_func.named_parameters["suffix"] = LogicalType::VARCHAR;
 	CreateTableFunctionInfo dsdgen_info(dsdgen_func);
 
 	// create the dsdgen function

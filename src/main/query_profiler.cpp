@@ -63,12 +63,24 @@ bool QueryProfiler::OperatorRequiresProfiling(PhysicalOperatorType op_type) {
 	}
 }
 
+void QueryProfiler::Finalize(TreeNode &node) {
+	for (auto &child : node.children) {
+		Finalize(*child);
+		if (node.type == PhysicalOperatorType::UNION) {
+			node.info.elements += child->info.elements;
+		}
+	}
+}
+
 void QueryProfiler::EndQuery() {
 	if (!enabled || !running) {
 		return;
 	}
 
 	main_query.End();
+	if (root) {
+		Finalize(*root);
+	}
 	this->running = false;
 	// print or output the query profiling after termination, if this is enabled
 	if (automatic_print_format != ProfilerPrintFormat::NONE) {
@@ -151,8 +163,7 @@ void QueryProfiler::Initialize(PhysicalOperator *root_op) {
 	}
 }
 
-OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p) {
-	execution_stack = std::stack<const PhysicalOperator *>();
+OperatorProfiler::OperatorProfiler(bool enabled_p) : enabled(enabled_p), active_operator(nullptr) {
 }
 
 void OperatorProfiler::StartOperator(const PhysicalOperator *phys_op) {
@@ -160,14 +171,11 @@ void OperatorProfiler::StartOperator(const PhysicalOperator *phys_op) {
 		return;
 	}
 
-	if (!execution_stack.empty()) {
-		// add timing for the previous element
-		op.End();
-
-		AddTiming(execution_stack.top(), op.Elapsed(), 0);
+	if (active_operator) {
+		throw InternalException("OperatorProfiler: Attempting to call StartOperator while another operator is active");
 	}
 
-	execution_stack.push(phys_op);
+	active_operator = phys_op;
 
 	// start timing for current element
 	op.Start();
@@ -178,18 +186,15 @@ void OperatorProfiler::EndOperator(DataChunk *chunk) {
 		return;
 	}
 
+	if (!active_operator) {
+		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
+	}
+
 	// finish timing for the current element
 	op.End();
 
-	AddTiming(execution_stack.top(), op.Elapsed(), chunk ? chunk->size() : 0);
-
-	D_ASSERT(!execution_stack.empty());
-	execution_stack.pop();
-
-	// start timing again for the previous element, if any
-	if (!execution_stack.empty()) {
-		op.Start();
-	}
+	AddTiming(active_operator, op.Elapsed(), chunk ? chunk->size() : 0);
+	active_operator = nullptr;
 }
 
 void OperatorProfiler::AddTiming(const PhysicalOperator *op, double time, idx_t elements) {
@@ -248,6 +253,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 			entry->second->info.executors_info[info_id] = move(info);
 		}
 	}
+	profiler.timings.clear();
 }
 
 static string DrawPadded(const string &str, idx_t width) {
@@ -352,13 +358,47 @@ void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) cons
 	}
 }
 
+static string JSONSanitize(const string &text) {
+	string result;
+	result.reserve(text.size());
+	for (idx_t i = 0; i < text.size(); i++) {
+		switch (text[i]) {
+		case '\b':
+			result += "\\b";
+			break;
+		case '\f':
+			result += "\\f";
+			break;
+		case '\n':
+			result += "\\n";
+			break;
+		case '\r':
+			result += "\\r";
+			break;
+		case '\t':
+			result += "\\t";
+			break;
+		case '"':
+			result += "\\\"";
+			break;
+		case '\\':
+			result += "\\\\";
+			break;
+		default:
+			result += text[i];
+			break;
+		}
+	}
+	return result;
+}
+
 // Print a row
 static void PrintRow(std::ostream &ss, const string &annotation, int id, const string &name, double time,
-                     int sample_counter, int tuple_counter, string extra_info, int depth) {
+                     int sample_counter, int tuple_counter, const string &extra_info, int depth) {
 	ss << string(depth * 3, ' ') << " {\n";
-	ss << string(depth * 3, ' ') << "   \"annotation\": \"" + annotation + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"annotation\": \"" + JSONSanitize(annotation) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"id\": " + to_string(id) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"name\": \"" + name + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(name) + "\",\n";
 #if defined(RDTSC)
 	ss << string(depth * 3, ' ') << "   \"timing\": \"NULL\" ,\n";
 	ss << string(depth * 3, ' ') << "   \"cycles_per_tuple\": " + StringUtil::Format("%.4f", time) + ",\n";
@@ -368,8 +408,7 @@ static void PrintRow(std::ostream &ss, const string &annotation, int id, const s
 #endif
 	ss << string(depth * 3, ' ') << "   \"sample_size\": " << to_string(sample_counter) + ",\n";
 	ss << string(depth * 3, ' ') << "   \"input_size\": " << to_string(tuple_counter) + ",\n";
-	ss << string(depth * 3, ' ') << "   \"extra_info\": \""
-	   << StringUtil::Replace(std::move(extra_info), "\n", "\\n") + "\"\n";
+	ss << string(depth * 3, ' ') << "   \"extra_info\": \"" << JSONSanitize(extra_info) + "\"\n";
 	ss << string(depth * 3, ' ') << " },\n";
 }
 
@@ -391,11 +430,10 @@ static void ExtractFunctions(std::ostream &ss, ExpressionInfo &info, int &fun_id
 
 static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int depth = 1) {
 	ss << string(depth * 3, ' ') << " {\n";
-	ss << string(depth * 3, ' ') << "   \"name\": \"" + node.name + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"name\": \"" + JSONSanitize(node.name) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"timing\":" + to_string(node.info.time) + ",\n";
 	ss << string(depth * 3, ' ') << "   \"cardinality\":" + to_string(node.info.elements) + ",\n";
-	ss << string(depth * 3, ' ')
-	   << "   \"extra_info\": \"" + StringUtil::Replace(node.extra_info, "\n", "\\n") + "\",\n";
+	ss << string(depth * 3, ' ') << "   \"extra_info\": \"" + JSONSanitize(node.extra_info) + "\",\n";
 	ss << string(depth * 3, ' ') << "   \"timings\": [";
 	int32_t function_counter = 1;
 	int32_t expression_counter = 1;
@@ -449,8 +487,7 @@ string QueryProfiler::ToJSON() const {
 	ss << "   \"timing\": " + to_string(main_query.Elapsed()) + ",\n";
 	ss << "   \"cardinality\": " + to_string(root->info.elements) + ",\n";
 	// JSON cannot have literal control characters in string literals
-	string extra_info = StringUtil::Replace(query, "\t", "\\t");
-	extra_info = StringUtil::Replace(extra_info, "\n", "\\n");
+	string extra_info = JSONSanitize(query);
 	ss << "   \"extra-info\": \"" + extra_info + "\", \n";
 	// print the phase timings
 	ss << "   \"timings\": [\n";
@@ -489,6 +526,7 @@ unique_ptr<QueryProfiler::TreeNode> QueryProfiler::CreateTree(PhysicalOperator *
 		this->query_requires_profiling = true;
 	}
 	auto node = make_unique<QueryProfiler::TreeNode>();
+	node->type = root->type;
 	node->name = root->GetName();
 	node->extra_info = root->ParamsToString();
 	node->depth = depth;

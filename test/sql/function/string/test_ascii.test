@@ -74,4 +74,7 @@ statement error
 SELECT CHR(-10)
 
 statement error
+SELECT CHR(1073741824)
+
+statement error
 SELECT CHR()

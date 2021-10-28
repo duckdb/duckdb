@@ -261,10 +261,10 @@ static void PragmaForceCompression(ClientContext &context, const FunctionParamet
 	auto compression = StringUtil::Lower(parameters.values[0].ToString());
 	auto &config = DBConfig::GetConfig(context);
 	if (compression == "none") {
-		config.force_compression = CompressionType::COMPRESSION_INVALID;
+		config.force_compression = CompressionType::COMPRESSION_AUTO;
 	} else {
 		auto compression_type = CompressionTypeFromString(compression);
-		if (compression_type == CompressionType::COMPRESSION_INVALID) {
+		if (compression_type == CompressionType::COMPRESSION_AUTO) {
 			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, "
 			                      "dictionary, pfor, bitpacking or fsst");
 		}

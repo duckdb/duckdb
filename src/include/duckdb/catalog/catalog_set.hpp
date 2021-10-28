@@ -12,9 +12,11 @@
 #include "duckdb/catalog/default/default_generator.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/mutex.hpp"
-
+#include "duckdb/parser/column_definition.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include <functional>
 #include <memory>
 
@@ -58,8 +60,8 @@ public:
 	CatalogEntry *GetEntry(ClientContext &context, const string &name);
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
-	//! none is found
-	string SimilarEntry(ClientContext &context, const string &name);
+	//! none is found. The returned pair consists of the entry name and the distance (smaller means closer).
+	pair<string, idx_t> SimilarEntry(ClientContext &context, const string &name);
 
 	//! Rollback <entry> to be the currently valid entry for a certain catalog
 	//! entry
@@ -84,6 +86,12 @@ public:
 	void UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp);
 
 private:
+	//! Adjusts table dependencies on the event of an UNDO
+	void AdjustTableDependencies(CatalogEntry *entry);
+	//! Adjust one dependency
+	void AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table, ColumnDefinition &column, bool remove);
+	//! Adjust Enum dependency
+	void AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove);
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(ClientContext &context, CatalogEntry *current);
 	CatalogEntry *GetCommittedEntry(CatalogEntry *current);

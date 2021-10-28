@@ -50,6 +50,16 @@ typedef enum PGOnCommitAction {
 	ONCOMMIT_DROP              /* ON COMMIT DROP */
 } PGOnCommitAction;
 
+/* What to do at commit time for temporary relations */
+typedef enum PGOnCreateConflict {
+	// Standard: throw error
+	PG_ERROR_ON_CONFLICT,
+	// CREATE IF NOT EXISTS, silently do nothing on conflict
+	PG_IGNORE_ON_CONFLICT,
+	// CREATE OR REPLACE
+	PG_REPLACE_ON_CONFLICT
+} PGOnCreateConflict;
+
 /*
  * PGRangeVar - range variable, used in FROM clauses
  *

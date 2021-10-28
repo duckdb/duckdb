@@ -107,6 +107,8 @@ struct DataTableInfo {
 struct ParallelTableScanState {
 	RowGroup *current_row_group;
 	idx_t vector_index;
+	idx_t max_row;
+	LocalScanState local_state;
 	bool transaction_local_data;
 };
 
@@ -114,8 +116,8 @@ struct ParallelTableScanState {
 class DataTable {
 public:
 	//! Constructs a new data table from an (optional) set of persistent segments
-	DataTable(DatabaseInstance &db, const string &schema, const string &table, vector<LogicalType> types,
-	          unique_ptr<PersistentTableData> data = nullptr);
+	DataTable(DatabaseInstance &db, const string &schema, const string &table,
+	          vector<ColumnDefinition> column_definitions_p, unique_ptr<PersistentTableData> data = nullptr);
 	//! Constructs a DataTable as a delta on an existing data table with a newly added column
 	DataTable(ClientContext &context, DataTable &parent, ColumnDefinition &new_column, Expression *default_value);
 	//! Constructs a DataTable as a delta on an existing data table but with one column removed
@@ -125,12 +127,16 @@ public:
 	          vector<column_t> bound_columns, Expression &cast_expr);
 
 	shared_ptr<DataTableInfo> info;
-	//! Types managed by data table
-	vector<LogicalType> types;
+
+	vector<ColumnDefinition> column_definitions;
+
 	//! A reference to the database instance
 	DatabaseInstance &db;
 
 public:
+	//! Returns a list of types of the table
+	vector<LogicalType> GetTypes();
+
 	void InitializeScan(TableScanState &state, const vector<column_t> &column_ids,
 	                    TableFilterSet *table_filter = nullptr);
 	void InitializeScan(Transaction &transaction, TableScanState &state, const vector<column_t> &column_ids,
@@ -138,7 +144,7 @@ public:
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context);
-	void InitializeParallelScan(ParallelTableScanState &state);
+	void InitializeParallelScan(ClientContext &context, ParallelTableScanState &state);
 	bool NextParallelScan(ClientContext &context, ParallelTableScanState &state, TableScanState &scan_state,
 	                      const vector<column_t> &column_ids);
 

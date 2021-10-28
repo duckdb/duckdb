@@ -1,0 +1,44 @@
+# name: test/sql/function/uuid/test_uuid.test
+# description: Test gen_random_uuid function
+# group: [uuid]
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+CREATE TEMPORARY TABLE t1 AS SELECT gen_random_uuid() a FROM range(0, 16);
+
+statement ok
+CREATE TEMPORARY TABLE t2 AS SELECT gen_random_uuid() b FROM range(0, 16);
+
+statement ok
+CREATE TEMPORARY TABLE t3 AS SELECT gen_random_uuid() c FROM range(0, 16);
+
+# empty result on this join
+query I
+SELECT COUNT(*) FROM (SELECT a FROM t1 JOIN t2 ON (a=b) JOIN t3 ON (b=c)) s1
+----
+0
+
+statement ok
+ROLLBACK
+
+# use gen_random_uuid in some complicated expressions
+statement ok
+CREATE TABLE uuids(u UUID NOT NULL DEFAULT gen_random_uuid(), a INTEGER)
+
+statement ok
+INSERT INTO uuids (a) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)
+
+query I
+SELECT COUNT(DISTINCT u) FROM uuids;
+----
+10
+
+# we can order by gen_random_uuid
+statement ok
+SELECT * FROM uuids ORDER BY gen_random_uuid()
+
+# we can select gen_random_uuid
+statement ok
+SELECT gen_random_uuid() FROM uuids

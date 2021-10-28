@@ -1,0 +1,31 @@
+# name: test/sql/join/cross_product/test_cross_product.test
+# description: Test cross products
+# group: [cross_product]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 1), (12, 2);
+
+query IIII
+SELECT * FROM test t1, test t2 ORDER BY 1, 2, 3, 4;
+----
+11	1	11	1
+11	1	12	2
+12	2	11	1
+12	2	12	2
+
+# big cross product
+query I
+SELECT COUNT(*) FROM test t1, range(2000) t2
+----
+4000
+
+query I
+SELECT COUNT(*) FROM range(2000) t1, test t2
+----
+4000

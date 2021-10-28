@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/execution/physical_sink.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parallel/pipeline.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
 
@@ -18,7 +18,7 @@ namespace duckdb {
 class OrderGlobalState;
 
 //! Physically re-orders the input data
-class PhysicalOrder : public PhysicalSink {
+class PhysicalOrder : public PhysicalOperator {
 public:
 	PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t estimated_cardinality);
 
@@ -26,21 +26,32 @@ public:
 	vector<BoundOrderByNode> orders;
 
 public:
-	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) override;
-	unique_ptr<GlobalOperatorState> GetGlobalState(ClientContext &context) override;
+	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
+	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	             LocalSourceState &lstate) const override;
 
-	void Sink(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p,
-	          DataChunk &input) const override;
-	void Combine(ExecutionContext &context, GlobalOperatorState &gstate_p, LocalSinkState &lstate_p) override;
-	bool Finalize(Pipeline &pipeline, ClientContext &context, unique_ptr<GlobalOperatorState> gstate_p) override;
+public:
+	unique_ptr<LocalSinkState> GetLocalSinkState(ExecutionContext &context) const override;
+	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 
-	unique_ptr<PhysicalOperatorState> GetOperatorState() override;
-	void GetChunkInternal(ExecutionContext &context, DataChunk &chunk, PhysicalOperatorState *state) const override;
+	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p,
+	                    DataChunk &input) const override;
+	void Combine(ExecutionContext &context, GlobalSinkState &gstate_p, LocalSinkState &lstate_p) const override;
+	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+	                          GlobalSinkState &gstate) const override;
+
+	bool IsSink() const override {
+		return true;
+	}
+	bool ParallelSink() const override {
+		return true;
+	}
 
 	string ParamsToString() const override;
 
 	//! Schedules tasks to merge the data during the Finalize phase
-	static void ScheduleMergeTasks(Pipeline &pipeline, ClientContext &context, OrderGlobalState &state);
+	static void ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGlobalState &state);
 };
 
 } // namespace duckdb

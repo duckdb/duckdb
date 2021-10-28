@@ -105,8 +105,6 @@ struct ParallelArrowScanState : public ParallelState {
 	}
 	unique_ptr<ArrowArrayStreamWrapper> stream;
 	std::mutex main_mutex;
-	std::mutex sync_mutex;
-	std::condition_variable cv;
 	bool ready = false;
 };
 
@@ -138,8 +136,9 @@ private:
 
 	//! -----Multi Thread Functions:-----
 	//! Initialize Parallel State
-	static unique_ptr<ParallelState> ArrowScanInitParallelState(ClientContext &context,
-	                                                            const FunctionData *bind_data_p);
+	static unique_ptr<ParallelState> ArrowScanInitParallelState(ClientContext &context, const FunctionData *bind_data_p,
+	                                                            const vector<column_t> &column_ids,
+	                                                            TableFilterCollection *filters);
 	//! Initialize Parallel Scans
 	static unique_ptr<FunctionOperatorData> ArrowScanParallelInit(ClientContext &context,
 	                                                              const FunctionData *bind_data_p, ParallelState *state,

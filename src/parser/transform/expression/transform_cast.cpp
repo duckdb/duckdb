@@ -6,7 +6,7 @@
 
 namespace duckdb {
 
-unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::PGTypeCast *root, idx_t depth) {
+unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::PGTypeCast *root) {
 	D_ASSERT(root);
 
 	// get the type to cast to
@@ -21,7 +21,7 @@ unique_ptr<ParsedExpression> Transformer::TransformTypeCast(duckdb_libpgquery::P
 		}
 	}
 	// transform the expression node
-	auto expression = TransformExpression(root->arg, depth + 1);
+	auto expression = TransformExpression(root->arg);
 	bool try_cast = root->tryCast;
 
 	// now create a cast operation

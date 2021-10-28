@@ -75,6 +75,10 @@ public:
 	DUCKDB_API static Value UBIGINT(uint64_t value);
 	//! Create a hugeint Value from a specified value
 	DUCKDB_API static Value HUGEINT(hugeint_t value);
+	//! Create a uuid Value from a specified value
+	DUCKDB_API static Value UUID(const string &value);
+	//! Create a uuid Value from a specified value
+	DUCKDB_API static Value UUID(hugeint_t value);
 	//! Create a hash Value from a specified value
 	DUCKDB_API static Value HASH(hash_t value);
 	//! Create a pointer Value from a specified value
@@ -99,6 +103,9 @@ public:
 	                                  int32_t micros);
 	DUCKDB_API static Value INTERVAL(int32_t months, int32_t days, int64_t micros);
 	DUCKDB_API static Value INTERVAL(interval_t interval);
+
+	// Create a enum Value from a specified uint value
+	DUCKDB_API static Value ENUM(uint64_t value, const LogicalType &original_type);
 
 	// Decimal values
 	DUCKDB_API static Value DECIMAL(int16_t value, uint8_t width, uint8_t scale);

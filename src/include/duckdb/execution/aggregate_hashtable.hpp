@@ -135,9 +135,6 @@ private:
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	hash_t bitmask;
 
-	//! Pointer vector for Scan()
-	Vector addresses;
-
 	vector<unique_ptr<GroupedAggregateHashTable>> distinct_hashes;
 
 	bool is_finalized;
