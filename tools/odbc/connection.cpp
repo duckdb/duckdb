@@ -1,7 +1,7 @@
 #include "duckdb_odbc.hpp"
 
 SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
-                            SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
+                                    SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 
 	return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) {
 		if (!value_ptr) {
@@ -18,7 +18,7 @@ SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 }
 
 SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
-                            SQLINTEGER string_length) {
+                                    SQLINTEGER string_length) {
 	return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) {
 		switch (attribute) {
 		case SQL_ATTR_AUTOCOMMIT:
@@ -42,7 +42,7 @@ SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attrib
 }
 
 SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr,
-                     SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr) {
+                             SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr) {
 
 	// TODO more from fun list
 	// https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqlgetinfo-function?view=sql-server-ver15

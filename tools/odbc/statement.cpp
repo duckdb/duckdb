@@ -7,7 +7,7 @@
 using duckdb::LogicalTypeId;
 
 SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
-                         SQLINTEGER string_length) {
+                                 SQLINTEGER string_length) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		switch (attribute) {
 		case SQL_ATTR_PARAMSET_SIZE: {
@@ -69,97 +69,96 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 	});
 }
 
-SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,  
-     SQLINTEGER BufferLength, SQLINTEGER *StringLengthPtr) {
+SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
+                                 SQLINTEGER BufferLength, SQLINTEGER *StringLengthPtr) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-        switch (Attribute)
-        {
-        case SQL_ATTR_APP_PARAM_DESC:
-        case SQL_ATTR_IMP_PARAM_DESC:
-        case SQL_ATTR_APP_ROW_DESC:
-        case SQL_ATTR_IMP_ROW_DESC: {
-            if(StringLengthPtr) {
-                *StringLengthPtr=4;
-            }
-            if (Attribute == SQL_ATTR_APP_PARAM_DESC) {
-                *((HSTMT *) ValuePtr) = (SQLHDESC )stmt->apd;
-            }
-            if (Attribute == SQL_ATTR_IMP_PARAM_DESC) {
-                *((HSTMT *) ValuePtr) = (SQLHDESC )stmt->ipd;
-            }
-            if (Attribute == SQL_ATTR_APP_ROW_DESC) {
-                *((HSTMT *) ValuePtr) = (SQLHDESC )stmt->ard;
-            }
-            if (Attribute == SQL_ATTR_IMP_ROW_DESC) {
-                *((HSTMT *) ValuePtr) = (SQLHDESC )stmt->ird;
-            }
-            return SQL_SUCCESS;
-        }
-        case SQL_ATTR_ASYNC_ENABLE:
-            break;
-        case SQL_ATTR_ASYNC_STMT_EVENT:
-            break;
-        case SQL_ATTR_CONCURRENCY:
-            break;
-        case SQL_ATTR_CURSOR_SCROLLABLE:
-            break;
-        case SQL_ATTR_CURSOR_SENSITIVITY:
-            break;
-        case SQL_ATTR_CURSOR_TYPE:
-            break;
-        case SQL_ATTR_ENABLE_AUTO_IPD:
-            break;
-        case SQL_ATTR_FETCH_BOOKMARK_PTR:
-            break;
-        case SQL_ATTR_KEYSET_SIZE:
-            break;
-        case SQL_ATTR_MAX_LENGTH:
-            break;
-        case SQL_ATTR_MAX_ROWS:
-            break;
-        case SQL_ATTR_METADATA_ID:
-            break;
-        case SQL_ATTR_NOSCAN:
-            break;
-        case SQL_ATTR_PARAM_BIND_OFFSET_PTR:
-            break;
-        case SQL_ATTR_PARAM_BIND_TYPE:
-            break;
-        case SQL_ATTR_PARAM_OPERATION_PTR:
-            break;
-        case SQL_ATTR_PARAM_STATUS_PTR:
-            break;
-        case SQL_ATTR_PARAMS_PROCESSED_PTR:
-            break;
-        case SQL_ATTR_PARAMSET_SIZE:
-            break;
-        case SQL_ATTR_QUERY_TIMEOUT:
-            break;
-        case SQL_ATTR_RETRIEVE_DATA:
-            break;
-        case SQL_ATTR_ROW_ARRAY_SIZE:
-            break;
-        case SQL_ATTR_ROW_BIND_OFFSET_PTR:
-            break;
-        case SQL_ATTR_ROW_BIND_TYPE:
-            break;
-        case SQL_ATTR_ROW_NUMBER:
-            break;
-        case SQL_ATTR_ROW_OPERATION_PTR:
-            break;
-        case SQL_ATTR_ROW_STATUS_PTR:
-            break;
-        case SQL_ATTR_ROWS_FETCHED_PTR:
-            break;
-        case SQL_ATTR_SIMULATE_CURSOR:
-            break;
-        case SQL_ATTR_USE_BOOKMARKS:
-            break;
-        default:
-            break;
-        }
-        return SQL_ERROR;
-    });
+		switch (Attribute) {
+		case SQL_ATTR_APP_PARAM_DESC:
+		case SQL_ATTR_IMP_PARAM_DESC:
+		case SQL_ATTR_APP_ROW_DESC:
+		case SQL_ATTR_IMP_ROW_DESC: {
+			if (StringLengthPtr) {
+				*StringLengthPtr = 4;
+			}
+			if (Attribute == SQL_ATTR_APP_PARAM_DESC) {
+				*((HSTMT *)ValuePtr) = (SQLHDESC)stmt->apd;
+			}
+			if (Attribute == SQL_ATTR_IMP_PARAM_DESC) {
+				*((HSTMT *)ValuePtr) = (SQLHDESC)stmt->ipd;
+			}
+			if (Attribute == SQL_ATTR_APP_ROW_DESC) {
+				*((HSTMT *)ValuePtr) = (SQLHDESC)stmt->ard;
+			}
+			if (Attribute == SQL_ATTR_IMP_ROW_DESC) {
+				*((HSTMT *)ValuePtr) = (SQLHDESC)stmt->ird;
+			}
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_ASYNC_ENABLE:
+			break;
+		case SQL_ATTR_ASYNC_STMT_EVENT:
+			break;
+		case SQL_ATTR_CONCURRENCY:
+			break;
+		case SQL_ATTR_CURSOR_SCROLLABLE:
+			break;
+		case SQL_ATTR_CURSOR_SENSITIVITY:
+			break;
+		case SQL_ATTR_CURSOR_TYPE:
+			break;
+		case SQL_ATTR_ENABLE_AUTO_IPD:
+			break;
+		case SQL_ATTR_FETCH_BOOKMARK_PTR:
+			break;
+		case SQL_ATTR_KEYSET_SIZE:
+			break;
+		case SQL_ATTR_MAX_LENGTH:
+			break;
+		case SQL_ATTR_MAX_ROWS:
+			break;
+		case SQL_ATTR_METADATA_ID:
+			break;
+		case SQL_ATTR_NOSCAN:
+			break;
+		case SQL_ATTR_PARAM_BIND_OFFSET_PTR:
+			break;
+		case SQL_ATTR_PARAM_BIND_TYPE:
+			break;
+		case SQL_ATTR_PARAM_OPERATION_PTR:
+			break;
+		case SQL_ATTR_PARAM_STATUS_PTR:
+			break;
+		case SQL_ATTR_PARAMS_PROCESSED_PTR:
+			break;
+		case SQL_ATTR_PARAMSET_SIZE:
+			break;
+		case SQL_ATTR_QUERY_TIMEOUT:
+			break;
+		case SQL_ATTR_RETRIEVE_DATA:
+			break;
+		case SQL_ATTR_ROW_ARRAY_SIZE:
+			break;
+		case SQL_ATTR_ROW_BIND_OFFSET_PTR:
+			break;
+		case SQL_ATTR_ROW_BIND_TYPE:
+			break;
+		case SQL_ATTR_ROW_NUMBER:
+			break;
+		case SQL_ATTR_ROW_OPERATION_PTR:
+			break;
+		case SQL_ATTR_ROW_STATUS_PTR:
+			break;
+		case SQL_ATTR_ROWS_FETCHED_PTR:
+			break;
+		case SQL_ATTR_SIMULATE_CURSOR:
+			break;
+		case SQL_ATTR_USE_BOOKMARKS:
+			break;
+		default:
+			break;
+		}
+		return SQL_ERROR;
+	});
 }
 
 SQLRETURN SQL_API SQLPrepare(SQLHSTMT statement_handle, SQLCHAR *statement_text, SQLINTEGER text_length) {
@@ -178,9 +177,9 @@ SQLRETURN SQL_API SQLExecDirect(SQLHSTMT statement_handle, SQLCHAR *statement_te
 }
 
 // https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqltables-function
-SQLRETURN SQL_API SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1, SQLCHAR *schema_name,
-                    SQLSMALLINT name_length2, SQLCHAR *table_name, SQLSMALLINT name_length3, SQLCHAR *table_type,
-                    SQLSMALLINT name_length4) {
+SQLRETURN SQL_API SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
+                            SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
+                            SQLSMALLINT name_length3, SQLCHAR *table_type, SQLSMALLINT name_length4) {
 
 	auto catalog_n = duckdb::OdbcUtils::ReadString(catalog_name, name_length1);
 	auto schema_n = duckdb::OdbcUtils::ReadString(schema_name, name_length2);
@@ -250,9 +249,9 @@ SQLRETURN SQL_API SQLTables(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQ
 	return SQL_SUCCESS;
 }
 
-SQLRETURN SQL_API SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1, SQLCHAR *schema_name,
-                     SQLSMALLINT name_length2, SQLCHAR *table_name, SQLSMALLINT name_length3, SQLCHAR *column_name,
-                     SQLSMALLINT name_length4) {
+SQLRETURN SQL_API SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, SQLSMALLINT name_length1,
+                             SQLCHAR *schema_name, SQLSMALLINT name_length2, SQLCHAR *table_name,
+                             SQLSMALLINT name_length3, SQLCHAR *column_name, SQLSMALLINT name_length4) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		// TODO
 		return SQL_ERROR;
@@ -260,8 +259,8 @@ SQLRETURN SQL_API SQLColumns(SQLHSTMT statement_handle, SQLCHAR *catalog_name, S
 }
 
 SQLRETURN SQL_API SQLColAttribute(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLUSMALLINT field_identifier,
-                          SQLPOINTER character_attribute_ptr, SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr,
-                          SQLLEN *numeric_attribute_ptr) {
+                                  SQLPOINTER character_attribute_ptr, SQLSMALLINT buffer_length,
+                                  SQLSMALLINT *string_length_ptr, SQLLEN *numeric_attribute_ptr) {
 
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (column_number < 1 || column_number > stmt->stmt->GetTypes().size()) {

@@ -13,10 +13,10 @@ using duckdb::Load;
 using duckdb::LogicalType;
 using duckdb::Value;
 
-SQLRETURN SQL_API SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT input_output_type,
-                           SQLSMALLINT value_type, SQLSMALLINT parameter_type, SQLULEN column_size,
-                           SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr, SQLLEN buffer_length,
-                           SQLLEN *str_len_or_ind_ptr) {
+SQLRETURN SQL_API SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number,
+                                   SQLSMALLINT input_output_type, SQLSMALLINT value_type, SQLSMALLINT parameter_type,
+                                   SQLULEN column_size, SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr,
+                                   SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	return duckdb::BindParameterStmt(statement_handle, parameter_number, input_output_type, value_type, parameter_type,
 	                                 column_size, decimal_digits, parameter_value_ptr, buffer_length,
 	                                 str_len_or_ind_ptr);
@@ -48,7 +48,7 @@ SQLRETURN SQL_API SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter
 }
 
 SQLRETURN SQL_API SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
-                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
+                             SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		D_ASSERT(column_number > 0);
 
@@ -69,7 +69,8 @@ SQLRETURN SQL_API SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_numb
 
 // https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqldescribeparam-function
 SQLRETURN SQL_API SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT *data_type_ptr,
-                           SQLULEN *parameter_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr) {
+                                   SQLULEN *parameter_size_ptr, SQLSMALLINT *decimal_digits_ptr,
+                                   SQLSMALLINT *nullable_ptr) {
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (parameter_number < 0 || parameter_number > stmt->stmt->n_param) {
 			return SQL_ERROR;
@@ -118,8 +119,8 @@ SQLRETURN SQL_API SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT param
 }
 
 SQLRETURN SQL_API SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLCHAR *column_name,
-                         SQLSMALLINT buffer_length, SQLSMALLINT *name_length_ptr, SQLSMALLINT *data_type_ptr,
-                         SQLULEN *column_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr) {
+                                 SQLSMALLINT buffer_length, SQLSMALLINT *name_length_ptr, SQLSMALLINT *data_type_ptr,
+                                 SQLULEN *column_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr) {
 
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (column_number > stmt->stmt->ColumnCount()) {

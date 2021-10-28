@@ -62,7 +62,7 @@ SQLRETURN SQL_API SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 }
 
 SQLRETURN SQL_API SQLSetEnvAttr(SQLHENV environment_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
-                        SQLINTEGER string_length) {
+                                SQLINTEGER string_length) {
 	if (!environment_handle) {
 		return SQL_ERROR;
 	}
@@ -144,27 +144,30 @@ static SQLRETURN SetConnection(SQLHDBC connection_handle, SQLCHAR *conn_str) {
 }
 
 SQLRETURN SQL_API SQLDriverConnect(SQLHDBC connection_handle, SQLHWND window_handle, SQLCHAR *in_connection_string,
-                           SQLSMALLINT string_length1, SQLCHAR *out_connection_string, SQLSMALLINT buffer_length,
-                           SQLSMALLINT *string_length2_ptr, SQLUSMALLINT driver_completion) {
+                                   SQLSMALLINT string_length1, SQLCHAR *out_connection_string,
+                                   SQLSMALLINT buffer_length, SQLSMALLINT *string_length2_ptr,
+                                   SQLUSMALLINT driver_completion) {
 	auto ret = SetConnection(connection_handle, in_connection_string);
 	std::string connect_str = "DuckDB connection";
 	if (string_length2_ptr) {
 		*string_length2_ptr = connect_str.size();
 	}
 	if (ret == SQL_SUCCESS && out_connection_string) {
-		memcpy(out_connection_string, connect_str.c_str(), duckdb::MinValue<SQLSMALLINT>((SQLSMALLINT)connect_str.size(), buffer_length));
+		memcpy(out_connection_string, connect_str.c_str(),
+		       duckdb::MinValue<SQLSMALLINT>((SQLSMALLINT)connect_str.size(), buffer_length));
 	}
 	return ret;
 }
 
-SQLRETURN SQL_API SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQLSMALLINT name_length1, SQLCHAR *user_name,
-                     SQLSMALLINT name_length2, SQLCHAR *authentication, SQLSMALLINT name_length3) {
+SQLRETURN SQL_API SQLConnect(SQLHDBC connection_handle, SQLCHAR *server_name, SQLSMALLINT name_length1,
+                             SQLCHAR *user_name, SQLSMALLINT name_length2, SQLCHAR *authentication,
+                             SQLSMALLINT name_length3) {
 	return SetConnection(connection_handle, server_name);
 }
 
 SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number, SQLCHAR *sql_state,
-                        SQLINTEGER *native_error_ptr, SQLCHAR *message_text, SQLSMALLINT buffer_length,
-                        SQLSMALLINT *text_length_ptr) {
+                                SQLINTEGER *native_error_ptr, SQLCHAR *message_text, SQLSMALLINT buffer_length,
+                                SQLSMALLINT *text_length_ptr) {
 	if (!handle) {
 		std::string msg_str("Handle is NULL.");
 		duckdb::OdbcUtils::WriteString(msg_str, message_text, buffer_length, text_length_ptr);
@@ -224,7 +227,7 @@ SQLRETURN SQL_API SQLGetDiagRec(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSM
 }
 
 SQLRETURN SQL_API SQLGetDiagField(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT rec_number,
-                          SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
-                          SQLSMALLINT *string_length_ptr) {
+                                  SQLSMALLINT diag_identifier, SQLPOINTER diag_info_ptr, SQLSMALLINT buffer_length,
+                                  SQLSMALLINT *string_length_ptr) {
 	return SQL_ERROR;
 }

@@ -102,9 +102,8 @@ struct OdbcHandleStmt : public OdbcHandle {
 
 struct OdbcHandleDesc : public OdbcHandle {
 	//! https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/descriptors?view=sql-server-ver15
-	//TODO requires full implmentation
-	explicit OdbcHandleDesc(): OdbcHandle(OdbcHandleType::DESC) {
-	};
+	// TODO requires full implmentation
+	explicit OdbcHandleDesc() : OdbcHandle(OdbcHandleType::DESC) {};
 	~OdbcHandleDesc();
 };
 
