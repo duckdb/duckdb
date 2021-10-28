@@ -80,6 +80,7 @@ public:
 	idx_t AddedRows(DataTable *table);
 
 	void AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column, Expression *default_value);
+	void DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t removed_column);
 	void ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<column_t> &bound_columns, Expression &cast_expr);
 

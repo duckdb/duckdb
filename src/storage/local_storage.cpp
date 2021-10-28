@@ -234,8 +234,23 @@ idx_t LocalStorage::AddedRows(DataTable *table) {
 
 void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinition &new_column,
                              Expression *default_value) {
+	// check if there are any pending appends for the old version of the table
+	auto entry = table_storage.find(old_dt);
+	if (entry == table_storage.end()) {
+		return;
+	}
 	throw InternalException("FIXME: LocalStorage::AddColumn");
 }
+
+void LocalStorage::DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t removed_column) {
+	// check if there are any pending appends for the old version of the table
+	auto storage = GetStorage(old_dt);
+	if (!storage) {
+		return;
+	}
+	storage->row_groups.RemoveColumn(removed_column);
+}
+
 
 void LocalStorage::ChangeType(DataTable *old_dt, DataTable *new_dt, idx_t changed_idx, const LogicalType &target_type,
                               const vector<column_t> &bound_columns, Expression &cast_expr) {

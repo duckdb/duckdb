@@ -83,6 +83,10 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t removed_co
 	// alter the row_groups and remove the column from each of them
 	this->row_groups = parent.row_groups->RemoveColumn(removed_column);
 
+	// scan the original table, and fill the new column with the transformed value
+	auto &transaction = Transaction::GetTransaction(context);
+	transaction.storage.DropColumn(&parent, this, removed_column);
+
 	// this table replaces the previous table, hence the parent is no longer the root DataTable
 	parent.is_root = false;
 }
