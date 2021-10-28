@@ -1,6 +1,6 @@
 #include "duckdb_odbc.hpp"
 
-SQLRETURN SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+SQLRETURN SQL_API SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                             SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 
 	return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) {
@@ -17,7 +17,7 @@ SQLRETURN SQLGetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQL
 	});
 }
 
-SQLRETURN SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+SQLRETURN SQL_API SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
                             SQLINTEGER string_length) {
 	return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) {
 		switch (attribute) {
@@ -41,7 +41,7 @@ SQLRETURN SQLSetConnectAttr(SQLHDBC connection_handle, SQLINTEGER attribute, SQL
 	});
 }
 
-SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr,
+SQLRETURN SQL_API SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINTER info_value_ptr,
                      SQLSMALLINT buffer_length, SQLSMALLINT *string_length_ptr) {
 
 	// TODO more from fun list
@@ -52,6 +52,11 @@ SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINT
 	case SQL_DBMS_NAME: {
 		std::string dbname = "DuckDB";
 		duckdb::OdbcUtils::WriteString(dbname, (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
+		return SQL_SUCCESS;
+	}
+	case SQL_DRIVER_ODBC_VER: {
+		std::string driver_ver = "03.00";
+		duckdb::OdbcUtils::WriteString(driver_ver, (SQLCHAR *)info_value_ptr, buffer_length, string_length_ptr);
 		return SQL_SUCCESS;
 	}
 	case SQL_DBMS_VER: {
@@ -81,7 +86,6 @@ SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINT
 		// TODO assert buffer length >= sizeof(SQLUSMALLINT)
 		duckdb::Store<SQLUSMALLINT>(SQL_NNC_NON_NULL, (duckdb::data_ptr_t)info_value_ptr);
 		return SQL_SUCCESS;
-
 	case SQL_ODBC_INTERFACE_CONFORMANCE:
 		// TODO assert buffer length >= sizeof(SQLUINTEGER)
 
@@ -93,15 +97,25 @@ SQLRETURN SQLGetInfo(SQLHDBC connection_handle, SQLUSMALLINT info_type, SQLPOINT
 		// TODO assert buffer length >= sizeof(SQLUINTEGER)
 
 		duckdb::Store<SQLUINTEGER>(SQL_CT_CREATE_TABLE, (duckdb::data_ptr_t)info_value_ptr);
-
 		return SQL_SUCCESS;
 
+	case SQL_CURSOR_COMMIT_BEHAVIOR:
+		duckdb::Store<SQLUSMALLINT>(SQL_CB_PRESERVE, (duckdb::data_ptr_t)info_value_ptr);
+		return SQL_SUCCESS;
+	case SQL_CURSOR_ROLLBACK_BEHAVIOR:
+		duckdb::Store<SQLUSMALLINT>(SQL_CB_CLOSE, (duckdb::data_ptr_t)info_value_ptr);
+		return SQL_SUCCESS;
+	case SQL_GETDATA_EXTENSIONS:
+		SQLUINTEGER mask;
+		mask = (SQL_GD_ANY_COLUMN | SQL_GD_ANY_ORDER | SQL_GD_BOUND | SQL_GD_BLOCK);
+		duckdb::Store<SQLUINTEGER>(mask, (duckdb::data_ptr_t)info_value_ptr);
+		return SQL_SUCCESS;
 	default:
 		return SQL_ERROR;
 	}
 }
 
-SQLRETURN SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type) {
+SQLRETURN SQL_API SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT completion_type) {
 	if (handle_type != SQL_HANDLE_DBC) { // theoretically this can also be done on env but no no no
 		return SQL_ERROR;
 	}
@@ -127,7 +141,7 @@ SQLRETURN SQLEndTran(SQLSMALLINT handle_type, SQLHANDLE handle, SQLSMALLINT comp
 	});
 }
 
-SQLRETURN SQLDisconnect(SQLHDBC connection_handle) {
+SQLRETURN SQL_API SQLDisconnect(SQLHDBC connection_handle) {
 	return duckdb::WithConnection(connection_handle, [&](duckdb::OdbcHandleDbc *dbc) {
 		dbc->conn.reset();
 		return SQL_SUCCESS;
