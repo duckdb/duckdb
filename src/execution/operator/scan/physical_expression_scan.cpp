@@ -6,7 +6,7 @@ namespace duckdb {
 
 class ExpressionScanState : public GlobalSourceState {
 public:
-	ExpressionScanState(const PhysicalExpressionScan &op) : expression_index(0) {
+	explicit ExpressionScanState(const PhysicalExpressionScan &op) : expression_index(0) {
 		temp_chunk.Initialize(op.GetTypes());
 	}
 
