@@ -1045,9 +1045,10 @@ void Query::ExecuteInternal() {
 		} else {
 			int current_row = 0, current_column = 0;
 			for (int i = 0; i < nResult && i < (int)comparison_values.size(); i++) {
-				bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column],
-				                              comparison_values[i], file_name, query_line, sql_query, current_row,
-				                              current_column, comparison_values, expected_column_count, row_wise, azResult);
+				bool success =
+				    compare_values(*result, azResult[current_row * expected_column_count + current_column],
+				                   comparison_values[i], file_name, query_line, sql_query, current_row, current_column,
+				                   comparison_values, expected_column_count, row_wise, azResult);
 				if (!success) {
 					FAIL_LINE(file_name, query_line, 0);
 				}
