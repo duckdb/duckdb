@@ -3,7 +3,7 @@
 #include "odbc_fetch.hpp"
 #include "parameter_wrapper.hpp"
 
-SQLRETURN SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
+SQLRETURN SQL_API SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                      SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 
 	return duckdb::GetDataStmtResult(statement_handle, col_or_param_num, target_type, target_value_ptr, buffer_length,
@@ -28,7 +28,7 @@ static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
 	});
 }
 
-SQLRETURN SQLFetch(SQLHSTMT statement_handle) {
+SQLRETURN SQL_API SQLFetch(SQLHSTMT statement_handle) {
 	auto ret = ExecuteBeforeFetch(statement_handle);
 	if (ret != SQL_SUCCESS) {
 		return ret;
@@ -36,7 +36,7 @@ SQLRETURN SQLFetch(SQLHSTMT statement_handle) {
 	return duckdb::FetchStmtResult(statement_handle);
 }
 
-SQLRETURN SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
+SQLRETURN SQL_API SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientation, SQLLEN fetch_offset) {
 	switch (fetch_orientation) {
 	case SQL_FETCH_FIRST:
 	case SQL_FETCH_ABSOLUTE:
@@ -49,7 +49,7 @@ SQLRETURN SQLFetchScroll(SQLHSTMT statement_handle, SQLSMALLINT fetch_orientatio
 	}
 }
 
-SQLRETURN SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr) {
+SQLRETURN SQL_API SQLRowCount(SQLHSTMT statement_handle, SQLLEN *row_count_ptr) {
 	return duckdb::WithStatementResult(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (!row_count_ptr) {
 			return SQL_ERROR;
