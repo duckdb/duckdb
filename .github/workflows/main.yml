@@ -122,7 +122,7 @@ jobs:
     - name: Install psqlodbc
       run: |
         curl -L https://github.com/Mytherin/psqlodbc/archive/refs/heads/main.zip -o psqlodbc-main.zip
-        tar -xf psqlodbc-main.zip
+        unzip psqlodbc-main.zip
         (cd psqlodbc-main && make debug)
 
     - name: Test psqlodbc
