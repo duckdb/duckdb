@@ -179,23 +179,21 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	unique_ptr<VectorData[]> key_data;
 	const SelectionVector *current_sel;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t added_count = PrepareKeys(keys, key_data, current_sel, sel, true);
-	if (added_count < keys.size()) {
-		has_null = true;
-	}
-	if (added_count == 0) {
+	idx_t prepared_keys_count = PrepareKeys(keys, key_data, current_sel, sel, true);
+	has_null = (prepared_keys_count < keys.size());
+	if (prepared_keys_count == 0) {
 		return;
 	}
 
 	// build out the buffer space
 	Vector addresses(LogicalType::POINTER);
 	auto key_locations = FlatVector::GetData<data_ptr_t>(addresses);
-	auto handles = block_collection->Build(added_count, key_locations, nullptr, current_sel);
+	auto handles = block_collection->Build(prepared_keys_count, key_locations, nullptr, current_sel);
 
 	// hash the keys and obtain an entry in the list
 	// note that we only hash the keys used in the equality comparison
 	Vector hash_values(LogicalType::HASH);
-	Hash(keys, *current_sel, added_count, hash_values);
+	Hash(keys, *current_sel, prepared_keys_count, hash_values);
 
 	// build a chunk so we can handle nested types that need more than Orrification
 	DataChunk source_chunk;
@@ -234,7 +232,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	source_chunk.SetCardinality(keys);
 
 	RowOperations::Scatter(source_chunk, source_data.data(), layout, addresses, *string_heap, *current_sel,
-	                       added_count);
+	                       prepared_keys_count);
 }
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
@@ -244,7 +242,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	ApplyBitmask(hashes, count);
 
 	hashes.Normalify(count);
-
+	// TODO: check for duplicates here
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
@@ -275,7 +273,7 @@ void JoinHashTable::Finalize() {
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
 	// now construct the actual hash table; scan the nodes
-	// as we can the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
+	// as we scan the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
 	// this is so that we can keep pointers around to the blocks
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
 	for (auto &block : block_collection->blocks) {
@@ -284,16 +282,16 @@ void JoinHashTable::Finalize() {
 		idx_t entry = 0;
 		while (entry < block.count) {
 			// fetch the next vector of entries from the blocks
-			idx_t next = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
-			for (idx_t i = 0; i < next; i++) {
+			idx_t entries_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
+			for (idx_t i = 0; i < entries_count; i++) {
 				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + pointer_offset));
 				key_locations[i] = dataptr;
 				dataptr += entry_size;
 			}
 			// now insert into the hash table
-			InsertHashes(hashes, next, key_locations);
+			InsertHashes(hashes, entries_count, key_locations);
 
-			entry += next;
+			entry += entries_count;
 		}
 		pinned_handles.push_back(move(handle));
 	}
