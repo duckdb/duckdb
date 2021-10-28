@@ -109,7 +109,7 @@ public:
 	//! The set of disabled optimizers (default empty)
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific compression method to be used when checkpointing (if available)
-	CompressionType force_compression = CompressionType::COMPRESSION_INVALID;
+	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
 	//! Debug flag that adds additional (unnecessary) free_list blocks to the storage
 	bool debug_many_free_list_blocks = false;
 

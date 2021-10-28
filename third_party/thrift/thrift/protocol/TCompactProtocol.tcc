@@ -37,10 +37,12 @@
 # error "TCompactProtocol currently only works if a signed right shift is arithmetic"
 #endif
 
+#ifndef UNLIKELY
 #ifdef __GNUC__
 #define UNLIKELY(val) (__builtin_expect((val), 0))
 #else
 #define UNLIKELY(val) (val)
+#endif
 #endif
 
 namespace duckdb_apache { namespace thrift { namespace protocol {

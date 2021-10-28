@@ -1,14 +1,16 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
-
+#include "duckdb/storage/data_table.hpp"
+#include "duckdb/parser/column_definition.hpp"
 namespace duckdb {
 
 ColumnDataCheckpointer::ColumnDataCheckpointer(ColumnData &col_data_p, RowGroup &row_group_p,
-                                               ColumnCheckpointState &state_p)
+                                               ColumnCheckpointState &state_p, ColumnCheckpointInfo &checkpoint_info_p)
     : col_data(col_data_p), row_group(row_group_p), state(state_p),
       is_validity(GetType().id() == LogicalTypeId::VALIDITY),
-      intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity) {
+      intermediate(is_validity ? LogicalType::BOOLEAN : GetType(), true, is_validity),
+      checkpoint_info(checkpoint_info_p) {
 	auto &config = DBConfig::GetConfig(GetDatabase());
 	compression_functions = config.GetCompressionFunctions(GetType().InternalType());
 }
@@ -53,30 +55,39 @@ void ColumnDataCheckpointer::ScanSegments(const std::function<void(Vector &, idx
 	}
 }
 
-unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
-	D_ASSERT(!compression_functions.empty());
-	auto &config = DBConfig::GetConfig(GetDatabase());
-	if (config.force_compression != CompressionType::COMPRESSION_INVALID) {
-		// force_compression flag has been set
-		// check if this compression method is available
-		bool found = false;
-		for (idx_t i = 0; i < compression_functions.size(); i++) {
-			if (compression_functions[i]->type == config.force_compression) {
-				found = true;
-				break;
-			}
+void ForceCompression(vector<CompressionFunction *> &compression_functions, CompressionType compression_type) {
+	// On of the force_compression flags has been set
+	// check if this compression method is available
+	bool found = false;
+	for (idx_t i = 0; i < compression_functions.size(); i++) {
+		if (compression_functions[i]->type == compression_type) {
+			found = true;
+			break;
 		}
-		if (found) {
-			// the force_compression method is available
-			// clear all other compression methods
-			for (idx_t i = 0; i < compression_functions.size(); i++) {
-				if (compression_functions[i]->type != config.force_compression) {
-					compression_functions[i] = nullptr;
-				}
+	}
+	if (found) {
+		// the force_compression method is available
+		// clear all other compression methods
+		for (idx_t i = 0; i < compression_functions.size(); i++) {
+			if (compression_functions[i]->type != compression_type) {
+				compression_functions[i] = nullptr;
 			}
 		}
 	}
+}
 
+unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx_t &compression_idx) {
+	D_ASSERT(!compression_functions.empty());
+	auto &config = DBConfig::GetConfig(GetDatabase());
+
+	auto compression_type = checkpoint_info.compression_type;
+	if (compression_type != CompressionType::COMPRESSION_AUTO) {
+		ForceCompression(compression_functions, compression_type);
+	}
+	if (compression_type == CompressionType::COMPRESSION_AUTO &&
+	    config.force_compression != CompressionType::COMPRESSION_AUTO) {
+		ForceCompression(compression_functions, config.force_compression);
+	}
 	// set up the analyze states for each compression method
 	vector<unique_ptr<AnalyzeState>> analyze_states;
 	analyze_states.reserve(compression_functions.size());
