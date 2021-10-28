@@ -13,7 +13,6 @@ EnumComparisonRule::EnumComparisonRule(ExpressionRewriter &rewriter) : Rule(rewr
 	// match on a ComparisonExpression that is an Equality and has a VARCHAR and ENUM as its children
 	auto op = make_unique<ComparisonExpressionMatcher>();
 	// Enum requires expression to be root
-	requires_root = true;
 	op->expr_type = make_unique<SpecificExpressionTypeMatcher>(ExpressionType::COMPARE_EQUAL);
 	for (idx_t i = 0; i < 2; i++) {
 		auto child = make_unique<CastExpressionMatcher>();
@@ -56,7 +55,7 @@ unique_ptr<Expression> EnumComparisonRule::Apply(LogicalOperator &op, vector<Exp
 		return ExpressionRewriter::ConstantOrNull(move(children), Value::BOOLEAN(false));
 	}
 
-	if ((requires_root && !is_root) || op.type != LogicalOperatorType::LOGICAL_FILTER) {
+	if (!is_root || op.type != LogicalOperatorType::LOGICAL_FILTER) {
 		return nullptr;
 	}
 
