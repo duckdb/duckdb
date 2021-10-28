@@ -56,3 +56,14 @@ NULL
 
 statement error
 SELECT even('abcd')
+
+# check bound
+query I
+SELECT even(1.7976931348623155e+308)
+----
+1.7976931348623155e+308
+
+query I
+SELECT even(-1.7976931348623155e+308)
+----
+-1.7976931348623155e+308
