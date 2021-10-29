@@ -278,20 +278,19 @@ void JoinHashTable::Finalize() {
 	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
 	for (auto &block : block_collection->blocks) {
 		auto handle = buffer_manager.Pin(block.block);
-		data_ptr_t dataptr = handle->node->buffer;
+		data_ptr_t entries_buffer = handle->node->buffer;
 		idx_t entry = 0;
 		while (entry < block.count) {
 			// fetch the next vector of entries from the blocks
 			idx_t entries_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
 			for (idx_t i = 0; i < entries_count; i++) {
-				hash_data[i] = Load<hash_t>((data_ptr_t)(dataptr + pointer_offset));
-				key_locations[i] = dataptr;
-				dataptr += entry_size;
+				hash_data[i] = Load<hash_t>((data_ptr_t)(entries_buffer + pointer_offset));
+				key_locations[i] = entries_buffer;
+				entries_buffer += entry_size; // walk to next tuple
 			}
-			// now insert into the hash table
+			// now insert the key_locations into the hash table
 			InsertHashes(hashes, entries_count, key_locations);
-
-			entry += entries_count;
+			entry += entries_count; // walk entries_count
 		}
 		pinned_handles.push_back(move(handle));
 	}
