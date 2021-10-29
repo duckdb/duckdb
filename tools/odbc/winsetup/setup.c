@@ -62,14 +62,14 @@ BOOL INSTAPI ConfigDriver(HWND hwnd, WORD request, LPCSTR driver, LPCSTR args, L
 		SQLPostInstallerError(ODBC_ERROR_INVALID_REQUEST_TYPE, "Invalid request");
 		return FALSE;
 	}
-	if (strcmp(driver, DriverName) != 0) {
+	if (strcmp(driver, driver_name) != 0) {
 		SQLPostInstallerError(ODBC_ERROR_INVALID_NAME, "Invalid driver name");
 		return FALSE;
 	}
 	return TRUE;
 }
 
-struct Data {
+struct odbc_data_t {
 	char *dsn;
 	char *database;
 	HWND parent;
@@ -79,10 +79,10 @@ struct Data {
 static void MergeFromProfileString(const char *dsn, char **datap, const char *entry, const char *defval) {
 	char buf[256];
 
-	if (*datap != nullptr) {
+	if (*datap != NULL) {
 		return;
-}
-	if (dsn == nullptr || *dsn == 0) {
+	}
+	if (dsn == NULL || *dsn == 0) {
 		*datap = strdup(defval);
 		return;
 	}
@@ -92,7 +92,7 @@ static void MergeFromProfileString(const char *dsn, char **datap, const char *en
 }
 
 static INT_PTR CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-	static struct data *datap;
+	static struct odbc_data_t *datap;
 	char buf[128];
 	RECT rcDlg, rcOwner;
 
@@ -100,7 +100,7 @@ static INT_PTR CALLBACK DialogProc(HWND hwndDlg, UINT uMsg, WPARAM wParam, LPARA
 	case WM_INITDIALOG:
 		ODBCLOG("DialogProc WM_INITDIALOG 0x%x 0x%x\n", (unsigned)wParam, (unsigned)lParam);
 
-		datap = (struct data *)lParam;
+		datap = (struct odbc_data_t *)lParam;
 		/* center dialog on parent */
 		GetWindowRect(datap->parent, &rcOwner);
 		GetWindowRect(hwndDlg, &rcDlg);
@@ -159,14 +159,14 @@ inline int strncasecmp(const char *s1, const char *s2, int n) {
 }
 
 BOOL INSTAPI ConfigDSN(HWND parent, WORD request, LPCSTR driver, LPCSTR attributes) {
-	struct data data;
+	struct odbc_data_t data;
 	char *dsn = NULL;
 	BOOL rc;
 
 	ODBCLOG("ConfigDSN %d %s %s 0x%" PRIxPTR "\n", request, driver ? driver : "(null)",
 	        attributes ? attributes : "(null)", (uintptr_t)&data);
 
-	if (strcmp(driver, DriverName) != 0) {
+	if (strcmp(driver, driver_name) != 0) {
 		SQLPostInstallerError(ODBC_ERROR_INVALID_NAME, "Invalid driver name");
 		return FALSE;
 	}

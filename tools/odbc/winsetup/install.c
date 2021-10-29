@@ -53,9 +53,9 @@ static void ProcessSysErrorMessage(DWORD err, const char *func) {
 	char *lp_msg_buf;
 
 	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL,
-	              err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&lpMsgBuf, 0, NULL);
+	              err, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR)&lp_msg_buf, 0, NULL);
 	PrintMsg(func, lp_msg_buf, 0);
-	LocalFree(lpMsgBuf);
+	LocalFree(lp_msg_buf);
 }
 
 int CheckIfFileExists(const char *filepath, const char *filename) {
@@ -159,10 +159,10 @@ static BOOL AddMyDSN(const char *dsn, const char *drivername) {
 	CreateAttributeString(attrs, sizeof(attrs), dsn);
 
 	/* I choose to remove the DSN if it already existed */
-	SQLConfigDataSource(nullptr, ODBC_REMOVE_SYS_DSN, drivername, attrs);
+	SQLConfigDataSource(NULL, ODBC_REMOVE_SYS_DSN, drivername, attrs);
 
 	/* then create a new DSN */
-	if (!SQLConfigDataSource(nullptr, ODBC_ADD_SYS_DSN, drivername, attrs) &&
+	if (!SQLConfigDataSource(NULL, ODBC_ADD_SYS_DSN, drivername, attrs) &&
 	    ProcessSQLErrorMessages("SQLConfigDataSource")) {
 		return FALSE;
 	}
@@ -180,7 +180,7 @@ static BOOL RemoveMyDSN(const char *dsn, const char *drivername) {
 			*p = 0;
 		}
 	}
-	SQLConfigDataSource(nullptr, ODBC_REMOVE_SYS_DSN, drivername, buf);
+	SQLConfigDataSource(NULL, ODBC_REMOVE_SYS_DSN, drivername, buf);
 	return TRUE;
 }
 
@@ -267,7 +267,7 @@ int main(int argc, char **argv) {
 	}
 
 	char *p = strrchr(buf, '\\');
-	if (p != nullptr) {
+	if (p != NULL) {
 		// remove last component
 		*p = '\0';
 		if (p > buf + 4 && strcmp(p - 4, "\\bin") == 0) {
