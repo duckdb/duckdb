@@ -69,28 +69,28 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 	});
 }
 
-SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER Attribute, SQLPOINTER ValuePtr,
-                                 SQLINTEGER BufferLength, SQLINTEGER *StringLengthPtr) {
+SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute, SQLPOINTER value_ptr,
+                                 SQLINTEGER buffer_length, SQLINTEGER *string_length_ptr) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		switch (Attribute) {
+		switch (attribute) {
 		case SQL_ATTR_APP_PARAM_DESC:
 		case SQL_ATTR_IMP_PARAM_DESC:
 		case SQL_ATTR_APP_ROW_DESC:
 		case SQL_ATTR_IMP_ROW_DESC: {
-			if (StringLengthPtr) {
-				*StringLengthPtr = 4;
+			if (string_length_ptr) {
+				*string_length_ptr = 4;
 			}
-			if (Attribute == SQL_ATTR_APP_PARAM_DESC) {
-				*((HSTMT *)ValuePtr) = (SQLHDESC)stmt->apd;
+			if (attribute == SQL_ATTR_APP_PARAM_DESC) {
+				*((HSTMT *)value_ptr) = (SQLHDESC)stmt->apd;
 			}
-			if (Attribute == SQL_ATTR_IMP_PARAM_DESC) {
-				*((HSTMT *)ValuePtr) = (SQLHDESC)stmt->ipd;
+			if (attribute == SQL_ATTR_IMP_PARAM_DESC) {
+				*((HSTMT *)value_ptr) = (SQLHDESC)stmt->ipd;
 			}
-			if (Attribute == SQL_ATTR_APP_ROW_DESC) {
-				*((HSTMT *)ValuePtr) = (SQLHDESC)stmt->ard;
+			if (attribute == SQL_ATTR_APP_ROW_DESC) {
+				*((HSTMT *)value_ptr) = (SQLHDESC)stmt->ard;
 			}
-			if (Attribute == SQL_ATTR_IMP_ROW_DESC) {
-				*((HSTMT *)ValuePtr) = (SQLHDESC)stmt->ird;
+			if (attribute == SQL_ATTR_IMP_ROW_DESC) {
+				*((HSTMT *)value_ptr) = (SQLHDESC)stmt->ird;
 			}
 			return SQL_SUCCESS;
 		}
