@@ -1,7 +1,7 @@
 name: Linux
-on: [push, pull_request]
+on:
   workflow_run:
-    workflows: ["Main"]
+    workflows: ["Initial Check"]
     types:
       - completed
 
@@ -17,14 +17,13 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
-   linux-debug:
-    name: Linux Debug
+ format-check:
+    name: Format Check
     runs-on: ubuntu-20.04
 
     env:
-      CC: ccache gcc-10
-      CXX: ccache g++-10
-      TREAT_WARNINGS_AS_ERRORS: 1
+      CC: gcc-10
+      CXX: g++-10
       GEN: ninja
 
     steps:
@@ -33,10 +32,10 @@ jobs:
         fetch-depth: 0
 
     - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
 
-    - name: Build
-      run:  make debug
-
-    - name: Test
-      run: make unittestci
+    - name: Format Check
+      run: |
+        clang-format --version
+        clang-format --dump-config
+        make format-check-silent
