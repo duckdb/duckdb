@@ -1,5 +1,5 @@
 name: Linux
-on:
+on: [push, pull_request]
   workflow_run:
     workflows: ["Main"]
     types:
