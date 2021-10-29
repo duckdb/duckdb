@@ -47,6 +47,8 @@ struct PandasColumnBindData {
 	unique_ptr<NumPyArrayWrapper> mask;
 	// Only for categorical types
 	string internal_categorical_type;
+	// When object types are casted we must hold their data somewhere
+	vector<py::str> object_str_val;
 };
 
 class VectorConversion {
