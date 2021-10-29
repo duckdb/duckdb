@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/optimizer/rule/date_part_simplification.hpp
+// duckdb/optimizer/rule/enum_comparison.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,11 +12,10 @@
 
 namespace duckdb {
 
-// The DatePart Simplification rule rewrites date_part with a constant specifier into a specialized function (e.g.
-// date_part('year', x) => year(x))
-class DatePartSimplificationRule : public Rule {
+// The Enum Comparison rule rewrites cases where two Enums are compared on an equality check
+class EnumComparisonRule : public Rule {
 public:
-	explicit DatePartSimplificationRule(ExpressionRewriter &rewriter);
+	explicit EnumComparisonRule(ExpressionRewriter &rewriter);
 
 	unique_ptr<Expression> Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made,
 	                             bool is_root) override;

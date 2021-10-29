@@ -27,8 +27,8 @@ MoveConstantsRule::MoveConstantsRule(ExpressionRewriter &rewriter) : Rule(rewrit
 	root = move(op);
 }
 
-unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                bool &changes_made) {
+unique_ptr<Expression> MoveConstantsRule::Apply(LogicalOperator &op, vector<Expression *> &bindings, bool &changes_made,
+                                                bool is_root) {
 	auto comparison = (BoundComparisonExpression *)bindings[0];
 	auto outer_constant = (BoundConstantExpression *)bindings[1];
 	auto arithmetic = (BoundFunctionExpression *)bindings[2];

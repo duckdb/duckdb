@@ -25,7 +25,7 @@ ConstantFoldingRule::ConstantFoldingRule(ExpressionRewriter &rewriter) : Rule(re
 }
 
 unique_ptr<Expression> ConstantFoldingRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                  bool &changes_made) {
+                                                  bool &changes_made, bool is_root) {
 	auto root = bindings[0];
 	// the root is a scalar expression that we have to fold
 	D_ASSERT(root->IsFoldable() && root->type != ExpressionType::VALUE_CONSTANT);
