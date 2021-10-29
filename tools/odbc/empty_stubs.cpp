@@ -23,8 +23,9 @@ SQLRETURN SQL_API SQLDataSources(SQLHENV environment_handle, SQLUSMALLINT direct
 }
 
 SQLRETURN SQL_API SQLDrivers(SQLHENV environment_handle, SQLUSMALLINT direction, SQLCHAR *driver_description,
-                             SQLSMALLINT buffer_length1, SQLSMALLINT *description_length_ptr, SQLCHAR *driver_attributes,
-                             SQLSMALLINT buffer_length2, SQLSMALLINT *attributes_length_ptr) {
+                             SQLSMALLINT buffer_length1, SQLSMALLINT *description_length_ptr,
+                             SQLCHAR *driver_attributes, SQLSMALLINT buffer_length2,
+                             SQLSMALLINT *attributes_length_ptr) {
 	std::cout << "***** SQLDrivers" << std::endl;
 	return SQL_ERROR;
 }
@@ -136,9 +137,9 @@ SQLRETURN SQL_API SQLProcedures(SQLHSTMT statement_handle, SQLCHAR *catalog_name
 	return SQL_ERROR;
 }
 
-SQLRETURN SQL_API SQLSetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT type, SQLSMALLINT sub_type,
-                                SQLLEN length, SQLSMALLINT precision, SQLSMALLINT scale, SQLPOINTER data_ptr,
-                                SQLLEN *string_length_ptr, SQLLEN *indicator_ptr) {
+SQLRETURN SQL_API SQLSetDescRec(SQLHDESC descriptor_handle, SQLSMALLINT rec_number, SQLSMALLINT type,
+                                SQLSMALLINT sub_type, SQLLEN length, SQLSMALLINT precision, SQLSMALLINT scale,
+                                SQLPOINTER data_ptr, SQLLEN *string_length_ptr, SQLLEN *indicator_ptr) {
 	std::cout << "***** SQLSetDescRec" << std::endl;
 	return SQL_ERROR;
 }

@@ -39,7 +39,7 @@ static void ODBCLOG(const char *fmt, ...) {
 			fclose(f);
 		} else {
 			vfprintf(stderr, fmt, ap);
-}
+		}
 	}
 	va_end(ap);
 }
