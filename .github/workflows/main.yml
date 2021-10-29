@@ -1,4 +1,3 @@
-name: Initial Check
 on: [push, pull_request]
 
 defaults:

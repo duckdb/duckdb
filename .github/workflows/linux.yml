@@ -1,7 +1,7 @@
 name: Linux
 on:
   workflow_run:
-    workflows: ["Initial Check"]
+    workflows: ["main"]
     types:
       - completed
 
