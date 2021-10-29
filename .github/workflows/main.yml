@@ -123,14 +123,14 @@ jobs:
       run: |
         curl -L https://github.com/Mytherin/psqlodbc/archive/refs/heads/main.zip -o psqlodbc-main.zip
         unzip psqlodbc-main.zip
-        (cd psqlodbc-main && make debug)
+        (cd psqlodbc-main && make release)
 
     - name: Test psqlodbc
       run: |
         cd psqlodbc-main
         setx PSQLODBC_TEST_DSN DuckDB
-        ./build/debug/Debug/reset-db.exe < sampletables.sql
-        ./build/debug/Debug/psqlodbc_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
+        ./build/release/Release/reset-db.exe < sampletables.sql
+        ./build/release/Release/psqlodbc_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
 
     - uses: actions/upload-artifact@v2
       with:
