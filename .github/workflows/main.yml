@@ -128,7 +128,7 @@ jobs:
     - name: Test psqlodbc
       run: |
         cd psqlodbc-main
-        setx PSQLODBC_TEST_DSN DuckDB
+        set PSQLODBC_TEST_DSN=DuckDB
         ./build/release/Release/reset-db.exe < sampletables.sql
         ./build/release/Release/psqlodbc_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
 
