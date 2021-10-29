@@ -142,8 +142,10 @@ static inline bool CanReplace(const idx_t *index, const INPUT_TYPE *fdata, const
 	const auto ij = index[j];
 	const auto ik0 = index[k0];
 	const auto ik1 = index[k1];
-	if (!validity(ij) && !validity(ik0)) {
-		return true;
+	const auto nullj = !validity(ij);
+	const auto nullk0 = !validity(ik0);
+	if (nullj || nullk0) {
+		return nullj == nullk0;
 	}
 
 	auto curr = fdata[ij];
@@ -467,7 +469,7 @@ struct QuantileScalarOperation : public QuantileOperation {
 		QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
 
 		//  Lazily initialise frame state
-		const auto prev_valid = state->pos == (prev.second - prev.first);
+		auto prev_pos = state->pos;
 		state->SetPos(frame.second - frame.first);
 
 		auto index = state->w.data();
@@ -480,11 +482,17 @@ struct QuantileScalarOperation : public QuantileOperation {
 		const auto q = bind_data->quantiles[0];
 
 		bool replace = false;
-		if (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
-			Interpolator<DISCRETE> interp(q, state->pos);
-			replace = CanReplace(index, data, j, interp.FRN, interp.CRN, not_null);
+			//	We can only replace if the number of NULls has not changed
+			if (dmask.AllValid() || not_null(prev.first) == not_null(prev.second)) {
+				Interpolator<DISCRETE> interp(q, prev_pos);
+				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, not_null);
+				if (replace) {
+					state->pos = prev_pos;
+				}
+			}
 		} else {
 			ReuseIndexes(index, frame, prev);
 		}
@@ -653,7 +661,7 @@ struct QuantileListOperation : public QuantileOperation {
 			Interpolator<DISCRETE> interp(quantile, state->pos);
 
 			if (fixed && CanReplace(index, data, j, interp.FRN, interp.CRN, not_null)) {
-				rdata[lentry.offset + q] = interp.template Operation<idx_t, CHILD_TYPE>(index, result, indirect);
+				rdata[lentry.offset + q] = interp.template Replace<idx_t, CHILD_TYPE>(index, result, indirect);
 				state->upper.resize(state->lower.size(), interp.FRN);
 			} else {
 				state->disturbed.push_back(q);
@@ -941,39 +949,48 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
 
 		//  Lazily initialise frame state
-		const auto prev_valid = state->pos == (prev.second - prev.first);
+		auto prev_pos = state->pos;
 		state->SetPos(frame.second - frame.first);
-
-		// Repurpose disturbed as second index.
-		if (state->pos > state->disturbed.size()) {
-			state->disturbed.resize(state->pos);
-		}
 
 		auto index = state->w.data();
 		D_ASSERT(index);
 
+		// We need a second index for the second pass.
+		// so repurpose disturbed as the second index.
+		if (state->pos > state->disturbed.size()) {
+			state->disturbed.resize(state->pos);
+		}
+
 		auto index2 = state->disturbed.data();
 		D_ASSERT(index2);
+
+		// The replacement trick does not work on the second index because if
+		// the median has changed, the previous order is not correct.
+		// It is probably close, however, and so reuse is helpful.
+		ReuseIndexes(index2, frame, prev);
+		std::partition(index2, index2 + state->pos, not_null);
 
 		// Find the two positions needed for the median
 		const float q = 0.5;
 
 		bool replace = false;
-		const bool is_fixed = (prev_valid && frame.first == prev.first + 1 && frame.second == prev.second + 1);
-		if (is_fixed) {
+		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
-			Interpolator<false> interp(q, state->pos);
-			replace = CanReplace(index, data, j, interp.FRN, interp.CRN, not_null);
+			//	We can only replace if the number of NULls has not changed
+			if (dmask.AllValid() || not_null(prev.first) == not_null(prev.second)) {
+				Interpolator<false> interp(q, prev_pos);
+				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, not_null);
+				if (replace) {
+					state->pos = prev_pos;
+				}
+			}
 		} else {
 			ReuseIndexes(index, frame, prev);
 		}
 
-		// Just reuse the second index for now.
-		ReuseIndexes(index2, frame, prev);
-
 		if (!replace && !dmask.AllValid()) {
 			// Remove the NULLs
-			std::partition(index2, index2 + state->pos, not_null);
 			state->pos = std::partition(index, index + state->pos, not_null) - index;
 		}
 
