@@ -22,7 +22,7 @@ EmptyNeedleRemovalRule::EmptyNeedleRemovalRule(ExpressionRewriter &rewriter) : R
 }
 
 unique_ptr<Expression> EmptyNeedleRemovalRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                     bool &changes_made) {
+                                                     bool &changes_made, bool is_root) {
 	auto root = (BoundFunctionExpression *)bindings[0];
 	D_ASSERT(root->children.size() == 2);
 	(void)root;

@@ -386,12 +386,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 	D_ASSERT(current);
 	if (op->IsSink()) {
 		// operator is a sink, build a pipeline
-		auto pipeline = make_shared<Pipeline>(*this);
-		pipeline->sink = op;
 		op->sink_state.reset();
 
-		// the current is dependent on this pipeline to complete
-		current->AddDependency(pipeline);
 		PhysicalOperator *pipeline_child = nullptr;
 		switch (op->type) {
 		case PhysicalOperatorType::CREATE_TABLE_AS:
@@ -406,8 +402,8 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::RESERVOIR_SAMPLE:
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
-		case PhysicalOperatorType::EXPRESSION_SCAN:
 		case PhysicalOperatorType::LIMIT:
+		case PhysicalOperatorType::EXPRESSION_SCAN:
 			D_ASSERT(op->children.size() == 1);
 			// single operator:
 			// the operator becomes the data source of the current pipeline
@@ -479,6 +475,10 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		default:
 			throw InternalException("Unimplemented sink type!");
 		}
+		// the current is dependent on this pipeline to complete
+		auto pipeline = make_shared<Pipeline>(*this);
+		pipeline->sink = op;
+		current->AddDependency(pipeline);
 		D_ASSERT(pipeline_child);
 		// recurse into the pipeline child
 		BuildPipelines(pipeline_child, pipeline.get());
