@@ -460,18 +460,28 @@ bool Hugeint::TryCast(hugeint_t input, float &result) {
 	return true;
 }
 
-template <>
-bool Hugeint::TryCast(hugeint_t input, double &result) {
+template <class real_t>
+bool CastBigintToFloating(hugeint_t input, real_t &result) {
 	switch (input.upper) {
 	case -1:
 		// special case for upper = -1 to avoid rounding issues in small negative numbers
-		result = -double(NumericLimits<uint64_t>::Maximum() - input.lower) - 1;
+		result = -real_t(NumericLimits<uint64_t>::Maximum() - input.lower) - 1;
 		break;
 	default:
-		result = double(input.lower) + double(input.upper) * double(NumericLimits<uint64_t>::Maximum());
+		result = real_t(input.lower) + real_t(input.upper) * real_t(NumericLimits<uint64_t>::Maximum());
 		break;
 	}
 	return true;
+}
+
+template <>
+bool Hugeint::TryCast(hugeint_t input, double &result) {
+	return CastBigintToFloating<double>(input, result);
+}
+
+template <>
+bool Hugeint::TryCast(hugeint_t input, long double &result) {
+	return CastBigintToFloating<long double>(input, result);
 }
 
 template <class DST>
@@ -531,8 +541,8 @@ bool Hugeint::TryConvert(float value, hugeint_t &result) {
 	return Hugeint::TryConvert(double(value), result);
 }
 
-template <>
-bool Hugeint::TryConvert(double value, hugeint_t &result) {
+template <class real_t>
+bool ConvertFloatingToBigint(real_t value, hugeint_t &result) {
 	if (value <= -170141183460469231731687303715884105728.0 || value >= 170141183460469231731687303715884105727.0) {
 		return false;
 	}
@@ -540,12 +550,22 @@ bool Hugeint::TryConvert(double value, hugeint_t &result) {
 	if (negative) {
 		value = -value;
 	}
-	result.lower = (uint64_t)fmod(value, double(NumericLimits<uint64_t>::Maximum()));
-	result.upper = (uint64_t)(value / double(NumericLimits<uint64_t>::Maximum()));
+	result.lower = (uint64_t)fmod(value, real_t(NumericLimits<uint64_t>::Maximum()));
+	result.upper = (uint64_t)(value / real_t(NumericLimits<uint64_t>::Maximum()));
 	if (negative) {
-		NegateInPlace(result);
+		Hugeint::NegateInPlace(result);
 	}
 	return true;
+}
+
+template <>
+bool Hugeint::TryConvert(double value, hugeint_t &result) {
+	return ConvertFloatingToBigint<double>(value, result);
+}
+
+template <>
+bool Hugeint::TryConvert(long double value, hugeint_t &result) {
+	return ConvertFloatingToBigint<long double>(value, result);
 }
 
 //===--------------------------------------------------------------------===//

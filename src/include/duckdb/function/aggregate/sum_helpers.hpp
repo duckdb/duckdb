@@ -14,6 +14,47 @@
 
 namespace duckdb {
 
+template <class T>
+static inline void KahanAdd(T input, double &summed, double &err) {
+	double diff = input - err;
+	double newval = summed + diff;
+	err = (newval - summed) - diff;
+	summed = newval;
+}
+
+template <class T>
+struct SumState {
+	bool isset;
+	T value;
+
+	void Initialize() {
+		this->isset = false;
+	}
+
+	void Combine(const SumState<T> &other) {
+		this->isset = other.isset || this->isset;
+		this->value += other.value;
+	}
+};
+
+template <>
+struct SumState<double> {
+	bool isset;
+	double value;
+	double err;
+
+	void Initialize() {
+		this->isset = false;
+		this->err = 0.0;
+	}
+
+	void Combine(const SumState<double> &other) {
+		this->isset = other.isset || this->isset;
+		KahanAdd(other.value, this->value, this->err);
+		KahanAdd(other.err, this->value, this->err);
+	}
+};
+
 struct RegularAdd {
 	template <class STATE, class T>
 	static void AddNumber(STATE &state, T input) {
@@ -23,6 +64,18 @@ struct RegularAdd {
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
 		state.value += input * count;
+	}
+};
+
+struct DoubleAdd {
+	template <class STATE, class T>
+	static void AddNumber(STATE &state, T input) {
+		KahanAdd(input, state.value, state.err);
+	}
+
+	template <class STATE, class T>
+	static void AddConstant(STATE &state, T input, idx_t count) {
+		KahanAdd(input * count, state.value, state.err);
 	}
 };
 

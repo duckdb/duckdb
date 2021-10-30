@@ -9,8 +9,35 @@ namespace duckdb {
 
 template <class T>
 struct AvgState {
-	T value;
 	uint64_t count;
+	T value;
+
+	void Initialize() {
+		this->count = 0;
+	}
+
+	void Combine(const AvgState<T> &other) {
+		this->count += other.count;
+		this->value += other.value;
+	}
+};
+
+template <>
+struct AvgState<double> {
+	uint64_t count;
+	double value;
+	double err;
+
+	void Initialize() {
+		this->count = 0;
+		this->err = 0.0;
+	}
+
+	void Combine(const AvgState<double> &other) {
+		this->count += other.count;
+		KahanAdd(other.value, this->value, this->err);
+		KahanAdd(other.err, this->value, this->err);
+	}
 };
 
 struct AverageDecimalBindData : public FunctionData {
@@ -28,12 +55,11 @@ public:
 struct AverageSetOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->count = 0;
+		state->Initialize();
 	}
 	template <class STATE>
 	static void Combine(const STATE &source, STATE *target) {
-		target->count += source.count;
-		target->value += source.value;
+		target->Combine(source);
 	}
 	template <class STATE>
 	static void AddValues(STATE *state, idx_t count) {
@@ -41,8 +67,9 @@ struct AverageSetOperation {
 	}
 };
 
-static double GetAverageDivident(uint64_t count, FunctionData *bind_data) {
-	double divident = double(count);
+template <class T>
+static T GetAverageDivident(uint64_t count, FunctionData *bind_data) {
+	T divident = T(count);
 	if (bind_data) {
 		auto &avg_bind_data = (AverageDecimalBindData &)*bind_data;
 		divident *= avg_bind_data.scale;
@@ -57,7 +84,7 @@ struct IntegerAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
-			double divident = GetAverageDivident(state->count, bind_data);
+			double divident = GetAverageDivident<double>(state->count, bind_data);
 			target[idx] = double(state->value) / divident;
 		}
 	}
@@ -70,8 +97,8 @@ struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperat
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
-			double divident = GetAverageDivident(state->count, bind_data);
-			target[idx] = Hugeint::Cast<double>(state->value) / divident;
+			long double divident = GetAverageDivident<long double>(state->count, bind_data);
+			target[idx] = Hugeint::Cast<long double>(state->value) / divident;
 		}
 	}
 };
@@ -83,13 +110,13 @@ struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 		if (state->count == 0) {
 			mask.SetInvalid(idx);
 		} else {
-			double divident = GetAverageDivident(state->count, bind_data);
-			target[idx] = Hugeint::Cast<double>(state->value) / divident;
+			long double divident = GetAverageDivident<long double>(state->count, bind_data);
+			target[idx] = Hugeint::Cast<long double>(state->value) / divident;
 		}
 	}
 };
 
-struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
+struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, DoubleAdd> {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
@@ -98,7 +125,7 @@ struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 			if (!Value::DoubleIsValid(state->value)) {
 				throw OutOfRangeException("AVG is out of range!");
 			}
-			target[idx] = state->value / state->count;
+			target[idx] = (state->value / state->count) + (state->err / state->count);
 		}
 	}
 };

@@ -75,3 +75,27 @@ query III
 SELECT AVG(i), AVG(j), AVG(k) FROM vals;
 ----
 NULL	NULL	NULL
+
+# this would give the wrong result with a simple sum-and-divide
+statement ok
+CREATE TABLE doubles(n DOUBLE);
+
+statement ok
+INSERT INTO doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE), (0::DOUBLE);
+
+query R
+SELECT AVG(n) - '2251799813685248.5'::DOUBLE FROM doubles;
+----
+0
+
+# this would give the wrong result with 'double' precision
+statement ok
+CREATE TABLE bigints(n HUGEINT);
+
+statement ok
+INSERT INTO bigints (n) VALUES ('9007199254740992'::HUGEINT), (1::HUGEINT), (0::HUGEINT);
+
+query R
+SELECT AVG(n)::DOUBLE - '3002399751580331'::DOUBLE FROM bigints;
+----
+0
