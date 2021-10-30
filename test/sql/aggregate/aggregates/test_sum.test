@@ -73,15 +73,3 @@ SELECT SUM(b) FROM bigints
 # this is too big for a bigint
 statement error
 SELECT SUM(b)::BIGINT FROM bigints
-
-# this would give the wrong result with a simple sum
-statement ok
-CREATE TABLE doubles(n DOUBLE);
-
-statement ok
-INSERT INTO doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE), (0::DOUBLE);
-
-query I
-SELECT SUM(n)::BIGINT FROM doubles;
-----
-9007199254740994

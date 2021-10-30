@@ -51,6 +51,7 @@
 #include <vector>
 #include <iostream>
 #include <thread>
+#include <cfloat>
 
 using namespace duckdb;
 using namespace std;
@@ -1552,6 +1553,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 #endif
 			} else if (param == "windows") {
 #ifndef _WIN32
+				return;
+#endif
+			} else if (param == "longdouble") {
+#if LDBL_MANT_DIG < 54
 				return;
 #endif
 			} else if (param == "noforcestorage") {
