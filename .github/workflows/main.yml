@@ -129,8 +129,8 @@ jobs:
       run: |
         cd psqlodbc-main
         set PSQLODBC_TEST_DSN=DuckDB
-        ./build/release/Release/reset-db.exe < sampletables.sql
-        ./build/release/Release/psqlodbc_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
+        build\\release\\Release\\reset-db.exe < sampletables.sql
+        build\\release\\Release\\psqlodbc_odbc_test.exe -f ..\\tools\\odbc\\test\\psql_supported_tests
 
     - uses: actions/upload-artifact@v2
       with:
