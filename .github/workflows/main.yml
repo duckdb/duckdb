@@ -125,11 +125,16 @@ jobs:
         unzip psqlodbc-main.zip
         (cd psqlodbc-main && make release)
 
-    - name: Test psqlodbc
+    - name: Create psqlodbc database
       run: |
         cd psqlodbc-main
         set PSQLODBC_TEST_DSN=DuckDB
         build\\release\\Release\\reset-db.exe < sampletables.sql
+
+    - name: Test psqlodbc
+      run: |
+        cd psqlodbc-main
+        set PSQLODBC_TEST_DSN=DuckDB
         build\\release\\Release\\psqlodbc_odbc_test.exe -f ..\\tools\\odbc\\test\\psql_supported_tests
 
     - uses: actions/upload-artifact@v2
