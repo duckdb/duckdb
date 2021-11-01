@@ -248,11 +248,12 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	for (idx_t i = 0; i < count; i++) {
 		auto index = indices[i];
-		// set prev in current key to the value (NOTE: this will be nullptr if
+		// store current_pointer in next_pointer location (NOTE: this will be nullptr if
 		// there is none)
-		Store<data_ptr_t>(pointers[index], key_locations[i] + pointer_offset);
+		auto next_entry_ptr = key_locations[i] + pointer_offset;
+		Store<data_ptr_t>(pointers[index], next_entry_ptr);
 
-		// set pointer to current tuple
+		// set current_pointer to current tuple
 		pointers[index] = key_locations[i];
 	}
 }

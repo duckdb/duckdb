@@ -1,0 +1,209 @@
+# name: test/sql/join/inner/test_join_primary_key.test
+# description: Test joins with primary keys
+# group: [inner]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test1 (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test1 VALUES (11, 1), (12, 2), (13, 3), (13, 2)
+
+statement ok
+CREATE TABLE test2 (b INTEGER, c INTEGER);
+
+statement ok
+INSERT INTO test2 VALUES (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30), (1, 10), (2, 20), (3, 30)
+
+mode output_hash
+
+statement ok
+PRAGMA enable_profiling;
+
+# simple inner join
+query III
+SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
+----
+11	1	10
+11	1	10
+11	1	10
+11	1	10
+11	1	10
+12	2	20
+12	2	20
+12	2	20
+12	2	20
+12	2	20
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+13	3	30
+
+#statement ok
+#PRAGMA disable_profiling
+#
+## create the table integers with the values 0..1000
+#statement ok
+#CREATE TABLE test3 AS SELECT * FROM range(0, 512, 1);
+#
+#statement ok
+#CREATE TABLE test4 AS SELECT * FROM range(0, 512, 1);
+#
+#
+#mode output_hash
+#
+#statement ok
+#PRAGMA enable_profiling;
+#
+#query I
+#select test4.range, test3.range from test3,test4 where test3.range=test4.range order by test4.range;
+#
+#statement ok
+#PRAGMA disable_profiling
+#
+## create the table integers with the values 0..1000
+#statement ok
+#CREATE TABLE test5 AS SELECT * FROM range(0, 1024, 1);
+#
+#statement ok
+#CREATE TABLE test6 AS SELECT * FROM range(0, 1024, 1);
+#
+#
+#mode output_hash
+#
+#statement ok
+#PRAGMA enable_profiling;
+#
+#query I
+#select test6.range, test5.range from test5,test6 where test5.range=test6.range order by test6.range;
+#
+#statement ok
+#PRAGMA disable_profiling
+#
+## create the table integers with the values 0..1000
+#statement ok
+#CREATE TABLE test7 AS SELECT * FROM range(0, 10000, 1);
+#
+#statement ok
+#CREATE TABLE test8 AS SELECT * FROM range(0, 10000, 1);
+#
+#
+#mode output_hash
+#
+#statement ok
+#PRAGMA enable_profiling;
+#
+#query I
+#select test8.range, test7.range from test7,test8 where test7.range=test8.range order by test8.range;
+#
+#statement ok
+#PRAGMA disable_profiling
+#
+#
+## create the table integers with the values 0..1000
+#statement ok
+#CREATE TABLE test11 AS SELECT * FROM range(0, 10000, 1);
+#
+#statement ok
+#CREATE TABLE test12 AS SELECT * FROM range(0, 10000, 1);
+#
+## START LOOP 0..10
+#loop i 0 9
+#
+#statement ok
+#INSERT INTO test12 SELECT * FROM test11;
+#
+#endloop
+#
+#mode output_hash
+#
+#statement ok
+#PRAGMA enable_profiling;
+#
+#query I
+#select test12.range, test11.range from test11,test12 where test11.range=test12.range order by test12.range;
+#
+#statement ok
+#PRAGMA disable_profiling
+#
+#loop i 0 90
+#
+#statement ok
+#INSERT INTO test12 SELECT * FROM test11;
+#
+#endloop
+#
+#mode output_hash
+#
+#statement ok
+#PRAGMA enable_profiling;
+#
+#query I
+#select test12.range, test11.range from test11,test12 where test11.range=test12.range order by test11.range;
+#
+#statement ok
+#PRAGMA disable_profiling
+#
+#
+#
+## insert the first entry (randomly ordered)
+##statement ok
+##INSERT INTO test1 VALUES (14, 1)
+#
+#query III
+#SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
+#----
+#11
+
+# join with probe outside build range
+#statement ok
+#INSERT INTO test2 VALUES (4, 10)
+#
+#query III
+#SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
+#----
+#11	1	10
+#14	1	10
+#11	1	10
+#14	1	10
+#11	1	10
+#14	1	10
+#11	1	10
+#14	1	10
+#11	1	10
+#14	1	10
+#12	2	20
+#12	2	20
+#12	2	20
+#12	2	20
+#12	2	20
+#13	3	30
+#13	3	30
+#13	3	30
+#13	3	30
+#13	3	30
+#
+
+# join with nulls
+#INSERT INTO test2 VALUES (4, 10)
+#query VI
+#SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
+#----
+#11	1	10
+#11	1	10
+#11	1	10
+#11	1	10
+#11	1	10
+#12	2	20
+#12	2	20
+#12	2	20
+#12	2	20
+#12	2	20
+#13	3	30
+#13	3	30
+#13	3	30
+#13	3	30
+#13	3	30

@@ -10,9 +10,9 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/mutex.hpp"
-#include "duckdb/parallel/pipeline.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/pair.hpp"
+#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/parallel/pipeline.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -74,6 +74,8 @@ public:
 	void AddEvent(shared_ptr<Event> event);
 
 	void ReschedulePipelines(const vector<shared_ptr<Pipeline>> &pipelines, vector<shared_ptr<Event>> &events);
+
+	bool has_primary_key {false};
 
 private:
 	void ScheduleEvents();
