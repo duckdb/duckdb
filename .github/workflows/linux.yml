@@ -1,7 +1,8 @@
 name: Linux
 on:
   workflow_run:
-    workflows: ["main"]
+    workflows:
+      - Main
     types:
       - completed
 
