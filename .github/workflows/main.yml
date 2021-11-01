@@ -1,4 +1,3 @@
-name: Main
 on: [push, pull_request]
 
 defaults:
