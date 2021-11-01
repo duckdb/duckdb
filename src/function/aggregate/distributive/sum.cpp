@@ -8,21 +8,14 @@
 
 namespace duckdb {
 
-template <class T>
-struct SumState {
-	T value;
-	bool isset;
-};
-
 struct SumSetOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->isset = false;
+		state->Initialize();
 	}
 	template <class STATE>
 	static void Combine(const STATE &source, STATE *target) {
-		target->isset = source.isset || target->isset;
-		target->value += source.value;
+		target->Combine(source);
 	}
 	template <class STATE>
 	static void AddValues(STATE *state, idx_t count) {
@@ -52,7 +45,7 @@ struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintA
 	}
 };
 
-struct NumericSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
+struct NumericSumOperation : public BaseSumOperation<SumSetOperation, DoubleAdd> {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {

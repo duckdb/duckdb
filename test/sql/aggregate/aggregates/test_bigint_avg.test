@@ -1,0 +1,17 @@
+# name: test/sql/aggregate/aggregates/test_bigint_avg.test
+# description: Test AVG on integers with no exact float64 representation
+# group: [aggregates]
+
+statement ok
+CREATE TABLE bigints(n HUGEINT);
+
+statement ok
+INSERT INTO bigints (n) VALUES ('9007199254740992'::HUGEINT), (1::HUGEINT), (0::HUGEINT);
+
+# this would give the wrong result with 'double' precision
+require longdouble
+
+query R
+SELECT AVG(n)::DOUBLE - '3002399751580331'::DOUBLE FROM bigints;
+----
+0
