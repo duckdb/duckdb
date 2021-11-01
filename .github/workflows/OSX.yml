@@ -1,0 +1,93 @@
+name: OSX
+on:
+  workflow_run:
+    workflows: ["Main"]
+    types:
+      - completed
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+   xcode-release:
+    name: OSX Release
+    runs-on: macos-latest
+
+    env:
+      BUILD_VISUALIZER: 1
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_REST: 1
+      BUILD_JDBC: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      run: make
+
+    - name: Unit Test
+      run: make allunit
+
+    - name: Tools Tests
+      run: |
+        python tools/shell/shell-test.py build/release/duckdb
+        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+
+    - name: Examples
+      run: |
+        (cd examples/embedded-c; make)
+        (cd examples/embedded-c++; make)
+        (cd examples/jdbc; make; make maven)
+
+    - name: Deploy
+      run: |
+        python scripts/amalgamation.py
+        zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
+        zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+        python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+
+    - uses: actions/upload-artifact@v2
+      with:
+        name: duckdb-binaries-osx
+        path: |
+          libduckdb-osx-amd64.zip
+          duckdb_cli-osx-amd64.zip
+          build/release/tools/jdbc/duckdb_jdbc.jar
+
+
+ xcode-debug:
+    name: OSX Debug
+    runs-on: macos-latest
+
+    env:
+      TREAT_WARNINGS_AS_ERRORS: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Build
+      run: make debug
+
+    - name: Test
+      run: make unittestci
+
+    - name: Amalgamation
+      run: |
+        python scripts/amalgamation.py --extended
+        python scripts/parquet_amalgamation.py
+        cd src/amalgamation
+        clang++ -std=c++11 -O0 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -DNDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
+        clang++ -DDEBUG -O0 -std=c++11 -Wall -Werror -emit-llvm -S duckdb.cpp parquet-amalgamation.cpp
