@@ -269,11 +269,10 @@ void LocalSortState::SortInMemory() {
 	idx_t sorting_size = 0;
 	idx_t col_offset = 0;
 	unique_ptr<bool[]> ties_ptr;
-	unique_ptr<BufferHandle> ties_handle;
 	bool *ties = nullptr;
 	for (idx_t i = 0; i < sort_layout->column_count; i++) {
 		sorting_size += sort_layout->column_sizes[i];
-		if (sort_layout->constant_size[i] && i < sort_layout->column_count - 1 && sorting_size < 32) {
+		if (sort_layout->constant_size[i] && i < sort_layout->column_count - 1) {
 			// Add columns to the sorting size until we reach a variable size column, or the last column
 			continue;
 		}
