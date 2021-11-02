@@ -9,13 +9,6 @@ defaults:
   run:
     shell: bash
 
-env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
-
 jobs:
    linux-python3:
     name: Python 3 Linux
@@ -72,108 +65,108 @@ jobs:
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl tools/pythonpkg/dist/duckdb-*.tar.gz
         fi
 
- osx-python3:
-    name: Python 3 OSX
-    runs-on: macos-latest
+   osx-python3:
+      name: Python 3 OSX
+      runs-on: macos-latest
 
-    env:
-      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-      CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" mypy && (pip install --prefer-binary "pyarrow==5.0" || true)'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
+      env:
+        CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+        CIBW_TEST_REQUIRES: 'pytest'
+        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "requests>=2.26" mypy && (pip install --prefer-binary "pyarrow==5.0" || true)'
+        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+        CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
+        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+        TWINE_USERNAME: 'hfmuehleisen'
 
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
 
-    - name: Install
-      run: pip install cibuildwheel twine
+      - name: Install
+        run: pip install cibuildwheel twine
 
-    - name: Build
-      run: |
-        cd tools/pythonpkg
-        python setup.py sdist
-        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cibuildwheel --output-dir wheelhouse duckdb_tarball
+      - name: Build
+        run: |
+          cd tools/pythonpkg
+          python setup.py sdist
+          mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+          cibuildwheel --output-dir wheelhouse duckdb_tarball
 
-    - name: Deploy
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
-          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-        fi
+      - name: Deploy
+        run: |
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+            twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+          fi
 
- win-python3:
-    name: Python 3 Windows
-    runs-on: windows-latest
+   win-python3:
+      name: Python 3 Windows
+      runs-on: windows-latest
 
-    env:
-      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
-      CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
-      CIBW_TEST_REQUIRES: 'pytest'
-      CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy && (pip install --prefer-binary "pyarrow==5.0" || true)'
-      CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
-      SETUPTOOLS_SCM_NO_LOCAL: 'yes'
-      TWINE_USERNAME: 'hfmuehleisen'
+      env:
+        CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+        CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
+        CIBW_TEST_REQUIRES: 'pytest'
+        CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3" mypy && (pip install --prefer-binary "pyarrow==5.0" || true)'
+        CIBW_TEST_COMMAND: 'python -m pytest {project}/tests'
+        SETUPTOOLS_SCM_NO_LOCAL: 'yes'
+        TWINE_USERNAME: 'hfmuehleisen'
 
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
 
-    - name: Install
-      run: pip install cibuildwheel twine
+      - name: Install
+        run: pip install cibuildwheel twine
 
-    - name: Build
-      run: |
-        cd tools/pythonpkg
-        python setup.py sdist
-        mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-        cibuildwheel --output-dir wheelhouse duckdb_tarball
+      - name: Build
+        run: |
+          cd tools/pythonpkg
+          python setup.py sdist
+          mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
+          cibuildwheel --output-dir wheelhouse duckdb_tarball
 
-    - name: Deploy
-      run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
-          twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
-        fi
+      - name: Deploy
+        run: |
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+            twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
+          fi
 
- linux-tarball:
-    name: Python 3 Tarball
-    runs-on: ubuntu-20.04
+   linux-tarball:
+      name: Python 3 Tarball
+      runs-on: ubuntu-20.04
 
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
 
-    - name: Install
-      run: pip install numpy pytest pandas mypy
+      - name: Install
+        run: pip install numpy pytest pandas mypy
 
-    - name: Build
-      run: |
-        python --version
-        git archive --format zip --output test-tarball.zip HEAD
-        mkdir duckdb-test-tarball
-        mv test-tarball.zip duckdb-test-tarball
-        cd duckdb-test-tarball
-        unzip test-tarball.zip
-        cd tools/pythonpkg
-        export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
-        python setup.py install --user
-        (cd tests/ && python -m pytest)
+      - name: Build
+        run: |
+          python --version
+          git archive --format zip --output test-tarball.zip HEAD
+          mkdir duckdb-test-tarball
+          mv test-tarball.zip duckdb-test-tarball
+          cd duckdb-test-tarball
+          unzip test-tarball.zip
+          cd tools/pythonpkg
+          export SETUPTOOLS_SCM_PRETEND_VERSION=0.2.2
+          python setup.py install --user
+          (cd tests/ && python -m pytest)

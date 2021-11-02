@@ -9,13 +9,6 @@ defaults:
   run:
     shell: bash
 
-env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
-
 jobs:
    regression-test-tpch:
     name: Regression Test (TPC-H)
@@ -49,66 +42,66 @@ jobs:
     - name: Regression Test TPC-H SF1
       run: python scripts/regression_test.py --benchmark=tpch
 
- regression-test-tpcds:
-    name: Regression Test (TPC-DS)
-    runs-on: ubuntu-20.04
+   regression-test-tpcds:
+      name: Regression Test (TPC-DS)
+      runs-on: ubuntu-20.04
 
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
+      env:
+        CC: gcc-10
+        CXX: g++-10
+        GEN: ninja
 
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
 
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
+      - name: Install
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
 
-    - name: Build
-      run: |
-        git clone https://github.com/duckdb/duckdb.git
-        cd duckdb/tools/pythonpkg
-        python setup.py install
-        cd ../../../tools/pythonpkg
-        python setup.py --package_name=duckcurrent install
+      - name: Build
+        run: |
+          git clone https://github.com/duckdb/duckdb.git
+          cd duckdb/tools/pythonpkg
+          python setup.py install
+          cd ../../../tools/pythonpkg
+          python setup.py --package_name=duckcurrent install
 
-    - name: Regression Test TPC-DS SF1
-      run: python scripts/regression_test.py --benchmark=tpcds
+      - name: Regression Test TPC-DS SF1
+        run: python scripts/regression_test.py --benchmark=tpcds
 
- regression-test-h20ai:
-    name: Regression Test (H2OAI)
-    runs-on: ubuntu-20.04
+   regression-test-h20ai:
+      name: Regression Test (H2OAI)
+      runs-on: ubuntu-20.04
 
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
+      env:
+        CC: gcc-10
+        CXX: g++-10
+        GEN: ninja
 
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
 
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
+      - name: Install
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
 
-    - name: Build
-      run: |
-        git clone https://github.com/duckdb/duckdb.git
-        cd duckdb/tools/pythonpkg
-        python setup.py install
-        cd ../../../tools/pythonpkg
-        python setup.py --package_name=duckcurrent install
+      - name: Build
+        run: |
+          git clone https://github.com/duckdb/duckdb.git
+          cd duckdb/tools/pythonpkg
+          python setup.py install
+          cd ../../../tools/pythonpkg
+          python setup.py --package_name=duckcurrent install
 
-    - name: Regression Test H2OAI
-      run: python scripts/regression_test.py --benchmark=h2oai
+      - name: Regression Test H2OAI
+        run: python scripts/regression_test.py --benchmark=h2oai
