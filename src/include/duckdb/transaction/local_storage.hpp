@@ -21,11 +21,12 @@ struct TableAppendState;
 class LocalTableStorage {
 public:
 	explicit LocalTableStorage(DataTable &table);
+	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t changed_idx, const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
 	~LocalTableStorage();
 
 	DataTable &table;
 	//! The main chunk collection holding the data
-	RowGroupCollection row_groups;
+	shared_ptr<RowGroupCollection> row_groups;
 	//! The set of unique indexes
 	TableIndexList indexes;
 	//! Stats

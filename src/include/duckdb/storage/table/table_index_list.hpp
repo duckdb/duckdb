@@ -61,6 +61,10 @@ public:
 		return indexes.size();
 	}
 
+	void Move(TableIndexList &other) {
+		indexes = move(other.indexes);
+	}
+
 private:
 	//! Indexes associated with the current table
 	mutex indexes_lock;

@@ -332,7 +332,7 @@ void RowGroupCollection::RemoveFromIndexes(Vector &row_identifiers, idx_t count)
 
 	// now fetch the columns from that row_group
 	TableScanState state;
-	state.table_state.max_row = total_rows;
+	state.table_state.max_row = row_start + total_rows;
 
 	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
 	vector<column_t> column_ids;
@@ -494,7 +494,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(idx_t changed_idx, 
 
 	TableScanState scan_state;
 	scan_state.Initialize(bound_columns);
-	scan_state.table_state.max_row = total_rows;
+	scan_state.table_state.max_row = row_start + total_rows;
 
 	// now alter the type of the column within all of the row_groups individually
 	auto current_row_group = (RowGroup *)row_groups->GetRootSegment();
