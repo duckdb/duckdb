@@ -14,8 +14,7 @@
 
 namespace duckdb {
 
-template <class T>
-static inline void KahanAdd(T input, double &summed, double &err) {
+static inline void KahanAddInternal(double input, double &summed, double &err) {
 	double diff = input - err;
 	double newval = summed + diff;
 	err = (newval - summed) - diff;
@@ -37,8 +36,7 @@ struct SumState {
 	}
 };
 
-template <>
-struct SumState<double> {
+struct KahanSumState {
 	bool isset;
 	double value;
 	double err;
@@ -48,10 +46,10 @@ struct SumState<double> {
 		this->err = 0.0;
 	}
 
-	void Combine(const SumState<double> &other) {
+	void Combine(const KahanSumState &other) {
 		this->isset = other.isset || this->isset;
-		KahanAdd(other.value, this->value, this->err);
-		KahanAdd(other.err, this->value, this->err);
+		KahanAddInternal(other.value, this->value, this->err);
+		KahanAddInternal(other.err, this->value, this->err);
 	}
 };
 
@@ -67,15 +65,15 @@ struct RegularAdd {
 	}
 };
 
-struct DoubleAdd {
+struct KahanAdd {
 	template <class STATE, class T>
 	static void AddNumber(STATE &state, T input) {
-		KahanAdd(input, state.value, state.err);
+		KahanAddInternal(input, state.value, state.err);
 	}
 
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
-		KahanAdd(input * count, state.value, state.err);
+		KahanAddInternal(input * count, state.value, state.err);
 	}
 };
 

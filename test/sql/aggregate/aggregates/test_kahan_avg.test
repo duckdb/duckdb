@@ -10,6 +10,6 @@ INSERT INTO doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DO
 
 # this would give the wrong result with a simple sum-and-divide
 query R
-SELECT AVG(n) - '2251799813685248.5'::DOUBLE FROM doubles;
+SELECT FAVG(n) - '2251799813685248.5'::DOUBLE FROM doubles;
 ----
 0
