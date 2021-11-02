@@ -154,6 +154,8 @@ public:
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 
+	bool has_primary_key{false};
+
 	struct {
 		mutex mj_lock;
 		//! The types of the duplicate eliminated columns, only used in correlated MARK JOIN for flattening

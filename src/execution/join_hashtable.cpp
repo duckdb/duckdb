@@ -251,6 +251,13 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		// store current_pointer in next_pointer location (NOTE: this will be nullptr if
 		// there is none)
 		auto next_entry_ptr = key_locations[i] + pointer_offset;
+		// In case of a conflict
+		if (pointers[index]) {
+			// check whether the hash_values are the same
+			auto current_hash = reinterpret_cast<int64_t>(pointers[index]);
+			auto next_hash = reinterpret_cast<int64_t>(next_entry_ptr);
+			has_primary_key = true;
+		}
 		Store<data_ptr_t>(pointers[index], next_entry_ptr);
 
 		// set current_pointer to current tuple
