@@ -45,7 +45,7 @@ struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintA
 	}
 };
 
-template<class ADD_OPERATOR>
+template <class ADD_OPERATOR>
 struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATOR> {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
