@@ -597,15 +597,19 @@ struct QuantileListOperation : public QuantileOperation {
 		auto v_t = state->v.data();
 		D_ASSERT(v_t);
 
-		target[idx].offset = ridx;
-		for (const auto &quantile : bind_data->quantiles) {
+		auto &entry = target[idx];
+		entry.offset = ridx;
+		idx_t lower = 0;
+		for (const auto &q : bind_data->order) {
+			const auto &quantile = bind_data->quantiles[q];
 			Interpolator<DISCRETE> interp(quantile, state->v.size());
-			rdata[ridx] = interp.template Operation<typename STATE::SaveType, CHILD_TYPE>(v_t, result);
-			++ridx;
+			interp.begin = lower;
+			rdata[ridx + q] = interp.template Operation<typename STATE::SaveType, CHILD_TYPE>(v_t, result);
+			lower = interp.FRN;
 		}
-		target[idx].length = bind_data->quantiles.size();
+		entry.length = bind_data->quantiles.size();
 
-		ListVector::SetListSize(result_list, ridx);
+		ListVector::SetListSize(result_list, entry.offset + entry.length);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
