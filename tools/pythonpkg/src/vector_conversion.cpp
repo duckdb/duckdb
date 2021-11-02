@@ -204,10 +204,15 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 					continue;
 				}
 				if (!py::isinstance<py::str>(val)) {
-					py::gil_scoped_acquire acquire;
-					py::handle object_handle = val;
-					bind_data.object_str_val.emplace_back(py::str(object_handle));
-					val = bind_data.object_str_val.back().ptr();
+					unique_ptr<PythonObjectContainer<py::str>> new_str = make_unique<PythonObjectContainer<py::str>>();
+					new_str->Assign<PyObject>(
+					    [](py::str &obj, PyObject &new_val) {
+						    py::handle object_handle = &new_val;
+						    obj = py::str(object_handle);
+					    },
+					    *val);
+					bind_data.object_str_val.push_back(move(new_str));
+					val = bind_data.object_str_val.back()->GetPointer()->ptr();
 				}
 			}
 			// Python 3 string representation:

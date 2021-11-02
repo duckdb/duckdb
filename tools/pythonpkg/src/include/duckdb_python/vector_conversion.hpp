@@ -11,7 +11,7 @@
 #include "duckdb_python/pybind_wrapper.hpp"
 
 #include "duckdb.hpp"
-
+#include "duckdb_python/python_object_container.hpp"
 namespace duckdb {
 
 enum class PandasType : uint8_t {
@@ -47,8 +47,8 @@ struct PandasColumnBindData {
 	unique_ptr<NumPyArrayWrapper> mask;
 	// Only for categorical types
 	string internal_categorical_type;
-	// When object types are casted we must hold their data somewhere
-	vector<py::str> object_str_val;
+	// When object types are cast we must hold their data somewhere
+	vector<unique_ptr<PythonObjectContainer<py::str>>> object_str_val;
 };
 
 class VectorConversion {
