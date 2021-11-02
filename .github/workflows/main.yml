@@ -116,8 +116,21 @@ jobs:
         zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip duckdb_jdbc-windows-amd64.jar=tools/jdbc/duckdb_jdbc.jar
 
-    - name: Install ODBC
-      run: tools\\odbc\\bin\\Release\\odbc_install.exe //CI //Install
+    - name: Install ODBC Driver
+      run:  |
+        tools\\odbc\\bin\\Release\\odbc_install.exe //CI //Install
+        Reg Query "HKEY_LOCAL_MACHINE\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources"
+        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\DuckDB"
+        Reg Query "HKEY_LOCAL_MACHINE\SOFTWARE\ODBC\ODBCINST.INI\DuckDB Driver"
+
+    - name: Enable ODBC Trace HKCU
+      run: |
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //f
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v Trace //t REG_SZ //d 1
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceDll //t REG_SZ //d "C:\Windows\system32\odbctrac.dll"
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceFile //t REG_SZ //d "D:\a\duckdb\duckdb\ODBC_TRACE.log"
+        echo "----------------------------------------------------------------"
+        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
 
     - name: Install psqlodbc
       run: |
@@ -125,17 +138,15 @@ jobs:
         unzip psqlodbc-main.zip
         (cd psqlodbc-main && make release)
 
-    - name: Create psqlodbc database
-      run: |
-        cd psqlodbc-main
-        set PSQLODBC_TEST_DSN=DuckDB
-        build\\release\\Release\\reset-db.exe < sampletables.sql
-
     - name: Test psqlodbc
       run: |
         cd psqlodbc-main
-        set PSQLODBC_TEST_DSN=DuckDB
-        build\\release\\Release\\psqlodbc_odbc_test.exe -f ..\\tools\\odbc\\test\\psql_supported_tests
+        export PSQLODBC_TEST_DSN=DuckDB
+        build\\release\\Release\\psql_odbc_test.exe -f ..\\tools\\odbc\\test\\windows_psql_supported_tests
+
+    - name: Cat ODBC Trace
+      if: always()
+      run: cat ODBC_TRACE.log
 
     - uses: actions/upload-artifact@v2
       with:
