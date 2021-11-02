@@ -129,8 +129,8 @@ static idx_t ReplaceIndex(idx_t *index, const FrameBounds &frame, const FrameBou
 }
 
 template <class INPUT_TYPE>
-static inline int CanReplace(const idx_t *index, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0,
-                              const idx_t k1, const QuantileNotNull &validity) {
+static inline int CanReplace(const idx_t *index, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0, const idx_t k1,
+                             const QuantileNotNull &validity) {
 	D_ASSERT(index);
 
 	// NULLs sort to the end, so if we have inserted a NULL,
@@ -267,7 +267,8 @@ struct QuantileLess {
 // Continuous interpolation
 template <bool DISCRETE>
 struct Interpolator {
-	Interpolator(const double q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(ceil(RN)), begin(0), end(n_p) {
+	Interpolator(const double q, const idx_t n_p)
+	    : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(ceil(RN)), begin(0), end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
@@ -310,7 +311,8 @@ struct Interpolator {
 // Discrete "interpolation"
 template <>
 struct Interpolator<true> {
-	Interpolator(const double q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(FRN), begin(0), end(n_p) {
+	Interpolator(const double q, const idx_t n_p)
+	    : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(FRN), begin(0), end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
@@ -406,7 +408,9 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vecto
 
 	D_ASSERT(bind_data_p);
 	auto bind_data = (QuantileBindData *)bind_data_p;
-	//ListVector::SetListSize(result, 0);
+	if (offset == 0) {
+		ListVector::SetListSize(result, 0);
+	}
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -587,7 +591,7 @@ struct QuantileListOperation : public QuantileOperation {
 
 		auto &result = ListVector::GetEntry(result_list);
 		auto ridx = ListVector::GetListSize(result_list);
-		ListVector::SetListSize(result_list, ridx + bind_data->quantiles.size());
+		ListVector::Reserve(result_list, ridx + bind_data->quantiles.size());
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
 		auto v_t = state->v.data();
@@ -600,6 +604,8 @@ struct QuantileListOperation : public QuantileOperation {
 			++ridx;
 		}
 		target[idx].length = bind_data->quantiles.size();
+
+		ListVector::SetListSize(result_list, ridx);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -634,7 +640,7 @@ struct QuantileListOperation : public QuantileOperation {
 		// So if a replaced index in an IQR is located between Q25 and Q50, but has a value below Q25,
 		// then Q25 must be recomputed, but Q50 and Q75 are unaffected.
 		// For a single element list, this reduces to the scalar case.
-		std::pair<idx_t, idx_t> replaceable{state->pos, 0};
+		std::pair<idx_t, idx_t> replaceable {state->pos, 0};
 		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
@@ -675,8 +681,7 @@ struct QuantileListOperation : public QuantileOperation {
 				const auto &quantile = bind_data->quantiles[q];
 				Interpolator<DISCRETE> interp(quantile, state->pos);
 				if (replaceable.first <= interp.FRN && interp.CRN <= replaceable.second) {
-					rdata[lentry.offset + q] =
-						interp.template Replace<idx_t, CHILD_TYPE, ID>(index, result, indirect);
+					rdata[lentry.offset + q] = interp.template Replace<idx_t, CHILD_TYPE, ID>(index, result, indirect);
 				} else {
 					// Make sure we don't disturb any replacements
 					if (replaceable.first < replaceable.second) {
@@ -688,7 +693,7 @@ struct QuantileListOperation : public QuantileOperation {
 						}
 					}
 					rdata[lentry.offset + q] =
-						interp.template Operation<idx_t, CHILD_TYPE, ID>(index, result, indirect);
+					    interp.template Operation<idx_t, CHILD_TYPE, ID>(index, result, indirect);
 				}
 			}
 		} else {
