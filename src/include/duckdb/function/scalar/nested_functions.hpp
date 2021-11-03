@@ -53,6 +53,7 @@ struct ListExtractFun {
 };
 
 struct ListConcatFun {
+	static ScalarFunction GetFunction();
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 

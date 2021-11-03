@@ -12,6 +12,7 @@
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 #include <limits>
 
@@ -285,6 +286,11 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			                      ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>);
 		}
 		break;
+	case LogicalTypeId::LIST:
+		if (right_type.id() == LogicalTypeId::LIST) {
+			return ListConcatFun::GetFunction();
+		}
+		break;
 	case LogicalTypeId::TIME:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIME,
@@ -328,6 +334,8 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
+	// we can add lists together
+	functions.AddFunction(GetFunction(LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)));
 
 	set.AddFunction(functions);
 }

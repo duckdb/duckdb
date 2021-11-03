@@ -5,6 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
+# basic functionality
 query T
 SELECT list_concat([1, 2], [3, 4])
 ----
@@ -18,12 +19,12 @@ SELECT array_cat([1, 2], [3, 4])
 query T
 SELECT list_concat(NULL, [3, 4])
 ----
-NULL
+[3, 4]
 
 query T
 SELECT list_concat([1, 2], NULL)
 ----
-NULL
+[1, 2]
 
 query T
 SELECT list_concat([], [])
@@ -41,11 +42,44 @@ SELECT list_concat([1, 2], [])
 [1, 2]
 
 statement error
-SELECT list_concat(['a', 'b'], [3, 4])
+SELECT list_concat([1, 2], 3)
 
-statement error
-SELECT list_concat([1, 2], ['c', 'd'])
+# operators
+query T
+SELECT [1, 2] || [3, 4]
+----
+[1, 2, 3, 4]
 
+query T
+SELECT [1, 2] + [3, 4]
+----
+[1, 2, 3, 4]
+
+# type casting
+foreach type_a <integral> varchar
+
+foreach type_b <integral> varchar
+
+query T
+SELECT list_concat([1, 2]::${type_a}[], [3, 4]::${type_b}[])
+----
+[1, 2, 3, 4]
+
+endloop
+
+endloop
+
+query T
+SELECT list_concat([1.000000, 2.000000]::float[], [3.000000, 4.000000]::double[])
+----
+[1.000000, 2.000000, 3.000000, 4.000000]
+
+query T
+SELECT list_concat([1.000000, 2.000000]::double[], [3.000000, 4.000000]::float[])
+----
+[1.000000, 2.000000, 3.000000, 4.000000]
+
+# nulls
 query T
 SELECT list_concat([NULL], [NULL])
 ----
@@ -66,10 +100,16 @@ SELECT list_concat([[1, 2]], [[3, 4]])
 ----
 [[1, 2], [3, 4]]
 
+# nested types
 query T
 SELECT list_concat([{a: 1}, {a: 2}], [{a: 3}, {a: 4}])
 ----
 [{'a': 1}, {'a': 2}, {'a': 3}, {'a': 4}]
+
+query T
+SELECT list_concat([[[1], [2]], [[3], [4]]], [[[5], [6]], [[7], [8]]])
+----
+[[[1], [2]], [[3], [4]], [[5], [6]], [[7], [8]]]
 
 statement ok
 CREATE TABLE test AS SELECT range % 4 i, range j, range k FROM range(16)
@@ -102,7 +142,7 @@ SELECT list_append([1, 2], NULL)
 query T
 SELECT list_append(NULL, 3)
 ----
-NULL
+[3]
 
 query II
 SELECT i, list_append(list_concat(j, k), i) FROM lists

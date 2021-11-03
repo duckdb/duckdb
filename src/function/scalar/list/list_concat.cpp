@@ -1,6 +1,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/storage/statistics/list_statistics.hpp"
 #include "duckdb/storage/statistics/validity_statistics.hpp"
 
@@ -12,9 +13,12 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 
 	Vector &lhs = args.data[0];
 	Vector &rhs = args.data[1];
-	if (lhs.GetType().id() == LogicalTypeId::SQLNULL || rhs.GetType().id() == LogicalTypeId::SQLNULL) {
-		// If either side is NULL the result is NULL
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+	if (lhs.GetType().id() == LogicalTypeId::SQLNULL) {
+		result.Reference(rhs);
+		return;
+	}
+	if (rhs.GetType().id() == LogicalTypeId::SQLNULL) {
+		result.Reference(lhs);
 		return;
 	}
 
@@ -42,21 +46,25 @@ static void ListConcatFunction(DataChunk &args, ExpressionState &state, Vector &
 	for (idx_t i = 0; i < count; i++) {
 		auto lhs_list_index = lhs_data.sel->get_index(i);
 		auto rhs_list_index = rhs_data.sel->get_index(i);
-		if (!lhs_data.validity.RowIsValid(lhs_list_index) || !rhs_data.validity.RowIsValid(rhs_list_index)) {
+		if (!lhs_data.validity.RowIsValid(lhs_list_index) && !rhs_data.validity.RowIsValid(rhs_list_index)) {
 			result_validity.SetInvalid(i);
 			continue;
 		}
-		const auto &lhs_entry = lhs_entries[lhs_list_index];
-		const auto &rhs_entry = rhs_entries[rhs_list_index];
-
 		result_entries[i].offset = offset;
-		result_entries[i].length = lhs_entry.length + rhs_entry.length;
+		result_entries[i].length = 0;
+		if (lhs_data.validity.RowIsValid(lhs_list_index)) {
+			const auto &lhs_entry = lhs_entries[lhs_list_index];
+			result_entries[i].length += lhs_entry.length;
+			ListVector::Append(result, lhs_child, *lhs_child_data.sel, lhs_entry.offset + lhs_entry.length,
+			                   lhs_entry.offset);
+		}
+		if (rhs_data.validity.RowIsValid(rhs_list_index)) {
+			const auto &rhs_entry = rhs_entries[rhs_list_index];
+			result_entries[i].length += rhs_entry.length;
+			ListVector::Append(result, rhs_child, *rhs_child_data.sel, rhs_entry.offset + rhs_entry.length,
+			                   rhs_entry.offset);
+		}
 		offset += result_entries[i].length;
-
-		ListVector::Append(result, lhs_child, *lhs_child_data.sel, lhs_entry.offset + lhs_entry.length,
-		                   lhs_entry.offset);
-		ListVector::Append(result, rhs_child, *rhs_child_data.sel, rhs_entry.offset + rhs_entry.length,
-		                   rhs_entry.offset);
 	}
 	D_ASSERT(ListVector::GetListSize(result) == offset);
 
@@ -71,35 +79,28 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 
 	auto &lhs = arguments[0]->return_type;
 	auto &rhs = arguments[1]->return_type;
-	if (lhs.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[0] = LogicalType::SQLNULL;
-	}
-	if (rhs.id() == LogicalTypeId::SQLNULL) {
-		bound_function.arguments[1] = LogicalType::SQLNULL;
-	}
-	if (lhs.id() == LogicalTypeId::SQLNULL || rhs.id() == LogicalTypeId::SQLNULL) {
+	if (lhs.id() == LogicalTypeId::SQLNULL && rhs.id() == LogicalTypeId::SQLNULL) {
 		bound_function.return_type = LogicalType::SQLNULL;
+	} else if (lhs.id() == LogicalTypeId::SQLNULL || rhs.id() == LogicalTypeId::SQLNULL) {
+		// we mimic postgres behaviour: list_concat(NULL, my_list) = my_list
+		bound_function.arguments[0] = lhs;
+		bound_function.arguments[1] = rhs;
+		bound_function.return_type = rhs.id() == LogicalTypeId::SQLNULL ? lhs : rhs;
 	} else {
 		D_ASSERT(lhs.id() == LogicalTypeId::LIST);
 		D_ASSERT(rhs.id() == LogicalTypeId::LIST);
 
-		auto &lhs_child_type = ListType::GetChildType(lhs);
-		auto &rhs_child_type = ListType::GetChildType(rhs);
-		if (lhs_child_type.id() == LogicalTypeId::SQLNULL) {
-			bound_function.arguments[0] = rhs;
-			bound_function.arguments[1] = rhs;
-			bound_function.return_type = rhs;
-		} else if (rhs_child_type.id() == LogicalTypeId::SQLNULL) {
-			bound_function.arguments[0] = lhs;
-			bound_function.arguments[1] = lhs;
-			bound_function.return_type = lhs;
-		} else if (lhs_child_type.id() != rhs_child_type.id()) {
-			throw TypeMismatchException(lhs, rhs, "Cannot concatenate lists with different child types");
-		} else {
-			bound_function.arguments[0] = lhs;
-			bound_function.arguments[1] = lhs;
-			bound_function.return_type = lhs;
+		// Resolve list type
+		auto child_type = LogicalType::SQLNULL;
+		for (const auto &argument : arguments) {
+			child_type = LogicalType::MaxLogicalType(child_type, ListType::GetChildType(argument->return_type));
 		}
+		ExpressionBinder::ResolveParameterType(child_type);
+		auto list_type = LogicalType::LIST(move(child_type));
+
+		bound_function.arguments[0] = list_type;
+		bound_function.arguments[1] = list_type;
+		bound_function.return_type = list_type;
 	}
 	return make_unique<VariableReturnBindData>(bound_function.return_type);
 }
@@ -121,12 +122,15 @@ static unique_ptr<BaseStatistics> ListConcatStats(ClientContext &context, BoundF
 	return stats;
 }
 
-void ListConcatFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction ListConcatFun::GetFunction() {
 	// the arguments and return types are actually set in the binder function
-	ScalarFunction lfun({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)},
-	                    LogicalType::LIST(LogicalType::ANY), ListConcatFunction, false, ListConcatBind, nullptr,
-	                    ListConcatStats);
-	set.AddFunction({"list_concat", "list_cat", "array_concat", "array_cat"}, lfun);
+	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)},
+	                      LogicalType::LIST(LogicalType::ANY), ListConcatFunction, false, ListConcatBind, nullptr,
+	                      ListConcatStats);
+}
+
+void ListConcatFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction({"list_concat", "list_cat", "array_concat", "array_cat"}, GetFunction());
 }
 
 } // namespace duckdb
