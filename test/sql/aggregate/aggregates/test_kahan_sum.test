@@ -10,6 +10,16 @@ INSERT INTO doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DO
 
 # this would give the wrong result with a simple sum
 query I
-SELECT SUM(n)::BIGINT FROM doubles;
+SELECT FSUM(n)::BIGINT FROM doubles;
+----
+9007199254740994
+
+query I
+SELECT sumKahan(n)::BIGINT FROM doubles;
+----
+9007199254740994
+
+query I
+SELECT kahan_sum(n)::BIGINT FROM doubles;
 ----
 9007199254740994

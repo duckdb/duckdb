@@ -22,8 +22,7 @@ struct AvgState {
 	}
 };
 
-template <>
-struct AvgState<double> {
+struct KahanAvgState {
 	uint64_t count;
 	double value;
 	double err;
@@ -33,10 +32,10 @@ struct AvgState<double> {
 		this->err = 0.0;
 	}
 
-	void Combine(const AvgState<double> &other) {
+	void Combine(const KahanAvgState &other) {
 		this->count += other.count;
-		KahanAdd(other.value, this->value, this->err);
-		KahanAdd(other.err, this->value, this->err);
+		KahanAddInternal(other.value, this->value, this->err);
+		KahanAddInternal(other.err, this->value, this->err);
 	}
 };
 
@@ -116,7 +115,21 @@ struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, Re
 	}
 };
 
-struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, DoubleAdd> {
+struct NumericAverageOperation : public BaseSumOperation<AverageSetOperation, RegularAdd> {
+	template <class T, class STATE>
+	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
+		if (state->count == 0) {
+			mask.SetInvalid(idx);
+		} else {
+			if (!Value::DoubleIsValid(state->value)) {
+				throw OutOfRangeException("AVG is out of range!");
+			}
+			target[idx] = (state->value / state->count);
+		}
+	}
+};
+
+struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, KahanAdd> {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (state->count == 0) {
@@ -177,6 +190,11 @@ void AvgFun::RegisterFunction(BuiltinFunctions &set) {
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	set.AddFunction(avg);
+
+	AggregateFunctionSet favg("favg");
+	favg.AddFunction(AggregateFunction::UnaryAggregate<KahanAvgState, double, double, KahanAverageOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+	set.AddFunction(favg);
 }
 
 } // namespace duckdb

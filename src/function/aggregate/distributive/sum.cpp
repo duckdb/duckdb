@@ -45,7 +45,8 @@ struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintA
 	}
 };
 
-struct NumericSumOperation : public BaseSumOperation<SumSetOperation, DoubleAdd> {
+template <class ADD_OPERATOR>
+struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATOR> {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
@@ -58,6 +59,9 @@ struct NumericSumOperation : public BaseSumOperation<SumSetOperation, DoubleAdd>
 		}
 	}
 };
+
+using NumericSumOperation = DoubleSumOperation<RegularAdd>;
+using KahanSumOperation = DoubleSumOperation<KahanAdd>;
 
 struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
 	template <class T, class STATE>
@@ -167,12 +171,23 @@ void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
-	// float sums to float
-	// FIXME: implement http://ic.ese.upenn.edu/pdf/parallel_fpaccum_tc2016.pdf for parallel FP sums
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 	set.AddFunction(sum);
+
+	// fsum
+	AggregateFunctionSet fsum("fsum");
+	fsum.AddFunction(AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+
+	set.AddFunction(fsum);
+
+	fsum.name = "kahan_sum";
+	set.AddFunction(fsum);
+
+	fsum.name = "sumKahan";
+	set.AddFunction(fsum);
 }
 
 } // namespace duckdb
