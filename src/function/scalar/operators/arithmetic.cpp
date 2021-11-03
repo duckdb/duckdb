@@ -286,11 +286,6 @@ ScalarFunction AddFun::GetFunction(const LogicalType &left_type, const LogicalTy
 			                      ScalarFunction::BinaryFunction<interval_t, timestamp_t, timestamp_t, AddOperator>);
 		}
 		break;
-	case LogicalTypeId::LIST:
-		if (right_type.id() == LogicalTypeId::LIST) {
-			return ListConcatFun::GetFunction();
-		}
-		break;
 	case LogicalTypeId::TIME:
 		if (right_type.id() == LogicalTypeId::INTERVAL) {
 			return ScalarFunction("+", {left_type, right_type}, LogicalType::TIME,

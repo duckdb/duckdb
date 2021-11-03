@@ -88,7 +88,9 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "nullif", {"a", "b", nullptr}, "CASE WHEN a=b THEN NULL ELSE a END"},
 	{DEFAULT_SCHEMA, "list_append", {"l", "e", nullptr}, "list_concat(l, list_value(e))"},
 	{DEFAULT_SCHEMA, "array_append", {"arr", "el", nullptr}, "list_append(arr, el)"},
-    {nullptr, nullptr, {nullptr}, nullptr}};
+	{DEFAULT_SCHEMA, "list_prepend", {"e", "l", nullptr}, "list_concat(list_value(e), l)"},
+	{DEFAULT_SCHEMA, "array_prepend", {"el", "arr", nullptr}, "list_prepend(el, arr)"},
+	{nullptr, nullptr, {nullptr}, nullptr}};
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &schema, const string &name) {
 	for (idx_t index = 0; internal_macros[index].name != nullptr; index++) {

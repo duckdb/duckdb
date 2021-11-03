@@ -151,3 +151,14 @@ SELECT i, list_append(list_concat(j, k), i) FROM lists
 1	[1, 5, 9, 13, 1, 5, 9, 13, 1]
 2	[2, 6, 10, 14, 2, 6, 10, 14, 2]
 3	[3, 7, 11, 15, 3, 7, 11, 15, 3]
+
+# prepend macro
+query T
+SELECT list_prepend(1, [2, 3])
+----
+[1, 2, 3]
+
+query T
+SELECT array_prepend(1, [2, 3])
+----
+[1, 2, 3]
