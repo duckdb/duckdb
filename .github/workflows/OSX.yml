@@ -1,10 +1,10 @@
 name: OSX
-on:
-  workflow_run:
-    workflows: ["Main"]
-    types:
-      - completed
-
+#on:
+#  workflow_run:
+#    workflows: ["Main"]
+#    types:
+#      - completed
+on: [push, pull_request]
 defaults:
   run:
     shell: bash
