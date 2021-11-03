@@ -66,6 +66,22 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 JoinHashTable::~JoinHashTable() {
 }
 
+void JoinHashTable::ApplyBitmask(Vector &hashes, Vector &indices, idx_t count) {
+	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		D_ASSERT(!ConstantVector::IsNull(hashes));
+		auto hash_data = ConstantVector::GetData<hash_t>(hashes);
+		auto indices_data = ConstantVector::GetData<hash_t>(indices);
+		*indices_data = *hash_data & bitmask;
+	} else {
+		hashes.Normalify(count);
+		auto hash_data = FlatVector::GetData<hash_t>(hashes);
+		auto indices_data = FlatVector::GetData<hash_t>(indices);
+		for (idx_t i = 0; i < count; i++) {
+			indices_data[i] = hash_data[i] & bitmask;
+		}
+	}
+}
+
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		D_ASSERT(!ConstantVector::IsNull(hashes));
@@ -239,23 +255,26 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
 
 	// use bitmask to get position in array
-	ApplyBitmask(hashes, count);
+	Vector indices(hashes.GetType(), false, true, count);
+	ApplyBitmask(hashes, indices, count);
 
 	hashes.Normalify(count);
 	// TODO: check for duplicates here
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
-	auto indices = FlatVector::GetData<hash_t>(hashes);
+	auto indices_data = FlatVector::GetData<hash_t>(indices);
 	for (idx_t i = 0; i < count; i++) {
-		auto index = indices[i];
+		auto index = indices_data[i];
 		// store current_pointer in next_pointer location (NOTE: this will be nullptr if
 		// there is none)
 		auto next_entry_ptr = key_locations[i] + pointer_offset;
+		auto next_hash = Load<hash_t>((data_ptr_t)(next_entry_ptr));
 		// In case of a conflict
-		if (pointers[index]) {
+		if (pointers[index] != 0) {
 			// check whether the hash_values are the same
-			auto current_hash = reinterpret_cast<int64_t>(pointers[index]);
-			auto next_hash = reinterpret_cast<int64_t>(next_entry_ptr);
+			auto current_ptr = pointers[index] + pointer_offset;
+			auto current_hash = Load<hash_t>((data_ptr_t)(current_ptr));
+			auto next_hash = Load<hash_t>((data_ptr_t)(next_entry_ptr));
 			has_primary_key = true;
 		}
 		Store<data_ptr_t>(pointers[index], next_entry_ptr);
