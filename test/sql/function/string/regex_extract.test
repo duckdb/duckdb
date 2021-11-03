@@ -13,9 +13,73 @@ bar
 query T
 SELECT regexp_extract('foobarbaz', 'b..', 1)
 ----
-NULL
+(empty)
 
 query T
 SELECT regexp_extract('foobarbaz', '(b..)(b..)')
 ----
 barbaz
+
+query T
+SELECT regexp_extract('foobarbaz', '(b..)(b..)', 1)
+----
+bar
+
+query T
+SELECT regexp_extract('foobarbaz', '(b..)(b..)', 2)
+----
+baz
+
+statement ok
+CREATE TABLE test (s VARCHAR, p VARCHAR, i INT)
+
+statement ok
+INSERT INTO test VALUES
+    ('foobarbaz', 'b..', 0),
+    ('foobarbaz', 'b..', 1),
+    ('foobarbaz', '(b..)(b..)', 0),
+    ('foobarbaz', '(b..)(b..)', 1),
+    ('foobarbaz', '(b..)(b..)', 2)
+
+query T
+SELECT regexp_extract(s, p, i) FROM test
+----
+bar
+(empty)
+barbaz
+bar
+baz
+
+query T
+SELECT regexp_extract(s, p, 0) FROM test
+----
+bar
+bar
+barbaz
+barbaz
+barbaz
+
+query T
+SELECT regexp_extract(s, 'b..', 0) FROM test
+----
+bar
+bar
+bar
+bar
+bar
+
+# null values
+query T
+SELECT regexp_extract('foobarbaz', NULL, 0)
+----
+(empty)
+
+query T
+SELECT regexp_extract('foobarbaz', 'b..', NULL)
+----
+(empty)
+
+query T
+SELECT regexp_extract(NULL, 'b..')
+----
+NULL

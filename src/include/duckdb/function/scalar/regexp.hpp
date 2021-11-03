@@ -39,7 +39,7 @@ struct RegexpExtractBindData : public FunctionData {
 	string pattern_string = "";
 
 	bool constant_group = true;
-	string group_string = "\\0";
+	string group_string = "";
 
 	unique_ptr<FunctionData> Copy() override;
 };

@@ -209,7 +209,7 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
-	auto &indices = args.data[2];
+	auto &groups = args.data[2];
 	if (info.constant_pattern) {
 		const RE2 re(duckdb_re2::StringPiece(info.pattern_string));
 		if (info.constant_group) {
@@ -221,9 +221,10 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 			});
 		} else {
 			BinaryExecutor::Execute<string_t, uint32_t, string_t>(
-			    strings, indices, result, args.size(), [&](string_t input, uint32_t group) {
+			    strings, groups, result, args.size(), [&](string_t input, uint32_t group) {
+				    string group_string = "\\" + std::to_string(group);
+				    auto rewrite = duckdb_re2::StringPiece(group_string);
 				    std::string extracted;
-				    auto rewrite = duckdb_re2::StringPiece("\\" + std::to_string(group));
 				    RE2::Extract(input.GetString(), re, rewrite, &extracted);
 				    return StringVector::AddString(result, extracted.c_str(), std::strlen(extracted.c_str()));
 			    });
@@ -232,17 +233,18 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 		if (info.constant_group) {
 			const duckdb_re2::StringPiece rewrite(info.group_string);
 			BinaryExecutor::Execute<string_t, string_t, string_t>(
-			    strings, indices, result, args.size(), [&](string_t input, string_t pattern) {
-				    RE2 re(duckdb_re2::StringPiece(info.pattern_string));
+			    strings, patterns, result, args.size(), [&](string_t input, string_t pattern) {
+				    RE2 re(CreateStringPiece(pattern));
 				    std::string extracted;
 				    RE2::Extract(input.GetString(), re, rewrite, &extracted);
 				    return StringVector::AddString(result, extracted.c_str(), std::strlen(extracted.c_str()));
 			    });
 		} else {
 			TernaryExecutor::Execute<string_t, string_t, uint32_t, string_t>(
-			    strings, patterns, indices, result, args.size(), [&](string_t input, string_t pattern, uint32_t group) {
-				    RE2 re(duckdb_re2::StringPiece(info.pattern_string));
-				    duckdb_re2::StringPiece rewrite("\\" + std::to_string(group));
+			    strings, patterns, groups, result, args.size(), [&](string_t input, string_t pattern, uint32_t group) {
+				    RE2 re(CreateStringPiece(pattern));
+				    string group_string = "\\" + std::to_string(group);
+				    duckdb_re2::StringPiece rewrite(group_string);
 				    std::string extracted;
 				    RE2::Extract(input.GetString(), re, rewrite, &extracted);
 				    return StringVector::AddString(result, extracted.c_str(), std::strlen(extracted.c_str()));
@@ -268,16 +270,22 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 		if (!pattern_str.is_null && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
 			data->pattern_string = pattern_str.str_value;
 		}
+	} else {
+		data->constant_pattern = false;
 	}
 
 	if (arguments.size() == 3) {
-		bound_function.arguments[2] = LogicalType::UINTEGER;
 		if (arguments[2]->IsFoldable()) {
 			Value group = ExpressionExecutor::EvaluateScalar(*arguments[2]);
-			data->group_string = "\\" + to_string(group.GetValue<uint32_t>());
+			if (!group.is_null && group.type().IsIntegral()) {
+				data->group_string = "\\" + to_string(group.GetValue<uint32_t>());
+			}
 		} else {
+			bound_function.arguments[2] = LogicalType::UINTEGER;
 			data->constant_group = false;
 		}
+	} else {
+		data->group_string = "\\0";
 	}
 
 	return move(data);
@@ -310,7 +318,7 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet regexp_extract("regexp_extract");
 	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                          RegexExtractFunction, false, RegexExtractBind));
-	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::UINTEGER},
+	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::ANY},
 	                                          LogicalType::VARCHAR, RegexExtractFunction, false, RegexExtractBind));
 
 	set.AddFunction(regexp_full_match);
