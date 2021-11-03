@@ -1,0 +1,21 @@
+# name: test/sql/function/string/regex_extract.test
+# description: regex extract test
+# group: [string]
+
+statement ok
+PRAGMA enable_verification
+
+query T
+SELECT regexp_extract('foobarbaz', 'b..')
+----
+bar
+
+query T
+SELECT regexp_extract('foobarbaz', 'b..', 1)
+----
+NULL
+
+query T
+SELECT regexp_extract('foobarbaz', '(b..)(b..)')
+----
+barbaz

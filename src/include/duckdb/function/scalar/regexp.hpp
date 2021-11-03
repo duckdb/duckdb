@@ -34,4 +34,14 @@ struct RegexpReplaceBindData : public FunctionData {
 	unique_ptr<FunctionData> Copy() override;
 };
 
+struct RegexpExtractBindData : public FunctionData {
+	bool constant_pattern = true;
+	string pattern_string = "";
+
+	bool constant_group = true;
+	string group_string = "\\0";
+
+	unique_ptr<FunctionData> Copy() override;
+};
+
 } // namespace duckdb
