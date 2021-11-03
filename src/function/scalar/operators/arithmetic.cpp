@@ -335,7 +335,7 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
 	// we can add lists together
-	functions.AddFunction(GetFunction(LogicalType::LIST(LogicalType::ANY), LogicalType::LIST(LogicalType::ANY)));
+	functions.AddFunction(ListConcatFun::GetFunction());
 
 	set.AddFunction(functions);
 }
