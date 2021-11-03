@@ -11,6 +11,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/function/aggregate_function.hpp"
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
 
 namespace duckdb {
 
@@ -19,7 +20,7 @@ public:
 	using FrameBounds = std::pair<idx_t, idx_t>;
 
 	WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info, const LogicalType &result_type,
-	                  ChunkCollection *input);
+	                  ChunkCollection *input, WindowAggregationMode mode);
 	~WindowSegmentTree();
 
 	//! First row contains the result.
@@ -60,6 +61,12 @@ private:
 
 	//! The (sorted) input chunk collection on which the tree is built
 	ChunkCollection *input_ref;
+
+	//! Use the window API, if available
+	bool use_window_api;
+
+	//! Use the combine API, if available
+	bool use_combine_api;
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
 	static constexpr idx_t TREE_FANOUT = 64;
