@@ -6,15 +6,17 @@ defaults:
     shell: bash
 
 jobs:
+
    linux-python3:
     name: Python 3 Linux
     runs-on: ubuntu-20.04
     strategy:
       matrix:
         arch: [auto, aarch64]
+        python_build: [cp36-manylinux_x86_64,cp36-manylinux_i686,cp36-musllinux_x86_64,cp36-musllinux_i686]
 
     env:
-      CIBW_BUILD: 'cp36-* cp37-* cp38-* cp39-*'
+      CIBW_BUILD: ${{ matrix.python_build}}
       CIBW_BEFORE_BUILD: 'pip install --prefer-binary "pandas>=0.24" "pytest>=4.3"'
       CIBW_TEST_REQUIRES: 'pytest'
       CIBW_BEFORE_TEST: 'pip install --prefer-binary "pandas>=0.24" pytest-timeout mypy && pip install --prefer-binary "requests>=2.26" && (pip install --prefer-binary "pyarrow==5.0" || true)'
