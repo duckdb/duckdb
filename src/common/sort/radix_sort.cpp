@@ -111,7 +111,7 @@ void RadixSortLSD(BufferManager &buffer_manager, const data_ptr_t &dataptr, cons
 	auto temp_block = buffer_manager.Allocate(MaxValue(count * row_width, (idx_t)Storage::BLOCK_SIZE));
 	bool swap = false;
 
-	idx_t counts[256];
+	idx_t counts[SortConstants::VALUES_PER_RADIX];
 	for (idx_t r = 1; r <= sorting_size; r++) {
 		// Init counts to 0
 		memset(counts, 0, sizeof(counts));
@@ -127,7 +127,7 @@ void RadixSortLSD(BufferManager &buffer_manager, const data_ptr_t &dataptr, cons
 		}
 		// Compute offsets from counts
 		idx_t max_count = counts[0];
-		for (idx_t val = 1; val < 256; val++) {
+		for (idx_t val = 1; val < SortConstants::VALUES_PER_RADIX; val++) {
 			max_count = MaxValue<idx_t>(max_count, counts[val]);
 			counts[val] = counts[val] + counts[val - 1];
 		}
@@ -182,7 +182,7 @@ void RadixSortMSD(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, const id
 	const data_ptr_t source_ptr = swap ? temp_ptr : orig_ptr;
 	const data_ptr_t target_ptr = swap ? orig_ptr : temp_ptr;
 	// Init counts to 0
-	memset(locations, 0, 257 * sizeof(idx_t));
+	memset(locations, 0, SortConstants::MSD_RADIX_LOCATIONS * sizeof(idx_t));
 	idx_t *counts = locations + 1;
 	// Collect counts
 	const idx_t total_offset = col_offset + offset;
@@ -193,7 +193,7 @@ void RadixSortMSD(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, const id
 	}
 	// Compute locations from counts
 	idx_t max_count = 0;
-	for (idx_t radix = 0; radix < 256; radix++) {
+	for (idx_t radix = 0; radix < SortConstants::VALUES_PER_RADIX; radix++) {
 		max_count = MaxValue<idx_t>(max_count, counts[radix]);
 		counts[radix] += locations[radix];
 	}
@@ -215,16 +215,17 @@ void RadixSortMSD(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, const id
 		return;
 	}
 	if (max_count == count) {
-		RadixSortMSD(orig_ptr, temp_ptr, count, col_offset, row_width, comp_width, offset + 1, locations + 257, swap);
+		RadixSortMSD(orig_ptr, temp_ptr, count, col_offset, row_width, comp_width, offset + 1,
+		             locations + SortConstants::MSD_RADIX_LOCATIONS, swap);
 		return;
 	}
 	// Recurse
 	idx_t radix_count = locations[0];
-	for (idx_t radix = 0; radix < 256; radix++) {
+	for (idx_t radix = 0; radix < SortConstants::VALUES_PER_RADIX; radix++) {
 		const idx_t loc = (locations[radix] - radix_count) * row_width;
-		if (radix_count > 24) {
+		if (radix_count > SortConstants::INSERTION_SORT_THRESHOLD) {
 			RadixSortMSD(orig_ptr + loc, temp_ptr + loc, radix_count, col_offset, row_width, comp_width, offset + 1,
-			             locations + 257, swap);
+			             locations + SortConstants::MSD_RADIX_LOCATIONS, swap);
 		} else if (radix_count != 0) {
 			InsertionSort(orig_ptr + loc, temp_ptr + loc, radix_count, col_offset, row_width, comp_width, offset + 1,
 			              swap);
@@ -236,13 +237,13 @@ void RadixSortMSD(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, const id
 //! Calls different sort functions, depending on the count and sorting sizes
 void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count, const idx_t &col_offset,
                const idx_t &sorting_size, const SortLayout &sort_layout) {
-	if (count <= 24) {
+	if (count <= SortConstants::INSERTION_SORT_THRESHOLD) {
 		InsertionSort(dataptr, nullptr, count, 0, sort_layout.entry_size, sort_layout.comparison_size, 0, false);
-	} else if (sorting_size <= 4) {
+	} else if (sorting_size <= SortConstants::MSD_RADIX_SORT_SIZE_THRESHOLD) {
 		RadixSortLSD(buffer_manager, dataptr, count, col_offset, sort_layout.entry_size, sorting_size);
 	} else {
 		auto temp_block = buffer_manager.Allocate(MaxValue(count * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
-		auto preallocated_array = unique_ptr<idx_t[]>(new idx_t[sorting_size * 257]);
+		auto preallocated_array = unique_ptr<idx_t[]>(new idx_t[sorting_size * SortConstants::MSD_RADIX_LOCATIONS]);
 		RadixSortMSD(dataptr, temp_block->Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,
 		             preallocated_array.get(), false);
 	}
