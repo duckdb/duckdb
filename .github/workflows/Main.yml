@@ -21,56 +21,58 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
-
-    - name: Build
-      run:  make debug
-
-    - name: Test
-      run: make unittestci
-
- format-check:
-    name: Format Check
-    runs-on: ubuntu-20.04
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
-
-    - name: Format Check
-      run: |
-        clang-format --version
-        clang-format --dump-config
-        make format-check-silent
-
- tidy-check:
-    name: Tidy Check
-    runs-on: ubuntu-20.04
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      TIDY_THREADS: 4
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
-
-    - name: Tidy Check
-      run: make tidy-check
-
+    - name: Fast Test
+      run: python scripts/ci_test.py
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+#
+#    - name: Build
+#      run:  make debug
+#
+#    - name: Test
+#      run: make unittestci
+#
+# format-check:
+#    name: Format Check
+#    runs-on: ubuntu-20.04
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
+#
+#    - name: Format Check
+#      run: |
+#        clang-format --version
+#        clang-format --dump-config
+#        make format-check-silent
+#
+# tidy-check:
+#    name: Tidy Check
+#    runs-on: ubuntu-20.04
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#      TIDY_THREADS: 4
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
+#
+#    - name: Tidy Check
+#      run: make tidy-check
+#
