@@ -198,7 +198,7 @@ test_that("duckdb_fetch_arrow() record_batch_reader multiple vectors per chunk",
     con <- dbConnect(duckdb::duckdb())
     dbExecute(con, paste0("CREATE table t as select range a from range(5000);"))
     res <- dbSendQuery(con, "SELECT * FROM t", arrow=TRUE)
-    record_batch_reader <- duckdb::duckdb_fetch_record_batch(res,2)
+    record_batch_reader <- duckdb::duckdb_fetch_record_batch(res,2048)
     cur_batch <- record_batch_reader$read_next_batch()
     expect_equal(2048,cur_batch$num_rows)
 

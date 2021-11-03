@@ -51,7 +51,7 @@ public:
 
 class ResultArrowArrayStreamWrapper {
 public:
-	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result, idx_t vectors_per_chunk);
+	explicit ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result, idx_t approx_batch_size);
 	ArrowArrayStream stream;
 	unique_ptr<QueryResult> result;
 	std::string last_error;

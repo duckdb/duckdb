@@ -139,12 +139,15 @@ const char *ResultArrowArrayStreamWrapper::MyStreamGetLastError(struct ArrowArra
 	auto my_stream = (ResultArrowArrayStreamWrapper *)stream->private_data;
 	return my_stream->last_error.c_str();
 }
-ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p,
-                                                             idx_t vectors_per_chunk_p)
-    : result(move(result_p)), vectors_per_chunk(vectors_per_chunk_p) {
+ResultArrowArrayStreamWrapper::ResultArrowArrayStreamWrapper(unique_ptr<QueryResult> result_p, idx_t approx_batch_size)
+    : result(move(result_p)) {
 	//! We first initialize the private data of the stream
 	stream.private_data = this;
-
+	//! Ceil Approx_Batch_Size/STANDARD_VECTOR_SIZE
+	if (approx_batch_size == 0) {
+		throw std::runtime_error("Approximate Batch Size of Record Batch MUST be higher than 0");
+	}
+	vectors_per_chunk = (approx_batch_size + STANDARD_VECTOR_SIZE - 1) / STANDARD_VECTOR_SIZE;
 	//! We initialize the stream functions
 	stream.get_schema = ResultArrowArrayStreamWrapper::MyStreamGetSchema;
 	stream.get_next = ResultArrowArrayStreamWrapper::MyStreamGetNext;

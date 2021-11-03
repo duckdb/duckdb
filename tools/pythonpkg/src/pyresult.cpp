@@ -339,7 +339,7 @@ py::object DuckDBPyResult::FetchArrowTable(bool stream, idx_t num_of_vectors, bo
 	return std::move(batches);
 }
 
-py::object DuckDBPyResult::FetchRecordBatchReader(idx_t vectors_per_chunk) {
+py::object DuckDBPyResult::FetchRecordBatchReader(idx_t approx_batch_size) {
 	if (!result) {
 		throw std::runtime_error("There is no query result");
 	}
@@ -347,7 +347,7 @@ py::object DuckDBPyResult::FetchRecordBatchReader(idx_t vectors_per_chunk) {
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");
 	auto record_batch_reader_func = pyarrow_lib_module.attr("RecordBatchReader").attr("_import_from_c");
 	//! We have to construct an Arrow Array Stream
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), vectors_per_chunk);
+	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(result), approx_batch_size);
 	py::object record_batch_reader = record_batch_reader_func((uint64_t)&result_stream->stream);
 	return record_batch_reader;
 }

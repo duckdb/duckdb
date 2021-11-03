@@ -30,7 +30,7 @@ duckdb_fetch_arrow(
   return_table = FALSE
 )
 
-duckdb_fetch_record_batch(res, vector_per_chunk = 1)
+duckdb_fetch_record_batch(res, approx_batch_size = 1)
 
 \S4method{dbFetch}{duckdb_result}(res, n = -1, ...)
 
