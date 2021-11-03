@@ -31,7 +31,7 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 	}
 	// create the dependents map for this object: it starts out empty
 	owns_map[object] = dependency_set_t();
-    owned_by_map[object] = dependencies;
+	owned_by_map[object] = dependencies;
 }
 
 void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object, bool cascade,
@@ -129,7 +129,7 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 	}
 	// add the new object to the dependency manager
 	owns_map[new_obj] = dependency_set_t();
-    owned_by_map[new_obj] = old_dependencies;
+	owned_by_map[new_obj] = old_dependencies;
 
 	for (auto &dependency : to_add) {
 		owned_by_map[new_obj].insert(dependency);
@@ -173,34 +173,34 @@ void DependencyManager::Scan(const std::function<void(CatalogEntry *, CatalogEnt
 
 void DependencyManager::AddDependencyToObject(ClientContext &context, CatalogEntry *object, CatalogEntry *entry) {
 	owns_map[object].emplace(entry);
-    owned_by_map[entry].emplace(object);
+	owned_by_map[entry].emplace(object);
 }
 
 void DependencyManager::RemoveDependencyFromObject(ClientContext &context, CatalogEntry *object, CatalogEntry *entry) {
-    // Erase returns 0 if the key is not present, or the number of deleted keys
+	// Erase returns 0 if the key is not present, or the number of deleted keys
 	owns_map[object].erase(entry);
-    owned_by_map[entry].erase(object);
+	owned_by_map[entry].erase(object);
 }
 
-dependency_set_t DependencyManager::GetOwns(ClientContext &context, CatalogEntry *object){
-    return owns_map[object];
+dependency_set_t DependencyManager::GetOwns(ClientContext &context, CatalogEntry *object) {
+	return owns_map[object];
 }
 
-std::unordered_set<CatalogEntry *> DependencyManager::GetOwnedBy(ClientContext &context, CatalogEntry *object){
-    return owned_by_map[object];
+std::unordered_set<CatalogEntry *> DependencyManager::GetOwnedBy(ClientContext &context, CatalogEntry *object) {
+	return owned_by_map[object];
 }
 
-void DependencyManager::CopyDependencies(ClientContext &context, CatalogEntry *from, CatalogEntry *to){
+void DependencyManager::CopyDependencies(ClientContext &context, CatalogEntry *from, CatalogEntry *to) {
 
-    owns_map[to] = owns_map[from];
-    for (auto object : owns_map[to]){
-        owned_by_map[object.entry].emplace(to);
-    }
+	owns_map[to] = owns_map[from];
+	for (auto object : owns_map[to]) {
+		owned_by_map[object.entry].emplace(to);
+	}
 
-    owned_by_map[to] = owned_by_map[from];
-    for (auto object : owned_by_map[to]){
-        owns_map[object].emplace(to);
-    }
+	owned_by_map[to] = owned_by_map[from];
+	for (auto object : owned_by_map[to]) {
+		owns_map[object].emplace(to);
+	}
 }
 
 } // namespace duckdb

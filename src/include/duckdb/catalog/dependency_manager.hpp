@@ -31,11 +31,11 @@ public:
 	//! Scans all dependencies, returning pairs of (object, dependent)
 	void Scan(const std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> &callback);
 
-    void AddDependencyToObject(ClientContext &context, CatalogEntry *object, CatalogEntry *entry);
+	void AddDependencyToObject(ClientContext &context, CatalogEntry *object, CatalogEntry *entry);
 	void RemoveDependencyFromObject(ClientContext &context, CatalogEntry *object, CatalogEntry *entry);
-    dependency_set_t GetOwns(ClientContext &context, CatalogEntry *object);
-    std::unordered_set<CatalogEntry *> GetOwnedBy(ClientContext &context, CatalogEntry *object);
-    void CopyDependencies(ClientContext &context, CatalogEntry *from, CatalogEntry *to);
+	dependency_set_t GetOwns(ClientContext &context, CatalogEntry *object);
+	std::unordered_set<CatalogEntry *> GetOwnedBy(ClientContext &context, CatalogEntry *object);
+	void CopyDependencies(ClientContext &context, CatalogEntry *from, CatalogEntry *to);
 
 private:
 	Catalog &catalog;
