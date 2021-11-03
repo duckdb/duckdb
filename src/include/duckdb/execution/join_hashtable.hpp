@@ -154,7 +154,7 @@ public:
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 
-	bool has_primary_key{false};
+	bool has_primary_key {false};
 
 	struct {
 		mutex mj_lock;
@@ -178,6 +178,7 @@ private:
 
 	//! Apply a bitmask to the hashes
 	void ApplyBitmask(Vector &hashes, idx_t count);
+	void ApplyBitmask(Vector &hashes, Vector &indices, idx_t count);
 	void ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers);
 
 private:
