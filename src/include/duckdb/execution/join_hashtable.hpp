@@ -154,7 +154,7 @@ public:
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 
-	bool has_primary_key {false};
+	bool has_primary_key {true};
 
 	struct {
 		mutex mj_lock;
@@ -199,6 +199,7 @@ private:
 	unique_ptr<BufferHandle> hash_map;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
+	unordered_set<hash_t> hash_values;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
