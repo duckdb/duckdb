@@ -259,6 +259,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	ApplyBitmask(hashes, indices, count);
 
 	hashes.Normalify(count);
+	indices.Normalify(count);
 	// TODO: check for duplicates here
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
@@ -273,8 +274,9 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		// In case of a conflict
 		if (pointers[index] != 0) {
 			// check whether the hash_values are the same
-			auto current_hash = hash_data[] auto next_hash = Load<hash_t>((data_ptr_t)(next_entry_ptr));
-			has_primary_key = true;
+			auto current_hash = hash_data[i];
+			auto next_hash = Load<hash_t>((data_ptr_t)(next_entry_ptr));
+			has_primary_key = (current_hash == next_hash);
 		}
 		Store<data_ptr_t>(pointers[index], next_entry_ptr);
 
