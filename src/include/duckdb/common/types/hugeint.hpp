@@ -139,6 +139,8 @@ template <>
 bool Hugeint::TryCast(hugeint_t input, float &result);
 template <>
 bool Hugeint::TryCast(hugeint_t input, double &result);
+template <>
+bool Hugeint::TryCast(hugeint_t input, long double &result);
 
 template <>
 bool Hugeint::TryConvert(int8_t value, hugeint_t &result);
@@ -160,5 +162,7 @@ template <>
 bool Hugeint::TryConvert(float value, hugeint_t &result);
 template <>
 bool Hugeint::TryConvert(double value, hugeint_t &result);
+template <>
+bool Hugeint::TryConvert(long double value, hugeint_t &result);
 
 } // namespace duckdb
