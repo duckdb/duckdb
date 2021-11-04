@@ -62,28 +62,28 @@ jobs:
 
     - name: Tools Tests
       run: |
-      python tools/shell/shell-test.py build/release/duckdb
-      java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
+        python tools/shell/shell-test.py build/release/duckdb
+        java -cp build/release/tools/jdbc/duckdb_jdbc.jar org.duckdb.test.TestDuckDBJDBC
 
     - name: Examples
       run: |
-      (cd examples/embedded-c; make)
-      (cd examples/embedded-c++; make)
-      (cd examples/jdbc; make; make maven)
+        (cd examples/embedded-c; make)
+        (cd examples/embedded-c++; make)
+        (cd examples/jdbc; make; make maven)
 
     - name: Deploy
       run: |
-      python scripts/amalgamation.py
-      zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
-      zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
-      python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
+        python scripts/amalgamation.py
+        zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
+        zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
+        python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
 
     - uses: actions/upload-artifact@v2
       with:
         name: duckdb-binaries-osx
         path: |
-        libduckdb-osx-amd64.zip
-        duckdb_cli-osx-amd64.zip
-        build/release/tools/jdbc/duckdb_jdbc.jar
+          libduckdb-osx-amd64.zip
+          duckdb_cli-osx-amd64.zip
+          build/release/tools/jdbc/duckdb_jdbc.jar
 
 

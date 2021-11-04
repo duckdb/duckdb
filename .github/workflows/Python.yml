@@ -205,7 +205,7 @@ jobs:
    linux-tarball:
       name: Python 3 Tarball
       runs-on: ubuntu-20.04
-      needs: linux-python3
+      needs: linux-python3-9
 
       steps:
       - uses: actions/checkout@v2
