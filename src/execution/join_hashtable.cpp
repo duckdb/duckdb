@@ -255,29 +255,28 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
 
 	// create a vector for indices and apply the bitmask to get them from the hash_values
-	Vector indices(hashes.GetType(), false, true, count, hashes.GetVectorType());
-	ApplyBitmask(hashes, indices, count);
+	ApplyBitmask(hashes, count);
 
 	hashes.Normalify(count);
-	indices.Normalify(count);
 	// TODO: check for duplicates here
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
-	auto indices_data = FlatVector::GetData<hash_t>(indices);
-	auto hash_data = FlatVector::GetData<hash_t>(hashes);
+	auto indices = FlatVector::GetData<hash_t>(hashes);
 	for (idx_t i = 0; i < count; i++) {
-		auto index = indices_data[i];
+		auto index = indices[i];
 		// store current_pointer in next_pointer location (NOTE: this will be nullptr if
 		// there is none)
 		auto next_entry_ptr = key_locations[i] + pointer_offset;
 		auto next_hash = Load<hash_t>((data_ptr_t)(next_entry_ptr));
 		// In case of a conflict
-		if (pointers[index] != 0) {
+		if (has_primary_key && pointers[index] != 0) {
 			// check whether the hash_values are the same
-			auto current_hash = hash_data[i];
-			auto next_hash = Load<hash_t>((data_ptr_t)(next_entry_ptr));
-			has_primary_key = (current_hash == next_hash);
+			auto found = hash_values.find(next_hash);
+			if (found != hash_values.end()) {
+				has_primary_key = false;
+			}
 		}
+		hash_values.insert(next_hash);
 		Store<data_ptr_t>(pointers[index], next_entry_ptr);
 
 		// set current_pointer to current tuple
