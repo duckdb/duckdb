@@ -275,13 +275,15 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 	}
 
 	if (arguments.size() == 3) {
-		if (arguments[2]->IsFoldable()) {
+		bound_function.arguments[2] = LogicalType::UINTEGER;
+		if (!arguments[2]->return_type.IsIntegral() && arguments[2]->return_type.id() != LogicalTypeId::SQLNULL) {
+			throw InvalidInputException("Group index field type must be integral!");
+		} else if (arguments[2]->IsFoldable()) {
 			Value group = ExpressionExecutor::EvaluateScalar(*arguments[2]);
 			if (!group.is_null && group.type().IsIntegral()) {
 				data->group_string = "\\" + to_string(group.GetValue<uint32_t>());
 			}
 		} else {
-			bound_function.arguments[2] = LogicalType::UINTEGER;
 			data->constant_group = false;
 		}
 	} else {

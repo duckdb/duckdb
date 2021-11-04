@@ -68,6 +68,15 @@ bar
 bar
 bar
 
+query T
+SELECT regexp_extract(s, '(b..)(b..)', i) FROM test
+----
+barbaz
+bar
+barbaz
+bar
+baz
+
 # null values
 query T
 SELECT regexp_extract('foobarbaz', NULL, 0)
@@ -83,3 +92,6 @@ query T
 SELECT regexp_extract(NULL, 'b..')
 ----
 NULL
+
+statement error
+SELECT regexp_extract('foobarbaz', 'b..', '1')
