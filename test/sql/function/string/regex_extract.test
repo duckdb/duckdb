@@ -30,6 +30,12 @@ SELECT regexp_extract('foobarbaz', '(b..)(b..)', 2)
 ----
 baz
 
+statement error
+SELECT regexp_extract('foobarbaz', '(b..)(b..)', -1)
+
+statement error
+SELECT regexp_extract('foobarbaz', '(b..)(b..)', 42)
+
 statement ok
 CREATE TABLE test (s VARCHAR, p VARCHAR, i INT)
 
@@ -41,14 +47,8 @@ INSERT INTO test VALUES
     ('foobarbaz', '(b..)(b..)', 1),
     ('foobarbaz', '(b..)(b..)', 2)
 
-query T
+statement error
 SELECT regexp_extract(s, p, i) FROM test
-----
-bar
-(empty)
-barbaz
-bar
-baz
 
 query T
 SELECT regexp_extract(s, p, 0) FROM test
@@ -68,14 +68,8 @@ bar
 bar
 bar
 
-query T
+statement error
 SELECT regexp_extract(s, '(b..)(b..)', i) FROM test
-----
-barbaz
-bar
-barbaz
-bar
-baz
 
 # null values
 query T

@@ -203,94 +203,102 @@ static unique_ptr<FunctionData> RegexReplaceBind(ClientContext &context, ScalarF
 	return move(data);
 }
 
+inline static string_t Extract(const string_t &input, Vector &result, const RE2 &re,
+                               const duckdb_re2::StringPiece &rewrite) {
+	std::string extracted;
+	RE2::Extract(input.GetString(), re, rewrite, &extracted);
+	return StringVector::AddString(result, extracted.c_str(), extracted.size());
+}
+inline static string_t Extract(const string_t &input, Vector &result, string_t &pattern,
+                               const duckdb_re2::StringPiece &rewrite) {
+	RE2 re(CreateStringPiece(pattern));
+	return Extract(input, result, re, rewrite);
+}
+
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
-	auto &info = (RegexpExtractBindData &)*func_expr.bind_info;
+	const auto &info = (RegexpExtractBindData &)*func_expr.bind_info;
 
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
-	auto &groups = args.data[2];
 	if (info.constant_pattern) {
-		const RE2 re(duckdb_re2::StringPiece(info.pattern_string));
-		if (info.constant_group) {
-			const duckdb_re2::StringPiece rewrite(info.group_string);
-			UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
-				std::string extracted;
-				RE2::Extract(input.GetString(), re, rewrite, &extracted);
-				return StringVector::AddString(result, extracted.c_str(), std::strlen(extracted.c_str()));
-			});
-		} else {
-			BinaryExecutor::Execute<string_t, uint32_t, string_t>(
-			    strings, groups, result, args.size(), [&](string_t input, uint32_t group) {
-				    string group_string = "\\" + std::to_string(group);
-				    auto rewrite = duckdb_re2::StringPiece(group_string);
-				    std::string extracted;
-				    RE2::Extract(input.GetString(), re, rewrite, &extracted);
-				    return StringVector::AddString(result, extracted.c_str(), std::strlen(extracted.c_str()));
-			    });
-		}
+		UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
+			return Extract(input, result, info.re, info.rewrite);
+		});
+		//		if (info.constant_group) {
+		//
+		//		} else {
+		//			BinaryExecutor::Execute<string_t, int32_t, string_t>(
+		//			    strings, groups, result, args.size(), [&](string_t input, int32_t group) {
+		//				    string group_string = "\\" + std::to_string(MinValue(group, 9));
+		//				    auto rewrite = duckdb_re2::StringPiece(group_string);
+		//				    return Extract(input, result, info.re, rewrite);
+		//			    });
+		//		}
 	} else {
-		if (info.constant_group) {
-			const duckdb_re2::StringPiece rewrite(info.group_string);
-			BinaryExecutor::Execute<string_t, string_t, string_t>(
-			    strings, patterns, result, args.size(), [&](string_t input, string_t pattern) {
-				    RE2 re(CreateStringPiece(pattern));
-				    std::string extracted;
-				    RE2::Extract(input.GetString(), re, rewrite, &extracted);
-				    return StringVector::AddString(result, extracted.c_str(), std::strlen(extracted.c_str()));
-			    });
-		} else {
-			TernaryExecutor::Execute<string_t, string_t, uint32_t, string_t>(
-			    strings, patterns, groups, result, args.size(), [&](string_t input, string_t pattern, uint32_t group) {
-				    RE2 re(CreateStringPiece(pattern));
-				    string group_string = "\\" + std::to_string(group);
-				    duckdb_re2::StringPiece rewrite(group_string);
-				    std::string extracted;
-				    RE2::Extract(input.GetString(), re, rewrite, &extracted);
-				    return StringVector::AddString(result, extracted.c_str(), std::strlen(extracted.c_str()));
-			    });
-		}
+		BinaryExecutor::Execute<string_t, string_t, string_t>(strings, patterns, result, args.size(),
+		                                                      [&](string_t input, string_t pattern) {
+			                                                      RE2 re(CreateStringPiece(pattern));
+			                                                      return Extract(input, result, re, info.rewrite);
+		                                                      });
+		//		if (info.constant_group) {
+		//
+		//		} else {
+		//			TernaryExecutor::Execute<string_t, string_t, int32_t, string_t>(
+		//			    strings, patterns, groups, result, args.size(), [&](string_t input, string_t pattern, int32_t
+		// group) { 				    RE2 re(CreateStringPiece(pattern)); 				    string group_string =
+		// "\\"
+		// + std::to_string(group); 				    duckdb_re2::StringPiece rewrite(group_string); return
+		// Extract(input, result, re, rewrite);
+		//			    });
+		//		}
 	}
 }
 
+RegexpExtractBindData::RegexpExtractBindData(bool constant_pattern, const string &pattern, const string &group_string_p)
+    : constant_pattern(constant_pattern), re(duckdb_re2::StringPiece(pattern)), group_string(group_string_p),
+      rewrite(group_string) {
+}
+
 unique_ptr<FunctionData> RegexpExtractBindData::Copy() {
-	auto copy = make_unique<RegexpExtractBindData>();
-	copy->constant_group = constant_group;
-	copy->group_string = group_string;
-	return move(copy);
+	return make_unique<RegexpExtractBindData>(constant_pattern, re.pattern(), group_string);
 }
 
 static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarFunction &bound_function,
                                                  vector<unique_ptr<Expression>> &arguments) {
 	D_ASSERT(arguments.size() >= 2);
-	auto data = make_unique<RegexpExtractBindData>();
 
-	if (arguments[1]->IsFoldable()) {
+	bool constant_pattern = arguments[1]->IsFoldable();
+	string pattern = "";
+	if (constant_pattern) {
 		Value pattern_str = ExpressionExecutor::EvaluateScalar(*arguments[1]);
 		if (!pattern_str.is_null && pattern_str.type().id() == LogicalTypeId::VARCHAR) {
-			data->pattern_string = pattern_str.str_value;
+			pattern = pattern_str.str_value;
 		}
-	} else {
-		data->constant_pattern = false;
 	}
 
+	string group_string = "";
 	if (arguments.size() == 3) {
-		bound_function.arguments[2] = LogicalType::UINTEGER;
-		if (!arguments[2]->return_type.IsIntegral() && arguments[2]->return_type.id() != LogicalTypeId::SQLNULL) {
-			throw InvalidInputException("Group index field type must be integral!");
-		} else if (arguments[2]->IsFoldable()) {
-			Value group = ExpressionExecutor::EvaluateScalar(*arguments[2]);
-			if (!group.is_null && group.type().IsIntegral()) {
-				data->group_string = "\\" + to_string(group.GetValue<uint32_t>());
+		bound_function.arguments[2] = LogicalType::INTEGER;
+		//		if (!arguments[2]->return_type.IsIntegral() && arguments[2]->return_type.id() != LogicalTypeId::SQLNULL)
+		//{ 			throw InvalidInputException("Group index field type must be integral!");
+		//		}
+		if (!arguments[2]->IsFoldable()) {
+			throw InvalidInputException("Group index field field must be a constant!");
+		}
+		Value group = ExpressionExecutor::EvaluateScalar(*arguments[2]);
+		if (!group.is_null) {
+			auto group_idx = group.GetValue<int32_t>();
+			if (group_idx < 0 || group_idx > 9) {
+				throw InvalidInputException("Group index must be between 0 and 9!");
 			}
-		} else {
-			data->constant_group = false;
+			group_string = "\\" + to_string(group_idx);
 		}
 	} else {
-		data->group_string = "\\0";
+		group_string = "\\0";
 	}
 
-	return move(data);
+	return make_unique<RegexpExtractBindData>(constant_pattern, pattern, group_string);
 }
 
 void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
@@ -320,7 +328,7 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet regexp_extract("regexp_extract");
 	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 	                                          RegexExtractFunction, false, RegexExtractBind));
-	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::ANY},
+	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER},
 	                                          LogicalType::VARCHAR, RegexExtractFunction, false, RegexExtractBind));
 
 	set.AddFunction(regexp_full_match);

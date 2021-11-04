@@ -35,11 +35,13 @@ struct RegexpReplaceBindData : public FunctionData {
 };
 
 struct RegexpExtractBindData : public FunctionData {
-	bool constant_pattern = true;
-	string pattern_string = "";
+	RegexpExtractBindData(bool constant_pattern, const string &pattern, const string &group_string_p);
 
-	bool constant_group = true;
-	string group_string = "";
+	const bool constant_pattern;
+	const RE2 re;
+
+	const string group_string;
+	const duckdb_re2::StringPiece rewrite;
 
 	unique_ptr<FunctionData> Copy() override;
 };
