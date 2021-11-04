@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/recursive_read_csv.test
+# name: test/sql/copy/csv/column_names.test
 # description: Test read CSV function in a recursive CTE
 # group: [csv]
 
