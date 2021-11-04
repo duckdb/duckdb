@@ -14,8 +14,8 @@ env:
 
 jobs:
   xcode-debug:
-      name: OSX Debug
-      runs-on: macos-latest
+    name: OSX Debug
+    runs-on: macos-latest
 
     env:
       CC: ccache gcc-10
