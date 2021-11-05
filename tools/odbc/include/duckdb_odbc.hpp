@@ -94,17 +94,17 @@ struct OdbcHandleStmt : public OdbcHandle {
 	// fetcher
 	unique_ptr<OdbcFetch> odbc_fetcher;
 
-	OdbcHandleDesc *apd;
-	OdbcHandleDesc *ipd;
-	OdbcHandleDesc *ard;
-	OdbcHandleDesc *ird;
+	unique_ptr<OdbcHandleDesc> apd;
+	unique_ptr<OdbcHandleDesc> ipd;
+	unique_ptr<OdbcHandleDesc> ard;
+	unique_ptr<OdbcHandleDesc> ird;
 };
 
 struct OdbcHandleDesc : public OdbcHandle {
 	//! https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/descriptors?view=sql-server-ver15
 	// TODO requires full implmentation
 	explicit OdbcHandleDesc() : OdbcHandle(OdbcHandleType::DESC) {};
-	~OdbcHandleDesc();
+	~OdbcHandleDesc() {};
 };
 
 struct OdbcUtils {

@@ -4,6 +4,7 @@
 
 using duckdb::OdbcHandleDbc;
 using duckdb::OdbcHandleStmt;
+using duckdb::OdbcHandleDesc;
 
 //! OdbcHandleDbc functions ***************************************************
 OdbcHandleDbc::~OdbcHandleDbc() {
@@ -40,6 +41,11 @@ OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
 	param_wrapper = make_unique<ParameterWrapper>(&error_messages);
 	odbc_fetcher = make_unique<OdbcFetch>();
 	dbc->vec_stmt_ref.emplace_back(this);
+
+	apd = make_unique<OdbcHandleDesc>();
+	ipd = make_unique<OdbcHandleDesc>();
+	ard = make_unique<OdbcHandleDesc>();
+	ird = make_unique<OdbcHandleDesc>();
 }
 
 OdbcHandleStmt::~OdbcHandleStmt() {

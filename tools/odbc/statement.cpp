@@ -81,16 +81,16 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 				*string_length_ptr = 4;
 			}
 			if (attribute == SQL_ATTR_APP_PARAM_DESC) {
-				*((HSTMT *)value_ptr) = (SQLHDESC)stmt->apd;
+				*((HSTMT *)value_ptr) = stmt->apd.get();
 			}
 			if (attribute == SQL_ATTR_IMP_PARAM_DESC) {
-				*((HSTMT *)value_ptr) = (SQLHDESC)stmt->ipd;
+				*((HSTMT *)value_ptr) = stmt->ipd.get();
 			}
 			if (attribute == SQL_ATTR_APP_ROW_DESC) {
-				*((HSTMT *)value_ptr) = (SQLHDESC)stmt->ard;
+				*((HSTMT *)value_ptr) = stmt->ard.get();
 			}
 			if (attribute == SQL_ATTR_IMP_ROW_DESC) {
-				*((HSTMT *)value_ptr) = (SQLHDESC)stmt->ird;
+				*((HSTMT *)value_ptr) = stmt->ird.get();
 			}
 			return SQL_SUCCESS;
 		}
