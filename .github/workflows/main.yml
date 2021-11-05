@@ -142,17 +142,7 @@ jobs:
       run: |
         cd psqlodbc-main
         export PSQLODBC_TEST_DSN=DuckDB
-        build\\release\\Release\\psql_odbc_test.exe alter-test
-        build\\release\\Release\\psql_odbc_test.exe boolsaschar-test
-        build\\release\\Release\\psql_odbc_test.exe colattribute-test
-        build\\release\\Release\\psql_odbc_test.exe connect-test
-        build\\release\\Release\\psql_odbc_test.exe declare-fetch-block-test
-        build\\release\\Release\\psql_odbc_test.exe dataatexecution-test
-        build\\release\\Release\\psql_odbc_test.exe numeric-test
-        build\\release\\Release\\psql_odbc_test.exe quotes-test
-        build\\release\\Release\\psql_odbc_test.exe result-conversions-test
-        build\\release\\Release\\psql_odbc_test.exe row-wise-fetching-test
-        build\\release\\Release\\psql_odbc_test.exe select-test
+        build/release/Release/psql_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
 
     - name: Cat ODBC Trace
       if: always()
