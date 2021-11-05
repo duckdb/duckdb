@@ -264,24 +264,32 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	for (idx_t i = 0; i < count; i++) {
 		auto index = indices[i];
-		// store current_pointer in next_pointer location (NOTE: this will be nullptr if
-		// there is none)
-		auto next_entry_ptr = key_locations[i] + pointer_offset;
-		auto next_hash = Load<hash_t>((data_ptr_t)(next_entry_ptr));
-		// In case of a conflict
+		// The hash_value will be replaced by a pointer to the next_entry in the hash_map or nullptr
+		auto entry_hash_ptr = key_locations[i] + pointer_offset;
+		// In case this is still a primary key and there is a conflict
 		if (has_primary_key && pointers[index] != 0) {
 			// check whether the hash_values are the same
-			auto found = hash_values.find(next_hash);
-			if (found != hash_values.end()) {
+
+			auto has_same_keys = CompareKeysSwitch(key_locations[i], pointers[index]);
+			if (has_same_keys) {
+				// this is not a primary key anymore
 				has_primary_key = false;
 			}
 		}
-		hash_values.insert(next_hash);
-		Store<data_ptr_t>(pointers[index], next_entry_ptr);
+		// replace the hash_value in the current entry and point to a position in the hash_map
+		Store<data_ptr_t>(pointers[index], entry_hash_ptr);
 
-		// set current_pointer to current tuple
+		// set hash_map pointer to current tuple entry
 		pointers[index] = key_locations[i];
 	}
+}
+
+bool JoinHashTable::CompareKeysSwitch(dataptr_t left_entry, dataptr_t right_entry) {
+	for (idx_t i = 0; i != condition_types.size(); i++) {
+		auto left_key = Load<hash_t>((data_ptr_t)(left_entry));
+		auto left_key = Load<hash_t>((data_ptr_t)(right_entry));
+	}
+	return true;
 }
 
 void JoinHashTable::Finalize() {
@@ -321,7 +329,10 @@ void JoinHashTable::Finalize() {
 		}
 		pinned_handles.push_back(move(handle));
 	}
-
+	// In case of primary key do a semi-join instead
+	if (has_primary_key) {
+		join_type = JoinType::SEMI;
+	}
 	finalized = true;
 }
 
