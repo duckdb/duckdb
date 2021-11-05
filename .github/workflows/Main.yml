@@ -1,556 +1,556 @@
-name: Main
-on: [push, pull_request]
-
-defaults:
-  run:
-    shell: bash
-
-env:
-  GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
-  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
-  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
-  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
-
-jobs:
- linux-debug:
-    name: Linux Debug
-    runs-on: ubuntu-20.04
-
-    env:
-      CC: ccache gcc-10
-      CXX: ccache g++-10
-      TREAT_WARNINGS_AS_ERRORS: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
-
-    - name: Build
-      run:  make debug
-
-    - name: Test
-      run: make unittestci
-
- format-check:
-    name: Format Check
-    runs-on: ubuntu-20.04
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
-
-    - name: Format Check
-      run: |
-        clang-format --version
-        clang-format --dump-config
-        make format-check-silent
-
-
- tidy-check:
-    name: Tidy Check
-    runs-on: ubuntu-20.04
-
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      TIDY_THREADS: 4
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
-
-    - name: Tidy Check
-      run: make tidy-check
-
- force-storage:
-    name: Force Storage
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_ICU: 1
-      BUILD_PARQUET: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Build
-      run: make reldebug
-
-    - name: Test
-      run: build/reldebug/test/unittest "*" --force-storage
-
-
- linux-arrow:
-      name: Linux Debug (Arrow Tests)
-      runs-on: ubuntu-20.04
-      needs: linux-debug
-      env:
-        CC: gcc-10
-        CXX: g++-10
-        TREAT_WARNINGS_AS_ERRORS: 1
-        GEN: ninja
-
-      steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Build
-        run: BUILD_ARROW_ABI_TEST=1 make debug
-
-      - name: Test
-        run: make unittestarrow
-
- threadsan:
-    name: Thread Sanitizer
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      BUILD_ICU: 1
-      BUILD_TPCH: 1
-      BUILD_TPCDS: 1
-      BUILD_FTS: 1
-      BUILD_VISUALIZER: 1
-      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Build
-      run: THREADSAN=1 make reldebug
-
-    - name: Test
-      run: |
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]"
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]"
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
-          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
-
-
- valgrind:
-    name: Valgrind
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      DISABLE_SANITIZER: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
-
-    - name: Build
-      run: make debug
-
-    - name: Test
-      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
-
-
- codecov:
-    name: CodeCov
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      GEN: ninja
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov
-
-      - name: Set up Python 3.9
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.9'
-
-      - name: Before Install
-        run: |
-          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow==5.0" pytest
-          sudo apt-get install g++
-
-      - name: Coverage Reset
-        run: |
-          lcov --config-file .github/workflows/lcovrc --zerocounters --directory .
-          lcov --config-file .github/workflows/lcovrc --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
-
-      - name: Run Tests
-        run: |
-          mkdir -p build/coverage
-          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
-          (cd tools/pythonpkg/tests/fast && python3 -m pytest)
-          (cd tools/pythonpkg/tests/coverage && python3 -m pytest)
-          build/coverage/test/unittest
-          build/coverage/test/unittest "[intraquery]"
-          build/coverage/test/unittest "[interquery]"
-          python3 scripts/try_timeout.py --timeout=1200 --retry=3 build/coverage/test/unittest "[coverage]"
-          build/coverage/test/unittest "[detailed_profiler]"
-          build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
-          build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
-          python tools/shell/shell-test.py build/coverage/duckdb
-
-
-      - name: Generate Coverage
-        run: |
-          lcov --config-file .github/workflows/lcovrc --directory . --base-directory . --no-external --capture --output-file coverage.info
-          lcov --config-file .github/workflows/lcovrc --remove coverage.info $(< .github/workflows/lcov_exclude) -o lcov.info
-
-      - name: CodeCov Upload
-        uses: codecov/codecov-action@v2
-        with:
-          files: lcov.info
-          fail_ci_if_error: true
-
- regression-test-tpch:
-  name: Regression Test (TPC-H)
-  runs-on: ubuntu-20.04
-  needs: linux-debug
-  env:
-    CC: gcc-10
-    CXX: g++-10
-    GEN: ninja
-
-  steps:
-  - uses: actions/checkout@v2
-    with:
-      fetch-depth: 0
-
-  - uses: actions/setup-python@v2
-    with:
-      python-version: '3.7'
-
-  - name: Install
-    run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
-
-  - name: Build
-    run: |
-      git clone https://github.com/duckdb/duckdb.git
-      cd duckdb/tools/pythonpkg
-      python setup.py install
-      cd ../../../tools/pythonpkg
-      python setup.py --package_name=duckcurrent install
-
-  - name: Regression Test TPC-H SF1
-    run: python scripts/regression_test.py --benchmark=tpch
-
- regression-test-tpcds:
-  name: Regression Test (TPC-DS)
-  runs-on: ubuntu-20.04
-  needs: linux-debug
-  env:
-    CC: gcc-10
-    CXX: g++-10
-    GEN: ninja
-
-  steps:
-  - uses: actions/checkout@v2
-    with:
-      fetch-depth: 0
-
-  - uses: actions/setup-python@v2
-    with:
-      python-version: '3.7'
-
-  - name: Install
-    run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
-
-  - name: Build
-    run: |
-      git clone https://github.com/duckdb/duckdb.git
-      cd duckdb/tools/pythonpkg
-      python setup.py install
-      cd ../../../tools/pythonpkg
-      python setup.py --package_name=duckcurrent install
-
-  - name: Regression Test TPC-DS SF1
-    run: python scripts/regression_test.py --benchmark=tpcds
-
- regression-test-h20ai:
-  name: Regression Test (H2OAI)
-  runs-on: ubuntu-20.04
-  needs: linux-debug
-  env:
-    CC: gcc-10
-    CXX: g++-10
-    GEN: ninja
-
-  steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
-
-    - name: Build
-      run: |
-        git clone https://github.com/duckdb/duckdb.git
-        cd duckdb/tools/pythonpkg
-        python setup.py install
-        cd ../../../tools/pythonpkg
-        python setup.py --package_name=duckcurrent install
-
-    - name: Regression Test H2OAI
-      run: python scripts/regression_test.py --benchmark=h2oai
-
- docs:
-    name: Website Docs
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Clone Website
-      run: git clone https://github.com/duckdb/duckdb-web
-
-    - name: Set up Python 3.9
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.9'
-
-    - name: Package
-      run: |
-        cd duckdb-web
-        python3 scripts/generate_docs.py ..
-
-
- sqllogic:
-    name: Sqllogic tests
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Test
-      run: make sqlite
-
- expanded:
-    name: Expanded
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      TREAT_WARNINGS_AS_ERRORS: 1
-      DISABLE_UNITY: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-    - name: Build
-      run: make debug
-
- sqlancer:
-    name: SQLancer
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      BUILD_JDBC: 1
-      FORCE_QUERY_LOG: sqlancer_log.tmp
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/hannesmuehleisen/sqlancer
-        cd sqlancer
-        git checkout persistent
-        mvn package -q -DskipTests
-
-    - name: Build
-      run: make reldebug
-
-    - name: Test
-      run: |
-        cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        python3 scripts/run_sqlancer.py
-
-
-
- sqlancer_persistent:
-    name: SQLancer (Persistent)
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      BUILD_JDBC: 1
-      FORCE_QUERY_LOG: sqlancer_log.tmp
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/hannesmuehleisen/sqlancer
-        cd sqlancer
-        git checkout persistent
-        mvn package -q -DskipTests
-
-    - name: Build
-      run: make reldebug
-
-    - name: Test
-      run: |
-        cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
-        python3 scripts/run_sqlancer.py --persistent
-
-
-
- jdbc:
-    name: JDBC Compliance
-    runs-on: ubuntu-18.04
-    needs: linux-debug
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      BUILD_JDBC: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - name: Install
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-        git clone https://github.com/cwida/jdbccts.git
-
-    - name: Build
-      run: make release
-
-    - name: Test
-      run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
-
- odbc:
-    name: ODBC
-    runs-on: ubuntu-20.04
-    needs: linux-debug
-    env:
-      BUILD_ODBC: 1
-      GEN: ninja
-
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Dependencies
-      run: |
-        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3 python3-pyodbc python3-pip julia
-        pip3 install pyodbc
-
-    - name: Install nanodbc
-      run: |
-        wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
-        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
-
-    - name: Install psqlodbc
-      run: |
-        git clone https://github.com/Mytherin/psqlodbc.git
-        (cd psqlodbc && make debug)
-
-    - name: Build
-      run: DISABLE_SANITIZER=1 make debug
-
-    - name: Test nanodbc
-      run: ./tools/odbc/test/run_nanodbc_tests.sh
-
-    - name: Test psqlodbc
-      run: ./tools/odbc/test/run_psqlodbc_tests.sh
-
-    - name: Test isql
-      run: ./tools/odbc/test/run_isql_tests.sh
-
-    - name: Test R ODBC
-      run: R -f tools/odbc/test/rodbc.R
-
-    - name: Test Python ODBC
-      run: ./tools/odbc/test/run_pyodbc_tests.sh
-
-    - name: Test Julia ODBC
-      run: |
-        export ASAN_OPTIONS=verify_asan_link_order=0
-        julia tools/odbc/test/julia-test.jl
-
+#name: Main
+#on: [push, pull_request]
+#
+#defaults:
+#  run:
+#    shell: bash
+#
+#env:
+#  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+#  TWINE_PASSWORD: ${{ secrets.TWINE_PASSWORD }}
+#  AWS_ACCESS_KEY_ID: AKIAVBLKPL2ZW2T7TYFQ
+#  AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
+#  NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
+#
+#jobs:
+# linux-debug:
+#    name: Linux Debug
+#    runs-on: ubuntu-20.04
+#
+#    env:
+#      CC: ccache gcc-10
+#      CXX: ccache g++-10
+#      TREAT_WARNINGS_AS_ERRORS: 1
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build ccache
+#
+#    - name: Build
+#      run:  make debug
+#
+#    - name: Test
+#      run: make unittestci
+#
+# format-check:
+#    name: Format Check
+#    runs-on: ubuntu-20.04
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format && sudo pip3 install cmake-format
+#
+#    - name: Format Check
+#      run: |
+#        clang-format --version
+#        clang-format --dump-config
+#        make format-check-silent
+#
+#
+# tidy-check:
+#    name: Tidy Check
+#    runs-on: ubuntu-20.04
+#
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#      TIDY_THREADS: 4
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-tidy && sudo pip3 install pybind11[global]
+#
+#    - name: Tidy Check
+#      run: make tidy-check
+#
+# force-storage:
+#    name: Force Storage
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#      BUILD_ICU: 1
+#      BUILD_PARQUET: 1
+#      BUILD_TPCH: 1
+#      BUILD_TPCDS: 1
+#      BUILD_FTS: 1
+#      BUILD_VISUALIZER: 1
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#
+#    - name: Build
+#      run: make reldebug
+#
+#    - name: Test
+#      run: build/reldebug/test/unittest "*" --force-storage
+#
+#
+# linux-arrow:
+#      name: Linux Debug (Arrow Tests)
+#      runs-on: ubuntu-20.04
+#      needs: linux-debug
+#      env:
+#        CC: gcc-10
+#        CXX: g++-10
+#        TREAT_WARNINGS_AS_ERRORS: 1
+#        GEN: ninja
+#
+#      steps:
+#      - uses: actions/checkout@v2
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Install
+#        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#
+#      - name: Build
+#        run: BUILD_ARROW_ABI_TEST=1 make debug
+#
+#      - name: Test
+#        run: make unittestarrow
+#
+# threadsan:
+#    name: Thread Sanitizer
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      GEN: ninja
+#      BUILD_ICU: 1
+#      BUILD_TPCH: 1
+#      BUILD_TPCDS: 1
+#      BUILD_FTS: 1
+#      BUILD_VISUALIZER: 1
+#      TSAN_OPTIONS: suppressions=.sanitizer-thread-suppressions.txt
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#
+#    - name: Build
+#      run: THREADSAN=1 make reldebug
+#
+#    - name: Test
+#      run: |
+#          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest
+#          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]"
+#          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]"
+#          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]"
+#          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow
+#
+#
+# valgrind:
+#    name: Valgrind
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      DISABLE_SANITIZER: 1
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+#
+#    - name: Build
+#      run: make debug
+#
+#    - name: Test
+#      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+#
+#
+# codecov:
+#    name: CodeCov
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    env:
+#      GEN: ninja
+#    steps:
+#      - uses: actions/checkout@v2
+#        with:
+#          fetch-depth: 0
+#
+#      - name: Install
+#        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build lcov
+#
+#      - name: Set up Python 3.9
+#        uses: actions/setup-python@v2
+#        with:
+#          python-version: '3.9'
+#
+#      - name: Before Install
+#        run: |
+#          pip install --prefer-binary "pandas>=1.2.4" "requests>=2.26" "pyarrow==5.0" pytest
+#          sudo apt-get install g++
+#
+#      - name: Coverage Reset
+#        run: |
+#          lcov --config-file .github/workflows/lcovrc --zerocounters --directory .
+#          lcov --config-file .github/workflows/lcovrc --capture --initial --directory . --base-directory . --no-external --output-file coverage.info
+#
+#      - name: Run Tests
+#        run: |
+#          mkdir -p build/coverage
+#          (cd build/coverage && cmake -E env CXXFLAGS="--coverage" cmake -DBUILD_PYTHON=1 -DBUILD_PARQUET_EXTENSION=1 -DENABLE_SANITIZER=0 -DCMAKE_BUILD_TYPE=Debug ../.. && make)
+#          (cd tools/pythonpkg/tests/fast && python3 -m pytest)
+#          (cd tools/pythonpkg/tests/coverage && python3 -m pytest)
+#          build/coverage/test/unittest
+#          build/coverage/test/unittest "[intraquery]"
+#          build/coverage/test/unittest "[interquery]"
+#          python3 scripts/try_timeout.py --timeout=1200 --retry=3 build/coverage/test/unittest "[coverage]"
+#          build/coverage/test/unittest "[detailed_profiler]"
+#          build/coverage/test/unittest test/sql/tpch/tpch_sf01.test_slow
+#          build/coverage/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
+#          python tools/shell/shell-test.py build/coverage/duckdb
+#
+#
+#      - name: Generate Coverage
+#        run: |
+#          lcov --config-file .github/workflows/lcovrc --directory . --base-directory . --no-external --capture --output-file coverage.info
+#          lcov --config-file .github/workflows/lcovrc --remove coverage.info $(< .github/workflows/lcov_exclude) -o lcov.info
+#
+#      - name: CodeCov Upload
+#        uses: codecov/codecov-action@v2
+#        with:
+#          files: lcov.info
+#          fail_ci_if_error: true
+#
+# regression-test-tpch:
+#  name: Regression Test (TPC-H)
+#  runs-on: ubuntu-20.04
+#  needs: linux-debug
+#  env:
+#    CC: gcc-10
+#    CXX: g++-10
+#    GEN: ninja
+#
+#  steps:
+#  - uses: actions/checkout@v2
+#    with:
+#      fetch-depth: 0
+#
+#  - uses: actions/setup-python@v2
+#    with:
+#      python-version: '3.7'
+#
+#  - name: Install
+#    run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
+#
+#  - name: Build
+#    run: |
+#      git clone https://github.com/duckdb/duckdb.git
+#      cd duckdb/tools/pythonpkg
+#      python setup.py install
+#      cd ../../../tools/pythonpkg
+#      python setup.py --package_name=duckcurrent install
+#
+#  - name: Regression Test TPC-H SF1
+#    run: python scripts/regression_test.py --benchmark=tpch
+#
+# regression-test-tpcds:
+#  name: Regression Test (TPC-DS)
+#  runs-on: ubuntu-20.04
+#  needs: linux-debug
+#  env:
+#    CC: gcc-10
+#    CXX: g++-10
+#    GEN: ninja
+#
+#  steps:
+#  - uses: actions/checkout@v2
+#    with:
+#      fetch-depth: 0
+#
+#  - uses: actions/setup-python@v2
+#    with:
+#      python-version: '3.7'
+#
+#  - name: Install
+#    run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
+#
+#  - name: Build
+#    run: |
+#      git clone https://github.com/duckdb/duckdb.git
+#      cd duckdb/tools/pythonpkg
+#      python setup.py install
+#      cd ../../../tools/pythonpkg
+#      python setup.py --package_name=duckcurrent install
+#
+#  - name: Regression Test TPC-DS SF1
+#    run: python scripts/regression_test.py --benchmark=tpcds
+#
+# regression-test-h20ai:
+#  name: Regression Test (H2OAI)
+#  runs-on: ubuntu-20.04
+#  needs: linux-debug
+#  env:
+#    CC: gcc-10
+#    CXX: g++-10
+#    GEN: ninja
+#
+#  steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests && pip install numpy
+#
+#    - name: Build
+#      run: |
+#        git clone https://github.com/duckdb/duckdb.git
+#        cd duckdb/tools/pythonpkg
+#        python setup.py install
+#        cd ../../../tools/pythonpkg
+#        python setup.py --package_name=duckcurrent install
+#
+#    - name: Regression Test H2OAI
+#      run: python scripts/regression_test.py --benchmark=h2oai
+#
+# docs:
+#    name: Website Docs
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Clone Website
+#      run: git clone https://github.com/duckdb/duckdb-web
+#
+#    - name: Set up Python 3.9
+#      uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.9'
+#
+#    - name: Package
+#      run: |
+#        cd duckdb-web
+#        python3 scripts/generate_docs.py ..
+#
+#
+# sqllogic:
+#    name: Sqllogic tests
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Test
+#      run: make sqlite
+#
+# expanded:
+#    name: Expanded
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      TREAT_WARNINGS_AS_ERRORS: 1
+#      DISABLE_UNITY: 1
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#
+#    - name: Build
+#      run: make debug
+#
+# sqlancer:
+#    name: SQLancer
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    env:
+#      BUILD_JDBC: 1
+#      FORCE_QUERY_LOG: sqlancer_log.tmp
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: |
+#        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#        git clone https://github.com/hannesmuehleisen/sqlancer
+#        cd sqlancer
+#        git checkout persistent
+#        mvn package -q -DskipTests
+#
+#    - name: Build
+#      run: make reldebug
+#
+#    - name: Test
+#      run: |
+#        cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
+#        python3 scripts/run_sqlancer.py
+#
+#
+#
+# sqlancer_persistent:
+#    name: SQLancer (Persistent)
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    env:
+#      BUILD_JDBC: 1
+#      FORCE_QUERY_LOG: sqlancer_log.tmp
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: |
+#        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#        git clone https://github.com/hannesmuehleisen/sqlancer
+#        cd sqlancer
+#        git checkout persistent
+#        mvn package -q -DskipTests
+#
+#    - name: Build
+#      run: make reldebug
+#
+#    - name: Test
+#      run: |
+#        cp build/reldebug/tools/jdbc/duckdb_jdbc.jar sqlancer/target/lib/duckdb_jdbc-*.jar
+#        python3 scripts/run_sqlancer.py --persistent
+#
+#
+#
+# jdbc:
+#    name: JDBC Compliance
+#    runs-on: ubuntu-18.04
+#    needs: linux-debug
+#    env:
+#      CC: gcc-10
+#      CXX: g++-10
+#      BUILD_JDBC: 1
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - name: Install
+#      run: |
+#        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+#        git clone https://github.com/cwida/jdbccts.git
+#
+#    - name: Build
+#      run: make release
+#
+#    - name: Test
+#      run: (cd jdbccts && make DUCKDB_JAR=../build/release/tools/jdbc/duckdb_jdbc.jar test)
+#
+# odbc:
+#    name: ODBC
+#    runs-on: ubuntu-20.04
+#    needs: linux-debug
+#    env:
+#      BUILD_ODBC: 1
+#      GEN: ninja
+#
+#    steps:
+#    - uses: actions/checkout@v2
+#      with:
+#        fetch-depth: 0
+#
+#    - uses: actions/setup-python@v2
+#      with:
+#        python-version: '3.7'
+#
+#    - name: Dependencies
+#      run: |
+#        sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build unixodbc-dev python3 python3-pyodbc python3-pip julia
+#        pip3 install pyodbc
+#
+#    - name: Install nanodbc
+#      run: |
+#        wget https://github.com/nanodbc/nanodbc/archive/refs/tags/v2.13.0.tar.gz -O nanodbc.tgz
+#        (mkdir nanodbc && tar xvf nanodbc.tgz -C nanodbc --strip-components=1 && cd nanodbc && sed -i -e "s/set(test_list/set(test_list odbc/" test/CMakeLists.txt && mkdir build && cd build && cmake -DNANODBC_DISABLE_TESTS=OFF .. && cmake --build .)
+#
+#    - name: Install psqlodbc
+#      run: |
+#        git clone https://github.com/Mytherin/psqlodbc.git
+#        (cd psqlodbc && make debug)
+#
+#    - name: Build
+#      run: DISABLE_SANITIZER=1 make debug
+#
+#    - name: Test nanodbc
+#      run: ./tools/odbc/test/run_nanodbc_tests.sh
+#
+#    - name: Test psqlodbc
+#      run: ./tools/odbc/test/run_psqlodbc_tests.sh
+#
+#    - name: Test isql
+#      run: ./tools/odbc/test/run_isql_tests.sh
+#
+#    - name: Test R ODBC
+#      run: R -f tools/odbc/test/rodbc.R
+#
+#    - name: Test Python ODBC
+#      run: ./tools/odbc/test/run_pyodbc_tests.sh
+#
+#    - name: Test Julia ODBC
+#      run: |
+#        export ASAN_OPTIONS=verify_asan_link_order=0
+#        julia tools/odbc/test/julia-test.jl
+#
