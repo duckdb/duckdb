@@ -60,19 +60,24 @@ class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
 		TableFunctionSet set("parquet_scan");
-		set.AddFunction(TableFunction({LogicalType::VARCHAR}, ParquetScanImplementation, ParquetScanBind,
-		                              ParquetScanInit, /* statistics */ ParquetScanStats, /* cleanup */ nullptr,
-		                              /* dependency */ nullptr, ParquetCardinality,
-		                              /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr,
-		                              ParquetScanMaxThreads, ParquetInitParallelState, ParquetScanFuncParallel,
-		                              ParquetScanParallelInit, ParquetParallelStateNext, true, true, ParquetProgress));
-		set.AddFunction(TableFunction({LogicalType::LIST(LogicalType::VARCHAR)}, ParquetScanImplementation,
-		                              ParquetScanBindList, ParquetScanInit, /* statistics */ ParquetScanStats,
-		                              /* cleanup */ nullptr,
-		                              /* dependency */ nullptr, ParquetCardinality,
-		                              /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr,
-		                              ParquetScanMaxThreads, ParquetInitParallelState, ParquetScanFuncParallel,
-		                              ParquetScanParallelInit, ParquetParallelStateNext, true, true, ParquetProgress));
+		auto table_function =
+		    TableFunction({LogicalType::VARCHAR}, ParquetScanImplementation, ParquetScanBind, ParquetScanInit,
+		                  /* statistics */ ParquetScanStats, /* cleanup */ nullptr,
+		                  /* dependency */ nullptr, ParquetCardinality,
+		                  /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr, ParquetScanMaxThreads,
+		                  ParquetInitParallelState, ParquetScanFuncParallel, ParquetScanParallelInit,
+		                  ParquetParallelStateNext, true, true, ParquetProgress);
+		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
+		set.AddFunction(table_function);
+		table_function = TableFunction({LogicalType::LIST(LogicalType::VARCHAR)}, ParquetScanImplementation,
+		                               ParquetScanBindList, ParquetScanInit, /* statistics */ ParquetScanStats,
+		                               /* cleanup */ nullptr,
+		                               /* dependency */ nullptr, ParquetCardinality,
+		                               /* pushdown_complex_filter */ nullptr, /* to_string */ nullptr,
+		                               ParquetScanMaxThreads, ParquetInitParallelState, ParquetScanFuncParallel,
+		                               ParquetScanParallelInit, ParquetParallelStateNext, true, true, ParquetProgress);
+		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
+		set.AddFunction(table_function);
 		return set;
 	}
 
@@ -95,6 +100,7 @@ public:
 		if (result->files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
+
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types);
 		return move(result);
 	}
@@ -161,11 +167,12 @@ public:
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context, vector<string> files,
-	                                                        vector<LogicalType> &return_types, vector<string> &names) {
+	                                                        vector<LogicalType> &return_types, vector<string> &names,
+	                                                        bool binary_as_string) {
 		auto result = make_unique<ParquetReadBindData>();
 		result->files = move(files);
 
-		result->initial_reader = make_shared<ParquetReader>(context, result->files[0]);
+		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], binary_as_string);
 		return_types = result->initial_reader->return_types;
 
 		names = result->initial_reader->names;
@@ -186,10 +193,15 @@ public:
 	                                                vector<string> &input_table_names,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto file_name = inputs[0].GetValue<string>();
-
+		bool binary_as_string = false;
+		for (auto &kv : named_parameters) {
+			if (kv.first == "binary_as_string") {
+				binary_as_string = kv.second.value_.boolean;
+			}
+		}
 		FileSystem &fs = FileSystem::GetFileSystem(context);
 		auto files = ParquetGlob(fs, file_name);
-		return ParquetScanBindInternal(context, move(files), return_types, names);
+		return ParquetScanBindInternal(context, move(files), return_types, names, binary_as_string);
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBindList(ClientContext &context, vector<Value> &inputs,
@@ -206,7 +218,13 @@ public:
 		if (files.empty()) {
 			throw IOException("Parquet reader needs at least one file to read");
 		}
-		return ParquetScanBindInternal(context, move(files), return_types, names);
+		bool binary_as_string = false;
+		for (auto &kv : named_parameters) {
+			if (kv.first == "binary_as_string") {
+				binary_as_string = kv.second.value_.boolean;
+			}
+		}
+		return ParquetScanBindInternal(context, move(files), return_types, names, binary_as_string);
 	}
 
 	static unique_ptr<FunctionOperatorData> ParquetScanInit(ClientContext &context, const FunctionData *bind_data_p,

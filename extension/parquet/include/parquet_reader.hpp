@@ -63,9 +63,9 @@ public:
 	}
 
 	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
-	              const string &initial_filename = string());
-	ParquetReader(ClientContext &context, string file_name)
-	    : ParquetReader(context, move(file_name), vector<LogicalType>()) {
+	              const string &initial_filename = string(), bool binary_as_string = false);
+	ParquetReader(ClientContext &context, string file_name, bool binary_as_string = false)
+	    : ParquetReader(context, move(file_name), vector<LogicalType>(), string(), binary_as_string) {
 	}
 	~ParquetReader();
 
@@ -90,7 +90,8 @@ public:
 	                                                 const duckdb_parquet::format::FileMetaData *file_meta_data);
 
 private:
-	void InitializeSchema(const vector<LogicalType> &expected_types_p, const string &initial_filename_p);
+	void InitializeSchema(const vector<LogicalType> &expected_types_p, const string &initial_filename_p,
+	                      bool binary_as_string = false);
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
 
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);

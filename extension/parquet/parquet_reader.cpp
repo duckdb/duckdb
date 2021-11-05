@@ -86,7 +86,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	return make_shared<ParquetFileMetadataCache>(move(metadata), current_time);
 }
 
-static LogicalType DeriveLogicalType(const SchemaElement &s_ele) {
+static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
 	// inner node
 	D_ASSERT(s_ele.__isset.type && s_ele.num_children == 0);
 	switch (s_ele.type) {
@@ -147,6 +147,9 @@ static LogicalType DeriveLogicalType(const SchemaElement &s_ele) {
 				return LogicalType::BLOB;
 			}
 		}
+		if (binary_as_string && s_ele.converted_type == ConvertedType::UTF8) {
+			return LogicalType::VARCHAR;
+		}
 		return LogicalType::BLOB;
 	default:
 		return LogicalType::INVALID;
@@ -155,7 +158,8 @@ static LogicalType DeriveLogicalType(const SchemaElement &s_ele) {
 
 static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, const FileMetaData *file_meta_data,
                                                       idx_t depth, idx_t max_define, idx_t max_repeat,
-                                                      idx_t &next_schema_idx, idx_t &next_file_idx) {
+                                                      idx_t &next_schema_idx, idx_t &next_file_idx,
+                                                      bool binary_as_string = false) {
 	D_ASSERT(file_meta_data);
 	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
 	auto &s_ele = file_meta_data->schema[next_schema_idx];
@@ -184,7 +188,7 @@ static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, con
 			auto &child_ele = file_meta_data->schema[next_schema_idx];
 
 			auto child_reader = CreateReaderRecursive(reader, file_meta_data, depth + 1, max_define, max_repeat,
-			                                          next_schema_idx, next_file_idx);
+			                                          next_schema_idx, next_file_idx, binary_as_string);
 			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
 			child_readers.push_back(move(child_reader));
 
@@ -211,23 +215,25 @@ static unique_ptr<ColumnReader> CreateReaderRecursive(ParquetReader &reader, con
 		return result;
 	} else { // leaf node
 		// TODO check return value of derive type or should we only do this on read()
-		return ColumnReader::CreateReader(reader, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
-		                                  max_repeat);
+		return ColumnReader::CreateReader(reader, DeriveLogicalType(s_ele, binary_as_string), s_ele, next_file_idx++,
+		                                  max_define, max_repeat);
 	}
 }
 
 // TODO we don't need readers for columns we are not going to read ay
-static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const FileMetaData *file_meta_data) {
+static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const FileMetaData *file_meta_data,
+                                             bool binary_as_string = false) {
 	idx_t next_schema_idx = 0;
 	idx_t next_file_idx = 0;
 
-	auto ret = CreateReaderRecursive(reader, file_meta_data, 0, 0, 0, next_schema_idx, next_file_idx);
+	auto ret = CreateReaderRecursive(reader, file_meta_data, 0, 0, 0, next_schema_idx, next_file_idx, binary_as_string);
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 	return ret;
 }
 
-void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p, const string &initial_filename_p) {
+void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p, const string &initial_filename_p,
+                                     bool binary_as_string) {
 	auto file_meta_data = GetFileMetadata();
 
 	if (file_meta_data->__isset.encryption_algorithm) {
@@ -239,7 +245,7 @@ void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p
 	}
 
 	bool has_expected_types = !expected_types_p.empty();
-	auto root_reader = CreateReader(*this, file_meta_data);
+	auto root_reader = CreateReader(*this, file_meta_data, binary_as_string);
 
 	auto &root_type = root_reader->Type();
 	auto &child_types = StructType::GetChildTypes(root_type);
@@ -280,7 +286,7 @@ ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const vector<LogicalType> &expected_types_p,
-                             const string &initial_filename_p)
+                             const string &initial_filename_p, bool binary_as_string)
     : allocator(Allocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)) {
 	auto &fs = FileSystem::GetFileSystem(context_p);
 	file_name = move(file_name_p);
@@ -302,7 +308,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 		}
 	}
 
-	InitializeSchema(expected_types_p, initial_filename_p);
+	InitializeSchema(expected_types_p, initial_filename_p, binary_as_string);
 }
 
 ParquetReader::~ParquetReader() {
