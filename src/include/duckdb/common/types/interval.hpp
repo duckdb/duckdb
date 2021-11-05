@@ -54,13 +54,19 @@ public:
 	//! Convert a string to an interval object
 	static bool FromCString(const char *str, idx_t len, interval_t &result, string *error_message, bool strict);
 	//! Convert an interval object to a string
-	static string ToString(interval_t date);
+	static string ToString(const interval_t &val);
+
+	//! Convert milliseconds to a normalised interval
+	static interval_t FromMicro(int64_t micros);
 
 	//! Get Interval in milliseconds
-	static int64_t GetMilli(interval_t val);
+	static int64_t GetMilli(const interval_t &val);
+
+	//! Get Interval in microseconds
+	static int64_t GetMicro(const interval_t &val);
 
 	//! Get Interval in Nanoseconds
-	static int64_t GetNanoseconds(interval_t val);
+	static int64_t GetNanoseconds(const interval_t &val);
 
 	//! Returns the age between two timestamps (including 30 day months)
 	static interval_t GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2);

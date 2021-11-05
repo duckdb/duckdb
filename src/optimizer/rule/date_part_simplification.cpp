@@ -20,7 +20,7 @@ DatePartSimplificationRule::DatePartSimplificationRule(ExpressionRewriter &rewri
 }
 
 unique_ptr<Expression> DatePartSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                         bool &changes_made) {
+                                                         bool &changes_made, bool is_root) {
 	auto &date_part = (BoundFunctionExpression &)*bindings[0];
 	auto &constant_expr = (BoundConstantExpression &)*bindings[1];
 	auto &constant = constant_expr.value;

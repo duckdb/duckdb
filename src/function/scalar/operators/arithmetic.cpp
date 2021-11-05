@@ -12,6 +12,7 @@
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/function/scalar/nested_functions.hpp"
 
 #include <limits>
 
@@ -328,6 +329,8 @@ void AddFun::RegisterFunction(BuiltinFunctions &set) {
 
 	functions.AddFunction(GetFunction(LogicalType::TIMESTAMP, LogicalType::INTERVAL));
 	functions.AddFunction(GetFunction(LogicalType::INTERVAL, LogicalType::TIMESTAMP));
+	// we can add lists together
+	functions.AddFunction(ListConcatFun::GetFunction());
 
 	set.AddFunction(functions);
 }

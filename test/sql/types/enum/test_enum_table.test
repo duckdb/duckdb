@@ -168,10 +168,6 @@ select * from person where current_mood = 'ok'
 ----
 Pedro	ok	ok	Seat
 
-# Comparison between two different enum types (Unimplemented type for cast (car_brand -> mood))
-statement error
-select * from person where current_mood = car
-
 #GROUP BY and ORDER BY on enums, both as keys and in the payload
 statement ok
 INSERT INTO person VALUES ('Diego', 'sad', 'happy','Seat'), ('Tim', 'happy', 'sad','Fiets');
@@ -270,6 +266,3 @@ CREATE TABLE midenum_t2 (
 
 statement ok
 INSERT INTO midenum_t2 VALUES ('0')
-
-statement error
-select * from midenum_t inner join midenum_t2 on (test = test_2)
