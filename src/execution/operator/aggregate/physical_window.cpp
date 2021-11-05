@@ -502,8 +502,8 @@ static void SortCollectionForPartition(WindowOperatorState &state, BoundWindowEx
 
 			// Copy the data for each collection.
 			if (bin_size) {
-				over_partition.Append(over_chunk, sel, bin_size);
-				payload_partition.Append(payload_chunk, sel, bin_size);
+				over_partition.Append(over_chunk, false, &sel, bin_size);
+				payload_partition.Append(payload_chunk, false, &sel, bin_size);
 			}
 		} else {
 			local_sort_state.SinkChunk(over_chunk, payload_chunk);

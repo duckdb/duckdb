@@ -603,14 +603,19 @@ SEXP RApi::DuckDBExecuteArrow(SEXP query_resultsexp, SEXP streamsexp, SEXP vecto
 }
 
 // Turn a DuckDB result set into an RecordBatchReader
-SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp) {
+SEXP RApi::DuckDBRecordBatchR(SEXP query_resultsexp, SEXP approx_batch_sizeexp) {
 	RProtector r;
 	RQueryResult *query_result_holder = (RQueryResult *)R_ExternalPtrAddr(query_resultsexp);
+	int approx_batch_size = NUMERIC_POINTER(approx_batch_sizeexp)[0];
+	if (TYPEOF(approx_batch_sizeexp) != REALSXP || LENGTH(approx_batch_sizeexp) != 1) {
+		Rf_error("vector_per_chunks parameter needs to be single-value numeric");
+	}
 	// somewhat dark magic below
 	SEXP arrow_namespace_call = r.Protect(Rf_lang2(RStrings::get().getNamespace_sym, RStrings::get().arrow_str));
 	SEXP arrow_namespace = r.Protect(RApi::REvalRerror(arrow_namespace_call, R_GlobalEnv));
 
-	ResultArrowArrayStreamWrapper *result_stream = new ResultArrowArrayStreamWrapper(move(query_result_holder->result));
+	ResultArrowArrayStreamWrapper *result_stream =
+	    new ResultArrowArrayStreamWrapper(move(query_result_holder->result), approx_batch_size);
 	auto stream_ptr_sexp =
 	    r.Protect(Rf_ScalarReal(static_cast<double>(reinterpret_cast<uintptr_t>(&result_stream->stream))));
 	auto record_batch_reader = r.Protect(Rf_lang2(RStrings::get().ImportRecordBatchReader_sym, stream_ptr_sexp));
