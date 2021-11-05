@@ -38,7 +38,7 @@ struct RegexpExtractBindData : public FunctionData {
 	RegexpExtractBindData(bool constant_pattern, const string &pattern, const string &group_string_p);
 
 	const bool constant_pattern;
-	const RE2 re;
+	const string constant_string;
 
 	const string group_string;
 	const duckdb_re2::StringPiece rewrite;

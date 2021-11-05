@@ -97,6 +97,11 @@ struct RegexLocalState : public FunctionData {
 		D_ASSERT(info.constant_pattern);
 	}
 
+	explicit RegexLocalState(RegexpExtractBindData &info)
+	    : constant_pattern(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size())) {
+		D_ASSERT(info.constant_pattern);
+	}
+
 	RE2 constant_pattern;
 };
 
@@ -209,11 +214,6 @@ inline static string_t Extract(const string_t &input, Vector &result, const RE2 
 	RE2::Extract(input.GetString(), re, rewrite, &extracted);
 	return StringVector::AddString(result, extracted.c_str(), extracted.size());
 }
-inline static string_t Extract(const string_t &input, Vector &result, string_t &pattern,
-                               const duckdb_re2::StringPiece &rewrite) {
-	RE2 re(CreateStringPiece(pattern));
-	return Extract(input, result, re, rewrite);
-}
 
 static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = (BoundFunctionExpression &)state.expr;
@@ -222,46 +222,36 @@ static void RegexExtractFunction(DataChunk &args, ExpressionState &state, Vector
 	auto &strings = args.data[0];
 	auto &patterns = args.data[1];
 	if (info.constant_pattern) {
+		auto &lstate = (RegexLocalState &)*ExecuteFunctionState::GetFunctionState(state);
 		UnaryExecutor::Execute<string_t, string_t>(strings, result, args.size(), [&](string_t input) {
-			return Extract(input, result, info.re, info.rewrite);
+			return Extract(input, result, lstate.constant_pattern, info.rewrite);
 		});
-		//		if (info.constant_group) {
-		//
-		//		} else {
-		//			BinaryExecutor::Execute<string_t, int32_t, string_t>(
-		//			    strings, groups, result, args.size(), [&](string_t input, int32_t group) {
-		//				    string group_string = "\\" + std::to_string(MinValue(group, 9));
-		//				    auto rewrite = duckdb_re2::StringPiece(group_string);
-		//				    return Extract(input, result, info.re, rewrite);
-		//			    });
-		//		}
 	} else {
 		BinaryExecutor::Execute<string_t, string_t, string_t>(strings, patterns, result, args.size(),
 		                                                      [&](string_t input, string_t pattern) {
 			                                                      RE2 re(CreateStringPiece(pattern));
 			                                                      return Extract(input, result, re, info.rewrite);
 		                                                      });
-		//		if (info.constant_group) {
-		//
-		//		} else {
-		//			TernaryExecutor::Execute<string_t, string_t, int32_t, string_t>(
-		//			    strings, patterns, groups, result, args.size(), [&](string_t input, string_t pattern, int32_t
-		// group) { 				    RE2 re(CreateStringPiece(pattern)); 				    string group_string =
-		// "\\"
-		// + std::to_string(group); 				    duckdb_re2::StringPiece rewrite(group_string); return
-		// Extract(input, result, re, rewrite);
-		//			    });
-		//		}
 	}
 }
 
-RegexpExtractBindData::RegexpExtractBindData(bool constant_pattern, const string &pattern, const string &group_string_p)
-    : constant_pattern(constant_pattern), re(duckdb_re2::StringPiece(pattern)), group_string(group_string_p),
+static unique_ptr<FunctionData> RegexExtractInitLocalState(const BoundFunctionExpression &expr,
+                                                           FunctionData *bind_data) {
+	auto &info = (RegexpExtractBindData &)*bind_data;
+	if (info.constant_pattern) {
+		return make_unique<RegexLocalState>(info);
+	}
+	return nullptr;
+}
+
+RegexpExtractBindData::RegexpExtractBindData(bool constant_pattern, const string &constant_string,
+                                             const string &group_string_p)
+    : constant_pattern(constant_pattern), constant_string(constant_string), group_string(group_string_p),
       rewrite(group_string) {
 }
 
 unique_ptr<FunctionData> RegexpExtractBindData::Copy() {
-	return make_unique<RegexpExtractBindData>(constant_pattern, re.pattern(), group_string);
+	return make_unique<RegexpExtractBindData>(constant_pattern, constant_string, group_string);
 }
 
 static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarFunction &bound_function,
@@ -279,10 +269,6 @@ static unique_ptr<FunctionData> RegexExtractBind(ClientContext &context, ScalarF
 
 	string group_string = "";
 	if (arguments.size() == 3) {
-		bound_function.arguments[2] = LogicalType::INTEGER;
-		//		if (!arguments[2]->return_type.IsIntegral() && arguments[2]->return_type.id() != LogicalTypeId::SQLNULL)
-		//{ 			throw InvalidInputException("Group index field type must be integral!");
-		//		}
 		if (!arguments[2]->IsFoldable()) {
 			throw InvalidInputException("Group index field field must be a constant!");
 		}
@@ -327,9 +313,11 @@ void RegexpFun::RegisterFunction(BuiltinFunctions &set) {
 
 	ScalarFunctionSet regexp_extract("regexp_extract");
 	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                                          RegexExtractFunction, false, RegexExtractBind));
+	                                          RegexExtractFunction, false, RegexExtractBind, nullptr, nullptr,
+	                                          RegexExtractInitLocalState));
 	regexp_extract.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR, LogicalType::INTEGER},
-	                                          LogicalType::VARCHAR, RegexExtractFunction, false, RegexExtractBind));
+	                                          LogicalType::VARCHAR, RegexExtractFunction, false, RegexExtractBind,
+	                                          nullptr, nullptr, RegexExtractInitLocalState));
 
 	set.AddFunction(regexp_full_match);
 	set.AddFunction(regexp_partial_match);
