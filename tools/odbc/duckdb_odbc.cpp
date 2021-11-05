@@ -3,8 +3,8 @@
 #include "parameter_wrapper.hpp"
 
 using duckdb::OdbcHandleDbc;
-using duckdb::OdbcHandleStmt;
 using duckdb::OdbcHandleDesc;
+using duckdb::OdbcHandleStmt;
 
 //! OdbcHandleDbc functions ***************************************************
 OdbcHandleDbc::~OdbcHandleDbc() {
