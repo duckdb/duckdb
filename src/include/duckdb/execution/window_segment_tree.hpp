@@ -33,6 +33,15 @@ private:
 	void AggregateInit();
 	void AggegateFinal(Vector &result, idx_t rid);
 
+	//! Use the window API, if available
+	inline bool UseWindowAPI() const {
+		return mode < WindowAggregationMode::COMBINE;
+	}
+	//! Use the combine API, if available
+	inline bool UseCombineAPI() const {
+		return mode < WindowAggregationMode::SEPARATE;
+	}
+
 	//! The aggregate that the window function is computed over
 	AggregateFunction aggregate;
 	//! The bind info of the aggregate
@@ -63,10 +72,7 @@ private:
 	ChunkCollection *input_ref;
 
 	//! Use the window API, if available
-	bool use_window_api;
-
-	//! Use the combine API, if available
-	bool use_combine_api;
+	WindowAggregationMode mode;
 
 	// TREE_FANOUT needs to cleanly divide STANDARD_VECTOR_SIZE
 	static constexpr idx_t TREE_FANOUT = 64;
