@@ -288,8 +288,60 @@ bool JoinHashTable::CompareKeysSwitch(dataptr_t left_entry, dataptr_t right_entr
 	for (idx_t i = 0; i != condition_types.size(); i++) {
 		auto left_key = Load<hash_t>((data_ptr_t)(left_entry));
 		auto left_key = Load<hash_t>((data_ptr_t)(right_entry));
+		switch (condition_types[i]) {
+		case PhysicalType::BOOL:
+		case PhysicalType::INT8:
+			TemplatedKeysCompare<int8_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::INT16:
+			TemplatedKeysCompare<int16_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::INT32:
+			TemplatedKeysCompare<int32_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::INT64:
+			TemplatedKeysCompare<int64_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::UINT8:
+			TemplatedKeysCompare<uint8_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::UINT16:
+			TemplatedKeysCompare<uint16_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::UINT32:
+			TemplatedKeysCompare<uint32_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::UINT64:
+			TemplatedKeysCompare<uint64_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::INT128:
+			TemplatedKeysCompare<hugeint_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::FLOAT:
+			TemplatedKeysCompare<float, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::DOUBLE:
+			TemplatedKeysCompare<double, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::INTERVAL:
+			TemplatedKeysCompare<interval_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::VARCHAR:
+			TemplatedKeysCompare<string_t, OP, NO_MATCH_SEL>();
+			break;
+		case PhysicalType::LIST:
+		case PhysicalType::MAP:
+		case PhysicalType::STRUCT:
+			TemplatedKeysCompare<OP, NO_MATCH_SEL>();
+			break;
+		default:
+			throw InternalException("Unsupported column type for RowOperations::Match");
+		}
 	}
 	return true;
+}
+
+bool TemplatedKeysCompare() {
 }
 
 void JoinHashTable::Finalize() {
