@@ -20,8 +20,15 @@ struct TableAppendState;
 
 class LocalTableStorage {
 public:
+	// Create a new LocalTableStorage
 	explicit LocalTableStorage(DataTable &table);
+	// Create a LocalTableStorage from an ALTER TYPE
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t changed_idx, const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
+	// Create a LocalTableStorage from a DROP COLUMN
+	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
+	// Create a LocalTableStorage from a ADD COLUMN
+	LocalTableStorage(DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column, Expression *default_value);
+
 	~LocalTableStorage();
 
 	DataTable &table;

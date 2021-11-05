@@ -40,6 +40,23 @@ LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &paren
 	indexes.Move(parent.indexes);
 }
 
+LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx) :
+	table(new_dt), deleted_rows(parent.deleted_rows)  {
+	stats.InitializeRemoveColumn(parent.stats, drop_idx);
+	row_groups = parent.row_groups->RemoveColumn(drop_idx);
+	parent.row_groups.reset();
+	indexes.Move(parent.indexes);
+}
+
+LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, ColumnDefinition &new_column, Expression *default_value) :
+	table(new_dt), deleted_rows(parent.deleted_rows) {
+	idx_t new_column_idx = parent.table.types.size();
+	stats.InitializeAddColumn(parent.stats, new_column.type);
+	row_groups = parent.row_groups->AddColumn(new_column, default_value, stats.GetStats(new_column_idx));
+	parent.row_groups.reset();
+	indexes.Move(parent.indexes);
+}
+
 LocalTableStorage::~LocalTableStorage() {
 }
 
@@ -249,7 +266,11 @@ void LocalStorage::AddColumn(DataTable *old_dt, DataTable *new_dt, ColumnDefinit
 	if (entry == table_storage.end()) {
 		return;
 	}
-	throw InternalException("FIXME: LocalStorage::AddColumn");
+	auto storage = move(entry->second);
+	auto new_storage = make_unique<LocalTableStorage>(*new_dt, *storage, new_column, default_value);
+
+	table_storage[new_dt] = move(new_storage);
+	table_storage.erase(old_dt);
 }
 
 void LocalStorage::DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t removed_column) {
@@ -259,9 +280,9 @@ void LocalStorage::DropColumn(DataTable *old_dt, DataTable *new_dt, idx_t remove
 		return;
 	}
 	auto storage = move(entry->second);
-	storage->row_groups = storage->row_groups->RemoveColumn(removed_column);
+	auto new_storage = make_unique<LocalTableStorage>(*new_dt, *storage, removed_column);
 
-	table_storage[new_dt] = move(storage);
+	table_storage[new_dt] = move(new_storage);
 	table_storage.erase(old_dt);
 }
 
