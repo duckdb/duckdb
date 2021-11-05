@@ -392,7 +392,7 @@ static idx_t FindPrevStart(const BitArray<W> &mask, const idx_t l, idx_t r) {
 	return l;
 }
 
-static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCollection &input, // NOLINT
+static void MaterializeExpressions(Expression **exprs, idx_t expr_count, ChunkCollection &input,
                                    ChunkCollection &output, bool scalar = false) {
 	if (expr_count == 0) {
 		return;
@@ -667,7 +667,7 @@ static bool WindowNeedsRank(BoundWindowExpression *wexpr) {
 }
 
 template <typename T>
-static T GetCell(ChunkCollection &collection, idx_t column, idx_t index) { // NOLINT
+static T GetCell(ChunkCollection &collection, idx_t column, idx_t index) {
 	D_ASSERT(collection.ColumnCount() > column);
 	auto &chunk = collection.GetChunkForRow(index);
 	auto &source = chunk.data[column];
@@ -676,7 +676,7 @@ static T GetCell(ChunkCollection &collection, idx_t column, idx_t index) { // NO
 	return data[source_offset];
 }
 
-static bool CellIsNull(ChunkCollection &collection, idx_t column, idx_t index) { // NOLINT
+static bool CellIsNull(ChunkCollection &collection, idx_t column, idx_t index) {
 	D_ASSERT(collection.ColumnCount() > column);
 	auto &chunk = collection.GetChunkForRow(index);
 	auto &source = chunk.data[column];
@@ -693,7 +693,7 @@ struct ChunkCollectionIterator {
 	using reference = T;
 	using pointer = idx_t;
 
-	ChunkCollectionIterator(ChunkCollection &coll_p, idx_t col_no_p, pointer pos_p = 0) // NOLINT
+	ChunkCollectionIterator(ChunkCollection &coll_p, idx_t col_no_p, pointer pos_p = 0)
 	    : coll(&coll_p), col_no(col_no_p), pos(pos_p) {
 	}
 
@@ -735,7 +735,7 @@ struct OperationCompare : public std::binary_function<T, T, bool> {
 };
 
 template <typename T, typename OP, bool FROM>
-static idx_t FindTypedRangeBound(ChunkCollection &over, const idx_t order_col, const idx_t order_begin, // NOLINT
+static idx_t FindTypedRangeBound(ChunkCollection &over, const idx_t order_col, const idx_t order_begin,
                                  const idx_t order_end, ChunkCollection &boundary, const idx_t boundary_row) {
 	D_ASSERT(!CellIsNull(boundary, 0, boundary_row));
 	const auto val = GetCell<T>(boundary, 0, boundary_row);
@@ -802,10 +802,10 @@ static idx_t FindOrderedRangeBound(ChunkCollection &over, const idx_t order_col,
 	}
 }
 
-static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t input_size, // NOLINT
-                                   const idx_t row_idx, ChunkCollection &over_collection,
-                                   ChunkCollection &boundary_start_collection, ChunkCollection &boundary_end_collection,
-                                   const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask) {
+static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t input_size, const idx_t row_idx,
+                                   ChunkCollection &over_collection, ChunkCollection &boundary_start_collection,
+                                   ChunkCollection &boundary_end_collection, const BitArray<uint64_t> &partition_mask,
+                                   const BitArray<uint64_t> &order_mask) {
 
 	// RANGE sorting parameters
 	const auto order_col = bounds.partition_count;
@@ -974,10 +974,9 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 	}
 }
 
-static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, // NOLINT
-                                    ChunkCollection &output, ChunkCollection &over,
-                                    const BitArray<uint64_t> &partition_mask, const BitArray<uint64_t> &order_mask,
-                                    WindowAggregationMode mode) {
+static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
+                                    ChunkCollection &over, const BitArray<uint64_t> &partition_mask,
+                                    const BitArray<uint64_t> &order_mask, WindowAggregationMode mode) {
 
 	// TODO we could evaluate those expressions in parallel
 
@@ -1185,7 +1184,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 using WindowExpressions = vector<BoundWindowExpression *>;
 
-static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkCollection &input, // NOLINT
+static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkCollection &input,
                                      ChunkCollection &window_results, ChunkCollection &over,
                                      WindowAggregationMode mode) {
 	//	Idempotency
