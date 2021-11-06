@@ -225,8 +225,6 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 				throw ParserException("Wrong number of arguments for MODE");
 			}
 			lowercase_name = "mode";
-		} else {
-			throw ParserException("Unknown ordered aggregate \"%s\".", function_name);
 		}
 	}
 
