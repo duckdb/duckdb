@@ -84,6 +84,8 @@ statement ok
 INSERT INTO doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE), (0::DOUBLE);
 
 # Incorrect result with a simple sum
+require longdouble
+
 query I
 SELECT sum(n)::BIGINT FROM doubles;
 ----
