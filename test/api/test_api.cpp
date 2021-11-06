@@ -224,8 +224,8 @@ TEST_CASE("Test streaming API errors", "[api]") {
 	// "result2" we can read
 	REQUIRE(CHECK_COLUMN(result2, 0, {42}));
 
-	// error in query
-	result = con.SendQuery("SELECT 'hello'::INT;");
+	// error in binding
+	result = con.SendQuery("SELECT * FROM nonexistanttable");
 	REQUIRE(!result->ToString().empty());
 	REQUIRE(result->type == QueryResultType::MATERIALIZED_RESULT);
 	REQUIRE_FAIL(result);
@@ -344,7 +344,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 static void VerifyStreamResult(unique_ptr<QueryResult> result) {
 	REQUIRE(result->types[0] == LogicalType::INTEGER);
 	size_t current_row = 0;
-	size_t current_expected_value = 0;
+	int current_expected_value = 0;
 	size_t expected_rows = 500 * 5;
 	while (true) {
 		auto chunk = result->Fetch();

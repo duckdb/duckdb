@@ -13,7 +13,7 @@
 namespace duckdb {
 
 enum class CompressionType : uint8_t {
-	COMPRESSION_INVALID = 0,
+	COMPRESSION_AUTO = 0,
 	COMPRESSION_UNCOMPRESSED = 1,
 	COMPRESSION_CONSTANT = 2,
 	COMPRESSION_RLE = 3,

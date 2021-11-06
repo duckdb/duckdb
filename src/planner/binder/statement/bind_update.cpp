@@ -108,7 +108,7 @@ static void BindUpdateConstraints(TableCatalogEntry &table, LogicalGet &get, Log
 	if (update.update_is_del_and_insert) {
 		// the update updates a column required by an index, push projections for all columns
 		unordered_set<column_t> all_columns;
-		for (idx_t i = 0; i < table.storage->types.size(); i++) {
+		for (idx_t i = 0; i < table.storage->column_definitions.size(); i++) {
 			all_columns.insert(i);
 		}
 		BindExtraColumns(table, get, proj, update, all_columns);

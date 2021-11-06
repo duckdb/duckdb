@@ -1572,7 +1572,8 @@ typedef enum PGConstrType /* types of constraints */
   PG_CONSTR_ATTR_DEFERRABLE, /* attributes for previous constraint node */
   PG_CONSTR_ATTR_NOT_DEFERRABLE,
   PG_CONSTR_ATTR_DEFERRED,
-  PG_CONSTR_ATTR_IMMEDIATE } PGConstrType;
+  PG_CONSTR_ATTR_IMMEDIATE,
+  PG_CONSTR_COMPRESSION} PGConstrType;
 
 /* Foreign key action codes */
 #define PG_FKCONSTR_ACTION_NOACTION 'a'
@@ -1630,6 +1631,11 @@ typedef struct PGConstraint {
 	/* Fields used for constraints that allow a NOT VALID specification */
 	bool skip_validation; /* skip validation of existing rows? */
 	bool initially_valid; /* mark the new constraint as valid? */
+
+
+	/* Field Used for COMPRESSION constraint */
+	char *compression_name;  /* existing index to use; otherwise NULL */
+
 } PGConstraint;
 
 /* ----------------------

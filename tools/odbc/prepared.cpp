@@ -17,28 +17,9 @@ SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
                            SQLSMALLINT value_type, SQLSMALLINT parameter_type, SQLULEN column_size,
                            SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr, SQLLEN buffer_length,
                            SQLLEN *str_len_or_ind_ptr) {
-	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
-		if (input_output_type != SQL_PARAM_INPUT) {
-			return SQL_ERROR;
-		}
-
-		if (parameter_number > stmt->param_wrapper->param_descriptors.size()) {
-			// need to resize because SQLFreeStmt might clear it before
-			stmt->param_wrapper->param_descriptors.resize(parameter_number);
-		}
-		idx_t param_idx = parameter_number - 1;
-		stmt->param_wrapper->param_descriptors[param_idx].io_type = input_output_type;
-		stmt->param_wrapper->param_descriptors[param_idx].idx = param_idx;
-		stmt->param_wrapper->param_descriptors[param_idx].apd.value_type = value_type;
-		stmt->param_wrapper->param_descriptors[param_idx].apd.param_value_ptr = parameter_value_ptr;
-		stmt->param_wrapper->param_descriptors[param_idx].apd.buffer_len = buffer_length;
-		stmt->param_wrapper->param_descriptors[param_idx].apd.str_len_or_ind_ptr = str_len_or_ind_ptr;
-		stmt->param_wrapper->param_descriptors[param_idx].ipd.param_type = parameter_type;
-		stmt->param_wrapper->param_descriptors[param_idx].ipd.col_size = column_size;
-		stmt->param_wrapper->param_descriptors[param_idx].ipd.dec_digits = decimal_digits;
-
-		return SQL_SUCCESS;
-	});
+	return duckdb::BindParameterStmt(statement_handle, parameter_number, input_output_type, value_type, parameter_type,
+	                                 column_size, decimal_digits, parameter_value_ptr, buffer_length,
+	                                 str_len_or_ind_ptr);
 }
 
 SQLRETURN SQLExecute(SQLHSTMT statement_handle) {
