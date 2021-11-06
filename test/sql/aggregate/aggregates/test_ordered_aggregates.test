@@ -75,31 +75,6 @@ select percentile_cont([0.25, 0.5, 0.75]) within group(order by i desc) from gen
 [75.000000, 50.000000, 25.000000]
 
 #
-# Ordering of non-ordered aggregates
-#
-statement ok
-CREATE TABLE doubles(n DOUBLE);
-
-statement ok
-INSERT INTO doubles (n) VALUES ('9007199254740992'::DOUBLE), (1::DOUBLE), (1::DOUBLE), (0::DOUBLE);
-
-# Incorrect result with a simple sum
-query I
-SELECT sum(n)::BIGINT FROM doubles;
-----
-9007199254740992
-
-# Correct result when ordered by size
-query I
-SELECT sum(n ORDER BY ABS(n))::BIGINT FROM doubles;
-----
-9007199254740994
-
-# Error as an ordered aggregate
-statement error
-SELECT (sum(n) WITHIN GROUP(ORDER BY ABS(n)))::BIGINT FROM doubles;
-
-#
 # Error checking
 #
 
