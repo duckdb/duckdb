@@ -288,7 +288,7 @@ bool JoinHashTable::CompareKeysSwitch(dataptr_t left_entry, dataptr_t right_entr
 	for (idx_t i = 0; i != condition_types.size(); i++) {
 		auto left_key = Load<hash_t>((data_ptr_t)(left_entry));
 		auto left_key = Load<hash_t>((data_ptr_t)(right_entry));
-		switch (condition_types[i]) {
+		switch (condition_types[i].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
 			TemplatedKeysCompare<int8_t, OP, NO_MATCH_SEL>();
