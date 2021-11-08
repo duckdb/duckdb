@@ -264,31 +264,30 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	for (idx_t i = 0; i < count; i++) {
+		// For each tuple the hash_value will be replaced by a pointer to the next_entry in the hash_map
 		auto index = indices[i];
-		// The hash_value will be replaced by a pointer to the next_entry in the hash_map or nullptr
 		auto entry_hash_ptr = key_locations[i] + pointer_offset;
 		// In case this is still a primary key and there is a conflict
 		if (has_primary_key && pointers[index] != 0) {
-			// check whether the hash_values are the same
-
+			// check whether the keys are the same
 			auto has_same_keys = CompareKeysSwitch(key_locations[i], pointers[index]);
 			if (has_same_keys) {
-				// this is not a primary key anymore
+				// this is not a primary key anymore (duplicate keys)
 				has_primary_key = false;
 			}
 		}
 		// replace the hash_value in the current entry and point to a position in the hash_map
 		Store<data_ptr_t>(pointers[index], entry_hash_ptr);
 
-		// set hash_map pointer to current tuple entry
+		// store a pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
 }
 
 template <typename T>
-bool TemplatedKeysCompare(data_ptr_t left, data_ptr_t right) {
-	auto left_key = Load<T>((data_ptr_t)(left));
-	auto right_key = Load<T>((data_ptr_t)(right));
+bool TemplatedKeysCompare(data_ptr_t left_data, data_ptr_t right_data) {
+	auto left_key = Load<T>((data_ptr_t)(left_data));
+	auto right_key = Load<T>((data_ptr_t)(right_data));
 	auto left_val = Value::CreateValue<T>(left_key);
 	auto right_val = Value::CreateValue<T>(right_key);
 	return ValueOperations::Equals(left_val, right_val);
