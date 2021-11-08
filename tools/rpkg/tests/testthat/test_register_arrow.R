@@ -120,32 +120,17 @@ numeric_operators <- function(data_type) {
 
 test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
     numeric_types <- c('TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT',
-    'FLOAT', 'DOUBLE')
+    'FLOAT', 'DOUBLE', 'HUGEINT')
 
     for (data_type in numeric_types)
         numeric_operators(data_type)
 
 })
 
-# ArrowNotImplementedError: Function equal has no kernel matching input types (array[decimal128(4, 1)], scalar[decimal128(4, 1)])
-
-test_that("duckdb_register_arrow() performs selection pushdown hugeint type", {
-    skip_if_not_installed("arrow", "4.0.1")
-    numeric_types <- c('HUGEINT')
-
-    for (data_type in numeric_types)
-        expect_error(numeric_operators(data_type))
-
-
-})
-
-# ArrowNotImplementedError: Function equal has no kernel matching input types (array[decimal128(4, 1)], scalar[decimal128(4, 1)])
-
 test_that("duckdb_register_arrow() performs selection pushdown decimal types", {
-    skip_if_not_installed("arrow", "4.0.1")
     numeric_types <- c('DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)','DECIMAL(30,12)')
     for (data_type in numeric_types)
-        expect_error(numeric_operators(data_type))
+        expect_equal(numeric_operators(data_type))
 
 })
 
