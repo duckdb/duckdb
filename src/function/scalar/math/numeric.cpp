@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar/math_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
+#include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -124,13 +125,6 @@ void NextAfterFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // abs
 //===--------------------------------------------------------------------===//
-struct AbsOperator {
-	template <class TA, class TR>
-	static inline TR Operation(TA input) {
-		return input < 0 ? -input : input;
-	}
-};
-
 template <class OP>
 unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
@@ -908,6 +902,34 @@ void FactorialFun::RegisterFunction(BuiltinFunctions &set) {
 	                          ScalarFunction::UnaryFunction<int32_t, hugeint_t, FactorialOperator>);
 
 	set.AddFunction({"factorial", "!__postfix"}, fun);
+}
+
+//===--------------------------------------------------------------------===//
+// even
+//===--------------------------------------------------------------------===//
+struct EvenOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA left) {
+		double value;
+		if (left >= 0) {
+			value = std::ceil(left);
+		} else {
+			value = std::ceil(-left);
+			value = -value;
+		}
+		if (std::floor(value / 2) * 2 != value) {
+			if (left >= 0) {
+				return value += 1;
+			}
+			return value -= 1;
+		}
+		return value;
+	}
+};
+
+void EvenFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("even", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, EvenOperator>));
 }
 
 } // namespace duckdb

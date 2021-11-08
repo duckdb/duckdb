@@ -34,6 +34,8 @@ void BuiltinFunctions::RegisterMathFunctions() {
 	Register<FactorialFun>();
 
 	Register<NextAfterFun>();
+
+	Register<EvenFun>();
 }
 
 } // namespace duckdb
