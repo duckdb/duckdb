@@ -120,10 +120,11 @@ public:
 	void ScanFullOuter(DataChunk &result, JoinHTScanState &state);
 	//! Fill the pointer with all the addresses from the hashtable for full scan
 	idx_t FillWithHTOffsets(data_ptr_t *key_locations, JoinHTScanState &state);
-
+	//! Returns the number of entries in the hash_table
 	idx_t Count() {
 		return block_collection->count;
 	}
+	//! Compare Switch function to specify the type in which the keys will be compared
 	bool CompareKeysSwitch(data_ptr_t left_entry, data_ptr_t right_entry);
 
 	//! BufferManager
@@ -154,7 +155,7 @@ public:
 	bool has_null;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
-
+	//! Flag to control weather the build side has a primary key
 	bool has_primary_key {true};
 
 	struct {
@@ -186,7 +187,7 @@ private:
 	//! Insert the given set of locations into the HT with the given set of
 	//! hashes. Caller should hold lock in parallel HT.
 	void InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]);
-
+	//! Filter out null keys and create a selection vector to access the prepared keys
 	idx_t PrepareKeys(DataChunk &keys, unique_ptr<VectorData[]> &key_data, const SelectionVector *&current_sel,
 	                  SelectionVector &sel, bool build_side);
 
