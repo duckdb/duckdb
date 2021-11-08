@@ -48,23 +48,14 @@ class TestArrowFilterPushdown(object):
         if not can_run:
             return
         numeric_types = ['TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT', 
-        'FLOAT', 'DOUBLE']
-
+        'FLOAT', 'DOUBLE', 'HUGEINT']
         for data_type in numeric_types:
             numeric_operators(data_type)
-
-# ArrowNotImplementedError: Function equal has no kernel matching input types (array[decimal128(4, 1)], scalar[decimal128(4, 1)])
-# These tests will break whenever arrow implements them
-    def test_filter_pushdown_hugeint(self,duckdb_cursor):
-        if not can_run:
-            return
-        numeric_operators('HUGEINT')
 
     def test_filter_pushdown_decimal(self,duckdb_cursor):
         if not can_run:
             return
         numeric_types = ['DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)','DECIMAL(30,12)']
-
         for data_type in numeric_types:
                 numeric_operators(data_type)
 
@@ -261,4 +252,3 @@ class TestArrowFilterPushdown(object):
 
         os.remove("data1.parquet")
         os.remove("data2.parquet")
-
