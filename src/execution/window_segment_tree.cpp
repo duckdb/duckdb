@@ -9,10 +9,11 @@
 namespace duckdb {
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
-                                     const LogicalType &result_type_p, ChunkCollection *input)
+                                     const LogicalType &result_type_p, ChunkCollection *input,
+                                     WindowAggregationMode mode_p)
     : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
       statep(Value::POINTER((idx_t)state.data())), frame(0, 0), statev(Value::POINTER((idx_t)state.data())),
-      internal_nodes(0), input_ref(input) {
+      internal_nodes(0), input_ref(input), mode(mode_p) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
@@ -22,9 +23,9 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 	if (input_ref && input_ref->ColumnCount() > 0) {
 		inputs.Initialize(input_ref->Types());
 		// if we have a frame-by-frame method, share the single state
-		if (aggregate.window) {
+		if (aggregate.window && UseWindowAPI()) {
 			AggregateInit();
-		} else if (aggregate.combine) {
+		} else if (aggregate.combine && UseCombineAPI()) {
 			ConstructTree();
 		}
 	}
@@ -50,7 +51,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 		aggregate.destructor(addresses, count);
 	}
 
-	if (aggregate.window) {
+	if (aggregate.window && UseWindowAPI()) {
 		aggregate.destructor(statev, 1);
 	}
 }
@@ -184,7 +185,7 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 	}
 
 	// If we have a window function, use that
-	if (aggregate.window) {
+	if (aggregate.window && UseWindowAPI()) {
 		// Frame boundaries
 		auto prev = frame;
 		frame = FrameBounds(begin, end);
@@ -199,7 +200,7 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 	AggregateInit();
 
 	// Aggregate everything at once if we can't combine states
-	if (!aggregate.combine) {
+	if (!aggregate.combine || !UseCombineAPI()) {
 		WindowSegmentValue(0, begin, end);
 		AggegateFinal(result, rid);
 		return;

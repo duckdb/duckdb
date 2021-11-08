@@ -15,11 +15,13 @@ namespace duckdb {
 
 // Hugeint arithmetic
 hugeint_t operator*(const hugeint_t &h, const double &d) {
+	D_ASSERT(d >= 0 && d <= 1);
 	return Hugeint::Convert(Hugeint::Cast<double>(h) * d);
 }
 
 // Interval arithmetic
 interval_t operator*(const interval_t &i, const double &d) {
+	D_ASSERT(d >= 0 && d <= 1);
 	return Interval::FromMicro(std::llround(Interval::GetMicro(i) * d));
 }
 
@@ -40,14 +42,12 @@ struct QuantileState {
 	// Regular aggregation
 	std::vector<SaveType> v;
 
-	// Windowed Aggregation
+	// Windowed Quantile indirection
 	std::vector<idx_t> w;
 	idx_t pos;
 
-	// List temporaries
-	std::vector<idx_t> disturbed;
-	std::vector<idx_t> lower;
-	std::vector<idx_t> upper;
+	// Windowed MAD indirection
+	std::vector<idx_t> m;
 
 	QuantileState() : pos(0) {
 	}
@@ -61,6 +61,17 @@ struct QuantileState {
 			w.resize(pos);
 		}
 	}
+};
+
+struct QuantileNotNull {
+	inline explicit QuantileNotNull(const ValidityMask &mask_p, idx_t bias_p) : mask(mask_p), bias(bias_p) {
+	}
+
+	inline bool operator()(const idx_t &idx) const {
+		return mask.RowIsValid(idx - bias);
+	}
+	const ValidityMask &mask;
+	const idx_t bias;
 };
 
 void ReuseIndexes(idx_t *index, const FrameBounds &frame, const FrameBounds &prev) {
@@ -118,34 +129,29 @@ static idx_t ReplaceIndex(idx_t *index, const FrameBounds &frame, const FrameBou
 }
 
 template <class INPUT_TYPE>
-static inline bool CanReplace(const idx_t *index, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0,
-                              const idx_t k1) {
-	auto same = false;
-
+static inline int CanReplace(const idx_t *index, const INPUT_TYPE *fdata, const idx_t j, const idx_t k0, const idx_t k1,
+                             const QuantileNotNull &validity) {
 	D_ASSERT(index);
 
-	auto curr = fdata[index[j]];
+	// NULLs sort to the end, so if we have inserted a NULL,
+	// it must be past the end of the quantile to be replaceable.
+	// Note that the quantile values are never NULL.
+	const auto ij = index[j];
+	if (!validity(ij)) {
+		return k1 < j ? 1 : 0;
+	}
+
+	auto curr = fdata[ij];
 	if (k1 < j) {
-		auto hi = fdata[index[k1]];
-		same = hi < curr;
+		auto hi = fdata[index[k0]];
+		return hi < curr ? 1 : 0;
 	} else if (j < k0) {
-		auto lo = fdata[index[k0]];
-		same = curr < lo;
+		auto lo = fdata[index[k1]];
+		return curr < lo ? -1 : 0;
 	}
 
-	return same;
+	return 0;
 }
-
-struct QuantileNotNull {
-	inline explicit QuantileNotNull(const ValidityMask &mask_p, idx_t bias_p) : mask(mask_p), bias(bias_p) {
-	}
-
-	inline bool operator()(const idx_t &idx) const {
-		return mask.RowIsValid(idx - bias);
-	}
-	const ValidityMask &mask;
-	const idx_t bias;
-};
 
 template <class INPUT_TYPE>
 struct IndirectLess {
@@ -165,11 +171,31 @@ struct CastInterpolation {
 	static inline TARGET_TYPE Cast(const INPUT_TYPE &src, Vector &result) {
 		return Cast::Operation<INPUT_TYPE, TARGET_TYPE>(src);
 	}
+	template <typename TARGET_TYPE>
+	static inline TARGET_TYPE Interpolate(const TARGET_TYPE &lo, const double d, const TARGET_TYPE &hi) {
+		const auto delta = hi - lo;
+		return lo + delta * d;
+	}
 };
 
 template <>
 interval_t CastInterpolation::Cast(const dtime_t &src, Vector &result) {
 	return {0, 0, src.micros};
+}
+
+template <>
+double CastInterpolation::Interpolate(const double &lo, const double d, const double &hi) {
+	return lo * (1.0 - d) + hi * d;
+}
+
+template <>
+dtime_t CastInterpolation::Interpolate(const dtime_t &lo, const double d, const dtime_t &hi) {
+	return dtime_t(std::llround(lo.micros * (1.0 - d) + hi.micros * d));
+}
+
+template <>
+timestamp_t CastInterpolation::Interpolate(const timestamp_t &lo, const double d, const timestamp_t &hi) {
+	return timestamp_t(std::llround(lo.value * (1.0 - d) + hi.value * d));
 }
 
 template <>
@@ -241,7 +267,8 @@ struct QuantileLess {
 // Continuous interpolation
 template <bool DISCRETE>
 struct Interpolator {
-	Interpolator(const double q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(ceil(RN)) {
+	Interpolator(const double q, const idx_t n_p)
+	    : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(ceil(RN)), begin(0), end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
@@ -249,15 +276,26 @@ struct Interpolator {
 		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
 		QuantileLess<ACCESSOR> comp(accessor);
 		if (CRN == FRN) {
-			std::nth_element(v_t, v_t + FRN, v_t + n, comp);
+			std::nth_element(v_t + begin, v_t + FRN, v_t + end, comp);
 			return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
 		} else {
-			std::nth_element(v_t, v_t + FRN, v_t + n, comp);
-			std::nth_element(v_t + FRN, v_t + CRN, v_t + n, comp);
+			std::nth_element(v_t + begin, v_t + FRN, v_t + end, comp);
+			std::nth_element(v_t + FRN, v_t + CRN, v_t + end, comp);
 			auto lo = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
 			auto hi = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[CRN]), result);
-			auto delta = hi - lo;
-			return lo + delta * (RN - FRN);
+			return CastInterpolation::Interpolate<TARGET_TYPE>(lo, RN - FRN, hi);
+		}
+	}
+
+	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
+	TARGET_TYPE Replace(const INPUT_TYPE *v_t, Vector &result, const ACCESSOR &accessor = ACCESSOR()) const {
+		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
+		if (CRN == FRN) {
+			return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
+		} else {
+			auto lo = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
+			auto hi = CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[CRN]), result);
+			return CastInterpolation::Interpolate<TARGET_TYPE>(lo, RN - FRN, hi);
 		}
 	}
 
@@ -265,19 +303,29 @@ struct Interpolator {
 	const double RN;
 	const idx_t FRN;
 	const idx_t CRN;
+
+	idx_t begin;
+	idx_t end;
 };
 
 // Discrete "interpolation"
 template <>
 struct Interpolator<true> {
-	Interpolator(const double q, const idx_t n_p) : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(FRN) {
+	Interpolator(const double q, const idx_t n_p)
+	    : n(n_p), RN((double)(n_p - 1) * q), FRN(floor(RN)), CRN(FRN), begin(0), end(n_p) {
 	}
 
 	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
 	TARGET_TYPE Operation(INPUT_TYPE *v_t, Vector &result, const ACCESSOR &accessor = ACCESSOR()) const {
 		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
 		QuantileLess<ACCESSOR> comp(accessor);
-		std::nth_element(v_t, v_t + FRN, v_t + n, comp);
+		std::nth_element(v_t + begin, v_t + FRN, v_t + end, comp);
+		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
+	}
+
+	template <class INPUT_TYPE, class TARGET_TYPE, typename ACCESSOR = QuantileDirect<INPUT_TYPE>>
+	TARGET_TYPE Replace(const INPUT_TYPE *v_t, Vector &result, const ACCESSOR &accessor = ACCESSOR()) const {
+		using ACCESS_TYPE = typename ACCESSOR::RESULT_TYPE;
 		return CastInterpolation::Cast<ACCESS_TYPE, TARGET_TYPE>(accessor(v_t[FRN]), result);
 	}
 
@@ -285,6 +333,9 @@ struct Interpolator<true> {
 	const double RN;
 	const idx_t FRN;
 	const idx_t CRN;
+
+	idx_t begin;
+	idx_t end;
 };
 
 struct QuantileBindData : public FunctionData {
@@ -351,13 +402,12 @@ struct QuantileOperation {
 };
 
 template <class STATE_TYPE, class RESULT_TYPE, class OP>
-static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count,
-                                idx_t offset) { // NOLINT
+static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vector &result, idx_t count, // NOLINT
+                                idx_t offset) {
 	D_ASSERT(result.GetType().id() == LogicalTypeId::LIST);
 
 	D_ASSERT(bind_data_p);
 	auto bind_data = (QuantileBindData *)bind_data_p;
-	ListVector::SetListSize(result, 0);
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -370,7 +420,7 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vecto
 	} else {
 		D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		ListVector::Reserve(result, count * bind_data->quantiles.size());
+		ListVector::Reserve(result, (offset + count) * bind_data->quantiles.size());
 
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
@@ -416,8 +466,10 @@ struct QuantileScalarOperation : public QuantileOperation {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
+		QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
+
 		//  Lazily initialise frame state
-		const auto prev_valid = state->pos == (prev.second - prev.first);
+		auto prev_pos = state->pos;
 		state->SetPos(frame.second - frame.first);
 
 		auto index = state->w.data();
@@ -429,29 +481,33 @@ struct QuantileScalarOperation : public QuantileOperation {
 		// Find the two positions needed
 		const auto q = bind_data->quantiles[0];
 
-		bool same = false;
-		if (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		bool replace = false;
+		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
-			Interpolator<DISCRETE> interp(q, state->pos);
-			same = CanReplace(index, data, j, interp.FRN, interp.CRN);
+			//	We can only replace if the number of NULLs has not changed
+			if (dmask.AllValid() || not_null(prev.first) == not_null(prev.second)) {
+				Interpolator<DISCRETE> interp(q, prev_pos);
+				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, not_null);
+				if (replace) {
+					state->pos = prev_pos;
+				}
+			}
 		} else {
 			ReuseIndexes(index, frame, prev);
 		}
 
-		if (!same) {
-			if (!dmask.AllValid()) {
-				// Remove the NULLs
-				QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
-				state->pos = std::partition(index, index + state->pos, not_null) - index;
-			}
+		if (!replace && !dmask.AllValid()) {
+			// Remove the NULLs
+			state->pos = std::partition(index, index + state->pos, not_null) - index;
 		}
 		if (state->pos) {
 			Interpolator<DISCRETE> interp(q, state->pos);
 
 			using ID = QuantileIndirect<INPUT_TYPE>;
 			ID indirect(data);
-			rdata[ridx] = interp.template Operation<idx_t, RESULT_TYPE, ID>(index, result, indirect);
+			rdata[ridx] = replace ? interp.template Replace<idx_t, RESULT_TYPE, ID>(index, result, indirect)
+			                      : interp.template Operation<idx_t, RESULT_TYPE, ID>(index, result, indirect);
 		} else {
 			rmask.Set(ridx, false);
 		}
@@ -538,15 +594,19 @@ struct QuantileListOperation : public QuantileOperation {
 		auto v_t = state->v.data();
 		D_ASSERT(v_t);
 
-		target[idx].offset = ridx;
-		for (const auto &quantile : bind_data->quantiles) {
+		auto &entry = target[idx];
+		entry.offset = ridx;
+		idx_t lower = 0;
+		for (const auto &q : bind_data->order) {
+			const auto &quantile = bind_data->quantiles[q];
 			Interpolator<DISCRETE> interp(quantile, state->v.size());
-			rdata[ridx] = interp.template Operation<typename STATE::SaveType, CHILD_TYPE>(v_t, result);
-			++ridx;
+			interp.begin = lower;
+			rdata[ridx + q] = interp.template Operation<typename STATE::SaveType, CHILD_TYPE>(v_t, result);
+			lower = interp.FRN;
 		}
-		target[idx].length = bind_data->quantiles.size();
+		entry.length = bind_data->quantiles.size();
 
-		ListVector::SetListSize(result_list, ridx);
+		ListVector::SetListSize(result_list, entry.offset + entry.length);
 	}
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
@@ -554,6 +614,8 @@ struct QuantileListOperation : public QuantileOperation {
 	                   const FrameBounds &frame, const FrameBounds &prev, Vector &list, idx_t lidx) {
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
+
+		QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		auto ldata = FlatVector::GetData<RESULT_TYPE>(list);
@@ -568,58 +630,75 @@ struct QuantileListOperation : public QuantileOperation {
 		auto rdata = FlatVector::GetData<CHILD_TYPE>(result);
 
 		//  Lazily initialise frame state
-		const auto prev_valid = state->w.size() == (prev.second - prev.first);
+		auto prev_pos = state->pos;
 		state->SetPos(frame.second - frame.first);
 
 		auto index = state->w.data();
 
-		bool fixed = false;
-		auto j = state->pos;
-		if (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		// We can generalise replacement for quantile lists by observing that when a replacement is
+		// valid for a single quantile, it is valid for all quantiles greater/less than that quantile
+		// based on whether the insertion is below/above the quantile location.
+		// So if a replaced index in an IQR is located between Q25 and Q50, but has a value below Q25,
+		// then Q25 must be recomputed, but Q50 and Q75 are unaffected.
+		// For a single element list, this reduces to the scalar case.
+		std::pair<idx_t, idx_t> replaceable {state->pos, 0};
+		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
-			j = ReplaceIndex(index, frame, prev);
-			fixed = true;
+			const auto j = ReplaceIndex(index, frame, prev);
+			//	We can only replace if the number of NULLs has not changed
+			if (dmask.AllValid() || not_null(prev.first) == not_null(prev.second)) {
+				for (const auto &q : bind_data->order) {
+					const auto &quantile = bind_data->quantiles[q];
+					Interpolator<DISCRETE> interp(quantile, prev_pos);
+					const auto replace = CanReplace(index, data, j, interp.FRN, interp.CRN, not_null);
+					if (replace < 0) {
+						//	Replacement is before this quantile, so the rest will be replaceable too.
+						replaceable.first = MinValue(replaceable.first, interp.FRN);
+						replaceable.second = prev_pos;
+						break;
+					} else if (replace > 0) {
+						//	Replacement is after this quantile, so everything before it is replaceable too.
+						replaceable.first = 0;
+						replaceable.second = MaxValue(replaceable.second, interp.CRN);
+					}
+				}
+				if (replaceable.first < replaceable.second) {
+					state->pos = prev_pos;
+				}
+			}
 		} else {
 			ReuseIndexes(index, frame, prev);
-			if (!dmask.AllValid()) {
-				QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
-				state->pos = std::partition(index, index + state->pos, not_null) - index;
-			}
 		}
 
-		if (!state->pos) {
+		if (replaceable.first >= replaceable.second && !dmask.AllValid()) {
+			// Remove the NULLs
+			state->pos = std::partition(index, index + state->pos, not_null) - index;
+		}
+
+		if (state->pos) {
+			using ID = QuantileIndirect<INPUT_TYPE>;
+			ID indirect(data);
+			for (const auto &q : bind_data->order) {
+				const auto &quantile = bind_data->quantiles[q];
+				Interpolator<DISCRETE> interp(quantile, state->pos);
+				if (replaceable.first <= interp.FRN && interp.CRN <= replaceable.second) {
+					rdata[lentry.offset + q] = interp.template Replace<idx_t, CHILD_TYPE, ID>(index, result, indirect);
+				} else {
+					// Make sure we don't disturb any replacements
+					if (replaceable.first < replaceable.second) {
+						if (interp.FRN < replaceable.first) {
+							interp.end = replaceable.first;
+						}
+						if (replaceable.second < interp.CRN) {
+							interp.begin = replaceable.second;
+						}
+					}
+					rdata[lentry.offset + q] =
+					    interp.template Operation<idx_t, CHILD_TYPE, ID>(index, result, indirect);
+				}
+			}
+		} else {
 			lmask.Set(lidx, false);
-			return;
-		}
-
-		// First pass: Fill in the undisturbed values and find the islands of stability.
-		QuantileIndirect<INPUT_TYPE> indirect(data);
-		state->disturbed.clear();
-		state->lower.clear();
-		state->upper.clear();
-		idx_t lb = 0;
-		for (idx_t i = 0; i < bind_data->order.size(); ++i) {
-			const auto q = bind_data->order[i];
-			const auto &quantile = bind_data->quantiles[q];
-			Interpolator<DISCRETE> interp(quantile, state->pos);
-
-			if (fixed && CanReplace(index, data, j, interp.FRN, interp.CRN)) {
-				rdata[lentry.offset + q] = interp.template Operation<idx_t, CHILD_TYPE>(index, result, indirect);
-				state->upper.resize(state->lower.size(), interp.FRN);
-			} else {
-				state->disturbed.push_back(q);
-				state->lower.push_back(MinValue(lb, interp.FRN));
-			}
-			lb = interp.CRN + 1;
-		}
-		state->upper.resize(state->lower.size(), state->pos);
-
-		// Second pass: select the disturbed values
-		for (idx_t i = 0; i < state->disturbed.size(); ++i) {
-			const auto &q = state->disturbed[i];
-			const auto &quantile = bind_data->quantiles[q];
-			Interpolator<DISCRETE> interp(quantile, state->pos);
-			rdata[lentry.offset + q] = interp.template Operation<idx_t, CHILD_TYPE>(index, result, indirect);
 		}
 	}
 };
@@ -889,45 +968,69 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
+		QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
+
 		//  Lazily initialise frame state
-		const auto prev_valid = state->pos == (prev.second - prev.first);
+		auto prev_pos = state->pos;
 		state->SetPos(frame.second - frame.first);
 
 		auto index = state->w.data();
 		D_ASSERT(index);
 
+		// We need a second index for the second pass.
+		if (state->pos > state->m.size()) {
+			state->m.resize(state->pos);
+		}
+
+		auto index2 = state->m.data();
+		D_ASSERT(index2);
+
+		// The replacement trick does not work on the second index because if
+		// the median has changed, the previous order is not correct.
+		// It is probably close, however, and so reuse is helpful.
+		ReuseIndexes(index2, frame, prev);
+		std::partition(index2, index2 + state->pos, not_null);
+
 		// Find the two positions needed for the median
 		const float q = 0.5;
 
-		bool same = false;
-		if (prev_valid && dmask.AllValid() && frame.first == prev.first + 1 && frame.second == prev.second + 1) {
+		bool replace = false;
+		if (frame.first == prev.first + 1 && frame.second == prev.second + 1) {
 			//  Fixed frame size
 			const auto j = ReplaceIndex(index, frame, prev);
-			Interpolator<false> interp(q, state->pos);
-			same = CanReplace(index, data, j, interp.FRN, interp.CRN);
+			//	We can only replace if the number of NULls has not changed
+			if (dmask.AllValid() || not_null(prev.first) == not_null(prev.second)) {
+				Interpolator<false> interp(q, prev_pos);
+				replace = CanReplace(index, data, j, interp.FRN, interp.CRN, not_null);
+				if (replace) {
+					state->pos = prev_pos;
+				}
+			}
 		} else {
 			ReuseIndexes(index, frame, prev);
 		}
 
-		if (!same && !dmask.AllValid()) {
+		if (!replace && !dmask.AllValid()) {
 			// Remove the NULLs
-			QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
 			state->pos = std::partition(index, index + state->pos, not_null) - index;
 		}
 
 		if (state->pos) {
 			Interpolator<false> interp(q, state->pos);
 
+			// Compute or replace median from the first index
 			using ID = QuantileIndirect<INPUT_TYPE>;
 			ID indirect(data);
-			const auto med = interp.template Operation<idx_t, MEDIAN_TYPE, ID>(index, result, indirect);
+			const auto med = replace ? interp.template Replace<idx_t, MEDIAN_TYPE, ID>(index, result, indirect)
+			                         : interp.template Operation<idx_t, MEDIAN_TYPE, ID>(index, result, indirect);
 
+			// Compute mad from the second index
 			using MAD = MadAccessor<INPUT_TYPE, RESULT_TYPE, MEDIAN_TYPE>;
 			MAD mad(med);
 
 			using MadIndirect = QuantileComposed<MAD, ID>;
 			MadIndirect mad_indirect(mad, indirect);
-			rdata[ridx] = interp.template Operation<idx_t, RESULT_TYPE, MadIndirect>(index, result, mad_indirect);
+			rdata[ridx] = interp.template Operation<idx_t, RESULT_TYPE, MadIndirect>(index2, result, mad_indirect);
 		} else {
 			rmask.Set(ridx, false);
 		}
@@ -946,17 +1049,6 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 
 AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type) {
 	switch (type.id()) {
-	case LogicalTypeId::TINYINT:
-		return GetTypedMedianAbsoluteDeviationAggregateFunction<int8_t, double, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::SMALLINT:
-		return GetTypedMedianAbsoluteDeviationAggregateFunction<int16_t, double, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::INTEGER:
-		return GetTypedMedianAbsoluteDeviationAggregateFunction<int32_t, double, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::BIGINT:
-		return GetTypedMedianAbsoluteDeviationAggregateFunction<int64_t, double, double>(type, LogicalType::DOUBLE);
-	case LogicalTypeId::HUGEINT:
-		return GetTypedMedianAbsoluteDeviationAggregateFunction<hugeint_t, double, double>(type, LogicalType::DOUBLE);
-
 	case LogicalTypeId::FLOAT:
 		return GetTypedMedianAbsoluteDeviationAggregateFunction<float, float, float>(type, type);
 	case LogicalTypeId::DOUBLE:
@@ -1134,10 +1226,6 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 	median.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                     nullptr, nullptr, nullptr, BindMedianDecimal));
 
-	AggregateFunctionSet mad("mad");
-	mad.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
-	                                  nullptr, nullptr, nullptr, BindMedianAbsoluteDeviationDecimal));
-
 	AggregateFunctionSet quantile_disc("quantile_disc");
 	quantile_disc.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::DOUBLE}, LogicalTypeId::DECIMAL,
 	                                            nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
@@ -1161,17 +1249,26 @@ void QuantileFun::RegisterFunction(BuiltinFunctions &set) {
 		if (CanInterpolate(type)) {
 			quantile_cont.AddFunction(GetContinuousQuantileAggregate(type));
 			quantile_cont.AddFunction(GetContinuousQuantileListAggregate(type));
-			mad.AddFunction(GetMedianAbsoluteDeviationAggregateFunction(type));
 		}
 	}
 
 	set.AddFunction(median);
-	set.AddFunction(mad);
 	set.AddFunction(quantile_disc);
 	set.AddFunction(quantile_cont);
 
 	quantile_disc.name = "quantile";
 	set.AddFunction(quantile_disc);
+
+	AggregateFunctionSet mad("mad");
+	mad.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
+	                                  nullptr, nullptr, nullptr, BindMedianAbsoluteDeviationDecimal));
+
+	const vector<LogicalType> MADS = {LogicalType::FLOAT, LogicalType::DOUBLE, LogicalType::DATE,
+	                                  LogicalType::TIMESTAMP, LogicalType::TIME};
+	for (const auto &type : MADS) {
+		mad.AddFunction(GetMedianAbsoluteDeviationAggregateFunction(type));
+	}
+	set.AddFunction(mad);
 }
 
 } // namespace duckdb

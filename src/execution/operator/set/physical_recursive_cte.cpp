@@ -124,6 +124,9 @@ void PhysicalRecursiveCTE::ExecuteRecursivePipelines(ExecutionContext &context) 
 
 	while (true) {
 		executor.WorkOnTasks();
+		if (executor.HasError()) {
+			executor.ThrowException();
+		}
 		bool finished = true;
 		for (auto &event : events) {
 			if (!event->IsFinished()) {

@@ -52,11 +52,14 @@ public:
 		return data.size();
 	}
 	void SetCardinality(idx_t count_p) {
-		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
+		D_ASSERT(count_p <= capacity);
 		this->count = count_p;
 	}
 	void SetCardinality(const DataChunk &other) {
 		this->count = other.size();
+	}
+	void SetCapacity(const DataChunk &other) {
+		this->capacity = other.capacity;
 	}
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
@@ -76,10 +79,10 @@ public:
 	void InitializeEmpty(const vector<LogicalType> &types);
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
-	//! is not enough space in the chunk.
-	DUCKDB_API void Append(const DataChunk &other);
-	//! Append a selection of the other DataChunk to this one
-	DUCKDB_API void Append(const DataChunk &other, const SelectionVector &sel, idx_t count);
+	//! is not enough space in the chunk and resize is not allowed.
+	DUCKDB_API void Append(const DataChunk &other, bool resize = false, SelectionVector *sel = nullptr,
+	                       idx_t count = 0);
+
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
 
@@ -131,6 +134,8 @@ public:
 private:
 	//! The amount of tuples stored in the data chunk
 	idx_t count;
+	//! The amount of tuples that can be stored in the data chunk
+	idx_t capacity;
 	//! Vector caches, used to store data when ::Initialize is called
 	vector<VectorCache> vector_caches;
 };

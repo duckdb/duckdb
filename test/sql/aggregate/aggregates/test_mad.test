@@ -93,3 +93,43 @@ query I
 SELECT mad('00:00:00'::TIME + INTERVAL (r) SECOND) FROM numerics
 ----
 00:41:40
+
+#
+# Extreme values
+#
+
+query I
+select mad(x) from (values ('127'::DECIMAL(3,0)), ('-128'::DECIMAL(3,0))) tbl(x);
+----
+127
+
+query I
+select mad(x) from (values ('32767'::DECIMAL(5,0)), ('-32768'::DECIMAL(5,0))) tbl(x);
+----
+32767
+
+query I
+select mad(x) from (values ('2147483647'::DECIMAL(10,0)), ('-2147483648'::DECIMAL(10,0))) tbl(x);
+----
+2147483647
+
+statement ok
+select mad(x) from (values (-1e308), (1e308)) tbl(x);
+
+query I
+select mad(x) from (values ('294247-01-10'::date), ('290309-12-22 (BC)'::date)) tbl(x);
+----
+106751991 days
+
+query I
+select mad(x) from (values
+	('294247-01-10 04:00:54.775807'::timestamp),
+	('290309-12-22 (BC) 00:00:00'::timestamp)
+	) tbl(x);
+----
+106751991 days 02:00:27.387904
+
+query I
+select mad(x) from (values ('23:59:59.999999'::time), ('00:00:00'::time)) tbl(x);
+----
+12:00:00

@@ -36,7 +36,6 @@ class TestArrowFetchChunk(object):
             print(cur_chunk)
         except Exception as err:
             print(err)
-            
         #Should be empty by now
         try:
             cur_chunk = query.fetch_arrow_chunk(return_table=True)

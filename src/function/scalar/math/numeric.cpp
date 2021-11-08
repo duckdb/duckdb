@@ -904,4 +904,32 @@ void FactorialFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction({"factorial", "!__postfix"}, fun);
 }
 
+//===--------------------------------------------------------------------===//
+// even
+//===--------------------------------------------------------------------===//
+struct EvenOperator {
+	template <class TA, class TR>
+	static inline TR Operation(TA left) {
+		double value;
+		if (left >= 0) {
+			value = std::ceil(left);
+		} else {
+			value = std::ceil(-left);
+			value = -value;
+		}
+		if (std::floor(value / 2) * 2 != value) {
+			if (left >= 0) {
+				return value += 1;
+			}
+			return value -= 1;
+		}
+		return value;
+	}
+};
+
+void EvenFun::RegisterFunction(BuiltinFunctions &set) {
+	set.AddFunction(ScalarFunction("even", {LogicalType::DOUBLE}, LogicalType::DOUBLE,
+	                               UnaryDoubleFunctionWrapper<double, EvenOperator>));
+}
+
 } // namespace duckdb

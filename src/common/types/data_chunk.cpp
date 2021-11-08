@@ -19,13 +19,14 @@
 
 namespace duckdb {
 
-DataChunk::DataChunk() : count(0) {
+DataChunk::DataChunk() : count(0), capacity(STANDARD_VECTOR_SIZE) {
 }
 
 DataChunk::~DataChunk() {
 }
 
 void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
+	capacity = STANDARD_VECTOR_SIZE;
 	D_ASSERT(data.empty());   // can only be initialized once
 	D_ASSERT(!types.empty()); // empty chunk not allowed
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -36,6 +37,7 @@ void DataChunk::InitializeEmpty(const vector<LogicalType> &types) {
 void DataChunk::Initialize(const vector<LogicalType> &types) {
 	D_ASSERT(data.empty());   // can only be initialized once
 	D_ASSERT(!types.empty()); // empty chunk not allowed
+	capacity = STANDARD_VECTOR_SIZE;
 	for (idx_t i = 0; i < types.size(); i++) {
 		VectorCache cache(types[i]);
 		data.emplace_back(cache);
@@ -53,12 +55,14 @@ void DataChunk::Reset() {
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].ResetFromCache(vector_caches[i]);
 	}
+	capacity = STANDARD_VECTOR_SIZE;
 	SetCardinality(0);
 }
 
 void DataChunk::Destroy() {
 	data.clear();
 	vector_caches.clear();
+	capacity = 0;
 	SetCardinality(0);
 }
 
@@ -74,6 +78,7 @@ void DataChunk::SetValue(idx_t col_idx, idx_t index, const Value &val) {
 void DataChunk::Reference(DataChunk &chunk) {
 	D_ASSERT(chunk.ColumnCount() <= ColumnCount());
 	SetCardinality(chunk);
+	SetCapacity(chunk);
 	for (idx_t i = 0; i < chunk.ColumnCount(); i++) {
 		data[i].Reference(chunk.data[i]);
 	}
@@ -81,6 +86,7 @@ void DataChunk::Reference(DataChunk &chunk) {
 
 void DataChunk::Move(DataChunk &chunk) {
 	SetCardinality(chunk);
+	SetCapacity(chunk);
 	data = move(chunk.data);
 	vector_caches = move(chunk.vector_caches);
 
@@ -126,32 +132,33 @@ void DataChunk::Split(DataChunk &other, idx_t split_idx) {
 	other.SetCardinality(*this);
 }
 
-void DataChunk::Append(const DataChunk &other) {
+void DataChunk::Append(const DataChunk &other, bool resize, SelectionVector *sel, idx_t sel_count) {
+	idx_t new_size = sel ? size() + sel_count : size() + other.size();
 	if (other.size() == 0) {
 		return;
 	}
 	if (ColumnCount() != other.ColumnCount()) {
 		throw InternalException("Column counts of appending chunk doesn't match!");
 	}
-	for (idx_t i = 0; i < ColumnCount(); i++) {
-		D_ASSERT(data[i].GetVectorType() == VectorType::FLAT_VECTOR);
-		VectorOperations::Copy(other.data[i], data[i], other.size(), 0, size());
-	}
-	SetCardinality(size() + other.size());
-}
-
-void DataChunk::Append(const DataChunk &other, const SelectionVector &sel, idx_t count) {
-	if (other.size() == 0) {
-		return;
-	}
-	if (ColumnCount() != other.ColumnCount()) {
-		throw InternalException("Column counts of appending chunk doesn't match!");
+	if (new_size > capacity) {
+		if (resize) {
+			for (idx_t i = 0; i < ColumnCount(); i++) {
+				data[i].Resize(size(), new_size);
+			}
+			capacity = new_size;
+		} else {
+			throw InternalException("Can't append chunk to other chunk without resizing");
+		}
 	}
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		D_ASSERT(data[i].GetVectorType() == VectorType::FLAT_VECTOR);
-		VectorOperations::Copy(other.data[i], data[i], sel, count, 0, size());
+		if (sel) {
+			VectorOperations::Copy(other.data[i], data[i], *sel, sel_count, 0, size());
+		} else {
+			VectorOperations::Copy(other.data[i], data[i], other.size(), 0, size());
+		}
 	}
-	SetCardinality(size() + count);
+	SetCardinality(new_size);
 }
 
 void DataChunk::Normalify() {
@@ -248,7 +255,7 @@ void DataChunk::Hash(Vector &result) {
 
 void DataChunk::Verify() {
 #ifdef DEBUG
-	D_ASSERT(size() <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(size() <= capacity);
 	// verify that all vectors in this chunk have the chunk selection vector
 	for (idx_t i = 0; i < ColumnCount(); i++) {
 		data[i].Verify(size());
