@@ -80,7 +80,7 @@ jobs:
         zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
         zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
-        gzip -k build/release/extensions/tpch/tpch.duckdb_extension
+        gzip -k build/release/extension/tpch/tpch.duckdb_extension
         pip install --user awscli
         aws s3 cp build/release/extension/tpch/tpch.duckdb_extension.gz s3://duckdb-extensions/`git log -1 --format=%h`/osx-amd64/tpch.duckdb_extension.gz --acl public-read  
 
