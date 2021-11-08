@@ -254,6 +254,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
 	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
+	data_ptr_t conflict_entries[STANDARD_VECTOR_SIZE];
 
 	// create a vector for indices and apply the bitmask to get them from the hash_values
 	ApplyBitmask(hashes, count);
@@ -372,9 +373,9 @@ void JoinHashTable::Finalize() {
 		pinned_handles.push_back(move(handle));
 	}
 	// In case of primary key do a semi-join instead
-	if (has_primary_key) {
-		join_type = JoinType::SEMI;
-	}
+	/* if (has_primary_key) {
+	    join_type = JoinType::SEMI;
+	} */
 	finalized = true;
 }
 
