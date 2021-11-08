@@ -408,9 +408,6 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vecto
 
 	D_ASSERT(bind_data_p);
 	auto bind_data = (QuantileBindData *)bind_data_p;
-	if (offset == 0) {
-		ListVector::SetListSize(result, 0);
-	}
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -423,7 +420,7 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vecto
 	} else {
 		D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		ListVector::Reserve(result, count * bind_data->quantiles.size());
+		ListVector::Reserve(result, (offset + count) * bind_data->quantiles.size());
 
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
