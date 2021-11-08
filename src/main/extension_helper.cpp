@@ -31,27 +31,18 @@
 namespace duckdb {
 
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
-#ifdef BUILD_ICU_EXTENSION
-	db.LoadExtension<ICUExtension>();
-#endif
-#ifdef BUILD_PARQUET_EXTENSION
-	db.LoadExtension<ParquetExtension>();
-#endif
-#ifdef BUILD_TPCH_EXTENSION
-	db.LoadExtension<TPCHExtension>();
-#endif
-#ifdef BUILD_TPCDS_EXTENSION
-	db.LoadExtension<TPCDSExtension>();
-#endif
-#ifdef BUILD_FTS_EXTENSION
-	db.LoadExtension<FTSExtension>();
-#endif
-#ifdef BUILD_HTTPFS_EXTENSION
-	db.LoadExtension<HTTPFsExtension>();
-#endif
-#ifdef BUILD_VISUALIZER_EXTENSION
-	db.LoadExtension<VisualizerExtension>();
-#endif
+	unordered_set<string> extensions {
+		"parquet",
+		"icu",
+		"tpch",
+		"tpcds",
+		"fts",
+		"httpfs",
+		"visualizer"
+	};
+	for(auto &ext : extensions) {
+		LoadExtension(db, ext);
+	}
 }
 
 ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
