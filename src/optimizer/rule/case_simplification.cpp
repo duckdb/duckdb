@@ -13,7 +13,7 @@ CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : R
 }
 
 unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                     bool &changes_made) {
+                                                     bool &changes_made, bool is_root) {
 	auto root = (BoundCaseExpression *)bindings[0];
 	auto constant_expr = bindings[1];
 	// the constant_expr is a scalar expression that we have to fold

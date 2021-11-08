@@ -17,6 +17,13 @@ namespace duckdb {
 class RowLayout;
 struct LocalSortState;
 
+struct SortConstants {
+	static constexpr idx_t VALUES_PER_RADIX = 256;
+	static constexpr idx_t MSD_RADIX_LOCATIONS = VALUES_PER_RADIX + 1;
+	static constexpr idx_t INSERTION_SORT_THRESHOLD = 24;
+	static constexpr idx_t MSD_RADIX_SORT_SIZE_THRESHOLD = 4;
+};
+
 struct SortLayout {
 public:
 	explicit SortLayout(const vector<BoundOrderByNode> &orders);

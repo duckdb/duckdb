@@ -503,4 +503,8 @@ void ParquetExtension::Load(DuckDB &db) {
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
 }
 
+std::string ParquetExtension::Name() {
+	return "parquet";
+}
+
 } // namespace duckdb

@@ -17,13 +17,7 @@ namespace duckdb {
 class FTSExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
+	std::string Name() override;
 };
 
 } // namespace duckdb
-
-extern "C" {
-// TODO use DUCKDB_EXTENSION_API here
-void fts_init(duckdb::DatabaseInstance &db);
-
-const char *fts_version();
-}

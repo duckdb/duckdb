@@ -115,9 +115,8 @@ static ScalarFunction GetICUFunction(string collation) {
 	                      ICUCollateBind);
 }
 
-static void LoadInternal(DatabaseInstance &instance) {
-	// load the collations
-	Connection con(instance);
+void ICUExtension::Load(DuckDB &db) {
+	Connection con(db);
 	con.BeginTransaction();
 
 	auto &catalog = Catalog::GetCatalog(*con.context);
@@ -148,16 +147,24 @@ static void LoadInternal(DatabaseInstance &instance) {
 
 	con.Commit();
 }
-void ICUExtension::Load(DuckDB &db) {
-	LoadInternal(*db.instance);
+
+std::string ICUExtension::Name() {
+	return "icu";
 }
+
 
 } // namespace duckdb
 
+
+extern "C" {
+
 void icu_init(duckdb::DatabaseInstance &db) {
-	LoadInternal(db);
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::ICUExtension>();
 }
 
 const char *icu_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
+}
+

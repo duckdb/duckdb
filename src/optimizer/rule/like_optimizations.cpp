@@ -100,7 +100,7 @@ static bool PatternIsContains(const string &pattern) {
 }
 
 unique_ptr<Expression> LikeOptimizationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                   bool &changes_made) {
+                                                   bool &changes_made, bool is_root) {
 	auto root = (BoundFunctionExpression *)bindings[0];
 	auto constant_expr = (BoundConstantExpression *)bindings[2];
 	D_ASSERT(root->children.size() == 2);

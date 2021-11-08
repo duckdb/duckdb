@@ -1,6 +1,7 @@
 #include "duckdb/function/scalar/math_functions.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/function/scalar/trigonometric_functions.hpp"
+#include "duckdb/common/operator/abs.hpp"
 #include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -124,13 +125,6 @@ void NextAfterFun::RegisterFunction(BuiltinFunctions &set) {
 //===--------------------------------------------------------------------===//
 // abs
 //===--------------------------------------------------------------------===//
-struct AbsOperator {
-	template <class TA, class TR>
-	static inline TR Operation(TA input) {
-		return input < 0 ? -input : input;
-	}
-};
-
 template <class OP>
 unique_ptr<FunctionData> DecimalUnaryOpBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {

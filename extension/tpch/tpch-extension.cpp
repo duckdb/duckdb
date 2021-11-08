@@ -152,8 +152,8 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 	return tpch::DBGenWrapper::GetQuery(index);
 }
 
-static void LoadInternal(DatabaseInstance &instance) {
-	Connection con(instance);
+void TPCHExtension::Load(DuckDB &db) {
+	Connection con(db);
 	con.BeginTransaction();
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
@@ -185,10 +185,6 @@ static void LoadInternal(DatabaseInstance &instance) {
 	con.Commit();
 }
 
-void TPCHExtension::Load(DuckDB &db) {
-	LoadInternal(*db.instance);
-}
-
 std::string TPCHExtension::GetQuery(int query) {
 	return tpch::DBGenWrapper::GetQuery(query);
 }
@@ -197,12 +193,20 @@ std::string TPCHExtension::GetAnswer(double sf, int query) {
 	return tpch::DBGenWrapper::GetAnswer(sf, query);
 }
 
+std::string TPCHExtension::Name() {
+	return "tpch";
+}
+
 } // namespace duckdb
 
+extern "C" {
+
 void tpch_init(duckdb::DatabaseInstance &db) {
-	LoadInternal(db);
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::TPCHExtension>();
 }
 
 const char *tpch_version() {
 	return duckdb::DuckDB::LibraryVersion();
+}
 }

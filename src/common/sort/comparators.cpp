@@ -162,7 +162,7 @@ int Comparators::CompareStringAndAdvance(data_ptr_t &left_ptr, data_ptr_t &right
 	left_ptr += sizeof(uint32_t);
 	right_ptr += sizeof(uint32_t);
 	string_t left_val((const char *)left_ptr, left_string_size);
-	string_t right_val((const char *)right_ptr, left_string_size);
+	string_t right_val((const char *)right_ptr, right_string_size);
 	left_ptr += left_string_size;
 	right_ptr += right_string_size;
 	// Compare
