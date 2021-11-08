@@ -138,11 +138,13 @@ shared_ptr<Relation> Connection::View(const string &schema_name, const string &t
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname) {
 	vector<Value> values;
-	return TableFunction(fname, values);
+	unordered_map<string, Value> named_parameters;
+	return TableFunction(fname, values, named_parameters);
 }
 
-shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values) {
-	return make_shared<TableFunctionRelation>(*context, fname, values);
+shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values,
+                                               const unordered_map<string, Value> &named_parameters) {
+	return make_shared<TableFunctionRelation>(*context, fname, values, named_parameters);
 }
 
 shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values) {

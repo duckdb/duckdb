@@ -85,7 +85,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
 	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
-	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"))
+	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"),
+	         py::arg("binary_as_string") = false)
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
 
@@ -161,7 +162,8 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::objec
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)value.ptr())})->CreateView(name, true, true);
+	connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)value.ptr())}, {})
+	    ->CreateView(name, true, true);
 	// keep a reference
 	auto object = make_unique<RegisteredObject>(value);
 	registered_objects[name] = move(object);
@@ -179,7 +181,8 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::ob
 	connection
 	    ->TableFunction("arrow_scan",
 	                    {Value::POINTER((uintptr_t)stream_factory.get()),
-	                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
+	                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)},
+	                    {})
 	    ->CreateView(name, true, true);
 	auto object = make_unique<RegisteredArrow>(move(stream_factory), move(table));
 	registered_objects[name] = move(object);
@@ -221,7 +224,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::TableFunction(const string &fna
 	}
 
 	return make_unique<DuckDBPyRelation>(
-	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(std::move(params))));
+	    connection->TableFunction(fname, DuckDBPyConnection::TransformPythonParamList(std::move(params)), {}));
 }
 
 static std::string GenerateRandomName() {
@@ -246,7 +249,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(py::object value) {
 	registered_objects[name] = make_unique<RegisteredObject>(value);
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)value.ptr()));
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params)->Alias(name));
+	return make_unique<DuckDBPyRelation>(connection->TableFunction("pandas_scan", params, {})->Alias(name));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filename) {
@@ -255,16 +258,18 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
+	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params, {})->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename, bool binary_as_string) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
+	unordered_map<string, Value> named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &table, const idx_t rows_per_tuple) {
@@ -281,7 +286,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 	    connection
 	        ->TableFunction("arrow_scan",
 	                        {Value::POINTER((uintptr_t)stream_factory.get()),
-	                         Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
+	                         Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)},
+	                        {})
 	        ->Alias(name));
 	registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), table);
 	return rel;

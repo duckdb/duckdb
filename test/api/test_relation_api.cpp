@@ -764,7 +764,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 	REQUIRE(CHECK_COLUMN(result, 0, {"main"}));
 
 	// function with parameters
-	auto i2 = con.TableFunction("pragma_table_info", {"integers"});
+	auto i2 = con.TableFunction("pragma_table_info", {"integers"}, {});
 	result = i2->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {0}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"i"}));
@@ -778,7 +778,7 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 
 	// table function that takes a relation as input
 	auto values = con.Values("(42)", {"i"});
-	auto summary = values->TableFunction("summary", vector<Value> {});
+	auto summary = values->TableFunction("summary", vector<Value> {}, {});
 	result = summary->Execute();
 	REQUIRE(CHECK_COLUMN(result, 0, {"[42]"}));
 	REQUIRE(CHECK_COLUMN(result, 1, {"42"}));

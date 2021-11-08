@@ -80,8 +80,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filenam
 	return DuckDBPyConnection::DefaultConnection()->FromCsvAuto(filename);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filename) {
-	return DuckDBPyConnection::DefaultConnection()->FromParquet(filename);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filename, bool binary_as_string) {
+	return DuckDBPyConnection::DefaultConnection()->FromParquet(filename, binary_as_string);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(py::object &table) {
@@ -279,7 +279,7 @@ void DuckDBPyRelation::Create(const string &table) {
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Map(py::function fun) {
 	vector<Value> params;
 	params.emplace_back(Value::POINTER((uintptr_t)fun.ptr()));
-	auto res = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params));
+	auto res = make_unique<DuckDBPyRelation>(rel->TableFunction("python_map_function", params, {}));
 	res->map_function = fun;
 	return res;
 }

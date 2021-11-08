@@ -101,7 +101,7 @@ public:
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
 
-		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types);
+		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types, false);
 		return move(result);
 	}
 
@@ -294,7 +294,8 @@ public:
 					string file = bind_data.files[data.file_index];
 					// move to the next file
 					data.reader =
-					    make_shared<ParquetReader>(context, file, data.reader->return_types, bind_data.files[0]);
+					    make_shared<ParquetReader>(context, file, data.reader->return_types,
+					                               data.reader->parquet_options.binary_as_string, bind_data.files[0]);
 					vector<idx_t> group_ids;
 					for (idx_t i = 0; i < data.reader->NumRowGroups(); i++) {
 						group_ids.push_back(i);
@@ -355,7 +356,8 @@ public:
 				// read the next file
 				string file = bind_data.files[++parallel_state.file_index];
 				parallel_state.current_reader =
-				    make_shared<ParquetReader>(context, file, parallel_state.current_reader->return_types);
+				    make_shared<ParquetReader>(context, file, parallel_state.current_reader->return_types,
+				                               parallel_state.current_reader->parquet_options.binary_as_string);
 				if (parallel_state.current_reader->NumRowGroups() == 0) {
 					// empty parquet file, move to next file
 					continue;
