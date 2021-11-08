@@ -120,9 +120,11 @@ void PhysicalLoad::DoInstall(ExecutionContext &context) const {
 	auto extension_name = fs.ExtractBaseName(info->filename);
 
 	string local_extension_path = fs.JoinPath(local_path, extension_name + ".duckdb_extension");
-	if (fs.FileExists(local_extension_path)) {
+	if (fs.FileExists(local_extension_path) && info->load_type != LoadType::FORCE_INSTALL) {
 		return;
 	}
+
+	auto is_http_url = StringUtil::Contains(info->filename, "http://");
 
 	if (fs.FileExists(info->filename)) {
 		std::ifstream in(info->filename, std::ios::binary);
@@ -137,14 +139,34 @@ void PhysicalLoad::DoInstall(ExecutionContext &context) const {
 		in.close();
 		out.close();
 		return;
-	} else if (StringUtil::Contains(info->filename, "/")) {
+	} else if (StringUtil::Contains(info->filename, "/") && !is_http_url) {
 		throw IOException("Failed to read extension from %s", info->filename);
 	}
 
-	auto url_base = "http://extensions.duckdb.org";
-	auto url_local_part =
-	    StringUtil::Format("/%s/%s/%s.duckdb_extension.gz", DuckDB::SourceID(), DuckDB::Platform(), extension_name);
-	httplib::Client cli(url_base);
+	string url_template = "http://extensions.duckdb.org/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension.gz";
+
+	if (is_http_url) {
+		url_template = info->filename;
+		extension_name = "";
+	}
+
+	auto url = StringUtil::Replace(url_template, "${REVISION}", DuckDB::SourceID());
+	url = StringUtil::Replace(url, "${PLATFORM}", DuckDB::Platform());
+	url = StringUtil::Replace(url, "${NAME}", extension_name);
+
+	string no_http = StringUtil::Replace(url, "http://", "");
+
+	idx_t next = no_http.find('/', 0);
+	if (next == string::npos) {
+		throw IOException("No slash in URL template");
+	}
+
+	// Push the substring [last, next) on to splits
+	auto hostname_without_http = no_http.substr(0, next);
+	auto url_local_part = no_http.substr(next);
+
+	auto url_base = "http://" + hostname_without_http;
+	httplib::Client cli(url_base.c_str());
 
 	httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),
 	                                                              DuckDB::SourceID(), DuckDB::Platform())}};
@@ -218,7 +240,7 @@ void PhysicalLoad::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 	if (!context.client.db->config.enable_external_access) {
 		throw Exception("Loading extensions is disabled");
 	}
-	if (info->install) {
+	if (info->load_type == LoadType::INSTALL || info->load_type == LoadType::FORCE_INSTALL) {
 		DoInstall(context);
 	} else {
 		DoLoad(context);

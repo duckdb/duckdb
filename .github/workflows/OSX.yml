@@ -37,16 +37,11 @@ jobs:
     runs-on: macos-latest
     needs: xcode-debug
     env:
-      BUILD_VISUALIZER: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
-      BUILD_TPCDS: 1
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
-      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
-      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
-      AWS_DEFAULT_REGION: us-east-1
 
     steps:
     - uses: actions/checkout@v2
@@ -80,9 +75,6 @@ jobs:
         zip -j duckdb_cli-osx-amd64.zip build/release/duckdb
         zip -j libduckdb-osx-amd64.zip build/release/src/libduckdb*.dylib src/amalgamation/duckdb.hpp src/include/duckdb.h
         python scripts/asset-upload-gha.py libduckdb-osx-amd64.zip duckdb_cli-osx-amd64.zip duckdb_jdbc-osx-amd64.jar=build/release/tools/jdbc/duckdb_jdbc.jar
-        gzip -k build/release/extension/tpch/tpch.duckdb_extension
-        pip install --user awscli
-        aws s3 cp build/release/extension/tpch/tpch.duckdb_extension.gz s3://duckdb-extensions/`git log -1 --format=%h`/osx-amd64/tpch.duckdb_extension.gz --acl public-read  
 
     - uses: actions/upload-artifact@v2
       with:
@@ -92,4 +84,39 @@ jobs:
           duckdb_cli-osx-amd64.zip
           build/release/tools/jdbc/duckdb_jdbc.jar
 
+
+
+  xcode-extensions:
+    name: OSX Extensions Release
+    runs-on: macos-latest
+    needs: xcode-debug
+    env:
+      BUILD_VISUALIZER: 1
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
+      AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
+      AWS_DEFAULT_REGION: us-east-1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      run: make
+
+    - name: Unit Test
+      run: make allunit
+
+    - name: Deploy
+      run: |
+        pip install --user awscli
+        ./scripts/extension-upload.sh osx-amd64
 

@@ -12,15 +12,17 @@
 
 namespace duckdb {
 
+enum class LoadType { LOAD, INSTALL, FORCE_INSTALL };
+
 struct LoadInfo : public ParseInfo {
 	std::string filename;
-	bool install;
+	LoadType load_type;
 
 public:
 	unique_ptr<LoadInfo> Copy() const {
 		auto result = make_unique<LoadInfo>();
 		result->filename = filename;
-		result->install = install;
+		result->load_type = load_type;
 		return result;
 	}
 };
