@@ -41,3 +41,9 @@ add_library(
   ../../third_party/snowball/src_c/stem_UTF_8_swedish.cpp
   ../../third_party/snowball/src_c/stem_UTF_8_tamil.cpp
   ../../third_party/snowball/src_c/stem_UTF_8_turkish.cpp)
+
+install(
+  TARGETS fts_extension
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

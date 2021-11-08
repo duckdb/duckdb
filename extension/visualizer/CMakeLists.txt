@@ -5,3 +5,9 @@ project(VisualizerExtension)
 include_directories(include)
 
 add_library(visualizer_extension STATIC visualizer-extension.cpp)
+
+install(
+  TARGETS visualizer_extension
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
