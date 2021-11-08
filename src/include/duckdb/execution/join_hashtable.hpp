@@ -124,7 +124,7 @@ public:
 	idx_t Count() {
 		return block_collection->count;
 	}
-	bool CompareKeysSwitch(dataptr_t left_entry, dataptr_t right_entry);
+	bool CompareKeysSwitch(data_ptr_t left_entry, data_ptr_t right_entry);
 
 	//! BufferManager
 	BufferManager &buffer_manager;

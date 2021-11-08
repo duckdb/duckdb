@@ -5,6 +5,7 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/common/types/row_data_collection.hpp"
+#include "duckdb/common/value_operations/value_operations.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -284,64 +285,54 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	}
 }
 
-bool JoinHashTable::CompareKeysSwitch(dataptr_t left_entry, dataptr_t right_entry) {
+template <typename T>
+bool TemplatedKeysCompare(data_ptr_t left, data_ptr_t right) {
+	auto left_key = Load<T>((data_ptr_t)(left));
+	auto right_key = Load<T>((data_ptr_t)(right));
+	auto left_val = Value::CreateValue<T>(left_key);
+	auto right_val = Value::CreateValue<T>(right_key);
+	return ValueOperations::Equals(left_val, right_val);
+}
+
+bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key) {
 	for (idx_t i = 0; i != condition_types.size(); i++) {
-		auto left_key = Load<hash_t>((data_ptr_t)(left_entry));
-		auto left_key = Load<hash_t>((data_ptr_t)(right_entry));
 		switch (condition_types[i].InternalType()) {
 		case PhysicalType::BOOL:
 		case PhysicalType::INT8:
-			TemplatedKeysCompare<int8_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<int8_t>(left_key, right_key);
 		case PhysicalType::INT16:
-			TemplatedKeysCompare<int16_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<int16_t>(left_key, right_key);
 		case PhysicalType::INT32:
-			TemplatedKeysCompare<int32_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<int32_t>(left_key, right_key);
 		case PhysicalType::INT64:
-			TemplatedKeysCompare<int64_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<int64_t>(left_key, right_key);
 		case PhysicalType::UINT8:
-			TemplatedKeysCompare<uint8_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<uint8_t>(left_key, right_key);
 		case PhysicalType::UINT16:
-			TemplatedKeysCompare<uint16_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<uint16_t>(left_key, right_key);
 		case PhysicalType::UINT32:
-			TemplatedKeysCompare<uint32_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<uint32_t>(left_key, right_key);
 		case PhysicalType::UINT64:
-			TemplatedKeysCompare<uint64_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<uint64_t>(left_key, right_key);
 		case PhysicalType::INT128:
-			TemplatedKeysCompare<hugeint_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<hugeint_t>(left_key, right_key);
 		case PhysicalType::FLOAT:
-			TemplatedKeysCompare<float, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<float>(left_key, right_key);
 		case PhysicalType::DOUBLE:
-			TemplatedKeysCompare<double, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<double>(left_key, right_key);
 		case PhysicalType::INTERVAL:
-			TemplatedKeysCompare<interval_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<interval_t>(left_key, right_key);
 		case PhysicalType::VARCHAR:
-			TemplatedKeysCompare<string_t, OP, NO_MATCH_SEL>();
-			break;
+			return TemplatedKeysCompare<string_t>(left_key, right_key);
 		case PhysicalType::LIST:
 		case PhysicalType::MAP:
 		case PhysicalType::STRUCT:
-			TemplatedKeysCompare<OP, NO_MATCH_SEL>();
-			break;
+			return false;
 		default:
-			throw InternalException("Unsupported column type for RowOperations::Match");
+			throw InternalException("Unsupported column type for ValueOperations::Equals");
 		}
 	}
 	return true;
-}
-
-bool TemplatedKeysCompare() {
 }
 
 void JoinHashTable::Finalize() {
