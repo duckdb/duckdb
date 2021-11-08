@@ -269,6 +269,10 @@ shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vec
 	return make_shared<TableFunctionRelation>(context, fname, values, named_parameters, shared_from_this());
 }
 
+shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vector<Value> &values) {
+	return make_shared<TableFunctionRelation>(context, fname, values, shared_from_this());
+}
+
 string Relation::ToString() {
 	string str;
 	str += "---------------------\n";

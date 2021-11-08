@@ -30,7 +30,7 @@ SEXP RApi::RegisterDataFrame(SEXP connsexp, SEXP namesexp, SEXP valuesexp) {
 		Rf_error("duckdb_register_R: Need at least one-column data frame parameter for value");
 	}
 	try {
-		conn_wrapper->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)}, {})
+		conn_wrapper->conn->TableFunction("r_dataframe_scan", {Value::POINTER((uintptr_t)valuesexp)})
 		    ->CreateView(name, true, true);
 		auto key = Rf_install(("_registered_df_" + name).c_str());
 		Rf_setAttrib(connsexp, key, valuesexp);

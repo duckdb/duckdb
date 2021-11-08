@@ -66,9 +66,9 @@ public:
 	}
 
 	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
-	              bool binary_as_string, const string &initial_filename = string());
-	ParquetReader(ClientContext &context, string file_name, bool binary_as_string = false)
-	    : ParquetReader(context, move(file_name), vector<LogicalType>(), binary_as_string, string()) {
+	              ParquetOptions parquet_options, const string &initial_filename = string());
+	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options)
+	    : ParquetReader(context, move(file_name), vector<LogicalType>(), parquet_options, string()) {
 	}
 	~ParquetReader();
 
@@ -103,6 +103,7 @@ private:
 	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
+	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
 
 	template <typename... Args>
 	std::runtime_error FormatException(const string fmt_str, Args... params) {

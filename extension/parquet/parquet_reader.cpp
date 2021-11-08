@@ -86,7 +86,7 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 	return make_shared<ParquetFileMetadataCache>(move(metadata), current_time);
 }
 
-static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 	// inner node
 	D_ASSERT(s_ele.__isset.type && s_ele.num_children == 0);
 	switch (s_ele.type) {
@@ -147,7 +147,7 @@ static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_
 				return LogicalType::BLOB;
 			}
 		}
-		if (binary_as_string) {
+		if (parquet_options.binary_as_string) {
 			return LogicalType::VARCHAR;
 		}
 		return LogicalType::BLOB;
@@ -214,8 +214,8 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		return result;
 	} else { // leaf node
 		// TODO check return value of derive type or should we only do this on read()
-		return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele, parquet_options.binary_as_string), s_ele,
-		                                  next_file_idx++, max_define, max_repeat);
+		return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
+		                                  max_repeat);
 	}
 }
 
@@ -283,8 +283,9 @@ ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file
 }
 
 ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const vector<LogicalType> &expected_types_p,
-                             bool binary_as_string, const string &initial_filename_p)
-    : allocator(Allocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)) {
+                             ParquetOptions parquet_options_p, const string &initial_filename_p)
+    : allocator(Allocator::Get(context_p)), file_opener(FileSystem::GetFileOpener(context_p)),
+      parquet_options(parquet_options_p) {
 	auto &fs = FileSystem::GetFileSystem(context_p);
 	file_name = move(file_name_p);
 	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ, FileSystem::DEFAULT_LOCK,
@@ -303,8 +304,6 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, const
 			ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
 		}
 	}
-
-	parquet_options.binary_as_string = binary_as_string;
 	InitializeSchema(expected_types_p, initial_filename_p);
 }
 

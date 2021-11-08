@@ -119,6 +119,8 @@ public:
 	//! Delete from a table, can only be used on a TableRelation
 	DUCKDB_API virtual void Delete(const string &condition = string());
 	//! Create a relation from calling a table in/out function on the input relation
+	//! Create a relation from calling a table in/out function on the input relation
+	DUCKDB_API shared_ptr<Relation> TableFunction(const std::string &fname, const vector<Value> &values);
 	DUCKDB_API shared_ptr<Relation> TableFunction(const std::string &fname, const vector<Value> &values,
 	                                              const unordered_map<string, Value> &named_parameters);
 

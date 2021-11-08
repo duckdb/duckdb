@@ -19,6 +19,13 @@ TableFunctionRelation::TableFunctionRelation(ClientContext &context, string name
       named_parameters(move(named_parameters)), input_relation(move(input_relation_p)) {
 	context.TryBindRelation(*this, this->columns);
 }
+TableFunctionRelation::TableFunctionRelation(ClientContext &context, string name_p, vector<Value> parameters_p,
+
+                                             shared_ptr<Relation> input_relation_p)
+    : Relation(context, RelationType::TABLE_FUNCTION_RELATION), name(move(name_p)), parameters(move(parameters_p)),
+      input_relation(move(input_relation_p)) {
+	context.TryBindRelation(*this, this->columns);
+}
 
 unique_ptr<QueryNode> TableFunctionRelation::GetQueryNode() {
 	auto result = make_unique<SelectNode>();

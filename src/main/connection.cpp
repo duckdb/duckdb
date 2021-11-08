@@ -147,6 +147,10 @@ shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector
 	return make_shared<TableFunctionRelation>(*context, fname, values, named_parameters);
 }
 
+shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values) {
+	return make_shared<TableFunctionRelation>(*context, fname, values);
+}
+
 shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values) {
 	vector<string> column_names;
 	return Values(values, column_names);
