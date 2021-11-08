@@ -5,7 +5,6 @@
 #include "duckdb/common/windows.hpp"
 
 #include <sqltypes.h>
-#include <sql.h>
 #include <sqlext.h>
 #include <vector>
 #include <stack>
