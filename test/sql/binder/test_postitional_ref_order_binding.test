@@ -1,0 +1,20 @@
+# name: test/sql/binder/test_postitional_ref_order_binding.test
+# description: Test that we can use string aliases with an AS clause
+# group: [binder]
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+#statement ok
+#call dbgen(sf=0.01)
+
+statement ok
+create table test as select * from (values (42, 43), (44, 45)) v(i, j);
+
+query II
+select i, sum(j) as s from test group by i order by #1;
+----
+42	43
+44	45
