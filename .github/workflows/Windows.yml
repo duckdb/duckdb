@@ -13,60 +13,6 @@ env:
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
 jobs:
- odbc-win-64:
-    name: ODBC Windows
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
-
-    - uses: actions/setup-python@v2
-      with:
-        python-version: '3.7'
-
-    - name: Build
-      run: |
-        python scripts/windows_ci.py
-        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
-        cmake --build . --config Release
-
-    - name: Install ODBC Driver
-      run:  |
-        tools/odbc/bin/Release/odbc_install.exe //CI //Install
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources"
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\DuckDB"
-        Reg Query "HKLM\SOFTWARE\ODBC\ODBCINST.INI\DuckDB Driver"
-
-    - name: Enable ODBC Trace HKCU
-      run: |
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //f
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v Trace //t REG_SZ //d 1
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceDll //t REG_SZ //d "C:\Windows\system32\odbctrac.dll"
-        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceFile //t REG_SZ //d "D:\a\duckdb\duckdb\ODBC_TRACE.log"
-        echo "----------------------------------------------------------------"
-        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
-
-    - name: Install psqlodbc
-      run: |
-        curl -L https://github.com/Mytherin/psqlodbc/archive/refs/heads/main.zip -o psqlodbc-main.zip
-        unzip psqlodbc-main.zip
-        (cd psqlodbc-main && make release)
-
-    - name: Test psqlodbc
-      run: |
-        cd psqlodbc-main
-        export PSQLODBC_TEST_DSN=DuckDB
-        build/release/Release/psql_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
-
-    - name: Print ODBC trace on failure
-      if: ${{ failure() }}
-      run: cat ODBC_TRACE.log
-
-    - uses: ilammy/msvc-dev-cmd@v1
-    - name: Duckdb.dll export symbols with C++ on Windows
-      run: cl -I src/include examples/embedded-c++-windows/cppintegration.cpp -link src/Release/duckdb.lib
-
  win-release-64:
     name: Windows (64 Bit)
     runs-on: windows-latest
@@ -184,3 +130,53 @@ jobs:
          run: |
            cp src/libduckdb.dll .
            test/unittest.exe
+
+ odbc-win-64:
+    name: ODBC Windows
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      run: |
+        python scripts/windows_ci.py
+        cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=x64 -DBUILD_ICU_EXTENSION=1 -DBUILD_PARQUET_EXTENSION=1 -DBUILD_TPCH_EXTENSION=1 -DBUILD_TPCDS_EXTENSION=1 -DBUILD_FTS_EXTENSION=1 -DBUILD_REST=1 -DJDBC_DRIVER=1 -DBUILD_VISUALIZER_EXTENSION=1 -DBUILD_ODBC_DRIVER=1 -DDISABLE_UNITY=1
+        cmake --build . --config Release
+
+    - name: Install ODBC Driver
+      run:  |
+        tools/odbc/bin/Release/odbc_install.exe //CI //Install
+        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\ODBC Data Sources"
+        Reg Query "HKLM\SOFTWARE\ODBC\ODBC.INI\DuckDB"
+        Reg Query "HKLM\SOFTWARE\ODBC\ODBCINST.INI\DuckDB Driver"
+
+    - name: Enable ODBC Trace HKCU
+      run: |
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //f
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v Trace //t REG_SZ //d 1
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceDll //t REG_SZ //d "C:\Windows\system32\odbctrac.dll"
+        REG ADD "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC" //v TraceFile //t REG_SZ //d "D:\a\duckdb\duckdb\ODBC_TRACE.log"
+        echo "----------------------------------------------------------------"
+        Reg Query "HKCU\SOFTWARE\ODBC\ODBC.INI\ODBC"
+
+    - name: Install psqlodbc
+      run: |
+        curl -L https://github.com/Mytherin/psqlodbc/archive/refs/heads/main.zip -o psqlodbc-main.zip
+        unzip psqlodbc-main.zip
+        (cd psqlodbc-main && make release)
+
+    - name: Test psqlodbc
+      run: |
+        cd psqlodbc-main
+        export PSQLODBC_TEST_DSN=DuckDB
+        build/release/Release/psql_odbc_test.exe -f ../tools/odbc/test/psql_supported_tests
+
+    - name: Print ODBC trace on failure
+      if: ${{ failure() }}
+      run: cat ODBC_TRACE.log
