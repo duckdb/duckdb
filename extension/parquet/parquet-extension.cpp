@@ -193,7 +193,6 @@ public:
 	                                                vector<string> &input_table_names,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto file_name = inputs[0].GetValue<string>();
-		bool binary_as_string = false;
 		ParquetOptions parquet_options;
 		for (auto &kv : named_parameters) {
 			if (kv.first == "binary_as_string") {
