@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/main/config.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -24,9 +25,9 @@ using counts_t = std::vector<size_t>;
 class WindowGlobalState : public GlobalSinkState {
 public:
 	WindowGlobalState(const PhysicalWindow &op_p, ClientContext &context)
-	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)) {
+	    : op(op_p), buffer_manager(BufferManager::GetBufferManager(context)),
+	      mode(DBConfig::GetConfig(context).window_mode) {
 	}
-
 	const PhysicalWindow &op;
 	BufferManager &buffer_manager;
 	mutex lock;
@@ -34,6 +35,7 @@ public:
 	ChunkCollection over_collection;
 	ChunkCollection hash_collection;
 	counts_t counts;
+	WindowAggregationMode mode;
 };
 
 //	Per-thread sink state
@@ -974,7 +976,7 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 
 static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollection &input, ChunkCollection &output,
                                     ChunkCollection &over, const BitArray<uint64_t> &partition_mask,
-                                    const BitArray<uint64_t> &order_mask) {
+                                    const BitArray<uint64_t> &order_mask, WindowAggregationMode mode) {
 
 	// TODO we could evaluate those expressions in parallel
 
@@ -1017,7 +1019,7 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 
 	if (wexpr->aggregate) {
 		segment_tree = make_unique<WindowSegmentTree>(*(wexpr->aggregate), wexpr->bind_info.get(), wexpr->return_type,
-		                                              &payload_collection);
+		                                              &payload_collection, mode);
 	}
 
 	WindowBoundariesState bounds(wexpr);
@@ -1183,7 +1185,8 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 using WindowExpressions = vector<BoundWindowExpression *>;
 
 static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkCollection &input,
-                                     ChunkCollection &window_results, ChunkCollection &over) {
+                                     ChunkCollection &window_results, ChunkCollection &over,
+                                     WindowAggregationMode mode) {
 	//	Idempotency
 	if (input.Count() == 0) {
 		return;
@@ -1210,7 +1213,7 @@ static void ComputeWindowExpressions(WindowExpressions &window_exprs, ChunkColle
 	//	Compute the functions columnwise
 	for (idx_t expr_idx = 0; expr_idx < window_exprs.size(); ++expr_idx) {
 		ChunkCollection output;
-		ComputeWindowExpression(window_exprs[expr_idx], input, output, over, partition_bits, order_bits);
+		ComputeWindowExpression(window_exprs[expr_idx], input, output, over, partition_bits, order_bits, mode);
 		window_results.Fuse(output);
 	}
 }
@@ -1257,7 +1260,7 @@ static void GeneratePartition(WindowOperatorState &state, WindowGlobalState &gst
 			ScanSortedPartition(state, input, input_types, over, over_types);
 		}
 
-		ComputeWindowExpressions(window_exprs, input, output, over);
+		ComputeWindowExpressions(window_exprs, input, output, over, gstate.mode);
 		state.chunks.Merge(input);
 		state.window_results.Merge(output);
 
@@ -1273,7 +1276,7 @@ static void GeneratePartition(WindowOperatorState &state, WindowGlobalState &gst
 		ChunkCollection over;
 		ScanSortedPartition(state, input, input_types, over, over_types);
 
-		ComputeWindowExpressions(window_exprs, input, output, over);
+		ComputeWindowExpressions(window_exprs, input, output, over, gstate.mode);
 		state.chunks.Merge(input);
 		state.window_results.Merge(output);
 	}
