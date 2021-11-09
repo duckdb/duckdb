@@ -20,6 +20,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -109,9 +110,11 @@ public:
 	//! The set of disabled optimizers (default empty)
 	set<OptimizerType> disabled_optimizers;
 	//! Force a specific compression method to be used when checkpointing (if available)
-	CompressionType force_compression = CompressionType::COMPRESSION_INVALID;
+	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
 	//! Debug flag that adds additional (unnecessary) free_list blocks to the storage
 	bool debug_many_free_list_blocks = false;
+	//! Debug setting for window aggregation mode: (window, combine, separate)
+	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

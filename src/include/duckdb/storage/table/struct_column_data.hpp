@@ -50,7 +50,8 @@ public:
 	void CommitDropColumn() override;
 
 	unique_ptr<ColumnCheckpointState> CreateCheckpointState(RowGroup &row_group, TableDataWriter &writer) override;
-	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer) override;
+	unique_ptr<ColumnCheckpointState> Checkpoint(RowGroup &row_group, TableDataWriter &writer,
+	                                             ColumnCheckpointInfo &checkpoint_info) override;
 
 	void DeserializeColumn(Deserializer &source) override;
 

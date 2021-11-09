@@ -57,20 +57,19 @@ public:
 	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
 	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
 	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
-	                  aggregate_window_t window = nullptr, bool order_sensitive = false)
+	                  aggregate_window_t window = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
 	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), window(window),
-	      order_sensitive(order_sensitive), bind(bind), destructor(destructor), statistics(statistics) {
+	      bind(bind), destructor(destructor), statistics(statistics) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
 	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
 	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
 	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr,
-	                  bool order_sensitive = false)
+	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
-	                        simple_update, bind, destructor, statistics, window, order_sensitive) {
+	                        simple_update, bind, destructor, statistics, window) {
 	}
 
 	//! The hashed aggregate state sizing function
@@ -87,8 +86,6 @@ public:
 	aggregate_simple_update_t simple_update;
 	//! The windowed aggregate frame update function (may be null)
 	aggregate_window_t window;
-	//! True if the aggregate is order-sensitive
-	bool order_sensitive;
 
 	//! The bind function (may be null)
 	bind_aggregate_function_t bind;

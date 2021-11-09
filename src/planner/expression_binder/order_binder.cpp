@@ -1,6 +1,7 @@
 #include "duckdb/planner/expression_binder/order_binder.hpp"
 
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/planner/expression_binder.hpp"
@@ -64,6 +65,10 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 			return CreateProjectionReference(*expr, entry->second);
 		}
 		break;
+	}
+	case ExpressionClass::POSITIONAL_REFERENCE: {
+		auto &posref = (PositionalReferenceExpression &)*expr;
+		return CreateProjectionReference(*expr, posref.index - 1);
 	}
 	default:
 		break;

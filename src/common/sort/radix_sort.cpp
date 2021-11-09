@@ -106,39 +106,146 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 }
 
 //! Textbook LSD radix sort
-static void RadixSort(BufferManager &buffer_manager, data_ptr_t dataptr, const idx_t &count, const idx_t &col_offset,
-                      const idx_t &sorting_size, const SortLayout &sort_layout) {
-	auto temp_block = buffer_manager.Allocate(MaxValue(count * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
-	data_ptr_t temp = temp_block->Ptr();
+void RadixSortLSD(BufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count, const idx_t &col_offset,
+                  const idx_t &row_width, const idx_t &sorting_size) {
+	auto temp_block = buffer_manager.Allocate(MaxValue(count * row_width, (idx_t)Storage::BLOCK_SIZE));
 	bool swap = false;
 
-	idx_t counts[256];
-	uint8_t byte;
-	for (idx_t offset = col_offset + sorting_size - 1; offset + 1 > col_offset; offset--) {
+	idx_t counts[SortConstants::VALUES_PER_RADIX];
+	for (idx_t r = 1; r <= sorting_size; r++) {
 		// Init counts to 0
 		memset(counts, 0, sizeof(counts));
+		// Const some values for convenience
+		const data_ptr_t source_ptr = swap ? temp_block->Ptr() : dataptr;
+		const data_ptr_t target_ptr = swap ? dataptr : temp_block->Ptr();
+		const idx_t offset = col_offset + sorting_size - r;
 		// Collect counts
+		data_ptr_t offset_ptr = source_ptr + offset;
 		for (idx_t i = 0; i < count; i++) {
-			byte = *(dataptr + i * sort_layout.entry_size + offset);
-			counts[byte]++;
+			counts[*offset_ptr]++;
+			offset_ptr += row_width;
 		}
 		// Compute offsets from counts
-		for (idx_t val = 1; val < 256; val++) {
+		idx_t max_count = counts[0];
+		for (idx_t val = 1; val < SortConstants::VALUES_PER_RADIX; val++) {
+			max_count = MaxValue<idx_t>(max_count, counts[val]);
 			counts[val] = counts[val] + counts[val - 1];
 		}
-		// Re-order the data in temporary array
-		for (idx_t i = count; i > 0; i--) {
-			byte = *(dataptr + (i - 1) * sort_layout.entry_size + offset);
-			memcpy(temp + (counts[byte] - 1) * sort_layout.entry_size, dataptr + (i - 1) * sort_layout.entry_size,
-			       sort_layout.entry_size);
-			counts[byte]--;
+		if (max_count == count) {
+			continue;
 		}
-		std::swap(dataptr, temp);
+		// Re-order the data in temporary array
+		data_ptr_t row_ptr = source_ptr + (count - 1) * row_width;
+		for (idx_t i = 0; i < count; i++) {
+			idx_t &radix_offset = --counts[*(row_ptr + offset)];
+			memcpy(target_ptr + radix_offset * row_width, row_ptr, row_width);
+			row_ptr -= row_width;
+		}
 		swap = !swap;
 	}
 	// Move data back to original buffer (if it was swapped)
 	if (swap) {
-		memcpy(temp, dataptr, count * sort_layout.entry_size);
+		memcpy(dataptr, temp_block->Ptr(), count * row_width);
+	}
+}
+
+//! Insertion sort, used when count of values is low
+inline void InsertionSort(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, const idx_t &count,
+                          const idx_t &col_offset, const idx_t &row_width, const idx_t &total_comp_width,
+                          const idx_t &offset, bool swap) {
+	const data_ptr_t source_ptr = swap ? temp_ptr : orig_ptr;
+	const data_ptr_t target_ptr = swap ? orig_ptr : temp_ptr;
+	if (count > 1) {
+		const idx_t total_offset = col_offset + offset;
+		auto temp_val = unique_ptr<data_t[]>(new data_t[row_width]);
+		const data_ptr_t val = temp_val.get();
+		const auto comp_width = total_comp_width - offset;
+		for (idx_t i = 1; i < count; i++) {
+			memcpy(val, source_ptr + i * row_width, row_width);
+			idx_t j = i;
+			while (j > 0 &&
+			       memcmp(source_ptr + (j - 1) * row_width + total_offset, val + total_offset, comp_width) > 0) {
+				memcpy(source_ptr + j * row_width, source_ptr + (j - 1) * row_width, row_width);
+				j--;
+			}
+			memcpy(source_ptr + j * row_width, val, row_width);
+		}
+	}
+	if (swap) {
+		memcpy(target_ptr, source_ptr, count * row_width);
+	}
+}
+
+//! MSD radix sort that switches to insertion sort with low bucket sizes
+void RadixSortMSD(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, const idx_t &count, const idx_t &col_offset,
+                  const idx_t &row_width, const idx_t &comp_width, const idx_t &offset, idx_t locations[], bool swap) {
+	const data_ptr_t source_ptr = swap ? temp_ptr : orig_ptr;
+	const data_ptr_t target_ptr = swap ? orig_ptr : temp_ptr;
+	// Init counts to 0
+	memset(locations, 0, SortConstants::MSD_RADIX_LOCATIONS * sizeof(idx_t));
+	idx_t *counts = locations + 1;
+	// Collect counts
+	const idx_t total_offset = col_offset + offset;
+	data_ptr_t offset_ptr = source_ptr + total_offset;
+	for (idx_t i = 0; i < count; i++) {
+		counts[*offset_ptr]++;
+		offset_ptr += row_width;
+	}
+	// Compute locations from counts
+	idx_t max_count = 0;
+	for (idx_t radix = 0; radix < SortConstants::VALUES_PER_RADIX; radix++) {
+		max_count = MaxValue<idx_t>(max_count, counts[radix]);
+		counts[radix] += locations[radix];
+	}
+	if (max_count != count) {
+		// Re-order the data in temporary array
+		data_ptr_t row_ptr = source_ptr;
+		for (idx_t i = 0; i < count; i++) {
+			const idx_t &radix_offset = locations[*(row_ptr + total_offset)]++;
+			memcpy(target_ptr + radix_offset * row_width, row_ptr, row_width);
+			row_ptr += row_width;
+		}
+		swap = !swap;
+	}
+	// Check if done
+	if (offset == comp_width - 1) {
+		if (swap) {
+			memcpy(orig_ptr, temp_ptr, count * row_width);
+		}
+		return;
+	}
+	if (max_count == count) {
+		RadixSortMSD(orig_ptr, temp_ptr, count, col_offset, row_width, comp_width, offset + 1,
+		             locations + SortConstants::MSD_RADIX_LOCATIONS, swap);
+		return;
+	}
+	// Recurse
+	idx_t radix_count = locations[0];
+	for (idx_t radix = 0; radix < SortConstants::VALUES_PER_RADIX; radix++) {
+		const idx_t loc = (locations[radix] - radix_count) * row_width;
+		if (radix_count > SortConstants::INSERTION_SORT_THRESHOLD) {
+			RadixSortMSD(orig_ptr + loc, temp_ptr + loc, radix_count, col_offset, row_width, comp_width, offset + 1,
+			             locations + SortConstants::MSD_RADIX_LOCATIONS, swap);
+		} else if (radix_count != 0) {
+			InsertionSort(orig_ptr + loc, temp_ptr + loc, radix_count, col_offset, row_width, comp_width, offset + 1,
+			              swap);
+		}
+		radix_count = locations[radix + 1] - locations[radix];
+	}
+}
+
+//! Calls different sort functions, depending on the count and sorting sizes
+void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const idx_t &count, const idx_t &col_offset,
+               const idx_t &sorting_size, const SortLayout &sort_layout) {
+	if (count <= SortConstants::INSERTION_SORT_THRESHOLD) {
+		InsertionSort(dataptr, nullptr, count, 0, sort_layout.entry_size, sort_layout.comparison_size, 0, false);
+	} else if (sorting_size <= SortConstants::MSD_RADIX_SORT_SIZE_THRESHOLD) {
+		RadixSortLSD(buffer_manager, dataptr, count, col_offset, sort_layout.entry_size, sorting_size);
+	} else {
+		auto temp_block = buffer_manager.Allocate(MaxValue(count * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
+		auto preallocated_array = unique_ptr<idx_t[]>(new idx_t[sorting_size * SortConstants::MSD_RADIX_LOCATIONS]);
+		RadixSortMSD(dataptr, temp_block->Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,
+		             preallocated_array.get(), false);
 	}
 }
 
@@ -179,11 +286,10 @@ void LocalSortState::SortInMemory() {
 	idx_t sorting_size = 0;
 	idx_t col_offset = 0;
 	unique_ptr<bool[]> ties_ptr;
-	unique_ptr<BufferHandle> ties_handle;
 	bool *ties = nullptr;
 	for (idx_t i = 0; i < sort_layout->column_count; i++) {
 		sorting_size += sort_layout->column_sizes[i];
-		if (sort_layout->constant_size[i] && i < sort_layout->column_count - 1 && sorting_size < 32) {
+		if (sort_layout->constant_size[i] && i < sort_layout->column_count - 1) {
 			// Add columns to the sorting size until we reach a variable size column, or the last column
 			continue;
 		}

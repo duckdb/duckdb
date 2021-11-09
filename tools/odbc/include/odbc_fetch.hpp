@@ -5,7 +5,6 @@
 #include "duckdb/common/windows.hpp"
 
 #include <sqltypes.h>
-#include <sql.h>
 #include <sqlext.h>
 #include <vector>
 #include <stack>
@@ -63,6 +62,8 @@ public:
 
 	SQLRETURN Fetch(SQLHSTMT statement_handle, OdbcHandleStmt *stmt, SQLULEN fetch_orientation = SQL_FETCH_NEXT,
 	                SQLLEN fetch_offset = 0);
+
+	SQLRETURN FetchFirst(SQLHSTMT statement_handle, OdbcHandleStmt *stmt);
 
 	SQLRETURN FetchNextChunk(SQLULEN fetch_orientation, OdbcHandleStmt *stmt, SQLLEN fetch_offset);
 

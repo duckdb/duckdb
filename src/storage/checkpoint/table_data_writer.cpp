@@ -21,4 +21,8 @@ BlockPointer TableDataWriter::WriteTableData() {
 	return table.storage->Checkpoint(*this);
 }
 
+CompressionType TableDataWriter::GetColumnCompressionType(idx_t i) {
+	return table.columns[i].compression_type;
+}
+
 } // namespace duckdb

@@ -47,6 +47,13 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGLis
 	case duckdb_libpgquery::PG_CONSTR_DEFAULT:
 		column.default_value = TransformExpression(constraint->raw_expr);
 		return nullptr;
+	case duckdb_libpgquery::PG_CONSTR_COMPRESSION:
+		column.compression_type = CompressionTypeFromString(constraint->compression_name);
+		if (column.compression_type == CompressionType::COMPRESSION_AUTO) {
+			throw ParserException("Unrecognized option for column compression, expected none, uncompressed, rle, "
+			                      "dictionary, pfor, bitpacking or fsst");
+		}
+		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_FOREIGN:
 	default:
 		throw NotImplementedException("Constraint not implemented!");

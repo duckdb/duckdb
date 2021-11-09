@@ -82,6 +82,16 @@ public:
 	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
 };
 
+class CastExpressionMatcher : public ExpressionMatcher {
+public:
+	CastExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CAST) {
+	}
+	//! The matcher for the child expressions
+	unique_ptr<ExpressionMatcher> matcher;
+
+	bool Match(Expression *expr_, vector<Expression *> &bindings) override;
+};
+
 class InClauseExpressionMatcher : public ExpressionMatcher {
 public:
 	InClauseExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_OPERATOR) {
