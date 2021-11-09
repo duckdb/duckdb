@@ -1,9 +1,6 @@
 name: CIFuzz
 on: [pull_request]
 
-env:
-  DISABLE_PARQUET: 1
-
 jobs:
   Fuzzing:
     runs-on: ubuntu-latest
