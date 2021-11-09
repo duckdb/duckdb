@@ -19,6 +19,32 @@ unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 	}
 }
 
+CatalogType ChangeOwnershipInfo::GetCatalogType() {
+    return catalog_type;
+}
+
+unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
+    return make_unique_base<AlterInfo, ChangeOwnershipInfo>(catalog_type, schema, name, owner_schema, owner_name);
+}
+
+void ChangeOwnershipInfo::Serialize(Serializer &serializer){
+    AlterInfo::Serialize(serializer);
+    serializer.Write<CatalogType>(catalog_type);
+    serializer.WriteString(schema);
+    serializer.WriteString(name);
+    serializer.WriteString(owner_schema);
+    serializer.WriteString(owner_name);
+}
+
+unique_ptr<AlterInfo> ChangeOwnershipInfo::Deserialize(Deserializer &source){
+    auto type = source.Read<CatalogType>();
+    auto schema = source.Read<string>();
+    auto name = source.Read<string>();
+    auto owner_schema = source.Read<string>();
+    auto owner_name = source.Read<string>();
+    return make_unique<ChangeOwnershipInfo>(type, schema, name, owner_schema, owner_name);
+}
+
 void AlterTableInfo::Serialize(Serializer &serializer) {
 	AlterInfo::Serialize(serializer);
 	serializer.Write<AlterTableType>(alter_table_type);

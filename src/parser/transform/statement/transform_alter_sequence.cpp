@@ -1,4 +1,3 @@
-#include "duckdb/parser/parsed_data/alter_sequence_info.hpp"
 #include "duckdb/parser/transformer.hpp"
 
 namespace duckdb {
@@ -32,21 +31,23 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 				auto opt_value_list = (duckdb_libpgquery::PGList *)(val);
 				for (auto c = opt_value_list->head; c != nullptr; c = lnext(c)) {
 					auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
-					opt_values.push_back(target->name);
+					opt_values.emplace_back(target->name);
 				}
-				D_ASSERT(opt_values.size() > 0);
-				string table_schema = "";
-				string table_name = "";
+				D_ASSERT(!opt_values.empty());
+				string owner_schema = "";
+				string owner_name = "";
 				if (opt_values.size() == 2) {
-					table_schema = opt_values[0];
-					table_name = opt_values[1];
+                    owner_schema = opt_values[0];
+                    owner_name = opt_values[1];
 				} else if (opt_values.size() == 1) {
-					table_schema = "main";
-					table_name = opt_values[0];
+                    owner_schema = "main";
+                    owner_name = opt_values[0];
 				} else {
 					throw ParserException("Expected an argument for option %s", opt_name);
 				}
-				auto info = make_unique<ChangeOwnershipInfo>(sequence_schema, sequence_name, table_schema, table_name);
+				auto info = make_unique<ChangeOwnershipInfo>(
+                    CatalogType::SEQUENCE_ENTRY, sequence_schema, sequence_name, owner_schema, owner_name
+                );
 				result->info = move(info);
 			}
 		}

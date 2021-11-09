@@ -2,295 +2,349 @@
 # description: Tests alter of ownership of sequences
 # group: [dependencies]
 
-# TEST: If the table is dropped, then the sequence is also droppped
+##TEST: If the table is dropped, then the sequence is also droppped
 statement ok
-CREATE SEQUENCE tablename_colname_seq;
+CREATE SEQUENCE sequence1;
 
 statement ok
 CREATE TABLE tablename (
-    colname integer DEFAULT nextval('tablename_colname_seq')
+    colname integer
 );
 
 statement ok
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+ALTER SEQUENCE sequence1 OWNED BY tablename;
+
+statement ok
+DROP TABLE tablename;
 
 statement error
+SELECT nextval('sequence1');
+
+##TEST: If the owned sequence is dropped with CASCADE, then the table is also dropped
+statement ok
+CREATE SEQUENCE sequence1;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer
+);
+
+statement ok
+ALTER SEQUENCE sequence1 OWNED BY tablename;
+
+statement ok
+DROP SEQUENCE sequence1 CASCADE;
+
+statement error
+SELECT * FROM tablename;
+
+##TEST: The owned sequence cannot be dropped without CASCADE
+statement ok
+CREATE SEQUENCE sequence1;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer
+);
+
+statement ok
+ALTER SEQUENCE sequence1 OWNED BY tablename;
+
+statement error
+DROP SEQUENCE sequence1;
+
+statement ok
+DROP TABLE tablename;
+
+##TEST: If sequence is already owned by other table throw an error
+statement ok
+CREATE SEQUENCE sequence1;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer
+);
+
+statement ok
+CREATE TABLE tablename2 (
+    colname integer
+);
+
+statement ok
+ALTER SEQUENCE sequence1 OWNED BY tablename;
+
+statement error
+ALTER SEQUENCE sequence1 OWNED BY tablename2;
+
+statement ok
 DROP TABLE tablename;
 
 statement ok
-DROP TABLE tablename CASCADE;
+DROP TABLE tablename2;
 
-statement error
-SELECT nextval('tablename_colname_seq');
-
+##TEST: If owning the sequence twice shouldn't return any error
 statement ok
-CREATE SEQUENCE tablename_colname_seq;
-
-statement ok
-DROP SEQUENCE tablename_colname_seq;
-
-# TEST: If the sequence is owned by the table, inserts work normally
-statement ok
-CREATE SEQUENCE tablename_colname_seq;
+CREATE SEQUENCE sequence1;
 
 statement ok
 CREATE TABLE tablename (
-    colname integer DEFAULT nextval('tablename_colname_seq')
+    colname integer
 );
 
 statement ok
-INSERT INTO tablename VALUES (default);
-
-query I
-SELECT colname FROM tablename;
-----
-1
+ALTER SEQUENCE sequence1 OWNED BY tablename;
 
 statement ok
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+ALTER SEQUENCE sequence1 OWNED BY tablename;
 
 statement ok
-INSERT INTO tablename VALUES (default);
+DROP TABLE tablename;
+
+##TEST: A table can own many sequences, and when the table is dropped, all sequences are also dropped
+statement ok
+CREATE SEQUENCE sequence1;
 
 statement ok
-INSERT INTO tablename VALUES (default);
-
-query I
-SELECT colname FROM tablename;
-----
-1
-2
-3
+CREATE SEQUENCE sequence2;
 
 statement ok
-DROP TABLE tablename CASCADE;
-
-# TEST: the sequence can be droppped but then the table loses its default value
-statement ok
-CREATE SEQUENCE tablename_colname_seq;
+CREATE SEQUENCE sequence3;
 
 statement ok
 CREATE TABLE tablename (
-    colname integer DEFAULT nextval('tablename_colname_seq')
+    colname integer
 );
 
 statement ok
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+ALTER SEQUENCE sequence1 OWNED BY tablename;
 
 statement ok
-DROP SEQUENCE tablename_colname_seq;
+ALTER SEQUENCE sequence2 OWNED BY tablename;
+
+statement ok
+ALTER SEQUENCE sequence3 OWNED BY tablename;
+
+statement ok
+DROP TABLE tablename;
 
 statement error
-SELECT nextval('tablename_colname_seq');
+SELECT nextval('sequence1');
 
+statement error
+SELECT nextval('sequence2');
+
+statement error
+SELECT nextval('sequence3');
+
+##TEST: When owning a sequence, insertions work normally
 statement ok
-INSERT INTO tablename VALUES (default);
+CREATE SEQUENCE sequence1;
 
-query I
-SELECT colname FROM tablename;
-----
-NULL
-
+# sequence 2 will not be owned by tablename
 statement ok
-DROP TABLE tablename CASCADE;
-
-# TEST: if a sequence is used by more than one table, then it cannot be owned
-statement ok
-CREATE SEQUENCE tablename_colname_seq;
+CREATE SEQUENCE sequence2;
 
 statement ok
 CREATE TABLE tablename (
-    colname integer DEFAULT nextval('tablename_colname_seq')
+    colname integer DEFAULT nextval('sequence1'),
+    colname2 integer DEFAULT nextval('sequence2'),
+    colname3 integer,
+    colname4 float,
+    colname5 string
 );
 
 statement ok
-CREATE TABLE tablename2 (
-    colname integer DEFAULT nextval('tablename_colname_seq')
-);
-
-statement error
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+ALTER SEQUENCE sequence1 OWNED BY tablename;
 
 statement ok
-DROP TABLE tablename CASCADE;
+INSERT INTO tablename VALUES(default, default, 10, 2.0, 'aaaa');
 
 statement ok
-DROP TABLE tablename2 CASCADE;
+INSERT INTO tablename VALUES(default, default, 20, 3.0, 'bbbb');
+
+query IIIII
+SELECT colname, colname2, colname3, colname4, colname5 FROM tablename;
+----
+1	1	10	2.0	aaaa
+2	2	20	3.0	bbbb
 
 statement ok
-DROP SEQUENCE tablename_colname_seq;
+DROP TABLE tablename;
 
-# TEST: The sequence can be droppped with CASCADE and the table remains intact
 statement ok
-CREATE SEQUENCE tablename_colname_seq;
+DROP SEQUENCE sequence2;
+
+##TEST: If we change the name of a table that has an owned sequence, the ownership moves to the new table name
+statement ok
+CREATE SEQUENCE sequence1;
 
 statement ok
 CREATE TABLE tablename (
-    colname integer DEFAULT nextval('tablename_colname_seq')
+    colname integer
 );
 
 statement ok
-INSERT INTO tablename VALUES (default)
-
-query I
-SELECT colname FROM tablename
-----
-1
+ALTER SEQUENCE sequence1 OWNED BY tablename;
 
 statement ok
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
+ALTER TABLE tablename RENAME TO new_tablename;
 
+# Create a new table, with the same name as the old table and try to own the sequence
 statement ok
-DROP SEQUENCE tablename_colname_seq CASCADE;
+CREATE TABLE tablename (
+    colname integer
+);
 
 statement error
-SELECT nextval('tablename_colname_seq');
+ALTER SEQUENCE sequence1 OWNED BY tablename;
 
-query I
-SELECT colname FROM tablename;
-----
-1
+statement error
+DROP SEQUENCE sequence1;
+
+# Owning the sequence with the same table shouldn't return any error
+statement ok
+ALTER SEQUENCE sequence1 OWNED BY new_tablename;
 
 statement ok
-DROP TABLE tablename CASCADE;
+DROP TABLE tablename;
 
-# TEST: If sequence is already owned by other table throw an error
 statement ok
-CREATE SEQUENCE tablename_colname_seq;
+DROP TABLE new_tablename;
+
+##TEST: If we add a column to a table that has an owned sequence, the ownership remains
+statement ok
+CREATE SEQUENCE sequence1;
 
 statement ok
 CREATE TABLE tablename (
-    colname integer DEFAULT nextval('tablename_colname_seq')
+    colname integer
 );
 
 statement ok
-CREATE TABLE tablename2 (
-    colname integer DEFAULT nextval('tablename_colname_seq')
-);
+ALTER SEQUENCE sequence1 OWNED BY tablename;
+
+statement ok
+ALTER TABLE tablename ADD COLUMN colname2 integer DEFAULT nextval('sequence1')
+
+statement ok
+ALTER SEQUENCE sequence1 OWNED BY tablename;
 
 statement error
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
-
-statement error
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename2;
+DROP SEQUENCE sequence1;
 
 statement ok
-DROP TABLE tablename CASCADE;
+DROP TABLE tablename;
 
+##TEST: If we remove a column to a table that has an owned sequence, the ownership remains
 statement ok
-DROP TABLE tablename2 CASCADE;
-
-statement ok
-DROP SEQUENCE tablename_colname_seq;
-
-# TEST: If there is a rollback during the ownership change, then the sequence returns to its old state
-statement ok
-CREATE SEQUENCE tablename_colname_seq;
+CREATE SEQUENCE sequence1;
 
 statement ok
 CREATE TABLE tablename (
-    colname integer DEFAULT nextval('tablename_colname_seq')
+    colname integer,
+    colname2 integer DEFAULT nextval('sequence1')
 );
 
 statement ok
-INSERT INTO tablename VALUES (default)
+ALTER SEQUENCE sequence1 OWNED BY tablename;
 
-query I
-SELECT colname FROM tablename
-----
-1
+statement ok
+ALTER TABLE tablename DROP colname2;
+
+statement error
+DROP SEQUENCE sequence1;
+
+statement ok
+DROP TABLE tablename;
+
+##TEST: If we alter the type of a column that has the sequence as default value
+statement ok
+CREATE SEQUENCE sequence1;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('sequence1')
+);
+
+statement ok
+ALTER SEQUENCE sequence1 OWNED BY tablename;
+
+statement ok
+ALTER TABLE tablename ALTER colname TYPE float;
+
+statement error
+DROP SEQUENCE sequence1;
+
+statement ok
+DROP TABLE tablename;
+
+###TEST: If we have many columns using the sequence as default and drop one by one, the ownership should remain intact
+statement ok
+CREATE SEQUENCE sequence1;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('sequence1'),
+    colname2 integer DEFAULT nextval('sequence1'),
+    colname3 integer DEFAULT nextval('sequence1'),
+    colname4 integer DEFAULT nextval('sequence1')
+);
+
+statement ok
+ALTER SEQUENCE sequence1 OWNED BY tablename;
+
+statement ok
+ALTER TABLE tablename DROP colname4;
+
+statement error
+DROP SEQUENCE sequence1;
+
+statement ok
+ALTER TABLE tablename DROP colname3;
+
+statement error
+DROP SEQUENCE sequence1;
+
+statement ok
+ALTER TABLE tablename DROP colname2;
+
+statement error
+DROP SEQUENCE sequence1;
+
+statement ok
+DROP TABLE tablename;
+
+##TEST: If we drop a table which owns a sequence and then roll back, the ownership should remain
+statement ok
+CREATE SEQUENCE sequence1;
+
+statement ok
+CREATE TABLE tablename (
+    colname integer DEFAULT nextval('sequence1')
+);
+
+statement ok
+ALTER SEQUENCE sequence1 OWNED BY tablename;
 
 statement ok
 BEGIN TRANSACTION;
 
 statement ok
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
-
-statement ok
-INSERT INTO tablename VALUES (default)
-
-query I
-SELECT colname FROM tablename
-----
-1
-2
-
-statement error
 DROP TABLE tablename;
 
-statement ok
-DROP TABLE tablename CASCADE;
+statement error
+select nextval('sequence1');
 
 statement ok
 ROLLBACK;
 
-statement ok
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
-
-statement ok
-INSERT INTO tablename VALUES (default)
-
 query I
-SELECT colname FROM tablename
-----
-1
-2
-
-statement ok
-DROP TABLE tablename CASCADE;
-
-# TEST: If owning the sequence twice shouldn't return any error
-statement ok
-CREATE SEQUENCE tablename_colname_seq;
-
-statement ok
-CREATE TABLE tablename (
-    colname integer DEFAULT nextval('tablename_colname_seq')
-);
-
-statement ok
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
-
-statement ok
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
-
-statement ok
-DROP TABLE tablename CASCADE;
-
-# TEST: If there is a rollback during dropping of an owned sequence, the sequence returns back to its original state
-statement ok
-CREATE SEQUENCE tablename_colname_seq;
-
-statement ok
-CREATE TABLE tablename (
-    colname integer DEFAULT nextval('tablename_colname_seq')
-);
-
-statement ok
-ALTER SEQUENCE tablename_colname_seq OWNED BY tablename;
-
-statement ok
-BEGIN TRANSACTION;
-
-statement ok
-DROP SEQUENCE tablename_colname_seq;
-
-statement error
-select nextval('tablename_colname_seq')
-
-statement ok
-ROLLBACK;
-
-statement ok
-INSERT INTO tablename VALUES (default)
-
-query I
-SELECT colname FROM tablename
+select nextval('sequence1');
 ----
 1
 
-statement ok
-DROP TABLE tablename CASCADE;
-
 statement error
-select nextval('tablename_colname_seq')
+DROP SEQUENCE sequence1;
+
+statement ok
+DROP TABLE tablename;

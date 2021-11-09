@@ -182,11 +182,17 @@ void SchemaCatalogEntry::DropEntry(ClientContext &context, DropInfo *info) {
 
 void SchemaCatalogEntry::Alter(ClientContext &context, AlterInfo *info) {
 	CatalogType type = info->GetCatalogType();
-	string name = info->name;
 	auto &set = GetCatalogSet(type);
-	if (!set.AlterEntry(context, name, info)) {
-		throw CatalogException("Entry with name \"%s\" does not exist!", name);
-	}
+    if(info->type == AlterType::CHANGE_OWNERSHIP){
+        if (!set.AlterOwnership(context, (ChangeOwnershipInfo *) info)) {
+            throw CatalogException("Couldn't change ownership!");
+        }
+    }else{
+        string name = info->name;
+        if (!set.AlterEntry(context, name, info)) {
+            throw CatalogException("Entry with name \"%s\" does not exist!", name);
+        }
+    }
 }
 
 void SchemaCatalogEntry::Scan(ClientContext &context, CatalogType type,

@@ -56,6 +56,8 @@ public:
 
 	bool DropEntry(ClientContext &context, const string &name, bool cascade);
 
+    bool AlterOwnership(ClientContext &context, ChangeOwnershipInfo *info);
+
 	void CleanupEntry(CatalogEntry *catalog_entry);
 
 	//! Returns the entry with the specified name
@@ -90,14 +92,10 @@ public:
 private:
 	//! Adjusts table dependencies on the event of an UNDO
 	void AdjustTableDependencies(CatalogEntry *entry);
-	//! Adjusts sequence dependencies on the event of an UNDO
-	void AdjustSequenceDependencies(SequenceCatalogEntry *old_sequence, SequenceCatalogEntry *new_sequence);
 	//! Adjust one dependency
 	void AdjustDependency(CatalogEntry *entry, TableCatalogEntry *table, ColumnDefinition &column, bool remove);
 	//! Adjust Enum dependency
 	void AdjustEnumDependency(CatalogEntry *entry, ColumnDefinition &column, bool remove);
-	//! Removes the default values of all tables that use the sequence
-	void RemoveSequenceAsDefaultValue(ClientContext &context, CatalogEntry &entry);
 	//! Given a root entry, gets the entry valid for this transaction
 	CatalogEntry *GetEntryForTransaction(ClientContext &context, CatalogEntry *current);
 	CatalogEntry *GetCommittedEntry(CatalogEntry *current);
