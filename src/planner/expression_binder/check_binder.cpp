@@ -5,9 +5,9 @@
 
 namespace duckdb {
 
-CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table, vector<ColumnDefinition> &columns,
+CheckBinder::CheckBinder(Binder &binder, ClientContext &context, string table_p, vector<ColumnDefinition> &columns,
                          unordered_set<column_t> &bound_columns)
-    : ExpressionBinder(binder, context), table(move(table)), columns(columns), bound_columns(bound_columns) {
+    : ExpressionBinder(binder, context), table(move(table_p)), columns(columns), bound_columns(bound_columns) {
 	target_type = LogicalType::INTEGER;
 }
 
@@ -30,8 +30,16 @@ string CheckBinder::UnsupportedAggregateMessage() {
 }
 
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
-	if (colref.IsQualified()) {
-		throw InternalException("FIXME: bind check column with > references");
+	if (colref.column_names.size() > 1) {
+		idx_t struct_start = 0;
+		if (colref.column_names[0] == table) {
+			struct_start++;
+		}
+		auto result = make_unique_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
+		for(idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
+			result = CreateStructExtract(move(result), colref.column_names[i]);
+		}
+		return BindExpression(&result, 0);
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (colref.column_names[0] == columns[i].name) {

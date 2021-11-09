@@ -41,6 +41,13 @@ SELECT test.tbl.col FROM test.tbl;
 2
 3
 
+# schema name with alias does not work
+statement error
+SELECT test.t.col FROM test.tbl t;
+
+statement error
+SELECT test.tbl.col FROM test.tbl t;
+
 # check how ties are resolved
 # we create a table called "t" in a schema called "t" with a column called "t" that has a field called "t"
 statement ok
@@ -76,7 +83,77 @@ SELECT t.t.t.t FROM t.t;
 ----
 42
 
-# test failures
+statement ok
+DROP SCHEMA t CASCADE;
+
+# test long nested struct
+statement ok
+CREATE SCHEMA t
+
+statement ok
+CREATE TABLE t.t AS SELECT {'t': {'t': {'t': {'t': {'t': 42}}}}} t
+
+query I
+SELECT t.t.t.t.t.t.t.t FROM t.t;
+----
+42
+
+query I
+SELECT t.t.t.t.t.t.t FROM t.t;
+----
+{'t': 42}
+
+query I
+SELECT t.t.t.t.t.t FROM t.t;
+----
+{'t': {'t': 42}}
+
+query I
+SELECT t.t.t.t.t FROM t.t;
+----
+{'t': {'t': {'t': 42}}}
+
+query I
+SELECT t.t.t.t FROM t.t;
+----
+{'t': {'t': {'t': {'t': 42}}}}
+
+query I
+SELECT t.t.t FROM t.t;
+----
+{'t': {'t': {'t': {'t': {'t': 42}}}}}
+
+query I
+SELECT t.t FROM t.t;
+----
+{'t': {'t': {'t': {'t': {'t': 42}}}}}
+
+query I
+SELECT t FROM t.t;
+----
+{'t': {'t': {'t': {'t': {'t': 42}}}}}
+
+statement ok
+DROP SCHEMA t CASCADE
+
+# test multiple tables with the same name but a different schema
+# we don't allow this (duplicate alias in query)
+statement ok
+CREATE SCHEMA s1
+
+statement ok
+CREATE SCHEMA s2
+
+statement ok
+CREATE TABLE s1.t1 AS SELECT 42 t
+
+statement ok
+CREATE TABLE s2.t1 AS SELECT 84 t
+
+statement error
+SELECT s1.t1.t FROM s1.t1, s2.t1
+
+# test various failures
 statement error
 SELECT testX.tbl.col FROM test.tbl;
 
@@ -86,8 +163,5 @@ SELECT test.tblX.col FROM test.tbl;
 statement error
 SELECT test.tbl.colX FROM test.tbl;
 
-# nested structs with very long chains
-# multiple tables with the same name but a different schema?
-# schema name with alias?
 # CHECK on struct CHECK(x.a)
 # ALTER TYPE with struct (x.a)

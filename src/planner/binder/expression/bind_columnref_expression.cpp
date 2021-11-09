@@ -108,7 +108,7 @@ void ExpressionBinder::QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpre
 	where_binder.QualifyColumnNames(expr);
 }
 
-static unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, string field_name) {
+unique_ptr<ParsedExpression> ExpressionBinder::CreateStructExtract(unique_ptr<ParsedExpression> base, string field_name) {
 	vector<unique_ptr<ParsedExpression>> children;
 	children.push_back(move(base));
 	children.push_back(make_unique_base<ParsedExpression, ConstantExpression>(Value(move(field_name))));
@@ -176,7 +176,8 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 			struct_extract_start = 2;
 		} else {
 			// part1 could be a column
-			result_expr = QualifyColumnName(colref.column_names[0], error_message);
+			string col_error;
+			result_expr = QualifyColumnName(colref.column_names[0], col_error);
 			if (!result_expr) {
 				// it is not! return the error
 				return nullptr;
