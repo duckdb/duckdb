@@ -28,4 +28,9 @@ struct RLEFun {
 	static bool TypeIsSupported(PhysicalType type);
 };
 
+struct BitpackingFun{
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(PhysicalType type);
+};
+
 } // namespace duckdb

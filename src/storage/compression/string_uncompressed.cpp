@@ -27,7 +27,7 @@ struct StringDictionaryContainer {
 	//! The size of the dictionary
 	uint32_t size;
 	//! The end of the dictionary (typically Storage::BLOCK_SIZE)
-	uint32_t end;
+	uint32_t  end;
 
 	void Verify() {
 		D_ASSERT(size <= Storage::BLOCK_SIZE);
