@@ -363,6 +363,11 @@ opt_all_clause:
 			| /*EMPTY*/								{ $$ = NIL; }
 		;
 
+opt_ignore_nulls:
+			IGNORE NULLS_P							{ $$ = true;}
+			| /*EMPTY*/								{ $$ = false; }
+		;
+
 opt_sort_clause:
 			sort_clause								{ $$ = $1;}
 			| /*EMPTY*/								{ $$ = NIL; }
@@ -2275,40 +2280,45 @@ func_application: func_name '(' ')'
 				{
 					$$ = (PGNode *) makeFuncCall($1, NIL, @1);
 				}
-			| func_name '(' func_arg_list opt_sort_clause ')'
+			| func_name '(' func_arg_list opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, $3, @1);
 					n->agg_order = $4;
+					n->agg_ignore_nulls = $5;
 					$$ = (PGNode *)n;
 				}
-			| func_name '(' VARIADIC func_arg_expr opt_sort_clause ')'
+			| func_name '(' VARIADIC func_arg_expr opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, list_make1($4), @1);
 					n->func_variadic = true;
 					n->agg_order = $5;
+					n->agg_ignore_nulls = $6;
 					$$ = (PGNode *)n;
 				}
-			| func_name '(' func_arg_list ',' VARIADIC func_arg_expr opt_sort_clause ')'
+			| func_name '(' func_arg_list ',' VARIADIC func_arg_expr opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, lappend($3, $6), @1);
 					n->func_variadic = true;
 					n->agg_order = $7;
+					n->agg_ignore_nulls = $8;
 					$$ = (PGNode *)n;
 				}
-			| func_name '(' ALL func_arg_list opt_sort_clause ')'
+			| func_name '(' ALL func_arg_list opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, $4, @1);
 					n->agg_order = $5;
+					n->agg_ignore_nulls = $6;
 					/* Ideally we'd mark the PGFuncCall node to indicate
 					 * "must be an aggregate", but there's no provision
 					 * for that in PGFuncCall at the moment.
 					 */
 					$$ = (PGNode *)n;
 				}
-			| func_name '(' DISTINCT func_arg_list opt_sort_clause ')'
+			| func_name '(' DISTINCT func_arg_list opt_sort_clause opt_ignore_nulls ')'
 				{
 					PGFuncCall *n = makeFuncCall($1, $4, @1);
 					n->agg_order = $5;
+					n->agg_ignore_nulls = $6;
 					n->agg_distinct = true;
 					$$ = (PGNode *)n;
 				}
@@ -3373,7 +3383,7 @@ AexprConst: Iconst
 					t->location = @1;
 					$$ = makeStringConstCast($2, @2, t);
 				}
-			| func_name '(' func_arg_list opt_sort_clause ')' Sconst
+			| func_name '(' func_arg_list opt_sort_clause opt_ignore_nulls ')' Sconst
 				{
 					/* generic syntax with a type modifier */
 					PGTypeName *t = makeTypeNameFromNameList($1);
@@ -3383,7 +3393,7 @@ AexprConst: Iconst
 					 * We must use func_arg_list and opt_sort_clause in the
 					 * production to avoid reduce/reduce conflicts, but we
 					 * don't actually wish to allow PGNamedArgExpr in this
-					 * context, nor ORDER BY.
+					 * context, ORDER BY, nor IGNORE NULLS.
 					 */
 					foreach(lc, $3)
 					{
@@ -3400,10 +3410,16 @@ AexprConst: Iconst
 									(errcode(PG_ERRCODE_SYNTAX_ERROR),
 									 errmsg("type modifier cannot have ORDER BY"),
 									 parser_errposition(@4)));
+					if ($5 != false)
+							ereport(ERROR,
+									(errcode(PG_ERRCODE_SYNTAX_ERROR),
+									 errmsg("type modifier cannot have IGNORE NULLS"),
+									 parser_errposition(@5)));
+
 
 					t->typmods = $3;
 					t->location = @1;
-					$$ = makeStringConstCast($6, @6, t);
+					$$ = makeStringConstCast($7, @7, t);
 				}
 			| ConstTypename Sconst
 				{

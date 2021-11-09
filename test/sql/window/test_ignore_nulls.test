@@ -1,0 +1,40 @@
+# name: test/sql/window/test_ignore_nulls.test
+# description: Test IGNORE NULLS window syntax
+# group: [window]
+
+require vector_size 512
+
+statement ok
+PRAGMA enable_verification
+
+# Issue #2549
+query IIII
+WITH t(id, user_id, order_id) AS (VALUES
+	(0, 1, 614),
+	(1, 1, null),
+	(2, 1, null),
+	(3, 1, 639),
+	(4, 1, 2027)
+)
+SELECT
+  id,
+  user_id,
+  order_id,
+  LAST_VALUE (order_id IGNORE NULLS) over (
+    PARTITION BY user_id
+    ORDER BY id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+  ) AS last_order_id
+FROM t
+----
+0	1	614	NULL
+1	1	NULL	614
+2	1	NULL	NULL
+3	1	639	NULL
+4	1	2027	639
+
+# 0	1	614	NULL
+# 1	1	NULL	614
+# 2	1	NULL	614
+# 3	1	639	614
+# 4	1	2027	639
