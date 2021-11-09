@@ -8,7 +8,7 @@ namespace duckdb {
 
 WindowExpression::WindowExpression(ExpressionType type, string schema, const string &function_name)
     : ParsedExpression(type, ExpressionClass::WINDOW), schema(move(schema)),
-      function_name(StringUtil::Lower(function_name)) {
+      function_name(StringUtil::Lower(function_name)), ignore_nulls(false) {
 	switch (type) {
 	case ExpressionType::WINDOW_AGGREGATE:
 	case ExpressionType::WINDOW_ROW_NUMBER:

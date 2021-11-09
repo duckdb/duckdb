@@ -38,3 +38,21 @@ FROM t
 # 2	1	NULL	614
 # 3	1	639	614
 # 4	1	2027	639
+
+#
+# Unsupported
+#
+
+# Regular function
+statement error
+SELECT ABS(x IGNORE NULLS) FROM range(10) tbl(x)
+
+# Aggregate function
+statement error
+SELECT SUM(x IGNORE NULLS)
+FROM range(10) tbl(x)
+
+# Windowed aggregate
+statement error
+SELECT SUM(x IGNORE NULLS) OVER (PARTITION BY (x / 3) ORDER BY x % 3)
+FROM range(10) tbl(x)

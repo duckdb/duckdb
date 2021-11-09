@@ -9,7 +9,7 @@ BoundWindowExpression::BoundWindowExpression(ExpressionType type, LogicalType re
                                              unique_ptr<AggregateFunction> aggregate,
                                              unique_ptr<FunctionData> bind_info)
     : Expression(type, ExpressionClass::BOUND_WINDOW, move(return_type)), aggregate(move(aggregate)),
-      bind_info(move(bind_info)) {
+      bind_info(move(bind_info)), ignore_nulls(false) {
 }
 
 string BoundWindowExpression::ToString() const {
