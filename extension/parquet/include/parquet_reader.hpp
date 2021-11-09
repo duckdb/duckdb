@@ -15,12 +15,11 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #endif
-#include "resizable_buffer.hpp"
 #include "column_reader.hpp"
-
 #include "parquet_file_metadata_cache.hpp"
-#include "parquet_types.h"
 #include "parquet_rle_bp_decoder.hpp"
+#include "parquet_types.h"
+#include "resizable_buffer.hpp"
 
 #include <exception>
 
@@ -54,6 +53,10 @@ struct ParquetReaderScanState {
 	ResizeableBuffer repeat_buf;
 };
 
+struct ParquetOptions {
+	bool binary_as_string = false;
+};
+
 class ParquetReader {
 public:
 	ParquetReader(Allocator &allocator, unique_ptr<FileHandle> file_handle_p,
@@ -63,9 +66,9 @@ public:
 	}
 
 	ParquetReader(ClientContext &context, string file_name, const vector<LogicalType> &expected_types_p,
-	              const string &initial_filename = string());
-	ParquetReader(ClientContext &context, string file_name)
-	    : ParquetReader(context, move(file_name), vector<LogicalType>()) {
+	              ParquetOptions parquet_options, const string &initial_filename = string());
+	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options)
+	    : ParquetReader(context, move(file_name), vector<LogicalType>(), parquet_options, string()) {
 	}
 	~ParquetReader();
 
@@ -75,6 +78,7 @@ public:
 	vector<LogicalType> return_types;
 	vector<string> names;
 	shared_ptr<ParquetFileMetadataCache> metadata;
+	ParquetOptions parquet_options;
 
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,
@@ -92,9 +96,14 @@ public:
 private:
 	void InitializeSchema(const vector<LogicalType> &expected_types_p, const string &initial_filename_p);
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
+	unique_ptr<ColumnReader> CreateReader(const duckdb_parquet::format::FileMetaData *file_meta_data);
 
+	unique_ptr<ColumnReader> CreateReaderRecursive(const duckdb_parquet::format::FileMetaData *file_meta_data,
+	                                               idx_t depth, idx_t max_define, idx_t max_repeat,
+	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
 	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
+	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
 
 	template <typename... Args>
 	std::runtime_error FormatException(const string fmt_str, Args... params) {
