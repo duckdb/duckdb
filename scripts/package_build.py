@@ -142,7 +142,7 @@ def build_package(target_dir, extensions, linenumbers = False):
         amalgamation.copy_if_different(src, target_file)
 
     # include the main extension helper
-    include_files += [os.path.join('extension', 'extension_helper.hpp')]
+    include_files += [os.path.join('src', 'include', 'duckdb', 'main', 'extension_helper.hpp')]
     # include the separate extensions
     for ext in extensions:
         ext_path = os.path.join(scripts_dir, '..', 'extension', ext)

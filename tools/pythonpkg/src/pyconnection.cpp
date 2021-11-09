@@ -16,8 +16,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
-#include "extension/extension_helper.hpp"
-
 #include "datetime.h" // from Python
 
 #include <random>
@@ -452,7 +450,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	}
 
 	res->database = make_unique<DuckDB>(database, &config);
-	ExtensionHelper::LoadAllExtensions(*res->database);
 	res->connection = make_unique<Connection>(*res->database);
 
 	PandasScanFunction scan_fun;

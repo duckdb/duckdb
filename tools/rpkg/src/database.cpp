@@ -1,6 +1,5 @@
 #include "rapi.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "extension/extension_helper.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 using namespace duckdb;
@@ -66,7 +65,6 @@ SEXP RApi::Startup(SEXP dbdirsexp, SEXP readonlysexp, SEXP configsexp) {
 		Rf_error("duckdb_startup_R: Failed to open database: %s", e.what());
 	}
 	D_ASSERT(wrapper->db);
-	ExtensionHelper::LoadAllExtensions(*wrapper->db);
 
 	DataFrameScanFunction scan_fun;
 	CreateTableFunctionInfo info(scan_fun);
