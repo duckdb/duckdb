@@ -61,6 +61,7 @@ def gh_api(suburl, filename='', method='GET'):
 	req.get_method = lambda: method
 	timeout = 1
 	nretries = 10
+	raw_resp = None
 	for i in range(nretries):
 		success = True
 		try:
@@ -71,6 +72,8 @@ def gh_api(suburl, filename='', method='GET'):
 			break
 		time.sleep(timeout)
 		timeout *= 2
+	if not success:
+		raise Exception("Failed to open URL " + req)
 
 	if (method != 'DELETE'):
 		return json.loads(raw_resp)
