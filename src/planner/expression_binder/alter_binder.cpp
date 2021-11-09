@@ -31,8 +31,8 @@ string AlterBinder::UnsupportedAggregateMessage() {
 }
 
 BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
-	if (colref.IsQualified()) {
-		throw InternalException("FIXME: Qualified Alter column name");
+	if (colref.column_names.size() > 1) {
+		return BindQualifiedColumnName(colref, table.name);
 	}
 	auto idx = table.GetColumnIndex(colref.column_names[0], true);
 	if (idx == INVALID_INDEX) {

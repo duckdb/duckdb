@@ -29,17 +29,21 @@ string CheckBinder::UnsupportedAggregateMessage() {
 	return "aggregate functions are not allowed in check constraints";
 }
 
+BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name) {
+	idx_t struct_start = 0;
+	if (colref.column_names[0] == table_name) {
+		struct_start++;
+	}
+	auto result = make_unique_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
+	for(idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
+		result = CreateStructExtract(move(result), colref.column_names[i]);
+	}
+	return BindExpression(&result, 0);
+}
+
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
 	if (colref.column_names.size() > 1) {
-		idx_t struct_start = 0;
-		if (colref.column_names[0] == table) {
-			struct_start++;
-		}
-		auto result = make_unique_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
-		for(idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
-			result = CreateStructExtract(move(result), colref.column_names[i]);
-		}
-		return BindExpression(&result, 0);
+		return BindQualifiedColumnName(colref, table);
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
 		if (colref.column_names[0] == columns[i].name) {
