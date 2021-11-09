@@ -21,8 +21,15 @@ ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p) :
 bool ColumnRefExpression::IsQualified() const {
 	return column_names.size() > 1;
 }
-string ColumnRefExpression::GetColumnName() const {
+
+const string &ColumnRefExpression::GetColumnName() const {
+	D_ASSERT(column_names.size() <= 3);
 	return column_names.back();
+}
+
+const string &ColumnRefExpression::GetTableName() const {
+	D_ASSERT(column_names.size() >= 2 && column_names.size() <= 3);
+	return column_names.size() == 3 ? column_names[1] : column_names[0];
 }
 
 string ColumnRefExpression::GetName() const {

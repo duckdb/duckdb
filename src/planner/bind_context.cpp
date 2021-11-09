@@ -188,7 +188,7 @@ BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	}
 
 	string error;
-	auto binding = GetBinding(colref.column_names[0], error);
+	auto binding = GetBinding(colref.GetTableName(), error);
 	if (!binding) {
 		return BindResult(error);
 	}

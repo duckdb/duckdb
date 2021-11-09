@@ -70,8 +70,7 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 }
 
 BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
-	D_ASSERT(colref.column_names.size() == 2);
-	auto &column_name = colref.column_names.back();
+	auto &column_name = colref.GetColumnName();
 	column_t column_index;
 	if (!TryGetBindingIndex(column_name, column_index)) {
 		return BindResult(ColumnNotFoundError(column_name));

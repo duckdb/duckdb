@@ -29,7 +29,8 @@ public:
 
 public:
 	bool IsQualified() const;
-	string GetColumnName() const;
+	const string &GetColumnName() const;
+	const string &GetTableName() const;
 	bool IsScalar() const override {
 		return false;
 	}
