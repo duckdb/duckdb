@@ -70,6 +70,7 @@ def gh_api(suburl, filename='', method='GET'):
 			success = False
 		if success:
 			break
+		print(f"Failed upload, retrying... ({i}/{nretries})")
 		time.sleep(timeout)
 		timeout *= 2
 	if not success:
