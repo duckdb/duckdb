@@ -10,10 +10,10 @@ static string ExtractColumnFromLambda(ParsedExpression &expr) {
 		throw ParserException("Lambda parameter must be a column name");
 	}
 	auto &colref = (ColumnRefExpression &)expr;
-	if (!colref.table_name.empty()) {
+	if (colref.IsQualified()) {
 		throw ParserException("Lambda parameter must be an unqualified name (e.g. 'x', not 'a.x')");
 	}
-	return colref.column_name;
+	return colref.column_names[0];
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGLambdaFunction *node) {

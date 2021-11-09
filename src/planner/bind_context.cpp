@@ -183,12 +183,12 @@ Binding *BindContext::GetBinding(const string &name, string &out_error) {
 }
 
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
-	if (colref.table_name.empty()) {
-		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.column_name));
+	if (!colref.IsQualified()) {
+		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.GetColumnName()));
 	}
 
 	string error;
-	auto binding = GetBinding(colref.table_name, error);
+	auto binding = GetBinding(colref.column_names[0], error);
 	if (!binding) {
 		return BindResult(error);
 	}

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/parser/parsed_expression.hpp"
+#include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
@@ -20,13 +21,15 @@ public:
 	ColumnRefExpression(string column_name, string table_name);
 	//! Only specify the column name, the table name will be derived later
 	explicit ColumnRefExpression(string column_name);
+	//! Specify a set of names
+	explicit ColumnRefExpression(vector<string> column_names);
 
-	//! Column name that is referenced
-	string column_name;
-	//! Table name of the column name that is referenced (optional)
-	string table_name;
+	//! The stack of names in order of which they appear (column_names[0].column_names[1].column_names[2]....)
+	vector<string> column_names;
 
 public:
+	bool IsQualified() const;
+	string GetColumnName() const;
 	bool IsScalar() const override {
 		return false;
 	}

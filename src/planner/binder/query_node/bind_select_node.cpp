@@ -205,7 +205,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	for (idx_t i = 0; i < statement.select_list.size(); i++) {
 		auto &expr = statement.select_list[i];
 		result->names.push_back(expr->GetName());
-		ExpressionBinder::BindTableNames(*this, *expr);
+		ExpressionBinder::QualifyColumnNames(*this, expr);
 		if (!expr->alias.empty()) {
 			alias_map[expr->alias] = i;
 			result->names[i] = expr->alias;
@@ -259,7 +259,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 			// if we wouldn't do this then (SELECT test.a FROM test GROUP BY a) would not work because "test.a" <> "a"
 			// hence we convert "a" -> "test.a" in the unbound expression
 			unbound_groups[i] = move(group_binder.unbound_expression);
-			ExpressionBinder::BindTableNames(*this, *unbound_groups[i]);
+			ExpressionBinder::QualifyColumnNames(*this, unbound_groups[i]);
 			info.map[unbound_groups[i].get()] = i;
 		}
 	}
@@ -268,7 +268,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 	// bind the HAVING clause, if any
 	if (statement.having) {
 		HavingBinder having_binder(*this, context, *result, info, alias_map);
-		ExpressionBinder::BindTableNames(*this, *statement.having, &alias_map);
+		ExpressionBinder::QualifyColumnNames(*this, statement.having);
 		result->having = having_binder.Bind(statement.having);
 	}
 

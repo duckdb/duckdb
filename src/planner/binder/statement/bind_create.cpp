@@ -82,11 +82,11 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	// positional parameters
 	for (idx_t i = 0; i < base.function->parameters.size(); i++) {
 		auto param = (ColumnRefExpression &)*base.function->parameters[i];
-		if (!param.table_name.empty()) {
-			throw BinderException("Invalid parameter name '%s'", param.ToString());
+		if (param.IsQualified()) {
+			throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
 		}
 		dummy_types.push_back(LogicalType::SQLNULL);
-		dummy_names.push_back(param.column_name);
+		dummy_names.push_back(param.GetColumnName());
 	}
 	// default parameters
 	for (auto it = base.function->default_parameters.begin(); it != base.function->default_parameters.end(); it++) {

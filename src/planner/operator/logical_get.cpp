@@ -4,6 +4,7 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/function/table/table_scan.hpp"
 
 namespace duckdb {
 
@@ -15,6 +16,10 @@ LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<Fun
 
 string LogicalGet::GetName() const {
 	return StringUtil::Upper(function.name);
+}
+
+TableCatalogEntry *LogicalGet::GetTable() const {
+	return TableScanFunction::GetTableEntry(function, bind_data.get());
 }
 
 string LogicalGet::ParamsToString() const {

@@ -17,7 +17,7 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	case ExpressionClass::COLUMN_REF: {
 		// if expr is a parameter, replace it with its argument
 		auto &colref = (ColumnRefExpression &)*expr;
-		if (colref.table_name.empty() && macro_binding->HasMatchingBinding(colref.column_name)) {
+		if (!colref.IsQualified() && macro_binding->HasMatchingBinding(colref.GetColumnName())) {
 			expr = macro_binding->ParamToArg(colref);
 		}
 		return;
@@ -137,7 +137,7 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalo
 	for (idx_t i = 0; i < macro_def.parameters.size(); i++) {
 		types.push_back(LogicalType::SQLNULL);
 		auto &param = (ColumnRefExpression &)*macro_def.parameters[i];
-		names.push_back(param.column_name);
+		names.push_back(param.GetColumnName());
 	}
 	// default parameters
 	for (auto it = macro_def.default_parameters.begin(); it != macro_def.default_parameters.end(); it++) {

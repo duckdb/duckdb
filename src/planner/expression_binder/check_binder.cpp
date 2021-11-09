@@ -30,17 +30,16 @@ string CheckBinder::UnsupportedAggregateMessage() {
 }
 
 BindResult CheckBinder::BindCheckColumn(ColumnRefExpression &colref) {
-	if (!colref.table_name.empty() && colref.table_name != table) {
-		throw BinderException("Cannot reference table %s from within check constraint for table %s!", colref.table_name,
-		                      table);
+	if (colref.IsQualified()) {
+		throw InternalException("FIXME: bind check column with > references");
 	}
 	for (idx_t i = 0; i < columns.size(); i++) {
-		if (colref.column_name == columns[i].name) {
+		if (colref.column_names[0] == columns[i].name) {
 			bound_columns.insert(i);
 			return BindResult(make_unique<BoundReferenceExpression>(columns[i].type, i));
 		}
 	}
-	throw BinderException("Table does not contain column %s referenced in check constraint!", colref.column_name);
+	throw BinderException("Table does not contain column %s referenced in check constraint!", colref.column_names[0]);
 }
 
 } // namespace duckdb

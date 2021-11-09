@@ -47,28 +47,13 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::
 		if (fields->length < 1) {
 			throw InternalException("Unexpected field length");
 		}
-		string column_name, table_name;
-		if (fields->length == 1) {
-			column_name = string(reinterpret_cast<duckdb_libpgquery::PGValue *>(fields->head->data.ptr_value)->val.str);
-			auto colref = make_unique<ColumnRefExpression>(column_name, table_name);
-			colref->query_location = root->location;
-			return move(colref);
-		} else if (fields->length == 2) {
-			table_name = string(reinterpret_cast<duckdb_libpgquery::PGValue *>(fields->head->data.ptr_value)->val.str);
-			auto col_node = reinterpret_cast<duckdb_libpgquery::PGNode *>(fields->head->next->data.ptr_value);
-			switch (col_node->type) {
-			case duckdb_libpgquery::T_PGString: {
-				column_name = string(reinterpret_cast<duckdb_libpgquery::PGValue *>(col_node)->val.str);
-				auto colref = make_unique<ColumnRefExpression>(column_name, table_name);
-				colref->query_location = root->location;
-				return move(colref);
-			}
-			default:
-				throw NotImplementedException("ColumnRef not implemented!");
-			}
-		} else {
-			throw NotImplementedException("ColumnRef not implemented!");
+		vector<string> column_names;
+		for(auto node = fields->head; node; node = node->next) {
+			column_names.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
 		}
+		auto colref = make_unique<ColumnRefExpression>(move(column_names));
+		colref->query_location = root->location;
+		return move(colref);
 	}
 	case duckdb_libpgquery::T_PGAStar: {
 		return TransformStarExpression(head_node);

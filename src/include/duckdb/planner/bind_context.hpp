@@ -126,11 +126,12 @@ public:
 	//! Add all the bindings from a BindContext to this BindContext. The other BindContext is destroyed in the process.
 	void AddContext(BindContext other);
 
-private:
-	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 	//! Gets a binding of the specified name. Returns a nullptr and sets the out_error if the binding could not be
 	//! found.
 	Binding *GetBinding(const string &name, string &out_error);
+
+private:
+	void AddBinding(const string &alias, unique_ptr<Binding> binding);
 
 private:
 	//! The set of bindings
