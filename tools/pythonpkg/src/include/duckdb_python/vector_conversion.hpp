@@ -48,7 +48,7 @@ struct PandasColumnBindData {
 	// Only for categorical types
 	string internal_categorical_type;
 	// When object types are cast we must hold their data somewhere
-	vector<unique_ptr<PythonObjectContainer<py::str>>> object_str_val;
+	PythonObjectContainer<py::str> object_str_val;
 };
 
 class VectorConversion {

@@ -191,6 +191,7 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 		auto src_ptr = (PyObject **)numpy_col.data();
 		auto tgt_ptr = FlatVector::GetData<string_t>(out);
 		auto &out_mask = FlatVector::Validity(out);
+		unique_ptr<PythonGILWrapper> gil;
 		for (idx_t row = 0; row < count; row++) {
 			auto source_idx = offset + row;
 			PyObject *val = src_ptr[source_idx];
@@ -204,15 +205,16 @@ void VectorConversion::NumpyToDuckDB(PandasColumnBindData &bind_data, py::array 
 					continue;
 				}
 				if (!py::isinstance<py::str>(val)) {
-					unique_ptr<PythonObjectContainer<py::str>> new_str = make_unique<PythonObjectContainer<py::str>>();
-					new_str->Assign<PyObject>(
+					if (!gil) {
+						gil = bind_data.object_str_val.GetLock();
+					}
+					bind_data.object_str_val.AssignInternal<PyObject>(
 					    [](py::str &obj, PyObject &new_val) {
 						    py::handle object_handle = &new_val;
 						    obj = py::str(object_handle);
 					    },
-					    *val);
-					bind_data.object_str_val.push_back(move(new_str));
-					val = bind_data.object_str_val.back()->GetPointer()->ptr();
+					    *val, *gil);
+					val = (PyObject *)bind_data.object_str_val.GetPointerTop()->ptr();
 				}
 			}
 			// Python 3 string representation:
