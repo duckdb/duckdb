@@ -327,7 +327,7 @@ endif()
 set(OS_NAME "unknown")
 set(OS_ARCH "amd64")
 
-string(REGEX MATCH "(arm64|aarch64)" IS_ARM ${CMAKE_SYSTEM_PROCESSOR})
+string(REGEX MATCH "(arm64|aarch64)" IS_ARM "${CMAKE_SYSTEM_PROCESSOR}")
 if(IS_ARM)
   set(OS_ARCH "arm64")
 endif()
