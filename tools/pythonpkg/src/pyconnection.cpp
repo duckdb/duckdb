@@ -16,8 +16,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
-#include "extension/extension_helper.hpp"
-
 #include "datetime.h" // from Python
 
 #include <random>
@@ -85,7 +83,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
 	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
-	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"))
+	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"),
+	         py::arg("binary_as_string") = false)
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
 
@@ -258,13 +257,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename, bool binary_as_string) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
+	unordered_map<string, Value> named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &table, const idx_t rows_per_tuple) {
@@ -449,7 +450,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	}
 
 	res->database = make_unique<DuckDB>(database, &config);
-	ExtensionHelper::LoadAllExtensions(*res->database);
 	res->connection = make_unique<Connection>(*res->database);
 
 	PandasScanFunction scan_fun;

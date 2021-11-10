@@ -15,3 +15,8 @@ build_loadable_extension(httpfs s3fs.cpp httpfs.cpp crypto.cpp
 
 find_package(OpenSSL REQUIRED)
 target_link_libraries(httpfs_loadable_extension ${OPENSSL_LIBRARIES})
+install(
+  TARGETS httpfs_extension
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

@@ -14,15 +14,11 @@ add_library(sqlite3_api_wrapper_static STATIC sqlite3_api_wrapper.cpp
 target_link_libraries(sqlite3_api_wrapper_static duckdb_static utf8proc)
 link_threads(sqlite3_api_wrapper_static)
 
-link_extension_libraries(sqlite3_api_wrapper_static)
-
 if(NOT WIN32)
   add_library(sqlite3_api_wrapper SHARED sqlite3_api_wrapper.cpp
                                          ${ALL_OBJECT_FILES})
   target_link_libraries(sqlite3_api_wrapper duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
   link_threads(sqlite3_api_wrapper)
-
-  link_extension_libraries(sqlite3_api_wrapper)
 
   include_directories(../../third_party/catch)
 

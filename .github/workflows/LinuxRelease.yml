@@ -62,9 +62,6 @@ jobs:
     - name: Test
       run: make allunit
 
-    - name: Symbol Leakage Test
-      run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
-
     - name: Tools Tests
       run: |
         python3.7 tools/shell/shell-test.py build/release/duckdb
@@ -332,8 +329,6 @@ jobs:
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*"
 
 
-
-
  vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-20.04
@@ -389,3 +384,24 @@ jobs:
         path: |
           duckdb-wasm32-nothreads.zip
 
+ symbol-leakage:
+    name: Symbol Leakage
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+    env:
+      DISABLE_PARQUET: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      run: make
+
+    - name: Symbol Leakage Test
+      run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so

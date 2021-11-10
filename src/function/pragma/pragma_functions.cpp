@@ -277,6 +277,20 @@ static void PragmaDebugManyFreeListBlocks(ClientContext &context, const Function
 	config.debug_many_free_list_blocks = true;
 }
 
+static void PragmaDebugWindowMode(ClientContext &context, const FunctionParameters &parameters) {
+	auto param = StringUtil::Lower(parameters.values[0].ToString());
+	auto &config = DBConfig::GetConfig(context);
+	if (param == "window") {
+		config.window_mode = WindowAggregationMode::WINDOW;
+	} else if (param == "combine") {
+		config.window_mode = WindowAggregationMode::COMBINE;
+	} else if (param == "separate") {
+		config.window_mode = WindowAggregationMode::SEPARATE;
+	} else {
+		throw ParserException("Unrecognized option for PRAGMA debug_window_mode, expected window, combine or separate");
+	}
+}
+
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -356,6 +370,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	    PragmaFunction::PragmaAssignment("force_compression", PragmaForceCompression, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("debug_many_free_list_blocks", PragmaDebugManyFreeListBlocks));
+
+	set.AddFunction(PragmaFunction::PragmaAssignment("debug_window_mode", PragmaDebugWindowMode, LogicalType::VARCHAR));
 }
 
 } // namespace duckdb

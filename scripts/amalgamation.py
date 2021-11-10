@@ -108,6 +108,8 @@ def get_includes(fpath, text):
         included_file = x[1]
         if skip_duckdb_includes and 'duckdb' in included_file:
             continue
+        if 'extension_helper.cpp' in fpath and included_file.endswith('-extension.hpp'):
+            continue
         include_statements.append(x[0])
         included_file = os.sep.join(included_file.split('/'))
         found = False

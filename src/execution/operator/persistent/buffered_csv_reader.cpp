@@ -140,6 +140,9 @@ void BufferedCSVReader::Initialize(const vector<LogicalType> &requested_types) {
 	PrepareComplexParser();
 	if (options.auto_detect) {
 		sql_types = SniffCSV(requested_types);
+		if (sql_types.empty()) {
+			throw Exception("Failed to detect column types from CSV: is the file a valid CSV file?");
+		}
 		if (cached_chunks.empty()) {
 			JumpToBeginning(options.skip_rows, options.header);
 		}
@@ -623,6 +626,10 @@ void BufferedCSVReader::DetectCandidateTypes(const vector<LogicalType> &type_can
 		DataChunk header_row;
 		header_row.Initialize(sql_types);
 		parse_chunk.Copy(header_row);
+
+		if (header_row.size() == 0) {
+			continue;
+		}
 
 		// init parse chunk and read csv with info candidate
 		InitParseChunk(sql_types.size());

@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 2.8.12)
 project(FTSExtension)
 
 include_directories(include ../../third_party/snowball/libstemmer)
-
 set(FTS_SOURCES
     fts-extension.cpp
     fts_indexing.cpp
@@ -44,3 +43,10 @@ set(FTS_SOURCES
 add_library(fts_extension STATIC ${FTS_SOURCES})
 
 build_loadable_extension(fts ${FTS_SOURCES})
+
+
+install(
+  TARGETS fts_extension
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")

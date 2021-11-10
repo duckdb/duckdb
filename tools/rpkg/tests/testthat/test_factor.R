@@ -34,9 +34,7 @@ test_that("iris can be round-tripped", {
     expect_identical(iris, df2)
 })
 
-
-
-test_that("non-utf factors can be read", {
+test_that("non-utf things can be read", {
     con <- dbConnect(duckdb::duckdb())
     on.exit(dbDisconnect(con, shutdown = TRUE))
 
