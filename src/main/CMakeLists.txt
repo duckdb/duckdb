@@ -1,6 +1,7 @@
 if(NOT CLANG_TIDY)
   add_subdirectory(capi)
 endif()
+add_subdirectory(extension)
 add_subdirectory(relation)
 
 if(FORCE_QUERY_LOG)
@@ -16,7 +17,6 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
-  extension_helper.cpp
   materialized_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp

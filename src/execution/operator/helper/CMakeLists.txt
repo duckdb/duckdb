@@ -1,5 +1,3 @@
-include_directories(../../../../third_party/httplib/)
-
 add_library_unity(
   duckdb_operator_helper
   OBJECT
