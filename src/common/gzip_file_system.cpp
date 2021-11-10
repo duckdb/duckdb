@@ -124,6 +124,22 @@ private:
 	data_ptr_t in_buff_end = nullptr;
 };
 
+void GZipFileSystem::VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count) {
+	// check for incorrectly formatted files
+	if (read_count != GZIP_HEADER_MINSIZE) {
+		throw IOException("Input is not a GZIP stream");
+	}
+	if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B) { // magic header
+		throw IOException("Input is not a GZIP stream");
+	}
+	if (gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE) { // compression method
+		throw IOException("Unsupported GZIP compression method");
+	}
+	if (gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
+		throw IOException("Unsupported GZIP archive");
+	}
+}
+
 void GZipFile::Initialize() {
 	Close();
 
@@ -145,22 +161,7 @@ void GZipFile::Initialize() {
 
 	// TODO use custom alloc/free methods in miniz to throw exceptions on OOM
 	auto read_count = child_handle->Read(gzip_hdr, GZIP_HEADER_MINSIZE);
-
-	// check for incorrectly formatted files
-	// LCOV_EXCL_START
-	if (read_count != GZIP_HEADER_MINSIZE) {
-		throw Exception("Input is not a GZIP stream");
-	}
-	if (gzip_hdr[0] != 0x1F || gzip_hdr[1] != 0x8B) { // magic header
-		throw Exception("Input is not a GZIP stream");
-	}
-	if (gzip_hdr[2] != GZIP_COMPRESSION_DEFLATE) { // compression method
-		throw Exception("Unsupported GZIP compression method");
-	}
-	if (gzip_hdr[3] & GZIP_FLAG_UNSUPPORTED) {
-		throw Exception("Unsupported GZIP archive");
-	}
-	// LCOV_EXCL_STOP
+	GZipFileSystem::VerifyGZIPHeader(gzip_hdr, read_count);
 
 	if (gzip_hdr[3] & GZIP_FLAG_NAME) {
 		child_handle->Seek(data_start);
@@ -262,6 +263,63 @@ int64_t GZipFileSystem::GetFileSize(FileHandle &handle) {
 bool GZipFileSystem::OnDiskFile(FileHandle &handle) {
 	auto &gzip_file = (GZipFile &)handle;
 	return gzip_file.child_handle->OnDiskFile();
+}
+
+
+string GZipFileSystem::UncompressGZIPString(const string &in) {
+	// decompress file
+	auto body_ptr = in.data();
+
+	auto mz_stream_ptr = new duckdb_miniz::mz_stream();
+	memset(mz_stream_ptr, 0, sizeof(duckdb_miniz::mz_stream));
+
+	uint8_t gzip_hdr[GZIP_HEADER_MINSIZE];
+
+	// check for incorrectly formatted files
+
+	// TODO this is mostly the same as gzip_file_system.cpp
+	if (in.size() < GZIP_HEADER_MINSIZE) {
+		throw IOException("Input is not a GZIP stream");
+	}
+	memcpy(gzip_hdr, body_ptr, GZIP_HEADER_MINSIZE);
+	body_ptr += GZIP_HEADER_MINSIZE;
+	GZipFileSystem::VerifyGZIPHeader(gzip_hdr, GZIP_HEADER_MINSIZE);
+
+	if (gzip_hdr[3] & GZIP_FLAG_NAME) {
+		char c;
+		do {
+			c = *body_ptr;
+			body_ptr++;
+		} while (c != '\0' && (idx_t)(body_ptr - in.data()) < in.size());
+	}
+
+	// stream is now set to beginning of payload data
+	auto status = duckdb_miniz::mz_inflateInit2(mz_stream_ptr, -MZ_DEFAULT_WINDOW_BITS);
+	if (status != duckdb_miniz::MZ_OK) {
+		throw InternalException("Failed to initialize miniz");
+	}
+
+	auto bytes_remaining = in.size() - (body_ptr - in.data());
+	mz_stream_ptr->next_in = (unsigned char *)body_ptr;
+	mz_stream_ptr->avail_in = bytes_remaining;
+
+	unsigned char decompress_buffer[BUFSIZ];
+	string decompressed;
+
+	while (status == duckdb_miniz::MZ_OK) {
+		mz_stream_ptr->next_out = decompress_buffer;
+		mz_stream_ptr->avail_out = sizeof(decompress_buffer);
+		status = mz_inflate(mz_stream_ptr, duckdb_miniz::MZ_NO_FLUSH);
+		if (status != duckdb_miniz::MZ_STREAM_END && status != duckdb_miniz::MZ_OK) {
+			throw IOException("Failed to uncompress");
+		}
+		decompressed.append((char *)decompress_buffer, mz_stream_ptr->total_out - decompressed.size());
+	}
+	duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
+	if (decompressed.size() == 0) {
+		throw IOException("Failed to uncompress");
+	}
+	return decompressed;
 }
 
 } // namespace duckdb

@@ -27,6 +27,11 @@ public:
 		return false;
 	}
 
+	//! Verifies that a buffer contains a valid GZIP header
+	static void VerifyGZIPHeader(uint8_t gzip_hdr[], idx_t read_count);
+	//! Consumes a byte stream as a gzip string, returning the decompressed string
+	static string UncompressGZIPString(const string &in);
+
 	std::string GetName() const override {
 		return "GZipFileSystem";
 	}
