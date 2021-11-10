@@ -92,13 +92,17 @@ struct BoolOrFunFunction {
 };
 
 AggregateFunction BoolOrFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolOrFunFunction>(
+	auto fun = AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolOrFunFunction>(
 	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
+	fun.name = "bool_or";
+	return fun;
 }
 
 AggregateFunction BoolAndFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolAndFunFunction>(
+	auto fun = AggregateFunction::UnaryAggregate<BoolState, bool, bool, BoolAndFunFunction>(
 	    LogicalType(LogicalTypeId::BOOLEAN), LogicalType::BOOLEAN);
+	fun.name = "bool_and";
+	return fun;
 }
 
 void BoolOrFun::RegisterFunction(BuiltinFunctions &set) {
