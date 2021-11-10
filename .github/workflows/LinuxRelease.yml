@@ -94,7 +94,7 @@ jobs:
 
 
  linux-extensions-64:
-    name: Linux Extensions(64 Bit)
+    name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
     env:
@@ -147,7 +147,7 @@ jobs:
 
     - name: Deploy
       run: |
-        ./scripts/extension-upload.sh osx-amd64
+        ./scripts/extension-upload.sh linux-amd64
 
 
  linux-release-32:

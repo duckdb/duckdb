@@ -17,10 +17,14 @@ void HTTPFsExtension::Load(DuckDB &db) {
 
 } // namespace duckdb
 
+extern "C" {
+
 void httpfs_init(duckdb::DatabaseInstance &db) {
 	LoadInternal(db);
 }
 
 const char *httpfs_version() {
 	return duckdb::DuckDB::LibraryVersion();
+}
+
 }
