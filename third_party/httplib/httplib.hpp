@@ -239,7 +239,7 @@ inline const unsigned char *ASN1_STRING_get0_data(const ASN1_STRING *asn1) {
 /*
  * Declaration
  */
-namespace httplib {
+namespace duckdb_httplib {
 
 namespace detail {
 
@@ -5471,7 +5471,7 @@ inline bool ClientImpl::write_content_with_provider(Stream &strm,
     return detail::write_content(strm, req.content_provider_, 0,
                                  req.content_length_, is_shutting_down, error);
   }
-} // namespace httplib
+} // namespace duckdb_httplib
 
 inline bool ClientImpl::write_request(Stream &strm, const Request &req,
                                       bool close_connection, Error &error) {
@@ -7410,6 +7410,6 @@ inline SSL_CTX *Client::ssl_context() const {
 
 // ----------------------------------------------------------------------------
 
-} // namespace httplib
+} // namespace duckdb_httplib
 
 #endif // CPPHTTPLIB_HTTPLIB_H

@@ -166,9 +166,9 @@ void PhysicalLoad::DoInstall(ExecutionContext &context) const {
 	auto url_local_part = no_http.substr(next);
 
 	auto url_base = "http://" + hostname_without_http;
-	httplib::Client cli(url_base.c_str());
+	duckdb_httplib::Client cli(url_base.c_str());
 
-	httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),
+	duckdb_httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),
 	                                                              DuckDB::SourceID(), DuckDB::Platform())}};
 
 	auto res = cli.Get(url_local_part.c_str(), headers);
