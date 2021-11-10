@@ -121,15 +121,15 @@ void StringAggFun::RegisterFunction(BuiltinFunctions &set) {
 	    AggregateFunction::BinaryScatterUpdate<StringAggState, string_t, string_t, StringAggFunction>, nullptr,
 	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggFunction>,
 	    AggregateFunction::BinaryUpdate<StringAggState, string_t, string_t, StringAggFunction>, nullptr,
-	    AggregateFunction::StateDestroy<StringAggState, StringAggFunction>, nullptr, nullptr, true));
-	string_agg.AddFunction(AggregateFunction(
-	    {LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
-	    AggregateFunction::StateInitialize<StringAggState, StringAggSingleFunction>,
-	    AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggSingleFunction>,
-	    AggregateFunction::StateCombine<StringAggState, StringAggSingleFunction>,
-	    AggregateFunction::StateFinalize<StringAggState, string_t, StringAggSingleFunction>,
-	    AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggSingleFunction>, nullptr,
-	    AggregateFunction::StateDestroy<StringAggState, StringAggSingleFunction>, nullptr, nullptr, true));
+	    AggregateFunction::StateDestroy<StringAggState, StringAggFunction>, nullptr, nullptr));
+	string_agg.AddFunction(
+	    AggregateFunction({LogicalType::VARCHAR}, LogicalType::VARCHAR, AggregateFunction::StateSize<StringAggState>,
+	                      AggregateFunction::StateInitialize<StringAggState, StringAggSingleFunction>,
+	                      AggregateFunction::UnaryScatterUpdate<StringAggState, string_t, StringAggSingleFunction>,
+	                      AggregateFunction::StateCombine<StringAggState, StringAggSingleFunction>,
+	                      AggregateFunction::StateFinalize<StringAggState, string_t, StringAggSingleFunction>,
+	                      AggregateFunction::UnaryUpdate<StringAggState, string_t, StringAggSingleFunction>, nullptr,
+	                      AggregateFunction::StateDestroy<StringAggState, StringAggSingleFunction>, nullptr, nullptr));
 	set.AddFunction(string_agg);
 	string_agg.name = "group_concat";
 	set.AddFunction(string_agg);

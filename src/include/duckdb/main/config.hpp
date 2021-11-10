@@ -20,6 +20,7 @@
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
+#include "duckdb/common/enums/window_aggregation_mode.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -72,6 +73,8 @@ public:
 	idx_t checkpoint_wal_size = 1 << 24;
 	//! Whether or not to use Direct IO, bypassing operating system buffers
 	bool use_direct_io = false;
+	//! Whether extensions should be loaded on start-up
+	bool load_extensions = true;
 	//! The FileSystem to use, can be overwritten to allow for injecting custom file systems for testing purposes (e.g.
 	//! RamFS or something similar)
 	unique_ptr<FileSystem> file_system;
@@ -112,6 +115,8 @@ public:
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
 	//! Debug flag that adds additional (unnecessary) free_list blocks to the storage
 	bool debug_many_free_list_blocks = false;
+	//! Debug setting for window aggregation mode: (window, combine, separate)
+	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

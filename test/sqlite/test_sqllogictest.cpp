@@ -39,7 +39,7 @@
 #include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/parser/parser.hpp"
 
-#include "extension_helper.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #include "test_helpers.hpp"
 #include "test_helper_extension.hpp"
@@ -51,6 +51,7 @@
 #include <vector>
 #include <iostream>
 #include <thread>
+#include <cfloat>
 
 using namespace duckdb;
 using namespace std;
@@ -70,6 +71,7 @@ struct SQLLogicTestRunner {
 public:
 	SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
 		config = GetTestConfig();
+		config->load_extensions = false;
 	}
 	~SQLLogicTestRunner();
 
@@ -399,6 +401,17 @@ static void print_error_header(const char *description, string file_name, int nl
 	std::cerr << termcolor::bold << "(" << file_name << ":" << nline << ")!" << termcolor::reset << std::endl;
 }
 
+static void print_result_error(vector<string> &result_values, vector<string> &values, idx_t expected_column_count,
+                               bool row_wise) {
+	print_header("Expected result:");
+	print_line_sep();
+	print_expected_result(values, expected_column_count, row_wise);
+	print_line_sep();
+	print_header("Actual result:");
+	print_line_sep();
+	print_expected_result(result_values, expected_column_count, false);
+}
+
 static void print_result_error(MaterializedQueryResult &result, vector<string> &values, idx_t expected_column_count,
                                bool row_wise) {
 	print_header("Expected result:");
@@ -441,7 +454,7 @@ static bool result_is_file(string result) {
 
 bool compare_values(MaterializedQueryResult &result, string lvalue_str, string rvalue_str, string zScriptFile,
                     int query_line, string zScript, int current_row, int current_column, vector<string> &values,
-                    int expected_column_count, bool row_wise) {
+                    int expected_column_count, bool row_wise, vector<string> &result_values) {
 	Value lvalue, rvalue;
 	bool error = false;
 	// simple first test: compare string value directly
@@ -529,7 +542,7 @@ bool compare_values(MaterializedQueryResult &result, string lvalue_str, string r
 		          << termcolor::reset;
 		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
 		print_line_sep();
-		print_result_error(result, values, expected_column_count, row_wise);
+		print_result_error(result_values, values, expected_column_count, row_wise);
 		return false;
 	}
 	return true;
@@ -1022,7 +1035,7 @@ void Query::ExecuteInternal() {
 				for (idx_t c = 0; c < splits.size(); c++) {
 					bool success = compare_values(*result, azResult[current_row * expected_column_count + c], splits[c],
 					                              file_name, query_line, sql_query, current_row, c, comparison_values,
-					                              expected_column_count, row_wise);
+					                              expected_column_count, row_wise, azResult);
 					if (!success) {
 						FAIL_LINE(file_name, query_line, 0);
 					}
@@ -1034,9 +1047,10 @@ void Query::ExecuteInternal() {
 		} else {
 			int current_row = 0, current_column = 0;
 			for (int i = 0; i < nResult && i < (int)comparison_values.size(); i++) {
-				bool success = compare_values(*result, azResult[current_row * expected_column_count + current_column],
-				                              comparison_values[i], file_name, query_line, sql_query, current_row,
-				                              current_column, comparison_values, expected_column_count, row_wise);
+				bool success =
+				    compare_values(*result, azResult[current_row * expected_column_count + current_column],
+				                   comparison_values[i], file_name, query_line, sql_query, current_row, current_column,
+				                   comparison_values, expected_column_count, row_wise, azResult);
 				if (!success) {
 					FAIL_LINE(file_name, query_line, 0);
 				}
@@ -1540,6 +1554,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 #endif
 			} else if (param == "windows") {
 #ifndef _WIN32
+				return;
+#endif
+			} else if (param == "longdouble") {
+#if LDBL_MANT_DIG < 54
 				return;
 #endif
 			} else if (param == "noforcestorage") {

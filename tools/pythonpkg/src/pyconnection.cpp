@@ -16,8 +16,6 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 
-#include "extension/extension_helper.hpp"
-
 #include "datetime.h" // from Python
 
 #include <random>
@@ -50,7 +48,7 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	         "Fetch a chunk of the result as an Arrow Table following execute()", py::arg("vectors_per_chunk") = 1,
 	         py::arg("return_table") = false)
 	    .def("fetch_record_batch", &DuckDBPyConnection::FetchRecordBatchReader,
-	         "Fetch an Arrow RecordBatchReader following execute()")
+	         "Fetch an Arrow RecordBatchReader following execute()", py::arg("approx_batch_size") = 1)
 	    .def("arrow", &DuckDBPyConnection::FetchArrow, "Fetch a result as Arrow table following execute()")
 	    .def("begin", &DuckDBPyConnection::Begin, "Start a new transaction")
 	    .def("commit", &DuckDBPyConnection::Commit, "Commit changes performed within a transaction")
@@ -85,7 +83,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 	    .def("from_csv_auto", &DuckDBPyConnection::FromCsvAuto,
 	         "Create a relation object from the CSV file in file_name", py::arg("file_name"))
 	    .def("from_parquet", &DuckDBPyConnection::FromParquet,
-	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"))
+	         "Create a relation object from the Parquet file in file_name", py::arg("file_name"),
+	         py::arg("binary_as_string") = false)
 	    .def_property_readonly("description", &DuckDBPyConnection::GetDescription,
 	                           "Get result set attributes, mainly column names");
 
@@ -258,13 +257,15 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromCsvAuto(const string &filen
 	return make_unique<DuckDBPyRelation>(connection->TableFunction("read_csv_auto", params)->Alias(filename));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &filename, bool binary_as_string) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
 	vector<Value> params;
 	params.emplace_back(filename);
-	return make_unique<DuckDBPyRelation>(connection->TableFunction("parquet_scan", params)->Alias(filename));
+	unordered_map<string, Value> named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)}});
+	return make_unique<DuckDBPyRelation>(
+	    connection->TableFunction("parquet_scan", params, named_parameters)->Alias(filename));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &table, const idx_t rows_per_tuple) {
@@ -389,11 +390,11 @@ py::object DuckDBPyConnection::FetchArrowChunk(const idx_t vectors_per_chunk, bo
 	return result->FetchArrowTableChunk(vectors_per_chunk, return_table);
 }
 
-py::object DuckDBPyConnection::FetchRecordBatchReader() const {
+py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t approx_batch_size) const {
 	if (!result) {
 		throw std::runtime_error("no open result set");
 	}
-	return result->FetchRecordBatchReader();
+	return result->FetchRecordBatchReader(approx_batch_size);
 }
 
 static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str &table_name) {
@@ -449,7 +450,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 	}
 
 	res->database = make_unique<DuckDB>(database, &config);
-	ExtensionHelper::LoadAllExtensions(*res->database);
 	res->connection = make_unique<Connection>(*res->database);
 
 	PandasScanFunction scan_fun;

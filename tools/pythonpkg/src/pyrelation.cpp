@@ -80,8 +80,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filenam
 	return DuckDBPyConnection::DefaultConnection()->FromCsvAuto(filename);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filename) {
-	return DuckDBPyConnection::DefaultConnection()->FromParquet(filename);
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filename, bool binary_as_string) {
+	return DuckDBPyConnection::DefaultConnection()->FromParquet(filename, binary_as_string);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(py::object &table) {

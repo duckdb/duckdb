@@ -344,7 +344,7 @@ TEST_CASE("Test fetch API robustness", "[api]") {
 static void VerifyStreamResult(unique_ptr<QueryResult> result) {
 	REQUIRE(result->types[0] == LogicalType::INTEGER);
 	size_t current_row = 0;
-	size_t current_expected_value = 0;
+	int current_expected_value = 0;
 	size_t expected_rows = 500 * 5;
 	while (true) {
 		auto chunk = result->Fetch();

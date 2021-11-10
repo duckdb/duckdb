@@ -23,7 +23,7 @@ ArithmeticSimplificationRule::ArithmeticSimplificationRule(ExpressionRewriter &r
 }
 
 unique_ptr<Expression> ArithmeticSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                           bool &changes_made) {
+                                                           bool &changes_made, bool is_root) {
 	auto root = (BoundFunctionExpression *)bindings[0];
 	auto constant = (BoundConstantExpression *)bindings[1];
 	int constant_child = root->children[0].get() == constant ? 0 : 1;

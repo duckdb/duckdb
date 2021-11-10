@@ -20,17 +20,3 @@ struct AltrepString {
 
 	static R_altrep_class_t rclass;
 };
-
-struct AltrepStringSubset {
-
-	static void Initialize(DllInfo *dll);
-
-	static R_xlen_t Length(SEXP x);
-
-	static void *Dataptr(SEXP x, Rboolean writeable);
-	static const void *DataptrOrNull(SEXP x);
-	static SEXP Elt(SEXP x, R_xlen_t i);
-	static void Finalize(SEXP x);
-
-	static R_altrep_class_t rclass;
-};

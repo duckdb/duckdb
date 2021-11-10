@@ -44,7 +44,7 @@ public:
 
 	py::object FetchArrowTable(bool stream = false, idx_t num_of_vectors = 1, bool return_table = true);
 
-	py::object FetchRecordBatchReader();
+	py::object FetchRecordBatchReader(idx_t vectors_per_chunk);
 
 	py::list Description();
 

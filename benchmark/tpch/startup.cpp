@@ -13,7 +13,6 @@ using namespace duckdb;
 		DeleteDatabase(db_path);                                                                                       \
 		{                                                                                                              \
 			DuckDB db(db_path);                                                                                        \
-			db.LoadExtension<TPCHExtension>();                                                                         \
 			Connection con(db);                                                                                        \
 			con.Query("CALL dbgen(sf=" + std::to_string(SF) + ")");                                                    \
 		}                                                                                                              \
@@ -26,7 +25,6 @@ using namespace duckdb;
 	void RunBenchmark(DuckDBBenchmarkState *state) override {                                                          \
 		auto config = GetConfig();                                                                                     \
 		DuckDB db(db_path, config.get());                                                                              \
-		db.LoadExtension<TPCHExtension>();                                                                             \
 		Connection con(db);                                                                                            \
 		state->result = con.Query(QUERY);                                                                              \
 	}                                                                                                                  \

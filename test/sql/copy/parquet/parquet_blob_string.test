@@ -1,0 +1,33 @@
+# name: test/sql/copy/parquet/parquet_blob_string.test
+# description: Test binary_as_string BLOB Function
+# group: [parquet]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet',binary_as_string=False) limit 1
+----
+BLOB
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet',binary_as_string=False)
+----
+foo
+bar
+baz
+
+query I
+SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet',binary_as_string=True) limit 1
+----
+VARCHAR
+
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet',binary_as_string=True)
+----
+foo
+bar
+baz
