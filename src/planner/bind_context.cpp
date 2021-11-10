@@ -158,6 +158,35 @@ unordered_set<string> BindContext::GetMatchingBindings(const string &column_name
 	return result;
 }
 
+unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &table_name, const string &column_name) {
+	string schema_name;
+	return CreateColumnReference(schema_name, table_name, column_name);
+}
+
+unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &schema_name, const string &table_name,
+                                                                const string &column_name) {
+	string error_message;
+	// because of case insensitivity in the binder we rename the column to the original name
+	// as it appears in the binding itself
+	auto binding = GetBinding(table_name, error_message);
+	if (!binding) {
+		throw InternalException("Failed to find binding for table name \"%s\"", table_name);
+	}
+	vector<string> names;
+	if (!schema_name.empty()) {
+		names.push_back(schema_name);
+	}
+	names.push_back(table_name);
+	auto column_index = binding->GetBindingIndex(column_name);
+	names.push_back(column_name);
+
+	auto result = make_unique<ColumnRefExpression>(move(names));
+	if (binding->names[column_index] != column_name) {
+		result->alias = binding->names[column_index];
+	}
+	return move(result);
+}
+
 Binding *BindContext::GetCTEBinding(const string &ctename) {
 	auto match = cte_bindings.find(ctename);
 	if (match == cte_bindings.end()) {

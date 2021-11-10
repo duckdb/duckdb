@@ -41,6 +41,7 @@ struct Binding {
 
 public:
 	bool TryGetBindingIndex(const string &column_name, column_t &column_index);
+	column_t GetBindingIndex(const string &column_name);
 	bool HasMatchingBinding(const string &column_name);
 	virtual string ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);

@@ -34,6 +34,14 @@ bool Binding::TryGetBindingIndex(const string &column_name, column_t &result) {
 	return false;
 }
 
+column_t Binding::GetBindingIndex(const string &column_name) {
+	column_t result;
+	if (!TryGetBindingIndex(column_name, result)) {
+		throw InternalException("Binding index for column \"%s\" not found", column_name);
+	}
+	return result;
+}
+
 bool Binding::HasMatchingBinding(const string &column_name) {
 	column_t result;
 	return TryGetBindingIndex(column_name, result);

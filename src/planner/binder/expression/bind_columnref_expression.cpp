@@ -34,21 +34,21 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 		}
 	}
 	// no table name: find a binding that contains this
-	string table_name;
 	if (binder.macro_binding != nullptr && binder.macro_binding->HasMatchingBinding(column_name)) {
 		// priority to macro parameter bindings TODO: throw a warning when this name conflicts
-		table_name = binder.macro_binding->alias;
+		D_ASSERT(!binder.macro_binding->alias.empty());
+		return make_unique<ColumnRefExpression>(column_name, binder.macro_binding->alias);
 	} else {
-		table_name = binder.bind_context.GetMatchingBinding(column_name);
+		string table_name = binder.bind_context.GetMatchingBinding(column_name);
+		if (table_name.empty()) {
+			auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
+			string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
+			error_message =
+			    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
+			return nullptr;
+		}
+		return binder.bind_context.CreateColumnReference(table_name, column_name);
 	}
-	if (table_name.empty()) {
-		auto similar_bindings = binder.bind_context.GetSimilarBindings(column_name);
-		string candidate_str = StringUtil::CandidatesMessage(similar_bindings, "Candidate bindings");
-		error_message =
-		    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", column_name, candidate_str);
-		return nullptr;
-	}
-	return make_unique<ColumnRefExpression>(column_name, move(table_name));
 }
 
 void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
@@ -115,7 +115,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// first check if part1 is a table
 		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message)) {
 			// it is! return the colref directly
-			return colref.Copy();
+			return binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
 		} else {
 			// otherwise check if we can turn this into a struct extract
 			auto new_colref = make_unique<ColumnRefExpression>(colref.column_names[0]);
@@ -147,15 +147,14 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		                              error_message)) {
 			// it is! the column reference is "schema.table.column"
 			// any additional fields are turned into struct_extract calls
-			result_expr = make_unique_base<ParsedExpression, ColumnRefExpression>(
-			    vector<string> {colref.column_names[0], colref.column_names[1], colref.column_names[2]});
+			result_expr = binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1],
+			                                                        colref.column_names[2]);
 			struct_extract_start = 3;
 		} else if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message)) {
 			// part1 is a table
 			// the column reference is "table.column"
 			// any additional fields are turned into struct_extract calls
-			result_expr =
-			    make_unique_base<ParsedExpression, ColumnRefExpression>(colref.column_names[1], colref.column_names[0]);
+			result_expr = binder.bind_context.CreateColumnReference(colref.column_names[0], colref.column_names[1]);
 			struct_extract_start = 2;
 		} else {
 			// part1 could be a column
