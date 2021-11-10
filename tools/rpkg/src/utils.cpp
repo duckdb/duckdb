@@ -250,6 +250,7 @@ SEXP RApiTypes::ValueToSexp(Value &val) {
 	case LogicalTypeId::UBIGINT:
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::DECIMAL:
 		res = r.Protect(NEW_NUMERIC(1));
 		NUMERIC_POINTER(res)[0] = val.GetValue<double>();
 		return res;

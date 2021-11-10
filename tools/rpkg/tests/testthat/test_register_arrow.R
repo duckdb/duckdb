@@ -130,7 +130,7 @@ test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
 test_that("duckdb_register_arrow() performs selection pushdown decimal types", {
     numeric_types <- c('DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)','DECIMAL(30,12)')
     for (data_type in numeric_types)
-        expect_equal(numeric_operators(data_type))
+        numeric_operators(data_type)
 
 })
 
