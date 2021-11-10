@@ -252,9 +252,54 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	                       prepared_keys_count);
 }
 
+void JoinHashTable::Finalize() {
+	// the build has finished, now iterate over all the nodes and construct the final hash table
+	// select a HT that has at least 50% empty space
+	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(Count() * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
+	// size needs to be a power of 2
+	D_ASSERT((capacity & (capacity - 1)) == 0);
+	bitmask = capacity - 1;
+
+	// allocate the HT and initialize it with all-zero entries
+	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
+	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
+
+	Vector hashes(LogicalType::HASH);
+	auto hash_data = FlatVector::GetData<hash_t>(hashes);
+	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
+	// now construct the actual hash table; scan the nodes
+	// as we scan the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
+	// this is so that we can keep pointers around to the blocks
+	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
+	for (auto &block : block_collection->blocks) {
+		auto handle = buffer_manager.Pin(block.block);
+		data_ptr_t entries_buffer = handle->node->buffer;
+		idx_t entry = 0;
+		while (entry < block.count) {
+			// fetch the next vector of entries from the blocks
+			idx_t entries_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
+			for (idx_t i = 0; i < entries_count; i++) {
+				hash_data[i] = Load<hash_t>((data_ptr_t)(entries_buffer + pointer_offset));
+				key_locations[i] = entries_buffer;
+				entries_buffer += entry_size; // walk to next tuple
+			}
+			// now insert the key_locations into the hash table
+			InsertHashes(hashes, entries_count, key_locations);
+			entry += entries_count; // walk entries_count
+		}
+		pinned_handles.push_back(move(handle));
+	}
+	// In case of primary key do a semi-join instead
+	/* if (has_primary_key) {
+	    join_type = JoinType::SEMI;
+	} */
+	finalized = true;
+}
+
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
 	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
-	data_ptr_t conflict_entries[STANDARD_VECTOR_SIZE];
+	vector<data_ptr_t> conflict_entries;
+	conflict_entries.reserve(STANDARD_VECTOR_SIZE);
 
 	// create a vector for indices and apply the bitmask to get them from the hash_values
 	ApplyBitmask(hashes, count);
@@ -271,17 +316,17 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		// In case this is still a primary key and there is a conflict
 		if (has_primary_key && pointers[index] != 0) {
 			// check whether the keys are the same
-			auto has_same_keys = CompareKeysSwitch(key_locations[i], pointers[index]);
-			if (has_same_keys) {
-				// this is not a primary key anymore (duplicate keys)
-				has_primary_key = false;
-			}
+			has_primary_key = !CompareKeysSwitch(key_locations[i], pointers[index]);
+			// and add the entry to check its next ptr later
+			conflict_entries.push_back(pointers[index]);
 		}
 		// replace the hash_value in the current entry and point to a position in the hash_map
 		Store<data_ptr_t>(pointers[index], entry_hash_ptr);
-
-		// store a pointer to the current tuple entry in the hash_map
+		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
+	}
+	for (idx_t i = 0; i < conflict_entries.size(); ++i) {
+		auto entry_hash_ptr = conflict_entries[i] + pointer_offset;
 	}
 }
 
@@ -333,50 +378,6 @@ bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key)
 		}
 	}
 	return true;
-}
-
-void JoinHashTable::Finalize() {
-	// the build has finished, now iterate over all the nodes and construct the final hash table
-	// select a HT that has at least 50% empty space
-	idx_t capacity = NextPowerOfTwo(MaxValue<idx_t>(Count() * 2, (Storage::BLOCK_SIZE / sizeof(data_ptr_t)) + 1));
-	// size needs to be a power of 2
-	D_ASSERT((capacity & (capacity - 1)) == 0);
-	bitmask = capacity - 1;
-
-	// allocate the HT and initialize it with all-zero entries
-	hash_map = buffer_manager.Allocate(capacity * sizeof(data_ptr_t));
-	memset(hash_map->node->buffer, 0, capacity * sizeof(data_ptr_t));
-
-	Vector hashes(LogicalType::HASH);
-	auto hash_data = FlatVector::GetData<hash_t>(hashes);
-	data_ptr_t key_locations[STANDARD_VECTOR_SIZE];
-	// now construct the actual hash table; scan the nodes
-	// as we scan the nodes we pin all the blocks of the HT and keep them pinned until the HT is destroyed
-	// this is so that we can keep pointers around to the blocks
-	// FIXME: if we cannot keep everything pinned in memory, we could switch to an out-of-memory merge join or so
-	for (auto &block : block_collection->blocks) {
-		auto handle = buffer_manager.Pin(block.block);
-		data_ptr_t entries_buffer = handle->node->buffer;
-		idx_t entry = 0;
-		while (entry < block.count) {
-			// fetch the next vector of entries from the blocks
-			idx_t entries_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, block.count - entry);
-			for (idx_t i = 0; i < entries_count; i++) {
-				hash_data[i] = Load<hash_t>((data_ptr_t)(entries_buffer + pointer_offset));
-				key_locations[i] = entries_buffer;
-				entries_buffer += entry_size; // walk to next tuple
-			}
-			// now insert the key_locations into the hash table
-			InsertHashes(hashes, entries_count, key_locations);
-			entry += entries_count; // walk entries_count
-		}
-		pinned_handles.push_back(move(handle));
-	}
-	// In case of primary key do a semi-join instead
-	/* if (has_primary_key) {
-	    join_type = JoinType::SEMI;
-	} */
-	finalized = true;
 }
 
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
