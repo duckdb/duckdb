@@ -181,7 +181,7 @@ unique_ptr<ParsedExpression> BindContext::CreateColumnReference(const string &sc
 	names.push_back(column_name);
 
 	auto result = make_unique<ColumnRefExpression>(move(names));
-	if (binding->names[column_index] != column_name) {
+	if (column_index < binding->names.size() && binding->names[column_index] != column_name) {
 		result->alias = binding->names[column_index];
 	}
 	return move(result);
