@@ -35,7 +35,8 @@ struct BoundColumnReferenceInfo {
 };
 
 struct BindResult {
-	BindResult() {}
+	BindResult() {
+	}
 	explicit BindResult(string error) : error(error) {
 	}
 	explicit BindResult(unique_ptr<Expression> expr) : expression(move(expr)) {

@@ -35,7 +35,7 @@ BindResult ExpressionBinder::BindQualifiedColumnName(ColumnRefExpression &colref
 		struct_start++;
 	}
 	auto result = make_unique_base<ParsedExpression, ColumnRefExpression>(colref.column_names.back());
-	for(idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
+	for (idx_t i = struct_start; i + 1 < colref.column_names.size(); i++) {
 		result = CreateStructExtract(move(result), colref.column_names[i]);
 	}
 	return BindExpression(&result, 0);

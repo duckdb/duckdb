@@ -1,6 +1,6 @@
 # name: test/sql/constraints/check/check_struct.test
 # description: CHECK constraint on structs
-# group: [constraints]
+# group: [check]
 
 statement ok
 PRAGMA enable_verification

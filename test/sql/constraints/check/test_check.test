@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_check.test
+# name: test/sql/constraints/check/test_check.test
 # description: CHECK constraint
-# group: [constraints]
+# group: [check]
 
 statement ok
 CREATE TABLE integers(i INTEGER CHECK(i < 5))

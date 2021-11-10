@@ -293,7 +293,8 @@ bool Binder::HasMatchingBinding(const string &table_name, const string &column_n
 	return HasMatchingBinding(empty_schema, table_name, column_name, error_message);
 }
 
-bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name, string &error_message) {
+bool Binder::HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
+                                string &error_message) {
 	Binding *binding;
 	if (macro_binding && table_name == macro_binding->alias) {
 		binding = macro_binding;

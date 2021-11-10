@@ -36,7 +36,8 @@ BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
 	}
 	auto idx = table.GetColumnIndex(colref.column_names[0], true);
 	if (idx == INVALID_INDEX) {
-		throw BinderException("Table does not contain column %s referenced in alter statement!", colref.column_names[0]);
+		throw BinderException("Table does not contain column %s referenced in alter statement!",
+		                      colref.column_names[0]);
 	}
 	bound_columns.push_back(idx);
 	return BindResult(make_unique<BoundReferenceExpression>(table.columns[idx].type, bound_columns.size() - 1));

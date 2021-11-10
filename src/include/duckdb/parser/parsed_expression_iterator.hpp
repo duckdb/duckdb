@@ -23,7 +23,8 @@ public:
 	static void EnumerateChildren(ParsedExpression &expr,
 	                              const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
 
-	static void EnumerateTableRefChildren(TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
+	static void EnumerateTableRefChildren(TableRef &ref,
+	                                      const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
 	static void EnumerateQueryNodeChildren(QueryNode &node,
 	                                       const std::function<void(unique_ptr<ParsedExpression> &child)> &callback);
 };

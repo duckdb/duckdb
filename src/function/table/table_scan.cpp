@@ -366,7 +366,7 @@ TableCatalogEntry *TableScanFunction::GetTableEntry(const TableFunction &functio
 	if (function.function != TableScanFunc || !bind_data_p) {
 		return nullptr;
 	}
-	auto &bind_data = (TableScanBindData &) *bind_data_p;
+	auto &bind_data = (TableScanBindData &)*bind_data_p;
 	return bind_data.table;
 }
 

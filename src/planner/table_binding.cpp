@@ -40,8 +40,7 @@ bool Binding::HasMatchingBinding(const string &column_name) {
 }
 
 string Binding::ColumnNotFoundError(const string &column_name) const {
-	return StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias,
-		                                     column_name);
+	return StringUtil::Format("Values list \"%s\" does not have a column named \"%s\"", alias, column_name);
 }
 
 BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
@@ -112,8 +111,7 @@ TableCatalogEntry *TableBinding::GetTableEntry() {
 }
 
 string TableBinding::ColumnNotFoundError(const string &column_name) const {
-	return StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias,
-		                                     column_name);
+	return StringUtil::Format("Table \"%s\" does not have a column named \"%s\"", alias, column_name);
 }
 
 const char *MacroBinding::MACRO_NAME = "0_macro_parameters";
@@ -146,8 +144,7 @@ unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colre
 }
 
 string MacroBinding::ColumnNotFoundError(const string &column_name) const {
-	return StringUtil::Format("Macro \"%s\" does not have a parameter named \"%s\"", alias,
-		                                     column_name);
+	return StringUtil::Format("Macro \"%s\" does not have a parameter named \"%s\"", alias, column_name);
 }
 
 } // namespace duckdb

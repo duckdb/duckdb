@@ -142,7 +142,8 @@ void ParsedExpressionIterator::EnumerateChildren(
 	}
 }
 
-void ParsedExpressionIterator::EnumerateTableRefChildren(TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
+void ParsedExpressionIterator::EnumerateTableRefChildren(
+    TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (ref.type) {
 	case TableReferenceType::CROSS_PRODUCT: {
 		auto &cp_ref = (CrossProductRef &)ref;
@@ -185,7 +186,8 @@ void ParsedExpressionIterator::EnumerateTableRefChildren(TableRef &ref, const st
 	}
 }
 
-void ParsedExpressionIterator::EnumerateQueryNodeChildren(QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
+void ParsedExpressionIterator::EnumerateQueryNodeChildren(
+    QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
 	switch (node.type) {
 	case QueryNodeType::RECURSIVE_CTE_NODE: {
 		auto &rcte_node = (RecursiveCTENode &)node;

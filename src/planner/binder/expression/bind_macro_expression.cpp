@@ -27,7 +27,8 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	case ExpressionClass::SUBQUERY: {
 		// replacing parameters within a subquery is slightly different
 		auto &sq = ((SubqueryExpression &)*expr).subquery;
-		ParsedExpressionIterator::EnumerateQueryNodeChildren(*sq->node, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
+		ParsedExpressionIterator::EnumerateQueryNodeChildren(
+		    *sq->node, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParametersRecursive(child); });
 		break;
 	}
 	default: // fall through

@@ -48,7 +48,7 @@ unique_ptr<ParsedExpression> Transformer::TransformColumnRef(duckdb_libpgquery::
 			throw InternalException("Unexpected field length");
 		}
 		vector<string> column_names;
-		for(auto node = fields->head; node; node = node->next) {
+		for (auto node = fields->head; node; node = node->next) {
 			column_names.emplace_back(reinterpret_cast<duckdb_libpgquery::PGValue *>(node->data.ptr_value)->val.str);
 		}
 		auto colref = make_unique<ColumnRefExpression>(move(column_names));
