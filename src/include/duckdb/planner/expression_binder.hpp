@@ -129,9 +129,7 @@ protected:
 	virtual BindResult BindMacro(FunctionExpression &expr, MacroCatalogEntry *macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> *expr_ptr);
 
-	virtual void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
-	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, QueryNode &node);
-	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, TableRef &ref);
+	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

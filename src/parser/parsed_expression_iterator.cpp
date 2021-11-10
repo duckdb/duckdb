@@ -1,6 +1,11 @@
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 
 #include "duckdb/parser/expression/list.hpp"
+#include "duckdb/parser/query_node.hpp"
+#include "duckdb/parser/query_node/recursive_cte_node.hpp"
+#include "duckdb/parser/query_node/select_node.hpp"
+#include "duckdb/parser/query_node/set_operation_node.hpp"
+#include "duckdb/parser/tableref/list.hpp"
 
 namespace duckdb {
 
@@ -134,6 +139,89 @@ void ParsedExpressionIterator::EnumerateChildren(
 	default:
 		// called on non ParsedExpression type!
 		throw NotImplementedException("Unimplemented expression class");
+	}
+}
+
+void ParsedExpressionIterator::EnumerateTableRefChildren(TableRef &ref, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
+	switch (ref.type) {
+	case TableReferenceType::CROSS_PRODUCT: {
+		auto &cp_ref = (CrossProductRef &)ref;
+		EnumerateTableRefChildren(*cp_ref.left, callback);
+		EnumerateTableRefChildren(*cp_ref.right, callback);
+		break;
+	}
+	case TableReferenceType::EXPRESSION_LIST: {
+		auto &el_ref = (ExpressionListRef &)ref;
+		for (idx_t i = 0; i < el_ref.values.size(); i++) {
+			for (idx_t j = 0; j < el_ref.values[i].size(); j++) {
+				callback(el_ref.values[i][j]);
+			}
+		}
+		break;
+	}
+	case TableReferenceType::JOIN: {
+		auto &j_ref = (JoinRef &)ref;
+		EnumerateTableRefChildren(*j_ref.left, callback);
+		EnumerateTableRefChildren(*j_ref.right, callback);
+		callback(j_ref.condition);
+		break;
+	}
+	case TableReferenceType::SUBQUERY: {
+		auto &sq_ref = (SubqueryRef &)ref;
+		EnumerateQueryNodeChildren(*sq_ref.subquery->node, callback);
+		break;
+	}
+	case TableReferenceType::TABLE_FUNCTION: {
+		auto &tf_ref = (TableFunctionRef &)ref;
+		callback(tf_ref.function);
+		break;
+	}
+	case TableReferenceType::BASE_TABLE:
+	case TableReferenceType::EMPTY:
+		// these TableRefs do not need to be unfolded
+		break;
+	default:
+		throw NotImplementedException("TableRef type not implemented for traversal");
+	}
+}
+
+void ParsedExpressionIterator::EnumerateQueryNodeChildren(QueryNode &node, const std::function<void(unique_ptr<ParsedExpression> &child)> &callback) {
+	switch (node.type) {
+	case QueryNodeType::RECURSIVE_CTE_NODE: {
+		auto &rcte_node = (RecursiveCTENode &)node;
+		EnumerateQueryNodeChildren(*rcte_node.left, callback);
+		EnumerateQueryNodeChildren(*rcte_node.right, callback);
+		break;
+	}
+	case QueryNodeType::SELECT_NODE: {
+		auto &sel_node = (SelectNode &)node;
+		for (idx_t i = 0; i < sel_node.select_list.size(); i++) {
+			callback(sel_node.select_list[i]);
+		}
+		for (idx_t i = 0; i < sel_node.groups.group_expressions.size(); i++) {
+			callback(sel_node.groups.group_expressions[i]);
+		}
+		if (sel_node.where_clause) {
+			callback(sel_node.where_clause);
+		}
+		if (sel_node.having) {
+			callback(sel_node.having);
+		}
+
+		EnumerateTableRefChildren(*sel_node.from_table.get(), callback);
+		break;
+	}
+	case QueryNodeType::SET_OPERATION_NODE: {
+		auto &setop_node = (SetOperationNode &)node;
+		EnumerateQueryNodeChildren(*setop_node.left, callback);
+		EnumerateQueryNodeChildren(*setop_node.right, callback);
+		break;
+	}
+	default:
+		throw NotImplementedException("QueryNode type not implemented for traversal");
+	}
+	for (auto &kv : node.cte_map) {
+		EnumerateQueryNodeChildren(*kv.second->query->node, callback);
 	}
 }
 
