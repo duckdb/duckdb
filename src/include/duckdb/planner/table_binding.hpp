@@ -69,6 +69,7 @@ public:
 //! Params/Arguments.
 struct MacroBinding : public Binding {
 	static constexpr const char *MACRO_NAME = "0_macro_parameters";
+
 public:
 	MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name);
 
