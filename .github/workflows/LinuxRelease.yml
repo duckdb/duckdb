@@ -19,7 +19,6 @@ jobs:
     container: ubuntu:16.04
     env:
       GEN: ninja
-      BUILD_VISUALIZER: 1
       BUILD_BENCHMARK: 1
       BUILD_ICU: 1
       BUILD_TPCH: 1
@@ -27,7 +26,6 @@ jobs:
       BUILD_FTS: 1
       BUILD_REST: 1
       BUILD_JDBC: 1
-      BUILD_HTTPFS: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
 
@@ -351,3 +349,27 @@ jobs:
 
     - name: Symbol Leakage Test
       run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+
+ linux-httpfs:
+    name: Linux HTTPFS
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+    env:
+      GEN: ninja
+      BUILD_VISUALIZER: 1
+      BUILD_HTTPFS: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      run: make
+
+    - name: Test
+      run: make allunit
