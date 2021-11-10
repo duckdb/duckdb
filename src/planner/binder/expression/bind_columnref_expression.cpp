@@ -10,6 +10,7 @@
 #include "duckdb/planner/expression_binder/where_binder.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/expression/subquery_expression.hpp"
 
 namespace duckdb {
 
@@ -50,7 +51,8 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 }
 
 void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
-	if (expr->type == ExpressionType::COLUMN_REF) {
+	switch(expr->type) {
+	case ExpressionType::COLUMN_REF: {
 		auto &colref = (ColumnRefExpression &) *expr;
 		string error_message;
 		auto new_expr = QualifyColumnName(colref, error_message);
@@ -60,7 +62,9 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 			}
 			expr = move(new_expr);
 		}
-	} else if (expr->type == ExpressionType::POSITIONAL_REFERENCE) {
+		break;
+	}
+	case ExpressionType::POSITIONAL_REFERENCE: {
 		auto &ref = (PositionalReferenceExpression &) *expr;
 		if (ref.alias.empty()) {
 			string table_name, column_name;
@@ -69,6 +73,10 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 				ref.alias = column_name;
 			}
 		}
+		break;
+	}
+	default:
+		break;
 	}
 	ParsedExpressionIterator::EnumerateChildren(
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { QualifyColumnNames(child); });

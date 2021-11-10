@@ -116,8 +116,10 @@ string TableBinding::ColumnNotFoundError(const string &column_name) const {
 		                                     column_name);
 }
 
+const char *MacroBinding::MACRO_NAME = "0_macro_parameters";
+
 MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, string macro_name_p)
-    : Binding("0_macro_parameters", move(types_p), move(names_p), -1), macro_name(move(macro_name_p)) {
+    : Binding(MacroBinding::MACRO_NAME, move(types_p), move(names_p), -1), macro_name(move(macro_name_p)) {
 }
 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {

@@ -12,7 +12,14 @@ void ExpressionBinder::ReplaceMacroParametersRecursive(unique_ptr<ParsedExpressi
 	case ExpressionClass::COLUMN_REF: {
 		// if expr is a parameter, replace it with its argument
 		auto &colref = (ColumnRefExpression &)*expr;
-		if (!colref.IsQualified() && macro_binding->HasMatchingBinding(colref.GetColumnName())) {
+		bool bind_macro_parameter = false;
+		if (colref.IsQualified()) {
+			bind_macro_parameter = colref.GetTableName() == MacroBinding::MACRO_NAME;
+		} else {
+			bind_macro_parameter = macro_binding->HasMatchingBinding(colref.GetColumnName());
+		}
+		if (bind_macro_parameter) {
+			D_ASSERT(macro_binding->HasMatchingBinding(colref.GetColumnName()));
 			expr = macro_binding->ParamToArg(colref);
 		}
 		return;

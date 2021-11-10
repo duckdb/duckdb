@@ -96,6 +96,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 	}
 	auto this_macro_binding = make_unique<MacroBinding>(dummy_types, dummy_names, base.name);
 	macro_binding = this_macro_binding.get();
+	ExpressionBinder::QualifyColumnNames(*this, base.function->expression);
 
 	// create a copy of the expression because we do not want to alter the original
 	auto expression = base.function->expression->Copy();
