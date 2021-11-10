@@ -162,6 +162,3 @@ SELECT test.tblX.col FROM test.tbl;
 
 statement error
 SELECT test.tbl.colX FROM test.tbl;
-
-# CHECK on struct CHECK(x.a)
-# ALTER TYPE with struct (x.a)

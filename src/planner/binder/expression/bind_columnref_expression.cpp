@@ -4,7 +4,6 @@
 #include "duckdb/planner/expression_binder.hpp"
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/planner/binder.hpp"
@@ -50,43 +49,15 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(const string &c
 	return make_unique<ColumnRefExpression>(column_name, move(table_name));
 }
 
-bool ExpressionBinder::QualifyColumnName(const string &table_name, const string &column_name, string &error_message) {
-	auto binding = binder.bind_context.GetBinding(table_name, error_message);
-	if (!binding) {
-		return false;
-	}
-	if (!binding->HasMatchingBinding(column_name)) {
-		error_message = binding->ColumnNotFoundError(column_name);
-		return false;
-	}
-	return true;
-}
-
-bool ExpressionBinder::QualifyColumnName(const string &schema_name, const string &table_name, const string &column_name, string &error_message) {
-	auto binding = binder.bind_context.GetBinding(table_name, error_message);
-	if (!binding) {
-		return false;
-	}
-	auto table_entry = binding->GetTableEntry();
-	if (!table_entry) {
-		return false;
-	}
-	if (table_entry->schema->name != schema_name || table_entry->name != table_name) {
-		return false;
-	}
-	if (!binding->HasMatchingBinding(column_name)) {
-		error_message = binding->ColumnNotFoundError(column_name);
-		return false;
-	}
-	return true;
-}
-
 void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr) {
 	if (expr->type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &) *expr;
 		string error_message;
 		auto new_expr = QualifyColumnName(colref, error_message);
 		if (new_expr) {
+			if (!expr->alias.empty()) {
+				new_expr->alias = expr->alias;
+			}
 			expr = move(new_expr);
 		}
 	} else if (expr->type == ExpressionType::POSITIONAL_REFERENCE) {
@@ -132,7 +103,7 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		// -> part1 is a column, part2 is a property of that column (i.e. struct_extract)
 
 		// first check if part1 is a table
-		if (QualifyColumnName(colref.column_names[0], colref.column_names[1], error_message)) {
+		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message)) {
 			// it is! return the colref directly
 			return colref.Copy();
 		} else {
@@ -163,12 +134,12 @@ unique_ptr<ParsedExpression> ExpressionBinder::QualifyColumnName(ColumnRefExpres
 		unique_ptr<ParsedExpression> result_expr;
 		idx_t struct_extract_start;
 		// first check if part1 is a schema
-		if (QualifyColumnName(colref.column_names[0], colref.column_names[1], colref.column_names[2], error_message)) {
+		if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], colref.column_names[2], error_message)) {
 			// it is! the column reference is "schema.table.column"
 			// any additional fields are turned into struct_extract calls
 			result_expr = make_unique_base<ParsedExpression, ColumnRefExpression>(vector<string> {colref.column_names[0], colref.column_names[1], colref.column_names[2]} );
 			struct_extract_start = 3;
-		} else if (QualifyColumnName(colref.column_names[0], colref.column_names[1], error_message)) {
+		} else if (binder.HasMatchingBinding(colref.column_names[0], colref.column_names[1], error_message)) {
 			// part1 is a table
 			// the column reference is "table.column"
 			// any additional fields are turned into struct_extract calls

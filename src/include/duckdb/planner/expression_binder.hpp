@@ -76,8 +76,6 @@ public:
 	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
 
 	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, string &error_message);
-	bool QualifyColumnName(const string &table_name, const string &column_name, string &error_message);
-	bool QualifyColumnName(const string &schema_name, const string &table_name, const string &column_name, string &error_message);
 	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, string &error_message);
 
 	// Bind table names to ColumnRefExpressions

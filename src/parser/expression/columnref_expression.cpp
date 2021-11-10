@@ -7,7 +7,7 @@
 namespace duckdb {
 
 ColumnRefExpression::ColumnRefExpression(string column_name, string table_name)
-    : ColumnRefExpression(vector<string>{move(table_name), move(column_name)}) {
+    : ColumnRefExpression(table_name.empty() ? vector<string> { move(column_name) } : vector<string>{move(table_name), move(column_name)}) {
 }
 
 ColumnRefExpression::ColumnRefExpression(string column_name)
@@ -15,7 +15,13 @@ ColumnRefExpression::ColumnRefExpression(string column_name)
 }
 
 ColumnRefExpression::ColumnRefExpression(vector<string> column_names_p) :
-	ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF), column_names(move(column_names_p)) {}
+	ParsedExpression(ExpressionType::COLUMN_REF, ExpressionClass::COLUMN_REF), column_names(move(column_names_p)) {
+#ifdef DEBUG
+	for(auto &col_name : column_names) {
+		D_ASSERT(!col_name.empty());
+	}
+#endif
+}
 
 
 bool ColumnRefExpression::IsQualified() const {
