@@ -301,14 +301,15 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	vector<data_ptr_t> conflict_entries;
 	conflict_entries.reserve(STANDARD_VECTOR_SIZE);
 
-	// create a vector for indices and apply the bitmask to get them from the hash_values
+	// create a vector for indices and apply the bitmask in the hash_values
 	ApplyBitmask(hashes, count);
-
+	// transform the vector into a flat vector
 	hashes.Normalify(count);
-	// TODO: check for duplicates here
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
+	// now insert the entries into the hash_map
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
+	// First, fill the hash_map and handle conflicts with a next_pointer
 	for (idx_t i = 0; i < count; i++) {
 		// For each tuple the hash_value will be replaced by a pointer to the next_entry in the hash_map
 		auto index = indices[i];
@@ -317,16 +318,32 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		if (has_primary_key && pointers[index] != 0) {
 			// check whether the keys are the same
 			has_primary_key = !CompareKeysSwitch(key_locations[i], pointers[index]);
-			// and add the entry to check its next ptr later
-			conflict_entries.push_back(pointers[index]);
+			// and add the entry to check its next_ptr later
+			conflict_entries.push_back(key_locations[i]);
 		}
 		// replace the hash_value in the current entry and point to a position in the hash_map
 		Store<data_ptr_t>(pointers[index], entry_hash_ptr);
 		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
-	for (idx_t i = 0; i < conflict_entries.size(); ++i) {
-		auto entry_hash_ptr = conflict_entries[i] + pointer_offset;
+	// Now, process the conflicts
+	count = conflict_entries.size();
+	while (count > 0) {
+		// Now, check the next pointer in the entries with condlicts
+		for (auto ptr_entry : conflict_entries) {
+			if (ptr_entry == 0)
+				continue;
+			auto entry_hash_ptr = ptr_entry + pointer_offset;
+			// check whether there is a next_ptr entry.
+			if (entry_hash_ptr != 0) {
+				// check whether keys are the same
+				has_primary_key = !CompareKeysSwitch(ptr_entry, entry_hash_ptr);
+				// and add the entry to check its next_ptr later
+				conflict_entries.push_back(entry_hash_ptr);
+				continue;
+			}
+			ptr_entry = 0;
+		}
 	}
 }
 
