@@ -5,9 +5,9 @@
 #include <fstream>
 #include <sstream>
 #include "duckdb/main/query_profiler.hpp"
+#include "duckdb/main/extension_helper.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "extension_helper.hpp"
 
 namespace duckdb {
 
@@ -32,14 +32,21 @@ static string ParseGroupFromPath(string file) {
 }
 
 struct InterpretedBenchmarkState : public BenchmarkState {
+	unique_ptr<DBConfig> benchmark_config;
 	DuckDB db;
 	Connection con;
 	unique_ptr<MaterializedQueryResult> result;
-	InterpretedBenchmarkState() : db(nullptr), con(db) {
+	InterpretedBenchmarkState() : benchmark_config(GetBenchmarkConfig()), db(nullptr, benchmark_config.get()), con(db) {
 		con.EnableProfiling();
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
 		D_ASSERT(res->success);
+	}
+
+	unique_ptr<DBConfig> GetBenchmarkConfig() {
+		auto result = make_unique<DBConfig>();
+		result->load_extensions = false;
+		return result;
 	}
 };
 

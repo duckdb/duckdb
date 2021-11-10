@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/function_set.hpp"
+#include "duckdb/function/scalar_function.hpp"
 
 namespace duckdb {
 
@@ -47,9 +47,16 @@ struct MapFun {
 struct MapExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
+
 struct ListExtractFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
+
+struct ListConcatFun {
+	static ScalarFunction GetFunction();
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 struct CardinalityFun {
 	static void RegisterFunction(BuiltinFunctions &set);
 };

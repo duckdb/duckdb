@@ -39,7 +39,7 @@
 #include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/parser/parser.hpp"
 
-#include "extension_helper.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #include "test_helpers.hpp"
 #include "test_helper_extension.hpp"
@@ -51,6 +51,7 @@
 #include <vector>
 #include <iostream>
 #include <thread>
+#include <cfloat>
 
 using namespace duckdb;
 using namespace std;
@@ -70,6 +71,7 @@ struct SQLLogicTestRunner {
 public:
 	SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
 		config = GetTestConfig();
+		config->load_extensions = false;
 	}
 	~SQLLogicTestRunner();
 
@@ -1552,6 +1554,10 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 #endif
 			} else if (param == "windows") {
 #ifndef _WIN32
+				return;
+#endif
+			} else if (param == "longdouble") {
+#if LDBL_MANT_DIG < 54
 				return;
 #endif
 			} else if (param == "noforcestorage") {

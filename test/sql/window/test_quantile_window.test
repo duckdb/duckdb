@@ -378,3 +378,156 @@ ORDER BY 1
 3	[0.750000, 1.500000, 2.000000]
 4	[0.500000, 1.000000, 1.500000]
 5	[1.250000, 1.500000, 1.750000]
+
+#
+# Coverage
+#
+
+# Discrete replace coverage
+query II
+SELECT r, quantile_disc(i, 0.5) OVER (ORDER BY r ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) q
+FROM (VALUES
+	(0, 0),
+	(1, 1),
+	(2, 2),
+	(3, 0),
+	(4, 1)
+	) tbl(r, i)
+ORDER BY 1, 2
+----
+0	0
+1	1
+2	1
+3	1
+4	0
+
+# Continuous interpolated replace coverage
+query II
+SELECT r, quantile_cont(i, 0.5) OVER (ORDER BY r ROWS BETWEEN 2 PRECEDING AND 1 FOLLOWING) q
+FROM (VALUES
+	(0, 0),
+	(1, 1),
+	(2, 2),
+	(3, 3),
+	(4, 0),
+	(5, 1)
+	) tbl(r, i)
+ORDER BY 1, 2
+----
+0	0.5
+1	1.0
+2	1.5
+3	1.5
+4	1.5
+5	1.0
+
+# NULL replace coverage
+query II
+SELECT r, quantile_cont(i, 0.5) OVER (ORDER BY r ROWS BETWEEN 2 PRECEDING AND 1 FOLLOWING) q
+FROM (VALUES
+	(0, NULL),
+	(1, 1),
+	(2, 2),
+	(3, 3),
+	(4, NULL),
+	(5, 1)
+	) tbl(r, i)
+ORDER BY 1, 2
+----
+0	1.000000
+1	1.500000
+2	2.000000
+3	2.000000
+4	2.000000
+5	2.000000
+
+#
+# Compare implementations
+#
+
+foreach windowmode "window" "combine" "separate"
+
+statement ok
+PRAGMA debug_window_mode=${windowmode}
+
+query II
+WITH t(r, i, p, f) AS (VALUES
+	(0, 0, 1, 1),
+	(1, 1, 1, 1),
+	(2, 2, 1, 1),
+	(3, 0, 1, 1),
+	(4, 1, 1, 1),
+	(5, 2, 1, 1)
+)
+SELECT r, MEDIAN(i) OVER (ORDER BY r ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	0.500000
+1	1.000000
+2	1.000000
+3	1.000000
+4	1.000000
+5	1.500000
+
+query II
+WITH t(r, i, p, f) AS (VALUES
+	(0, 0, 1, 1),
+	(1, 1, 1, 1),
+	(2, 2, 1, 1),
+	(3, 0, 1, 1),
+	(4, 1, 1, 1),
+	(5, 2, 1, 1)
+)
+SELECT r, QUANTILE_DISC(i, 0.5) OVER (ORDER BY r ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	0
+1	1
+2	1
+3	1
+4	1
+5	1
+
+query II
+WITH t(r, i, p, f) AS (VALUES
+	(0, NULL, 1, 2),
+	(1, 1, 1, 2),
+	(2, 2, 1, 2),
+	(3, 3, 1, 2),
+	(4, 4, 1, 2),
+	(5, 5, 1, 2)
+)
+SELECT r, QUANTILE_DISC(i, [0.25, 0.5, 0.75]) OVER (ORDER BY r ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	[1, 1, 1]
+1	[1, 2, 2]
+2	[1, 2, 3]
+3	[2, 3, 4]
+4	[3, 4, 4]
+5	[4, 4, 4]
+
+query II
+WITH t(r, i, p, f) AS (VALUES
+	(0, 0, 1, 2),
+	(1, 1, 1, 2),
+	(2, 2, 1, 2),
+	(3, 0, 1, 2),
+	(4, 1, 1, 2),
+	(5, 2, 1, 2)
+)
+SELECT r, QUANTILE_CONT(i, [0.25, 0.5, 0.75]) OVER (ORDER BY r ROWS BETWEEN p PRECEDING and f FOLLOWING)
+FROM t
+ORDER BY 1
+----
+0	[0.500000, 1.000000, 1.500000]
+1	[0.000000, 0.500000, 1.250000]
+2	[0.750000, 1.000000, 1.250000]
+3	[0.750000, 1.500000, 2.000000]
+4	[0.500000, 1.000000, 1.500000]
+5	[1.250000, 1.500000, 1.750000]
+
+endloop

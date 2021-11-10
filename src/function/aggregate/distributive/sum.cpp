@@ -8,21 +8,14 @@
 
 namespace duckdb {
 
-template <class T>
-struct SumState {
-	T value;
-	bool isset;
-};
-
 struct SumSetOperation {
 	template <class STATE>
 	static void Initialize(STATE *state) {
-		state->isset = false;
+		state->Initialize();
 	}
 	template <class STATE>
 	static void Combine(const STATE &source, STATE *target) {
-		target->isset = source.isset || target->isset;
-		target->value += source.value;
+		target->Combine(source);
 	}
 	template <class STATE>
 	static void AddValues(STATE *state, idx_t count) {
@@ -52,7 +45,8 @@ struct SumToHugeintOperation : public BaseSumOperation<SumSetOperation, HugeintA
 	}
 };
 
-struct NumericSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
+template <class ADD_OPERATOR>
+struct DoubleSumOperation : public BaseSumOperation<SumSetOperation, ADD_OPERATOR> {
 	template <class T, class STATE>
 	static void Finalize(Vector &result, FunctionData *, STATE *state, T *target, ValidityMask &mask, idx_t idx) {
 		if (!state->isset) {
@@ -65,6 +59,9 @@ struct NumericSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd
 		}
 	}
 };
+
+using NumericSumOperation = DoubleSumOperation<RegularAdd>;
+using KahanSumOperation = DoubleSumOperation<KahanAdd>;
 
 struct HugeintSumOperation : public BaseSumOperation<SumSetOperation, RegularAdd> {
 	template <class T, class STATE>
@@ -174,12 +171,23 @@ void SumFun::RegisterFunction(BuiltinFunctions &set) {
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT128));
-	// float sums to float
-	// FIXME: implement http://ic.ese.upenn.edu/pdf/parallel_fpaccum_tc2016.pdf for parallel FP sums
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 
 	set.AddFunction(sum);
+
+	// fsum
+	AggregateFunctionSet fsum("fsum");
+	fsum.AddFunction(AggregateFunction::UnaryAggregate<KahanSumState, double, double, KahanSumOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+
+	set.AddFunction(fsum);
+
+	fsum.name = "kahan_sum";
+	set.AddFunction(fsum);
+
+	fsum.name = "sumKahan";
+	set.AddFunction(fsum);
 }
 
 } // namespace duckdb

@@ -134,7 +134,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 		auto initial_reader = make_unique<BufferedCSVReader>(context, options);
 
 		return_types.assign(initial_reader->sql_types.begin(), initial_reader->sql_types.end());
-		names.assign(initial_reader->col_names.begin(), initial_reader->col_names.end());
+		if (names.empty()) {
+			names.assign(initial_reader->col_names.begin(), initial_reader->col_names.end());
+		} else {
+			D_ASSERT(return_types.size() == names.size());
+		}
 		result->initial_reader = move(initial_reader);
 	} else {
 		result->sql_types = return_types;
