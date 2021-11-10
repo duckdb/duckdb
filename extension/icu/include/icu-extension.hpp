@@ -8,8 +8,6 @@
 
 #pragma once
 
-#define DUCKDB_BUILD_LOADABLE_EXTENSION
-
 #include "duckdb.hpp"
 
 namespace duckdb {
