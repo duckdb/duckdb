@@ -66,6 +66,10 @@ BindResult Binding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	return BindResult(make_unique<BoundColumnRefExpression>(colref.GetName(), sql_type, binding, depth));
 }
 
+TableCatalogEntry *Binding::GetTableEntry() {
+	return nullptr;
+}
+
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p, LogicalGet &get,
                            idx_t index, bool add_row_id)
     : Binding(alias, move(types_p), move(names_p), index), get(get) {
@@ -129,7 +133,7 @@ MacroBinding::MacroBinding(vector<LogicalType> types_p, vector<string> names_p, 
 BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	column_t column_index;
 	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
-		return BindResult(ColumnNotFoundError(colref.GetColumnName()));
+		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
 	ColumnBinding binding;
 	binding.table_index = index;
@@ -142,15 +146,11 @@ BindResult MacroBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 unique_ptr<ParsedExpression> MacroBinding::ParamToArg(ColumnRefExpression &colref) {
 	column_t column_index;
 	if (!TryGetBindingIndex(colref.GetColumnName(), column_index)) {
-		throw BinderException(ColumnNotFoundError(colref.GetColumnName()));
+		throw InternalException("Column %s not found in macro", colref.GetColumnName());
 	}
 	auto arg = arguments[column_index]->Copy();
 	arg->alias = colref.alias;
 	return arg;
-}
-
-string MacroBinding::ColumnNotFoundError(const string &column_name) const {
-	return StringUtil::Format("Macro \"%s\" does not have a parameter named \"%s\"", alias, column_name);
 }
 
 } // namespace duckdb

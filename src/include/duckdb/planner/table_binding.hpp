@@ -45,9 +45,7 @@ public:
 	bool HasMatchingBinding(const string &column_name);
 	virtual string ColumnNotFoundError(const string &column_name) const;
 	virtual BindResult Bind(ColumnRefExpression &colref, idx_t depth);
-	virtual TableCatalogEntry *GetTableEntry() {
-		return nullptr;
-	}
+	virtual TableCatalogEntry *GetTableEntry();
 };
 
 //! TableBinding is exactly like the Binding, except it keeps track of which columns were bound in the linked LogicalGet
@@ -83,8 +81,6 @@ public:
 
 	//! Given the parameter colref, returns a copy of the argument that was supplied for this parameter
 	unique_ptr<ParsedExpression> ParamToArg(ColumnRefExpression &colref);
-
-	string ColumnNotFoundError(const string &column_name) const override;
 };
 
 } // namespace duckdb

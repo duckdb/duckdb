@@ -212,7 +212,7 @@ Binding *BindContext::GetBinding(const string &name, string &out_error) {
 
 BindResult BindContext::BindColumn(ColumnRefExpression &colref, idx_t depth) {
 	if (!colref.IsQualified()) {
-		return BindResult(StringUtil::Format("Could not bind alias \"%s\"!", colref.GetColumnName()));
+		throw InternalException("Could not bind alias \"%s\"!", colref.GetColumnName());
 	}
 
 	string error;
