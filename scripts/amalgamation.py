@@ -247,14 +247,6 @@ def git_dev_version():
         version_splits[2] = str(int(version_splits[2]) + 1)
         return '.'.join(version_splits) + "-dev" + dev_version
 
-def get_platform():
-    import platform
-    p = platform.system()
-    a = platform.machine()
-    if p == "Darwin":
-        p = "osx"
-    return "%s-%s" % (p, a)
-
 def generate_duckdb_hpp(header_file):
     print("-----------------------")
     print("-- Writing " + header_file + " --")
@@ -270,7 +262,6 @@ def generate_duckdb_hpp(header_file):
             hfile.write("#define DUCKDB_AMALGAMATION_EXTENDED 1\n")
         hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash())
         hfile.write("#define DUCKDB_VERSION \"%s\"\n" % git_dev_version())
-        hfile.write("#define DUCKDB_PLATFORM \"%s\"\n" % get_platform())
 
         for fpath in main_header_files:
             hfile.write(write_file(fpath))

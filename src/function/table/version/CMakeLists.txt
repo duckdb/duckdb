@@ -1,6 +1,5 @@
 add_definitions(-DDUCKDB_SOURCE_ID="\""${GIT_COMMIT_HASH}"\"")
 add_definitions(-DDUCKDB_VERSION="\""${DUCKDB_VERSION}"\"")
-add_definitions(-DDUCKDB_PLATFORM="\""${OS_NAME}_${OS_ARCH}"\"")
 
 add_library_unity(duckdb_func_table_version OBJECT pragma_version.cpp)
 

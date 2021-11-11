@@ -88,7 +88,7 @@ public:
 	DUCKDB_API idx_t NumberOfThreads();
 	DUCKDB_API static const char *SourceID();
 	DUCKDB_API static const char *LibraryVersion();
-	DUCKDB_API static const char *Platform();
+	DUCKDB_API static string Platform();
 	DUCKDB_API bool ExtensionIsLoaded(const std::string &name);
 	DUCKDB_API void SetExtensionLoaded(const std::string &name);
 };

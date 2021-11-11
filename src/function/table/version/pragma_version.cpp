@@ -52,8 +52,18 @@ const char *DuckDB::LibraryVersion() {
 	return DUCKDB_VERSION;
 }
 
-const char *DuckDB::Platform() {
-	return DUCKDB_PLATFORM;
+string DuckDB::Platform() {
+	string os = "linux";
+	string arch = "amd64";
+#ifdef _WIN32
+	os = "windows";
+#elif defined(__APPLE__)
+	os = "osx";
+#endif
+#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
+	arch = "arm64";
+#endif
+	return os + "_" + arch;
 }
 
 } // namespace duckdb

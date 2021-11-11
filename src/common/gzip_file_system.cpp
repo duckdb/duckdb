@@ -315,7 +315,7 @@ string GZipFileSystem::UncompressGZIPString(const string &in) {
 		decompressed.append((char *)decompress_buffer, mz_stream_ptr->total_out - decompressed.size());
 	}
 	duckdb_miniz::mz_inflateEnd(mz_stream_ptr);
-	if (decompressed.size() == 0) {
+	if (decompressed.empty()) {
 		throw IOException("Failed to uncompress");
 	}
 	return decompressed;
