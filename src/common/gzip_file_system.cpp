@@ -265,7 +265,6 @@ bool GZipFileSystem::OnDiskFile(FileHandle &handle) {
 	return gzip_file.child_handle->OnDiskFile();
 }
 
-
 string GZipFileSystem::UncompressGZIPString(const string &in) {
 	// decompress file
 	auto body_ptr = in.data();

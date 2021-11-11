@@ -44,7 +44,6 @@ add_library(fts_extension STATIC ${FTS_SOURCES})
 
 build_loadable_extension(fts ${FTS_SOURCES})
 
-
 install(
   TARGETS fts_extension
   EXPORT "${DUCKDB_EXPORT_SET}"

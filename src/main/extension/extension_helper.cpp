@@ -180,7 +180,7 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 	duckdb_httplib::Client cli(url_base.c_str());
 
 	duckdb_httplib::Headers headers = {{"User-Agent", StringUtil::Format("DuckDB %s %s %s", DuckDB::LibraryVersion(),
-	                                                              DuckDB::SourceID(), DuckDB::Platform())}};
+	                                                                     DuckDB::SourceID(), DuckDB::Platform())}};
 
 	auto res = cli.Get(url_local_part.c_str(), headers);
 	if (!res || res->status != 200) {
@@ -197,13 +197,13 @@ void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &exten
 //===--------------------------------------------------------------------===//
 // Load External Extension
 //===--------------------------------------------------------------------===//
-template<class T>
+template <class T>
 static T LoadFunctionFromDLL(void *dll, const string &function_name, const string &filename) {
 	auto function = dlsym(dll, function_name.c_str());
 	if (!function) {
 		throw IOException("File \"%s\" did not contain function \"%s\"", filename, function_name);
 	}
-	return (T) function;
+	return (T)function;
 }
 
 void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &extension) {
@@ -254,8 +254,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, const string &
 	try {
 		(*init_fun)(db);
 	} catch (std::exception &e) {
-		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"", init_fun_name,
-		                            filename, e.what());
+		throw InvalidInputException("Initialization function \"%s\" from file \"%s\" threw an exception: \"%s\"",
+		                            init_fun_name, filename, e.what());
 	}
 }
 

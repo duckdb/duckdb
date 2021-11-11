@@ -27,5 +27,3 @@ add_library_unity(
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main>
     PARENT_SCOPE)
-
-add_extension_definitions(duckdb_main)

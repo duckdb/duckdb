@@ -22,4 +22,4 @@ void *dlsym(void *handle, const char *name) {
 }
 #endif
 
-}
+} // namespace duckdb
