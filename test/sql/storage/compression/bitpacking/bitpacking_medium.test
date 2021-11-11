@@ -1,0 +1,32 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_medium.test
+# description: Test medium storage with bitpacking (> vector size)
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+# simple Bitpacking with few values
+statement ok
+CREATE TABLE test (a BIGINT);
+
+# Insert values that fit in different widths
+statement ok
+INSERT INTO test SELECT * FROM range(0, 10000);
+INSERT INTO test SELECT * FROM range(22767, 32767);
+INSERT INTO test SELECT * FROM range(2147473647, 2147483647);
+INSERT INTO test SELECT * FROM range(2147473647, 2147483647);
+
+query IIII
+SELECT SUM(a), MIN(a), MAX(a), COUNT(*) FROM test
+----
+42949900590000	0	2147483646	40000
+
+restart
+
+query IIII
+SELECT SUM(a), MIN(a), MAX(a), COUNT(*) FROM test
+----
+42949900590000	0	2147483646	40000
