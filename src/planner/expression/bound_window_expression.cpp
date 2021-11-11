@@ -27,6 +27,11 @@ string BoundWindowExpression::ToString() const {
 		result += default_expr->GetName();
 	}
 
+	// IGNORE NULLS
+	if (ignore_nulls) {
+		result += " IGNORE NULLS";
+	}
+
 	// Over clause
 	result += ") OVER(";
 	string sep;
@@ -144,6 +149,9 @@ bool BoundWindowExpression::Equals(const BaseExpression *other_p) const {
 	}
 	auto other = (BoundWindowExpression *)other_p;
 
+	if (ignore_nulls != other->ignore_nulls) {
+		return false;
+	}
 	if (start != other->start || end != other->end) {
 		return false;
 	}
@@ -226,6 +234,7 @@ unique_ptr<Expression> BoundWindowExpression::Copy() {
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
+	new_window->ignore_nulls = ignore_nulls;
 
 	return move(new_window);
 }

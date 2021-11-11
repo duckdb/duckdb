@@ -215,7 +215,13 @@ static void MaskColumn(ValidityMask &mask, ChunkCollection &over_collection, con
 	}
 }
 
-static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r) {
+static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r, idx_t &n) {
+	if (mask.AllValid()) {
+		auto start = MinValue(l + n - 1, r);
+		n -= MinValue(n, r - l);
+		return start;
+	}
+
 	while (l < r) {
 		//	If l is aligned with the start of a block, and the block is blank, then skip forward one block.
 		idx_t entry_idx;
@@ -229,8 +235,8 @@ static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r) {
 		}
 
 		// Loop over the block
-		for (; shift < ValidityMask::BITS_PER_VALUE; ++shift, ++l) {
-			if (mask.RowIsValid(block, shift)) {
+		for (; shift < ValidityMask::BITS_PER_VALUE && l < r; ++shift, ++l) {
+			if (mask.RowIsValid(block, shift) && --n == 0) {
 				return MinValue(l, r);
 			}
 		}
@@ -240,7 +246,13 @@ static idx_t FindNextStart(const ValidityMask &mask, idx_t l, const idx_t r) {
 	return r;
 }
 
-static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r) {
+static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r, idx_t &n) {
+	if (mask.AllValid()) {
+		auto start = (r <= l + n) ? l : r - n;
+		n -= r - start;
+		return start;
+	}
+
 	while (l < r) {
 		// If r is aligned with the start of a block, and the previous block is blank,
 		// then skip backwards one block.
@@ -258,7 +270,7 @@ static idx_t FindPrevStart(const ValidityMask &mask, const idx_t l, idx_t r) {
 		// Loop backwards over the block
 		// shift is probing r-1 >= l >= 0
 		for (++shift; shift-- > 0; --r) {
-			if (mask.RowIsValid(block, shift)) {
+			if (mask.RowIsValid(block, shift) && --n == 0) {
 				return MaxValue(l, r - 1);
 			}
 		}
@@ -700,7 +712,8 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 			// find end of partition
 			bounds.partition_end = input_size;
 			if (bounds.partition_count) {
-				bounds.partition_end = FindNextStart(partition_mask, bounds.partition_start + 1, input_size);
+				idx_t n = 1;
+				bounds.partition_end = FindNextStart(partition_mask, bounds.partition_start + 1, input_size, n);
 			}
 
 			// Find valid ordering values for the new partition
@@ -711,14 +724,16 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 			if ((bounds.valid_start < bounds.valid_end) && bounds.has_preceding_range) {
 				// Exclude any leading NULLs
 				if (CellIsNull(over_collection, order_col, bounds.valid_start)) {
-					bounds.valid_start = FindNextStart(order_mask, bounds.valid_start + 1, bounds.valid_end);
+					idx_t n = 1;
+					bounds.valid_start = FindNextStart(order_mask, bounds.valid_start + 1, bounds.valid_end, n);
 				}
 			}
 
 			if ((bounds.valid_start < bounds.valid_end) && bounds.has_following_range) {
 				// Exclude any trailing NULLs
 				if (CellIsNull(over_collection, order_col, bounds.valid_end - 1)) {
-					bounds.valid_end = FindPrevStart(order_mask, bounds.valid_start, bounds.valid_end);
+					idx_t n = 1;
+					bounds.valid_end = FindPrevStart(order_mask, bounds.valid_start, bounds.valid_end, n);
 				}
 			}
 
@@ -729,7 +744,8 @@ static void UpdateWindowBoundaries(WindowBoundariesState &bounds, const idx_t in
 		if (bounds.needs_peer) {
 			bounds.peer_end = bounds.partition_end;
 			if (bounds.order_count) {
-				bounds.peer_end = FindNextStart(order_mask, bounds.peer_start + 1, bounds.partition_end);
+				idx_t n = 1;
+				bounds.peer_end = FindNextStart(order_mask, bounds.peer_start + 1, bounds.partition_end, n);
 			}
 		}
 
@@ -889,6 +905,42 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 		MaterializeExpression(wexpr->end_expr.get(), input, boundary_end_collection, wexpr->end_expr->IsScalar());
 	}
 
+	// Set up a validity mask for IGNORE NULLS
+	ValidityMask ignore_nulls;
+	if (wexpr->ignore_nulls) {
+		switch (wexpr->type) {
+		case ExpressionType::WINDOW_LEAD:
+		case ExpressionType::WINDOW_LAG:
+		case ExpressionType::WINDOW_FIRST_VALUE:
+		case ExpressionType::WINDOW_LAST_VALUE:
+		case ExpressionType::WINDOW_NTH_VALUE: {
+			idx_t pos = 0;
+			for (auto &chunk : payload_collection.Chunks()) {
+				const auto count = chunk->size();
+				VectorData vdata;
+				chunk->data[0].Orrify(count, vdata);
+				if (!vdata.validity.AllValid()) {
+					//	Lazily materialise the contents when we find the first NULL
+					if (ignore_nulls.AllValid()) {
+						ignore_nulls.Initialize(payload_collection.Count());
+					}
+					// Write to the current position
+					// Chunks in a collection are full, so we don't have to worry about raggedness
+					auto dst = ignore_nulls.GetData() + ignore_nulls.EntryCount(pos);
+					auto src = vdata.validity.GetData();
+					for (auto entry_count = vdata.validity.EntryCount(count); entry_count-- > 0;) {
+						*dst++ = *src++;
+					}
+				}
+				pos += count;
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
 	// build a segment tree for frame-adhering aggregates
 	// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
 	unique_ptr<WindowSegmentTree> segment_tree = nullptr;
@@ -1016,7 +1068,18 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 				val_idx -= offset;
 			}
 
-			if (val_idx >= int64_t(bounds.partition_start) && val_idx < int64_t(bounds.partition_end)) {
+			idx_t delta = 0;
+			if (val_idx < (int64_t)row_idx) {
+				// Count backwards
+				delta = idx_t(row_idx - val_idx);
+				val_idx = FindPrevStart(ignore_nulls, bounds.partition_start, row_idx, delta);
+			} else if (val_idx > (int64_t)row_idx) {
+				delta = idx_t(val_idx - row_idx);
+				val_idx = FindNextStart(ignore_nulls, row_idx + 1, bounds.partition_end, delta);
+			}
+			// else offset is zero, so don't move.
+
+			if (!delta) {
 				payload_collection.CopyCell(0, val_idx, result, output_offset);
 			} else if (wexpr->default_expr) {
 				const auto source_row = wexpr->default_expr->IsScalar() ? 0 : row_idx;
@@ -1026,12 +1089,18 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 			}
 			break;
 		}
-		case ExpressionType::WINDOW_FIRST_VALUE:
-			payload_collection.CopyCell(0, bounds.window_start, result, output_offset);
+		case ExpressionType::WINDOW_FIRST_VALUE: {
+			idx_t n = 1;
+			const auto first_idx = FindNextStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
+			payload_collection.CopyCell(0, first_idx, result, output_offset);
 			break;
-		case ExpressionType::WINDOW_LAST_VALUE:
-			payload_collection.CopyCell(0, bounds.window_end - 1, result, output_offset);
+		}
+		case ExpressionType::WINDOW_LAST_VALUE: {
+			idx_t n = 1;
+			payload_collection.CopyCell(0, FindPrevStart(ignore_nulls, bounds.window_start, bounds.window_end, n),
+			                            result, output_offset);
 			break;
+		}
 		case ExpressionType::WINDOW_NTH_VALUE: {
 			D_ASSERT(payload_collection.ColumnCount() == 2);
 			// Returns value evaluated at the row that is the n'th row of the window frame (counting from 1);
@@ -1040,11 +1109,16 @@ static void ComputeWindowExpression(BoundWindowExpression *wexpr, ChunkCollectio
 				FlatVector::SetNull(result, output_offset, true);
 			} else {
 				auto n_param = GetCell<int64_t>(payload_collection, 1, row_idx);
-				int64_t n_total = bounds.window_end - bounds.window_start;
-				if (0 < n_param && n_param <= n_total) {
-					payload_collection.CopyCell(0, bounds.window_start + n_param - 1, result, output_offset);
-				} else {
+				if (n_param < 1) {
 					FlatVector::SetNull(result, output_offset, true);
+				} else {
+					auto n = idx_t(n_param);
+					const auto nth_index = FindNextStart(ignore_nulls, bounds.window_start, bounds.window_end, n);
+					if (!n) {
+						payload_collection.CopyCell(0, nth_index, result, output_offset);
+					} else {
+						FlatVector::SetNull(result, output_offset, true);
+					}
 				}
 			}
 			break;
