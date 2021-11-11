@@ -124,6 +124,115 @@ FROM issue2549
 4	1	2027	2027
 
 #
+# RESPECT NULLS should be the default
+#
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  LAST_VALUE (order_id RESPECT NULLS) over (
+    PARTITION BY user_id
+    ORDER BY id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+  ) AS last_order_id
+FROM issue2549
+----
+0	1	614	NULL
+1	1	NULL	614
+2	1	NULL	NULL
+3	1	639	NULL
+4	1	2027	639
+
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  FIRST_VALUE (order_id RESPECT NULLS) over (
+    PARTITION BY user_id
+    ORDER BY id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+  ) AS last_order_id
+FROM issue2549
+----
+0	1	614	NULL
+1	1	NULL	614
+2	1	NULL	614
+3	1	639	614
+4	1	2027	614
+
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  NTH_VALUE (order_id, 2 RESPECT NULLS) over (
+    PARTITION BY user_id
+    ORDER BY id
+    ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+  ) AS last_order_id
+FROM issue2549
+----
+0	1	614	NULL
+1	1	NULL	NULL
+2	1	NULL	NULL
+3	1	639	NULL
+4	1	2027	NULL
+
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  LEAD(order_id, 1, -1 RESPECT NULLS) over (
+    PARTITION BY user_id
+    ORDER BY id
+  ) AS last_order_id
+FROM issue2549
+----
+0	1	614	NULL
+1	1	NULL	NULL
+2	1	NULL	639
+3	1	639	2027
+4	1	2027	-1
+
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  LAG(order_id, 1, -1 RESPECT NULLS) over (
+    PARTITION BY user_id
+    ORDER BY id
+  ) AS last_order_id
+FROM issue2549
+----
+0	1	614	-1
+1	1	NULL	614
+2	1	NULL	NULL
+3	1	639	NULL
+4	1	2027	639
+
+# Zero LAG is always identity
+query IIII
+SELECT
+  id,
+  user_id,
+  order_id,
+  LAG(order_id, 0, -1 RESPECT NULLS) over (
+    PARTITION BY user_id
+    ORDER BY id
+  ) AS last_order_id
+FROM issue2549
+----
+0	1	614	614
+1	1	NULL	NULL
+2	1	NULL	NULL
+3	1	639	639
+4	1	2027	2027
+
+#
 # Unsupported
 #
 

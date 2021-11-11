@@ -365,6 +365,7 @@ opt_all_clause:
 
 opt_ignore_nulls:
 			IGNORE NULLS_P							{ $$ = true;}
+			| RESPECT NULLS_P						{ $$ = false;}
 			| /*EMPTY*/								{ $$ = false; }
 		;
 
