@@ -13,6 +13,7 @@
 namespace duckdb {
 class Serializer;
 class Deserializer;
+struct FileHandle;
 
 //! The version number of the database storage format
 extern const uint64_t VERSION_NUMBER;
@@ -36,6 +37,8 @@ struct MainHeader {
 	uint64_t version_number;
 	//! The set of flags used by the database
 	uint64_t flags[FLAG_COUNT];
+
+	static void CheckMagicBytes(FileHandle &handle);
 
 	void Serialize(Serializer &ser);
 	static MainHeader Deserialize(Deserializer &source);
