@@ -118,8 +118,14 @@ struct BitpackingCompressState : public CompressionState {
 		auto &config = DBConfig::GetConfig(db);
 		function = config.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING, type.InternalType());
 		CreateEmptySegment(checkpointer.GetRowGroup().start);
-		max_entry_count = (Storage::BLOCK_SIZE - BitpackingConstants::BITPACKING_HEADER_SIZE) /
-		                  GetTypeIdSize(compress_type); // TODO where do we store the compress_type size?
+		max_entry_count = MaxEntryCount();
+	}
+
+	idx_t MaxEntryCount() {
+		auto entry_size = GetTypeIdSize(compress_type);
+		auto entry_count = (Storage::BLOCK_SIZE - BitpackingConstants::BITPACKING_HEADER_SIZE) / entry_size;
+		auto max_vector_count = entry_count / STANDARD_VECTOR_SIZE;
+		return max_vector_count * STANDARD_VECTOR_SIZE;
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
@@ -142,7 +148,11 @@ struct BitpackingCompressState : public CompressionState {
 
 	// TODO Use Store?
 	void WriteCastValue(void *data_pointer, T value) {
+
 		switch (compress_type) {
+		case PhysicalType::INT8:
+			((int8_t *)data_pointer)[entry_count] = (int8_t)value;
+			break;
 		case PhysicalType::INT16:
 			((int16_t *)data_pointer)[entry_count] = (int16_t)value;
 			break;
@@ -151,6 +161,9 @@ struct BitpackingCompressState : public CompressionState {
 			break;
 		case PhysicalType::INT64:
 			((int64_t *)data_pointer)[entry_count] = (int64_t)value;
+			break;
+		case PhysicalType::UINT8:
+			((uint8_t *)data_pointer)[entry_count] = (uint8_t)value;
 			break;
 		case PhysicalType::UINT16:
 			((uint16_t *)data_pointer)[entry_count] = (uint16_t)value;
@@ -166,9 +179,11 @@ struct BitpackingCompressState : public CompressionState {
 		}
 	}
 
+	// TODO do not write per value but per vector
 	void WriteValue(T value, bool is_null) {
 		auto data_pointer = (T *)(handle->Ptr() + BitpackingConstants::BITPACKING_HEADER_SIZE);
 
+		// TODO do not write if null
 		WriteCastValue(data_pointer, value);
 		entry_count++;
 
@@ -191,10 +206,10 @@ struct BitpackingCompressState : public CompressionState {
 		auto &state = checkpointer.GetCheckpointState();
 
 		// Store the compressed type in the beginning of the segment
-		Store<uint8_t>(static_cast<uint8_t>(compress_type), handle->node->buffer);
+		Store<uint64_t>(static_cast<uint64_t>(compress_type), handle->node->buffer);
 		handle.reset();
 
-		state.FlushSegment(move(current_segment), entry_count * GetTypeIdSize(compress_type));
+		state.FlushSegment(move(current_segment), entry_count * GetTypeIdSize(compress_type) + BitpackingConstants::BITPACKING_HEADER_SIZE);
 	}
 
 	void Finalize() {
@@ -236,6 +251,12 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
+template <class FROM_TYPE, class TO_TYPE>
+void CastCopy(data_ptr_t dst, data_ptr_t src) {
+	*(TO_TYPE *)dst = (TO_TYPE)*(FROM_TYPE *)src;
+}
+
+template <class T>
 struct BitpackingScanState : public SegmentScanState {
 	unique_ptr<BufferHandle> handle;
 	PhysicalType compress_type;
@@ -247,44 +268,48 @@ struct BitpackingScanState : public SegmentScanState {
 		handle = buffer_manager.Pin(segment.block);
 
 		// Load the Compression Type from the BitpackingHeader
-		uint8_t compress_type_id = 0;
-		compress_type_id = Load<uint8_t>((uint8_t*)handle->node->buffer);
+		uint64_t compress_type_id = 0;
+		compress_type_id = Load<uint64_t>(handle->node->buffer + segment.GetBlockOffset());
 		compress_type = static_cast<PhysicalType>(compress_type_id);
+
+		LoadDecompressFunction();
+	}
+
+	void LoadDecompressFunction () {
+		switch (compress_type) {
+		case PhysicalType::INT8:
+			decompress_function = &CastCopy<int8_t, T>;
+			break;
+		case PhysicalType::INT16:
+			decompress_function = &CastCopy<int16_t, T>;
+			break;
+		case PhysicalType::INT32:
+			decompress_function = &CastCopy<int32_t, T>;
+			break;
+		case PhysicalType::INT64:
+			decompress_function = &CastCopy<int64_t, T>;
+			break;
+		case PhysicalType::UINT8:
+			decompress_function = &CastCopy<uint8_t, T>;
+			break;
+		case PhysicalType::UINT16:
+			decompress_function = &CastCopy<uint16_t, T>;
+			break;
+		case PhysicalType::UINT32:
+			decompress_function = &CastCopy<uint32_t, T>;
+			break;
+		case PhysicalType::UINT64:
+			decompress_function = &CastCopy<uint64_t, T>;
+			break;
+		default:
+			throw InternalException("Invalid type found in Bitpacking");
+		}
 	}
 };
 
-template <class FROM_TYPE, class TO_TYPE>
-void CastCopy(data_ptr_t dst, data_ptr_t src) {
-	*(TO_TYPE *)dst = (TO_TYPE)* (FROM_TYPE *)src;
-}
-
 template <class T>
 unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
-	auto result = make_unique<BitpackingScanState>(segment);
-	// TODO move elsewhere
-	switch (result->compress_type) {
-	case PhysicalType::INT16:
-		result->decompress_function = &CastCopy<int16_t, T>;
-		break;
-	case PhysicalType::INT32:
-		result->decompress_function = &CastCopy<int32_t, T>;
-		break;
-	case PhysicalType::INT64:
-		result->decompress_function = &CastCopy<int64_t, T>;
-		break;
-	case PhysicalType::UINT16:
-		result->decompress_function = &CastCopy<uint16_t, T>;
-		break;
-	case PhysicalType::UINT32:
-		result->decompress_function = &CastCopy<uint32_t, T>;
-		break;
-	case PhysicalType::UINT64:
-		result->decompress_function = &CastCopy<uint64_t, T>;
-		break;
-	default:
-		throw InternalException("Invalid type found in Bitpacking");
-	}
-
+	auto result = make_unique<BitpackingScanState<T>>(segment);
 	return move(result);
 }
 
@@ -294,11 +319,11 @@ unique_ptr<SegmentScanState> BitpackingInitScan(ColumnSegment &segment) {
 template <class T>
 void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                            idx_t result_offset) {
-	auto &scan_state = (BitpackingScanState &)*state.scan_state;
+	auto &scan_state = (BitpackingScanState<T> &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
-	auto data = scan_state.handle->node->buffer + segment.GetBlockOffset();
-	auto source_data = data + start * GetTypeIdSize(scan_state.compress_type) + BitpackingConstants::BITPACKING_HEADER_SIZE;
+	auto data = scan_state.handle->node->buffer + segment.GetBlockOffset() + BitpackingConstants::BITPACKING_HEADER_SIZE; // removal of header here results in 8 1s too many
+	auto source_data = data + start * GetTypeIdSize(scan_state.compress_type);
 
 	// copy the data from the base table
 	result.SetVectorType(VectorType::FLAT_VECTOR);
@@ -306,6 +331,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 	auto result_data = FlatVector::GetData(result) + result_offset * sizeof(T);
 
 	for (idx_t i = 0; i < scan_count; i++) {
+
 		scan_state.decompress_function(result_data, source_data);
 		result_data += sizeof(T);
 		source_data += GetTypeIdSize(scan_state.compress_type);
@@ -322,11 +348,11 @@ void BitpackingScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_c
 template <class T>
 void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                         idx_t result_idx) {
-	BitpackingScanState scan_state(segment);
+	BitpackingScanState<T> scan_state(segment);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 
-	auto data_ptr = handle->node->buffer + segment.GetBlockOffset() + row_id * GetTypeIdSize(scan_state.compress_type);
+	auto data_ptr = handle->node->buffer + segment.GetBlockOffset() + BitpackingConstants::BITPACKING_HEADER_SIZE + row_id * GetTypeIdSize(scan_state.compress_type);
 	auto result_data = FlatVector::GetData(result) + result_idx * sizeof(T);
 	scan_state.decompress_function(result_data, data_ptr);
 }
@@ -362,7 +388,7 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 }
 
 bool BitpackingFun::TypeIsSupported(PhysicalType type) {
-	// TODO support INT128
+	// TODO support INT128?
 	switch (type) {
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
