@@ -24,18 +24,23 @@ void MainHeader::Serialize(Serializer &ser) {
 }
 
 void MainHeader::CheckMagicBytes(FileHandle &handle) {
-	char magic_bytes[MAGIC_BYTE_SIZE];
-	if (handle.GetFileSize() < 4) {
+	data_t magic_bytes[MAGIC_BYTE_SIZE];
+	if (handle.GetFileSize() < MainHeader::MAGIC_BYTE_SIZE + MainHeader::MAGIC_BYTE_OFFSET) {
 		throw IOException("The file is not a valid DuckDB database file!");
 	}
-	handle.Read(magic_bytes, 4, 0);
+	handle.Read(magic_bytes, MainHeader::MAGIC_BYTE_SIZE, MainHeader::MAGIC_BYTE_OFFSET);
 	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
 		throw IOException("The file is not a valid DuckDB database file!");
 	}
 }
 
 MainHeader MainHeader::Deserialize(Deserializer &source) {
+	data_t magic_bytes[MAGIC_BYTE_SIZE];
 	MainHeader header;
+	source.ReadData(magic_bytes, MainHeader::MAGIC_BYTE_SIZE);
+	if (memcmp(magic_bytes, MainHeader::MAGIC_BYTES, MainHeader::MAGIC_BYTE_SIZE) != 0) {
+		throw IOException("The file is not a valid DuckDB database file!");
+	}
 	header.version_number = source.Read<uint64_t>();
 	// read the flags
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
