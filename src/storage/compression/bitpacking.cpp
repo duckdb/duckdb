@@ -138,12 +138,31 @@ struct BitpackingCompressState : public CompressionState {
 		handle = buffer_manager.Pin(current_segment->block);
 	}
 
-	void Append(VectorData &vdata, idx_t count) {
+	// Todo return number of values appended, can now append all in loop without checking
+	idx_t Append(VectorData &vdata, idx_t offset, idx_t count) {
 		auto data = (T *)vdata.data;
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = vdata.sel->get_index(i);
-			WriteValue(data[idx], !vdata.validity.RowIsValid(idx));
+
+		idx_t copy_count = MinValue<idx_t>(count, max_entry_count - current_segment->count);
+		D_ASSERT(entry_count + copy_count < max_entry_count);
+		D_ASSERT(current_segment->GetBlockOffset() == 0); //Apparently append expects a fresh block?
+
+		// APPEND LOOP
+		// TODO optimize like appendloop from uncompressed segment.
+		for (idx_t i = 0; i < copy_count; i++) {
+			auto idx = vdata.sel->get_index(i + offset);
+			bool is_null = !vdata.validity.RowIsValid(idx);
+			if (!is_null) {
+				NumericStatistics::Update<T>(current_segment->stats, data[idx]);
+			}
+			auto data_pointer = (T *)(handle->Ptr() + BitpackingConstants::BITPACKING_HEADER_SIZE);
+			// TODO do not write if null
+			WriteCastValue(data_pointer, data[idx]);
+
+			// is this the same thing?
+			entry_count++;
+			current_segment->count++;
 		}
+		return copy_count;
 	}
 
 	// TODO Use Store?
@@ -176,29 +195,6 @@ struct BitpackingCompressState : public CompressionState {
 			break;
 		default:
 			throw InternalException("Unsupported type for Bitpacking");
-		}
-	}
-
-	// TODO do not write per value but per vector
-	void WriteValue(T value, bool is_null) {
-		auto data_pointer = (T *)(handle->Ptr() + BitpackingConstants::BITPACKING_HEADER_SIZE);
-
-		// TODO do not write if null
-		WriteCastValue(data_pointer, value);
-		entry_count++;
-
-		// update meta data
-		if (!is_null) {
-			NumericStatistics::Update<T>(current_segment->stats, value);
-		}
-		current_segment->count++;
-
-		if (entry_count == max_entry_count) {
-			// we have finished writing this segment: flush it and create a new segment
-			auto row_start = current_segment->start + current_segment->count;
-			FlushSegment();
-			CreateEmptySegment(row_start);
-			entry_count = 0;
 		}
 	}
 
@@ -240,7 +236,28 @@ void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t co
 	auto &state = (BitpackingCompressState<T> &)state_p;
 	VectorData vdata;
 	scan_vector.Orrify(count, vdata);
-	state.Append(vdata, count);
+
+	idx_t offset = 0;
+	while (count > 0) {
+		idx_t appended = state.Append(vdata, offset, count);
+
+		auto next_start = state.current_segment->start + state.current_segment->count;
+
+		// the segment is full: flush it to disk
+		state.FlushSegment();
+
+		// now create a new segment and continue appending
+		state.CreateEmptySegment(next_start);
+		state.entry_count = 0;
+
+		if (appended == count) {
+			// appended everything: finished
+			return;
+		}
+
+		offset += appended;
+		count -= appended;
+	}
 }
 
 template <class T>
