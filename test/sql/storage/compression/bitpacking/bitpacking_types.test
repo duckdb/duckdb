@@ -1,0 +1,25 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_types.test
+# description: Test bitpacking with unsigned type and negative values
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE test (a BIGINT, b USMALLINT);
+
+# Insert values that fit in different widths, with different signs
+statement ok
+INSERT INTO test SELECT -i, i FROM range(0, 10000) tbl(i);
+INSERT INTO test SELECT -i, i FROM range(22767, 32767) tbl(i);
+
+statement ok
+checkpoint
+
+query IIII
+SELECT SUM(a), MIN(a), MAX(a), COUNT(*) FROM test
+----
+-327660000	-32766	0	20000
