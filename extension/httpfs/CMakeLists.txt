@@ -9,3 +9,9 @@ include_directories(include ../.. ../../third_party/httplib
 
 add_library(httpfs_extension STATIC s3fs.cpp httpfs.cpp crypto.cpp
                                     httpfs-extension.cpp)
+
+install(
+  TARGETS httpfs_extension
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
