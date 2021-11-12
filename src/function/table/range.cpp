@@ -87,7 +87,8 @@ static void RangeFunction(ClientContext &context, const FunctionData *bind_data_
 	// set the result vector as a sequence vector
 	output.data[0].Sequence(current_value_i64, Hugeint::Cast<int64_t>(increment));
 	int64_t offset = increment < 0 ? 1 : -1;
-	idx_t remaining = MinValue<idx_t>(Hugeint::Cast<idx_t>((end - current_value + (increment + offset)) / increment), STANDARD_VECTOR_SIZE);
+	idx_t remaining = MinValue<idx_t>(Hugeint::Cast<idx_t>((end - current_value + (increment + offset)) / increment),
+	                                  STANDARD_VECTOR_SIZE);
 	// increment the index pointer by the remaining count
 	state.current_idx += remaining;
 	output.SetCardinality(remaining);
