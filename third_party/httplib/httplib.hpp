@@ -11,6 +11,11 @@
 /*
  * Configuration
  */
+#ifdef CPPHTTPLIB_OPENSSL_SUPPORT
+#define CPPHTTPLIB_NAMESPACE duckdb_httplib_openssl
+#else
+#define CPPHTTPLIB_NAMESPACE duckdb_httplib
+#endif
 
 #ifndef CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND
 #define CPPHTTPLIB_KEEPALIVE_TIMEOUT_SECOND 5
@@ -239,7 +244,7 @@ inline const unsigned char *ASN1_STRING_get0_data(const ASN1_STRING *asn1) {
 /*
  * Declaration
  */
-namespace duckdb_httplib {
+namespace CPPHTTPLIB_NAMESPACE {
 
 namespace detail {
 
@@ -5471,7 +5476,7 @@ inline bool ClientImpl::write_content_with_provider(Stream &strm,
     return detail::write_content(strm, req.content_provider_, 0,
                                  req.content_length_, is_shutting_down, error);
   }
-} // namespace duckdb_httplib
+} // namespace CPPHTTPLIB_NAMESPACE
 
 inline bool ClientImpl::write_request(Stream &strm, const Request &req,
                                       bool close_connection, Error &error) {
@@ -7410,6 +7415,6 @@ inline SSL_CTX *Client::ssl_context() const {
 
 // ----------------------------------------------------------------------------
 
-} // namespace duckdb_httplib
+} // namespace CPPHTTPLIB_NAMESPACE
 
 #endif // CPPHTTPLIB_HTTPLIB_H

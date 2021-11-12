@@ -2,6 +2,7 @@
 #include "httpfs-extension.hpp"
 
 #include "s3fs.hpp"
+
 namespace duckdb {
 
 static void LoadInternal(DatabaseInstance &instance) {
