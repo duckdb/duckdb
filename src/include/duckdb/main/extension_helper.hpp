@@ -26,7 +26,7 @@ public:
 	static void LoadExternalExtension(DatabaseInstance &db, const string &extension);
 
 private:
-	static vector<string> PATH_COMPONENTS;
+	static const vector<string> PATH_COMPONENTS;
 };
 
 } // namespace duckdb
