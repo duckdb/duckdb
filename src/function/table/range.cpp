@@ -44,6 +44,20 @@ RangeFunctionBind(ClientContext &context, vector<Value> &inputs, unordered_map<s
 	} else if (result->start < result->end && result->increment < 0) {
 		throw BinderException("start is smaller than end, but increment is negative: cannot generate infinite series");
 	}
+	constexpr const static int64_t range_min_value = -2305843009213693951;
+	constexpr const static int64_t range_max_value = 2305843009213693951;
+	if (result->start < range_min_value || result->start > range_max_value) {
+		throw BinderException("start value \"%d\" is out of range (min: %d, max: %d)", result->start, range_min_value,
+		                      range_max_value);
+	}
+	if (result->end < range_min_value || result->end > range_max_value) {
+		throw BinderException("end value \"%d\" is out of range (min: %d, max: %d)", result->start, range_min_value,
+		                      range_max_value);
+	}
+	if (result->increment < range_min_value || result->increment > range_max_value) {
+		throw BinderException("increment value \"%d\" is out of range (min: %d, max: %d)", result->start,
+		                      range_min_value, range_max_value);
+	}
 	return_types.push_back(LogicalType::BIGINT);
 	if (GENERATE_SERIES) {
 		// generate_series has inclusive bounds on the RHS
@@ -82,7 +96,8 @@ static void RangeFunction(ClientContext &context, const FunctionData *bind_data_
 	int64_t current_value = bind_data.start + (int64_t)increment * state.current_idx;
 	// set the result vector as a sequence vector
 	output.data[0].Sequence(current_value, increment);
-	idx_t remaining = MinValue<idx_t>((end - current_value) / increment, STANDARD_VECTOR_SIZE);
+	int64_t offset = increment < 0 ? 1 : -1;
+	idx_t remaining = MinValue<idx_t>((end - current_value + (increment + offset)) / increment, STANDARD_VECTOR_SIZE);
 	// increment the index pointer by the remaining count
 	state.current_idx += remaining;
 	output.SetCardinality(remaining);
