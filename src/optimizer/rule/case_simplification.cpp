@@ -8,27 +8,40 @@ namespace duckdb {
 CaseSimplificationRule::CaseSimplificationRule(ExpressionRewriter &rewriter) : Rule(rewriter) {
 	// match on a CaseExpression that has a ConstantExpression as a check
 	auto op = make_unique<CaseExpressionMatcher>();
-	op->check = make_unique<FoldableConstantMatcher>();
 	root = move(op);
 }
 
 unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
                                                      bool &changes_made, bool is_root) {
 	auto root = (BoundCaseExpression *)bindings[0];
-	auto constant_expr = bindings[1];
-	// the constant_expr is a scalar expression that we have to fold
-	D_ASSERT(constant_expr->IsFoldable());
+	for (idx_t i = 0; i < root->case_checks.size(); i++) {
+		auto &case_check = root->case_checks[i];
+		if (case_check.when_expr->IsFoldable()) {
+			// the WHEN check is a foldable expression
+			// use an ExpressionExecutor to execute the expression
+			auto constant_value = ExpressionExecutor::EvaluateScalar(*case_check.when_expr);
 
-	// use an ExpressionExecutor to execute the expression
-	auto constant_value = ExpressionExecutor::EvaluateScalar(*constant_expr);
-
-	// fold based on the constant condition
-	auto condition = constant_value.CastAs(LogicalType::BOOLEAN);
-	if (condition.is_null || !condition.value_.boolean) {
-		return move(root->result_if_false);
-	} else {
-		return move(root->result_if_true);
+			// fold based on the constant condition
+			auto condition = constant_value.CastAs(LogicalType::BOOLEAN);
+			if (condition.is_null || !condition.value_.boolean) {
+				// the condition is always false: remove this case check
+				root->case_checks.erase(root->case_checks.begin() + i);
+				i--;
+			} else {
+				// the condition is always true
+				// move the THEN clause to the ELSE of the case
+				root->else_expr = move(case_check.then_expr);
+				// remove this case check and any case checks after this one
+				root->case_checks.erase(root->case_checks.begin() + i, root->case_checks.end());
+				break;
+			}
+		}
 	}
+	if (root->case_checks.size() == 0) {
+		// no case checks left: return the ELSE expression
+		return move(root->else_expr);
+	}
+	return nullptr;
 }
 
 } // namespace duckdb
