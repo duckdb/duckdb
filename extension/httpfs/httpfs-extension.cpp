@@ -15,6 +15,10 @@ void HTTPFsExtension::Load(DuckDB &db) {
 	LoadInternal(*db.instance);
 }
 
+std::string HTTPFsExtension::Name() {
+	return "httpfs";
+}
+
 } // namespace duckdb
 
 extern "C" {
@@ -26,4 +30,5 @@ void httpfs_init(duckdb::DatabaseInstance &db) {
 const char *httpfs_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
+
 }
