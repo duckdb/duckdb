@@ -11,9 +11,9 @@ namespace duckdb {
 // Range (integers)
 //===--------------------------------------------------------------------===//
 struct RangeFunctionBindData : public TableFunctionData {
-	int64_t start;
-	int64_t end;
-	int64_t increment;
+	hugeint_t start;
+	hugeint_t end;
+	hugeint_t increment;
 };
 
 template <bool GENERATE_SERIES>
@@ -43,20 +43,6 @@ RangeFunctionBind(ClientContext &context, vector<Value> &inputs, unordered_map<s
 		throw BinderException("start is bigger than end, but increment is positive: cannot generate infinite series");
 	} else if (result->start < result->end && result->increment < 0) {
 		throw BinderException("start is smaller than end, but increment is negative: cannot generate infinite series");
-	}
-	constexpr const static int64_t range_min_value = -2305843009213693951;
-	constexpr const static int64_t range_max_value = 2305843009213693951;
-	if (result->start < range_min_value || result->start > range_max_value) {
-		throw BinderException("start value \"%d\" is out of range (min: %d, max: %d)", result->start, range_min_value,
-		                      range_max_value);
-	}
-	if (result->end < range_min_value || result->end > range_max_value) {
-		throw BinderException("end value \"%d\" is out of range (min: %d, max: %d)", result->start, range_min_value,
-		                      range_max_value);
-	}
-	if (result->increment < range_min_value || result->increment > range_max_value) {
-		throw BinderException("increment value \"%d\" is out of range (min: %d, max: %d)", result->start,
-		                      range_min_value, range_max_value);
 	}
 	return_types.push_back(LogicalType::BIGINT);
 	if (GENERATE_SERIES) {
@@ -93,11 +79,15 @@ static void RangeFunction(ClientContext &context, const FunctionData *bind_data_
 
 	auto increment = bind_data.increment;
 	auto end = bind_data.end;
-	int64_t current_value = bind_data.start + (int64_t)increment * state.current_idx;
+	hugeint_t current_value = bind_data.start + increment * state.current_idx;
+	int64_t current_value_i64;
+	if (!Hugeint::TryCast<int64_t>(current_value, current_value_i64)) {
+		return;
+	}
 	// set the result vector as a sequence vector
-	output.data[0].Sequence(current_value, increment);
+	output.data[0].Sequence(current_value_i64, Hugeint::Cast<int64_t>(increment));
 	int64_t offset = increment < 0 ? 1 : -1;
-	idx_t remaining = MinValue<idx_t>((end - current_value + (increment + offset)) / increment, STANDARD_VECTOR_SIZE);
+	idx_t remaining = MinValue<idx_t>(Hugeint::Cast<idx_t>((end - current_value + (increment + offset)) / increment), STANDARD_VECTOR_SIZE);
 	// increment the index pointer by the remaining count
 	state.current_idx += remaining;
 	output.SetCardinality(remaining);
@@ -105,7 +95,7 @@ static void RangeFunction(ClientContext &context, const FunctionData *bind_data_
 
 unique_ptr<NodeStatistics> RangeCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (RangeFunctionBindData &)*bind_data_p;
-	idx_t cardinality = (bind_data.end - bind_data.start) / bind_data.increment;
+	idx_t cardinality = Hugeint::Cast<idx_t>((bind_data.end - bind_data.start) / bind_data.increment);
 	return make_unique<NodeStatistics>(cardinality, cardinality);
 }
 
