@@ -364,8 +364,8 @@ opt_all_clause:
 		;
 
 opt_ignore_nulls:
-			IGNORE NULLS_P							{ $$ = true;}
-			| RESPECT NULLS_P						{ $$ = false;}
+			IGNORE_P NULLS_P						{ $$ = true;}
+			| RESPECT_P NULLS_P						{ $$ = false;}
 			| /*EMPTY*/								{ $$ = false; }
 		;
 

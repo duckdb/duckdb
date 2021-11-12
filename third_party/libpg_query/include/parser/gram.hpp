@@ -224,7 +224,7 @@
      HOURS_P = 440,
      IDENTITY_P = 441,
      IF_P = 442,
-     IGNORE = 443,
+     IGNORE_P = 443,
      ILIKE = 444,
      IMMEDIATE = 445,
      IMMUTABLE = 446,
@@ -377,7 +377,7 @@
      REPLACE = 593,
      REPLICA = 594,
      RESET = 595,
-     RESPECT = 596,
+     RESPECT_P = 596,
      RESTART = 597,
      RESTRICT = 598,
      RETURNING = 599,
@@ -704,7 +704,7 @@
 #define HOURS_P 440
 #define IDENTITY_P 441
 #define IF_P 442
-#define IGNORE 443
+#define IGNORE_P 443
 #define ILIKE 444
 #define IMMEDIATE 445
 #define IMMUTABLE 446
@@ -857,7 +857,7 @@
 #define REPLACE 593
 #define REPLICA 594
 #define RESET 595
-#define RESPECT 596
+#define RESPECT_P 596
 #define RESTART 597
 #define RESTRICT 598
 #define RETURNING 599
