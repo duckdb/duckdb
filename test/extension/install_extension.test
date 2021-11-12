@@ -19,6 +19,12 @@ INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_exten
 statement ok
 LOAD 'loadable_extension_demo';
 
+statement ok
+FORCE INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement ok
+LOAD 'loadable_extension_demo';
+
 # TODO this requires things having been deployed, so run after that
 mode skip
 
