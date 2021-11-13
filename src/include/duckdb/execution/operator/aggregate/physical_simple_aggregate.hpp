@@ -22,6 +22,7 @@ public:
 
 	//! The aggregates that have to be computed
 	vector<unique_ptr<Expression>> aggregates;
+
 public:
 	// Source interface
 	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;

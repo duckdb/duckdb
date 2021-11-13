@@ -148,8 +148,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 			}
 		}
 		if (use_simple_aggregation && all_combinable) {
-			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(
-			    op.types, move(op.expressions), op.estimated_cardinality);
+			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(op.types, move(op.expressions),
+			                                                                      op.estimated_cardinality);
 		} else {
 			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),
 			                                                                    op.estimated_cardinality);
