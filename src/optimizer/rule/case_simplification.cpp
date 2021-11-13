@@ -37,7 +37,7 @@ unique_ptr<Expression> CaseSimplificationRule::Apply(LogicalOperator &op, vector
 			}
 		}
 	}
-	if (root->case_checks.size() == 0) {
+	if (root->case_checks.empty()) {
 		// no case checks left: return the ELSE expression
 		return move(root->else_expr);
 	}
