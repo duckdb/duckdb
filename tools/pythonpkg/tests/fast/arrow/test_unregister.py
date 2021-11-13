@@ -17,9 +17,9 @@ class TestArrowUnregister(object):
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','userdata1.parquet')
         cols = 'id, first_name, last_name, email, gender, ip_address, cc, country, birthdate, salary, title, comments'
 
-        arrow_table = pyarrow.parquet.read_table(parquet_filename)
+        arrow_table_obj = pyarrow.parquet.read_table(parquet_filename)
         connection = duckdb.connect(":memory:")
-        connection.register_arrow("arrow_table", arrow_table)
+        connection.register_arrow("arrow_table", arrow_table_obj)
 
         arrow_table_2 = connection.execute("SELECT * FROM arrow_table;").fetch_arrow_table()
         connection.unregister("arrow_table")
@@ -39,8 +39,8 @@ class TestArrowUnregister(object):
         connection = duckdb.connect(db)
         parquet_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','userdata1.parquet')
         cols = 'id, first_name, last_name, email, gender, ip_address, cc, country, birthdate, salary, title, comments'
-        arrow_table = pyarrow.parquet.read_table(parquet_filename)
-        connection.register_arrow("arrow_table", arrow_table)
+        arrow_table_obj = pyarrow.parquet.read_table(parquet_filename)
+        connection.register_arrow("arrow_table", arrow_table_obj)
         connection.unregister("arrow_table")  # Attempting to unregister.
         connection.close()
         # Reconnecting while Arrow Table still in mem.
@@ -49,7 +49,7 @@ class TestArrowUnregister(object):
         with pytest.raises(RuntimeError):
             connection.execute("SELECT * FROM arrow_table;").fetch_arrow_table()
         connection.close()
-        del arrow_table
+        del arrow_table_obj
         gc.collect()
         # Reconnecting after Arrow Table is freed.
         connection = duckdb.connect(db)
