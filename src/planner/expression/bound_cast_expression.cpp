@@ -57,7 +57,7 @@ bool BoundCastExpression::CastIsInvertible(const LogicalType &source_type, const
 		}
 		return true;
 	}
-	if (source_type.id() == LogicalTypeId::TIMESTAMP || target_type.id() == LogicalTypeId::DATE) {
+	if (source_type.id() == LogicalTypeId::TIMESTAMP && target_type.id() == LogicalTypeId::DATE) {
 		return false;
 	}
 	if (source_type.id() == LogicalTypeId::VARCHAR) {
