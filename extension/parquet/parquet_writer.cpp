@@ -69,6 +69,7 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::DATE:
 		return Type::INT32;
 	case LogicalTypeId::BIGINT:
 		return Type::INT64;
@@ -80,7 +81,6 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return Type::BYTE_ARRAY;
-	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
 		return Type::INT96;
 	default:
@@ -90,6 +90,9 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 
 static bool DuckDBTypeToConvertedType(const LogicalType &duckdb_type, ConvertedType::type &result) {
 	switch (duckdb_type.id()) {
+	case LogicalTypeId::DATE:
+		result = ConvertedType::DATE;
+		return true;
 	case LogicalTypeId::VARCHAR:
 		result = ConvertedType::UTF8;
 		return true;
@@ -273,6 +276,7 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				TemplatedWritePlain<int16_t, int32_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::INTEGER:
+			case LogicalTypeId::DATE:
 				TemplatedWritePlain<int32_t, int32_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::BIGINT:
@@ -291,16 +295,6 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			case LogicalTypeId::DOUBLE:
 				TemplatedWritePlain<double, double>(input_column, input.size(), mask, temp_writer);
 				break;
-			case LogicalTypeId::DATE: {
-				auto *ptr = FlatVector::GetData<date_t>(input_column);
-				for (idx_t r = 0; r < input.size(); r++) {
-					if (mask.RowIsValid(r)) {
-						auto ts = Timestamp::FromDatetime(ptr[r], dtime_t(0));
-						temp_writer.Write<Int96>(TimestampToImpalaTimestamp(ts));
-					}
-				}
-				break;
-			}
 			case LogicalTypeId::TIMESTAMP: {
 				auto *ptr = FlatVector::GetData<timestamp_t>(input_column);
 				for (idx_t r = 0; r < input.size(); r++) {

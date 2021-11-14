@@ -5,7 +5,6 @@
 require parquet
 
 # single scalar value
-
 require vector_size 64
 
 statement ok
