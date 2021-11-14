@@ -396,37 +396,55 @@ py::object DuckDBPyConnection::FetchRecordBatchReader(const idx_t approx_batch_s
 	}
 	return result->FetchRecordBatchReader(approx_batch_size);
 }
-
-static unique_ptr<TableFunctionRef> TryPandasReplacement(py::dict &dict, py::str &table_name) {
+static unique_ptr<TableFunctionRef>
+TryReplacement(py::dict &dict, py::str &table_name,
+               unordered_map<string, unique_ptr<RegisteredObject>> &registered_objects) {
 	if (!dict.contains(table_name)) {
 		// not present in the globals
 		return nullptr;
 	}
 	auto entry = dict[table_name];
-
-	// check if there is a local or global variable
+	auto py_object_type = string(py::str(entry.get_type().attr("__name__")));
 	auto table_function = make_unique<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
-	children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)entry.ptr())));
-	table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
+	if (py_object_type == "DataFrame") {
+		string name = "df_" + GenerateRandomName();
+		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)entry.ptr())));
+		table_function->function = make_unique<FunctionExpression>("pandas_scan", move(children));
+		// keep a reference
+		auto object = make_unique<RegisteredObject>(entry);
+		registered_objects[name] = move(object);
+	} else if (py_object_type == "Table" || py_object_type == "FileSystemDataset") {
+		string name = "arrow_" + GenerateRandomName();
+		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr());
+		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory.get())));
+		children.push_back(make_unique<ConstantExpression>(Value::POINTER((uintptr_t)stream_factory_produce)));
+		children.push_back(make_unique<ConstantExpression>(Value::UBIGINT(1000000)));
+		table_function->function = make_unique<FunctionExpression>("arrow_scan", move(children));
+		registered_objects[name] = make_unique<RegisteredArrow>(move(stream_factory), entry);
+	} else {
+		throw std::runtime_error("Python Object " + py_object_type + " not suitable for replacement scans");
+	}
 	return table_function;
 }
 
-static unique_ptr<TableFunctionRef> PandasScanReplacement(const string &table_name, void *data) {
+static unique_ptr<TableFunctionRef> ScanReplacement(const string &table_name, void *data) {
 	py::gil_scoped_acquire acquire;
+	auto registered_objects = (unordered_map<string, unique_ptr<RegisteredObject>> *)data;
 	// look in the locals first
 	PyObject *p = PyEval_GetLocals();
 	auto py_table_name = py::str(table_name);
 	if (p) {
 		auto local_dict = py::reinterpret_borrow<py::dict>(p);
-		auto result = TryPandasReplacement(local_dict, py_table_name);
+		auto result = TryReplacement(local_dict, py_table_name, *registered_objects);
 		if (result) {
 			return result;
 		}
 	}
 	// otherwise look in the globals
 	auto global_dict = py::globals();
-	return TryPandasReplacement(global_dict, py_table_name);
+	return TryReplacement(global_dict, py_table_name, *registered_objects);
 }
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &database, bool read_only,
@@ -446,7 +464,8 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::Connect(const string &databas
 		config.SetOption(*config_property, Value(val));
 	}
 	if (config.enable_external_access) {
-		config.replacement_scans.emplace_back(PandasScanReplacement);
+		//		ReplacementScan replacement_scan(ScanReplacement, (void *) &res->registered_objects);
+		config.replacement_scans.emplace_back(ScanReplacement, (void *)&res->registered_objects);
 	}
 
 	res->database = make_unique<DuckDB>(database, &config);
