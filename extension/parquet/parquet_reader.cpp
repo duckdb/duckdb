@@ -481,10 +481,10 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 		TemplatedFilterOperation<uint64_t, OP>(v, constant.value_.ubigint, filter_mask, count);
 		break;
 	case LogicalTypeId::TINYINT:
-		TemplatedFilterOperation<int8_t, OP>(v, constant.value_.integer, filter_mask, count);
+		TemplatedFilterOperation<int8_t, OP>(v, constant.value_.tinyint, filter_mask, count);
 		break;
 	case LogicalTypeId::SMALLINT:
-		TemplatedFilterOperation<int16_t, OP>(v, constant.value_.bigint, filter_mask, count);
+		TemplatedFilterOperation<int16_t, OP>(v, constant.value_.smallint, filter_mask, count);
 		break;
 	case LogicalTypeId::INTEGER:
 		TemplatedFilterOperation<int32_t, OP>(v, constant.value_.integer, filter_mask, count);
