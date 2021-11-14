@@ -18,6 +18,7 @@ def parquet_types_test(type_list):
         numpy_type = type_pair[1]
         sql_type = type_pair[2]
         add_cast = len(type_pair) > 3 and type_pair[3]
+        add_sql_cast = len(type_pair) > 4 and type_pair[4]
         df = pandas.DataFrame.from_dict({
             'val': numpy.array(value_list, dtype=numpy_type)
         })
@@ -32,6 +33,13 @@ def parquet_types_test(type_list):
         read_from_duckdb = duckdb_cursor.execute(f"SELECT * FROM parquet_scan('{temp_name}')").df()
         assert read_df.equals(read_from_duckdb)
 
+        df.to_parquet(temp_name)
+        if add_sql_cast:
+            read_from_arrow = duckdb_cursor.execute(f"SELECT val::{sql_type} val FROM parquet_scan('{temp_name}')").df()
+        else:
+            read_from_arrow = duckdb_cursor.execute(f"SELECT * FROM parquet_scan('{temp_name}')").df()
+        assert read_df.equals(read_from_arrow)
+
 
 class TestParquetRoundtrip(object):
     def test_roundtrip_numeric(self, duckdb_cursor):
@@ -44,7 +52,7 @@ class TestParquetRoundtrip(object):
             ([-2**63, 0, 2**63-1], numpy.int64, 'BIGINT'),
             ([0, 42, 2**8-1], numpy.uint8, 'UTINYINT'),
             ([0, 42, 2**16-1], numpy.uint16, 'USMALLINT'),
-            ([0, 42, 2**32-1], numpy.uint32, 'UINTEGER'),
+            ([0, 42, 2**32-1], numpy.uint32, 'UINTEGER', False, True),
             ([0, 42, 2**64-1], numpy.uint64, 'UBIGINT'),
             ([0, 0.5, -0.5], numpy.float32, 'REAL'),
             ([0, 0.5, -0.5], numpy.float64, 'DOUBLE'),
