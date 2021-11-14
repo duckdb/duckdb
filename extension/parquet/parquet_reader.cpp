@@ -95,12 +95,23 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 	case Type::INT32:
 		if (s_ele.__isset.converted_type) {
 			switch (s_ele.converted_type) {
-			case ConvertedType::DATE:
-				return LogicalType::DATE;
+			case ConvertedType::INT_8:
+				return LogicalType::TINYINT;
+			case ConvertedType::INT_16:
+				return LogicalType::SMALLINT;
 			case ConvertedType::UINT_8:
 				return LogicalType::UTINYINT;
 			case ConvertedType::UINT_16:
 				return LogicalType::USMALLINT;
+			case ConvertedType::UINT_32:
+				return LogicalType::UINTEGER;
+			case ConvertedType::UINT_64:
+				throw IOException("UINT64 converted type can only be set for value of Type::INT64");
+			case ConvertedType::DATE:
+				return LogicalType::DATE;
+			case ConvertedType::TIMESTAMP_MICROS:
+			case ConvertedType::TIMESTAMP_MILLIS:
+				throw IOException("TIMESTAMP converted type can only be set for value of Type::INT64");
 			default:
 				return LogicalType::INTEGER;
 			}
@@ -109,19 +120,28 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 	case Type::INT64:
 		if (s_ele.__isset.converted_type) {
 			switch (s_ele.converted_type) {
+			case ConvertedType::INT_8:
+				throw IOException("INT_8 converted type can only be set for value of Type::INT32");
+			case ConvertedType::INT_16:
+				throw IOException("INT_16 converted type can only be set for value of Type::INT32");
+			case ConvertedType::UINT_8:
+				throw IOException("UINT8 converted type can only be set for value of Type::INT32");
+			case ConvertedType::UINT_16:
+				throw IOException("UINT16 converted type can only be set for value of Type::INT32");
+			case ConvertedType::UINT_32:
+				throw IOException("UINT32 converted type can only be set for value of Type::INT32");
+			case ConvertedType::UINT_64:
+				return LogicalType::UBIGINT;
+			case ConvertedType::DATE:
+				throw IOException("DATE converted type can only be set for value of Type::INT32");
 			case ConvertedType::TIMESTAMP_MICROS:
 			case ConvertedType::TIMESTAMP_MILLIS:
 				return LogicalType::TIMESTAMP;
-			case ConvertedType::UINT_32:
-				return LogicalType::UINTEGER;
-			case ConvertedType::UINT_64:
-				return LogicalType::UBIGINT;
 			default:
 				return LogicalType::BIGINT;
 			}
 		}
 		return LogicalType::BIGINT;
-
 	case Type::INT96: // always a timestamp it would seem
 		return LogicalType::TIMESTAMP;
 	case Type::FLOAT:
@@ -460,6 +480,12 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 		break;
 	case LogicalTypeId::UBIGINT:
 		TemplatedFilterOperation<uint64_t, OP>(v, constant.value_.ubigint, filter_mask, count);
+		break;
+	case LogicalTypeId::TINYINT:
+		TemplatedFilterOperation<int8_t, OP>(v, constant.value_.integer, filter_mask, count);
+		break;
+	case LogicalTypeId::SMALLINT:
+		TemplatedFilterOperation<int16_t, OP>(v, constant.value_.bigint, filter_mask, count);
 		break;
 	case LogicalTypeId::INTEGER:
 		TemplatedFilterOperation<int32_t, OP>(v, constant.value_.integer, filter_mask, count);

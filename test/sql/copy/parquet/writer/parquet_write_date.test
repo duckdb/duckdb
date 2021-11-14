@@ -7,6 +7,9 @@ require parquet
 require vector_size 64
 
 statement ok
+PRAGMA enable_verification
+
+statement ok
 CREATE TABLE dates(d DATE)
 
 statement ok
@@ -27,3 +30,8 @@ query I
 SELECT typeof(d) FROM '__TEST_DIR__/dates.parquet' LIMIT 1
 ----
 DATE
+
+query I
+SELECT * FROM '__TEST_DIR__/dates.parquet' WHERE d='1992-01-01'
+----
+1992-01-01

@@ -88,8 +88,8 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 		return Type::INT64;
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
-		return Type::INT32;
 	case LogicalTypeId::UINTEGER:
+		return Type::INT32;
 	case LogicalTypeId::UBIGINT:
 		return Type::INT64;
 	default:
@@ -99,6 +99,18 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 
 static bool DuckDBTypeToConvertedType(const LogicalType &duckdb_type, ConvertedType::type &result) {
 	switch (duckdb_type.id()) {
+	case LogicalTypeId::TINYINT:
+		result = ConvertedType::INT_8;
+		return true;
+	case LogicalTypeId::SMALLINT:
+		result = ConvertedType::INT_16;
+		return true;
+	case LogicalTypeId::INTEGER:
+		result = ConvertedType::INT_32;
+		return true;
+	case LogicalTypeId::BIGINT:
+		result = ConvertedType::INT_64;
+		return true;
 	case LogicalTypeId::UTINYINT:
 		result = ConvertedType::UINT_8;
 		return true;
@@ -339,6 +351,18 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				break;
 			case LogicalTypeId::TIMESTAMP_SEC:
 				TemplatedWritePlain<int64_t, int64_t, ParquetTimestampSOperator>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::UTINYINT:
+				TemplatedWritePlain<uint8_t, int32_t>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::USMALLINT:
+				TemplatedWritePlain<uint16_t, int32_t>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::UINTEGER:
+				TemplatedWritePlain<uint32_t, uint32_t>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::UBIGINT:
+				TemplatedWritePlain<uint64_t, uint64_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::FLOAT:
 				TemplatedWritePlain<float, float>(input_column, input.size(), mask, temp_writer);

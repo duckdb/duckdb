@@ -69,6 +69,12 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 	case LogicalTypeId::UBIGINT:
 		return make_unique<TemplatedColumnReader<uint64_t, TemplatedParquetValueConversion<uint64_t>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case LogicalTypeId::TINYINT:
+		return make_unique<TemplatedColumnReader<int8_t, TemplatedParquetValueConversion<int32_t>>>(
+		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case LogicalTypeId::SMALLINT:
+		return make_unique<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<int32_t>>>(
+		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::INTEGER:
 		return make_unique<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<int32_t>>>(
 		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);

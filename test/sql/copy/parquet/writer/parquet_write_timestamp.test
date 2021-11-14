@@ -6,6 +6,9 @@ require parquet
 
 require vector_size 64
 
+statement ok
+PRAGMA enable_verification
+
 foreach type TIMESTAMP TIMESTAMP_MS TIMESTAMP_NS TIMESTAMP_S
 
 statement ok
@@ -18,16 +21,21 @@ INSERT INTO timestamps VALUES
     (NULL),
     (TIMESTAMP '2020-09-27 13:12:01')
 
-query I nosort date_scan
+query I nosort ts_scan
 SELECT * FROM timestamps
 ----
 
 statement ok
 COPY timestamps TO '__TEST_DIR__/timestamps.parquet' (FORMAT 'parquet');
 
-query I nosort date_scan
+query I nosort ts_scan
 SELECT * FROM '__TEST_DIR__/timestamps.parquet'
 ----
+
+query I
+SELECT * FROM '__TEST_DIR__/timestamps.parquet' WHERE d='1992-01-01 12:03:27'
+----
+1992-01-01 12:03:27
 
 query I
 SELECT typeof(d) FROM '__TEST_DIR__/timestamps.parquet' LIMIT 1
