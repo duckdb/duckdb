@@ -45,6 +45,7 @@ def gh_api(suburl, filename='', method='GET'):
 
 	body_data = b''
 
+	print(f'GH API URL: "{url}" Filename: "{filename}" Method: "{method}"')
 	if len(filename) > 0:
 		method = 'POST'
 		body_data = open(filename, 'rb')
