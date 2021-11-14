@@ -62,19 +62,20 @@ def gh_api(suburl, filename='', method='GET'):
 	timeout = 1
 	nretries = 10
 	raw_resp = None
-	for i in range(nretries):
+	for i in range(nretries+1):
 		success = True
 		try:
 			raw_resp = urllib.request.urlopen(req).read().decode()
-		except:
+		except Exception as e:
+			print(e)
 			success = False
 		if success:
 			break
-		print(f"Failed upload, retrying... ({i}/{nretries})")
+		print(f"Failed upload, retrying in {timeout} seconds... ({i}/{nretries})")
 		time.sleep(timeout)
-		timeout *= 2
+		timeout = timeout * 2
 	if not success:
-		raise Exception("Failed to open URL " + req)
+		raise Exception("Failed to open URL " + url)
 
 	if (method != 'DELETE'):
 		return json.loads(raw_resp)
