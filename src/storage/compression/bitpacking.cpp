@@ -15,108 +15,108 @@ namespace duckdb {
 
 using bitpacking_width_t = uint8_t;
 
+struct BitpackingConstants {
+	static constexpr const idx_t BITPACKING_HEADER_SIZE = sizeof(uint64_t);
+
+	// needs to be a factor of STANDARD_VECTOR_SIZE
+	static constexpr const idx_t BITPACKING_GROUPING_SIZE = STANDARD_VECTOR_SIZE;
+};
+
+template<class T>
+bitpacking_width_t MinimumBitWidth(T min_value, T max_value) {
+	if (std::is_signed<T>::value) {
+		if ((int64_t)min_value > (int64_t)NumericLimits<int8_t>::Minimum() &&
+		    (int64_t)max_value < (int64_t)NumericLimits<int8_t>::Maximum()) {
+			return 1;
+		}
+		if ((int64_t)min_value > (int64_t)NumericLimits<int16_t>::Minimum() &&
+		    (int64_t)max_value < (int64_t)NumericLimits<int16_t>::Maximum()) {
+			return 2;
+		}
+		if ((int64_t)min_value > (int64_t)NumericLimits<int32_t>::Minimum() &&
+		    (int64_t)max_value < (int64_t)NumericLimits<int32_t>::Maximum()) {
+			return 4;
+		}
+	} else {
+		if ((uint64_t)max_value < (uint64_t)NumericLimits<uint8_t>::Maximum()) {
+			return 1;
+		}
+		if ((uint64_t)max_value < (uint64_t)NumericLimits<uint16_t>::Maximum()) {
+			return 2;
+		}
+		if ((uint64_t)max_value < (uint64_t)NumericLimits<uint32_t>::Maximum()) {
+			return 4;
+		}
+	}
+
+	return 8;
+}
+
+template<class T>
+bitpacking_width_t FindMinBitWidth(VectorData &vdata, idx_t count) {
+	auto data = (T *)vdata.data;
+	T min_value = NumericLimits<T>::Maximum();
+	T max_value = NumericLimits<T>::Minimum();
+	for (idx_t i = 0; i < count; i++) {
+		auto idx = vdata.sel->get_index(i);
+		if (vdata.validity.RowIsValid(idx)) {
+			if (data[idx] > max_value) {
+				max_value = data[idx];
+			}
+
+			if (std::is_signed<T>::value) {
+				if (data[idx] < min_value) {
+					min_value = data[idx];
+				}
+			}
+			// TODO we can stop early here depending on available bit widths?
+		}
+	}
+
+	return MinimumBitWidth<T>(min_value, max_value);
+}
+
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//
 template <class T>
 struct BitpackingAnalyzeState : public AnalyzeState {
-	explicit BitpackingAnalyzeState(PhysicalType current_type)
-	    : min_value(NumericLimits<T>::Maximum()), max_value(NumericLimits<T>::Minimum()), count(0),
-	      current_type(current_type) {
-	}
-	T min_value;
-	T max_value;
-	idx_t count;
-	PhysicalType current_type;
-
-	// Calculates the smallest fitting type
-	PhysicalType GetSmallestFittingType() {
-
-		size_t current_size = sizeof(T);
-		D_ASSERT(current_size == 2 || current_size == 4 || current_size == 8);
-
-		// TODO we could store signed as unsigned as well if no negative values occur possibly allowing a smaller
-		// datatype
-		// TODO make nicer? possible reuse existing code? or move this to existing code?
-		if (std::is_signed<T>::value) {
-			if ((int64_t)min_value > (int64_t)NumericLimits<int8_t>::Minimum() &&
-			    (int64_t)max_value < (int64_t)NumericLimits<int8_t>::Maximum()) {
-				return PhysicalType::INT8;
-			}
-			if ((int64_t)min_value > (int64_t)NumericLimits<int16_t>::Minimum() &&
-			    (int64_t)max_value < (int64_t)NumericLimits<int16_t>::Maximum()) {
-				return PhysicalType::INT16;
-			}
-			if ((int64_t)min_value > (int64_t)NumericLimits<int32_t>::Minimum() &&
-			    (int64_t)max_value < (int64_t)NumericLimits<int32_t>::Maximum()) {
-				return PhysicalType::INT32;
-			}
-		} else {
-			if ((uint64_t)max_value < (uint64_t)NumericLimits<uint8_t>::Maximum()) {
-				return PhysicalType::UINT8;
-			}
-			if ((uint64_t)max_value < (uint64_t)NumericLimits<uint16_t>::Maximum()) {
-				return PhysicalType::UINT16;
-			}
-			if ((uint64_t)max_value < (uint64_t)NumericLimits<uint32_t>::Maximum()) {
-				return PhysicalType::UINT32;
-			}
-		}
-		return current_type;
-	}
+//	explicit BitpackingAnalyzeState() {
+//	}
+	idx_t total_size = 0;
 };
 
 template <class T>
 unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	return make_unique<BitpackingAnalyzeState<T>>(type);
+	return make_unique<BitpackingAnalyzeState<T>>();
 }
 
+// TODO this size is not very accurate as it disregards both the header and the empty spaces that are to small for a
+// TODO bitpacking group
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &bitpacking_state = (BitpackingAnalyzeState<T> &)state;
 	VectorData vdata;
 	input.Orrify(count, vdata);
 
-	auto data = (T *)vdata.data;
-
-	for (idx_t i = 0; i < count; i++) {
-		auto idx = vdata.sel->get_index(i);
-
-		if (vdata.validity.RowIsValid(idx)) {
-			if (data[idx] > bitpacking_state.max_value) {
-				bitpacking_state.max_value = data[idx];
-			}
-
-			if (std::is_signed<T>::value) {
-				if (data[idx] < bitpacking_state.min_value) {
-					bitpacking_state.min_value = data[idx];
-				}
-			}
-			// TODO we can stop early if we find a value that exceeds the numerical limits of the type 1 smaller than
-		}
-	}
-	bitpacking_state.count += count;
+  bitpacking_width_t bitwidth = FindMinBitWidth<T>(vdata, count);
+	bitpacking_state.total_size = (idx_t)bitwidth * count + sizeof(bitpacking_width_t);
 	return true;
 }
 
 template <class T>
 idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 	auto &bitpacking_state = (BitpackingAnalyzeState<T> &)state;
-	return GetTypeIdSize(bitpacking_state.GetSmallestFittingType()) * bitpacking_state.count;
+	return bitpacking_state.total_size;
 }
 
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-struct BitpackingConstants {
-	static constexpr const idx_t BITPACKING_HEADER_SIZE = sizeof(uint64_t);
-	static constexpr const idx_t BITPACKING_GROUPING_SIZE = STANDARD_VECTOR_SIZE;
-};
-
 template <class T>
 struct BitpackingCompressState : public CompressionState {
-	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer, PhysicalType compress_type)
-	    : checkpointer(checkpointer), compress_type(compress_type) {
+	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer)
+	    : checkpointer(checkpointer) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
 		auto &config = DBConfig::GetConfig(db);
@@ -142,64 +142,12 @@ struct BitpackingCompressState : public CompressionState {
 		width_ptr = handle->Ptr() + Storage::BLOCK_SIZE - sizeof(bitpacking_width_t);
 	}
 
-	bitpacking_width_t FindMinBitWidth(VectorData &vdata, idx_t count) {
-		auto data = (T *)vdata.data;
-		T min_value = NumericLimits<T>::Maximum();
-		T max_value = NumericLimits<T>::Minimum();
-		for (idx_t i = 0; i < count; i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (vdata.validity.RowIsValid(idx)) {
-				if (data[idx] > max_value) {
-					max_value = data[idx];
-				}
-
-				if (std::is_signed<T>::value) {
-					if (data[idx] < min_value) {
-						min_value = data[idx];
-					}
-				}
-				// TODO we can stop early here depending on available bit widths?
-			}
-		}
-
-		return MinimumBitWidth(min_value, max_value);
-	}
-
-	// This is actually byte width
-	bitpacking_width_t MinimumBitWidth(T min_value, T max_value) {
-		if (std::is_signed<T>::value) {
-			if ((int64_t)min_value > (int64_t)NumericLimits<int8_t>::Minimum() &&
-			    (int64_t)max_value < (int64_t)NumericLimits<int8_t>::Maximum()) {
-				return 1;
-			}
-			if ((int64_t)min_value > (int64_t)NumericLimits<int16_t>::Minimum() &&
-			    (int64_t)max_value < (int64_t)NumericLimits<int16_t>::Maximum()) {
-				return 2;
-			}
-			if ((int64_t)min_value > (int64_t)NumericLimits<int32_t>::Minimum() &&
-			    (int64_t)max_value < (int64_t)NumericLimits<int32_t>::Maximum()) {
-				return 4;
-			}
-		} else {
-			if ((uint64_t)max_value < (uint64_t)NumericLimits<uint8_t>::Maximum()) {
-				return 1;
-			}
-			if ((uint64_t)max_value < (uint64_t)NumericLimits<uint16_t>::Maximum()) {
-				return 2;
-			}
-			if ((uint64_t)max_value < (uint64_t)NumericLimits<uint32_t>::Maximum()) {
-				return 4;
-			}
-		}
-
-		return 8;
-	}
-
-	// Todo return number of values appended, can now append all in loop without checking
+	// TODO rewrite for bitpacking groups below vector size
+	// TODO rewrite with a packValue function that packs a fixed amount of values?
 	idx_t Append(VectorData &vdata, idx_t offset, idx_t count) {
 		auto data = (T *)vdata.data;
 
-		auto bitwidth = FindMinBitWidth(vdata, count);
+		auto bitwidth = FindMinBitWidth<T>(vdata, count);
 
 		// TODO we now stop when a vector does not fit, this could be improved to the bitpacking grouping size
 		if (RemainingSize() < bitwidth * count + sizeof(bitpacking_width_t)) {
@@ -217,8 +165,6 @@ struct BitpackingCompressState : public CompressionState {
 				PackValue(data[idx], bitwidth);
 			}
 
-			// is this the same thing?
-			//			entry_count++;
 			current_segment->count++;
 		}
 
@@ -256,13 +202,17 @@ struct BitpackingCompressState : public CompressionState {
 	void FlushSegment() {
 		auto &state = checkpointer.GetCheckpointState();
 
-		// TODO Compaction
+		// compact the segment by moving the widths next to the data.
+		idx_t minimal_widths_offset = AlignValue(data_ptr - handle->node->buffer);
+		idx_t widths_size = handle->node->buffer + Storage::BLOCK_SIZE - width_ptr - 1;
+		idx_t total_segment_size = minimal_widths_offset + widths_size;
+		memmove(handle->node->buffer + minimal_widths_offset, width_ptr+1, widths_size);
 
-		// Store the offset of the bitpacking widths in the beginning of the segment
-		Store<idx_t>(Storage::BLOCK_SIZE - 1, handle->node->buffer);
+		// Store the offset of the first width (which is at the highest address).
+		Store<idx_t>(minimal_widths_offset + widths_size - 1, handle->node->buffer);
 		handle.reset();
 
-		state.FlushSegment(move(current_segment), Storage::BLOCK_SIZE);
+		state.FlushSegment(move(current_segment), total_segment_size);
 	}
 
 	void Finalize() {
@@ -275,22 +225,16 @@ struct BitpackingCompressState : public CompressionState {
 	unique_ptr<ColumnSegment> current_segment;
 	unique_ptr<BufferHandle> handle;
 
-	PhysicalType compress_type;
-	idx_t entry_count = 0;
-	//	idx_t max_entry_count;
-
 	// ptr to next free spot in segment;
 	data_ptr_t data_ptr;
-	// ptr to next free spot for storing bitwidth.
+	// ptr to next free spot for storing bitwidths (growing downwards).
 	data_ptr_t width_ptr;
 };
 
 template <class T>
 unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &checkpointer,
                                                        unique_ptr<AnalyzeState> state) {
-
-	PhysicalType smallest_fitting_type = ((BitpackingAnalyzeState<T> *)state.get())->GetSmallestFittingType();
-	return make_unique<BitpackingCompressState<T>>(checkpointer, smallest_fitting_type);
+	return make_unique<BitpackingCompressState<T>>(checkpointer);
 }
 
 template <class T>
@@ -310,7 +254,6 @@ void BitpackingCompress(CompressionState &state_p, Vector &scan_vector, idx_t co
 
 		// now create a new segment and continue appending
 		state.CreateEmptySegment(next_start);
-		state.entry_count = 0;
 
 		if (appended == count) {
 			// appended everything: finished
@@ -351,7 +294,7 @@ struct BitpackingScanState : public SegmentScanState {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 
-		D_ASSERT(segment.GetBlockOffset() == 0); // TODO why is this?
+//		D_ASSERT(segment.GetBlockOffset() == 0); // TODO why is this?
 
 		current_ptr = handle->node->buffer + segment.GetBlockOffset() + BitpackingConstants::BITPACKING_HEADER_SIZE;
 
@@ -359,8 +302,7 @@ struct BitpackingScanState : public SegmentScanState {
 
 		// load offset to bitpacking widths pointer
 		auto bitpacking_widths_offset = Load<idx_t>(handle->node->buffer + segment.GetBlockOffset());
-		bitpacking_width_ptr = handle->node->buffer + bitpacking_widths_offset;
-
+		bitpacking_width_ptr = handle->node->buffer + segment.GetBlockOffset() + bitpacking_widths_offset;
 
 		// load the bitwidth of the first vector
 		LoadCurrentBitWidth();
