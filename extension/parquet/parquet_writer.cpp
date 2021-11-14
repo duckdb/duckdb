@@ -82,7 +82,16 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 	case LogicalTypeId::BLOB:
 		return Type::BYTE_ARRAY;
 	case LogicalTypeId::TIMESTAMP:
-		return Type::INT96;
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Type::INT64;
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+		return Type::INT32;
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+		return Type::INT64;
 	default:
 		throw NotImplementedException(duckdb_type.ToString());
 	}
@@ -90,11 +99,31 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 
 static bool DuckDBTypeToConvertedType(const LogicalType &duckdb_type, ConvertedType::type &result) {
 	switch (duckdb_type.id()) {
+	case LogicalTypeId::UTINYINT:
+		result = ConvertedType::UINT_8;
+		return true;
+	case LogicalTypeId::USMALLINT:
+		result = ConvertedType::UINT_16;
+		return true;
+	case LogicalTypeId::UINTEGER:
+		result = ConvertedType::UINT_32;
+		return true;
+	case LogicalTypeId::UBIGINT:
+		result = ConvertedType::UINT_64;
+		return true;
 	case LogicalTypeId::DATE:
 		result = ConvertedType::DATE;
 		return true;
 	case LogicalTypeId::VARCHAR:
 		result = ConvertedType::UTF8;
+		return true;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		result = ConvertedType::TIMESTAMP_MICROS;
+		return true;
+	case LogicalTypeId::TIMESTAMP_MS:
+		result = ConvertedType::TIMESTAMP_MILLIS;
 		return true;
 	default:
 		return false;
@@ -125,12 +154,33 @@ static uint8_t GetVarintSize(uint32_t val) {
 	return res;
 }
 
-template <class SRC, class TGT>
+struct ParquetCastOperator {
+	template<class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return TGT(input);
+	}
+};
+
+struct ParquetTimestampNSOperator {
+	template<class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return Timestamp::FromEpochNanoSeconds(input).value;
+	}
+};
+
+struct ParquetTimestampSOperator {
+	template<class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return Timestamp::FromEpochSeconds(input).value;
+	}
+};
+
+template <class SRC, class TGT, class OP = ParquetCastOperator>
 static void TemplatedWritePlain(Vector &col, idx_t length, ValidityMask &mask, Serializer &ser) {
 	auto *ptr = FlatVector::GetData<SRC>(col);
 	for (idx_t r = 0; r < length; r++) {
 		if (mask.RowIsValid(r)) {
-			ser.Write<TGT>((TGT)ptr[r]);
+			ser.Write<TGT>(OP::template Operation<SRC, TGT>(ptr[r]));
 		}
 	}
 }
@@ -280,7 +330,15 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				TemplatedWritePlain<int32_t, int32_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::BIGINT:
+			case LogicalTypeId::TIMESTAMP:
+			case LogicalTypeId::TIMESTAMP_MS:
 				TemplatedWritePlain<int64_t, int64_t>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::TIMESTAMP_NS:
+				TemplatedWritePlain<int64_t, int64_t, ParquetTimestampNSOperator>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::TIMESTAMP_SEC:
+				TemplatedWritePlain<int64_t, int64_t, ParquetTimestampSOperator>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::FLOAT:
 				TemplatedWritePlain<float, float>(input_column, input.size(), mask, temp_writer);
@@ -295,15 +353,6 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			case LogicalTypeId::DOUBLE:
 				TemplatedWritePlain<double, double>(input_column, input.size(), mask, temp_writer);
 				break;
-			case LogicalTypeId::TIMESTAMP: {
-				auto *ptr = FlatVector::GetData<timestamp_t>(input_column);
-				for (idx_t r = 0; r < input.size(); r++) {
-					if (mask.RowIsValid(r)) {
-						temp_writer.Write<Int96>(TimestampToImpalaTimestamp(ptr[r]));
-					}
-				}
-				break;
-			}
 			case LogicalTypeId::BLOB:
 			case LogicalTypeId::VARCHAR: {
 				auto *ptr = FlatVector::GetData<string_t>(input_column);
