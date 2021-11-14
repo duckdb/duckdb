@@ -51,6 +51,25 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
 ColumnReader::~ColumnReader() {
 }
 
+template <class T>
+unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const LogicalType &type_p,
+                                             const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define,
+                                             idx_t max_repeat) {
+	switch (type_p.InternalType()) {
+	case PhysicalType::INT16:
+		return make_unique<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(
+		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case PhysicalType::INT32:
+		return make_unique<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<T>>>(
+		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+	case PhysicalType::INT64:
+		return make_unique<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(
+		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+	default:
+		throw NotImplementedException("Unimplemented internal type for CreateDecimalReader");
+	}
+}
+
 unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const LogicalType &type_p,
                                                     const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define,
                                                     idx_t max_repeat) {
@@ -115,22 +134,30 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 		return make_unique<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
 	case LogicalTypeId::DECIMAL:
 		// we have to figure out what kind of int we need
-		switch (type_p.InternalType()) {
-		case PhysicalType::INT16:
-			return make_unique<DecimalColumnReader<int16_t>>(reader, type_p, schema_p, file_idx_p, max_define,
-			                                                 max_repeat);
-		case PhysicalType::INT32:
-			return make_unique<DecimalColumnReader<int32_t>>(reader, type_p, schema_p, file_idx_p, max_define,
-			                                                 max_repeat);
-		case PhysicalType::INT64:
-			return make_unique<DecimalColumnReader<int64_t>>(reader, type_p, schema_p, file_idx_p, max_define,
-			                                                 max_repeat);
-		case PhysicalType::INT128:
-			return make_unique<DecimalColumnReader<hugeint_t>>(reader, type_p, schema_p, file_idx_p, max_define,
-			                                                   max_repeat);
-
+		switch (schema_p.type) {
+		case Type::INT32:
+			return CreateDecimalReader<int32_t>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		case Type::INT64:
+			return CreateDecimalReader<int64_t>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		case Type::FIXED_LEN_BYTE_ARRAY:
+			switch (type_p.InternalType()) {
+			case PhysicalType::INT16:
+				return make_unique<DecimalColumnReader<int16_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+				                                                 max_repeat);
+			case PhysicalType::INT32:
+				return make_unique<DecimalColumnReader<int32_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+				                                                 max_repeat);
+			case PhysicalType::INT64:
+				return make_unique<DecimalColumnReader<int64_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+				                                                 max_repeat);
+			case PhysicalType::INT128:
+				return make_unique<DecimalColumnReader<hugeint_t>>(reader, type_p, schema_p, file_idx_p, max_define,
+				                                                   max_repeat);
+			default:
+				throw InternalException("Unrecognized type for Decimal");
+			}
 		default:
-			break;
+			throw NotImplementedException("Unrecognized type for Decimal");
 		}
 		break;
 	default:
