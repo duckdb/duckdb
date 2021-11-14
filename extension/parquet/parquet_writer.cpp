@@ -11,6 +11,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
@@ -77,6 +78,7 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 		return Type::FLOAT;
 	case LogicalTypeId::DECIMAL: // for now...
 	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::HUGEINT:
 		return Type::DOUBLE;
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
@@ -184,6 +186,13 @@ struct ParquetTimestampSOperator {
 	template<class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochSeconds(input).value;
+	}
+};
+
+struct ParquetHugeintOperator {
+	template<class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return Hugeint::Cast<double>(input);
 	}
 };
 
@@ -345,6 +354,9 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			case LogicalTypeId::TIMESTAMP:
 			case LogicalTypeId::TIMESTAMP_MS:
 				TemplatedWritePlain<int64_t, int64_t>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::HUGEINT:
+				TemplatedWritePlain<hugeint_t, double, ParquetHugeintOperator>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::TIMESTAMP_NS:
 				TemplatedWritePlain<int64_t, int64_t, ParquetTimestampNSOperator>(input_column, input.size(), mask, temp_writer);
