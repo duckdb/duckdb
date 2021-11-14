@@ -160,7 +160,6 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 					return LogicalType::DECIMAL(s_ele.precision, s_ele.scale);
 				}
 				return LogicalType::INVALID;
-
 			case ConvertedType::UTF8:
 				return LogicalType::VARCHAR;
 			default:

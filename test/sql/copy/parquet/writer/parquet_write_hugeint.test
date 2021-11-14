@@ -1,6 +1,6 @@
 # name: test/sql/copy/parquet/writer/parquet_write_hugeint.test
 # description: Parquet hugeint round trip
-# group: [parquet]
+# group: [writer]
 
 require parquet
 

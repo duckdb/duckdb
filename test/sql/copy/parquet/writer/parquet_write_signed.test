@@ -1,6 +1,6 @@
 # name: test/sql/copy/parquet/writer/parquet_write_signed.test
 # description: Parquet signed types round trip
-# group: [parquet]
+# group: [writer]
 
 require parquet
 

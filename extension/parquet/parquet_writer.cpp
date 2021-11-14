@@ -169,28 +169,28 @@ static uint8_t GetVarintSize(uint32_t val) {
 }
 
 struct ParquetCastOperator {
-	template<class SRC, class TGT>
+	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return TGT(input);
 	}
 };
 
 struct ParquetTimestampNSOperator {
-	template<class SRC, class TGT>
+	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochNanoSeconds(input).value;
 	}
 };
 
 struct ParquetTimestampSOperator {
-	template<class SRC, class TGT>
+	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochSeconds(input).value;
 	}
 };
 
 struct ParquetHugeintOperator {
-	template<class SRC, class TGT>
+	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Hugeint::Cast<double>(input);
 	}
@@ -356,13 +356,16 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				TemplatedWritePlain<int64_t, int64_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::HUGEINT:
-				TemplatedWritePlain<hugeint_t, double, ParquetHugeintOperator>(input_column, input.size(), mask, temp_writer);
+				TemplatedWritePlain<hugeint_t, double, ParquetHugeintOperator>(input_column, input.size(), mask,
+				                                                               temp_writer);
 				break;
 			case LogicalTypeId::TIMESTAMP_NS:
-				TemplatedWritePlain<int64_t, int64_t, ParquetTimestampNSOperator>(input_column, input.size(), mask, temp_writer);
+				TemplatedWritePlain<int64_t, int64_t, ParquetTimestampNSOperator>(input_column, input.size(), mask,
+				                                                                  temp_writer);
 				break;
 			case LogicalTypeId::TIMESTAMP_SEC:
-				TemplatedWritePlain<int64_t, int64_t, ParquetTimestampSOperator>(input_column, input.size(), mask, temp_writer);
+				TemplatedWritePlain<int64_t, int64_t, ParquetTimestampSOperator>(input_column, input.size(), mask,
+				                                                                 temp_writer);
 				break;
 			case LogicalTypeId::UTINYINT:
 				TemplatedWritePlain<uint8_t, int32_t>(input_column, input.size(), mask, temp_writer);

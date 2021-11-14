@@ -9,4 +9,4 @@ class TestBlob(object):
 
         duckdb_cursor.execute("SELECT BLOB 'hello' AS a")
         results = duckdb_cursor.fetchnumpy()
-        assert results['a'] == numpy.array([b'hello'], dtype=numpy.object)
+        assert results['a'] == numpy.array([b'hello'], dtype=object)

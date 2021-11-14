@@ -1,6 +1,6 @@
 # name: test/sql/copy/parquet/writer/parquet_write_date.test
 # description: Parquet dates round trip
-# group: [parquet]
+# group: [writer]
 
 require parquet
 
