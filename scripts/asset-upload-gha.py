@@ -35,7 +35,7 @@ token = os.getenv("GH_TOKEN", "")
 if token == "":
 	raise ValueError('need a GitHub token in GH_TOKEN')
 
-def gh_api(suburl, filename='', method='GET'):
+def internal_gh_api(suburl, filename='', method='GET'):
 	url = api_url + suburl
 	headers = {
 		"Content-Type": "application/json",
@@ -43,44 +43,46 @@ def gh_api(suburl, filename='', method='GET'):
 	}
 
 	body_data = b''
+	raw_resp = None
+	if len(filename) > 0:
+		method = 'POST'
+		body_data = open(filename, 'rb')
+		headers["Content-Type"] = "binary/octet-stream"
+		headers["Content-Length"] = os.path.getsize(local_filename)
+		url = suburl # cough
 
+	req = urllib.request.Request(url, body_data, headers)
+	req.get_method = lambda: method
+
+	print(f'GH API URL: "{url}" Filename: "{filename}" Method: "{method}"')
+	raw_resp = urllib.request.urlopen(req).read().decode()
+
+	if (method != 'DELETE'):
+		return json.loads(raw_resp)
+	else:
+		return {}
+
+def gh_api(suburl, filename='', method='GET'):
 	timeout = 1
 	nretries = 10
-	raw_resp = None
+	success = False
 	for i in range(nretries+1):
-		success = True
 		try:
-			if len(filename) > 0:
-				method = 'POST'
-				body_data = open(filename, 'rb')
-				headers["Content-Type"] = "binary/octet-stream"
-				headers["Content-Length"] = os.path.getsize(local_filename)
-				url = suburl # cough
-
-			req = urllib.request.Request(url, body_data, headers)
-			req.get_method = lambda: method
-
-			print(f'GH API URL: "{url}" Filename: "{filename}" Method: "{method}"')
-
-			raw_resp = urllib.request.urlopen(req).read().decode()
+			response = internal_gh_api(suburl, filename, method)
+			success = True
 		except urllib.error.HTTPError as e:
 			print(e.read().decode()) # gah
-			success = False
 		except Exception as e:
 			print(e)
-			success = False
 		if success:
 			break
 		print(f"Failed upload, retrying in {timeout} seconds... ({i}/{nretries})")
 		time.sleep(timeout)
 		timeout = timeout * 2
 	if not success:
-		raise Exception("Failed to open URL " + url)
+		raise Exception("Failed to open URL " + suburl)
+	return response
 
-	if (method != 'DELETE'):
-		return json.loads(raw_resp)
-	else:
-		return {}
 
 # check if tag exists
 resp = gh_api('git/ref/tags/%s' % tag)
