@@ -100,25 +100,34 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
+	if (std::this_thread::get_id() != thread_id) {
+		throw std::runtime_error("DuckDB objects created in a thread can only be used in that same thread. The object "
+		                         "was created in thread id " +
+		                         to_string(std::hash<std::thread::id> {}(thread_id)) + " and this is thread id " +
+		                         to_string(std::hash<std::thread::id> {}(std::this_thread::get_id())));
+	}
 	result = nullptr;
-
-	auto statements = connection->ExtractStatements(query);
-	if (statements.empty()) {
-		// no statements to execute
-		return this;
-	}
-	// if there are multiple statements, we directly execute the statements besides the last one
-	// we only return the result of the last statement to the user, unless one of the previous statements fails
-	for (idx_t i = 0; i + 1 < statements.size(); i++) {
-		auto res = connection->Query(move(statements[i]));
-		if (!res->success) {
-			throw std::runtime_error(res->error);
+	unique_ptr<PreparedStatement> prep;
+	{
+		py::gil_scoped_release release;
+		auto statements = connection->ExtractStatements(query);
+		if (statements.empty()) {
+			// no statements to execute
+			return this;
 		}
-	}
+		// if there are multiple statements, we directly execute the statements besides the last one
+		// we only return the result of the last statement to the user, unless one of the previous statements fails
+		for (idx_t i = 0; i + 1 < statements.size(); i++) {
+			auto res = connection->Query(move(statements[i]));
+			if (!res->success) {
+				throw std::runtime_error(res->error);
+			}
+		}
 
-	auto prep = connection->Prepare(move(statements.back()));
-	if (!prep->success) {
-		throw std::runtime_error(prep->error);
+		prep = connection->Prepare(move(statements.back()));
+		if (!prep->success) {
+			throw std::runtime_error(prep->error);
+		}
 	}
 
 	// this is a list of a list of parameters in executemany
@@ -175,11 +184,15 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterArrow(const string &name, py::ob
 	auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(table.ptr());
 
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-	connection
-	    ->TableFunction("arrow_scan",
-	                    {Value::POINTER((uintptr_t)stream_factory.get()),
-	                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
-	    ->CreateView(name, true, true);
+	{
+		py::gil_scoped_release release;
+		connection
+		    ->TableFunction("arrow_scan",
+		                    {Value::POINTER((uintptr_t)stream_factory.get()),
+		                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
+		    ->CreateView(name, true, true);
+	}
+
 	auto object = make_unique<RegisteredArrow>(move(stream_factory), move(table));
 	registered_objects[name] = move(object);
 	return this;
