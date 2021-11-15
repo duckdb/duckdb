@@ -12,15 +12,19 @@
 
 namespace duckdb {
 
+struct BoundCaseCheck {
+	unique_ptr<Expression> when_expr;
+	unique_ptr<Expression> then_expr;
+};
+
 class BoundCaseExpression : public Expression {
 public:
 	BoundCaseExpression(LogicalType type);
-	BoundCaseExpression(unique_ptr<Expression> check, unique_ptr<Expression> res_if_true,
-	                    unique_ptr<Expression> res_if_false);
+	BoundCaseExpression(unique_ptr<Expression> when_expr, unique_ptr<Expression> then_expr,
+	                    unique_ptr<Expression> else_expr);
 
-	unique_ptr<Expression> check;
-	unique_ptr<Expression> result_if_true;
-	unique_ptr<Expression> result_if_false;
+	vector<BoundCaseCheck> case_checks;
+	unique_ptr<Expression> else_expr;
 
 public:
 	string ToString() const override;

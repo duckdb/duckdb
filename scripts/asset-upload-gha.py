@@ -3,7 +3,6 @@ import os
 import sys
 import glob
 import time
-import mimetypes
 import urllib.request
 
 api_url = 'https://api.github.com/repos/duckdb/duckdb/'
@@ -45,36 +44,38 @@ def gh_api(suburl, filename='', method='GET'):
 
 	body_data = b''
 
-	if len(filename) > 0:
-		method = 'POST'
-		body_data = open(filename, 'rb')
-
-		mime_type = mimetypes.guess_type(local_filename)[0]
-		if mime_type is None:
-			mime_type = "application/octet-stream"
-		headers["Content-Type"] = mime_type
-		headers["Content-Length"] = os.path.getsize(local_filename)
-
-		url = suburl # cough
-
-	req = urllib.request.Request(url, body_data, headers)
-	req.get_method = lambda: method
 	timeout = 1
 	nretries = 10
 	raw_resp = None
-	for i in range(nretries):
+	for i in range(nretries+1):
 		success = True
 		try:
+			if len(filename) > 0:
+				method = 'POST'
+				body_data = open(filename, 'rb')
+				headers["Content-Type"] = "binary/octet-stream"
+				headers["Content-Length"] = os.path.getsize(local_filename)
+				url = suburl # cough
+
+			req = urllib.request.Request(url, body_data, headers)
+			req.get_method = lambda: method
+
+			print(f'GH API URL: "{url}" Filename: "{filename}" Method: "{method}"')
+
 			raw_resp = urllib.request.urlopen(req).read().decode()
-		except:
+		except urllib.error.HTTPError as e:
+			print(e.read().decode()) # gah
+			success = False
+		except Exception as e:
+			print(e)
 			success = False
 		if success:
 			break
-		print(f"Failed upload, retrying... ({i}/{nretries})")
+		print(f"Failed upload, retrying in {timeout} seconds... ({i}/{nretries})")
 		time.sleep(timeout)
-		timeout *= 2
+		timeout = timeout * 2
 	if not success:
-		raise Exception("Failed to open URL " + req)
+		raise Exception("Failed to open URL " + url)
 
 	if (method != 'DELETE'):
 		return json.loads(raw_resp)
@@ -89,6 +90,7 @@ if 'object' not in resp or 'sha' not in resp['object'] : # or resp['object']['sh
 resp = gh_api('releases/tags/%s' % tag)
 if 'id' not in resp or 'upload_url' not in resp:
 	raise ValueError('release does not exist for tag ' % tag)
+
 
 # double-check that release exists and has correct sha
 # disabled to not spam people watching releases
@@ -117,7 +119,7 @@ for filename in files:
 		if asset['name'] == asset_filename:
 			gh_api('releases/assets/%s' % asset['id'], method='DELETE')
 
-	resp = gh_api(upload_url + '?name=%s' % asset_filename, filename=local_filename)
+	resp = gh_api(f'{upload_url}?name={asset_filename}', filename=local_filename)
 	if 'id' not in resp:
 		raise ValueError('upload failed :/ ' + str(resp))
 	print("%s -> %s" % (local_filename, resp['browser_download_url']))

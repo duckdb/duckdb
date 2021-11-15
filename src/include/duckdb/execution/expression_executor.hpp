@@ -134,7 +134,7 @@ protected:
 	//! Verify that the output of a step in the ExpressionExecutor is correct
 	void Verify(const Expression &expr, Vector &result, idx_t count);
 
-	void FillSwitch(Vector &vector, Vector &result, SelectionVector &sel, sel_t count);
+	void FillSwitch(Vector &vector, Vector &result, const SelectionVector &sel, sel_t count);
 
 private:
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
