@@ -31,7 +31,7 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 	}
 	// create the dependents map for this object: it starts out empty
 	dependents_map[object] = dependency_set_t();
-    dependencies_map[object] = dependencies;
+	dependencies_map[object] = dependencies;
 }
 
 void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object, bool cascade,
@@ -55,7 +55,8 @@ void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object,
 			continue;
 		}
 		// conflict: attempting to delete this object but the dependent object still exists
-        if (cascade || dep.dependency_type == DependencyType::DEPENDENCY_AUTOMATIC || dep.dependency_type == DependencyType::DEPENDENCY_OWNS) {
+		if (cascade || dep.dependency_type == DependencyType::DEPENDENCY_AUTOMATIC ||
+		    dep.dependency_type == DependencyType::DEPENDENCY_OWNS) {
 			// cascade: drop the dependent object
 			catalog_set.DropEntryInternal(context, entry_index, *dependency_entry, cascade, lock_set);
 		} else {
@@ -72,7 +73,7 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 	D_ASSERT(dependencies_map.find(old_obj) != dependencies_map.end());
 
 	// first check the objects that depend on this object
-    vector<CatalogEntry *> owned_objects_to_add;
+	vector<CatalogEntry *> owned_objects_to_add;
 	auto &dependent_objects = dependents_map[old_obj];
 	for (auto &dep : dependent_objects) {
 		// look up the entry in the catalog set
@@ -83,11 +84,11 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 			// the dependent object was already deleted, no conflict
 			continue;
 		}
-        if (dep.dependency_type == DependencyType::DEPENDENCY_OWNS){
-            // the dependent object is owned by the current object
-            owned_objects_to_add.push_back(dep.entry);
-            continue;
-        }
+		if (dep.dependency_type == DependencyType::DEPENDENCY_OWNS) {
+			// the dependent object is owned by the current object
+			owned_objects_to_add.push_back(dep.entry);
+			continue;
+		}
 		// conflict: attempting to alter this object but the dependent object still exists
 		// no cascade and there are objects that depend on this object: throw error
 		throw CatalogException("Cannot alter entry \"%s\" because there are entries that "
@@ -135,18 +136,18 @@ void DependencyManager::AlterObject(ClientContext &context, CatalogEntry *old_ob
 	}
 	// add the new object to the dependency manager
 	dependents_map[new_obj] = dependency_set_t();
-    dependencies_map[new_obj] = old_dependencies;
+	dependencies_map[new_obj] = old_dependencies;
 
 	for (auto &dependency : to_add) {
 		dependencies_map[new_obj].insert(dependency);
 		dependents_map[dependency].insert(new_obj);
 	}
 
-    for(auto &dependency : owned_objects_to_add){
-        dependents_map[new_obj].insert(Dependency(dependency, DependencyType::DEPENDENCY_OWNS));
-        dependents_map[dependency].insert(Dependency(new_obj, DependencyType::DEPENDENCY_OWNED_BY));
-        dependencies_map[new_obj].insert(dependency);
-    }
+	for (auto &dependency : owned_objects_to_add) {
+		dependents_map[new_obj].insert(Dependency(dependency, DependencyType::DEPENDENCY_OWNS));
+		dependents_map[dependency].insert(Dependency(new_obj, DependencyType::DEPENDENCY_OWNED_BY));
+		dependencies_map[new_obj].insert(dependency);
+	}
 }
 
 void DependencyManager::EraseObject(CatalogEntry *object) {
@@ -183,20 +184,20 @@ void DependencyManager::Scan(const std::function<void(CatalogEntry *, CatalogEnt
 	}
 }
 
-void DependencyManager::AddOwnership(ClientContext &context, CatalogEntry *owner, CatalogEntry *entry){
-    // if the entry is already owned, throw error
-    for(auto &dep : dependents_map[entry]){
-        if (dep.entry != owner) {
-            throw CatalogException(entry->name + " is already owned by " + dep.entry->name);
-        }
-    }
+void DependencyManager::AddOwnership(ClientContext &context, CatalogEntry *owner, CatalogEntry *entry) {
+	// if the entry is already owned, throw error
+	for (auto &dep : dependents_map[entry]) {
+		if (dep.entry != owner) {
+			throw CatalogException(entry->name + " is already owned by " + dep.entry->name);
+		}
+	}
 
-    // Emplace guarantees that the same object cannot be inserted twice in the unordered_set
-    // In the case AddOwnership is called twice, because of emplace, the object will not be repeated in the set.
-    // We use an automatic dependency because if the Owner gets deleted, then the owned objects are also deleted
-    dependents_map[owner].emplace(Dependency(entry, DependencyType::DEPENDENCY_OWNS));
-    dependents_map[entry].emplace(Dependency(owner, DependencyType::DEPENDENCY_OWNED_BY));
-    dependencies_map[owner].emplace(entry);
+	// Emplace guarantees that the same object cannot be inserted twice in the unordered_set
+	// In the case AddOwnership is called twice, because of emplace, the object will not be repeated in the set.
+	// We use an automatic dependency because if the Owner gets deleted, then the owned objects are also deleted
+	dependents_map[owner].emplace(Dependency(entry, DependencyType::DEPENDENCY_OWNS));
+	dependents_map[entry].emplace(Dependency(owner, DependencyType::DEPENDENCY_OWNED_BY));
+	dependencies_map[owner].emplace(entry);
 }
 
 } // namespace duckdb

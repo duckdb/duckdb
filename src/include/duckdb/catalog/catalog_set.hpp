@@ -56,7 +56,7 @@ public:
 
 	bool DropEntry(ClientContext &context, const string &name, bool cascade);
 
-    bool AlterOwnership(ClientContext &context, ChangeOwnershipInfo *info);
+	bool AlterOwnership(ClientContext &context, ChangeOwnershipInfo *info);
 
 	void CleanupEntry(CatalogEntry *catalog_entry);
 

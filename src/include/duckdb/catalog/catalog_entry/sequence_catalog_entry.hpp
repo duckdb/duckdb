@@ -60,6 +60,6 @@ public:
 
 	string ToSQL() override;
 
-    CatalogEntry* AlterOwnership(ClientContext &context, AlterInfo *info);
+	CatalogEntry *AlterOwnership(ClientContext &context, AlterInfo *info);
 };
 } // namespace duckdb

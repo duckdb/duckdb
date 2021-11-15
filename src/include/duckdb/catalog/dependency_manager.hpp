@@ -31,16 +31,16 @@ public:
 	//! Scans all dependencies, returning pairs of (object, dependent)
 	void Scan(const std::function<void(CatalogEntry *, CatalogEntry *, DependencyType)> &callback);
 
-    void AddOwnership(ClientContext &context, CatalogEntry *owner, CatalogEntry *entry);
+	void AddOwnership(ClientContext &context, CatalogEntry *owner, CatalogEntry *entry);
 
 private:
 	Catalog &catalog;
-    //! Map of objects that DEPEND on [object], i.e. [object] can only be deleted when all entries in the dependency map
-    //! are deleted.
+	//! Map of objects that DEPEND on [object], i.e. [object] can only be deleted when all entries in the dependency map
+	//! are deleted.
 	unordered_map<CatalogEntry *, dependency_set_t> dependents_map;
-    //! Map of objects that the source object DEPENDS on, i.e. when any of the entries in the vector perform a CASCADE
-    //! drop then [object] is deleted as well
-    unordered_map<CatalogEntry *, unordered_set<CatalogEntry *>> dependencies_map;
+	//! Map of objects that the source object DEPENDS on, i.e. when any of the entries in the vector perform a CASCADE
+	//! drop then [object] is deleted as well
+	unordered_map<CatalogEntry *, unordered_set<CatalogEntry *>> dependencies_map;
 
 private:
 	void AddObject(ClientContext &context, CatalogEntry *object, unordered_set<CatalogEntry *> &dependencies);

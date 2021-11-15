@@ -14,7 +14,13 @@
 
 namespace duckdb {
 
-enum class AlterType : uint8_t { INVALID = 0, ALTER_TABLE = 1, ALTER_VIEW = 2, ALTER_SEQUENCE = 3, CHANGE_OWNERSHIP = 4};
+enum class AlterType : uint8_t {
+	INVALID = 0,
+	ALTER_TABLE = 1,
+	ALTER_VIEW = 2,
+	ALTER_SEQUENCE = 3,
+	CHANGE_OWNERSHIP = 4
+};
 
 struct AlterInfo : public ParseInfo {
 	AlterInfo(AlterType type, string schema, string name) : type(type), schema(schema), name(name) {
@@ -38,26 +44,26 @@ public:
 //===--------------------------------------------------------------------===//
 // Change Ownership
 //===--------------------------------------------------------------------===//
-struct ChangeOwnershipInfo : public AlterInfo{
-   ChangeOwnershipInfo(CatalogType catalog_type, string entry_schema, string entry_name, string owner_schema, string owner_name)
-    : AlterInfo(AlterType::CHANGE_OWNERSHIP, entry_schema, entry_name),
-      catalog_type(catalog_type),
-      owner_schema(owner_schema),
-      owner_name(owner_name)
-    {}
+struct ChangeOwnershipInfo : public AlterInfo {
+	ChangeOwnershipInfo(CatalogType catalog_type, string entry_schema, string entry_name, string owner_schema,
+	                    string owner_name)
+	    : AlterInfo(AlterType::CHANGE_OWNERSHIP, entry_schema, entry_name), catalog_type(catalog_type),
+	      owner_schema(owner_schema), owner_name(owner_name) {
+	}
 
-    // Catalog type refers to the entry type, since struct is usually built from an
-    // ALTER <TYPE> <schema>.<name> OWNED BY <owner_schema>.<owner_name> statement
-    // here it is only possible to know the type of who is to be owned
-    CatalogType catalog_type;
+	// Catalog type refers to the entry type, since struct is usually built from an
+	// ALTER <TYPE> <schema>.<name> OWNED BY <owner_schema>.<owner_name> statement
+	// here it is only possible to know the type of who is to be owned
+	CatalogType catalog_type;
 
-    string owner_schema;
-    string owner_name;
+	string owner_schema;
+	string owner_name;
+
 public:
-    CatalogType GetCatalogType() override;
-    unique_ptr<AlterInfo> Copy() const override;
-    void Serialize(Serializer &serializer) override;
-    static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
+	CatalogType GetCatalogType() override;
+	unique_ptr<AlterInfo> Copy() const override;
+	void Serialize(Serializer &serializer) override;
+	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
 
 //===--------------------------------------------------------------------===//

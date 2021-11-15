@@ -102,28 +102,28 @@ bool CatalogSet::GetEntryInternal(ClientContext &context, const string &name, id
 	return GetEntryInternal(context, entry_index, catalog_entry);
 }
 
-bool CatalogSet::AlterOwnership(ClientContext &context, ChangeOwnershipInfo *info){
-    // lock the catalog for writing
-    lock_guard<mutex> write_lock(catalog.write_lock);
-    // lock this catalog set to disallow reading
-    lock_guard<mutex> read_lock(catalog_lock);
+bool CatalogSet::AlterOwnership(ClientContext &context, ChangeOwnershipInfo *info) {
+	// lock the catalog for writing
+	lock_guard<mutex> write_lock(catalog.write_lock);
+	// lock this catalog set to disallow reading
+	lock_guard<mutex> read_lock(catalog_lock);
 
-    idx_t entry_index;
-    CatalogEntry *entry;
-    if (!GetEntryInternal(context, info->name, entry_index, entry)) {
-        return false;
-    }
+	idx_t entry_index;
+	CatalogEntry *entry;
+	if (!GetEntryInternal(context, info->name, entry_index, entry)) {
+		return false;
+	}
 
-    // TODO: How to make this generic? we dont want only table entries
-    auto owner_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->owner_schema, info->owner_name);
+	// TODO: How to make this generic? we dont want only table entries
+	auto owner_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->owner_schema, info->owner_name);
 
-    if (!owner_entry) {
-        return false;
-    }
+	if (!owner_entry) {
+		return false;
+	}
 
-    catalog.dependency_manager->AddOwnership(context, owner_entry, entry);
+	catalog.dependency_manager->AddOwnership(context, owner_entry, entry);
 
-    return true;
+	return true;
 }
 
 bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info) {
@@ -167,8 +167,8 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 		PutMapping(context, value->name, entry_index);
 		DeleteMapping(context, original_name);
 	}
-    //! Check the dependency manager to verify that there are no conflicting dependencies with this alter
-    catalog.dependency_manager->AlterObject(context, entry, value.get());
+	//! Check the dependency manager to verify that there are no conflicting dependencies with this alter
+	catalog.dependency_manager->AlterObject(context, entry, value.get());
 
 	value->timestamp = transaction.transaction_id;
 	value->child = move(entries[entry_index]);
@@ -191,19 +191,18 @@ void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, Ca
                                    set_lock_map_t &lock_set) {
 	auto &transaction = Transaction::GetTransaction(context);
 
-    auto old_deleted = entries[entry_index].get()->deleted;
-    entries[entry_index].get()->deleted = true;
-    try{
-        // check any dependencies of this object
-        entry.catalog->dependency_manager->DropObject(context, &entry, cascade, lock_set);
-    }
-    catch (Exception &ex) {
-        entries[entry_index].get()->deleted = old_deleted;
-        throw ex;
-    }
-    entries[entry_index].get()->deleted = old_deleted;
+	auto old_deleted = entries[entry_index].get()->deleted;
+	entries[entry_index].get()->deleted = true;
+	try {
+		// check any dependencies of this object
+		entry.catalog->dependency_manager->DropObject(context, &entry, cascade, lock_set);
+	} catch (Exception &ex) {
+		entries[entry_index].get()->deleted = old_deleted;
+		throw ex;
+	}
+	entries[entry_index].get()->deleted = old_deleted;
 
-    // add this catalog to the lock set, if it is not there yet
+	// add this catalog to the lock set, if it is not there yet
 	if (lock_set.find(this) == lock_set.end()) {
 		lock_set.insert(make_pair(this, unique_lock<mutex>(catalog_lock)));
 	}

@@ -37,17 +37,16 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 				string owner_schema = "";
 				string owner_name = "";
 				if (opt_values.size() == 2) {
-                    owner_schema = opt_values[0];
-                    owner_name = opt_values[1];
+					owner_schema = opt_values[0];
+					owner_name = opt_values[1];
 				} else if (opt_values.size() == 1) {
-                    owner_schema = "main";
-                    owner_name = opt_values[0];
+					owner_schema = "main";
+					owner_name = opt_values[0];
 				} else {
 					throw ParserException("Expected an argument for option %s", opt_name);
 				}
-				auto info = make_unique<ChangeOwnershipInfo>(
-                    CatalogType::SEQUENCE_ENTRY, sequence_schema, sequence_name, owner_schema, owner_name
-                );
+				auto info = make_unique<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_schema,
+				                                             sequence_name, owner_schema, owner_name);
 				result->info = move(info);
 			}
 		}
