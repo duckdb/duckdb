@@ -1,4 +1,6 @@
 #include "duckdb/parser/transformer.hpp"
+#include "duckdb/parser/statement/alter_statement.hpp"
+#include "duckdb/parser/parsed_data/alter_table_info.hpp"
 
 namespace duckdb {
 
