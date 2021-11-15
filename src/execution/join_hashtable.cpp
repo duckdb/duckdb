@@ -299,7 +299,7 @@ void JoinHashTable::Finalize() {
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
 	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
 	vector<data_ptr_t> conflict_entries;
-	conflict_entries.reserve(STANDARD_VECTOR_SIZE);
+	conflict_entries.reserve(count);
 
 	// create a vector for indices and apply the bitmask in the hash_values
 	ApplyBitmask(hashes, count);
@@ -314,35 +314,31 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		// For each tuple the hash_value will be replaced by a pointer to the next_entry in the hash_map
 		auto index = indices[i];
 		auto entry_hash_ptr = key_locations[i] + pointer_offset;
+		auto next_key = pointers[index];
 		// In case this is still a primary key and there is a conflict
-		if (has_primary_key && pointers[index] != 0) {
+		// check all keys to look for duplicate values
+		while (has_primary_key && next_key != 0) {
 			// check whether the keys are the same
-			has_primary_key = !CompareKeysSwitch(key_locations[i], pointers[index]);
-			// and add the entry to check its next_ptr later
-			conflict_entries.push_back(key_locations[i]);
+			for (auto key_type : condition_types) {
+				has_primary_key = !CompareKeysSwitch(key_locations[i], next_key, key_type);
+			}
+			// store the tuple for later
+			conflict_entries.push_back(next_key);
 		}
 		// replace the hash_value in the current entry and point to a position in the hash_map
 		Store<data_ptr_t>(pointers[index], entry_hash_ptr);
 		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
-	// Now, process the conflicts
-	count = conflict_entries.size();
-	while (count > 0) {
-		// Now, check the next pointer in the entries with condlicts
-		for (auto ptr_entry : conflict_entries) {
-			if (ptr_entry == 0)
-				continue;
-			auto entry_hash_ptr = ptr_entry + pointer_offset;
-			// check whether there is a next_ptr entry.
-			if (entry_hash_ptr != 0) {
-				// check whether keys are the same
-				has_primary_key = !CompareKeysSwitch(ptr_entry, entry_hash_ptr);
-				// and add the entry to check its next_ptr later
-				conflict_entries.push_back(entry_hash_ptr);
-				continue;
+	// now process the next entries
+	for (auto entry : conflict_entries) {
+		auto next_key = entry + pointer_offset;
+		while (has_primary_key && next_key != 0) {
+			// check whether the keys are the same
+			for (auto key_type : condition_types) {
+				has_primary_key = !CompareKeysSwitch(entry, next_key, key_type);
 			}
-			ptr_entry = 0;
+			next_key = next_key + pointer_offset;
 		}
 	}
 }
@@ -356,44 +352,44 @@ bool TemplatedKeysCompare(data_ptr_t left_data, data_ptr_t right_data) {
 	return ValueOperations::Equals(left_val, right_val);
 }
 
-bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key) {
-	for (idx_t i = 0; i != condition_types.size(); i++) {
-		switch (condition_types[i].InternalType()) {
-		case PhysicalType::BOOL:
-		case PhysicalType::INT8:
-			return TemplatedKeysCompare<int8_t>(left_key, right_key);
-		case PhysicalType::INT16:
-			return TemplatedKeysCompare<int16_t>(left_key, right_key);
-		case PhysicalType::INT32:
-			return TemplatedKeysCompare<int32_t>(left_key, right_key);
-		case PhysicalType::INT64:
-			return TemplatedKeysCompare<int64_t>(left_key, right_key);
-		case PhysicalType::UINT8:
-			return TemplatedKeysCompare<uint8_t>(left_key, right_key);
-		case PhysicalType::UINT16:
-			return TemplatedKeysCompare<uint16_t>(left_key, right_key);
-		case PhysicalType::UINT32:
-			return TemplatedKeysCompare<uint32_t>(left_key, right_key);
-		case PhysicalType::UINT64:
-			return TemplatedKeysCompare<uint64_t>(left_key, right_key);
-		case PhysicalType::INT128:
-			return TemplatedKeysCompare<hugeint_t>(left_key, right_key);
-		case PhysicalType::FLOAT:
-			return TemplatedKeysCompare<float>(left_key, right_key);
-		case PhysicalType::DOUBLE:
-			return TemplatedKeysCompare<double>(left_key, right_key);
-		case PhysicalType::INTERVAL:
-			return TemplatedKeysCompare<interval_t>(left_key, right_key);
-		case PhysicalType::VARCHAR:
-			return TemplatedKeysCompare<string_t>(left_key, right_key);
-		case PhysicalType::LIST:
-		case PhysicalType::MAP:
-		case PhysicalType::STRUCT:
-			return false;
-		default:
-			throw InternalException("Unsupported column type for ValueOperations::Equals");
-		}
+bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key, LogicalType key_type) {
+
+	switch (key_type.InternalType()) {
+	case PhysicalType::BOOL:
+	case PhysicalType::INT8:
+		return TemplatedKeysCompare<int8_t>(left_key, right_key);
+	case PhysicalType::INT16:
+		return TemplatedKeysCompare<int16_t>(left_key, right_key);
+	case PhysicalType::INT32:
+		return TemplatedKeysCompare<int32_t>(left_key, right_key);
+	case PhysicalType::INT64:
+		return TemplatedKeysCompare<int64_t>(left_key, right_key);
+	case PhysicalType::UINT8:
+		return TemplatedKeysCompare<uint8_t>(left_key, right_key);
+	case PhysicalType::UINT16:
+		return TemplatedKeysCompare<uint16_t>(left_key, right_key);
+	case PhysicalType::UINT32:
+		return TemplatedKeysCompare<uint32_t>(left_key, right_key);
+	case PhysicalType::UINT64:
+		return TemplatedKeysCompare<uint64_t>(left_key, right_key);
+	case PhysicalType::INT128:
+		return TemplatedKeysCompare<hugeint_t>(left_key, right_key);
+	case PhysicalType::FLOAT:
+		return TemplatedKeysCompare<float>(left_key, right_key);
+	case PhysicalType::DOUBLE:
+		return TemplatedKeysCompare<double>(left_key, right_key);
+	case PhysicalType::INTERVAL:
+		return TemplatedKeysCompare<interval_t>(left_key, right_key);
+	case PhysicalType::VARCHAR:
+		return TemplatedKeysCompare<string_t>(left_key, right_key);
+	case PhysicalType::LIST:
+	case PhysicalType::MAP:
+	case PhysicalType::STRUCT:
+		return false;
+	default:
+		throw InternalException("Unsupported column type for ValueOperations::Equals");
 	}
+
 	return true;
 }
 

@@ -125,13 +125,13 @@ public:
 		return block_collection->count;
 	}
 	//! Compare Switch function to specify the type in which the keys will be compared
-	bool CompareKeysSwitch(data_ptr_t left_entry, data_ptr_t right_entry);
+	bool CompareKeysSwitch(data_ptr_t left_entry, data_ptr_t right_entry, LogicalType key_type);
 
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The types of the keys used in equality comparison
 	vector<LogicalType> equality_types;
-	//! The types of the keys
+	//! The types of the keysπ
 	vector<LogicalType> condition_types;
 	//! The types of all conditions
 	vector<LogicalType> build_types;
