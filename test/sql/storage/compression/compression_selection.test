@@ -34,3 +34,4 @@ query I
 SELECT compression FROM pragma_storage_info('test_bp') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
 ----
 BitPacking
+
