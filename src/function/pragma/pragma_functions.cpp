@@ -72,14 +72,6 @@ static void PragmaDisableForceParallelism(ClientContext &context, const Function
 	ClientConfig::GetConfig(context).verify_parallelism = false;
 }
 
-static void PragmaEnableForceExternal(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).force_external = true;
-}
-
-static void PragmaDisableForceExternal(ClientContext &context, const FunctionParameters &parameters) {
-	ClientConfig::GetConfig(context).force_external = false;
-}
-
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).object_cache_enable = true;
 }
@@ -104,11 +96,6 @@ static void PragmaDisableOptimizer(ClientContext &context, const FunctionParamet
 	ClientConfig::GetConfig(context).enable_optimizer = false;
 }
 
-static void PragmaDebugManyFreeListBlocks(ClientContext &context, const FunctionParameters &parameters) {
-	auto &config = DBConfig::GetConfig(context);
-	config.debug_many_free_list_blocks = true;
-}
-
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
@@ -120,9 +107,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("verify_parallelism", PragmaEnableForceParallelism));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verify_parallelism", PragmaDisableForceParallelism));
-
-	set.AddFunction(PragmaFunction::PragmaStatement("force_external", PragmaEnableForceExternal));
-	set.AddFunction(PragmaFunction::PragmaStatement("disable_force_external", PragmaDisableForceExternal));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
@@ -142,8 +126,6 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", PragmaEnableCheckpointOnShutdown));
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
-
-	set.AddFunction(PragmaFunction::PragmaStatement("debug_many_free_list_blocks", PragmaDebugManyFreeListBlocks));
 }
 
 } // namespace duckdb

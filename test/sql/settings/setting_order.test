@@ -1,0 +1,31 @@
+# name: test/sql/settings/setting_order.test
+# description: Test ORDER setting
+# group: [settings]
+
+foreach statement_type PRAGMA SET
+
+statement ok
+${statement_type} default_order='desc'
+
+query I
+SELECT * FROM range(3) ORDER BY 1
+----
+2
+1
+0
+
+statement ok
+${statement_type} default_order='asc'
+
+query I
+SELECT * FROM range(3) ORDER BY 1
+----
+0
+1
+2
+
+statement error
+${statement_type} default_order='unknown_order'
+
+endloop
+

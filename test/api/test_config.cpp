@@ -33,8 +33,8 @@ TEST_CASE("Test DB config configuration", "[api]") {
 				Value val(str_val);
 				REQUIRE_NOTHROW(config.SetOption(option, val));
 			}
+			Value invalid_val("___this_is_probably_invalid");
+			REQUIRE_THROWS(config.SetOption(option, invalid_val));
 		}
-		Value invalid_val("___this_is_probably_invalid");
-		REQUIRE_THROWS(config.SetOption(option, invalid_val));
 	}
 }

@@ -22,7 +22,7 @@ CREATE TABLE lineitem_d AS (
 
 # first iteration runs externally, second runs normally
 statement ok
-PRAGMA force_external
+PRAGMA debug_force_external=true
 
 loop i 0 2
 
@@ -84,6 +84,6 @@ select * from rownum_window order by l_extendedprice
 ----
 
 statement ok
-PRAGMA disable_force_external
+PRAGMA debug_force_external=false
 
 endloop

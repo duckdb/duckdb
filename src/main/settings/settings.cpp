@@ -79,6 +79,29 @@ Value DebugCheckpointAbort::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Debug Force External
+//===--------------------------------------------------------------------===//
+void DebugForceExternal::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).force_external = input.GetValue<bool>();
+}
+
+Value DebugForceExternal::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).force_external);
+}
+
+//===--------------------------------------------------------------------===//
+// Debug Many Free List blocks
+//===--------------------------------------------------------------------===//
+void DebugManyFreeListBlocks::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.debug_many_free_list_blocks = input.GetValue<bool>();
+}
+
+Value DebugManyFreeListBlocks::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value::BOOLEAN(config.debug_many_free_list_blocks);
+}
+
+//===--------------------------------------------------------------------===//
 // Debug Window Mode
 //===--------------------------------------------------------------------===//
 void DebugWindowMode::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -233,6 +256,17 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 	default:
 		throw InternalException("Unsupported profiler print format");
 	}
+}
+
+//===--------------------------------------------------------------------===//
+// Enable Progress Bar
+//===--------------------------------------------------------------------===//
+void EnableProgressBarSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).enable_progress_bar = input.GetValue<bool>();
+}
+
+Value EnableProgressBarSetting::GetSetting(ClientContext &context) {
+	return Value::BOOLEAN(ClientConfig::GetConfig(context).enable_progress_bar);
 }
 
 //===--------------------------------------------------------------------===//

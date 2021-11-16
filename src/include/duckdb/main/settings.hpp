@@ -40,6 +40,22 @@ struct DebugCheckpointAbort {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct DebugForceExternal {
+	static constexpr const char *Name = "debug_force_external";
+	static constexpr const char *Description = "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DebugManyFreeListBlocks {
+	static constexpr const char *Name = "debug_many_free_list_blocks";
+	static constexpr const char *Description = "DEBUG SETTING: add additional blocks to the free list";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct DebugWindowMode {
 	static constexpr const char *Name = "debug_window_mode";
 	static constexpr const char *Description = "DEBUG SETTING: switch window mode to use";
@@ -93,6 +109,14 @@ struct EnableProfilingSetting {
 	static constexpr const char *Name = "enable_profiling";
 	static constexpr const char *Description = "Enables profiling, and sets the output format (JSON, [QUERY_TREE], QUERY_TREE_OPTIMIZER)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct EnableProgressBarSetting {
+	static constexpr const char *Name = "enable_progress_bar";
+	static constexpr const char *Description = "Enables the progress bar, printing progress to the terminal for long queries";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
 };
