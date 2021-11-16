@@ -18,7 +18,7 @@ struct DBConfig;
 
 struct AccessModeSetting {
 	static constexpr const char *Name = "access_mode";
-	static constexpr const char *Description = "Access mode of the database ([AUTOMATIC], READ_ONLY or READ_WRITE)";
+	static constexpr const char *Description = "Access mode of the database (AUTOMATIC, READ_ONLY or READ_WRITE)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -78,7 +78,7 @@ struct DefaultCollationSetting {
 
 struct DefaultOrderSetting {
 	static constexpr const char *Name = "default_order";
-	static constexpr const char *Description = "The order type used when none is specified ([ASC] or DESC)";
+	static constexpr const char *Description = "The order type used when none is specified (ASC or DESC)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -87,7 +87,7 @@ struct DefaultOrderSetting {
 struct DefaultNullOrderSetting {
 	static constexpr const char *Name = "default_null_order";
 	static constexpr const char *Description =
-	    "Null ordering used when none is specified ([NULLS_FIRST] or NULLS_LAST)";
+	    "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -114,7 +114,7 @@ struct EnableObjectCacheSetting {
 struct EnableProfilingSetting {
 	static constexpr const char *Name = "enable_profiling";
 	static constexpr const char *Description =
-	    "Enables profiling, and sets the output format (JSON, [QUERY_TREE], QUERY_TREE_OPTIMIZER)";
+	    "Enables profiling, and sets the output format (JSON, QUERY_TREE, QUERY_TREE_OPTIMIZER)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -131,7 +131,7 @@ struct EnableProgressBarSetting {
 
 struct ExplainOutputSetting {
 	static constexpr const char *Name = "explain_output";
-	static constexpr const char *Description = "Output of EXPLAIN statements (ALL, [OPTIMIZED_ONLY], PHYSICAL_ONLY)";
+	static constexpr const char *Description = "Output of EXPLAIN statements (ALL, OPTIMIZED_ONLY, PHYSICAL_ONLY)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -189,7 +189,7 @@ struct ProfileOutputSetting {
 
 struct ProfilingModeSetting {
 	static constexpr const char *Name = "profiling_mode";
-	static constexpr const char *Description = "The profiling mode ([standard] or detailed)";
+	static constexpr const char *Description = "The profiling mode (STANDARD or DETAILED)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
