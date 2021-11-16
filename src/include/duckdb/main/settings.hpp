@@ -86,8 +86,7 @@ struct DefaultOrderSetting {
 
 struct DefaultNullOrderSetting {
 	static constexpr const char *Name = "default_null_order";
-	static constexpr const char *Description =
-	    "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
+	static constexpr const char *Description = "Null ordering used when none is specified (NULLS_FIRST or NULLS_LAST)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
