@@ -296,22 +296,20 @@ void JoinHashTable::Finalize() {
 	finalized = true;
 }
 
-void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
+void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t key_locations[]) {
 	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
 	vector<data_ptr_t> conflict_entries;
-	conflict_entries.reserve(count);
+	conflict_entries.reserve(count_tuples);
 
 	// create a vector for indices and apply the bitmask in the hash_values
-	ApplyBitmask(hashes, count);
-	// transform the vector into a flat vector
-	hashes.Normalify(count);
+	ApplyBitmask(hashes, count_tuples);
+	hashes.Normalify(count_tuples); // Flatten the vector
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
-	// now insert the entries into the hash_map
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	// First, fill the hash_map and handle conflicts with a next_pointer
-	for (idx_t i = 0; i < count; i++) {
-		// For each tuple the hash_value will be replaced by a pointer to the next_entry in the hash_map
+	for (idx_t i = 0; i < count_tuples; i++) {
+		// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
 		auto index = indices[i];
 		auto entry_hash_ptr = key_locations[i] + pointer_offset;
 		auto next_key = pointers[index];
@@ -330,17 +328,19 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		pointers[index] = key_locations[i];
 	}
 	// now process the next ptr entries
-	for (auto entry : conflict_entries) {
-		auto next_key = entry + pointer_offset;
-		// check the whole chain
-		while (has_primary_key && next_key != 0) {
-			// check whether the keys are the same
-			for (auto key_type : condition_types) {
-				has_primary_key = !CompareKeysSwitch(entry, next_key, key_type);
+	if (!has_primary_key) {
+		for (auto entry : conflict_entries) {
+			auto next_key = entry + pointer_offset;
+			// check the whole chain
+			while (has_primary_key && next_key != 0) {
+				// check whether the keys are the same
+				for (auto key_type : condition_types) {
+					has_primary_key = !CompareKeysSwitch(entry, next_key, key_type);
+				}
+				next_key = next_key + pointer_offset;
 			}
-			next_key = next_key + pointer_offset;
+			// no more conflicts for this key
 		}
-		// no more conflicts for this key
 	}
 }
 
