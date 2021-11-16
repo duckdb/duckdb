@@ -197,7 +197,7 @@ struct ProfilingModeSetting {
 struct ProgressBarTimeSetting {
 	static constexpr const char *Name = "progress_bar_time";
 	static constexpr const char *Description =
-	    "Sets the time (in seconds) how long a query needs to take before we start printing a progress bar";
+	    "Sets the time (in milliseconds) how long a query needs to take before we start printing a progress bar";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
