@@ -1,6 +1,8 @@
 #include "duckdb/main/settings.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 namespace duckdb {
 
@@ -129,6 +131,30 @@ void MaximumMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, con
 Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.maximum_memory));
+}
+
+//===--------------------------------------------------------------------===//
+// Schema
+//===--------------------------------------------------------------------===//
+void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto parameter = input.ToString();
+	context.catalog_search_path->Set(parameter, true);
+}
+
+Value SchemaSetting::GetSetting(ClientContext &context) {
+	return Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Search Path
+//===--------------------------------------------------------------------===//
+void SearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto parameter = input.ToString();
+	context.catalog_search_path->Set(parameter, false);
+}
+
+Value SearchPathSetting::GetSetting(ClientContext &context) {
+	return Value(StringUtil::Join(context.catalog_search_path->Get(), ","));
 }
 
 //===--------------------------------------------------------------------===//

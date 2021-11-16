@@ -64,6 +64,22 @@ struct MaximumMemorySetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct SchemaSetting {
+	static constexpr const char *Name = "schema";
+	static constexpr const char *Description = "Sets the default search schema. Equivalent to setting search_path to a single value.";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct SearchPathSetting {
+	static constexpr const char *Name = "search_path";
+	static constexpr const char *Description = "Sets the default search search path as a comma-separated list of values";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ThreadsSetting {
 	static constexpr const char *Name = "threads";
 	static constexpr const char *Description = "The number of total threads used by the system.";

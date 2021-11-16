@@ -31,10 +31,6 @@ public:
 	const std::string name;
 	const Value value;
 	const SetScope scope;
-
-private:
-	//! Returns the normalized key name.
-	string ValidateInput(ExecutionContext &context) const;
 };
 
 } // namespace duckdb

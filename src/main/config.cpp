@@ -6,7 +6,7 @@
 namespace duckdb {
 
 #define DUCKDB_GLOBAL(_PARAM) {_PARAM::Name,_PARAM::Description,_PARAM::InputType,_PARAM::SetGlobal,nullptr,_PARAM::GetSetting}
-#define DUCKDB_LOCAL(NAME) {_PARAM::Name,_PARAM::Description,_PARAM::InputType,nullptr,_PARAM::SetLocal,_PARAM::GetSetting}
+#define DUCKDB_LOCAL(_PARAM) {_PARAM::Name,_PARAM::Description,_PARAM::InputType,nullptr,_PARAM::SetLocal,_PARAM::GetSetting}
 #define FINAL_SETTING {nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr}
 
 static ConfigurationOption internal_options[] = {
@@ -16,6 +16,8 @@ static ConfigurationOption internal_options[] = {
 	DUCKDB_GLOBAL(EnableExternalAccessSetting),
 	DUCKDB_GLOBAL(EnableObjectCacheSetting),
 	DUCKDB_GLOBAL(MaximumMemorySetting),
+	DUCKDB_LOCAL(SchemaSetting),
+	DUCKDB_LOCAL(SearchPathSetting),
 	DUCKDB_GLOBAL(ThreadsSetting),
 	FINAL_SETTING
 };
