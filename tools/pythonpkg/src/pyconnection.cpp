@@ -149,10 +149,11 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		{
 			py::gil_scoped_release release;
 			res->result = prep->Execute(args);
+			if (!res->result->success) {
+				throw std::runtime_error(res->result->error);
+			}
 		}
-		if (!res->result->success) {
-			throw std::runtime_error(res->result->error);
-		}
+
 		if (!many) {
 			result = move(res);
 		}
@@ -169,7 +170,11 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterDF(const string &name, py::objec
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-	connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)value.ptr())})->CreateView(name, true, true);
+	{
+		py::gil_scoped_release release;
+		connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)value.ptr())})
+		    ->CreateView(name, true, true);
+	}
 	// keep a reference
 	auto object = make_unique<RegisteredObject>(value);
 	registered_objects[name] = move(object);
@@ -303,7 +308,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	registered_objects.erase(name);
-
+	py::gil_scoped_release release;
 	if (connection) {
 		connection->Query("DROP VIEW \"" + name + "\"");
 	}

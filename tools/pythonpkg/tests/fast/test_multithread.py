@@ -2,11 +2,14 @@ import duckdb
 import pytest
 import threading
 import queue as Queue
+import pandas as pd
+import numpy as np
 try:
     import pyarrow as pa
     can_run = True
 except:
     can_run = False
+
 class DuckDBThreaded:
     def __init__(self,duckdb_insert_thread_count,thread_function):
         self.duckdb_insert_thread_count = duckdb_insert_thread_count
@@ -52,6 +55,15 @@ def execute_query(duckdb_conn, queue):
         queue.put(True)
     except:
         queue.put(False)  
+
+def insert_runtime_error(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    try:
+        duckdb_conn.execute('insert into T values (42), (84), (NULL), (128)')
+        queue.put(False)
+    except:
+        queue.put(True)  
 
 def execute_many_query(duckdb_conn, queue):
     # Get a new connection
@@ -151,6 +163,63 @@ def fetch_record_batch_query(duckdb_conn, queue):
     except:
         queue.put(False) 
 
+def transaction_query(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    duckdb_conn.execute("CREATE TABLE T ( i INTEGER)")
+    try:
+        duckdb_conn.begin()
+        duckdb_conn.execute('insert into T values (42), (84), (NULL), (128)')
+        duckdb_conn.rollback()
+        duckdb_conn.execute('insert into T values (42), (84), (NULL), (128)')
+        duckdb_conn.commit()
+        queue.put(True)
+    except:
+        queue.put(False) 
+
+def df_append(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    duckdb_conn.execute("CREATE TABLE T ( i INTEGER)")
+    df = pd.DataFrame(np.random.randint(0,100,size=15), columns=['A'])
+    try:
+        duckdb_conn.append('T',df)
+        queue.put(True)
+    except:
+        queue.put(False) 
+
+def df_register(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    df = pd.DataFrame(np.random.randint(0,100,size=15), columns=['A'])
+    try:
+        duckdb_conn.register('T',df)
+        queue.put(True)
+    except:
+        queue.put(False) 
+
+def df_unregister(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    df = pd.DataFrame(np.random.randint(0,100,size=15), columns=['A'])
+    try:
+        duckdb_conn.register('T',df)
+        duckdb_conn.unregister('T')
+        queue.put(True)
+    except:
+        queue.put(False) 
+
+def arrow_register_unregister(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    arrow_tbl = pa.Table.from_pydict({'my_column':pa.array([1,2,3,4,5],type=pa.int64())})
+    try:
+        duckdb_conn.register_arrow('T',arrow_tbl)
+        duckdb_conn.unregister('T')
+        queue.put(True)
+    except:
+        queue.put(False) 
+
 class TestDuckMultithread(object):
     def test_same_conn(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,execute_query_same_connection)
@@ -199,3 +268,26 @@ class TestDuckMultithread(object):
     def test_fetch_record_batch(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,fetch_record_batch_query)
         duck_threads.multithread_test()
+
+    def test_transaction(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,transaction_query)
+        duck_threads.multithread_test()
+
+    def test_df_append(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,df_append)
+        duck_threads.multithread_test()    
+
+    def test_df_register(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,df_register)
+        duck_threads.multithread_test()
+
+    def test_df_unregister(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,df_unregister)
+        duck_threads.multithread_test() 
+
+    def test_arrow_register_unregister(self, duckdb_cursor):
+        if not can_run:
+            return
+        duck_threads = DuckDBThreaded(10,arrow_register_unregister)
+        duck_threads.multithread_test() 
+ 
