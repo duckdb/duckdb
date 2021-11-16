@@ -24,7 +24,7 @@ PRAGMA enable_profiling;
 
 # simple inner join
 query III
-SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
+SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY a;
 ----
 11	1	10
 11	1	10
@@ -36,6 +36,11 @@ SELECT a, test1.b, c FROM test1, test2 WHERE test1.b = test2.b ORDER BY c;
 12	2	20
 12	2	20
 12	2	20
+13	2	20
+13	2	20
+13	2	20
+13	2	20
+13	2	20
 13	3	30
 13	3	30
 13	3	30

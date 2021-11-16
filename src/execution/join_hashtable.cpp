@@ -313,11 +313,13 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		auto index = indices[i];
 		auto entry_hash_ptr = key_locations[i] + pointer_offset;
 		auto next_key = pointers[index];
+		idx_t key_offset = 0;
 		// In case this is still a primary key and there is a conflict
 		while (has_primary_key && next_key != 0) {
 			// check whether the keys are the same
 			for (auto key_type : condition_types) {
-				has_primary_key = !CompareKeysSwitch(key_locations[i], next_key, key_type);
+				has_primary_key = !CompareKeysSwitch(key_locations[i] + key_offset, next_key + key_offset, key_type);
+				key_offset += GetTypeIdSize(key_type.InternalType());
 			}
 			// store the tuple to evaluate the next_key later
 			conflict_entries.push_back(next_key);
@@ -327,7 +329,8 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
-	// build is still a primary key, process the next ptr entries
+	// It is  still necessary to handle multiple conflicts
+	// to the same key
 	if (has_primary_key) {
 		for (auto entry : conflict_entries) {
 			auto next_key = entry + pointer_offset;
