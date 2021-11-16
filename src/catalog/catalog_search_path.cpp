@@ -53,12 +53,7 @@ void CatalogSearchPath::SetPaths(vector<string> new_paths) {
 }
 
 vector<string> CatalogSearchPath::ParsePaths(const string &value) {
-	vector<string> paths;
-	auto given_paths = StringUtil::SplitWithQuote(value);
-	for (const auto &p : given_paths) {
-		paths.emplace_back(StringUtil::Lower(p));
-	}
-	return paths;
+	return StringUtil::SplitWithQuote(StringUtil::Lower(value));
 }
 
 } // namespace duckdb
