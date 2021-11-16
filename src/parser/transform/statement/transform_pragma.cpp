@@ -4,6 +4,7 @@
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parser/statement/set_statement.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 
 namespace duckdb {
 
@@ -44,6 +45,14 @@ unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode 
 		}
 		if (!info.named_parameters.empty()) {
 			throw ParserException("PRAGMA statement with assignment cannot have named parameters");
+		}
+		// SQLite does not distinguish between:
+		// "PRAGMA table_info='integers'"
+		// "PRAGMA table_info('integers')"
+		// for compatibility, any pragmas that match the SQLite ones are parsed as calls
+		case_insensitive_set_t sqlite_compat_pragmas {"table_info"};
+		if (sqlite_compat_pragmas.find(info.name) != sqlite_compat_pragmas.end()) {
+			break;
 		}
 		auto set_statement = make_unique<SetStatement>(info.name, info.parameters[0], SetScope::AUTOMATIC);
 		return move(set_statement);
