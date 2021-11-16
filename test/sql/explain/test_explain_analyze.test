@@ -1,0 +1,35 @@
+# name: test/sql/explain/test_explain_analyze.test
+# description: Test explain analyze
+# group: [explain]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(100) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT SUM(i) FROM integers
+----
+analyzed_plan	<REGEX>:.*integers.*
+
+query II
+EXPLAIN ANALYZE SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+analyzed_plan	<REGEX>:.*CROSS_PRODUCT.*
+
+statement ok
+PRAGMA enable_profiling
+
+query II
+EXPLAIN ANALYZE SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+analyzed_plan	<REGEX>:.*CROSS_PRODUCT.*
+
+statement ok
+PRAGMA disable_profiling
+
+query II
+EXPLAIN ANALYZE SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+analyzed_plan	<REGEX>:.*CROSS_PRODUCT.*

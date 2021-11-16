@@ -13,11 +13,17 @@
 
 namespace duckdb {
 
+enum class ExplainType : uint8_t {
+	EXPLAIN_STANDARD,
+	EXPLAIN_ANALYZE
+};
+
 class ExplainStatement : public SQLStatement {
 public:
-	explicit ExplainStatement(unique_ptr<SQLStatement> stmt);
+	ExplainStatement(unique_ptr<SQLStatement> stmt, ExplainType explain_type = ExplainType::EXPLAIN_STANDARD);
 
 	unique_ptr<SQLStatement> stmt;
+	ExplainType explain_type;
 
 public:
 	unique_ptr<SQLStatement> Copy() const override;
