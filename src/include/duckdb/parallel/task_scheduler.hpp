@@ -42,6 +42,7 @@ public:
 	~TaskScheduler();
 
 	static TaskScheduler &GetScheduler(ClientContext &context);
+	static TaskScheduler &GetScheduler(DatabaseInstance &db);
 
 	unique_ptr<ProducerToken> CreateProducer();
 	//! Schedule a task to be executed by the task scheduler

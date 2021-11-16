@@ -3,10 +3,11 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/execution/expression_executor.hpp"
+#include "duckdb/parser/statement/set_statement.hpp"
 
 namespace duckdb {
 
-unique_ptr<PragmaStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode *node) {
+unique_ptr<SQLStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGPragmaStmt *>(node);
 
 	auto result = make_unique<PragmaStatement>();
@@ -32,7 +33,7 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNo
 	}
 	// now parse the pragma type
 	switch (stmt->kind) {
-	case duckdb_libpgquery::PG_PRAGMA_TYPE_NOTHING:
+	case duckdb_libpgquery::PG_PRAGMA_TYPE_NOTHING: {
 		if (!info.parameters.empty() || !info.named_parameters.empty()) {
 			throw ParserException("PRAGMA statement that is not a call or assignment cannot contain parameters");
 		}
@@ -44,14 +45,16 @@ unique_ptr<PragmaStatement> Transformer::TransformPragma(duckdb_libpgquery::PGNo
 		if (!info.named_parameters.empty()) {
 			throw ParserException("PRAGMA statement with assignment cannot have named parameters");
 		}
-		break;
+		auto set_statement = make_unique<SetStatement>(info.name, info.parameters[0], SetScope::AUTOMATIC);
+		return move(set_statement);
+	}
 	case duckdb_libpgquery::PG_PRAGMA_TYPE_CALL:
 		break;
 	default:
 		throw ParserException("Unknown pragma type");
 	}
 
-	return result;
+	return move(result);
 }
 
 } // namespace duckdb

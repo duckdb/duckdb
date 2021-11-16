@@ -3,6 +3,11 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/main/query_profiler.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -38,13 +43,34 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Default Collation
+//===--------------------------------------------------------------------===//
+void DefaultCollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto parameter = StringUtil::Lower(input.ToString());
+	config.collation = parameter;
+}
+
+void DefaultCollationSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto parameter = input.ToString();
+	// bind the collation to verify that it exists
+	ExpressionBinder::TestCollation(context, parameter);
+	auto &config = DBConfig::GetConfig(context);
+	config.collation = parameter;
+}
+
+Value DefaultCollationSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.collation);
+}
+
+//===--------------------------------------------------------------------===//
 // Default Order
 //===--------------------------------------------------------------------===//
 void DefaultOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
-	if (parameter == "asc") {
+	if (parameter == "ascending" || parameter == "asc") {
 		config.default_order_type = OrderType::ASCENDING;
-	} else if (parameter == "desc") {
+	} else if (parameter == "descending" || parameter == "desc") {
 		config.default_order_type = OrderType::DESCENDING;
 	} else {
 		throw InvalidInputException("Unrecognized parameter for option DEFAULT_ORDER \"%s\". Expected ASC or DESC.",
@@ -69,13 +95,14 @@ Value DefaultOrderSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
-	if (parameter == "nulls_first") {
+
+	if (parameter == "nulls_first" || parameter == "nulls first" || parameter == "null first" || parameter == "first") {
 		config.default_null_order = OrderByNullType::NULLS_FIRST;
-	} else if (parameter == "nulls_last") {
+	} else if (parameter == "nulls_last" || parameter == "nulls last" || parameter == "null last" || parameter == "last") {
 		config.default_null_order = OrderByNullType::NULLS_LAST;
 	} else {
-		throw InvalidInputException(
-			"Unrecognized parameter for option NULL_ORDER \"%s\". Expected NULLS_FIRST or NULLS_LAST.", parameter);
+		throw ParserException("Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST or NULLS LAST",
+		                      parameter);
 	}
 }
 
@@ -119,18 +146,131 @@ Value EnableObjectCacheSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Enable Object Cache
+// Enable Profiling
+//===--------------------------------------------------------------------===//
+void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto parameter = StringUtil::Lower(input.ToString());
+	if (parameter == "json") {
+		context.profiler->automatic_print_format = ProfilerPrintFormat::JSON;
+	} else if (parameter == "query_tree") {
+		context.profiler->automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
+	} else if (parameter == "query_tree_optimizer") {
+		context.profiler->automatic_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+	} else {
+		throw ParserException(
+		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", parameter);
+	}
+	context.profiler->Enable();
+}
+
+Value EnableProfilingSetting::GetSetting(ClientContext &context) {
+	if (!context.profiler->IsEnabled()) {
+		return Value();
+	}
+	switch(context.profiler->automatic_print_format) {
+	case ProfilerPrintFormat::JSON:
+		return Value("json");
+	case ProfilerPrintFormat::QUERY_TREE:
+		return Value("query_tree");
+	case ProfilerPrintFormat::QUERY_TREE_OPTIMIZER:
+		return Value("query_tree_optimizer");
+	default:
+		throw InternalException("Unsupported profiler print format");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Explain Output
+//===--------------------------------------------------------------------===//
+void ExplainOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto parameter = StringUtil::Lower(input.ToString());
+	if (parameter == "all") {
+		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::ALL;
+	} else if (parameter == "optimized_only") {
+		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::OPTIMIZED_ONLY;
+	} else if (parameter == "physical_only") {
+		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
+	} else {
+		throw ParserException("Unrecognized output type \"%s\", expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY",
+		                      parameter);
+	}
+}
+
+Value ExplainOutputSetting::GetSetting(ClientContext &context) {
+	switch(ClientConfig::GetConfig(context).explain_output_type) {
+	case ExplainOutputType::ALL:
+		return "all";
+	case ExplainOutputType::OPTIMIZED_ONLY:
+		return "optimized_only";
+	case ExplainOutputType::PHYSICAL_ONLY:
+		return "physical_only";
+	default:
+		throw InternalException("Unrecognized explain output type");
+	}
+}
+
+//===--------------------------------------------------------------------===//
+// Log Query Path
+//===--------------------------------------------------------------------===//
+void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto path = input.ToString();
+	if (path.empty()) {
+		// empty path: clean up query writer
+		context.log_query_writer = nullptr;
+	} else {
+		context.log_query_writer =
+		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), path,
+		                                    BufferedFileWriter::DEFAULT_OPEN_FLAGS, context.file_opener.get());
+	}
+}
+
+Value LogQueryPathSetting::GetSetting(ClientContext &context) {
+	return context.log_query_writer ? Value(context.log_query_writer->path) : Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Maximum Memory
 //===--------------------------------------------------------------------===//
 void MaximumMemorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db) {
-		throw InternalException("FIXME: change memory at run-time");
-	}
 	config.maximum_memory = DBConfig::ParseMemoryLimit(input.ToString());
+	if (db) {
+		BufferManager::GetBufferManager(*db).SetLimit(config.maximum_memory);
+	}
 }
 
 Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value(StringUtil::BytesToHumanReadableString(config.maximum_memory));
+}
+
+//===--------------------------------------------------------------------===//
+// Profile Output
+//===--------------------------------------------------------------------===//
+void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto parameter = input.ToString();
+	context.profiler->save_location = parameter;
+}
+
+Value ProfileOutputSetting::GetSetting(ClientContext &context) {
+	return Value(context.profiler->save_location);
+}
+
+//===--------------------------------------------------------------------===//
+// Profiling Mode
+//===--------------------------------------------------------------------===//
+void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto parameter = StringUtil::Lower(input.ToString());
+	if (parameter == "standard") {
+		context.profiler->Enable();
+	} else if (parameter == "detailed") {
+		context.profiler->DetailedEnable();
+	} else {
+		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);
+	}
+}
+
+Value ProfilingModeSetting::GetSetting(ClientContext &context) {
+	return Value(context.profiler->IsDetailedEnabled() ? "detailed" : "standard");
 }
 
 //===--------------------------------------------------------------------===//
@@ -158,13 +298,28 @@ Value SearchPathSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Set Profiler History Size
+//===--------------------------------------------------------------------===//
+void SetProfilerHistorySize::SetLocal(ClientContext &context, const Value &input) {
+	auto size = input.GetValue<int64_t>();
+	if (size <= 0) {
+		throw ParserException("Size should be >= 0");
+	}
+	context.query_profiler_history->SetProfilerHistorySize(size);
+}
+
+Value SetProfilerHistorySize::GetSetting(ClientContext &context) {
+	return Value();
+}
+
+//===--------------------------------------------------------------------===//
 // Threads Setting
 //===--------------------------------------------------------------------===//
 void ThreadsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db) {
-		throw InternalException("FIXME: change threads at run-time");
-	}
 	config.maximum_threads = input.GetValue<int64_t>();
+	if (db) {
+		TaskScheduler::GetScheduler(*db).SetThreads(config.maximum_threads);
+	}
 }
 
 Value ThreadsSetting::GetSetting(ClientContext &context) {

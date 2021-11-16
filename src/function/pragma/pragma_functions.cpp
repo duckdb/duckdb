@@ -19,47 +19,9 @@ static void PragmaEnableProfilingStatement(ClientContext &context, const Functio
 	context.profiler->Enable();
 }
 
-static void PragmaSetProfilingModeStatement(ClientContext &context, const FunctionParameters &parameters) {
-	// this is either profiling_mode = standard, or profiling_mode = detailed
-	string mode = StringUtil::Lower(parameters.values[0].ToString());
-	if (mode == "standard") {
-		context.profiler->Enable();
-	} else if (mode == "detailed") {
-		context.profiler->DetailedEnable();
-	} else {
-		throw ParserException("Unrecognized print format %s, supported formats: [standard, detailed]", mode);
-	}
-}
-
-static void PragmaSetProfilerHistorySize(ClientContext &context, const FunctionParameters &parameters) {
-	auto size = parameters.values[0].GetValue<int64_t>();
-	if (size <= 0) {
-		throw ParserException("Size should be larger than 0");
-	}
-	context.query_profiler_history->SetProfilerHistorySize(size);
-}
-
-static void PragmaEnableProfilingAssignment(ClientContext &context, const FunctionParameters &parameters) {
-	// this is either enable_profiling = json, or enable_profiling = query_tree
-	string assignment = parameters.values[0].ToString();
-	if (assignment == "json") {
-		context.profiler->automatic_print_format = ProfilerPrintFormat::JSON;
-	} else if (assignment == "query_tree") {
-		context.profiler->automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
-	} else if (assignment == "query_tree_optimizer") {
-		context.profiler->automatic_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
-	} else {
-		throw ParserException(
-		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", assignment);
-	}
-	context.profiler->Enable();
-}
-
 void RegisterEnableProfiling(BuiltinFunctions &set) {
 	vector<PragmaFunction> functions;
 	functions.push_back(PragmaFunction::PragmaStatement(string(), PragmaEnableProfilingStatement));
-	functions.push_back(
-	    PragmaFunction::PragmaAssignment(string(), PragmaEnableProfilingAssignment, LogicalType::VARCHAR));
 
 	set.AddFunction("enable_profile", functions);
 	set.AddFunction("enable_profiling", functions);
@@ -68,54 +30,6 @@ void RegisterEnableProfiling(BuiltinFunctions &set) {
 static void PragmaDisableProfiling(ClientContext &context, const FunctionParameters &parameters) {
 	context.profiler->Disable();
 	context.profiler->automatic_print_format = ProfilerPrintFormat::NONE;
-}
-
-static void PragmaProfileOutput(ClientContext &context, const FunctionParameters &parameters) {
-	context.profiler->save_location = parameters.values[0].ToString();
-}
-
-static void PragmaMemoryLimit(ClientContext &context, const FunctionParameters &parameters) {
-	idx_t new_limit = DBConfig::ParseMemoryLimit(parameters.values[0].ToString());
-	// set the new limit in the buffer manager
-	BufferManager::GetBufferManager(context).SetLimit(new_limit);
-}
-
-static void PragmaCollation(ClientContext &context, const FunctionParameters &parameters) {
-	auto collation_param = StringUtil::Lower(parameters.values[0].ToString());
-	// bind the collation to verify that it exists
-	ExpressionBinder::TestCollation(context, collation_param);
-	auto &config = DBConfig::GetConfig(context);
-	config.collation = collation_param;
-}
-
-static void PragmaNullOrder(ClientContext &context, const FunctionParameters &parameters) {
-	auto &config = DBConfig::GetConfig(context);
-	string new_null_order = StringUtil::Lower(parameters.values[0].ToString());
-	if (new_null_order == "nulls first" || new_null_order == "null first" || new_null_order == "first") {
-		config.default_null_order = OrderByNullType::NULLS_FIRST;
-	} else if (new_null_order == "nulls last" || new_null_order == "null last" || new_null_order == "last") {
-		config.default_null_order = OrderByNullType::NULLS_LAST;
-	} else {
-		throw ParserException("Unrecognized null order '%s', expected either NULLS FIRST or NULLS LAST",
-		                      new_null_order);
-	}
-}
-
-static void PragmaDefaultOrder(ClientContext &context, const FunctionParameters &parameters) {
-	auto &config = DBConfig::GetConfig(context);
-	string new_order = StringUtil::Lower(parameters.values[0].ToString());
-	if (new_order == "ascending" || new_order == "asc") {
-		config.default_order_type = OrderType::ASCENDING;
-	} else if (new_order == "descending" || new_order == "desc") {
-		config.default_order_type = OrderType::DESCENDING;
-	} else {
-		throw ParserException("Unrecognized order order '%s', expected either ASCENDING or DESCENDING", new_order);
-	}
-}
-
-static void PragmaSetThreads(ClientContext &context, const FunctionParameters &parameters) {
-	auto nr_threads = parameters.values[0].GetValue<int64_t>();
-	TaskScheduler::GetScheduler(context).SetThreads(nr_threads);
 }
 
 static void PragmaEnableProgressBar(ClientContext &context, const FunctionParameters &parameters) {
@@ -185,32 +99,6 @@ static void PragmaEnableCheckpointOnShutdown(ClientContext &context, const Funct
 
 static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).checkpoint_on_shutdown = false;
-}
-
-static void PragmaLogQueryPath(ClientContext &context, const FunctionParameters &parameters) {
-	auto str_val = parameters.values[0].ToString();
-	if (str_val.empty()) {
-		// empty path: clean up query writer
-		context.log_query_writer = nullptr;
-	} else {
-		context.log_query_writer =
-		    make_unique<BufferedFileWriter>(FileSystem::GetFileSystem(context), str_val,
-		                                    BufferedFileWriter::DEFAULT_OPEN_FLAGS, context.file_opener.get());
-	}
-}
-
-static void PragmaExplainOutput(ClientContext &context, const FunctionParameters &parameters) {
-	string val = StringUtil::Lower(parameters.values[0].ToString());
-	if (val == "all") {
-		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::ALL;
-	} else if (val == "optimized_only") {
-		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::OPTIMIZED_ONLY;
-	} else if (val == "physical_only") {
-		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
-	} else {
-		throw ParserException("Unrecognized output type '%s', expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY",
-		                      val);
-	}
 }
 
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
@@ -294,30 +182,8 @@ static void PragmaDebugWindowMode(ClientContext &context, const FunctionParamete
 void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	RegisterEnableProfiling(set);
 
-	set.AddFunction(
-	    PragmaFunction::PragmaAssignment("profiling_mode", PragmaSetProfilingModeStatement, LogicalType::VARCHAR));
-	set.AddFunction(PragmaFunction::PragmaAssignment("set_profiler_history_size", PragmaSetProfilerHistorySize,
-	                                                 LogicalType::BIGINT));
-
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profile", PragmaDisableProfiling));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_profiling", PragmaDisableProfiling));
-
-	set.AddFunction(PragmaFunction::PragmaAssignment("profile_output", PragmaProfileOutput, LogicalType::VARCHAR));
-	set.AddFunction(PragmaFunction::PragmaAssignment("profiling_output", PragmaProfileOutput, LogicalType::VARCHAR));
-
-	set.AddFunction(PragmaFunction::PragmaAssignment("memory_limit", PragmaMemoryLimit, LogicalType::VARCHAR));
-
-	set.AddFunction(PragmaFunction::PragmaAssignment("collation", PragmaCollation, LogicalType::VARCHAR));
-	set.AddFunction(PragmaFunction::PragmaAssignment("default_collation", PragmaCollation, LogicalType::VARCHAR));
-
-	set.AddFunction(PragmaFunction::PragmaAssignment("null_order", PragmaNullOrder, LogicalType::VARCHAR));
-	set.AddFunction(PragmaFunction::PragmaAssignment("default_null_order", PragmaNullOrder, LogicalType::VARCHAR));
-
-	set.AddFunction(PragmaFunction::PragmaAssignment("order", PragmaDefaultOrder, LogicalType::VARCHAR));
-	set.AddFunction(PragmaFunction::PragmaAssignment("default_order", PragmaDefaultOrder, LogicalType::VARCHAR));
-
-	set.AddFunction(PragmaFunction::PragmaAssignment("threads", PragmaSetThreads, LogicalType::BIGINT));
-	set.AddFunction(PragmaFunction::PragmaAssignment("worker_threads", PragmaSetThreads, LogicalType::BIGINT));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_verification", PragmaEnableVerification));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_verification", PragmaDisableVerification));
@@ -334,8 +200,7 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));
 
-	set.AddFunction(PragmaFunction::PragmaAssignment("log_query_path", PragmaLogQueryPath, LogicalType::VARCHAR));
-	set.AddFunction(PragmaFunction::PragmaAssignment("explain_output", PragmaExplainOutput, LogicalType::VARCHAR));
+	// set.AddFunction(PragmaFunction::PragmaAssignment("explain_output", PragmaExplainOutput, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_index_join", PragmaEnableForceIndexJoin));
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));
@@ -346,32 +211,32 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_print_progress_bar", PragmaEnablePrintProgressBar));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_print_progress_bar", PragmaDisablePrintProgressBar));
 
-	set.AddFunction(
-	    PragmaFunction::PragmaAssignment("set_progress_bar_time", PragmaSetProgressBarWaitTime, LogicalType::INTEGER));
+	// set.AddFunction(
+	//     PragmaFunction::PragmaAssignment("set_progress_bar_time", PragmaSetProgressBarWaitTime, LogicalType::INTEGER));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_checkpoint_on_shutdown", PragmaEnableCheckpointOnShutdown));
 	set.AddFunction(
 	    PragmaFunction::PragmaStatement("disable_checkpoint_on_shutdown", PragmaDisableCheckpointOnShutdown));
 
-	set.AddFunction(
-	    PragmaFunction::PragmaAssignment("perfect_ht_threshold", PragmaPerfectHashThreshold, LogicalType::INTEGER));
+	// set.AddFunction(
+	//     PragmaFunction::PragmaAssignment("perfect_ht_threshold", PragmaPerfectHashThreshold, LogicalType::INTEGER));
 
-	set.AddFunction(
-	    PragmaFunction::PragmaAssignment("wal_autocheckpoint", PragmaAutoCheckpointThreshold, LogicalType::VARCHAR));
-	set.AddFunction(
-	    PragmaFunction::PragmaAssignment("checkpoint_threshold", PragmaAutoCheckpointThreshold, LogicalType::VARCHAR));
+	// set.AddFunction(
+	//     PragmaFunction::PragmaAssignment("wal_autocheckpoint", PragmaAutoCheckpointThreshold, LogicalType::VARCHAR));
+	// set.AddFunction(
+	//     PragmaFunction::PragmaAssignment("checkpoint_threshold", PragmaAutoCheckpointThreshold, LogicalType::VARCHAR));
 
-	set.AddFunction(
-	    PragmaFunction::PragmaAssignment("debug_checkpoint_abort", PragmaDebugCheckpointAbort, LogicalType::VARCHAR));
+	// set.AddFunction(
+	//     PragmaFunction::PragmaAssignment("debug_checkpoint_abort", PragmaDebugCheckpointAbort, LogicalType::VARCHAR));
 
-	set.AddFunction(PragmaFunction::PragmaAssignment("temp_directory", PragmaSetTempDirectory, LogicalType::VARCHAR));
+	// set.AddFunction(PragmaFunction::PragmaAssignment("temp_directory", PragmaSetTempDirectory, LogicalType::VARCHAR));
 
-	set.AddFunction(
-	    PragmaFunction::PragmaAssignment("force_compression", PragmaForceCompression, LogicalType::VARCHAR));
+	// set.AddFunction(
+	//     PragmaFunction::PragmaAssignment("force_compression", PragmaForceCompression, LogicalType::VARCHAR));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("debug_many_free_list_blocks", PragmaDebugManyFreeListBlocks));
 
-	set.AddFunction(PragmaFunction::PragmaAssignment("debug_window_mode", PragmaDebugWindowMode, LogicalType::VARCHAR));
+	// set.AddFunction(PragmaFunction::PragmaAssignment("debug_window_mode", PragmaDebugWindowMode, LogicalType::VARCHAR));
 }
 
 } // namespace duckdb

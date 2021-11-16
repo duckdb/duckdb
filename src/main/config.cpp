@@ -6,19 +6,36 @@
 namespace duckdb {
 
 #define DUCKDB_GLOBAL(_PARAM) {_PARAM::Name,_PARAM::Description,_PARAM::InputType,_PARAM::SetGlobal,nullptr,_PARAM::GetSetting}
+#define DUCKDB_GLOBAL_ALIAS(_ALIAS, _PARAM) {_ALIAS,_PARAM::Description,_PARAM::InputType,_PARAM::SetGlobal,nullptr,_PARAM::GetSetting}
+
 #define DUCKDB_LOCAL(_PARAM) {_PARAM::Name,_PARAM::Description,_PARAM::InputType,nullptr,_PARAM::SetLocal,_PARAM::GetSetting}
+#define DUCKDB_LOCAL_ALIAS(_ALIAS,_PARAM) {_ALIAS,_PARAM::Description,_PARAM::InputType,nullptr,_PARAM::SetLocal,_PARAM::GetSetting}
+
+#define DUCKDB_GLOBAL_LOCAL(_PARAM) {_PARAM::Name,_PARAM::Description,_PARAM::InputType,_PARAM::SetGlobal,_PARAM::SetLocal,_PARAM::GetSetting}
+#define DUCKDB_GLOBAL_LOCAL_ALIAS(_ALIAS,_PARAM) {_ALIAS,_PARAM::Description,_PARAM::InputType,_PARAM::SetGlobal,_PARAM::SetLocal,_PARAM::GetSetting}
 #define FINAL_SETTING {nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr}
 
 static ConfigurationOption internal_options[] = {
 	DUCKDB_GLOBAL(AccessModeSetting),
+	DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
 	DUCKDB_GLOBAL(DefaultOrderSetting),
 	DUCKDB_GLOBAL(DefaultNullOrderSetting),
 	DUCKDB_GLOBAL(EnableExternalAccessSetting),
 	DUCKDB_GLOBAL(EnableObjectCacheSetting),
+	DUCKDB_LOCAL(EnableProfilingSetting),
+	DUCKDB_LOCAL(ExplainOutputSetting),
+	DUCKDB_LOCAL(LogQueryPathSetting),
 	DUCKDB_GLOBAL(MaximumMemorySetting),
+	DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
+	DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
+	DUCKDB_LOCAL(ProfileOutputSetting),
+	DUCKDB_LOCAL(ProfilingModeSetting),
+	DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
 	DUCKDB_LOCAL(SchemaSetting),
 	DUCKDB_LOCAL(SearchPathSetting),
+	DUCKDB_LOCAL(SetProfilerHistorySize),
 	DUCKDB_GLOBAL(ThreadsSetting),
+	DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
 	FINAL_SETTING
 };
 
