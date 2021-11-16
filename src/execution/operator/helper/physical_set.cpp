@@ -18,7 +18,7 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 			throw CatalogException("unrecognized configuration parameter \"%s\"", name);
 		}
 		//! it is!
-		auto target_type = entry->second;
+		auto &target_type = entry->second.type;
 		if (scope == SetScope::GLOBAL) {
 			config.set_variables[name] = value.CastAs(target_type);
 		} else {

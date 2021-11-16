@@ -11,11 +11,11 @@ void HTTPFsExtension::Load(DuckDB &db) {
 	fs.RegisterSubSystem(make_unique<S3FileSystem>());
 
 	auto &config = DBConfig::GetConfig(*db.instance);
-	config.extension_parameters["s3_region"] = LogicalType::VARCHAR;
-	config.extension_parameters["s3_access_key_id"] = LogicalType::VARCHAR;
-	config.extension_parameters["s3_secret_access_key"] = LogicalType::VARCHAR;
-	config.extension_parameters["s3_session_token"] = LogicalType::VARCHAR;
-	config.extension_parameters["s3_endpoint"] = LogicalType::VARCHAR;
+	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
+	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
+	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
+	config.AddExtensionOption("s3_session_token", "S3 Session Token", LogicalType::VARCHAR);
+	config.AddExtensionOption("s3_endpoint", "S3 Endpoint (default s3.amazonaws.com)", LogicalType::VARCHAR);
 }
 
 } // namespace duckdb

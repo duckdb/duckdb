@@ -247,6 +247,8 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 		return Value();
 	}
 	switch(context.profiler->automatic_print_format) {
+	case ProfilerPrintFormat::NONE:
+		return Value("none");
 	case ProfilerPrintFormat::JSON:
 		return Value("json");
 	case ProfilerPrintFormat::QUERY_TREE:

@@ -52,6 +52,14 @@ struct ConfigurationOption {
 	get_setting_function_t get_setting;
 };
 
+struct ExtensionOption {
+	ExtensionOption(string description_p, LogicalType type_p) :
+		description(move(description_p)), type(move(type_p)) {}
+
+	string description;
+	LogicalType type;
+};
+
 // this is optional and only used in tests at the moment
 struct DBConfig {
 	friend class DatabaseInstance;
@@ -113,9 +121,13 @@ public:
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 
 	//! Extra parameters that can be SET for loaded extensions
-	case_insensitive_map_t<LogicalType> extension_parameters;
+	case_insensitive_map_t<ExtensionOption> extension_parameters;
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
+
+	void AddExtensionOption(string name, string description, LogicalType parameter) {
+		extension_parameters.insert(make_pair(move(name), ExtensionOption(move(description), move(parameter))));
+	}
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
 	DUCKDB_API static DBConfig &GetConfig(DatabaseInstance &db);
