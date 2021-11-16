@@ -119,40 +119,40 @@ static void PragmaSetThreads(ClientContext &context, const FunctionParameters &p
 }
 
 static void PragmaEnableProgressBar(ClientContext &context, const FunctionParameters &parameters) {
-	context.enable_progress_bar = true;
+	ClientConfig::GetConfig(context).enable_progress_bar = true;
 }
 
 static void PragmaSetProgressBarWaitTime(ClientContext &context, const FunctionParameters &parameters) {
-	context.wait_time = parameters.values[0].GetValue<int>();
-	context.enable_progress_bar = true;
+	ClientConfig::GetConfig(context).wait_time = parameters.values[0].GetValue<int>();
+	ClientConfig::GetConfig(context).enable_progress_bar = true;
 }
 
 static void PragmaDisableProgressBar(ClientContext &context, const FunctionParameters &parameters) {
-	context.enable_progress_bar = false;
+	ClientConfig::GetConfig(context).enable_progress_bar = false;
 }
 
 static void PragmaEnablePrintProgressBar(ClientContext &context, const FunctionParameters &parameters) {
-	context.print_progress_bar = true;
+	ClientConfig::GetConfig(context).print_progress_bar = true;
 }
 
 static void PragmaDisablePrintProgressBar(ClientContext &context, const FunctionParameters &parameters) {
-	context.print_progress_bar = false;
+	ClientConfig::GetConfig(context).print_progress_bar = false;
 }
 
 static void PragmaEnableVerification(ClientContext &context, const FunctionParameters &parameters) {
-	context.query_verification_enabled = true;
+	ClientConfig::GetConfig(context).query_verification_enabled = true;
 }
 
 static void PragmaDisableVerification(ClientContext &context, const FunctionParameters &parameters) {
-	context.query_verification_enabled = false;
+	ClientConfig::GetConfig(context).query_verification_enabled = false;
 }
 
 static void PragmaEnableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
-	context.verify_parallelism = true;
+	ClientConfig::GetConfig(context).verify_parallelism = true;
 }
 
 static void PragmaEnableForceIndexJoin(ClientContext &context, const FunctionParameters &parameters) {
-	context.force_index_join = true;
+	ClientConfig::GetConfig(context).force_index_join = true;
 }
 
 static void PragmaForceCheckpoint(ClientContext &context, const FunctionParameters &parameters) {
@@ -160,15 +160,15 @@ static void PragmaForceCheckpoint(ClientContext &context, const FunctionParamete
 }
 
 static void PragmaDisableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
-	context.verify_parallelism = false;
+	ClientConfig::GetConfig(context).verify_parallelism = false;
 }
 
 static void PragmaEnableForceExternal(ClientContext &context, const FunctionParameters &parameters) {
-	context.force_external = true;
+	ClientConfig::GetConfig(context).force_external = true;
 }
 
 static void PragmaDisableForceExternal(ClientContext &context, const FunctionParameters &parameters) {
-	context.force_external = false;
+	ClientConfig::GetConfig(context).force_external = false;
 }
 
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
@@ -202,11 +202,11 @@ static void PragmaLogQueryPath(ClientContext &context, const FunctionParameters 
 static void PragmaExplainOutput(ClientContext &context, const FunctionParameters &parameters) {
 	string val = StringUtil::Lower(parameters.values[0].ToString());
 	if (val == "all") {
-		context.explain_output_type = ExplainOutputType::ALL;
+		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::ALL;
 	} else if (val == "optimized_only") {
-		context.explain_output_type = ExplainOutputType::OPTIMIZED_ONLY;
+		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::OPTIMIZED_ONLY;
 	} else if (val == "physical_only") {
-		context.explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
+		ClientConfig::GetConfig(context).explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 	} else {
 		throw ParserException("Unrecognized output type '%s', expected either ALL, OPTIMIZED_ONLY or PHYSICAL_ONLY",
 		                      val);
@@ -214,20 +214,20 @@ static void PragmaExplainOutput(ClientContext &context, const FunctionParameters
 }
 
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
-	context.enable_optimizer = true;
+	ClientConfig::GetConfig(context).enable_optimizer = true;
 }
 
 static void PragmaDisableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
-	context.enable_optimizer = false;
+	ClientConfig::GetConfig(context).enable_optimizer = false;
 }
 
 static void PragmaPerfectHashThreshold(ClientContext &context, const FunctionParameters &parameters) {
 	auto bits = parameters.values[0].GetValue<int32_t>();
-	;
+
 	if (bits < 0 || bits > 32) {
 		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
 	}
-	context.perfect_ht_threshold = bits;
+	ClientConfig::GetConfig(context).perfect_ht_threshold = bits;
 }
 
 static void PragmaAutoCheckpointThreshold(ClientContext &context, const FunctionParameters &parameters) {

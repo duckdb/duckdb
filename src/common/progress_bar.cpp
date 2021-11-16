@@ -11,7 +11,7 @@ void ProgressBar::ProgressBarThread() {
 		int new_percentage;
 		supported = executor->GetPipelinesProgress(new_percentage);
 		current_percentage = new_percentage;
-		if (supported && current_percentage > -1 && executor->context.print_progress_bar) {
+		if (supported && current_percentage > -1 && ClientConfig::GetConfig(executor->context).print_progress_bar) {
 			Printer::PrintProgress(current_percentage, PROGRESS_BAR_STRING.c_str(), PROGRESS_BAR_WIDTH);
 		}
 		WaitFor(std::chrono::milliseconds(time_update_bar));
@@ -41,7 +41,7 @@ void ProgressBar::Stop() {
 		stop = true;
 		c.notify_one();
 		progress_bar_thread.join();
-		if (supported && current_percentage > 0 && executor->context.print_progress_bar) {
+		if (supported && current_percentage > 0 && ClientConfig::GetConfig(executor->context).print_progress_bar) {
 			Printer::FinishProgressBarPrint(PROGRESS_BAR_STRING.c_str(), PROGRESS_BAR_WIDTH);
 		}
 	}

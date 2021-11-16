@@ -10,9 +10,7 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/deque.hpp"
-#include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/progress_bar.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -24,6 +22,7 @@
 #include "duckdb/transaction/transaction_context.hpp"
 #include <random>
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
 class Appender;
@@ -68,41 +67,21 @@ public:
 
 	//! The Progress Bar
 	unique_ptr<ProgressBar> progress_bar;
-	//! If the progress bar is enabled or not.
-	bool enable_progress_bar = false;
-	//! If the print of the progress bar is enabled
-	bool print_progress_bar = true;
-	//! The wait time before showing the progress bar
-	int wait_time = 2000;
 
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
 
-	case_insensitive_map_t<Value> set_variables;
-
-	// Whether or not aggressive query verification is enabled
-	bool query_verification_enabled = false;
-	//! Enable the running of optimizers
-	bool enable_optimizer = true;
-	//! Force parallelism of small tables, used for testing
-	bool verify_parallelism = false;
-	//! Force index join independent of table cardinality, used for testing
-	bool force_index_join = false;
-	//! Force out-of-core computation for operators that support it, used for testing
-	bool force_external = false;
-	//! Maximum bits allowed for using a perfect hash table (i.e. the perfect HT can hold up to 2^perfect_ht_threshold
-	//! elements)
-	idx_t perfect_ht_threshold = 12;
 	//! The writer used to log queries (if logging is enabled)
 	unique_ptr<BufferedFileWriter> log_query_writer;
-	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
-	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
 	//! The random generator used by random(). Its seed value can be set by setseed().
 	std::mt19937 random_engine;
 
 	const unique_ptr<CatalogSearchPath> catalog_search_path;
 
 	unique_ptr<FileOpener> file_opener;
+
+	//! The client configuration
+	ClientConfig config;
 
 public:
 	DUCKDB_API Transaction &ActiveTransaction() {

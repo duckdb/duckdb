@@ -12,9 +12,9 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 
 	auto normalized_name = ValidateInput(context);
 	if (scope == SetScope::GLOBAL) {
-		context.client.db->config.set_variables[normalized_name] = value;
+		DBConfig::GetConfig(context.client).set_variables[normalized_name] = value;
 	} else {
-		context.client.set_variables[normalized_name] = value;
+		ClientConfig::GetConfig(context.client).set_variables[normalized_name] = value;
 	}
 }
 
