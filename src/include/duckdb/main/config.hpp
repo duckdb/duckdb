@@ -92,8 +92,6 @@ public:
 	bool enable_external_access = true;
 	//! Whether or not object cache is used
 	bool object_cache_enable = false;
-	//! Database configuration variables as controlled by SET
-	case_insensitive_map_t<Value> set_variables;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
@@ -114,6 +112,10 @@ public:
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
 
+	//! Extra parameters that can be SET for loaded extensions
+	case_insensitive_map_t<LogicalType> extension_parameters;
+	//! Database configuration variables as controlled by SET
+	case_insensitive_map_t<Value> set_variables;
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
 	DUCKDB_API static DBConfig &GetConfig(DatabaseInstance &db);

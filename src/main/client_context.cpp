@@ -935,7 +935,6 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 	const auto &session_config_map = config.set_variables;
 	const auto &global_config_map = db->config.set_variables;
 
-
 	auto session_value = session_config_map.find(key);
 	bool found_session_value = session_value != session_config_map.end();
 	auto global_value = global_config_map.find(key);

@@ -6,16 +6,25 @@
 
 namespace duckdb {
 
-	// if (scope == SetScope::GLOBAL) {
-	// 	DBConfig::GetConfig(context.client).set_variables[normalized_name] = value;
-	// } else {
-	// 	ClientConfig::GetConfig(context.client).set_variables[normalized_name] = value;
-	// }
 void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                           LocalSourceState &lstate) const {
 	auto option = DBConfig::GetOptionByName(name);
 	if (!option) {
-		throw CatalogException("unrecognized configuration parameter \"%s\"", name);
+		// check if this is an extra extension variable
+		auto &config = DBConfig::GetConfig(context.client);
+		auto entry = config.extension_parameters.find(name);
+		if (entry == config.extension_parameters.end()) {
+			// it is not!
+			throw CatalogException("unrecognized configuration parameter \"%s\"", name);
+		}
+		//! it is!
+		auto target_type = entry->second;
+		if (scope == SetScope::GLOBAL) {
+			config.set_variables[name] = value.CastAs(target_type);
+		} else {
+			ClientConfig::GetConfig(context.client).set_variables[name] = value.CastAs(target_type);
+		}
+		return;
 	}
 	SetScope variable_scope = scope;
 	if (variable_scope == SetScope::AUTOMATIC) {
