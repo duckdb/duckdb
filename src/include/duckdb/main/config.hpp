@@ -60,7 +60,6 @@ struct ExtensionOption {
 	LogicalType type;
 };
 
-// this is optional and only used in tests at the moment
 struct DBConfig {
 	friend class DatabaseInstance;
 	friend class StorageManager;
