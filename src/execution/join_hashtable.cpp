@@ -316,13 +316,12 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		auto entry_hash_ptr = key_locations[i] + pointer_offset;
 		auto next_key = pointers[index];
 		// In case this is still a primary key and there is a conflict
-		// check all keys to look for duplicate values
 		while (has_primary_key && next_key != 0) {
 			// check whether the keys are the same
 			for (auto key_type : condition_types) {
 				has_primary_key = !CompareKeysSwitch(key_locations[i], next_key, key_type);
 			}
-			// store the tuple for later
+			// store the tuple to evaluate the next_key later
 			conflict_entries.push_back(next_key);
 		}
 		// replace the hash_value in the current entry and point to a position in the hash_map
@@ -330,9 +329,10 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
-	// now process the next entries
+	// now process the next ptr entries
 	for (auto entry : conflict_entries) {
 		auto next_key = entry + pointer_offset;
+		// check the whole chain
 		while (has_primary_key && next_key != 0) {
 			// check whether the keys are the same
 			for (auto key_type : condition_types) {
@@ -340,6 +340,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 			}
 			next_key = next_key + pointer_offset;
 		}
+		// no more conflicts for this key
 	}
 }
 
