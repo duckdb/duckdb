@@ -12,16 +12,14 @@ TEST_CASE("Test DB config configuration", "[api]") {
 
 	auto options = config.GetOptions();
 
-	map<ConfigurationOptionType, vector<string>> test_options;
-	test_options[ConfigurationOptionType::ACCESS_MODE] = {"automatic", "read_only", "read_write"};
-	test_options[ConfigurationOptionType::DEFAULT_ORDER_TYPE] = {"asc", "desc"};
-	test_options[ConfigurationOptionType::DEFAULT_NULL_ORDER] = {"nulls_first", "nulls_last"};
-	test_options[ConfigurationOptionType::ENABLE_EXTERNAL_ACCESS] = {"true", "false"};
-	test_options[ConfigurationOptionType::ENABLE_OBJECT_CACHE] = {"true", "false"};
-	test_options[ConfigurationOptionType::MAXIMUM_MEMORY] = {"-1", "16GB"};
-	test_options[ConfigurationOptionType::THREADS] = {"-1", "4"};
-
-	set<ConfigurationOptionType> skip_invalid;
+	map<string, vector<string>> test_options;
+	test_options["access_mode"] = {"automatic", "read_only", "read_write"};
+	test_options["default_order"] = {"asc", "desc"};
+	test_options["default_null_order"] = {"nulls_first", "nulls_last"};
+	test_options["enable_external_access"] = {"true", "false"};
+	test_options["enable_object_cache"] = {"true", "false"};
+	test_options["max_memory"] = {"-1", "16GB"};
+	test_options["threads"] = {"-1", "4"};
 
 	REQUIRE(config.GetOptionByName("unknownoption") == nullptr);
 
@@ -29,15 +27,12 @@ TEST_CASE("Test DB config configuration", "[api]") {
 		auto op = config.GetOptionByName(option.name);
 		REQUIRE(op);
 
-		auto entry = test_options.find(option.type);
+		auto entry = test_options.find(option.name);
 		if (entry != test_options.end()) {
 			for (auto &str_val : entry->second) {
 				Value val(str_val);
 				REQUIRE_NOTHROW(config.SetOption(option, val));
 			}
-		}
-		if (skip_invalid.find(option.type) != skip_invalid.end()) {
-			continue;
 		}
 		Value invalid_val("___this_is_probably_invalid");
 		REQUIRE_THROWS(config.SetOption(option, invalid_val));

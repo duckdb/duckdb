@@ -28,6 +28,7 @@ class TableFunctionRef;
 class CompressionFunction;
 
 struct CompressionFunctionSet;
+struct DBConfig;
 
 enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
 
@@ -38,22 +39,17 @@ enum class CheckpointAbort : uint8_t {
 	DEBUG_ABORT_AFTER_FREE_LIST_WRITE = 3
 };
 
-enum class ConfigurationOptionType : uint32_t {
-	INVALID = 0,
-	ACCESS_MODE,
-	DEFAULT_ORDER_TYPE,
-	DEFAULT_NULL_ORDER,
-	ENABLE_EXTERNAL_ACCESS,
-	ENABLE_OBJECT_CACHE,
-	MAXIMUM_MEMORY,
-	THREADS
-};
+typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
+typedef Value (*get_setting_function_t)(ClientContext &context);
 
 struct ConfigurationOption {
-	ConfigurationOptionType type;
 	const char *name;
 	const char *description;
 	LogicalTypeId parameter_type;
+	set_global_function_t set_global;
+	set_local_function_t set_local;
+	get_setting_function_t get_setting;
 };
 
 // this is optional and only used in tests at the moment
