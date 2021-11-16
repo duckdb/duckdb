@@ -26,6 +26,9 @@ public:
 
 	void Set(const string &new_value, bool is_set_schema);
 	const vector<string> &Get();
+	const vector<string> &GetSetPaths() {
+		return set_paths;
+	}
 	const string &GetDefault();
 	const string &GetOrDefault(const string &name);
 
@@ -36,8 +39,9 @@ private:
 
 private:
 	ClientContext &context;
-	string last_value;
 	vector<string> paths;
+	//! Only the paths that were explicitly set (minus the always included paths)
+	vector<string> set_paths;
 };
 
 } // namespace duckdb

@@ -23,7 +23,8 @@ void CatalogSearchPath::Set(const string &new_value, bool is_set_schema) {
 			throw CatalogException("SET %s: No schema named %s found.", is_set_schema ? "schema" : "search_path", path);
 		}
 	}
-	SetPaths(move(new_paths));
+	this->set_paths = move(new_paths);
+	SetPaths(set_paths);
 }
 
 const vector<string> &CatalogSearchPath::Get() {

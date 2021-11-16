@@ -439,7 +439,7 @@ void SchemaSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value SchemaSetting::GetSetting(ClientContext &context) {
-	return Value();
+	return SearchPathSetting::GetSetting(context);
 }
 
 //===--------------------------------------------------------------------===//
@@ -451,7 +451,7 @@ void SearchPathSetting::SetLocal(ClientContext &context, const Value &input) {
 }
 
 Value SearchPathSetting::GetSetting(ClientContext &context) {
-	return Value(StringUtil::Join(context.catalog_search_path->Get(), ","));
+	return Value(StringUtil::Join(context.catalog_search_path->GetSetPaths(), ","));
 }
 
 //===--------------------------------------------------------------------===//
