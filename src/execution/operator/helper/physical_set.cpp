@@ -15,7 +15,17 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 		auto entry = config.extension_parameters.find(name);
 		if (entry == config.extension_parameters.end()) {
 			// it is not!
-			throw CatalogException("unrecognized configuration parameter \"%s\"", name);
+			// get a list of all options
+			vector<string> potential_names;
+			for (idx_t i = 0, option_count = DBConfig::GetOptionCount(); i < option_count; i++) {
+				potential_names.emplace_back(DBConfig::GetOptionByIndex(i)->name);
+			}
+			for (auto &entry : config.extension_parameters) {
+				potential_names.push_back(entry.first);
+			}
+			auto closest_settings = StringUtil::TopNLevenshtein(potential_names, name);
+			throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
+			                       StringUtil::CandidatesMessage(closest_settings, "Did you mean"));
 		}
 		//! it is!
 		auto &target_type = entry->second.type;
@@ -37,7 +47,7 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 	}
 
 	Value input = value.CastAs(option->parameter_type);
-	switch(variable_scope) {
+	switch (variable_scope) {
 	case SetScope::GLOBAL: {
 		if (!option->set_global) {
 			throw CatalogException("option \"%s\" cannot be set globally", name);

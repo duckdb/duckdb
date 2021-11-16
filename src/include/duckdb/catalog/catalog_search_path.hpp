@@ -33,6 +33,7 @@ private:
 	static vector<string> ParsePaths(const string &value);
 
 	void SetPaths(vector<string> new_paths);
+
 private:
 	ClientContext &context;
 	string last_value;

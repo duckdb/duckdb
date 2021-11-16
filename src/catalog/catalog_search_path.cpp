@@ -45,7 +45,7 @@ void CatalogSearchPath::SetPaths(vector<string> new_paths) {
 	paths.clear();
 	paths.reserve(new_paths.size() + 3);
 	paths.emplace_back(TEMP_SCHEMA);
-	for(auto &path : new_paths) {
+	for (auto &path : new_paths) {
 		paths.push_back(move(path));
 	}
 	paths.emplace_back(DEFAULT_SCHEMA);

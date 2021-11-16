@@ -83,7 +83,6 @@ ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
 	return context.config;
 }
 
-
 TransactionManager &TransactionManager::Get(ClientContext &context) {
 	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
 }

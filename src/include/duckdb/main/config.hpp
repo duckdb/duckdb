@@ -53,8 +53,8 @@ struct ConfigurationOption {
 };
 
 struct ExtensionOption {
-	ExtensionOption(string description_p, LogicalType type_p) :
-		description(move(description_p)), type(move(type_p)) {}
+	ExtensionOption(string description_p, LogicalType type_p) : description(move(description_p)), type(move(type_p)) {
+	}
 
 	string description;
 	LogicalType type;
@@ -128,6 +128,7 @@ public:
 	void AddExtensionOption(string name, string description, LogicalType parameter) {
 		extension_parameters.insert(make_pair(move(name), ExtensionOption(move(description), move(parameter))));
 	}
+
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
 	DUCKDB_API static DBConfig &GetConfig(DatabaseInstance &db);

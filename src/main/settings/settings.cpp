@@ -24,13 +24,13 @@ void AccessModeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const 
 		config.access_mode = AccessMode::READ_WRITE;
 	} else {
 		throw InvalidInputException(
-			"Unrecognized parameter for option ACCESS_MODE \"%s\". Expected READ_ONLY or READ_WRITE.", parameter);
+		    "Unrecognized parameter for option ACCESS_MODE \"%s\". Expected READ_ONLY or READ_WRITE.", parameter);
 	}
 }
 
 Value AccessModeSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	switch(config.access_mode) {
+	switch (config.access_mode) {
 	case AccessMode::AUTOMATIC:
 		return "automatic";
 	case AccessMode::READ_ONLY:
@@ -153,13 +153,13 @@ void DefaultOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, cons
 		config.default_order_type = OrderType::DESCENDING;
 	} else {
 		throw InvalidInputException("Unrecognized parameter for option DEFAULT_ORDER \"%s\". Expected ASC or DESC.",
-									parameter);
+		                            parameter);
 	}
 }
 
 Value DefaultOrderSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	switch(config.default_order_type) {
+	switch (config.default_order_type) {
 	case OrderType::ASCENDING:
 		return "asc";
 	case OrderType::DESCENDING:
@@ -177,17 +177,19 @@ void DefaultNullOrderSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, 
 
 	if (parameter == "nulls_first" || parameter == "nulls first" || parameter == "null first" || parameter == "first") {
 		config.default_null_order = OrderByNullType::NULLS_FIRST;
-	} else if (parameter == "nulls_last" || parameter == "nulls last" || parameter == "null last" || parameter == "last") {
+	} else if (parameter == "nulls_last" || parameter == "nulls last" || parameter == "null last" ||
+	           parameter == "last") {
 		config.default_null_order = OrderByNullType::NULLS_LAST;
 	} else {
-		throw ParserException("Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST or NULLS LAST",
-		                      parameter);
+		throw ParserException(
+		    "Unrecognized parameter for option NULL_ORDER \"%s\", expected either NULLS FIRST or NULLS LAST",
+		    parameter);
 	}
 }
 
 Value DefaultNullOrderSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	switch(config.default_null_order) {
+	switch (config.default_null_order) {
 	case OrderByNullType::NULLS_FIRST:
 		return "nulls_first";
 	case OrderByNullType::NULLS_LAST:
@@ -246,7 +248,7 @@ Value EnableProfilingSetting::GetSetting(ClientContext &context) {
 	if (!context.profiler->IsEnabled()) {
 		return Value();
 	}
-	switch(context.profiler->automatic_print_format) {
+	switch (context.profiler->automatic_print_format) {
 	case ProfilerPrintFormat::NONE:
 		return Value("none");
 	case ProfilerPrintFormat::JSON:
@@ -289,7 +291,7 @@ void ExplainOutputSetting::SetLocal(ClientContext &context, const Value &input) 
 }
 
 Value ExplainOutputSetting::GetSetting(ClientContext &context) {
-	switch(ClientConfig::GetConfig(context).explain_output_type) {
+	switch (ClientConfig::GetConfig(context).explain_output_type) {
 	case ExplainOutputType::ALL:
 		return "all";
 	case ExplainOutputType::OPTIMIZED_ONLY:
@@ -416,7 +418,6 @@ Value ProfilingModeSetting::GetSetting(ClientContext &context) {
 	return Value(context.profiler->IsDetailedEnabled() ? "detailed" : "standard");
 }
 
-
 //===--------------------------------------------------------------------===//
 // Progress Bar Time
 //===--------------------------------------------------------------------===//
@@ -485,4 +486,4 @@ Value ThreadsSetting::GetSetting(ClientContext &context) {
 	return Value::BIGINT(config.maximum_threads);
 }
 
-}
+} // namespace duckdb

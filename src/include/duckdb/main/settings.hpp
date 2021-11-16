@@ -26,7 +26,8 @@ struct AccessModeSetting {
 
 struct CheckpointThresholdSetting {
 	static constexpr const char *Name = "checkpoint_threshold";
-	static constexpr const char *Description = "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)";
+	static constexpr const char *Description =
+	    "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -34,7 +35,8 @@ struct CheckpointThresholdSetting {
 
 struct DebugCheckpointAbort {
 	static constexpr const char *Name = "debug_checkpoint_abort";
-	static constexpr const char *Description = "DEBUG SETTING: trigger an abort while checkpointing for testing purposes";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: trigger an abort while checkpointing for testing purposes";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -42,7 +44,8 @@ struct DebugCheckpointAbort {
 
 struct DebugForceExternal {
 	static constexpr const char *Name = "debug_force_external";
-	static constexpr const char *Description = "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing";
+	static constexpr const char *Description =
+	    "DEBUG SETTING: force out-of-core computation for operators that support it, used for testing";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -83,7 +86,8 @@ struct DefaultOrderSetting {
 
 struct DefaultNullOrderSetting {
 	static constexpr const char *Name = "default_null_order";
-	static constexpr const char *Description = "Null ordering used when none is specified ([NULLS_FIRST] or NULLS_LAST)";
+	static constexpr const char *Description =
+	    "Null ordering used when none is specified ([NULLS_FIRST] or NULLS_LAST)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -91,7 +95,9 @@ struct DefaultNullOrderSetting {
 
 struct EnableExternalAccessSetting {
 	static constexpr const char *Name = "enable_external_access";
-	static constexpr const char *Description = "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV readers, pandas replacement scans, etc)";
+	static constexpr const char *Description =
+	    "Allow the database to access external state (through e.g. loading/installing modules, COPY TO/FROM, CSV "
+	    "readers, pandas replacement scans, etc)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -107,7 +113,8 @@ struct EnableObjectCacheSetting {
 
 struct EnableProfilingSetting {
 	static constexpr const char *Name = "enable_profiling";
-	static constexpr const char *Description = "Enables profiling, and sets the output format (JSON, [QUERY_TREE], QUERY_TREE_OPTIMIZER)";
+	static constexpr const char *Description =
+	    "Enables profiling, and sets the output format (JSON, [QUERY_TREE], QUERY_TREE_OPTIMIZER)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -115,7 +122,8 @@ struct EnableProfilingSetting {
 
 struct EnableProgressBarSetting {
 	static constexpr const char *Name = "enable_progress_bar";
-	static constexpr const char *Description = "Enables the progress bar, printing progress to the terminal for long queries";
+	static constexpr const char *Description =
+	    "Enables the progress bar, printing progress to the terminal for long queries";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BOOLEAN;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -139,7 +147,8 @@ struct ForceCompressionSetting {
 
 struct LogQueryPathSetting {
 	static constexpr const char *Name = "log_query_path";
-	static constexpr const char *Description = "Specifies the path to which queries should be logged (default: empty string, queries are not logged)";
+	static constexpr const char *Description =
+	    "Specifies the path to which queries should be logged (default: empty string, queries are not logged)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -171,7 +180,8 @@ struct ProfilerHistorySize {
 
 struct ProfileOutputSetting {
 	static constexpr const char *Name = "profile_output";
-	static constexpr const char *Description = "The file to which profile output should be saved, or empty to print to the terminal";
+	static constexpr const char *Description =
+	    "The file to which profile output should be saved, or empty to print to the terminal";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -187,7 +197,8 @@ struct ProfilingModeSetting {
 
 struct ProgressBarTimeSetting {
 	static constexpr const char *Name = "progress_bar_time";
-	static constexpr const char *Description = "Sets the time (in seconds) how long a query needs to take before we start printing a progress bar";
+	static constexpr const char *Description =
+	    "Sets the time (in seconds) how long a query needs to take before we start printing a progress bar";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -195,7 +206,8 @@ struct ProgressBarTimeSetting {
 
 struct SchemaSetting {
 	static constexpr const char *Name = "schema";
-	static constexpr const char *Description = "Sets the default search schema. Equivalent to setting search_path to a single value.";
+	static constexpr const char *Description =
+	    "Sets the default search schema. Equivalent to setting search_path to a single value.";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
@@ -203,7 +215,8 @@ struct SchemaSetting {
 
 struct SearchPathSetting {
 	static constexpr const char *Name = "search_path";
-	static constexpr const char *Description = "Sets the default search search path as a comma-separated list of values";
+	static constexpr const char *Description =
+	    "Sets the default search search path as a comma-separated list of values";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);

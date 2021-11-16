@@ -21,10 +21,10 @@ struct DuckDBSettingsData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, vector<Value> &inputs,
-                                                 unordered_map<string, Value> &named_parameters,
-                                                 vector<LogicalType> &input_table_types,
-                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                 vector<string> &names) {
+                                                   unordered_map<string, Value> &named_parameters,
+                                                   vector<LogicalType> &input_table_types,
+                                                   vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                   vector<string> &names) {
 	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 
@@ -41,12 +41,13 @@ static unique_ptr<FunctionData> DuckDBSettingsBind(ClientContext &context, vecto
 }
 
 unique_ptr<FunctionOperatorData> DuckDBSettingsInit(ClientContext &context, const FunctionData *bind_data,
-                                                  const vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                    const vector<column_t> &column_ids,
+                                                    TableFilterCollection *filters) {
 	auto result = make_unique<DuckDBSettingsData>();
 
 	auto &config = DBConfig::GetConfig(context);
 	auto options_count = DBConfig::GetOptionCount();
-	for(idx_t i = 0; i < options_count; i++) {
+	for (idx_t i = 0; i < options_count; i++) {
 		auto option = DBConfig::GetOptionByIndex(i);
 		D_ASSERT(option);
 		DuckDBSettingValue value;
@@ -57,7 +58,7 @@ unique_ptr<FunctionOperatorData> DuckDBSettingsInit(ClientContext &context, cons
 
 		result->settings.push_back(move(value));
 	}
-	for(auto &ext_param : config.extension_parameters) {
+	for (auto &ext_param : config.extension_parameters) {
 		Value setting_val;
 		string setting_str_val;
 		if (context.TryGetCurrentSetting(ext_param.first, setting_val)) {
@@ -75,7 +76,7 @@ unique_ptr<FunctionOperatorData> DuckDBSettingsInit(ClientContext &context, cons
 }
 
 void DuckDBSettingsFunction(ClientContext &context, const FunctionData *bind_data, FunctionOperatorData *operator_state,
-                          DataChunk *input, DataChunk &output) {
+                            DataChunk *input, DataChunk &output) {
 	auto &data = (DuckDBSettingsData &)*operator_state;
 	if (data.offset >= data.settings.size()) {
 		// finished returning values
@@ -102,7 +103,8 @@ void DuckDBSettingsFunction(ClientContext &context, const FunctionData *bind_dat
 }
 
 void DuckDBSettingsFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(TableFunction("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit));
+	set.AddFunction(
+	    TableFunction("duckdb_settings", {}, DuckDBSettingsFunction, DuckDBSettingsBind, DuckDBSettingsInit));
 }
 
 } // namespace duckdb
