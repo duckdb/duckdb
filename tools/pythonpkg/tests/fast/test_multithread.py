@@ -9,7 +9,7 @@ class DuckDBThreaded:
         self.threads = []
         self.thread_function = thread_function
         
-    def same_conn_test(self):
+    def multithread_test(self,if_all_true=True):
         duckdb_conn = duckdb.connect()
         queue = Queue.Queue()
         return_value = False
@@ -19,9 +19,15 @@ class DuckDBThreaded:
 
         for i in range(0,len(self.threads)):
             self.threads[i].start()
-            if queue.get():
-                return_value = True
-        
+            if not if_all_true:
+                if queue.get():
+                    return_value = True
+            else:
+                if i == 0 and queue.get():
+                    return_value = True
+                elif queue.get() and return_value:
+                    return_value = True
+            
         for i in range(0,len(self.threads)):
             self.threads[i].join()
 
@@ -29,14 +35,28 @@ class DuckDBThreaded:
 
 def execute_query_same_connection(duckdb_conn, queue):
     try:
-        out = duckdb_conn.execute('select my_column from (values (42), (84), (NULL), (128)) tbl(i)')
+        out = duckdb_conn.execute('select i from (values (42), (84), (NULL), (128)) tbl(i)')
         queue.put(False)
     except:
-        queue.put(True)  
+        queue.put(True)
+
+def execute_query(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+
+    try:
+        duckdb_conn.execute('select i from (values (42), (84), (NULL), (128)) tbl(i)')
+        queue.put(True)
+    except:
+        queue.put(False)  
 
 class TestDuckMultithread(object):
 
     def test_same_conn(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,execute_query_same_connection)
-        duck_threads.same_conn_test()
+        duck_threads.multithread_test(False)
+
+    def test_execute(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,execute_query)
+        duck_threads.multithread_test()
  
