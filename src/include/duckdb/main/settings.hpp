@@ -24,6 +24,30 @@ struct AccessModeSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct CheckpointThresholdSetting {
+	static constexpr const char *Name = "checkpoint_threshold";
+	static constexpr const char *Description = "The WAL size threshold at which to automatically trigger a checkpoint (e.g. 1GB)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DebugCheckpointAbort {
+	static constexpr const char *Name = "debug_checkpoint_abort";
+	static constexpr const char *Description = "DEBUG SETTING: trigger an abort while checkpointing for testing purposes";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct DebugWindowMode {
+	static constexpr const char *Name = "debug_window_mode";
+	static constexpr const char *Description = "DEBUG SETTING: switch window mode to use";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct DefaultCollationSetting {
 	static constexpr const char *Name = "default_collation";
 	static constexpr const char *Description = "The collation setting used when none is specified";
@@ -81,6 +105,14 @@ struct ExplainOutputSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct ForceCompressionSetting {
+	static constexpr const char *Name = "force_compression";
+	static constexpr const char *Description = "DEBUG SETTING: forces a specific compression method to be used";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct LogQueryPathSetting {
 	static constexpr const char *Name = "log_query_path";
 	static constexpr const char *Description = "Specifies the path to which queries should be logged (default: empty string, queries are not logged)";
@@ -97,6 +129,22 @@ struct MaximumMemorySetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct PerfectHashThresholdSetting {
+	static constexpr const char *Name = "perfect_ht_threshold";
+	static constexpr const char *Description = "Threshold in bytes for when to use a perfect hash table (default: 12)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ProfilerHistorySize {
+	static constexpr const char *Name = "profiler_history_size";
+	static constexpr const char *Description = "Sets the profiler history size";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct ProfileOutputSetting {
 	static constexpr const char *Name = "profile_output";
 	static constexpr const char *Description = "The file to which profile output should be saved, or empty to print to the terminal";
@@ -109,6 +157,14 @@ struct ProfilingModeSetting {
 	static constexpr const char *Name = "profiling_mode";
 	static constexpr const char *Description = "The profiling mode ([standard] or detailed)";
 	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
+struct ProgressBarTimeSetting {
+	static constexpr const char *Name = "progress_bar_time";
+	static constexpr const char *Description = "Sets the time (in seconds) how long a query needs to take before we start printing a progress bar";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
 };
@@ -129,11 +185,11 @@ struct SearchPathSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
-struct SetProfilerHistorySize {
-	static constexpr const char *Name = "set_profiler_history_size";
-	static constexpr const char *Description = "Sets the profiler history size";
-	static constexpr const LogicalTypeId InputType = LogicalTypeId::BIGINT;
-	static void SetLocal(ClientContext &context, const Value &parameter);
+struct TempDirectorySetting {
+	static constexpr const char *Name = "temp_directory";
+	static constexpr const char *Description = "Set the directory to which to write temp files";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static Value GetSetting(ClientContext &context);
 };
 

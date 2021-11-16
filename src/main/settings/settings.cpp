@@ -43,6 +43,62 @@ Value AccessModeSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Checkpoint Threshold
+//===--------------------------------------------------------------------===//
+void CheckpointThresholdSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	idx_t new_limit = DBConfig::ParseMemoryLimit(input.ToString());
+	config.checkpoint_wal_size = new_limit;
+}
+
+Value CheckpointThresholdSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(StringUtil::BytesToHumanReadableString(config.checkpoint_wal_size));
+}
+
+//===--------------------------------------------------------------------===//
+// Debug Checkpoint Abort
+//===--------------------------------------------------------------------===//
+void DebugCheckpointAbort::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto checkpoint_abort = StringUtil::Lower(input.ToString());
+	if (checkpoint_abort == "none") {
+		config.checkpoint_abort = CheckpointAbort::NO_ABORT;
+	} else if (checkpoint_abort == "before_truncate") {
+		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_TRUNCATE;
+	} else if (checkpoint_abort == "before_header") {
+		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_BEFORE_HEADER;
+	} else if (checkpoint_abort == "after_free_list_write") {
+		config.checkpoint_abort = CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE;
+	} else {
+		throw ParserException(
+		    "Unrecognized option for PRAGMA debug_checkpoint_abort, expected none, before_truncate or before_header");
+	}
+}
+
+Value DebugCheckpointAbort::GetSetting(ClientContext &context) {
+	return Value();
+}
+
+//===--------------------------------------------------------------------===//
+// Debug Window Mode
+//===--------------------------------------------------------------------===//
+void DebugWindowMode::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto param = StringUtil::Lower(input.ToString());
+	if (param == "window") {
+		config.window_mode = WindowAggregationMode::WINDOW;
+	} else if (param == "combine") {
+		config.window_mode = WindowAggregationMode::COMBINE;
+	} else if (param == "separate") {
+		config.window_mode = WindowAggregationMode::SEPARATE;
+	} else {
+		throw ParserException("Unrecognized option for PRAGMA debug_window_mode, expected window, combine or separate");
+	}
+}
+
+Value DebugWindowMode::GetSetting(ClientContext &context) {
+	return Value();
+}
+
+//===--------------------------------------------------------------------===//
 // Default Collation
 //===--------------------------------------------------------------------===//
 void DefaultCollationSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -210,6 +266,27 @@ Value ExplainOutputSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Force Compression
+//===--------------------------------------------------------------------===//
+void ForceCompressionSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto compression = StringUtil::Lower(input.ToString());
+	if (compression == "none") {
+		config.force_compression = CompressionType::COMPRESSION_AUTO;
+	} else {
+		auto compression_type = CompressionTypeFromString(compression);
+		if (compression_type == CompressionType::COMPRESSION_AUTO) {
+			throw ParserException("Unrecognized option for PRAGMA force_compression, expected none, uncompressed, rle, "
+			                      "dictionary, pfor, bitpacking or fsst");
+		}
+		config.force_compression = compression_type;
+	}
+}
+
+Value ForceCompressionSetting::GetSetting(ClientContext &context) {
+	return Value();
+}
+
+//===--------------------------------------------------------------------===//
 // Log Query Path
 //===--------------------------------------------------------------------===//
 void LogQueryPathSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -244,6 +321,36 @@ Value MaximumMemorySetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Perfect Hash Threshold
+//===--------------------------------------------------------------------===//
+void PerfectHashThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto bits = input.GetValue<int32_t>();
+	if (bits < 0 || bits > 32) {
+		throw ParserException("Perfect HT threshold out of range: should be within range 0 - 32");
+	}
+	ClientConfig::GetConfig(context).perfect_ht_threshold = bits;
+}
+
+Value PerfectHashThresholdSetting::GetSetting(ClientContext &context) {
+	return Value::BIGINT(ClientConfig::GetConfig(context).perfect_ht_threshold);
+}
+
+//===--------------------------------------------------------------------===//
+// Profiler History Size
+//===--------------------------------------------------------------------===//
+void ProfilerHistorySize::SetLocal(ClientContext &context, const Value &input) {
+	auto size = input.GetValue<int64_t>();
+	if (size <= 0) {
+		throw ParserException("Size should be >= 0");
+	}
+	context.query_profiler_history->SetProfilerHistorySize(size);
+}
+
+Value ProfilerHistorySize::GetSetting(ClientContext &context) {
+	return Value();
+}
+
+//===--------------------------------------------------------------------===//
 // Profile Output
 //===--------------------------------------------------------------------===//
 void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) {
@@ -273,6 +380,19 @@ Value ProfilingModeSetting::GetSetting(ClientContext &context) {
 	return Value(context.profiler->IsDetailedEnabled() ? "detailed" : "standard");
 }
 
+
+//===--------------------------------------------------------------------===//
+// Progress Bar Time
+//===--------------------------------------------------------------------===//
+void ProgressBarTimeSetting::SetLocal(ClientContext &context, const Value &input) {
+	ClientConfig::GetConfig(context).wait_time = input.GetValue<int32_t>();
+	ClientConfig::GetConfig(context).enable_progress_bar = true;
+}
+
+Value ProgressBarTimeSetting::GetSetting(ClientContext &context) {
+	return Value::BIGINT(ClientConfig::GetConfig(context).wait_time);
+}
+
 //===--------------------------------------------------------------------===//
 // Schema
 //===--------------------------------------------------------------------===//
@@ -298,18 +418,20 @@ Value SearchPathSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
-// Set Profiler History Size
+// Temp Directory
 //===--------------------------------------------------------------------===//
-void SetProfilerHistorySize::SetLocal(ClientContext &context, const Value &input) {
-	auto size = input.GetValue<int64_t>();
-	if (size <= 0) {
-		throw ParserException("Size should be >= 0");
+void TempDirectorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.temporary_directory = input.ToString();
+	config.use_temporary_directory = !config.temporary_directory.empty();
+	if (db) {
+		auto &buffer_manager = BufferManager::GetBufferManager(*db);
+		buffer_manager.SetTemporaryDirectory(config.temporary_directory);
 	}
-	context.query_profiler_history->SetProfilerHistorySize(size);
 }
 
-Value SetProfilerHistorySize::GetSetting(ClientContext &context) {
-	return Value();
+Value TempDirectorySetting::GetSetting(ClientContext &context) {
+	auto &buffer_manager = BufferManager::GetBufferManager(context);
+	return Value(buffer_manager.GetTemporaryDirectory());
 }
 
 //===--------------------------------------------------------------------===//
@@ -326,6 +448,5 @@ Value ThreadsSetting::GetSetting(ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return Value::BIGINT(config.maximum_threads);
 }
-
 
 }

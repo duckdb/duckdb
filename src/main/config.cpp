@@ -17,6 +17,9 @@ namespace duckdb {
 
 static ConfigurationOption internal_options[] = {
 	DUCKDB_GLOBAL(AccessModeSetting),
+	DUCKDB_GLOBAL(CheckpointThresholdSetting),
+	DUCKDB_GLOBAL(DebugCheckpointAbort),
+	DUCKDB_GLOBAL(DebugWindowMode),
 	DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
 	DUCKDB_GLOBAL(DefaultOrderSetting),
 	DUCKDB_GLOBAL(DefaultNullOrderSetting),
@@ -24,17 +27,22 @@ static ConfigurationOption internal_options[] = {
 	DUCKDB_GLOBAL(EnableObjectCacheSetting),
 	DUCKDB_LOCAL(EnableProfilingSetting),
 	DUCKDB_LOCAL(ExplainOutputSetting),
+	DUCKDB_GLOBAL(ForceCompressionSetting),
 	DUCKDB_LOCAL(LogQueryPathSetting),
 	DUCKDB_GLOBAL(MaximumMemorySetting),
 	DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
 	DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
+	DUCKDB_LOCAL(PerfectHashThresholdSetting),
+	DUCKDB_LOCAL(ProfilerHistorySize),
 	DUCKDB_LOCAL(ProfileOutputSetting),
 	DUCKDB_LOCAL(ProfilingModeSetting),
 	DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
+	DUCKDB_LOCAL(ProgressBarTimeSetting),
 	DUCKDB_LOCAL(SchemaSetting),
 	DUCKDB_LOCAL(SearchPathSetting),
-	DUCKDB_LOCAL(SetProfilerHistorySize),
+	DUCKDB_GLOBAL(TempDirectorySetting),
 	DUCKDB_GLOBAL(ThreadsSetting),
+	DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
 	DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
 	FINAL_SETTING
 };
