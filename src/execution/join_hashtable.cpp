@@ -327,8 +327,8 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
-	// now process the next ptr entries
-	if (!has_primary_key) {
+	// build is still a primary key, process the next ptr entries
+	if (has_primary_key) {
 		for (auto entry : conflict_entries) {
 			auto next_key = entry + pointer_offset;
 			// check the whole chain
