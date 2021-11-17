@@ -42,7 +42,8 @@ void ProgressBar::Stop(bool success) {
 		stop = true;
 		c.notify_one();
 		progress_bar_thread.join();
-		if (success && supported && current_percentage > 0 && ClientConfig::GetConfig(executor->context).print_progress_bar) {
+		if (success && supported && current_percentage > 0 &&
+		    ClientConfig::GetConfig(executor->context).print_progress_bar) {
 			Printer::FinishProgressBarPrint(PROGRESS_BAR_STRING.c_str(), PROGRESS_BAR_WIDTH);
 		}
 	}
