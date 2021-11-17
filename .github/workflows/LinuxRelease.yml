@@ -405,3 +405,26 @@ jobs:
 
     - name: Symbol Leakage Test
       run: python3.7 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
+
+ linux-httpfs:
+    name: Linux HTTPFS
+    runs-on: ubuntu-20.04
+    needs: linux-release-64
+    env:
+      BUILD_VISUALIZER: 1
+      BUILD_HTTPFS: 1
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      run: make
+
+    - name: Test
+      run: make allunit

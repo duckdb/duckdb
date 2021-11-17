@@ -1,0 +1,68 @@
+# name: test/sql/table_function/range_function_different_iterators.test
+# description: Issue #2584: select * from range(4,15,6) miss one value 10
+# group: [table_function]
+
+query I
+select * from range(4,15,6);
+----
+4
+10
+
+query I
+select * from range(-4,-15,-6);
+----
+-4
+-10
+
+query I
+select * from range(4,15);
+----
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+
+query I
+select * from range(4,15,3)a;
+----
+4
+7
+10
+13
+
+query I
+select * from range(-4,-15,-3)a;
+----
+-4
+-7
+-10
+-13
+
+query I
+select * from range(4,15,5)a;
+----
+4
+9
+14
+
+query I
+select * from range(4,19,5)a;
+----
+4
+9
+14
+
+query I
+select * from generate_series(4,19,5)a;
+----
+4
+9
+14
+19

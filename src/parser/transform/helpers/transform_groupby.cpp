@@ -6,6 +6,13 @@
 
 namespace duckdb {
 
+static void CheckGroupingSetMax(idx_t count) {
+	static constexpr const idx_t MAX_GROUPING_SETS = 65535;
+	if (count > MAX_GROUPING_SETS) {
+		throw ParserException("Maximum grouping set count of %d exceeded", MAX_GROUPING_SETS);
+	}
+}
+
 struct GroupingExpressionMap {
 	expression_map_t<idx_t> map;
 };
@@ -19,6 +26,7 @@ static GroupingSet VectorToGroupingSet(vector<idx_t> &indexes) {
 }
 
 static void MergeGroupingSet(GroupingSet &result, GroupingSet &other) {
+	CheckGroupingSetMax(result.size() + other.size());
 	result.insert(other.begin(), other.end());
 }
 
@@ -129,13 +137,16 @@ bool Transformer::TransformGroupBy(duckdb_libpgquery::PGList *group, GroupByNode
 		auto n = reinterpret_cast<duckdb_libpgquery::PGNode *>(node->data.ptr_value);
 		vector<GroupingSet> result_sets;
 		TransformGroupByNode(n, map, result, result_sets);
+		CheckGroupingSetMax(result_sets.size());
 		if (result.grouping_sets.empty()) {
 			// no grouping sets yet: use the current set of grouping sets
 			result.grouping_sets = move(result_sets);
 		} else {
 			// compute the cross product
 			vector<GroupingSet> new_sets;
-			new_sets.reserve(result.grouping_sets.size() * result_sets.size());
+			idx_t grouping_set_count = result.grouping_sets.size() * result_sets.size();
+			CheckGroupingSetMax(grouping_set_count);
+			new_sets.reserve(grouping_set_count);
 			for (idx_t current_idx = 0; current_idx < result.grouping_sets.size(); current_idx++) {
 				auto &current_set = result.grouping_sets[current_idx];
 				for (idx_t new_idx = 0; new_idx < result_sets.size(); new_idx++) {

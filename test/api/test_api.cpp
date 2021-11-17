@@ -477,3 +477,22 @@ TEST_CASE("Test parser tokenize", "[api]") {
 	Parser parser;
 	REQUIRE_NOTHROW(parser.Tokenize("SELECT * FROM table WHERE i+1=3 AND j='hello'; --tokenize example query"));
 }
+
+TEST_CASE("Test opening an invalid database file", "[api]") {
+	unique_ptr<DuckDB> db;
+	bool success = false;
+	try {
+		db = make_unique<DuckDB>("data/parquet-testing/blob.parquet");
+		success = true;
+	} catch (std::exception &ex) {
+		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));
+	}
+	REQUIRE(!success);
+	try {
+		db = make_unique<DuckDB>("data/parquet-testing/h2oai/h2oai_group_small.parquet");
+		success = true;
+	} catch (std::exception &ex) {
+		REQUIRE(StringUtil::Contains(ex.what(), "DuckDB"));
+	}
+	REQUIRE(!success);
+}

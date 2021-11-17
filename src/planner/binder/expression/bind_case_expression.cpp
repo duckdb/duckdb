@@ -25,32 +25,19 @@ BindResult ExpressionBinder::BindExpression(CaseExpression &expr, idx_t depth) {
 	}
 	ExpressionBinder::ResolveParameterType(return_type);
 
-	// now rewrite the case into a chain of cases
-
-	// CASE WHEN e1 THEN r1 WHEN w2 THEN r2 ELSE r3 is rewritten to
-	// CASE WHEN e1 THEN r1 ELSE CASE WHEN e2 THEN r2 ELSE r3
-
-	auto root = make_unique<BoundCaseExpression>(return_type);
-	auto current_root = root.get();
+	// bind all the individual components of the CASE statement
+	auto result = make_unique<BoundCaseExpression>(return_type);
 	for (idx_t i = 0; i < expr.case_checks.size(); i++) {
 		auto &check = expr.case_checks[i];
 		auto &when_expr = (BoundExpression &)*check.when_expr;
 		auto &then_expr = (BoundExpression &)*check.then_expr;
-		current_root->check = BoundCastExpression::AddCastToType(move(when_expr.expr), LogicalType::BOOLEAN);
-		current_root->result_if_true = BoundCastExpression::AddCastToType(move(then_expr.expr), return_type);
-		if (i + 1 == expr.case_checks.size()) {
-			// finished all cases
-			// res_false is the default result
-			auto &else_expr = (BoundExpression &)*expr.else_expr;
-			current_root->result_if_false = BoundCastExpression::AddCastToType(move(else_expr.expr), return_type);
-		} else {
-			// more cases remain, create a case statement within the FALSE branch
-			auto next_case = make_unique<BoundCaseExpression>(return_type);
-			auto case_ptr = next_case.get();
-			current_root->result_if_false = move(next_case);
-			current_root = case_ptr;
-		}
+		BoundCaseCheck result_check;
+		result_check.when_expr = BoundCastExpression::AddCastToType(move(when_expr.expr), LogicalType::BOOLEAN);
+		result_check.then_expr = BoundCastExpression::AddCastToType(move(then_expr.expr), return_type);
+		result->case_checks.push_back(move(result_check));
 	}
-	return BindResult(move(root));
+	auto &else_expr = (BoundExpression &)*expr.else_expr;
+	result->else_expr = BoundCastExpression::AddCastToType(move(else_expr.expr), return_type);
+	return BindResult(move(result));
 }
 } // namespace duckdb

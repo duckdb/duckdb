@@ -278,7 +278,9 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 }
 
 AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
-	return GetFirstFunction<false>(type);
+	auto fun = GetFirstFunction<false>(type);
+	fun.name = "first";
+	return fun;
 }
 
 template <bool LAST>

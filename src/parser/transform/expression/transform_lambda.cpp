@@ -17,6 +17,9 @@ static string ExtractColumnFromLambda(ParsedExpression &expr) {
 }
 
 unique_ptr<ParsedExpression> Transformer::TransformLambda(duckdb_libpgquery::PGLambdaFunction *node) {
+	if (!node->parameters) {
+		throw ParserException("Lambda function must have parameters");
+	}
 	vector<unique_ptr<ParsedExpression>> parameter_expressions;
 	TransformExpressionList(*node->parameters, parameter_expressions);
 	vector<string> parameters;
