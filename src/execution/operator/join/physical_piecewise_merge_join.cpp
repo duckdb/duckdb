@@ -112,65 +112,6 @@ unique_ptr<LocalSinkState> PhysicalPiecewiseMergeJoin::GetLocalSinkState(Executi
 	return move(result);
 }
 
-static idx_t CountNulls(const ValidityMask &validity, const idx_t count) {
-	auto null_count = validity.AllValid() ? 0 : count;
-	if (null_count) {
-		const auto entry_count = ValidityMask::EntryCount(count);
-		for (idx_t entry_idx = 0; entry_idx < entry_count;) {
-			auto entry = validity.GetValidityEntry(entry_idx++);
-			// Handle ragged end
-			if (entry_idx == entry_count) {
-				idx_t idx_in_entry;
-				validity.GetEntryIndex(count, entry_idx, idx_in_entry);
-				for (idx_t i = 0; i < idx_in_entry; ++i) {
-					null_count -= idx_t(validity.RowIsValid(entry, i));
-				}
-				break;
-			}
-
-			// Handle all set
-			if (validity.AllValid(entry)) {
-				null_count -= validity.BITS_PER_VALUE;
-				continue;
-			}
-
-			// Count partial entry
-			while (entry) {
-				entry &= (entry - 1);
-				--null_count;
-			}
-		}
-	}
-
-	return null_count;
-}
-
-static idx_t CountNulls(Vector &v, const idx_t count) {
-	idx_t nulls = 0;
-
-	VectorData vdata;
-	v.Orrify(count, vdata);
-	if (vdata.validity.AllValid()) {
-		return nulls;
-	}
-	switch (v.GetVectorType()) {
-	case VectorType::FLAT_VECTOR:
-		nulls += CountNulls(vdata.validity, count);
-		break;
-	case VectorType::CONSTANT_VECTOR:
-		nulls += CountNulls(vdata.validity, 1) * count;
-		break;
-	default:
-		for (idx_t i = 0; i < count; ++i) {
-			const auto row_idx = vdata.sel->get_index(i);
-			nulls += 1 - int(vdata.validity.RowIsValid(row_idx));
-		}
-		break;
-	}
-
-	return nulls;
-}
-
 SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, GlobalSinkState &gstate_p,
                                                 LocalSinkState &lstate_p, DataChunk &input) const {
 	auto &gstate = (MergeJoinGlobalState &)gstate_p;
@@ -193,7 +134,7 @@ SinkResultType PhysicalPiecewiseMergeJoin::Sink(ExecutionContext &context, Globa
 	// TODO: Sort any comparison NULLs to the end using an initial sort column
 	const auto count = join_keys.size();
 	for (auto &key : join_keys.data) {
-		gstate.rhs_has_null += CountNulls(key, count);
+		gstate.rhs_has_null += (count - key.CountValid(count));
 	}
 	gstate.rhs_count += count;
 
@@ -360,7 +301,7 @@ public:
 		// TODO: Sort any multi-comparison NULLs to the end using an initial sort column
 		lhs_count = lhs_keys.size();
 		for (auto &key : lhs_keys.data) {
-			lhs_has_null = CountNulls(key, lhs_count);
+			lhs_has_null = lhs_count - key.CountValid(lhs_count);
 			break;
 		}
 

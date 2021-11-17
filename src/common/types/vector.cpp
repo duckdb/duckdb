@@ -559,6 +559,32 @@ Value Vector::GetValue(idx_t index) const {
 	}
 }
 
+idx_t Vector::CountValid(const idx_t count) {
+	idx_t valid = 0;
+
+	VectorData vdata;
+	Orrify(count, vdata);
+	if (vdata.validity.AllValid()) {
+		return count;
+	}
+	switch (GetVectorType()) {
+	case VectorType::FLAT_VECTOR:
+		valid += vdata.validity.CountValid(count);
+		break;
+	case VectorType::CONSTANT_VECTOR:
+		valid += vdata.validity.CountValid(1) * count;
+		break;
+	default:
+		for (idx_t i = 0; i < count; ++i) {
+			const auto row_idx = vdata.sel->get_index(i);
+			valid += int(vdata.validity.RowIsValid(row_idx));
+		}
+		break;
+	}
+
+	return valid;
+}
+
 // LCOV_EXCL_START
 string VectorTypeToString(VectorType type) {
 	switch (type) {
@@ -1056,7 +1082,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 
 	if (GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &child_types = StructType::GetChildTypes(GetType());
-		D_ASSERT(child_types.size() > 0);
+		D_ASSERT(!child_types.empty());
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// create a selection vector of the non-null entries of the struct vector
 			auto &children = StructVector::GetEntries(*this);

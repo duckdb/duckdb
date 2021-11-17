@@ -118,6 +118,9 @@ public:
 	//! Obtains a selection vector and data pointer through which the data of this vector can be accessed
 	DUCKDB_API void Orrify(idx_t count, VectorData &data);
 
+	//! Count the number of valid entries
+	idx_t CountValid(const idx_t count);
+
 	//! Turn the vector into a sequence vector
 	void Sequence(int64_t start, int64_t increment);
 
