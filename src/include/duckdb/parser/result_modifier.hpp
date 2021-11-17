@@ -65,6 +65,7 @@ public:
 
 	//! LIMIT count
 	unique_ptr<ParsedExpression> limit;
+	bool is_limit_percent = false;
 	//! OFFSET
 	unique_ptr<ParsedExpression> offset;
 

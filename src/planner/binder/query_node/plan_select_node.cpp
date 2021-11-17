@@ -104,10 +104,19 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 		if (limit_modifier.limit || limit_modifier.offset) {
 			PlanSubqueries(&limit_modifier.limit, &root);
 			PlanSubqueries(&limit_modifier.offset, &root);
-			auto limit = make_unique<LogicalLimit>(limit_modifier.limit_val, limit_modifier.offset_val,
-			                                       move(limit_modifier.limit), move(limit_modifier.offset));
-			limit->AddChild(move(root));
-			root = move(limit);
+			if (limit_modifier.limit_val.IsMaximum()) {
+				auto limit = make_unique<LogicalLimit>(limit_modifier.limit_val.is_percentage,
+				                                       NumericLimits<int64_t>::Maximum(), limit_modifier.offset_val,
+				                                       move(limit_modifier.limit), move(limit_modifier.offset));
+				limit->AddChild(move(root));
+				root = move(limit);
+			} else {
+				auto limit = make_unique<LogicalLimit>(
+				    limit_modifier.limit_val.is_percentage, (int64_t)limit_modifier.limit_val.limit_value,
+				    limit_modifier.offset_val, move(limit_modifier.limit), move(limit_modifier.offset));
+				limit->AddChild(move(root));
+				root = move(limit);
+			}
 			// Delete from modifiers
 			std::swap(statement.modifiers[i], statement.modifiers.back());
 			statement.modifiers.erase(statement.modifiers.end() - 1);

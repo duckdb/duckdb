@@ -1042,7 +1042,7 @@ typedef union YYSTYPE
 	PGSubLinkType subquerytype;
 	PGViewCheckOption viewcheckoption;
 }
-/* Line 1529 of yacc.c.  */
+/* Line 1489 of yacc.c.  */
 #line 1047 "third_party/libpg_query/grammar/grammar_out.hpp"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */

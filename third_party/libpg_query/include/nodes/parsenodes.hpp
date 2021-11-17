@@ -1977,6 +1977,14 @@ typedef struct PGSampleOptions {
 	int location;             /* token location, or -1 if unknown */
 } PGSampleOptions;
 
+/* ----------------------
+ *              Limit Percentage
+ * ----------------------
+ */
+typedef struct PGLimitPercent {
+	PGNodeTag type;
+    PGNode* limit_percent;  /* limit percent */
+} PGLimitPercent;
 
 /* ----------------------
  *		Lambda Function

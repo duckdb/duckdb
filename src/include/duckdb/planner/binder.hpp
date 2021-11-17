@@ -167,6 +167,8 @@ private:
 	//! Bind a delimiter value (LIMIT or OFFSET)
 	unique_ptr<Expression> BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
 	                                     int64_t &delimiter_value);
+	unique_ptr<Expression> BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
+	                                     double &delimiter_value);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);

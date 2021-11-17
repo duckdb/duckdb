@@ -4,6 +4,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
+#include "duckdb/parser/parsed_data/limit_count.hpp"
 
 namespace duckdb {
 
@@ -13,12 +14,14 @@ namespace duckdb {
 class LimitGlobalState : public GlobalSinkState {
 public:
 	explicit LimitGlobalState(const PhysicalLimit &op) : current_offset(0) {
-		this->limit = op.limit_expression ? INVALID_INDEX : op.limit_value;
+		this->is_limit_percent = op.is_limit_percent;
+		this->limit_val = op.limit_expression ? INVALID_INDEX : op.limit_value;
 		this->offset = op.offset_expression ? INVALID_INDEX : op.offset_value;
 	}
 
 	idx_t current_offset;
-	idx_t limit;
+	bool is_limit_percent;
+	double limit_val;
 	idx_t offset;
 	ChunkCollection data;
 };
@@ -50,7 +53,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
                                    DataChunk &input) const {
 	D_ASSERT(input.size() > 0);
 	auto &state = (LimitGlobalState &)gstate;
-	auto &limit = state.limit;
+	auto &limit = state.limit_val;
 	auto &offset = state.offset;
 
 	if (limit != INVALID_INDEX && offset != INVALID_INDEX) {
@@ -78,7 +81,12 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 			// however we will reach it in this chunk
 			// we have to copy part of the chunk with an offset
 			idx_t start_position = offset - state.current_offset;
-			auto chunk_count = MinValue<idx_t>(limit, input.size() - start_position);
+			idx_t chunk_count;
+			if (!state.is_limit_percent) {
+				chunk_count = MinValue<idx_t>(limit, input.size() - start_position);
+			} else {
+				chunk_count = input.size() - start_position;
+			}
 			SelectionVector sel(STANDARD_VECTOR_SIZE);
 			for (idx_t i = 0; i < chunk_count; i++) {
 				sel.set_index(i, start_position + i);
@@ -92,7 +100,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	} else {
 		// have to copy either the entire chunk or part of it
 		idx_t chunk_count;
-		if (state.current_offset + input.size() >= max_element) {
+		if (!state.is_limit_percent && state.current_offset + input.size() >= max_element) {
 			// have to limit the count of the chunk
 			chunk_count = max_element - state.current_offset;
 		} else {
@@ -107,6 +115,47 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	state.current_offset += input_size;
 	state.data.Append(input);
 	return SinkResultType::NEED_MORE_INPUT;
+}
+
+void PhysicalLimit::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
+	auto &state = (LimitGlobalState &)gstate;
+	auto &state_limit = state.limit_val;
+
+	if (!state.is_limit_percent || state.data.ChunkCount() <= 0) {
+		return;
+	}
+
+	if (state_limit == INVALID_INDEX) {
+		DataChunk &input = state.data.GetChunk(0);
+		state_limit = (double)GetDelimiter(input, limit_expression.get(), 1ULL << 62ULL);
+	}
+
+	if (state_limit == (double)NumericLimits<int64_t>::Maximum()) {
+		return;
+	}
+
+	LimitCount limit_count;
+	limit_count.SetLimitValue(state.is_limit_percent, state_limit);
+	auto limit = limit_count.GetLimitValue(state.data.Count());
+
+	ChunkCollection chunk_col;
+	for (int32_t i = 0; i < state.data.ChunkCount(); i++) {
+		DataChunk &input = state.data.GetChunk(i);
+
+		idx_t chunk_count = MinValue(limit, input.size());
+		// instead of copying we just change the pointer in the current chunk
+		input.Reference(input);
+		input.SetCardinality(chunk_count);
+		chunk_col.Append(input);
+
+		limit -= chunk_count;
+		if (limit <= 0) {
+			break;
+		}
+	}
+
+	state.data.Reset();
+	state.data.Append(chunk_col);
 }
 
 //===--------------------------------------------------------------------===//

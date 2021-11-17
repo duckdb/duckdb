@@ -543,6 +543,12 @@ select_limit_value:
 					/* LIMIT ALL is represented as a NULL constant */
 					$$ = makeNullAConst(@1);
 				}
+			| a_expr '%'
+				{ $$ = makeLimitPercent($1); }
+			| FCONST PERCENT
+				{ $$ = makeLimitPercent(makeFloatConst($1,@1)); }
+			| ICONST PERCENT
+				{ $$ = makeLimitPercent(makeIntConst($1,@1)); }
 		;
 
 select_offset_value:

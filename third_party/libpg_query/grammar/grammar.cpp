@@ -178,6 +178,18 @@ makeSampleOptions(PGNode *sample_size, char *method, int seed, int location) {
 	return (PGNode *)n;
 }
 
+/* makeLimitPercent()
+ * Make limit percent node
+ */
+static PGNode *
+makeLimitPercent(PGNode *limit_percent) {
+	PGLimitPercent *n = makeNode(PGLimitPercent);
+
+	n->limit_percent = limit_percent;
+
+	return (PGNode *)n;
+}
+
 static PGNode *
 makeIntConst(int val, int location)
 {

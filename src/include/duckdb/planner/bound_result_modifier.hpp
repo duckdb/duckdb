@@ -13,6 +13,7 @@
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
+#include "duckdb/parser/parsed_data/limit_count.hpp"
 
 namespace duckdb {
 
@@ -56,7 +57,7 @@ public:
 	BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {
 	}
 	//! LIMIT
-	int64_t limit_val = NumericLimits<int64_t>::Maximum();
+	LimitCount limit_val;
 	//! OFFSET
 	int64_t offset_val = 0;
 	//! Expression in case limit is not constant

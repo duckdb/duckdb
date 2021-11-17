@@ -47,6 +47,7 @@ unique_ptr<ResultModifier> LimitModifier::Copy() {
 	auto copy = make_unique<LimitModifier>();
 	if (limit) {
 		copy->limit = limit->Copy();
+		copy->is_limit_percent = is_limit_percent;
 	}
 	if (offset) {
 		copy->offset = offset->Copy();
@@ -57,12 +58,14 @@ unique_ptr<ResultModifier> LimitModifier::Copy() {
 void LimitModifier::Serialize(Serializer &serializer) {
 	ResultModifier::Serialize(serializer);
 	serializer.WriteOptional(limit);
+	serializer.Write(is_limit_percent);
 	serializer.WriteOptional(offset);
 }
 
 unique_ptr<ResultModifier> LimitModifier::Deserialize(Deserializer &source) {
 	auto mod = make_unique<LimitModifier>();
 	mod->limit = source.ReadOptional<ParsedExpression>();
+	mod->is_limit_percent = source.Read<bool>();
 	mod->offset = source.ReadOptional<ParsedExpression>();
 	return move(mod);
 }

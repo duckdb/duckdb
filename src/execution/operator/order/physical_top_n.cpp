@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
+PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, LimitCount limit, idx_t offset,
                            idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::TOP_N, move(types), estimated_cardinality), orders(move(orders)),
       limit(limit), offset(offset) {
@@ -233,6 +233,7 @@ TopNHeap::TopNHeap(ClientContext &context_p, const vector<LogicalType> &payload_
 	compare_chunk.Initialize(sort_types);
 	boundary_values.Initialize(sort_types);
 	sort_state.Initialize();
+	limit = NumericLimits<int64_t>::Maximum();
 }
 
 void TopNHeap::Sink(DataChunk &input) {
@@ -408,11 +409,11 @@ public:
 };
 
 unique_ptr<LocalSinkState> PhysicalTopN::GetLocalSinkState(ExecutionContext &context) const {
-	return make_unique<TopNLocalState>(context.client, types, orders, limit, offset);
+	return make_unique<TopNLocalState>(context.client, types, orders, NumericLimits<idx_t>::Maximum(), offset);
 }
 
 unique_ptr<GlobalSinkState> PhysicalTopN::GetGlobalSinkState(ClientContext &context) const {
-	return make_unique<TopNGlobalState>(context, types, orders, limit, offset);
+	return make_unique<TopNGlobalState>(context, types, orders, NumericLimits<idx_t>::Maximum(), offset);
 }
 
 //===--------------------------------------------------------------------===//
@@ -434,9 +435,16 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, Lo
 	auto &gstate = (TopNGlobalState &)state;
 	auto &lstate = (TopNLocalState &)lstate_p;
 
+	// Set limit count for local state's heap
+	int32_t count = limit.GetLimitValue(lstate.heap.sort_state.count);
+	lstate.heap.limit = count;
+
 	// scan the local top N and append it to the global heap
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.heap.Combine(lstate.heap);
+
+	// Set limit count for global state's heap
+	gstate.heap.limit = count;
 }
 
 //===--------------------------------------------------------------------===//
@@ -465,11 +473,12 @@ unique_ptr<GlobalSourceState> PhysicalTopN::GetGlobalSourceState(ClientContext &
 
 void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
                            LocalSourceState &lstate) const {
-	if (limit == 0) {
-		return;
-	}
 	auto &state = (TopNOperatorState &)gstate_p;
 	auto &gstate = (TopNGlobalState &)*sink_state;
+
+	if (limit.IsZero()) {
+		return;
+	}
 
 	if (!state.initialized) {
 		gstate.heap.InitializeScan(state.state, true);
@@ -480,7 +489,7 @@ void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 
 string PhysicalTopN::ParamsToString() const {
 	string result;
-	result += "Top " + to_string(limit);
+	result += "Top " + limit.ToString();
 	if (offset > 0) {
 		result += "\n";
 		result += "Offset " + to_string(offset);

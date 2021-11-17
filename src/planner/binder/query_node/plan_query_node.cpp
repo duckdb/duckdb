@@ -26,10 +26,18 @@ unique_ptr<LogicalOperator> Binder::VisitQueryNode(BoundQueryNode &node, unique_
 		}
 		case ResultModifierType::LIMIT_MODIFIER: {
 			auto &bound = (BoundLimitModifier &)*mod;
-			auto limit =
-			    make_unique<LogicalLimit>(bound.limit_val, bound.offset_val, move(bound.limit), move(bound.offset));
-			limit->AddChild(move(root));
-			root = move(limit);
+			if (bound.limit_val.IsMaximum()) {
+				auto limit = make_unique<LogicalLimit>(bound.limit_val.is_percentage, NumericLimits<int64_t>::Maximum(),
+				                                       bound.offset_val, move(bound.limit), move(bound.offset));
+				limit->AddChild(move(root));
+				root = move(limit);
+			} else {
+				auto limit =
+				    make_unique<LogicalLimit>(bound.limit_val.is_percentage, (int64_t)bound.limit_val.limit_value,
+				                              bound.offset_val, move(bound.limit), move(bound.offset));
+				limit->AddChild(move(root));
+				root = move(limit);
+			}
 			break;
 		}
 		default:

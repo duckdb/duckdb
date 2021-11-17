@@ -1,0 +1,109 @@
+# name: test/sql/order/test_limit_percent.test
+# description: Test LIMIT keyword {% | PERCENT}
+# group: [order]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER, b INTEGER);
+
+statement ok
+INSERT INTO test VALUES (11, 22), (12, 21), (13, 22), (14, 32), (15, 52)
+
+# constant limit
+query I
+SELECT a FROM test LIMIT 20 %
+----
+11
+
+query I
+SELECT a FROM test LIMIT 40 PERCENT
+----
+11
+12
+
+# decimal limit
+query I
+SELECT a FROM test LIMIT 66.7%
+----
+11
+12
+13
+
+query I
+SELECT a FROM test LIMIT 101.1 PERCENT
+----
+11
+12
+13
+14
+15
+
+# LIMIT PERCENT with order by
+query I
+SELECT i from generate_series(1, 2000) tbl(i) WHERE (i / 10 * 10 = i) ORDER BY i DESC LIMIT 10%
+----
+2000
+1990
+1980
+1970
+1960
+1950
+1940
+1930
+1920
+1910
+1900
+1890
+1880
+1870
+1860
+1850
+1840
+1830
+1820
+1810
+
+# LIMIT with operation
+query I
+SELECT a FROM test LIMIT (30-10) %
+----
+11
+
+# LIMIT with non-scalar should fail
+statement error
+SELECT a FROM test LIMIT a %
+
+# LIMIT with non-scalar operation should also fail
+statement error
+SELECT a FROM test LIMIT a+1 %
+
+# aggregate in limit percent
+statement error
+SELECT a FROM test LIMIT SUM(42) %
+
+# non-foldable expression in limit percent
+statement ok
+SELECT * FROM test LIMIT RANDOM() %;
+
+# subquery in limit percent
+query I
+SELECT a FROM test LIMIT ((SELECT COUNT(*) FROM test)*10) % OFFSET 2
+----
+13
+
+query I
+SELECT a FROM test LIMIT (SELECT max(b) FROM test where a > 12) %
+----
+11
+12
+
+#negative values
+statement error
+SELECT b FROM test LIMIT -10 %
+----
+
+#Subqueries that return strings that can't be converted to integers
+statement error
+SELECT * FROM test LIMIT (SELECT 'ab') %

@@ -48,10 +48,28 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, unique_ptr<
 	return expr;
 }
 
+unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
+                                             double &delimiter_value) {
+	auto new_binder = Binder::CreateBinder(context, this, true);
+	ExpressionBinder expr_binder(*new_binder, context);
+	expr_binder.target_type = LogicalType::UBIGINT;
+	auto expr = expr_binder.Bind(delimiter);
+	if (expr->IsFoldable()) {
+		//! this is a constant
+		Value value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::DOUBLE);
+		delimiter_value = value.GetValue<double>();
+		return nullptr;
+	}
+	return expr;
+}
+
 unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	auto result = make_unique<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		result->limit = BindDelimiter(context, move(limit_mod.limit), result->limit_val);
+		double limit_value;
+		result->limit = BindDelimiter(context, move(limit_mod.limit), limit_value);
+		result->limit_val.is_percentage = limit_mod.is_limit_percent;
+		result->limit_val.SetLimitValue(limit_mod.is_limit_percent, limit_value);
 	}
 	if (limit_mod.offset) {
 		result->offset = BindDelimiter(context, move(limit_mod.offset), result->offset_val);

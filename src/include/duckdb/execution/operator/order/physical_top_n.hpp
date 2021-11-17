@@ -11,6 +11,7 @@
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/bound_query_node.hpp"
+#include "duckdb/parser/parsed_data/limit_count.hpp"
 
 namespace duckdb {
 
@@ -18,11 +19,11 @@ namespace duckdb {
 //! the data but only add a selection vector.
 class PhysicalTopN : public PhysicalOperator {
 public:
-	PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
+	PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, LimitCount limit, idx_t offset,
 	             idx_t estimated_cardinality);
 
 	vector<BoundOrderByNode> orders;
-	idx_t limit;
+	LimitCount limit;
 	idx_t offset;
 
 public:
