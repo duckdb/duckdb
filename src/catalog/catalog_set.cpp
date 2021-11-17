@@ -114,9 +114,7 @@ bool CatalogSet::AlterOwnership(ClientContext &context, ChangeOwnershipInfo *inf
 		return false;
 	}
 
-	// TODO: How to make this generic? we dont want only table entries
-	auto owner_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, info->owner_schema, info->owner_name);
-
+	auto owner_entry = catalog.GetEntry(context, info->GetOwnerCatalogType(), info->owner_schema, info->owner_name);
 	if (!owner_entry) {
 		return false;
 	}

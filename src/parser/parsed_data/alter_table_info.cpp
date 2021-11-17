@@ -20,16 +20,26 @@ unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 }
 
 CatalogType ChangeOwnershipInfo::GetCatalogType() {
-	return catalog_type;
+	return GetEntryCatalogType();
+}
+
+CatalogType ChangeOwnershipInfo::GetEntryCatalogType() {
+	return entry_catalog_type;
+}
+
+CatalogType ChangeOwnershipInfo::GetOwnerCatalogType() {
+	return owner_catalog_type;
 }
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
-	return make_unique_base<AlterInfo, ChangeOwnershipInfo>(catalog_type, schema, name, owner_schema, owner_name);
+	return make_unique_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, schema, name, owner_catalog_type,
+	                                                        owner_schema, owner_name);
 }
 
 void ChangeOwnershipInfo::Serialize(Serializer &serializer) {
 	AlterInfo::Serialize(serializer);
-	serializer.Write<CatalogType>(catalog_type);
+	serializer.Write<CatalogType>(entry_catalog_type);
+	serializer.Write<CatalogType>(owner_catalog_type);
 	serializer.WriteString(schema);
 	serializer.WriteString(name);
 	serializer.WriteString(owner_schema);
@@ -37,12 +47,13 @@ void ChangeOwnershipInfo::Serialize(Serializer &serializer) {
 }
 
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Deserialize(Deserializer &source) {
-	auto type = source.Read<CatalogType>();
+	auto entry_type = source.Read<CatalogType>();
+	auto owner_type = source.Read<CatalogType>();
 	auto schema = source.Read<string>();
 	auto name = source.Read<string>();
 	auto owner_schema = source.Read<string>();
 	auto owner_name = source.Read<string>();
-	return make_unique<ChangeOwnershipInfo>(type, schema, name, owner_schema, owner_name);
+	return make_unique<ChangeOwnershipInfo>(entry_type, schema, name, owner_type, owner_schema, owner_name);
 }
 
 void AlterTableInfo::Serialize(Serializer &serializer) {
