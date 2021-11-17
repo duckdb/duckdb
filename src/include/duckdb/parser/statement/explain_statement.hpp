@@ -13,10 +13,7 @@
 
 namespace duckdb {
 
-enum class ExplainType : uint8_t {
-	EXPLAIN_STANDARD,
-	EXPLAIN_ANALYZE
-};
+enum class ExplainType : uint8_t { EXPLAIN_STANDARD, EXPLAIN_ANALYZE };
 
 class ExplainStatement : public SQLStatement {
 public:

@@ -412,7 +412,7 @@ static bool IsExplainAnalyze(SQLStatement *statement) {
 	if (statement->type != StatementType::EXPLAIN_STATEMENT) {
 		return false;
 	}
-	auto &explain = (ExplainStatement &) *statement;
+	auto &explain = (ExplainStatement &)*statement;
 	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
 }
 

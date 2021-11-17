@@ -15,8 +15,8 @@ namespace duckdb {
 
 class LogicalExplain : public LogicalOperator {
 public:
-	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type) :
-	   LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type) {
+	LogicalExplain(unique_ptr<LogicalOperator> plan, ExplainType explain_type)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_EXPLAIN), explain_type(explain_type) {
 		children.push_back(move(plan));
 	}
 

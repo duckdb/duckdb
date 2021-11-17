@@ -16,8 +16,9 @@ unique_ptr<GlobalSourceState> PhysicalExplainAnalyze::GetGlobalSourceState(Clien
 	return make_unique<ExplainAnalyzeState>();
 }
 
-void PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate, LocalSourceState &lstate) const {
-	auto &state = (ExplainAnalyzeState &) gstate;
+void PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+                                     LocalSourceState &lstate) const {
+	auto &state = (ExplainAnalyzeState &)gstate;
 	if (state.finished) {
 		return;
 	}
@@ -29,10 +30,9 @@ void PhysicalExplainAnalyze::GetData(ExecutionContext &context, DataChunk &chunk
 	state.finished = true;
 }
 
-
 SinkResultType PhysicalExplainAnalyze::Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
-					DataChunk &input) const {
+                                            DataChunk &input) const {
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
-}
+} // namespace duckdb

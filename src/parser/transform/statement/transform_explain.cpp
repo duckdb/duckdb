@@ -8,8 +8,8 @@ unique_ptr<ExplainStatement> Transformer::TransformExplain(duckdb_libpgquery::PG
 	D_ASSERT(stmt);
 	auto explain_type = ExplainType::EXPLAIN_STANDARD;
 	if (stmt->options) {
-		for(auto n = stmt->options->head; n; n = n->next) {
-			auto def_elem = ((duckdb_libpgquery::PGDefElem*)n->data.ptr_value)->defname;
+		for (auto n = stmt->options->head; n; n = n->next) {
+			auto def_elem = ((duckdb_libpgquery::PGDefElem *)n->data.ptr_value)->defname;
 			string elem(def_elem);
 			if (elem == "analyze") {
 				explain_type = ExplainType::EXPLAIN_ANALYZE;

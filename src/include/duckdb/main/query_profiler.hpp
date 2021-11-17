@@ -133,6 +133,7 @@ public:
 	//! The file to save query profiling information to, instead of printing it to the console (empty = print to
 	//! console)
 	string save_location;
+
 public:
 	struct TreeNode {
 		PhysicalOperatorType type;

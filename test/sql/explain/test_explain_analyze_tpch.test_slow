@@ -1,4 +1,4 @@
-# name: test/sql/explain/test_explain_analyze_tpch.test
+# name: test/sql/explain/test_explain_analyze_tpch.test_slow
 # description: Test explain analyze TPC-H
 # group: [explain]
 
