@@ -25,6 +25,7 @@ int ProgressBar::GetCurrentPercentage() {
 
 void ProgressBar::Start() {
 #ifndef DUCKDB_NO_THREADS
+	Stop(false);
 	stop = false;
 	current_percentage = 0;
 	progress_bar_thread = thread(&ProgressBar::ProgressBarThread, this);
@@ -35,13 +36,13 @@ ProgressBar::~ProgressBar() {
 	Stop();
 }
 
-void ProgressBar::Stop() {
+void ProgressBar::Stop(bool success) {
 #ifndef DUCKDB_NO_THREADS
 	if (progress_bar_thread.joinable()) {
 		stop = true;
 		c.notify_one();
 		progress_bar_thread.join();
-		if (supported && current_percentage > 0 && ClientConfig::GetConfig(executor->context).print_progress_bar) {
+		if (success && supported && current_percentage > 0 && ClientConfig::GetConfig(executor->context).print_progress_bar) {
 			Printer::FinishProgressBarPrint(PROGRESS_BAR_STRING.c_str(), PROGRESS_BAR_WIDTH);
 		}
 	}

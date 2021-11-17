@@ -29,7 +29,7 @@ public:
 	//! Starts the thread
 	void Start();
 	//! Stops the thread
-	void Stop();
+	void Stop(bool success = true);
 	//! Gets current percentage
 	int GetCurrentPercentage();
 
