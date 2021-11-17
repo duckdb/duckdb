@@ -4,6 +4,7 @@ import threading
 import queue as Queue
 import pandas as pd
 import numpy as np
+import os
 try:
     import pyarrow as pa
     can_run = True
@@ -54,7 +55,7 @@ def execute_query(duckdb_conn, queue):
         duckdb_conn.execute('select i from (values (42), (84), (NULL), (128)) tbl(i)')
         queue.put(True)
     except:
-        queue.put(False)  
+        queue.put(False)
 
 def insert_runtime_error(duckdb_conn, queue):
     # Get a new connection
@@ -125,7 +126,7 @@ def fetchdf_query(duckdb_conn, queue):
         duckdb_conn.execute('select i from (values (42), (84), (NULL), (128)) tbl(i)').fetchdf()
         queue.put(True)
     except:
-        queue.put(False) 
+        queue.put(False)
 
 def fetchdf_chunk_query(duckdb_conn, queue):
     # Get a new connection
@@ -220,6 +221,98 @@ def arrow_register_unregister(duckdb_conn, queue):
     except:
         queue.put(False) 
 
+def table(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    duckdb_conn.execute("CREATE TABLE T ( i INTEGER)")
+    try:
+        out = duckdb_conn.table('T')
+        queue.put(True)
+    except:
+        queue.put(False) 
+
+def view(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    duckdb_conn.execute("CREATE TABLE T ( i INTEGER)")
+    duckdb_conn.execute("CREATE VIEW V as (SELECT * FROM T)")
+    try:
+        out = duckdb_conn.values([5, 'five'])
+        queue.put(True)
+    except:
+        queue.put(False) 
+def values(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    try:
+        out = duckdb_conn.values([5, 'five'])
+        queue.put(True)
+    except:
+        queue.put(False) 
+
+
+def from_query(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    try:
+        out = duckdb_conn.from_query("select i from (values (42), (84), (NULL), (128)) tbl(i)")
+        queue.put(True)
+    except:
+        queue.put(False) 
+
+def from_df(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    df = pd.DataFrame(['bla', 'blabla']*10, columns=['A'])
+    try:
+        out = duckdb_conn.execute("select * from df").fetchall()
+        queue.put(True)
+    except:
+        queue.put(False)
+
+def from_arrow_table(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    arrow_tbl = pa.Table.from_pydict({'my_column':pa.array([1,2,3,4,5],type=pa.int64())})
+    try:
+        out = duckdb_conn.from_arrow_table(arrow_tbl)
+        queue.put(True)
+    except:
+        queue.put(False)
+
+def from_csv_auto(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','integers.csv')
+    try:
+        out = duckdb_conn.from_csv_auto(filename)
+        queue.put(True)
+    except:
+        queue.put(False)     
+
+def from_parquet(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    filename = os.path.join(os.path.dirname(os.path.realpath(__file__)),'data','binary_string.parquet')
+    try:
+        out = duckdb_conn.from_parquet(filename)
+        queue.put(True)
+    except:
+        queue.put(False)
+
+def description(duckdb_conn, queue):
+    # Get a new connection
+    duckdb_conn = duckdb.connect()
+    duckdb_conn.execute('CREATE TABLE test (i bool, j TIME, k VARCHAR)')
+    duckdb_conn.execute("INSERT INTO test VALUES (TRUE, '01:01:01', 'bla' )")
+    rel = duckdb_conn.table("test")
+    res = rel.execute()
+    try:
+        res.description()
+        queue.put(True)
+    except:
+        queue.put(False)          
+
 class TestDuckMultithread(object):
     def test_same_conn(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,execute_query_same_connection)
@@ -275,7 +368,7 @@ class TestDuckMultithread(object):
 
     def test_df_append(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,df_append)
-        duck_threads.multithread_test()    
+        duck_threads.multithread_test()
 
     def test_df_register(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,df_register)
@@ -283,11 +376,55 @@ class TestDuckMultithread(object):
 
     def test_df_unregister(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,df_unregister)
-        duck_threads.multithread_test() 
+        duck_threads.multithread_test()
 
     def test_arrow_register_unregister(self, duckdb_cursor):
         if not can_run:
             return
         duck_threads = DuckDBThreaded(10,arrow_register_unregister)
+        duck_threads.multithread_test()
+
+    def test_table(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,table)
+        duck_threads.multithread_test()
+
+    def test_view(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,view)
+        duck_threads.multithread_test()
+
+    def test_values(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,values)
+        duck_threads.multithread_test()
+
+    def test_table_function(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,arrow_register_unregister)
+        duck_threads.multithread_test()
+    
+    def test_from_query(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,from_query)
+        duck_threads.multithread_test()
+
+    def test_from_DF(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,from_df)
         duck_threads.multithread_test() 
+
+    def test_from_arrow_table(self, duckdb_cursor):
+        if not can_run:
+            return
+        duck_threads = DuckDBThreaded(10,from_arrow_table)
+        duck_threads.multithread_test()
  
+    def test_from_csv_auto(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,from_csv_auto)
+        duck_threads.multithread_test()
+
+    def test_from_parquet(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(10,from_parquet)
+        duck_threads.multithread_test()
+
+    def test_description(self, duckdb_cursor):
+        duck_threads = DuckDBThreaded(1,description)
+        duck_threads.multithread_test()
+    
+
+
