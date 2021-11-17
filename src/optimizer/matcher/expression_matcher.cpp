@@ -30,16 +30,6 @@ bool CaseExpressionMatcher::Match(Expression *expr_p, vector<Expression *> &bind
 	if (!ExpressionMatcher::Match(expr_p, bindings)) {
 		return false;
 	}
-	auto expr = (BoundCaseExpression *)expr_p;
-	if (check && !check->Match(expr->check.get(), bindings)) {
-		return false;
-	}
-	if (result_if_true && !result_if_true->Match(expr->result_if_true.get(), bindings)) {
-		return false;
-	}
-	if (result_if_false && !result_if_false->Match(expr->result_if_false.get(), bindings)) {
-		return false;
-	}
 	return true;
 }
 

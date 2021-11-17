@@ -210,6 +210,10 @@ unique_ptr<NodeStatistics> StatisticsPropagator::PropagateStatistics(LogicalFilt
                                                                      unique_ptr<LogicalOperator> *node_ptr) {
 	// first propagate to the child
 	node_stats = PropagateStatistics(filter.children[0]);
+	if (filter.children[0]->type == LogicalOperatorType::LOGICAL_EMPTY_RESULT) {
+		ReplaceWithEmptyResult(*node_ptr);
+		return make_unique<NodeStatistics>(0, 0);
+	}
 
 	// then propagate to each of the expressions
 	for (idx_t i = 0; i < filter.expressions.size(); i++) {

@@ -16,6 +16,7 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
+  extension_helper.cpp
   materialized_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
@@ -26,3 +27,5 @@ add_library_unity(
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main>
     PARENT_SCOPE)
+
+add_extension_definitions(duckdb_main)

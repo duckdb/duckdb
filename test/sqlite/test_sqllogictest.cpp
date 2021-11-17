@@ -39,7 +39,7 @@
 #include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/parser/parser.hpp"
 
-#include "extension_helper.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #include "test_helpers.hpp"
 #include "test_helper_extension.hpp"
@@ -71,6 +71,7 @@ struct SQLLogicTestRunner {
 public:
 	SQLLogicTestRunner(string dbpath) : dbpath(move(dbpath)) {
 		config = GetTestConfig();
+		config->load_extensions = false;
 	}
 	~SQLLogicTestRunner();
 

@@ -57,7 +57,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 	RProtector r;
 	SEXP df((SEXP)inputs[0].GetPointer());
 
-	auto df_names = r.Protect(RApi::ToUtf8(GET_NAMES(df)));
+	auto df_names = r.Protect(GET_NAMES(df));
 	vector<RType> rtypes;
 
 	for (idx_t col_idx = 0; col_idx < (idx_t)Rf_length(df); col_idx++) {
@@ -77,7 +77,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 			duckdb_col_type = LogicalType::DOUBLE;
 			break;
 		case RType::FACTOR: {
-			auto levels = r.Protect(RApi::ToUtf8(GET_LEVELS(coldata)));
+			auto levels = r.Protect(GET_LEVELS(coldata));
 			vector<string> duckdb_levels(LENGTH(levels));
 			for (idx_t level_idx = 0; level_idx < LENGTH(levels); level_idx++) {
 				duckdb_levels[level_idx] = string(CHAR(STRING_ELT(levels, level_idx)));
@@ -132,12 +132,8 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 	}
 	idx_t this_count = std::min((idx_t)STANDARD_VECTOR_SIZE, data.row_count - state.position);
 
-	RProtector r;
-	auto poscount = r.Protect(NEW_NUMERIC(2));
-
 	output.SetCardinality(this_count);
 
-	// TODO this is quite similar to append, unify!
 	for (idx_t col_idx = 0; col_idx < output.ColumnCount(); col_idx++) {
 		auto &v = output.data[col_idx];
 		SEXP coldata = VECTOR_ELT(data.df, col_idx);
@@ -159,13 +155,7 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 			break;
 		}
 		case RType::STRING: {
-			// fun: we need an altrep string wrapper just to feed enc2utf8 without copying all ze strings
-			// although that may be preferable...
-			NUMERIC_POINTER(poscount)[0] = state.position;
-			NUMERIC_POINTER(poscount)[1] = this_count;
-			auto coldata_subset = r.Protect(R_new_altrep(AltrepStringSubset::rclass, coldata, poscount));
-			auto coldata_subset_utf = r.Protect(RApi::ToUtf8(coldata_subset));
-			AppendStringSegment(coldata_subset_utf, v, 0, this_count);
+			AppendStringSegment(coldata, v, state.position, this_count);
 			break;
 		}
 		case RType::FACTOR: {

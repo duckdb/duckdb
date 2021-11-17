@@ -12,7 +12,6 @@ using namespace std;
 TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
 	unique_ptr<QueryResult> result;
 	DuckDB db(nullptr);
-	db.LoadExtension<TPCHExtension>();
 	Connection con(db);
 	double sf = 0.01;
 

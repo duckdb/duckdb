@@ -471,7 +471,7 @@ unique_ptr<LocalFunctionData> ParquetWriteInitializeLocal(ClientContext &context
 }
 
 unique_ptr<TableFunctionRef> ParquetScanReplacement(const string &table_name, void *data) {
-	if (!StringUtil::EndsWith(table_name, ".parquet")) {
+	if (!StringUtil::EndsWith(StringUtil::Lower(table_name), ".parquet")) {
 		return nullptr;
 	}
 	auto table_function = make_unique<TableFunctionRef>();

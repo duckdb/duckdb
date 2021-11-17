@@ -9,8 +9,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/client_context.hpp"
 
-#include "extension_helper.hpp"
-
 // you can set this to enable compression. You will need to link zlib as well.
 // #define CPPHTTPLIB_ZLIB_SUPPORT 1
 #define CPPHTTPLIB_KEEPALIVE_TIMEOUT_USECOND 10000
@@ -331,7 +329,6 @@ int main(int argc, char **argv) {
 	config.maximum_memory = 10737418240;
 
 	DuckDB duckdb(dbfile.empty() ? nullptr : dbfile.c_str(), &config);
-	ExtensionHelper::LoadAllExtensions(duckdb);
 
 	svr.Get("/query", [&](const Request &req, Response &resp) {
 		auto q = req.get_param_value("q");
