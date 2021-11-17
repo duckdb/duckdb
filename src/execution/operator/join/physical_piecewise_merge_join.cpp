@@ -6,7 +6,6 @@
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/execution/merge_join.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/main/client_context.hpp"
 

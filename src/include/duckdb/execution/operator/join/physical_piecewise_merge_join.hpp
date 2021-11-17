@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/execution/merge_join.hpp"
 #include "duckdb/execution/operator/join/physical_comparison_join.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 
