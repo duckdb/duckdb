@@ -2,6 +2,7 @@
 #include "duckdb_odbc.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/string_util.hpp"
+#include <iostream>
 
 using duckdb::Decimal;
 using duckdb::idx_t;
@@ -59,6 +60,7 @@ SQLRETURN ParameterWrapper::GetValues(std::vector<Value> &values) {
 	D_ASSERT(paramset_idx < paramset_size);
 	// Fill values
 	for (idx_t desc_idx = 0; desc_idx < param_descriptors.size(); ++desc_idx) {
+		std::cout << "ParameterWrapper::GetValues" << std::endl;
 		// set a proper parameter value
 		auto ret = param_descriptors[desc_idx].SetValue(paramset_idx);
 		if (param_status_ptr) {

@@ -5,9 +5,11 @@
 #include "duckdb.hpp"
 
 #include "duckdb/common/windows.hpp"
+#include "descriptor.hpp"
 
 #include <sqltypes.h>
 #include <sqlext.h>
+#include <vector>
 
 #ifdef _WIN32
 #include <Windows.h>
@@ -17,6 +19,7 @@ namespace duckdb {
 
 class OdbcFetch;
 class ParameterWrapper;
+class ParameterController;
 
 enum OdbcHandleType { ENV, DBC, STMT, DESC };
 struct OdbcHandle {
@@ -94,6 +97,8 @@ struct OdbcHandleStmt : public OdbcHandle {
 	// fetcher
 	unique_ptr<OdbcFetch> odbc_fetcher;
 
+	unique_ptr<ParameterController> param_ctl;
+
 	unique_ptr<OdbcHandleDesc> apd;
 	unique_ptr<OdbcHandleDesc> ipd;
 	unique_ptr<OdbcHandleDesc> ard;
@@ -103,8 +108,24 @@ struct OdbcHandleStmt : public OdbcHandle {
 struct OdbcHandleDesc : public OdbcHandle {
 	//! https://docs.microsoft.com/en-us/sql/odbc/reference/develop-app/descriptors?view=sql-server-ver15
 	// TODO requires full implmentation
-	explicit OdbcHandleDesc() : OdbcHandle(OdbcHandleType::DESC) {};
+public:
+	explicit OdbcHandleDesc(DescType type, OdbcHandleStmt *stmt_p)
+	    : OdbcHandle(OdbcHandleType::DESC), desc_type(type), stmt(stmt_p) {
+	}
 	~OdbcHandleDesc() {};
+	DescRecord *GetDescRecord(idx_t param_idx);
+	SQLRETURN SetDescField(SQLSMALLINT rec_number, SQLSMALLINT field_identifier, SQLPOINTER value_ptr,
+	                       SQLINTEGER buffer_length);
+	void Clear();
+	void Reset();
+
+	public:
+		DescHeader header;
+		std::vector<DescRecord> records;
+
+	private:
+		DescType desc_type;
+		OdbcHandleStmt *stmt;
 };
 
 struct OdbcUtils {

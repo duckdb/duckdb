@@ -39,6 +39,8 @@ add_library(
   odbc_fetch.cpp
   parameter_wrapper.cpp
   empty_stubs.cpp
+  descriptor.cpp
+  parameter_controller.cpp
   duckdb_odbc.def)
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")

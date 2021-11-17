@@ -3,6 +3,7 @@
 #include "odbc_fetch.hpp"
 #include "statement_functions.hpp"
 #include "parameter_wrapper.hpp"
+#include "parameter_controller.hpp"
 
 using duckdb::LogicalTypeId;
 
@@ -16,13 +17,22 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 			 */
 			// this should be 1?
 			stmt->param_wrapper->paramset_size = (SQLULEN)value_ptr;
+			stmt->apd->header.sql_desc_array_size = (SQLULEN)value_ptr;
+			return SQL_SUCCESS;
+		}
+		case SQL_ATTR_PARAM_BIND_TYPE: {
+			if (value_ptr) {
+				stmt->apd->header.sql_desc_bind_type = *((SQLINTEGER *)value_ptr);
+			}
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_PARAMS_PROCESSED_PTR:
 			stmt->param_wrapper->SetParamProcessedPtr(value_ptr);
+			stmt->param_ctl->SetParamProcessedPtr(value_ptr);
 			return SQL_SUCCESS;
 		case SQL_ATTR_PARAM_STATUS_PTR:
 			stmt->param_wrapper->param_status_ptr = (SQLUSMALLINT *)value_ptr;
+			stmt->ipd->header.sql_desc_array_status_ptr = (SQLUSMALLINT *)value_ptr;
 			return SQL_SUCCESS;
 		case SQL_ATTR_QUERY_TIMEOUT: {
 			// this should be 0
@@ -353,6 +363,7 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 		}
 		if (option == SQL_RESET_PARAMS) {
 			stmt->param_wrapper->Clear();
+			stmt->param_ctl->Clear();
 			return SQL_SUCCESS;
 		}
 		if (option == SQL_CLOSE) {
@@ -365,7 +376,8 @@ SQLRETURN SQL_API SQLFreeStmt(SQLHSTMT statement_handle, SQLUSMALLINT option) {
 
 SQLRETURN SQL_API SQLMoreResults(SQLHSTMT statement_handle) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		if (!stmt->param_wrapper->HasParamSetToProcess()) {
+		// if (!stmt->param_wrapper->HasParamSetToProcess()) {
+		if (!stmt->param_ctl->HasParamSetToProcess()) {
 			return SQL_NO_DATA;
 		}
 		return duckdb::SingleExecuteStmt(stmt);
