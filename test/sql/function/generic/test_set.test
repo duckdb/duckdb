@@ -9,6 +9,9 @@ PRAGMA enable_verification
 statement error
 SELECT CURRENT_SETTING('a');
 
+statement error
+SELECT CURRENT_SETTING('memori_limit');
+
 statement ok
 SELECT CURRENT_SETTING('default_null_order');
 
@@ -32,3 +35,12 @@ SELECT * FROM range(3) UNION ALL SELECT NULL ORDER BY 1
 1
 2
 NULL
+
+statement error
+SELECT CURRENT_SETTING(i::VARCHAR) FROM range(1) tbl(i)
+
+statement error
+SELECT CURRENT_SETTING(NULL)
+
+statement error
+SELECT CURRENT_SETTING('')

@@ -91,7 +91,7 @@ ConfigurationOption *DBConfig::GetOptionByName(const string &name) {
 
 void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) {
 	if (!option.set_global) {
-		return;
+		throw InternalException("Could not set option \"%s\" as a global option", option.name);
 	}
 	Value input = value.CastAs(option.parameter_type);
 	option.set_global(nullptr, *this, input);

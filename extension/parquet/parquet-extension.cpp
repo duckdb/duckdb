@@ -520,6 +520,8 @@ void ParquetExtension::Load(DuckDB &db) {
 
 	auto &config = DBConfig::GetConfig(*db.instance);
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
+	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
+	                          LogicalType::BOOLEAN);
 }
 
 } // namespace duckdb
