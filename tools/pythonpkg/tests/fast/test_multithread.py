@@ -423,7 +423,7 @@ class TestDuckMultithread(object):
         duck_threads.multithread_test()
 
     def test_description(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(1,description)
+        duck_threads = DuckDBThreaded(10,description)
         duck_threads.multithread_test()
     
 
