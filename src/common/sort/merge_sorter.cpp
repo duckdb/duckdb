@@ -1,3 +1,4 @@
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/sort.hpp"
 
@@ -154,7 +155,7 @@ int MergeSorter::CompareUsingGlobalIndex(SortedBlock &l, SortedBlock &r, const i
 
 	int comp_res;
 	if (sort_layout.all_constant) {
-		comp_res = memcmp(l_ptr, r_ptr, sort_layout.comparison_size);
+		comp_res = FastMemcmp(l_ptr, r_ptr, sort_layout.comparison_size);
 	} else {
 		l.blob_sorting_data->block_idx = l_block_idx;
 		l.blob_sorting_data->entry_idx = l_entry_idx;
@@ -298,7 +299,7 @@ void MergeSorter::ComputeMerge(const idx_t &count, bool left_smaller[]) {
 		if (sort_layout.all_constant) {
 			// All sorting columns are constant size
 			for (; compared < count && l_entry_idx < l_count && r_entry_idx < r_count; compared++) {
-				left_smaller[compared] = memcmp(l_radix_ptr, r_radix_ptr, sort_layout.comparison_size) < 0;
+				left_smaller[compared] = FastMemcmp(l_radix_ptr, r_radix_ptr, sort_layout.comparison_size) < 0;
 				const bool &l_smaller = left_smaller[compared];
 				const bool r_smaller = !l_smaller;
 				// Use comparison bool (0 or 1) to increment entries and pointers
