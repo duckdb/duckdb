@@ -447,7 +447,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
 		statement = move(copied_statement);
 	}
 	// start the profiler
-	profiler->StartQuery(query, IsExplainAnalyze(statement.get()));
+	profiler->StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
 	try {
 		if (statement) {
 			result = RunStatementInternal(lock, query, move(statement), allow_stream_result);

@@ -125,7 +125,8 @@ class QueryProfiler {
 public:
 	DUCKDB_API QueryProfiler()
 	    : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), detailed_enabled(false), running(false),
-	      query_requires_profiling(false) {
+	      query_requires_profiling(false), is_explain_analyze(false), stored_enabled(false),
+	      stored_automatic_print_format(ProfilerPrintFormat::NONE) {
 	}
 
 	//! The format to automatically print query profiling information in (default: disabled)
@@ -222,7 +223,7 @@ private:
 	//! A map of a Physical Operator pointer to a tree node
 	TreeMap tree_map;
 
-	bool is_explain_analyze = false;
+	bool is_explain_analyze;
 	bool stored_enabled;
 	ProfilerPrintFormat stored_automatic_print_format;
 	string stored_save_location;
