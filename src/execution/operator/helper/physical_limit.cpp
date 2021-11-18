@@ -139,7 +139,7 @@ void PhysicalLimit::Combine(ExecutionContext &context, GlobalSinkState &gstate, 
 	auto limit = limit_count.GetLimitValue(state.data.Count());
 
 	ChunkCollection chunk_col;
-	for (int32_t i = 0; i < state.data.ChunkCount(); i++) {
+	for (idx_t i = 0; i < state.data.ChunkCount(); i++) {
 		DataChunk &input = state.data.GetChunk(i);
 
 		idx_t chunk_count = MinValue(limit, input.size());

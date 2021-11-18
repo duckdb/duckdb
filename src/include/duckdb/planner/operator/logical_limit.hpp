@@ -23,7 +23,7 @@ public:
 
 	//! Limit and offset values in case they are constants, used in optimizations.
 	bool is_limit_percent = false;
-	double limit_val = (double)NumericLimits<int64_t>::Maximum();
+	double limit_val;
 	int64_t offset_val;
 	//! The maximum amount of elements to emit
 	unique_ptr<Expression> limit;
