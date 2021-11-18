@@ -36,26 +36,6 @@ unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
 	                                                        owner_schema, owner_name);
 }
 
-//void ChangeOwnershipInfo::Serialize(Serializer &serializer) {
-//	AlterInfo::Serialize(serializer);
-//	serializer.Write<CatalogType>(entry_catalog_type);
-//	serializer.Write<CatalogType>(owner_catalog_type);
-//	serializer.WriteString(schema);
-//	serializer.WriteString(name);
-//	serializer.WriteString(owner_schema);
-//	serializer.WriteString(owner_name);
-//}
-//
-//unique_ptr<AlterInfo> ChangeOwnershipInfo::Deserialize(Deserializer &source) {
-//	auto entry_type = source.Read<CatalogType>();
-//	auto owner_type = source.Read<CatalogType>();
-//	auto schema = source.Read<string>();
-//	auto name = source.Read<string>();
-//	auto owner_schema = source.Read<string>();
-//	auto owner_name = source.Read<string>();
-//	return make_unique<ChangeOwnershipInfo>(entry_type, schema, name, owner_type, owner_schema, owner_name);
-//}
-
 void AlterTableInfo::Serialize(Serializer &serializer) {
 	AlterInfo::Serialize(serializer);
 	serializer.Write<AlterTableType>(alter_table_type);

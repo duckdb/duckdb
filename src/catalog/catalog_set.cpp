@@ -103,11 +103,6 @@ bool CatalogSet::GetEntryInternal(ClientContext &context, const string &name, id
 }
 
 bool CatalogSet::AlterOwnership(ClientContext &context, ChangeOwnershipInfo *info) {
-	// lock the catalog for writing
-	lock_guard<mutex> write_lock(catalog.write_lock);
-	// lock this catalog set to disallow reading
-	lock_guard<mutex> read_lock(catalog_lock);
-
 	idx_t entry_index;
 	CatalogEntry *entry;
 	if (!GetEntryInternal(context, info->name, entry_index, entry)) {
