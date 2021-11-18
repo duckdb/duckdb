@@ -65,8 +65,6 @@ public:
 	CatalogType GetEntryCatalogType();
 	CatalogType GetOwnerCatalogType();
 	unique_ptr<AlterInfo> Copy() const override;
-	void Serialize(Serializer &serializer) override;
-	static unique_ptr<AlterInfo> Deserialize(Deserializer &source);
 };
 
 //===--------------------------------------------------------------------===//

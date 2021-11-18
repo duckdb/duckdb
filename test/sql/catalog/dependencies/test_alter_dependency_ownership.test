@@ -20,6 +20,24 @@ DROP TABLE tablename;
 statement error
 SELECT nextval('sequence1');
 
+##TEST: If the table is dropped, then the sequence is also droppped, using schemas
+statement ok
+CREATE SEQUENCE main.sequence1;
+
+statement ok
+CREATE TABLE main.tablename (
+    colname integer
+);
+
+statement ok
+ALTER SEQUENCE main.sequence1 OWNED BY main.tablename;
+
+statement ok
+DROP TABLE main.tablename;
+
+statement error
+SELECT nextval('main.sequence1');
+
 ##TEST: If the owned sequence is dropped with CASCADE, then the table is also dropped
 statement ok
 CREATE SEQUENCE sequence1;
@@ -348,3 +366,16 @@ DROP SEQUENCE sequence1;
 
 statement ok
 DROP TABLE tablename;
+
+##TEST: Wrong argument for alter sequence
+statement ok
+CREATE SEQUENCE sequence1;
+
+statement error
+ALTER SEQUENCE sequence1 OWNED BY;
+
+statement error
+ALTER SEQUENCE sequence1 OWNED BY 2;
+
+statement ok
+DROP SEQUENCE sequence1;
