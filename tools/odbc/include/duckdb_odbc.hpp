@@ -18,7 +18,6 @@
 namespace duckdb {
 
 class OdbcFetch;
-class ParameterWrapper;
 class ParameterController;
 
 enum OdbcHandleType { ENV, DBC, STMT, DESC };
@@ -88,7 +87,6 @@ struct OdbcHandleStmt : public OdbcHandle {
 	OdbcHandleDbc *dbc;
 	unique_ptr<PreparedStatement> stmt;
 	unique_ptr<QueryResult> res;
-	unique_ptr<ParameterWrapper> param_wrapper;
 	vector<OdbcBoundCol> bound_cols;
 	bool open;
 	SQLULEN *rows_fetched_ptr;

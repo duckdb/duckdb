@@ -1,7 +1,6 @@
 #include "statement_functions.hpp"
 #include "odbc_interval.hpp"
 #include "odbc_fetch.hpp"
-#include "parameter_wrapper.hpp"
 #include "descriptor.hpp"
 #include "parameter_controller.hpp"
 
@@ -53,8 +52,6 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 			stmt->error_messages.emplace_back(stmt->stmt->error);
 			return SQL_ERROR;
 		}
-		//		stmt->param_wrapper->param_descriptors.resize(stmt->stmt->n_param);
-		// stmt->param_ctl->SetDescCount(stmt->stmt->n_param);
 		stmt->param_ctl->ResetParams(stmt->stmt->n_param);
 
 		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
@@ -96,14 +93,11 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 	}
 
 	std::vector<Value> values;
-
 	SQLRETURN ret = stmt->param_ctl->GetParamValues(values);
-
-	// values.clear();
-	// ret = stmt->param_wrapper->GetValues(values);
 	if (ret == SQL_NEED_DATA || ret == SQL_ERROR) {
 		return ret;
 	}
+
 	stmt->res = stmt->stmt->Execute(values);
 
 	if (!stmt->res->success) {
@@ -827,20 +821,7 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
 			stmt->error_messages.emplace_back("Invalid descriptor index.");
 			return SQL_ERROR;
 		}
-		if (parameter_number > stmt->param_wrapper->param_descriptors.size()) {
-			// need to resize because SQLFreeStmt might clear it before
-			stmt->param_wrapper->param_descriptors.resize(parameter_number);
-		}
 		idx_t param_idx = parameter_number - 1;
-		stmt->param_wrapper->param_descriptors[param_idx].io_type = input_output_type;
-		stmt->param_wrapper->param_descriptors[param_idx].idx = param_idx;
-		stmt->param_wrapper->param_descriptors[param_idx].apd.value_type = value_type;
-		stmt->param_wrapper->param_descriptors[param_idx].apd.param_value_ptr = parameter_value_ptr;
-		stmt->param_wrapper->param_descriptors[param_idx].apd.buffer_len = buffer_length;
-		stmt->param_wrapper->param_descriptors[param_idx].apd.str_len_or_ind_ptr = str_len_or_ind_ptr;
-		stmt->param_wrapper->param_descriptors[param_idx].ipd.param_type = parameter_type;
-		stmt->param_wrapper->param_descriptors[param_idx].ipd.col_size = column_size;
-		stmt->param_wrapper->param_descriptors[param_idx].ipd.dec_digits = decimal_digits;
 
 		//! New descriptor
 		auto ipd_record = stmt->ipd->GetDescRecord(param_idx);

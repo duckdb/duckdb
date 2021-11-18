@@ -1,5 +1,4 @@
 #include "duckdb_odbc.hpp"
-#include "parameter_wrapper.hpp"
 #include "odbc_fetch.hpp"
 #include <odbcinst.h>
 #include <codecvt>
