@@ -191,9 +191,11 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 		frame = FrameBounds(begin, end);
 
 		// Extract the range
-		ExtractFrame(MinValue(frame.first, prev.first), MaxValue(frame.second, prev.second));
+		const FrameBounds active(MinValue(frame.first, prev.first), MaxValue(frame.second, prev.second));
+		ExtractFrame(active.first, active.second);
 
-		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result, rid);
+		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result, rid,
+		                 active.first);
 		return;
 	}
 
