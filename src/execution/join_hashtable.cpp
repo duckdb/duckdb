@@ -348,12 +348,10 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 }
 
 template <typename T>
-bool TemplatedKeysCompare(data_ptr_t left_data, data_ptr_t right_data) {
-	auto left_key = Load<T>((data_ptr_t)(left_data));
-	auto right_key = Load<T>((data_ptr_t)(right_data));
-	auto left_val = Value::CreateValue<T>(left_key);
-	auto right_val = Value::CreateValue<T>(right_key);
-	return ValueOperations::Equals(left_val, right_val);
+bool TemplatedKeysCompare(data_ptr_t left_ptr, data_ptr_t right_ptr) {
+	const auto left_val = Load<T>(left_ptr);
+	const auto right_val = Load<T>(right_ptr);
+	return Equals::Operation<T>(left_val, right_val);
 }
 
 bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key, LogicalType key_type) {
