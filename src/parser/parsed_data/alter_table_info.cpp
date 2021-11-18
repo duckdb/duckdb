@@ -148,7 +148,8 @@ unique_ptr<AlterInfo> ChangeColumnTypeInfo::Deserialize(Deserializer &source, st
 // SetDefaultInfo
 //===--------------------------------------------------------------------===//
 unique_ptr<AlterInfo> SetDefaultInfo::Copy() const {
-	return make_unique_base<AlterInfo, SetDefaultInfo>(schema, name, column_name, expression->Copy());
+	return make_unique_base<AlterInfo, SetDefaultInfo>(schema, name, column_name,
+	                                                   expression ? expression->Copy() : nullptr);
 }
 
 void SetDefaultInfo::Serialize(Serializer &serializer) {

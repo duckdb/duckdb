@@ -181,7 +181,7 @@ setMethod(
         col_idx <- 1
         for (name in col_names) {
             if (name %in% names(field.types)) {
-                cols <- c(cols, sprintf("#%d::%s %s", col_idx, field.types[name], name))
+                cols <- c(cols, sprintf("#%d::%s %s", col_idx, field.types[name], dbQuoteIdentifier(conn, name)))
             }
             else {
                 cols <- c(cols, sprintf("#%d", col_idx))
