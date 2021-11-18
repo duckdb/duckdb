@@ -78,7 +78,40 @@ INSERT INTO albums_error VALUES ('Tenacious D', '2001'), ('The Pick of Destiny',
 statement error
 select name, year_release::INT from albums_error
 
-query I
+query II
 select name, year_release::INT from albums_error where year_release = '2001'
 ----
 Tenacious D	2001
+
+# Check some other varchar conversions
+
+query II
+select name, year_release::DOUBLE from albums
+----
+Tenacious D	2001.000000
+The Pick of Destiny	2006.000000
+Rize of the Fenix	2012.000000
+Post-Apocalypto	2018.000000
+Something Random	NULL
+
+
+statement ok
+CREATE TYPE dates AS ENUM ('2001-01-01');
+
+statement ok
+CREATE TABLE dates_table (
+    year_release dates
+);
+
+statement ok
+INSERT INTO dates_table VALUES ('2001-01-01')
+
+query I
+select year_release::DATE from dates_table
+----
+2001-01-01
+
+query I
+select year_release::TIMESTAMP from dates_table
+----
+2001-01-01 00:00:00
