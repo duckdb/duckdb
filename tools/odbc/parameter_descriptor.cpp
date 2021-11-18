@@ -2,12 +2,12 @@
 #include "duckdb/common/types/decimal.hpp"
 
 using duckdb::Decimal;
+using duckdb::OdbcHandleDesc;
 using duckdb::ParameterDescriptor;
 using duckdb::Value;
-using duckdb::OdbcHandleDesc;
 
 ParameterDescriptor::ParameterDescriptor(OdbcHandleStmt *stmt_ptr)
-	: stmt(stmt_ptr), paramset_idx(0), cur_paramset_idx(0), cur_param_idx(0) {
+    : stmt(stmt_ptr), paramset_idx(0), cur_paramset_idx(0), cur_param_idx(0) {
 
 	apd = make_unique<OdbcHandleDesc>(DescType::APD, stmt);
 	ipd = make_unique<OdbcHandleDesc>(DescType::IPD, stmt);

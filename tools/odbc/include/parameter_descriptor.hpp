@@ -9,8 +9,8 @@ public:
 	explicit ParameterDescriptor(OdbcHandleStmt *stmt_ptr);
 	~ParameterDescriptor() {
 	}
-    OdbcHandleDesc *GetIPD();
-    OdbcHandleDesc *GetAPD();
+	OdbcHandleDesc *GetIPD();
+	OdbcHandleDesc *GetAPD();
 	void Clear();
 	void Reset();
 	void ResetParams(SQLSMALLINT count);
