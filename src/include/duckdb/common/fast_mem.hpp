@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include "duckdb/common/common.hpp"
+
 template <size_t SIZE>
 static inline void MemcpyFixed(void *dest, const void *src) {
 	memcpy(dest, src, SIZE);
