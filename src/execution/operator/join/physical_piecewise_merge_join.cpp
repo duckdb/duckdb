@@ -332,6 +332,10 @@ unique_ptr<OperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(ClientCon
 	return make_unique<PiecewiseMergeJoinState>(*this, buffer_manager, context.force_external);
 }
 
+static inline idx_t SortedBlockNotNull(const idx_t base, const idx_t count, const idx_t not_null) {
+	return MinValue(base + count, MaxValue(base, not_null)) - base;
+}
+
 static int MergeJoinComparisonValue(ExpressionType comparison) {
 	switch (comparison) {
 	case ExpressionType::COMPARE_LESSTHAN:
@@ -433,9 +437,7 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 		rsorted.PinRadix(r_block_idx);
 
 		auto &rblock = rsorted.radix_sorting_data[r_block_idx];
-		const auto r_not_null =
-		    MaxValue(right_base, MinValue(right_base + rblock.count, rstate.rhs_count - rstate.rhs_has_null)) -
-		    right_base;
+		const auto r_not_null = SortedBlockNotNull(right_base, rblock.count, rstate.rhs_count - rstate.rhs_has_null);
 		if (0 == r_not_null) {
 			break;
 		}
@@ -638,9 +640,8 @@ OperatorResultType PhysicalPiecewiseMergeJoin::ResolveComplexJoin(ExecutionConte
 		BlockMergeInfo left_info(*state.lhs_global_state, 0, 0, state.left_position, lhs_not_null);
 
 		const auto &rblock = rsorted.radix_sorting_data[state.right_chunk_index];
-		const auto rhs_not_null = MaxValue(state.right_base, MinValue(state.right_base + rblock.count,
-		                                                              gstate.rhs_count - gstate.rhs_has_null)) -
-		                          state.right_base;
+		const auto rhs_not_null =
+		    SortedBlockNotNull(state.right_base, rblock.count, gstate.rhs_count - gstate.rhs_has_null);
 		BlockMergeInfo right_info(gstate.rhs_global_sort_state, state.right_chunk_index, state.right_chunk_index,
 		                          state.right_position, rhs_not_null);
 
