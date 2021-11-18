@@ -2,7 +2,7 @@
 #include "odbc_interval.hpp"
 #include "odbc_fetch.hpp"
 #include "descriptor.hpp"
-#include "parameter_controller.hpp"
+#include "parameter_descriptor.hpp"
 
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/string_type.hpp"
@@ -52,7 +52,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 			stmt->error_messages.emplace_back(stmt->stmt->error);
 			return SQL_ERROR;
 		}
-		stmt->param_ctl->ResetParams(stmt->stmt->n_param);
+		stmt->param_desc->ResetParams(stmt->stmt->n_param);
 
 		stmt->bound_cols.resize(stmt->stmt->ColumnCount());
 		return SQL_SUCCESS;
@@ -93,7 +93,7 @@ SQLRETURN duckdb::SingleExecuteStmt(duckdb::OdbcHandleStmt *stmt) {
 	}
 
 	std::vector<Value> values;
-	SQLRETURN ret = stmt->param_ctl->GetParamValues(values);
+	SQLRETURN ret = stmt->param_desc->GetParamValues(values);
 	if (ret == SQL_NEED_DATA || ret == SQL_ERROR) {
 		return ret;
 	}
@@ -824,8 +824,8 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
 		idx_t param_idx = parameter_number - 1;
 
 		//! New descriptor
-		auto ipd_record = stmt->param_ctl->ipd->GetDescRecord(param_idx);
-		auto apd_record = stmt->param_ctl->apd->GetDescRecord(param_idx);
+		auto ipd_record = stmt->param_desc->ipd->GetDescRecord(param_idx);
+		auto apd_record = stmt->param_desc->apd->GetDescRecord(param_idx);
 
 		ipd_record->sql_desc_parameter_type = input_output_type;
 		ipd_record->sql_desc_length = column_size;

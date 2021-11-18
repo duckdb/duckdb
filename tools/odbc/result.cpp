@@ -1,7 +1,7 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
 #include "odbc_fetch.hpp"
-#include "parameter_controller.hpp"
+#include "parameter_descriptor.hpp"
 
 SQLRETURN SQL_API SQLGetData(SQLHSTMT statement_handle, SQLUSMALLINT col_or_param_num, SQLSMALLINT target_type,
                              SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
@@ -17,7 +17,7 @@ static SQLRETURN ExecuteBeforeFetch(SQLHSTMT statement_handle) {
 			return SQL_SUCCESS;
 		}
 		// check if it's needed to execute the stmt before fetch
-		if (stmt->param_ctl->HasParamSetToProcess()) {
+		if (stmt->param_desc->HasParamSetToProcess()) {
 			auto rc = duckdb::SingleExecuteStmt(stmt);
 			if (rc == SQL_SUCCESS || rc == SQL_STILL_EXECUTING) {
 				return SQL_SUCCESS;

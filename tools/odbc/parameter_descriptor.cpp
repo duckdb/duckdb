@@ -1,33 +1,33 @@
-#include "parameter_controller.hpp"
+#include "parameter_descriptor.hpp"
 #include "duckdb/common/types/decimal.hpp"
 
 using duckdb::Decimal;
-using duckdb::ParameterController;
+using duckdb::ParameterDescriptor;
 using duckdb::Value;
 using duckdb::OdbcHandleDesc;
 
-ParameterController::ParameterController(OdbcHandleStmt *stmt_ptr)
+ParameterDescriptor::ParameterDescriptor(OdbcHandleStmt *stmt_ptr)
 	: stmt(stmt_ptr), paramset_idx(0), cur_paramset_idx(0), cur_param_idx(0) {
 
 	apd = make_unique<OdbcHandleDesc>(DescType::APD, stmt);
 	ipd = make_unique<OdbcHandleDesc>(DescType::IPD, stmt);
 }
 
-OdbcHandleDesc *ParameterController::GetIPD() {
+OdbcHandleDesc *ParameterDescriptor::GetIPD() {
 	return ipd.get();
 }
 
-OdbcHandleDesc *ParameterController::GetAPD() {
+OdbcHandleDesc *ParameterDescriptor::GetAPD() {
 	return apd.get();
 }
 
-void ParameterController::Clear() {
+void ParameterDescriptor::Clear() {
 	ipd->records.clear();
 	apd->records.clear();
 	Reset();
 }
 
-void ParameterController::Reset() {
+void ParameterDescriptor::Reset() {
 	pool_allocated_ptr.clear();
 	ipd->header.sql_desc_count = 0;
 	apd->header.sql_desc_count = 0;
@@ -36,7 +36,7 @@ void ParameterController::Reset() {
 	cur_param_idx = 0;
 }
 
-void ParameterController::ResetParams(SQLSMALLINT count) {
+void ParameterDescriptor::ResetParams(SQLSMALLINT count) {
 	pool_allocated_ptr.clear();
 
 	ipd->records.resize(count);
@@ -46,7 +46,7 @@ void ParameterController::ResetParams(SQLSMALLINT count) {
 	apd->header.sql_desc_count = count;
 }
 
-SQLRETURN ParameterController::GetParamValues(std::vector<Value> &values) {
+SQLRETURN ParameterDescriptor::GetParamValues(std::vector<Value> &values) {
 	values.clear();
 	if (ipd->records.empty()) {
 		return SQL_SUCCESS;
@@ -74,14 +74,14 @@ SQLRETURN ParameterController::GetParamValues(std::vector<Value> &values) {
 	return SetParamIndex();
 }
 
-void ParameterController::SetParamProcessedPtr(SQLPOINTER value_ptr) {
+void ParameterDescriptor::SetParamProcessedPtr(SQLPOINTER value_ptr) {
 	ipd->header.sql_desc_rows_processed_ptr = (SQLULEN *)value_ptr;
 	if (ipd->header.sql_desc_rows_processed_ptr) {
 		*ipd->header.sql_desc_rows_processed_ptr = 0;
 	}
 }
 
-SQLRETURN ParameterController::GetNextParam(SQLPOINTER *param) {
+SQLRETURN ParameterDescriptor::GetNextParam(SQLPOINTER *param) {
 	if ((SQLSMALLINT)cur_param_idx >= apd->header.sql_desc_count) {
 		return SQL_NO_DATA;
 	}
@@ -97,7 +97,7 @@ SQLRETURN ParameterController::GetNextParam(SQLPOINTER *param) {
 	return SQL_SUCCESS;
 }
 
-SQLRETURN ParameterController::PutData(SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
+SQLRETURN ParameterDescriptor::PutData(SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
 	if ((SQLSMALLINT)cur_param_idx >= apd->header.sql_desc_count) {
 		return SQL_ERROR;
 	}
@@ -119,11 +119,11 @@ SQLRETURN ParameterController::PutData(SQLPOINTER data_ptr, SQLLEN str_len_or_in
 	return SQL_SUCCESS;
 }
 
-bool ParameterController::HasParamSetToProcess() {
+bool ParameterDescriptor::HasParamSetToProcess() {
 	return (paramset_idx < apd->header.sql_desc_array_size && !ipd->records.empty());
 }
 
-SQLRETURN ParameterController::PutCharData(DescRecord &apd_record, DescRecord &ipd_record, SQLPOINTER data_ptr,
+SQLRETURN ParameterDescriptor::PutCharData(DescRecord &apd_record, DescRecord &ipd_record, SQLPOINTER data_ptr,
                                            SQLLEN str_len_or_ind_ptr) {
 	if (apd->header.sql_desc_array_size == 1) {
 		return FillParamCharDataBuffer(apd_record, ipd_record, data_ptr, str_len_or_ind_ptr);
@@ -132,7 +132,7 @@ SQLRETURN ParameterController::PutCharData(DescRecord &apd_record, DescRecord &i
 	return FillCurParamCharSet(apd_record, ipd_record, data_ptr, str_len_or_ind_ptr);
 }
 
-SQLRETURN ParameterController::FillParamCharDataBuffer(DescRecord &apd_record, DescRecord &ipd_record,
+SQLRETURN ParameterDescriptor::FillParamCharDataBuffer(DescRecord &apd_record, DescRecord &ipd_record,
                                                        SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
 	size_t offset = 0;
 	if (*apd_record.sql_desc_indicator_ptr == SQL_DATA_AT_EXEC) {
@@ -161,7 +161,7 @@ SQLRETURN ParameterController::FillParamCharDataBuffer(DescRecord &apd_record, D
 	return SQL_PARAM_SUCCESS;
 }
 
-SQLRETURN ParameterController::FillCurParamCharSet(DescRecord &apd_record, DescRecord &ipd_record, SQLPOINTER data_ptr,
+SQLRETURN ParameterDescriptor::FillCurParamCharSet(DescRecord &apd_record, DescRecord &ipd_record, SQLPOINTER data_ptr,
                                                    SQLLEN str_len_or_ind_ptr) {
 	auto len_ptr = &apd_record.sql_desc_indicator_ptr[cur_paramset_idx];
 	auto col_size = (size_t)ipd_record.sql_desc_length;
@@ -196,7 +196,7 @@ SQLRETURN ParameterController::FillCurParamCharSet(DescRecord &apd_record, DescR
 	return SQL_PARAM_SUCCESS;
 }
 
-SQLRETURN ParameterController::SetValue(idx_t rec_idx) {
+SQLRETURN ParameterDescriptor::SetValue(idx_t rec_idx) {
 	auto val_idx = paramset_idx;
 
 	if (apd->records[rec_idx].sql_desc_data_ptr == nullptr && apd->records[rec_idx].sql_desc_indicator_ptr == nullptr) {
@@ -308,7 +308,7 @@ SQLRETURN ParameterController::SetValue(idx_t rec_idx) {
 	return SQL_PARAM_SUCCESS;
 }
 
-void ParameterController::SetValue(Value &value, idx_t val_idx) {
+void ParameterDescriptor::SetValue(Value &value, idx_t val_idx) {
 	if (val_idx >= values.size()) {
 		values.emplace_back(value);
 		return;
@@ -317,11 +317,11 @@ void ParameterController::SetValue(Value &value, idx_t val_idx) {
 	values[val_idx] = value;
 }
 
-Value ParameterController::GetNextValue() {
+Value ParameterDescriptor::GetNextValue() {
 	return values[paramset_idx];
 }
 
-SQLRETURN ParameterController::SetParamIndex() {
+SQLRETURN ParameterDescriptor::SetParamIndex() {
 	++paramset_idx;
 	if (paramset_idx == apd->header.sql_desc_array_size) {
 		return SQL_SUCCESS;
@@ -329,7 +329,7 @@ SQLRETURN ParameterController::SetParamIndex() {
 	return SQL_STILL_EXECUTING;
 }
 
-SQLRETURN ParameterController::ValidateNumeric(int precision, int scale) {
+SQLRETURN ParameterDescriptor::ValidateNumeric(int precision, int scale) {
 	if (precision < 1 || precision > Decimal::MAX_WIDTH_DECIMAL || scale < 0 || scale > Decimal::MAX_WIDTH_DECIMAL ||
 	    scale > precision) {
 		// TODO we should use SQLGetDiagField to register the error message

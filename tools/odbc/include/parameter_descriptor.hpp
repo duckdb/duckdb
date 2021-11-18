@@ -1,13 +1,13 @@
-#ifndef PARAMETER_CONTROLLER_HPP
-#define PARAMETER_CONTROLLER_HPP
+#ifndef PARAMETER_DESCRIPTOR_HPP
+#define PARAMETER_DESCRIPTOR_HPP
 
 #include "duckdb_odbc.hpp"
 
 namespace duckdb {
-class ParameterController {
+class ParameterDescriptor {
 public:
-	ParameterController(OdbcHandleStmt *stmt_ptr);
-	~ParameterController() {
+	explicit ParameterDescriptor(OdbcHandleStmt *stmt_ptr);
+	~ParameterDescriptor() {
 	}
     OdbcHandleDesc *GetIPD();
     OdbcHandleDesc *GetAPD();

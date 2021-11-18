@@ -18,7 +18,7 @@
 namespace duckdb {
 
 class OdbcFetch;
-class ParameterController;
+class ParameterDescriptor;
 
 enum OdbcHandleType { ENV, DBC, STMT, DESC };
 struct OdbcHandle {
@@ -95,7 +95,7 @@ struct OdbcHandleStmt : public OdbcHandle {
 	// fetcher
 	unique_ptr<OdbcFetch> odbc_fetcher;
 
-	unique_ptr<ParameterController> param_ctl;
+	unique_ptr<ParameterDescriptor> param_desc;
 
 	unique_ptr<OdbcHandleDesc> ard;
 	unique_ptr<OdbcHandleDesc> ird;

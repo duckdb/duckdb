@@ -2,7 +2,7 @@
 #include "odbc_fetch.hpp"
 #include "odbc_interval.hpp"
 #include "descriptor.hpp"
-#include "parameter_controller.hpp"
+#include "parameter_descriptor.hpp"
 
 using duckdb::OdbcHandleDbc;
 using duckdb::OdbcHandleDesc;
@@ -46,7 +46,7 @@ OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
 	ard = make_unique<OdbcHandleDesc>(DescType::ARD, this);
 	ird = make_unique<OdbcHandleDesc>(DescType::IRD, this);
 
-	param_ctl = make_unique<ParameterController>(this);
+	param_desc = make_unique<ParameterDescriptor>(this);
 }
 
 OdbcHandleStmt::~OdbcHandleStmt() {
@@ -57,7 +57,7 @@ void OdbcHandleStmt::Close() {
 	res.reset();
 	odbc_fetcher->ClearChunks();
 	// the parameter values can be reused after
-	param_ctl->Reset();
+	param_desc->Reset();
 	// stmt->stmt.reset(); // the statment can be reuse in prepared statement
 	bound_cols.clear();
 	error_messages.clear();
