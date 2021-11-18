@@ -351,6 +351,92 @@ COPY staff FROM 'test/sakila/data/staff.csv' (HEADER, DELIMITER '|')
 statement ok
 COPY store FROM 'test/sakila/data/store.csv' (HEADER, DELIMITER '|')
 
+query TT
+SELECT first_name,last_name FROM actor ORDER BY actor_id LIMIT 10
+----
+PENELOPE	GUINESS
+NICK	WAHLBERG
+ED	CHASE
+JENNIFER	DAVIS
+JOHNNY	LOLLOBRIGIDA
+BETTE	NICHOLSON
+GRACE	MOSTEL
+MATTHEW	JOHANSSON
+JOE	SWANK
+CHRISTIAN	GABLE
+
+query RTT
+SELECT actor_id, first_name, last_name FROM actor WHERE first_name='JOE' ORDER BY actor_id
+----
+9.000000	JOE	SWANK
+
+query RTT
+SELECT actor_id, first_name, last_name FROM actor WHERE last_name LIKE '%GEN%' ORDER BY actor_id
+----
+14.000000	VIVIEN	BERGEN
+41.000000	JODIE	DEGENERES
+107.000000	GINA	DEGENERES
+166.000000	NICK	DEGENERES
+
+query IT
+SELECT country_id, country FROM country WHERE country IN('Afghanistan', 'Bangladesh', 'China') ORDER BY country_id
+----
+1	Afghanistan
+12	Bangladesh
+23	China
+
+query TI
+SELECT last_name, COUNT(*) as lnc FROM actor GROUP BY last_name HAVING COUNT(*) >=4 ORDER BY lnc desc, last_name
+----
+KILMER	5
+NOLTE	4
+TEMPLE	4
+
+query TTT
+SELECT first_name, last_name, address FROM staff INNER JOIN address ON staff.address_id = address.address_id order by first_name, last_name
+----
+Jon	Stephens	1411 Lillydale Drive
+Mike	Hillyer	23 Workhaven Lane
+
+query TTR
+SELECT first_name, last_name, SUM(amount) as total FROM staff INNER JOIN payment ON staff.staff_id = payment.staff_id AND payment_date LIKE '2005-08%' GROUP BY first_name, last_name ORDER BY total
+----
+Mike	Hillyer	11853.650000
+Jon	Stephens	12218.480000
+
+query TI
+SELECT title, COUNT(actor_id) as actor_count FROM film_actor INNER JOIN film ON film_actor.film_id = film.film_id GROUP BY title order by actor_count desc, title limit 10
+----
+LAMBS CINCINATTI	15
+BOONDOCK BALLROOM	13
+CHITTY LOCK	13
+CRAZY HOME	13
+DRACULA CRYSTAL	13
+MUMMY CREATURES	13
+RANDOM GO	13
+ARABIA DOGMA	12
+HELLFIGHTERS SIERRA	12
+LESSON CLEOPATRA	12
+
+query TI
+SELECT title, COUNT(title) as copies_available FROM film INNER JOIN inventory ON film.film_id = inventory.film_id WHERE title = 'HUNCHBACK IMPOSSIBLE' GROUP BY title
+----
+HUNCHBACK IMPOSSIBLE	6
+
+query TTR
+SELECT first_name, last_name, SUM(amount) as total_paid FROM payment INNER JOIN customer ON payment.customer_id = customer.customer_id GROUP BY first_name, last_name ORDER BY total_paid desc, first_name limit 10
+----
+KARL	SEAL	221.550000
+ELEANOR	HUNT	216.540000
+CLARA	SHAW	195.580000
+MARION	SNYDER	194.610000
+RHONDA	KENNEDY	194.610000
+TOMMY	COLLAZO	186.620000
+WESLEY	BULL	177.600000
+TIM	CARY	175.610000
+MARCIA	DEAN	175.580000
+ANA	BRADLEY	174.660000
+
 query T
 SELECT title FROM film WHERE title LIKE 'K%' OR title LIKE 'Q%' AND title IN ( SELECT title FROM film WHERE language_id IN ( SELECT language_id FROM language WHERE name ='English' ) ) ORDER BY title
 ----
@@ -370,4 +456,118 @@ QUEEN LUKE
 QUEST MUSSOLINI
 QUILLS BULL
 
+query TT
+SELECT first_name, last_name FROM actor WHERE actor_id IN ( SELECT actor_id FROM film_actor WHERE film_id IN ( SELECT film_id FROM film WHERE title = 'ALONE TRIP' ) ) ORDER BY actor_id
+----
+ED	CHASE
+KARL	BERRY
+UMA	WOOD
+WOODY	JOLIE
+SPENCER	DEPP
+CHRIS	DEPP
+LAURENCE	BULLOCK
+RENEE	BALL
+
+query TTT
+SELECT first_name, last_name, email FROM customer JOIN address ON (customer.address_id = address.address_id) JOIN city ON (city.city_id = address.city_id) JOIN country ON (country.country_id = city.country_id) WHERE country.country= 'Canada' ORDER BY first_name, last_name
+----
+CURTIS	IRBY	CURTIS.IRBY@sakilacustomer.org
+DARRELL	POWER	DARRELL.POWER@sakilacustomer.org
+DERRICK	BOURQUE	DERRICK.BOURQUE@sakilacustomer.org
+LORETTA	CARPENTER	LORETTA.CARPENTER@sakilacustomer.org
+TROY	QUIGLEY	TROY.QUIGLEY@sakilacustomer.org
+
+query T
+SELECT title FROM film WHERE film_id IN ( SELECT film_id FROM film_category WHERE category_id IN ( SELECT category_id FROM category WHERE name='Family' ) ) ORDER BY film_id LIMIT 10
+----
+AFRICAN EGG
+APACHE DIVINE
+ATLANTIS CAUSE
+BAKED CLEOPATRA
+BANG KWAI
+BEDAZZLED MARRIED
+BILKO ANONYMOUS
+BLANKET BEVERLY
+BLOOD ARGONAUTS
+BLUES INSTINCT
+
+query TI
+SELECT title, COUNT(rental_id) as rental_count FROM rental JOIN inventory ON (rental.inventory_id = inventory.inventory_id) JOIN film ON (inventory.film_id = film.film_id) GROUP BY film.title ORDER BY COUNT(rental_id) DESC, title limit 10
+----
+BUCKET BROTHERHOOD	34
+ROCKETEER MOTHER	33
+FORWARD TEMPLE	32
+GRIT CLOCKWORK	32
+JUGGLER HARDLY	32
+RIDGEMONT SUBMARINE	32
+SCALAWAG DUCK	32
+APACHE DIVINE	31
+GOODFELLAS SALUTE	31
+HOBBIT ALIEN	31
+
+query IR
+SELECT store.store_id, SUM(amount) as sum_amount FROM store INNER JOIN staff ON store.store_id = staff.store_id INNER JOIN payment ON payment.staff_id = staff.staff_id GROUP BY store.store_id order by sum_amount
+----
+1	33489.470000
+2	33927.040000
+
+query ITT
+SELECT store_id, city, country FROM store INNER JOIN address ON store.address_id = address.address_id INNER JOIN city ON city.city_id = address.city_id INNER JOIN country ON country.country_id = city.country_id order by store_id
+----
+1	Lethbridge	Canada
+2	Woodridge	Australia
+
+query TR
+SELECT name, SUM(amount) FROM category INNER JOIN film_category ON category.category_id = film_category.category_id INNER JOIN inventory ON film_category.film_id = inventory.film_id INNER JOIN rental ON inventory.inventory_id = rental.inventory_id INNER JOIN payment ON rental.rental_id = payment.rental_id GROUP BY name ORDER BY SUM(amount) DESC LIMIT 5
+----
+Sports	5314.210000
+Sci-Fi	4756.980000
+Animation	4656.300000
+Drama	4587.390000
+Comedy	4383.580000
+
+# these four queries are equivalent, see https:www.jooq.org/benchmark
+query TTI
+SELECT first_name, last_name, count(*) FROM actor a JOIN film_actor fa USING (actor_id) WHERE last_name LIKE 'A%' GROUP BY fa.actor_id, a.first_name, a.last_name ORDER BY count(*) DESC
+----
+KIRSTEN	AKROYD	34
+CHRISTIAN	AKROYD	32
+ANGELINA	ASTAIRE	31
+KIM	ALLEN	28
+CUBA	ALLEN	25
+DEBBIE	AKROYD	24
+MERYL	ALLEN	22
+
+query TTI
+SELECT first_name, last_name, count(*) FROM ( SELECT * FROM actor WHERE last_name LIKE 'A%' ) a JOIN film_actor USING (actor_id) GROUP BY a.actor_id, a.first_name, a.last_name ORDER BY count(*) DESC
+----
+KIRSTEN	AKROYD	34
+CHRISTIAN	AKROYD	32
+ANGELINA	ASTAIRE	31
+KIM	ALLEN	28
+CUBA	ALLEN	25
+DEBBIE	AKROYD	24
+MERYL	ALLEN	22
+
+query TTI
+SELECT * FROM ( SELECT first_name, last_name, ( SELECT count(*) FROM film_actor fa WHERE a.actor_id = fa.actor_id ) AS c FROM actor a WHERE last_name LIKE 'A%' ) a WHERE c > 0 ORDER BY c DESC
+----
+KIRSTEN	AKROYD	34
+CHRISTIAN	AKROYD	32
+ANGELINA	ASTAIRE	31
+KIM	ALLEN	28
+CUBA	ALLEN	25
+DEBBIE	AKROYD	24
+MERYL	ALLEN	22
+
+query TTI
+SELECT first_name, last_name, c FROM actor JOIN ( SELECT actor_id, count(*) c FROM film_actor GROUP BY actor_id ) fa USING (actor_id) WHERE last_name LIKE 'A%' ORDER BY c DESC
+----
+KIRSTEN	AKROYD	34
+CHRISTIAN	AKROYD	32
+ANGELINA	ASTAIRE	31
+KIM	ALLEN	28
+CUBA	ALLEN	25
+DEBBIE	AKROYD	24
+MERYL	ALLEN	22
 
