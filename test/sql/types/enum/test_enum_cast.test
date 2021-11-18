@@ -5,31 +5,80 @@
 statement ok
 PRAGMA enable_verification
 
+#statement ok
+#CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+#
+#statement ok
+#CREATE TABLE person (
+#    name text,
+#    current_mood mood
+#);
+#
+#
+#statement ok
+#INSERT INTO person VALUES ('Pedro', 'ok'), ('Mark', 'sad'),('Moe', 'happy'), ('Diego', NULL);
+#
+#query TT
+#select * from person
+#----
+#Pedro	ok
+#Mark	sad
+#Moe	happy
+#Diego	NULL
+#
+#query T
+#select current_mood::varchar from person
+#----
+#ok
+#sad
+#happy
+#NULL
+
+# Cast from ENUM to Integer
 statement ok
-CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+CREATE TYPE years AS ENUM ('2001', '2006', '2012', '2018');
 
 statement ok
-CREATE TABLE person (
+CREATE TABLE albums (
     name text,
-    current_mood mood
+    year_release years
 );
 
+statement ok
+INSERT INTO albums VALUES ('Tenacious D', '2001'), ('The Pick of Destiny', '2006'),('Rize of the Fenix', '2012'), ('Post-Apocalypto', '2018'), ('Something Random', NULL);
+
+query II
+select name, year_release::INT from albums
+----
+Tenacious D	2001
+The Pick of Destiny	2006
+Rize of the Fenix	2012
+Post-Apocalypto	2018
+Something Random	NULL
+
+query I
+select name from albums where year_release::INT > 2010
+----
+Rize of the Fenix
+Post-Apocalypto
 
 statement ok
-INSERT INTO person VALUES ('Pedro', 'ok'), ('Mark', 'sad'),('Moe', 'happy'), ('Diego', NULL);
+CREATE TYPE years_error AS ENUM ('2001', '2006', '2012', 'bla');
 
-query TT
-select * from person
-----
-Pedro	ok
-Mark	sad
-Moe	happy
-Diego	NULL
+statement ok
+CREATE TABLE albums_error (
+    name text,
+    year_release years_error
+);
 
-query T
-select current_mood::varchar from person
+statement ok
+INSERT INTO albums_error VALUES ('Tenacious D', '2001'), ('The Pick of Destiny', 'bla')
+
+# Conversion Error: Could not convert string 'bla' to INT32
+statement error
+select name, year_release::INT from albums_error
+
+query I
+select name, year_release::INT from albums_error where year_release = '2001'
 ----
-ok
-sad
-happy
-NULL
+Tenacious D	2001
