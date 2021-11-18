@@ -12,10 +12,6 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		switch (attribute) {
 		case SQL_ATTR_PARAMSET_SIZE: {
-			/* auto size = Load<SQLLEN>((data_ptr_t) value_ptr);
-			 return (size == 1) ? SQL_SUCCESS : SQL_ERROR;
-			 */
-			// this should be 1?
 			stmt->param_wrapper->paramset_size = (SQLULEN)value_ptr;
 			stmt->apd->header.sql_desc_array_size = (SQLULEN)value_ptr;
 			return SQL_SUCCESS;

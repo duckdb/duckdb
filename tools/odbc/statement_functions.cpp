@@ -53,7 +53,7 @@ SQLRETURN duckdb::PrepareStmt(SQLHSTMT statement_handle, SQLCHAR *statement_text
 			stmt->error_messages.emplace_back(stmt->stmt->error);
 			return SQL_ERROR;
 		}
-//		stmt->param_wrapper->param_descriptors.resize(stmt->stmt->n_param);
+		//		stmt->param_wrapper->param_descriptors.resize(stmt->stmt->n_param);
 		// stmt->param_ctl->SetDescCount(stmt->stmt->n_param);
 		stmt->param_ctl->ResetParams(stmt->stmt->n_param);
 

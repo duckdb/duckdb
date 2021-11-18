@@ -119,13 +119,13 @@ public:
 	void Clear();
 	void Reset();
 
-	public:
-		DescHeader header;
-		std::vector<DescRecord> records;
+public:
+	DescHeader header;
+	std::vector<DescRecord> records;
 
-	private:
-		DescType desc_type;
-		OdbcHandleStmt *stmt;
+private:
+	DescType desc_type;
+	OdbcHandleStmt *stmt;
 };
 
 struct OdbcUtils {
