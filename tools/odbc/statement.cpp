@@ -11,12 +11,12 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		switch (attribute) {
 		case SQL_ATTR_PARAMSET_SIZE: {
-			stmt->apd->header.sql_desc_array_size = (SQLULEN)value_ptr;
+			stmt->param_ctl->apd->header.sql_desc_array_size = (SQLULEN)value_ptr;
 			return SQL_SUCCESS;
 		}
 		case SQL_ATTR_PARAM_BIND_TYPE: {
 			if (value_ptr) {
-				stmt->apd->header.sql_desc_bind_type = *((SQLINTEGER *)value_ptr);
+				stmt->param_ctl->apd->header.sql_desc_bind_type = *((SQLINTEGER *)value_ptr);
 			}
 			return SQL_SUCCESS;
 		}
@@ -24,7 +24,7 @@ SQLRETURN SQL_API SQLSetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 			stmt->param_ctl->SetParamProcessedPtr(value_ptr);
 			return SQL_SUCCESS;
 		case SQL_ATTR_PARAM_STATUS_PTR:
-			stmt->ipd->header.sql_desc_array_status_ptr = (SQLUSMALLINT *)value_ptr;
+			stmt->param_ctl->ipd->header.sql_desc_array_status_ptr = (SQLUSMALLINT *)value_ptr;
 			return SQL_SUCCESS;
 		case SQL_ATTR_QUERY_TIMEOUT: {
 			// this should be 0
@@ -83,10 +83,10 @@ SQLRETURN SQL_API SQLGetStmtAttr(SQLHSTMT statement_handle, SQLINTEGER attribute
 				*string_length_ptr = 4;
 			}
 			if (attribute == SQL_ATTR_APP_PARAM_DESC) {
-				*((HSTMT *)value_ptr) = stmt->apd.get();
+				*((HSTMT *)value_ptr) = stmt->param_ctl->GetAPD();
 			}
 			if (attribute == SQL_ATTR_IMP_PARAM_DESC) {
-				*((HSTMT *)value_ptr) = stmt->ipd.get();
+				*((HSTMT *)value_ptr) = stmt->param_ctl->GetIPD();
 			}
 			if (attribute == SQL_ATTR_APP_ROW_DESC) {
 				*((HSTMT *)value_ptr) = stmt->ard.get();

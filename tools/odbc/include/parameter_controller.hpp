@@ -6,11 +6,11 @@
 namespace duckdb {
 class ParameterController {
 public:
-	ParameterController(OdbcHandleStmt *stmt_ptr, OdbcHandleDesc *ipd_ptr, OdbcHandleDesc *apd_ptr)
-	    : stmt(stmt_ptr), ipd(ipd_ptr), apd(apd_ptr), paramset_idx(0), cur_paramset_idx(0), cur_param_idx(0) {
-	}
+	ParameterController(OdbcHandleStmt *stmt_ptr);
 	~ParameterController() {
 	}
+    OdbcHandleDesc *GetIPD();
+    OdbcHandleDesc *GetAPD();
 	void Clear();
 	void Reset();
 	void ResetParams(SQLSMALLINT count);
@@ -20,6 +20,10 @@ public:
 	SQLRETURN GetNextParam(SQLPOINTER *param);
 	SQLRETURN PutData(SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr);
 	bool HasParamSetToProcess();
+
+public:
+	unique_ptr<OdbcHandleDesc> apd;
+	unique_ptr<OdbcHandleDesc> ipd;
 
 private:
 	SQLRETURN SetValue(idx_t rec_idx);
@@ -36,8 +40,6 @@ private:
 
 private:
 	OdbcHandleStmt *stmt;
-	OdbcHandleDesc *ipd;
-	OdbcHandleDesc *apd;
 
 	//! a pool of allocated parameters during SQLPutData for character data
 	vector<unique_ptr<char[]>> pool_allocated_ptr;

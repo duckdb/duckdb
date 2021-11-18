@@ -824,8 +824,8 @@ SQLRETURN duckdb::BindParameterStmt(SQLHSTMT statement_handle, SQLUSMALLINT para
 		idx_t param_idx = parameter_number - 1;
 
 		//! New descriptor
-		auto ipd_record = stmt->ipd->GetDescRecord(param_idx);
-		auto apd_record = stmt->apd->GetDescRecord(param_idx);
+		auto ipd_record = stmt->param_ctl->ipd->GetDescRecord(param_idx);
+		auto apd_record = stmt->param_ctl->apd->GetDescRecord(param_idx);
 
 		ipd_record->sql_desc_parameter_type = input_output_type;
 		ipd_record->sql_desc_length = column_size;

@@ -43,12 +43,10 @@ OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
 	odbc_fetcher = make_unique<OdbcFetch>();
 	dbc->vec_stmt_ref.emplace_back(this);
 
-	apd = make_unique<OdbcHandleDesc>(DescType::APD, this);
-	ipd = make_unique<OdbcHandleDesc>(DescType::IPD, this);
 	ard = make_unique<OdbcHandleDesc>(DescType::ARD, this);
 	ird = make_unique<OdbcHandleDesc>(DescType::IRD, this);
 
-	param_ctl = make_unique<ParameterController>(this, ipd.get(), apd.get());
+	param_ctl = make_unique<ParameterController>(this);
 }
 
 OdbcHandleStmt::~OdbcHandleStmt() {

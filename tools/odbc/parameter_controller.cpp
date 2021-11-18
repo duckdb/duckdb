@@ -4,10 +4,22 @@
 using duckdb::Decimal;
 using duckdb::ParameterController;
 using duckdb::Value;
+using duckdb::OdbcHandleDesc;
 
-// ParameterController::~ParameterController() {
-// 	Clear();
-// }
+ParameterController::ParameterController(OdbcHandleStmt *stmt_ptr)
+	: stmt(stmt_ptr), paramset_idx(0), cur_paramset_idx(0), cur_param_idx(0) {
+
+	apd = make_unique<OdbcHandleDesc>(DescType::APD, stmt);
+	ipd = make_unique<OdbcHandleDesc>(DescType::IPD, stmt);
+}
+
+OdbcHandleDesc *ParameterController::GetIPD() {
+	return ipd.get();
+}
+
+OdbcHandleDesc *ParameterController::GetAPD() {
+	return apd.get();
+}
 
 void ParameterController::Clear() {
 	ipd->records.clear();

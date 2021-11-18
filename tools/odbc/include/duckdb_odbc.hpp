@@ -97,8 +97,6 @@ struct OdbcHandleStmt : public OdbcHandle {
 
 	unique_ptr<ParameterController> param_ctl;
 
-	unique_ptr<OdbcHandleDesc> apd;
-	unique_ptr<OdbcHandleDesc> ipd;
 	unique_ptr<OdbcHandleDesc> ard;
 	unique_ptr<OdbcHandleDesc> ird;
 };
