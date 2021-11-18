@@ -185,8 +185,8 @@ void DependencyManager::Scan(const std::function<void(CatalogEntry *, CatalogEnt
 }
 
 void DependencyManager::AddOwnership(ClientContext &context, CatalogEntry *owner, CatalogEntry *entry) {
-    // lock the catalog for writing
-    lock_guard<mutex> write_lock(catalog.write_lock);
+	// lock the catalog for writing
+	lock_guard<mutex> write_lock(catalog.write_lock);
 	// if the entry is already owned, throw error
 	for (auto &dep : dependents_map[entry]) {
 		if (dep.entry != owner) {
