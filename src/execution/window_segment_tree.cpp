@@ -12,8 +12,8 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
                                      const LogicalType &result_type_p, ChunkCollection *input,
                                      WindowAggregationMode mode_p)
     : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
-      statep(Value::POINTER((idx_t)state.data())), frame(0, 0), statev(Value::POINTER((idx_t)state.data())),
-      internal_nodes(0), input_ref(input), mode(mode_p) {
+      statep(Value::POINTER((idx_t)state.data())), frame(0, 0), active(0, 1),
+      statev(Value::POINTER((idx_t)state.data())), internal_nodes(0), input_ref(input), mode(mode_p) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
@@ -191,8 +191,33 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 		frame = FrameBounds(begin, end);
 
 		// Extract the range
-		const FrameBounds active(MinValue(frame.first, prev.first), MaxValue(frame.second, prev.second));
-		ExtractFrame(active.first, active.second);
+		auto &coll = *input_ref;
+		const auto prev_active = active;
+		const FrameBounds combined(MinValue(frame.first, prev.first), MaxValue(frame.second, prev.second));
+
+		// The chunk bounds are the range that includes the begin and end - 1
+		const FrameBounds prev_chunks(coll.LocateChunk(prev_active.first), coll.LocateChunk(prev_active.second - 1));
+		const FrameBounds active_chunks(coll.LocateChunk(combined.first), coll.LocateChunk(combined.second - 1));
+
+		// Extract the range
+		if (active_chunks.first == active_chunks.second) {
+			// If all the data is in a single chunk, then just reference it
+			inputs.Reference(coll.GetChunk(active_chunks.first));
+		} else if (active_chunks.first == prev_chunks.first) {
+			// If the start chunk did not change, extend if necessary
+			for (auto chunk_idx = prev_chunks.second + 1; chunk_idx <= active_chunks.second; ++chunk_idx) {
+				inputs.Append(coll.GetChunk(chunk_idx));
+			}
+		} else {
+			// If the first chunk changed, start over
+			inputs.Reset();
+			for (auto chunk_idx = active_chunks.first; chunk_idx <= active_chunks.second; ++chunk_idx) {
+				inputs.Append(coll.GetChunk(chunk_idx));
+			}
+		}
+
+		active = FrameBounds(active_chunks.first * STANDARD_VECTOR_SIZE,
+		                     MinValue((active_chunks.second + 1) * STANDARD_VECTOR_SIZE, coll.Count()));
 
 		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result, rid,
 		                 active.first);
