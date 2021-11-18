@@ -5,34 +5,34 @@
 statement ok
 PRAGMA enable_verification
 
-#statement ok
-#CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
-#
-#statement ok
-#CREATE TABLE person (
-#    name text,
-#    current_mood mood
-#);
-#
-#
-#statement ok
-#INSERT INTO person VALUES ('Pedro', 'ok'), ('Mark', 'sad'),('Moe', 'happy'), ('Diego', NULL);
-#
-#query TT
-#select * from person
-#----
-#Pedro	ok
-#Mark	sad
-#Moe	happy
-#Diego	NULL
-#
-#query T
-#select current_mood::varchar from person
-#----
-#ok
-#sad
-#happy
-#NULL
+statement ok
+CREATE TYPE mood AS ENUM ('sad', 'ok', 'happy');
+
+statement ok
+CREATE TABLE person (
+    name text,
+    current_mood mood
+);
+
+
+statement ok
+INSERT INTO person VALUES ('Pedro', 'ok'), ('Mark', 'sad'),('Moe', 'happy'), ('Diego', NULL);
+
+query TT
+select * from person
+----
+Pedro	ok
+Mark	sad
+Moe	happy
+Diego	NULL
+
+query T
+select current_mood::varchar from person
+----
+ok
+sad
+happy
+NULL
 
 # Cast from ENUM to Integer
 statement ok
