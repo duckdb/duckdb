@@ -43,10 +43,10 @@ OdbcHandleStmt::OdbcHandleStmt(OdbcHandleDbc *dbc_p)
 	odbc_fetcher = make_unique<OdbcFetch>();
 	dbc->vec_stmt_ref.emplace_back(this);
 
+	param_desc = make_unique<ParameterDescriptor>(this);
+
 	ard = make_unique<OdbcHandleDesc>(DescType::ARD, this);
 	ird = make_unique<OdbcHandleDesc>(DescType::IRD, this);
-
-	param_desc = make_unique<ParameterDescriptor>(this);
 }
 
 OdbcHandleStmt::~OdbcHandleStmt() {

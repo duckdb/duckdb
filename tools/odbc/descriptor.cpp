@@ -6,7 +6,7 @@ using duckdb::DescRecord;
 using duckdb::OdbcHandleDesc;
 using duckdb::OdbcInterval;
 
-//! OdbcHandleDesc fucntions ********************************
+//! OdbcHandleDesc functions ********************************
 duckdb::DescRecord *OdbcHandleDesc::GetDescRecord(duckdb::idx_t param_idx) {
 	if (param_idx >= records.size()) {
 		records.resize(param_idx + 1);
@@ -49,7 +49,7 @@ void OdbcHandleDesc::Reset() {
 	records.clear();
 }
 
-//! DescRecord fucntions ******************************************************
+//! DescRecord functions ******************************************************
 SQLRETURN DescRecord::SetValueType(SQLSMALLINT value_type) {
 	sql_desc_type = value_type;
 
@@ -66,7 +66,7 @@ SQLRETURN DescRecord::SetValueType(SQLSMALLINT value_type) {
 	return SQL_SUCCESS;
 }
 
-//! DescHeader fucntions ******************************************************
+//! DescHeader functions ******************************************************
 DescHeader::DescHeader() {
 	Reset();
 }
