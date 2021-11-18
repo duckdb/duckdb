@@ -610,7 +610,7 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 	}
 }
 
-static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
+static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message, bool strict) {
 	auto enum_physical_type = source.GetType().InternalType();
 	switch (result.GetType().id()) {
 	case LogicalTypeId::ENUM: {
@@ -639,7 +639,7 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 		Vector varchar_cast(LogicalType::VARCHAR, count);
 		EnumToVarchar(source, varchar_cast, count, enum_physical_type);
 		// Try to cast from varchar to whatever we wanted before
-		VectorOperations::TryCast(varchar_cast, result, count, error_message, false);
+		VectorOperations::TryCast(varchar_cast, result, count, error_message, strict);
 		break;
 	}
 	}
@@ -756,7 +756,7 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 	case LogicalTypeId::LIST:
 		return ListCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::ENUM:
-		return EnumCastSwitch(source, result, count, error_message);
+		return EnumCastSwitch(source, result, count, error_message, strict);
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}

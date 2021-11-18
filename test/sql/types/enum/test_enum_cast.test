@@ -83,6 +83,12 @@ select name, year_release::INT from albums_error where year_release = '2001'
 ----
 Tenacious D	2001
 
+query II
+select name, TRY_CAST(year_release AS INT) from albums_error
+----
+Tenacious D	2001
+The Pick of Destiny	NULL
+
 # Check some other varchar conversions
 
 query II
