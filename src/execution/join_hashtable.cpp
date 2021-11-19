@@ -311,26 +311,27 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	for (idx_t i = 0; i < count_tuples; i++) {
 		// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
 		auto index = indices[i];
-		auto entry_hash_ptr = key_locations[i] + pointer_offset;
-		auto next_key = pointers[index];
+		auto next_ptr = key_locations[i] + pointer_offset;
+		auto next_entry_ptr = pointers[index];
 		idx_t key_offset = 0;
 		// In case this is still a primary key and there is a conflict
-		while (has_primary_key && next_key != 0) {
-			// check whether the keys are the same
+		if (has_primary_key && next_entry_ptr != 0) {
+			// for each key pair in the entry
 			for (auto key_type : condition_types) {
-				has_primary_key = !CompareKeysSwitch(key_locations[i] + key_offset, next_key + key_offset, key_type);
+				// check whether the keys are the same
+				has_primary_key =
+				    !CompareKeysSwitch(key_locations[i] + key_offset, next_entry_ptr + key_offset, key_type);
 				key_offset += GetTypeIdSize(key_type.InternalType());
 			}
 			// store the tuple to evaluate the next_key later
-			conflict_entries.push_back(next_key);
+			conflict_entries.push_back(next_entry_ptr);
 		}
 		// replace the hash_value in the current entry and point to a position in the hash_map
-		Store<data_ptr_t>(pointers[index], entry_hash_ptr);
+		Store<data_ptr_t>(pointers[index], next_ptr);
 		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
-	// It is  still necessary to handle multiple conflicts
-	// to the same key
+	// It is  still necessary to handle multiple conflicts to the same key
 	if (has_primary_key) {
 		for (auto entry : conflict_entries) {
 			auto next_key = entry + pointer_offset;
