@@ -1,15 +1,15 @@
-#include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/statistics/string_statistics.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/common/vector_size.hpp"
-#include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/vector_size.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/table_filter.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/checkpoint/string_checkpoint_state.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/statistics/string_statistics.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 
@@ -27,7 +27,7 @@ struct StringDictionaryContainer {
 	//! The size of the dictionary
 	uint32_t size;
 	//! The end of the dictionary (typically Storage::BLOCK_SIZE)
-	uint32_t  end;
+	uint32_t end;
 
 	void Verify() {
 		D_ASSERT(size <= Storage::BLOCK_SIZE);

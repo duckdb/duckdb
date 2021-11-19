@@ -1,3 +1,4 @@
+#include "bitpackinghelpers.h"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
 #include "duckdb/function/compression/compression.hpp"
@@ -7,8 +8,6 @@
 #include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
-
-#include "bitpackinghelpers.h"
 
 #include <functional>
 
@@ -91,14 +90,16 @@ private:
 		bitpacking_width_t calc_width = MinimumBitWidth<T>(std::is_signed<T>::value ? min_value : 0, max_value);
 
 		// Assert results are correct
+#ifdef DEBUG
 		if (calc_width < sizeof(T) * 8) {
 			if (std::is_signed<T>::value) {
-				D_ASSERT(max_value <= (1L << (calc_width - 1)) - 1);
-				D_ASSERT(min_value >= -1 * ((1L << (calc_width - 1)) - 1) - 1);
+				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (calc_width - 1)) - 1);
+				D_ASSERT((int64_t)min_value >= (int64_t)(-1 * ((1L << (calc_width - 1)) - 1) - 1));
 			} else {
-				D_ASSERT(max_value <= (1L << (calc_width)) - 1);
+				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (calc_width)) - 1);
 			}
 		}
+#endif
 		if (round_to_next_byte) {
 			return (calc_width / 8 + (calc_width % 8 != 0)) * 8;
 		} else {
@@ -116,7 +117,9 @@ private:
 			throw InternalException("Unsupported type found in bitpacking.");
 		}
 
-		SignExtend<T>(dst, width);
+		if (NumericLimits<T>::IsSigned() && width > 0) {
+			SignExtend<T>(dst, width);
+		}
 	}
 
 	// Sign bit extension
@@ -124,16 +127,14 @@ private:
 	// TODO http://graphics.stanford.edu/~seander/bithacks.html#FixedSignExtend
 	template <class T, class T_U = typename std::make_unsigned<T>::type>
 	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
-		if (NumericLimits<T>::IsSigned() && width > 0) {
-			idx_t shift = width - 1;
-			for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
-				T_U most_significant_compressed_bit = *((T_U *)dst + i) >> shift;
-				D_ASSERT(most_significant_compressed_bit == 1 || most_significant_compressed_bit == 0);
+		idx_t shift = width - 1;
+		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
+			T_U most_significant_compressed_bit = *((T_U *)dst + i) >> shift;
+			D_ASSERT(most_significant_compressed_bit == 1 || most_significant_compressed_bit == 0);
 
-				if (most_significant_compressed_bit == 1) {
-					T_U mask = ((T_U)-1) << shift;
-					*(T_U *)(dst + i * sizeof(T)) |= mask;
-				}
+			if (most_significant_compressed_bit == 1) {
+				T_U mask = ((T_U)-1) << shift;
+				*(T_U *)(dst + i * sizeof(T)) |= mask;
 			}
 		}
 	}
@@ -341,8 +342,7 @@ struct BitpackingCompressState : public CompressionState {
 	}
 
 	void WriteValues(T *values, bitpacking_width_t width, idx_t count) {
-		if (RemainingSize() <
-		    (width * BITPACKING_WIDTH_GROUP_SIZE) / 8 + sizeof(bitpacking_width_t)) {
+		if (RemainingSize() < (width * BITPACKING_WIDTH_GROUP_SIZE) / 8 + sizeof(bitpacking_width_t)) {
 			// Segment is full
 			auto row_start = current_segment->start + current_segment->count;
 			FlushSegment();
@@ -350,8 +350,7 @@ struct BitpackingCompressState : public CompressionState {
 		}
 
 		// TODO we can optimize this by stopping early if count < BITPACKING_WIDTH_GROUP_SIZE
-		idx_t compress_loops =
-		    BITPACKING_WIDTH_GROUP_SIZE / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+		idx_t compress_loops = BITPACKING_WIDTH_GROUP_SIZE / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 		for (idx_t i = 0; i < compress_loops; i++) {
 			BitpackingPrimitives::PackBlock<T>(
 			    data_ptr, &values[i * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE], width);
@@ -511,8 +510,7 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		if (scan_state.position_in_group >= BITPACKING_WIDTH_GROUP_SIZE) {
 			scan_state.position_in_group = 0;
 			scan_state.bitpacking_width_ptr -= sizeof(bitpacking_width_t);
-			scan_state.current_width_group_ptr +=
-			    (scan_state.current_width * BITPACKING_WIDTH_GROUP_SIZE) / 8;
+			scan_state.current_width_group_ptr += (scan_state.current_width * BITPACKING_WIDTH_GROUP_SIZE) / 8;
 			scan_state.LoadCurrentBitWidth();
 		}
 

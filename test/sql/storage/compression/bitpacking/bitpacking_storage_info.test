@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/bitpacking/storage_info.test
+# name: test/sql/storage/compression/bitpacking/bitpacking_storage_info.test
 # description: Test storage with Bitpacking
 # group: [bitpacking]
 
