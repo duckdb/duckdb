@@ -60,3 +60,16 @@ test_that("non-utf things can be read", {
     expect_identical(df, df2)
 
 })
+
+
+test_that("single value factors round trip correctly", {
+    con <- dbConnect(duckdb::duckdb())
+    on.exit(dbDisconnect(con, shutdown = TRUE))
+
+    df1 <- data.frame(year = as.factor(rep("1998", 5)))
+    dbWriteTable(con, "df", df1, field.types = c(year = "VARCHAR"))
+    df2 <- dbReadTable(con, "df")
+    df1$year <- as.character(df1$year)
+    expect_identical(df1, df2)
+
+})

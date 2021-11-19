@@ -77,6 +77,8 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 			duckdb_col_type = LogicalType::DOUBLE;
 			break;
 		case RType::FACTOR: {
+			// TODO What about factors that use numeric?
+
 			auto levels = r.Protect(GET_LEVELS(coldata));
 			vector<string> duckdb_levels(LENGTH(levels));
 			for (idx_t level_idx = 0; level_idx < LENGTH(levels); level_idx++) {
@@ -162,15 +164,15 @@ static void dataframe_scan_function(ClientContext &context, const FunctionData *
 			auto data_ptr = INTEGER_POINTER(coldata) + state.position;
 			switch (v.GetType().InternalType()) {
 			case PhysicalType::UINT8:
-				AppendColumnSegment<int, uint8_t, RIntegerType>(data_ptr, v, this_count);
+				AppendColumnSegment<int, uint8_t, RFactorType>(data_ptr, v, this_count);
 				break;
 
 			case PhysicalType::UINT16:
-				AppendColumnSegment<int, uint16_t, RIntegerType>(data_ptr, v, this_count);
+				AppendColumnSegment<int, uint16_t, RFactorType>(data_ptr, v, this_count);
 				break;
 
 			case PhysicalType::UINT32:
-				AppendColumnSegment<int, uint32_t, RIntegerType>(data_ptr, v, this_count);
+				AppendColumnSegment<int, uint32_t, RFactorType>(data_ptr, v, this_count);
 				break;
 
 			default:
