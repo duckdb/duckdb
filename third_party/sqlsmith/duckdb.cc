@@ -18,7 +18,6 @@ static regex e_syntax("syntax error at or near .*");
 duckdb_connection::duckdb_connection(string &conninfo) {
 	// in-memory database
 	database = make_unique<DuckDB>(nullptr);
-	database->LoadExtension<TPCHExtension>();
 	connection = make_unique<Connection>(*database);
 }
 

@@ -20,8 +20,6 @@
 #include <cassert>
 #include <climits>
 
-#include "extension_helper.hpp"
-
 using namespace duckdb;
 using namespace std;
 
@@ -96,8 +94,6 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		}
 		pDb->db = make_unique<DuckDB>(filename, &config);
 		pDb->con = make_unique<Connection>(*pDb->db);
-
-		ExtensionHelper::LoadAllExtensions(*pDb->db);
 	} catch (std::exception &ex) {
 		if (pDb) {
 			pDb->last_error = ex.what();

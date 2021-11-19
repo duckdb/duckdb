@@ -1,0 +1,15 @@
+# name: benchmark/micro/case/integer_case_predictable.benchmark
+# description: Case benchmark
+# group: [case]
+
+name Predictable case with integers
+group case
+
+load
+CREATE TABLE integers AS SELECT * FROM range(100000000) tbl(i);
+
+run
+SELECT SUM(CASE WHEN i<50000000 THEN 1 ELSE 0 END) FROM integers;
+
+result I
+50000000

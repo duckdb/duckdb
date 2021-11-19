@@ -200,7 +200,6 @@ struct FirstVectorFunction {
 template <class T, bool LAST>
 static AggregateFunction GetFirstAggregateTemplated(LogicalType type) {
 	auto agg = AggregateFunction::UnaryAggregate<FirstState<T>, T, T, FirstFunction<LAST>>(type, type);
-	agg.order_sensitive = true;
 	return agg;
 }
 
@@ -258,7 +257,6 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 	case LogicalTypeId::BLOB: {
 		auto agg = AggregateFunction::UnaryAggregateDestructor<FirstState<string_t>, string_t, string_t,
 		                                                       FirstFunctionString<LAST>>(type, type);
-		agg.order_sensitive = true;
 		return agg;
 	}
 	case LogicalTypeId::DECIMAL: {
@@ -274,13 +272,15 @@ static AggregateFunction GetFirstFunction(const LogicalType &type) {
 		                         AggregateFunction::StateInitialize<FirstStateVector, OP>, OP::Update,
 		                         AggregateFunction::StateCombine<FirstStateVector, OP>,
 		                         AggregateFunction::StateFinalize<FirstStateVector, void, OP>, nullptr, OP::Bind,
-		                         AggregateFunction::StateDestroy<FirstStateVector, OP>, nullptr, nullptr, true);
+		                         AggregateFunction::StateDestroy<FirstStateVector, OP>, nullptr, nullptr);
 	}
 	}
 }
 
 AggregateFunction FirstFun::GetFunction(const LogicalType &type) {
-	return GetFirstFunction<false>(type);
+	auto fun = GetFirstFunction<false>(type);
+	fun.name = "first";
+	return fun;
 }
 
 template <bool LAST>
@@ -298,9 +298,9 @@ void FirstFun::RegisterFunction(BuiltinFunctions &set) {
 	for (auto &type : LogicalType::ALL_TYPES) {
 		if (type.id() == LogicalTypeId::DECIMAL) {
 			first.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                    BindDecimalFirst<false>, nullptr, nullptr, nullptr, true));
+			                                    BindDecimalFirst<false>, nullptr, nullptr, nullptr));
 			last.AddFunction(AggregateFunction({type}, type, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-			                                   BindDecimalFirst<true>, nullptr, nullptr, nullptr, true));
+			                                   BindDecimalFirst<true>, nullptr, nullptr, nullptr));
 		} else {
 			first.AddFunction(GetFirstFunction<false>(type));
 			last.AddFunction(GetFirstFunction<true>(type));

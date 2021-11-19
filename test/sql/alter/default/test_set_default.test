@@ -1,6 +1,6 @@
-# name: test/sql/alter/test_set_default.test
+# name: test/sql/alter/default/test_set_default.test
 # description: Test ALTER TABLE SET DEFAULT
-# group: [alter]
+# group: [default]
 
 statement ok
 CREATE TABLE test(i INTEGER, j INTEGER)

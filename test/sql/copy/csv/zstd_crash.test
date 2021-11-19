@@ -1,0 +1,6 @@
+# name: test/sql/copy/csv/zstd_crash.test
+# description: Test that reading a ZSTD file with auto-detect does not crash
+# group: [csv]
+
+statement error
+CREATE TABLE test_zst AS SELECT * FROM read_csv('test/sql/copy/csv/broken/test.csv.zst', AUTO_DETECT=TRUE);

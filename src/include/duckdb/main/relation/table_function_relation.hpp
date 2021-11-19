@@ -15,10 +15,15 @@ namespace duckdb {
 class TableFunctionRelation : public Relation {
 public:
 	TableFunctionRelation(ClientContext &context, string name, vector<Value> parameters,
+	                      unordered_map<string, Value> named_parameters,
+	                      shared_ptr<Relation> input_relation_p = nullptr);
+
+	TableFunctionRelation(ClientContext &context, string name, vector<Value> parameters,
 	                      shared_ptr<Relation> input_relation_p = nullptr);
 
 	string name;
 	vector<Value> parameters;
+	unordered_map<string, Value> named_parameters;
 	vector<ColumnDefinition> columns;
 	shared_ptr<Relation> input_relation;
 

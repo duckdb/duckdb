@@ -160,8 +160,8 @@ Value ConvertParquetStats(duckdb_parquet::format::Type::type type, bool stats_is
 void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types,
                                                    const string &file_path) {
 	collection.Reset();
-
-	auto reader = make_unique<ParquetReader>(context, file_path);
+	ParquetOptions parquet_options;
+	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(return_types);
@@ -348,8 +348,8 @@ Value ParquetLogicalTypeToString(const duckdb_parquet::format::LogicalType &type
 void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const vector<LogicalType> &return_types,
                                                  const string &file_path) {
 	collection.Reset();
-
-	auto reader = make_unique<ParquetReader>(context, file_path);
+	ParquetOptions parquet_options;
+	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(return_types);
