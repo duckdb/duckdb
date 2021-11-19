@@ -313,11 +313,13 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		auto index = indices[i];
 		auto next_ptr = key_locations[i] + pointer_offset;
 		auto next_entry_ptr = pointers[index];
-		idx_t key_offset = 0;
 		// In case this is still a primary key and there is a conflict
 		if (has_primary_key && next_entry_ptr != 0) {
 			// for each key pair in the entry
-			for (auto key_type : condition_types) {
+			auto col_offsets = layout.GetOffsets();
+			for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
+				auto key_type = condition_types[key_idx];
+				auto key_offset = col_offsets[key_idx];
 				// check whether the keys are the same
 				has_primary_key =
 				    !CompareKeysSwitch(key_locations[i] + key_offset, next_entry_ptr + key_offset, key_type);
@@ -392,8 +394,6 @@ bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key,
 	default:
 		throw InternalException("Unsupported column type for ValueOperations::Equals");
 	}
-
-	return true;
 }
 
 unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
