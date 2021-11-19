@@ -62,7 +62,7 @@ test_that("non-utf things can be read", {
 })
 
 
-test_that("single value factors round trip correctly", {
+test_that("single value factors round trip correctly, issue 2627", {
     con <- dbConnect(duckdb::duckdb())
     on.exit(dbDisconnect(con, shutdown = TRUE))
 
