@@ -9,8 +9,8 @@
 
 namespace FastPForLib {
 
-inline void fastunpack(const uint32_t *__restrict__ in,
-                       uint32_t *__restrict__ out, const uint32_t bit) {
+inline void fastunpack(const uint32_t *__restrict in,
+                       uint32_t *__restrict out, const uint32_t bit) {
   // Could have used function pointers instead of switch.
   // Switch calls do offer the compiler more opportunities for optimization in
   // theory. In this case, it makes no difference with a good compiler.
@@ -119,8 +119,8 @@ inline void fastunpack(const uint32_t *__restrict__ in,
   }
 }
 
-inline void fastunpack(const uint32_t *__restrict__ in,
-                       uint64_t *__restrict__ out, const uint32_t bit) {
+inline void fastunpack(const uint32_t *__restrict in,
+                       uint64_t *__restrict out, const uint32_t bit) {
   // Could have used function pointers instead of switch.
   // Switch calls do offer the compiler more opportunities for optimization in
   // theory. In this case, it makes no difference with a good compiler.
@@ -325,8 +325,8 @@ inline void fastunpack(const uint32_t *__restrict__ in,
   }
 }
 
-inline void fastpack(const uint32_t *__restrict__ in,
-                     uint32_t *__restrict__ out, const uint32_t bit) {
+inline void fastpack(const uint32_t *__restrict in,
+                     uint32_t *__restrict out, const uint32_t bit) {
   // Could have used function pointers instead of switch.
   // Switch calls do offer the compiler more opportunities for optimization in
   // theory. In this case, it makes no difference with a good compiler.
@@ -435,8 +435,8 @@ inline void fastpack(const uint32_t *__restrict__ in,
   }
 }
 
-inline void fastpack(const uint64_t *__restrict__ in,
-                     uint32_t *__restrict__ out, const uint32_t bit) {
+inline void fastpack(const uint64_t *__restrict in,
+                     uint32_t *__restrict out, const uint32_t bit) {
   switch (bit) {
   case 0:
     __fastpack0(in, out);
@@ -639,8 +639,8 @@ inline void fastpack(const uint64_t *__restrict__ in,
 }
 
 /*assumes that integers fit in the prescribed number of bits*/
-inline void fastpackwithoutmask(const uint32_t *__restrict__ in,
-                                uint32_t *__restrict__ out,
+inline void fastpackwithoutmask(const uint32_t *__restrict in,
+                                uint32_t *__restrict out,
                                 const uint32_t bit) {
   // Could have used function pointers instead of switch.
   // Switch calls do offer the compiler more opportunities for optimization in
@@ -750,8 +750,8 @@ inline void fastpackwithoutmask(const uint32_t *__restrict__ in,
   }
 }
 
-inline void fastpackwithoutmask(const uint64_t *__restrict__ in,
-                                uint32_t *__restrict__ out,
+inline void fastpackwithoutmask(const uint64_t *__restrict in,
+                                uint32_t *__restrict out,
                                 const uint32_t bit) {
   switch (bit) {
   case 0:
