@@ -25,6 +25,7 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 		// if we have a frame-by-frame method, share the single state
 		if (aggregate.window && UseWindowAPI()) {
 			AggregateInit();
+			inputs.Reference(input_ref->GetChunk(0));
 		} else if (aggregate.combine && UseCombineAPI()) {
 			ConstructTree();
 		}
@@ -202,17 +203,19 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 		// Extract the range
 		if (active_chunks.first == active_chunks.second) {
 			// If all the data is in a single chunk, then just reference it
-			inputs.Reference(coll.GetChunk(active_chunks.first));
-		} else if (active_chunks.first == prev_chunks.first) {
-			// If the start chunk did not change, extend if necessary
+			if (prev_chunks != active_chunks || (!prev.first && !prev.second)) {
+				inputs.Reference(coll.GetChunk(active_chunks.first));
+			}
+		} else if (active_chunks.first == prev_chunks.first && prev_chunks.first != prev_chunks.second) {
+			// If the start chunk did not change, and we are not just a reference, then extend if necessary
 			for (auto chunk_idx = prev_chunks.second + 1; chunk_idx <= active_chunks.second; ++chunk_idx) {
-				inputs.Append(coll.GetChunk(chunk_idx));
+				inputs.Append(coll.GetChunk(chunk_idx), true);
 			}
 		} else {
 			// If the first chunk changed, start over
 			inputs.Reset();
 			for (auto chunk_idx = active_chunks.first; chunk_idx <= active_chunks.second; ++chunk_idx) {
-				inputs.Append(coll.GetChunk(chunk_idx));
+				inputs.Append(coll.GetChunk(chunk_idx), true);
 			}
 		}
 
