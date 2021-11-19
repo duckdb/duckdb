@@ -2,16 +2,16 @@ if(POLICY CMP0063)
     cmake_policy(SET CMP0063 NEW)
 endif()
 
-add_library(lemire STATIC bitpacking.cpp bitpackingaligned.cpp bitpackingunaligned.cpp)
+add_library(fastpforlib STATIC bitpacking.cpp)
 
 target_include_directories(
-  lemire
+        fastpforlib
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>)
-set_target_properties(lemire PROPERTIES EXPORT_NAME duckdb_lemire)
+set_target_properties(fastpforlib PROPERTIES EXPORT_NAME duckdb_fastpforlib)
 
-install(TARGETS lemire
+install(TARGETS fastpforlib
         EXPORT "${DUCKDB_EXPORT_SET}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
         ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
 
-disable_target_warnings(lemire)
+disable_target_warnings(fastpforlib)

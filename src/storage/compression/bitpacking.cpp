@@ -15,29 +15,30 @@ namespace duckdb {
 
 using bitpacking_width_t = uint8_t;
 
+static constexpr const idx_t BITPACKING_WIDTH_GROUP_SIZE = 1024;
+
 class BitpackingPrimitives {
 public:
-	static constexpr const idx_t BITPACKING_ALGORITHM_GROUPING = 32;
-	static constexpr const idx_t BITPACKING_GROUPING_SIZE = STANDARD_VECTOR_SIZE;
+	static constexpr const idx_t BITPACKING_ALGORITHM_GROUP_SIZE = 32;
 	static constexpr const idx_t BITPACKING_HEADER_SIZE = sizeof(uint64_t);
 	static constexpr const bool BYTE_ALIGNED = false;
 
-	// Packs a block of BITPACKING_GROUPING_SIZE values
+	// Packs a block of BITPACKING_ALGORITHM_GROUP_SIZE values
 	template <class T>
 	inline static void PackBlock(data_ptr_t dst, T *src, bitpacking_width_t width) {
-		return PackValueGroupedLemire<T>(dst, src, width);
+		return PackGroup<T>(dst, src, width);
 	}
 
-	// Unpacks a block of BITPACKING_GROUPING_SIZE values
+	// Unpacks a block of BITPACKING_ALGORITHM_GROUP_SIZE values
 	template <class T>
-	inline static void UnpackBlock(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
-		return UnPackLemire<T>(dst, src, width);
+	inline static void UnPackBlock(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
+		return UnPackGroup<T>(dst, src, width);
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values
 	template <class T>
-	inline static bitpacking_width_t GetMinimumBitWidth(T *values, idx_t count) {
-		return FindMinBitWidth<T, BYTE_ALIGNED>(values, count);
+	inline static bitpacking_width_t MinimumBitWidth(T *values, idx_t count) {
+		return FindMinimumBitWidth<T, BYTE_ALIGNED>(values, count);
 	}
 
 private:
@@ -48,7 +49,6 @@ private:
 
 			max_value = MaxValue(-min_value, max_value);
 
-			// only consider the max value if its positive: else, the negative value is guaranteed to require more bits
 			if (max_value >= 0) {
 				required_bits_max = 1;
 				while (max_value) {
@@ -71,7 +71,7 @@ private:
 	}
 
 	template <class T, bool round_to_next_byte = false>
-	static bitpacking_width_t FindMinBitWidth(T *values, idx_t count) {
+	static bitpacking_width_t FindMinimumBitWidth(T *values, idx_t count) {
 		T min_value = values[0];
 		T max_value = values[0];
 
@@ -105,8 +105,8 @@ private:
 		}
 	}
 
-	template <class T, class T_U = typename std::make_unsigned<T>::type>
-	static void UnPackLemire(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
+	template <class T>
+	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
 		if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
 			FastPForLib::fastunpack((const uint32_t *)src, (uint32_t *)dst, (uint32_t)width);
 		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
@@ -115,12 +115,17 @@ private:
 			throw InternalException("Unsupported type found in bitpacking.");
 		}
 
-		// Sign bit extension
-		// TODO check if we can implement faster algorithm, e.g. from
-		// TODO http://graphics.stanford.edu/~seander/bithacks.html#FixedSignExtend
+		SignExtend<T>(dst, width);
+	}
+
+	// Sign bit extension
+	// TODO check if we can implement faster algorithm, e.g. from
+	// TODO http://graphics.stanford.edu/~seander/bithacks.html#FixedSignExtend
+	template <class T, class T_U = typename std::make_unsigned<T>::type>
+	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
 		if (NumericLimits<T>::IsSigned() && width > 0) {
 			idx_t shift = width - 1;
-			for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUPING; ++i) {
+			for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
 				T_U most_significant_compressed_bit = *((T_U *)dst + i) >> shift;
 				D_ASSERT(most_significant_compressed_bit == 1 || most_significant_compressed_bit == 0);
 
@@ -133,13 +138,73 @@ private:
 	}
 
 	template <class T>
-	static void PackValueGroupedLemire(data_ptr_t dst, T *values, bitpacking_width_t width) {
+	static void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
 		// TODO: types smaller than 32bits
 		if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
 			FastPForLib::fastpack((const uint32_t *)values, (uint32_t *)dst, (uint32_t)width);
 		}
 		if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
 			FastPForLib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
+		}
+	}
+
+	template <class T>
+	static void PackValueGroupedFallbackByteAligned(data_ptr_t dst, T *values, bitpacking_width_t width) {
+		D_ASSERT(width % 8 == 0);
+
+		switch (width) {
+		case 8:
+			PackValues<T, uint8_t>(dst, values);
+			break;
+		case 16:
+			PackValues<T, uint16_t>(dst, values);
+			break;
+		case 32:
+			PackValues<T, uint32_t>(dst, values);
+			break;
+		case 64:
+			PackValues<T, uint64_t>(dst, values);
+			break;
+		default:
+			throw InternalException("Unsupported width in Bitpacking");
+		}
+	}
+
+	template <class FROM_TYPE, class TO_TYPE>
+	static void PackValues(data_ptr_t dst, FROM_TYPE *values) {
+		for (idx_t i = 0; i < BITPACKING_ALGORITHM_GROUP_SIZE; i++) {
+			(*((TO_TYPE *)dst + i)) = (TO_TYPE) * (values + i);
+		}
+	}
+
+	template <class T>
+	static void UnPackGroupedFallbackByteAligned(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
+		D_ASSERT(width % 8 == 0);
+
+		switch (width) {
+		case 8:
+			UnpackValues<uint8_t, T>(dst, src);
+			break;
+		case 16:
+			UnpackValues<uint16_t, T>(dst, src);
+			break;
+		case 32:
+			UnpackValues<uint32_t, T>(dst, src);
+			break;
+		case 64:
+			UnpackValues<uint64_t, T>(dst, src);
+			break;
+		}
+
+		if (std::is_signed<T>::value) {
+			SignExtend<T>(dst, width);
+		}
+	}
+
+	template <class FROM_TYPE, class TO_TYPE>
+	static void UnpackValues(data_ptr_t dst, data_ptr_t src) {
+		for (idx_t i = 0; i < BITPACKING_ALGORITHM_GROUP_SIZE; i++) {
+			*(((TO_TYPE *)dst) + i) = (TO_TYPE) * (((FROM_TYPE *)src) + i);
 		}
 	}
 };
@@ -155,7 +220,7 @@ struct BitpackingState {
 	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
 	}
 
-	T compression_buffer[BitpackingPrimitives::BITPACKING_GROUPING_SIZE];
+	T compression_buffer[BITPACKING_WIDTH_GROUP_SIZE];
 	idx_t compression_buffer_idx;
 	idx_t total_size;
 	void *data_ptr;
@@ -163,10 +228,9 @@ struct BitpackingState {
 public:
 	template <class OP>
 	void Flush() {
-		bitpacking_width_t width =
-		    BitpackingPrimitives::GetMinimumBitWidth<T>(compression_buffer, compression_buffer_idx);
+		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth<T>(compression_buffer, compression_buffer_idx);
 		OP::Operation(compression_buffer, width, compression_buffer_idx, data_ptr);
-		total_size += (BitpackingPrimitives::BITPACKING_GROUPING_SIZE * width) / 8 + sizeof(bitpacking_width_t);
+		total_size += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t);
 	}
 
 	template <class OP = EmptyBitpackingWriter>
@@ -179,8 +243,8 @@ public:
 			compression_buffer[compression_buffer_idx++] = 0;
 		}
 
-		if (compression_buffer_idx == BitpackingPrimitives::BITPACKING_GROUPING_SIZE) {
-			// calculate bitpacking width;
+		if (compression_buffer_idx == BITPACKING_WIDTH_GROUP_SIZE) {
+			// Calculate bitpacking width;
 			Flush<OP>();
 			compression_buffer_idx = 0;
 		}
@@ -200,8 +264,6 @@ unique_ptr<AnalyzeState> BitpackingInitAnalyze(ColumnData &col_data, PhysicalTyp
 	return make_unique<BitpackingAnalyzeState<T>>();
 }
 
-// TODO this size is not very accurate as it disregards both the header and the empty spaces that are to small for a
-// TODO bitpacking group
 template <class T>
 bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 	auto &analyze_state = (BitpackingAnalyzeState<T> &)state;
@@ -266,6 +328,7 @@ struct BitpackingCompressState : public CompressionState {
 	}
 
 	void Append(VectorData &vdata, idx_t count) {
+		// TODO Optimization: avoid use of compression buffer if we can compress straight to result vector
 		auto data = (T *)vdata.data;
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
@@ -277,22 +340,21 @@ struct BitpackingCompressState : public CompressionState {
 	}
 
 	void WriteValues(T *values, bitpacking_width_t width, idx_t count) {
-
 		if (RemainingSize() <
-		    (width * BitpackingPrimitives::BITPACKING_GROUPING_SIZE) / 8 + sizeof(bitpacking_width_t)) {
+		    (width * BITPACKING_WIDTH_GROUP_SIZE) / 8 + sizeof(bitpacking_width_t)) {
 			// Segment is full
 			auto row_start = current_segment->start + current_segment->count;
 			FlushSegment();
 			CreateEmptySegment(row_start);
 		}
 
-		// Todo we might not need to do the whole thing?
+		// TODO we can optimize this by stopping early if count < BITPACKING_WIDTH_GROUP_SIZE
 		idx_t compress_loops =
-		    BitpackingPrimitives::BITPACKING_GROUPING_SIZE / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUPING;
+		    BITPACKING_WIDTH_GROUP_SIZE / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 		for (idx_t i = 0; i < compress_loops; i++) {
-			BitpackingPrimitives::PackBlock<T>(data_ptr,
-			                                   &values[i * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUPING], width);
-			data_ptr += (BitpackingPrimitives::BITPACKING_ALGORITHM_GROUPING * width) / 8;
+			BitpackingPrimitives::PackBlock<T>(
+			    data_ptr, &values[i * BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE], width);
+			data_ptr += (BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * width) / 8;
 		}
 
 		Store<bitpacking_width_t>(width, width_ptr);
@@ -304,7 +366,7 @@ struct BitpackingCompressState : public CompressionState {
 	void FlushSegment() {
 		auto &state = checkpointer.GetCheckpointState();
 
-		// compact the segment by moving the widths next to the data.
+		// Compact the segment by moving the widths next to the data.
 		idx_t minimal_widths_offset = AlignValue(data_ptr - handle->node->buffer);
 		idx_t widths_size = handle->node->buffer + Storage::BLOCK_SIZE - width_ptr - 1;
 		idx_t total_segment_size = minimal_widths_offset + widths_size;
@@ -328,9 +390,9 @@ struct BitpackingCompressState : public CompressionState {
 	unique_ptr<ColumnSegment> current_segment;
 	unique_ptr<BufferHandle> handle;
 
-	// ptr to next free spot in segment;
+	// Ptr to next free spot in segment;
 	data_ptr_t data_ptr;
-	// ptr to next free spot for storing bitwidths (growing downwards).
+	// Ptr to next free spot for storing bitwidths (growing downwards).
 	data_ptr_t width_ptr;
 
 	BitpackingState<T> state;
@@ -355,10 +417,10 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 	auto &state = (BitpackingCompressState<T> &)state_p;
 	state.Finalize();
 }
+
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-
 template <class T>
 struct BitpackingScanState : public SegmentScanState {
 	unique_ptr<BufferHandle> handle;
@@ -389,21 +451,16 @@ struct BitpackingScanState : public SegmentScanState {
 	}
 
 	void Skip(ColumnSegment &segment, idx_t skip_count) {
-
 		while (skip_count > 0) {
-
-			if (position_in_group + skip_count < BitpackingPrimitives::BITPACKING_GROUPING_SIZE) {
-
+			if (position_in_group + skip_count < BITPACKING_WIDTH_GROUP_SIZE) {
 				// We're not leaving this bitpacking group, we can perform all skips.
 				position_in_group += skip_count;
 				break;
-
 			} else {
 				// The skip crosses the current bitpacking group, we skip the remainder of this group.
-				auto skipping = BitpackingPrimitives::BITPACKING_GROUPING_SIZE - position_in_group;
-
+				auto skipping = BITPACKING_WIDTH_GROUP_SIZE - position_in_group;
 				position_in_group = 0;
-				current_width_group_ptr += (current_width * BitpackingPrimitives::BITPACKING_GROUPING_SIZE) / 8;
+				current_width_group_ptr += (current_width * BITPACKING_WIDTH_GROUP_SIZE) / 8;
 
 				// Update width pointer and load new width
 				bitpacking_width_ptr -= sizeof(bitpacking_width_t);
@@ -415,7 +472,7 @@ struct BitpackingScanState : public SegmentScanState {
 	}
 
 	void LoadDecompressFunction() {
-		decompress_function = &BitpackingPrimitives::UnpackBlock<T>;
+		decompress_function = &BitpackingPrimitives::UnPackBlock<T>;
 		return;
 	}
 
@@ -426,7 +483,7 @@ struct BitpackingScanState : public SegmentScanState {
 
 	PhysicalType type;
 
-	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUPING];
+	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 };
 
 template <class T>
@@ -450,21 +507,21 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 	while (scanned < scan_count) {
 		// Exhausted this width group, move pointers to next group and load bitwidth for next group.
-		if (scan_state.position_in_group >= BitpackingPrimitives::BITPACKING_GROUPING_SIZE) {
+		if (scan_state.position_in_group >= BITPACKING_WIDTH_GROUP_SIZE) {
 			scan_state.position_in_group = 0;
 			scan_state.bitpacking_width_ptr -= sizeof(bitpacking_width_t);
 			scan_state.current_width_group_ptr +=
-			    (scan_state.current_width * BitpackingPrimitives::BITPACKING_GROUPING_SIZE) / 8;
+			    (scan_state.current_width * BITPACKING_WIDTH_GROUP_SIZE) / 8;
 			scan_state.LoadCurrentBitWidth();
 		}
 
 		idx_t offset_in_compression_group =
-		    scan_state.position_in_group % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUPING;
+		    scan_state.position_in_group % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
-		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUPING -
+		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
 		                                                          offset_in_compression_group);
 
-		// TODO can be optimized to not use the decompression buffer
+		// TODO Optimization: avoid use of decompression buffer if we can compress straight to result vector
 		// Calculate start of compression algorithm group
 		data_ptr_t current_position_ptr =
 		    scan_state.current_width_group_ptr + scan_state.position_in_group * scan_state.current_width / 8;
@@ -487,6 +544,7 @@ template <class T>
 void BitpackingScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	BitpackingScanPartial<T>(segment, state, scan_count, result, 0);
 }
+
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
@@ -500,7 +558,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 
 	// Todo clean up, is reused in partialscan
 	idx_t offset_in_compression_group =
-	    scan_state.position_in_group % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUPING;
+	    scan_state.position_in_group % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
 	data_ptr_t decompression_group_start_pointer =
 	    scan_state.current_width_group_ptr +
@@ -529,18 +587,10 @@ CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 
 CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 	switch (type) {
-		//	case PhysicalType::INT8:
-		//		return GetBitpackingFunction<int8_t>(type);
-		//	case PhysicalType::INT16:
-		//		return GetBitpackingFunction<int16_t>(type);
 	case PhysicalType::INT32:
 		return GetBitpackingFunction<int32_t>(type);
 	case PhysicalType::INT64:
 		return GetBitpackingFunction<int64_t>(type);
-		//	case PhysicalType::UINT8:
-		//		return GetBitpackingFunction<uint8_t>(type);
-		//	case PhysicalType::UINT16:
-		//		return GetBitpackingFunction<uint16_t>(type);
 	case PhysicalType::UINT32:
 		return GetBitpackingFunction<uint32_t>(type);
 	case PhysicalType::UINT64:
@@ -552,12 +602,8 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 
 bool BitpackingFun::TypeIsSupported(PhysicalType type) {
 	switch (type) {
-		//	case PhysicalType::INT8:
-		//	case PhysicalType::INT16:
 	case PhysicalType::INT32:
 	case PhysicalType::INT64:
-		//	case PhysicalType::UINT8:
-		//	case PhysicalType::UINT16:
 	case PhysicalType::UINT32:
 	case PhysicalType::UINT64:
 		return true;

@@ -23,6 +23,6 @@ statement ok
 CHECKPOINT
 
 query IIIIII
-SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
+SELECT MIN(id), MAX(id), SUM(col), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000' or id='9999'
 ----
-5000	5000	5000	5000	5000	1
+5000	9999	14999	5000	9999	2
