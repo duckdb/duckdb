@@ -991,8 +991,17 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	explicit EnumTypeInfo(string enum_name_p, vector<string> values_insert_order_p)
 	    : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), enum_name(move(enum_name_p)),
 	      values_insert_order(std::move(values_insert_order_p)) {
+		for (auto &value : values_insert_order) {
+			if (!hash) {
+				hash = duckdb::Hash(value.c_str());
+			} else {
+				hash_t value_hash = duckdb::Hash(value.c_str());
+				hash = CombineHash(hash, value_hash);
+			}
+		}
 	}
 	string enum_name;
+	hash_t hash;
 	vector<string> values_insert_order;
 	TypeCatalogEntry *catalog_entry = nullptr;
 
@@ -1005,7 +1014,7 @@ public:
 			return false;
 		}
 		auto &other = (EnumTypeInfo &)*other_p;
-		return other.enum_name == enum_name && other.values_insert_order == values_insert_order;
+		return other.hash == hash;
 	}
 
 	void Serialize(Serializer &serializer) const override {
