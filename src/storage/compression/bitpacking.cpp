@@ -8,7 +8,8 @@
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
 #include "duckdb/storage/table/column_segment.hpp"
 
-#include <bitpackinghelpers.h>
+#include "bitpackinghelpers.h"
+
 #include <functional>
 
 namespace duckdb {
