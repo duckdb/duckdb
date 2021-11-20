@@ -49,6 +49,10 @@ public:
 	vector<LogicalType> GetTypes();
 
 	unique_ptr<DataChunk> FetchChunk();
+	idx_t CountChunk();
+	//! Calculate limit value for PhysicalLimit and PhysicalTopN
+	idx_t CalculateCount(PhysicalOperator *plan);
+	void PreprocessPlan(PhysicalOperator *op);
 
 	//! Push a new error
 	void PushError(ExceptionType type, const string &exception);

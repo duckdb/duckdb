@@ -14,6 +14,8 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_finish_event.hpp"
 #include "duckdb/parallel/pipeline_complete_event.hpp"
+#include "duckdb/execution/operator/helper/physical_limit.hpp"
+#include "duckdb/execution/operator/order/physical_top_n.hpp"
 
 #include <algorithm>
 
@@ -673,6 +675,174 @@ unique_ptr<DataChunk> Executor::FetchChunk() {
 		}
 	}
 	return chunk;
+}
+
+idx_t Executor::CountChunk() {
+	D_ASSERT(physical_plan);
+
+	idx_t all_count = 0;
+	auto chunk = make_unique<DataChunk>();
+	root_executor->InitializeChunk(*chunk);
+	while (true) {
+		root_executor->ExecutePull(*chunk);
+		idx_t count = chunk->size();
+		all_count += count;
+		chunk->Reset();
+		if (count == 0) {
+			root_executor->PullFinalize();
+			if (NextExecutor()) {
+				continue;
+			}
+		}
+		break;
+	}
+	return all_count;
+}
+
+idx_t Executor::CalculateCount(PhysicalOperator *plan) {
+
+	Initialize(plan);
+	// count a materialized result by continuously counting
+	idx_t all_count = 0;
+	while (true) {
+		auto count = CountChunk();
+		if (count == 0) {
+			break;
+		}
+		all_count += count;
+	}
+
+	return all_count;
+}
+
+void Executor::PreprocessPlan(PhysicalOperator *op) {
+	if (op->IsSink()) {
+		PhysicalOperator *pipeline_child = nullptr;
+		switch (op->type) {
+		case PhysicalOperatorType::CREATE_TABLE_AS:
+		case PhysicalOperatorType::INSERT:
+		case PhysicalOperatorType::DELETE_OPERATOR:
+		case PhysicalOperatorType::UPDATE:
+		case PhysicalOperatorType::HASH_GROUP_BY:
+		case PhysicalOperatorType::SIMPLE_AGGREGATE:
+		case PhysicalOperatorType::PERFECT_HASH_GROUP_BY:
+		case PhysicalOperatorType::WINDOW:
+		case PhysicalOperatorType::ORDER_BY:
+		case PhysicalOperatorType::RESERVOIR_SAMPLE:
+		case PhysicalOperatorType::TOP_N:
+		case PhysicalOperatorType::COPY_TO_FILE:
+		case PhysicalOperatorType::LIMIT:
+		case PhysicalOperatorType::EXPRESSION_SCAN:
+			D_ASSERT(op->children.size() == 1);
+			// we create a new pipeline starting from the child
+			pipeline_child = op->children[0].get();
+			if (op->type == PhysicalOperatorType::TOP_N) {
+				PreprocessPlan(pipeline_child);
+				auto plan_ptr = reinterpret_cast<duckdb::PhysicalTopN *>(op);
+				if (plan_ptr->is_limit_percent && plan_ptr->limit_count == INVALID_INDEX) {
+					// idx_t back_limit = plan_ptr->limit;
+					plan_ptr->limit = duckdb::NumericLimits<idx_t>::Maximum();
+					plan_ptr->limit_count = CalculateCount(op);
+					// plan_ptr->limit = back_limit;
+				}
+				return;
+			} else if (op->type == PhysicalOperatorType::LIMIT) {
+				PreprocessPlan(pipeline_child);
+				auto plan_ptr = reinterpret_cast<duckdb::PhysicalLimit *>(op);
+				if (plan_ptr->is_limit_percent && plan_ptr->limit_count == INVALID_INDEX) {
+					// idx_t back_limit = plan_ptr->limit_value;
+					plan_ptr->limit_value = duckdb::NumericLimits<idx_t>::Maximum();
+					plan_ptr->limit_count = CalculateCount(op);
+					// plan_ptr->limit_value = back_limit;
+				}
+				return;
+			}
+			break;
+		case PhysicalOperatorType::EXPORT:
+			// EXPORT has an optional child
+			// we only need to schedule child pipelines if there is a child
+			if (op->children.empty()) {
+				return;
+			}
+			D_ASSERT(op->children.size() == 1);
+			pipeline_child = op->children[0].get();
+			break;
+		case PhysicalOperatorType::NESTED_LOOP_JOIN:
+		case PhysicalOperatorType::BLOCKWISE_NL_JOIN:
+		case PhysicalOperatorType::HASH_JOIN:
+		case PhysicalOperatorType::PIECEWISE_MERGE_JOIN:
+		case PhysicalOperatorType::CROSS_PRODUCT:
+			// regular join, create a pipeline with RHS source that sinks into this pipeline
+			pipeline_child = op->children[1].get();
+			// on the LHS (probe child), the operator becomes a regular operator
+			PreprocessPlan(op->children[0].get());
+			break;
+		case PhysicalOperatorType::DELIM_JOIN: {
+			// duplicate eliminated join
+			// for delim joins, recurse into the actual join
+			pipeline_child = op->children[0].get();
+			break;
+		}
+		case PhysicalOperatorType::RECURSIVE_CTE: {
+			// we build this pipeline as normal
+			pipeline_child = op->children[0].get();
+			PreprocessPlan(op->children[1].get());
+			break;
+		}
+		default:
+			throw InternalException("Unimplemented sink type!");
+		}
+		// the current is dependent on this pipeline to complete
+		D_ASSERT(pipeline_child);
+		// recurse into the pipeline child
+		PreprocessPlan(pipeline_child);
+		if (op->type == PhysicalOperatorType::DELIM_JOIN) {
+			// for delim joins, recurse into the actual join
+			// any pipelines in there depend on the main pipeline
+			auto &delim_join = (PhysicalDelimJoin &)*op;
+			// any scan of the duplicate eliminated data on the RHS depends on this pipeline
+			// we add an entry to the mapping of (PhysicalOperator*) -> (Pipeline*)
+			PreprocessPlan(delim_join.join.get());
+		}
+	} else {
+		// operator is not a sink! recurse in children
+		// first check if there is any additional action we need to do depending on the type
+		switch (op->type) {
+		case PhysicalOperatorType::DELIM_SCAN: {
+			D_ASSERT(op->children.empty());
+			return;
+		}
+		case PhysicalOperatorType::EXECUTE: {
+			// EXECUTE statement: build pipeline on child
+			auto &execute = (PhysicalExecute &)*op;
+			PreprocessPlan(execute.plan);
+			return;
+		}
+		case PhysicalOperatorType::RECURSIVE_CTE_SCAN: {
+			break;
+		}
+		case PhysicalOperatorType::INDEX_JOIN: {
+			// index join: we only continue into the LHS
+			// the right side is probed by the index join
+			// so we don't need to do anything in the pipeline with this child
+			PreprocessPlan(op->children[0].get());
+			return;
+		}
+		case PhysicalOperatorType::UNION: {
+			PreprocessPlan(op->children[0].get());
+			PreprocessPlan(op->children[1].get());
+			return;
+		}
+		default:
+			break;
+		}
+		if (!op->children.empty()) {
+			if (op->children.size() != 1) {
+				throw InternalException("Operator not supported yet");
+			}
+			PreprocessPlan(op->children[0].get());
+		}
+	}
 }
 
 } // namespace duckdb

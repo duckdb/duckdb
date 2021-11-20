@@ -1,32 +1,31 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/operator/logical_limit.hpp
+// duckdb/planner/operator/logical_top_n_percent.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
+#include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 
-//! LogicalLimit represents a LIMIT clause
-class LogicalLimit : public LogicalOperator {
+//! LogicalTopNPercent represents a comibination of ORDER BY and LIMIT clause, using Min/Max Heap
+class LogicalTopNPercent : public LogicalOperator {
 public:
-	LogicalLimit(int64_t limit_val, int64_t offset_val, unique_ptr<Expression> limit, unique_ptr<Expression> offset)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT), limit_val(limit_val), offset_val(offset_val),
-	      limit(move(limit)), offset(move(offset)) {
+	LogicalTopNPercent(vector<BoundOrderByNode> orders, double limit_percent, int64_t offset)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_TOP_N_PERCENT), orders(move(orders)),
+	      limit_percent(limit_percent), offset(offset) {
 	}
 
-	//! Limit and offset values in case they are constants, used in optimizations.
-	int64_t limit_val;
-	int64_t offset_val;
+	vector<BoundOrderByNode> orders;
 	//! The maximum amount of elements to emit
-	unique_ptr<Expression> limit;
+	double limit_percent;
 	//! The offset from the start to begin emitting elements
-	unique_ptr<Expression> offset;
+	int64_t offset;
 
 public:
 	vector<ColumnBinding> GetColumnBindings() override {

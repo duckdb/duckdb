@@ -52,12 +52,16 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, unique_ptr<
                                              double &delimiter_value) {
 	auto new_binder = Binder::CreateBinder(context, this, true);
 	ExpressionBinder expr_binder(*new_binder, context);
-	expr_binder.target_type = LogicalType::UBIGINT;
+	expr_binder.target_type = LogicalType::DOUBLE;
 	auto expr = expr_binder.Bind(delimiter);
 	if (expr->IsFoldable()) {
 		//! this is a constant
 		Value value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::DOUBLE);
-		delimiter_value = value.GetValue<double>();
+		double val = value.GetValue<double>();
+		if (val < 0.0) {
+			throw Exception("Liit percentage can't be negative value");
+		}
+		delimiter_value = val;
 		return nullptr;
 	}
 	return expr;
@@ -66,10 +70,18 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, unique_ptr<
 unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	auto result = make_unique<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		double limit_value;
-		result->limit = BindDelimiter(context, move(limit_mod.limit), limit_value);
-		result->limit_val.is_percentage = limit_mod.is_limit_percent;
-		result->limit_val.SetLimitValue(limit_mod.is_limit_percent, limit_value);
+		result->limit = BindDelimiter(context, move(limit_mod.limit), result->limit_val);
+	}
+	if (limit_mod.offset) {
+		result->offset = BindDelimiter(context, move(limit_mod.offset), result->offset_val);
+	}
+	return move(result);
+}
+
+unique_ptr<BoundResultModifier> Binder::BindLimitPercent(LimitPercentModifier &limit_mod) {
+	auto result = make_unique<BoundLimitPercentModifier>();
+	if (limit_mod.limit) {
+		result->limit = BindDelimiter(context, move(limit_mod.limit), result->limit_percent);
 	}
 	if (limit_mod.offset) {
 		result->offset = BindDelimiter(context, move(limit_mod.offset), result->offset_val);
@@ -115,6 +127,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		}
 		case ResultModifierType::LIMIT_MODIFIER:
 			bound_modifier = BindLimit((LimitModifier &)*mod);
+			break;
+		case ResultModifierType::LIMIT_PERCENT_MODIFIER:
+			bound_modifier = BindLimitPercent((LimitPercentModifier &)*mod);
 			break;
 		default:
 			throw Exception("Unsupported result modifier");

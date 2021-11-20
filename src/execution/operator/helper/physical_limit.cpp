@@ -4,7 +4,6 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
-#include "duckdb/parser/parsed_data/limit_count.hpp"
 
 namespace duckdb {
 
@@ -14,16 +13,32 @@ namespace duckdb {
 class LimitGlobalState : public GlobalSinkState {
 public:
 	explicit LimitGlobalState(const PhysicalLimit &op) : current_offset(0) {
+		if (!op.limit_expression) {
+			this->limit = op.limit_value;
+			is_limit_delimited = true;
+
+			this->limit_percent = op.limit_percent;
+			is_limit_percent_delimited = true;
+		}
+
 		this->is_limit_percent = op.is_limit_percent;
-		this->limit_val = op.limit_expression ? INVALID_INDEX : op.limit_value;
-		this->offset = op.offset_expression ? INVALID_INDEX : op.offset_value;
+
+		if (!op.offset_expression) {
+			this->offset = op.offset_value;
+			is_offset_delimited = true;
+		}
 	}
 
 	idx_t current_offset;
+	idx_t limit;
 	bool is_limit_percent;
-	double limit_val;
+	double limit_percent;
 	idx_t offset;
 	ChunkCollection data;
+
+	bool is_limit_delimited = false;
+	bool is_limit_percent_delimited = false;
+	bool is_offset_delimited = false;
 };
 
 uint64_t GetDelimiter(DataChunk &input, Expression *expr, uint64_t original_value) {
@@ -45,6 +60,28 @@ uint64_t GetDelimiter(DataChunk &input, Expression *expr, uint64_t original_valu
 	return limit_value.value_.ubigint;
 }
 
+double GetDelimiter(DataChunk &input, Expression *expr, double original_value) {
+	if (!expr) {
+		return original_value;
+	}
+	DataChunk limit_chunk;
+	vector<LogicalType> types {expr->return_type};
+	limit_chunk.Initialize(types);
+	ExpressionExecutor limit_executor(expr);
+	auto input_size = input.size();
+	input.SetCardinality(1);
+	limit_executor.Execute(input, limit_chunk);
+	input.SetCardinality(input_size);
+	auto limit_value = limit_chunk.GetValue(0, 0);
+	if (limit_value.is_null) {
+		return original_value;
+	}
+	if (limit_value.value_.double_ < 0.0) {
+		throw BinderException("Percentage value(%f) can't be negative", limit_value.value_.double_);
+	}
+	return limit_value.value_.double_;
+}
+
 unique_ptr<GlobalSinkState> PhysicalLimit::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<LimitGlobalState>(*this);
 }
@@ -53,7 +90,9 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
                                    DataChunk &input) const {
 	D_ASSERT(input.size() > 0);
 	auto &state = (LimitGlobalState &)gstate;
-	auto &limit = state.limit_val;
+	auto &limit = state.limit;
+	auto &is_limit_percent = state.is_limit_percent;
+	auto &limit_percent = state.limit_percent;
 	auto &offset = state.offset;
 
 	if (limit != INVALID_INDEX && offset != INVALID_INDEX) {
@@ -64,11 +103,22 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	}
 
 	// get the next chunk from the child
-	if (limit == INVALID_INDEX) {
-		limit = GetDelimiter(input, limit_expression.get(), 1ULL << 62ULL);
+	if (!state.is_limit_delimited) {
+		if (!is_limit_percent) {
+			limit = GetDelimiter(input, limit_expression.get(), (idx_t)(1ULL << 62ULL));
+		}
+		state.is_limit_delimited = true;
 	}
-	if (offset == INVALID_INDEX) {
-		offset = GetDelimiter(input, offset_expression.get(), 0);
+	if (is_limit_percent && !state.is_limit_percent_delimited) {
+		limit_percent = GetDelimiter(input, limit_expression.get(), 100.0);
+		state.is_limit_percent_delimited = true;
+	}
+	if (is_limit_percent && state.is_limit_percent_delimited && limit_count != INVALID_INDEX) {
+		limit = MinValue((idx_t)(limit_percent / 100 * limit_count), limit_count);
+	}
+	if (!state.is_offset_delimited) {
+		offset = GetDelimiter(input, offset_expression.get(), (idx_t)0);
+		state.is_offset_delimited = true;
 	}
 	idx_t max_element = limit + offset;
 	idx_t input_size = input.size();
@@ -81,12 +131,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 			// however we will reach it in this chunk
 			// we have to copy part of the chunk with an offset
 			idx_t start_position = offset - state.current_offset;
-			idx_t chunk_count;
-			if (!state.is_limit_percent) {
-				chunk_count = MinValue<idx_t>(limit, input.size() - start_position);
-			} else {
-				chunk_count = input.size() - start_position;
-			}
+			auto chunk_count = MinValue<idx_t>(limit, input.size() - start_position);
 			SelectionVector sel(STANDARD_VECTOR_SIZE);
 			for (idx_t i = 0; i < chunk_count; i++) {
 				sel.set_index(i, start_position + i);
@@ -100,7 +145,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	} else {
 		// have to copy either the entire chunk or part of it
 		idx_t chunk_count;
-		if (!state.is_limit_percent && state.current_offset + input.size() >= max_element) {
+		if (state.current_offset + input.size() >= max_element) {
 			// have to limit the count of the chunk
 			chunk_count = max_element - state.current_offset;
 		} else {
@@ -115,47 +160,6 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	state.current_offset += input_size;
 	state.data.Append(input);
 	return SinkResultType::NEED_MORE_INPUT;
-}
-
-void PhysicalLimit::Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const {
-	auto &state = (LimitGlobalState &)gstate;
-	auto &state_limit = state.limit_val;
-
-	if (!state.is_limit_percent || state.data.ChunkCount() <= 0) {
-		return;
-	}
-
-	if (state_limit == INVALID_INDEX) {
-		DataChunk &input = state.data.GetChunk(0);
-		state_limit = (double)GetDelimiter(input, limit_expression.get(), 1ULL << 62ULL);
-	}
-
-	if (state_limit == (double)NumericLimits<int64_t>::Maximum()) {
-		return;
-	}
-
-	LimitCount limit_count;
-	limit_count.SetLimitValue(state.is_limit_percent, state_limit);
-	auto limit = limit_count.GetLimitValue(state.data.Count());
-
-	ChunkCollection chunk_col;
-	for (idx_t i = 0; i < state.data.ChunkCount(); i++) {
-		DataChunk &input = state.data.GetChunk(i);
-
-		idx_t chunk_count = MinValue(limit, input.size());
-		// instead of copying we just change the pointer in the current chunk
-		input.Reference(input);
-		input.SetCardinality(chunk_count);
-		chunk_col.Append(input);
-
-		limit -= chunk_count;
-		if (limit <= 0) {
-			break;
-		}
-	}
-
-	state.data.Reset();
-	state.data.Append(chunk_col);
 }
 
 //===--------------------------------------------------------------------===//

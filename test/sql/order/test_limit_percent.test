@@ -25,11 +25,24 @@ SELECT a FROM test LIMIT 40 PERCENT
 
 # decimal limit
 query I
-SELECT a FROM test LIMIT 66.7%
+SELECT a FROM test LIMIT 35%
+----
+11
+
+query I
+SELECT a FROM test LIMIT 79.9%
 ----
 11
 12
 13
+
+query I
+SELECT a FROM test LIMIT 80.1%
+----
+11
+12
+13
+14
 
 query I
 SELECT a FROM test LIMIT 101.1 PERCENT
@@ -77,7 +90,13 @@ SELECT a FROM test LIMIT a %
 
 # LIMIT with non-scalar operation should also fail
 statement error
-SELECT a FROM test LIMIT a+1 %
+SELECT a FROM test LIMIT (a+1) %
+
+statement error
+SELECT a FROM test LIMIT (a+b*c) %
+
+statement error
+SELECT a FROM test LIMIT (a+b*c) %
 
 # aggregate in limit percent
 statement error
@@ -87,22 +106,41 @@ SELECT a FROM test LIMIT SUM(42) %
 statement ok
 SELECT * FROM test LIMIT RANDOM() %;
 
-# subquery in limit percent
+# subquery in limit percent and offset
 query I
-SELECT a FROM test LIMIT ((SELECT COUNT(*) FROM test)*10) % OFFSET 2
+SELECT a FROM test LIMIT 50% OFFSET 2
 ----
 13
 
 query I
-SELECT a FROM test LIMIT (SELECT max(b) FROM test where a > 12) %
+SELECT a FROM test LIMIT (SELECT COUNT(*) FROM test) % OFFSET 1
 ----
-11
-12
 
-#negative values
-statement error
-SELECT b FROM test LIMIT -10 %
+# big value
+query I
+SELECT * FROM range(1000000) LIMIT 0.0001%
 ----
+0
+
+query I
+SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM range(1000000) LIMIT 10%) LIMIT 10%) LIMIT 10%)
+----
+1000
+
+query I
+SELECT * FROM range(10) UNION ALL SELECT * FROM range(10, 20) LIMIT 10%;
+----
+0
+1
+
+#boundary values
+statement ok
+SELECT b FROM test LIMIT 0%
+----
+
+#Subqueries that return negative values
+statement error
+SELECT * FROM range(100) LIMIT -10 %;
 
 #Subqueries that return strings that can't be converted to integers
 statement error

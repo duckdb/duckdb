@@ -282,6 +282,20 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			return move(plan->children[0]);
 		}
 	}
+	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
+		auto &limit = (LogicalLimitPercent &)*plan;
+		if (limit.limit) {
+			throw ParserException("Non-constant limit percent not supported in correlated subquery");
+		}
+		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
+		if (limit.limit_percent <= 0.0) {
+			// limit = 0 means we return zero columns here
+			return plan;
+		} else {
+			// limit > 0 does nothing
+			return move(plan->children[0]);
+		}
+	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		auto &window = (LogicalWindow &)*plan;
 		// push into children

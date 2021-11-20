@@ -13,7 +13,6 @@
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
-#include "duckdb/parser/parsed_data/limit_count.hpp"
 
 namespace duckdb {
 
@@ -57,7 +56,7 @@ public:
 	BoundLimitModifier() : BoundResultModifier(ResultModifierType::LIMIT_MODIFIER) {
 	}
 	//! LIMIT
-	LimitCount limit_val;
+	int64_t limit_val = NumericLimits<int64_t>::Maximum();
 	//! OFFSET
 	int64_t offset_val = 0;
 	//! Expression in case limit is not constant
@@ -82,6 +81,20 @@ public:
 
 	//! list of distinct on targets (if any)
 	vector<unique_ptr<Expression>> target_distincts;
+};
+
+class BoundLimitPercentModifier : public BoundResultModifier {
+public:
+	BoundLimitPercentModifier() : BoundResultModifier(ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+	}
+	//! LIMIT %
+	double limit_percent = 100.0;
+	//! OFFSET
+	int64_t offset_val = 0;
+	//! Expression in case limit is not constant
+	unique_ptr<Expression> limit;
+	//! Expression in case limit is not constant
+	unique_ptr<Expression> offset;
 };
 
 } // namespace duckdb

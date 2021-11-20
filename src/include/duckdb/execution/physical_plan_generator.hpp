@@ -12,6 +12,8 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/logical_tokens.hpp"
+#include "duckdb/planner/operator/logical_limit_percent.hpp"
+#include "duckdb/planner/operator/logical_top_n_percent.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/unordered_set.hpp"
@@ -58,8 +60,10 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalFilter &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalGet &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalLimit &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalLimitPercent &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOrder &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalTopN &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalTopNPercent &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalProjection &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalInsert &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyToFile &op);

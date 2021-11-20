@@ -9,7 +9,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimit &op)
 
 	auto plan = CreatePlan(*op.children[0]);
 
-	auto limit = make_unique<PhysicalLimit>(op.types, op.is_limit_percent, op.limit_val, op.offset_val, move(op.limit),
+	auto limit = make_unique<PhysicalLimit>(op.types, (idx_t)op.limit_val, op.offset_val, move(op.limit),
 	                                        move(op.offset), op.estimated_cardinality);
 	limit->children.push_back(move(plan));
 	return move(limit);

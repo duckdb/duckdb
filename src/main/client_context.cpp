@@ -236,6 +236,9 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 		                                   StatementTypeToString(statement.statement_type)));
 	}
 
+	// if there is a need to calculate a materialized result's size, execute it
+	executor.PreprocessPlan(statement.plan.get());
+
 	// bind the bound values before execution
 	statement.Bind(move(bound_values));
 

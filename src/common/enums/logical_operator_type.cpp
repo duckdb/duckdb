@@ -40,8 +40,12 @@ string LogicalOperatorToString(LogicalOperatorType type) {
 		return "ORDER_BY";
 	case LogicalOperatorType::LOGICAL_TOP_N:
 		return "TOP_N";
+	case LogicalOperatorType::LOGICAL_TOP_N_PERCENT:
+		return "TOP_N_PERCENT";
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		return "SAMPLE";
+	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT:
+		return "LIMIT_PERCENT";
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		return "COPY_TO_FILE";
 	case LogicalOperatorType::LOGICAL_JOIN:

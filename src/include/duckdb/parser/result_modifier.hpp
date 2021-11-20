@@ -15,7 +15,12 @@
 
 namespace duckdb {
 
-enum ResultModifierType : uint8_t { LIMIT_MODIFIER = 1, ORDER_MODIFIER = 2, DISTINCT_MODIFIER = 3 };
+enum ResultModifierType : uint8_t {
+	LIMIT_MODIFIER = 1,
+	ORDER_MODIFIER = 2,
+	DISTINCT_MODIFIER = 3,
+	LIMIT_PERCENT_MODIFIER = 4
+};
 
 //! A ResultModifier
 class ResultModifier {
@@ -65,7 +70,6 @@ public:
 
 	//! LIMIT count
 	unique_ptr<ParsedExpression> limit;
-	bool is_limit_percent = false;
 	//! OFFSET
 	unique_ptr<ParsedExpression> offset;
 
@@ -98,6 +102,23 @@ public:
 
 	//! list of distinct on targets (if any)
 	vector<unique_ptr<ParsedExpression>> distinct_on_targets;
+
+public:
+	bool Equals(const ResultModifier *other) const override;
+	unique_ptr<ResultModifier> Copy() override;
+	void Serialize(Serializer &serializer) override;
+	static unique_ptr<ResultModifier> Deserialize(Deserializer &source);
+};
+
+class LimitPercentModifier : public ResultModifier {
+public:
+	LimitPercentModifier() : ResultModifier(ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+	}
+
+	//! LIMIT %
+	unique_ptr<ParsedExpression> limit;
+	//! OFFSET
+	unique_ptr<ParsedExpression> offset;
 
 public:
 	bool Equals(const ResultModifier *other) const override;

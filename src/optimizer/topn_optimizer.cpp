@@ -14,10 +14,20 @@ unique_ptr<LogicalOperator> TopN::Optimize(unique_ptr<LogicalOperator> op) {
 
 		// This optimization doesn't apply when OFFSET is present without LIMIT
 		// Or if offset is not constant
-		LimitCount limit_count;
-		limit_count.SetLimitValue(limit.is_limit_percent, limit.limit_val);
-		if (limit.limit_val != (double)NumericLimits<int64_t>::Maximum() || limit.offset) {
-			auto topn = make_unique<LogicalTopN>(move(order_by.orders), limit_count, limit.offset_val);
+		if (limit.limit_val != NumericLimits<int64_t>::Maximum() || limit.offset) {
+			auto topn = make_unique<LogicalTopN>(move(order_by.orders), limit.limit_val, limit.offset_val);
+			topn->AddChild(move(order_by.children[0]));
+			op = move(topn);
+		}
+	} else if (op->type == LogicalOperatorType::LOGICAL_LIMIT_PERCENT &&
+	           op->children[0]->type == LogicalOperatorType::LOGICAL_ORDER_BY) {
+		auto &limit = (LogicalLimitPercent &)*op;
+		auto &order_by = (LogicalOrder &)*(op->children[0]);
+
+		// This optimization doesn't apply when OFFSET is present without LIMIT PERCENT
+		// Or if offset is not constant
+		if (limit.limit_percent != 100.0 || limit.offset) {
+			auto topn = make_unique<LogicalTopNPercent>(move(order_by.orders), limit.limit_percent, limit.offset_val);
 			topn->AddChild(move(order_by.children[0]));
 			op = move(topn);
 		}

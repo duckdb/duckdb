@@ -24,6 +24,8 @@ unique_ptr<ResultModifier> ResultModifier::Deserialize(Deserializer &source) {
 		return OrderModifier::Deserialize(source);
 	case ResultModifierType::DISTINCT_MODIFIER:
 		return DistinctModifier::Deserialize(source);
+	case ResultModifierType::LIMIT_PERCENT_MODIFIER:
+		return LimitPercentModifier::Deserialize(source);
 	default:
 		throw InternalException("Unrecognized ResultModifierType for Deserialization");
 	}
@@ -47,7 +49,6 @@ unique_ptr<ResultModifier> LimitModifier::Copy() {
 	auto copy = make_unique<LimitModifier>();
 	if (limit) {
 		copy->limit = limit->Copy();
-		copy->is_limit_percent = is_limit_percent;
 	}
 	if (offset) {
 		copy->offset = offset->Copy();
@@ -58,14 +59,12 @@ unique_ptr<ResultModifier> LimitModifier::Copy() {
 void LimitModifier::Serialize(Serializer &serializer) {
 	ResultModifier::Serialize(serializer);
 	serializer.WriteOptional(limit);
-	serializer.Write(is_limit_percent);
 	serializer.WriteOptional(offset);
 }
 
 unique_ptr<ResultModifier> LimitModifier::Deserialize(Deserializer &source) {
 	auto mod = make_unique<LimitModifier>();
 	mod->limit = source.ReadOptional<ParsedExpression>();
-	mod->is_limit_percent = source.Read<bool>();
 	mod->offset = source.ReadOptional<ParsedExpression>();
 	return move(mod);
 }
@@ -170,6 +169,44 @@ unique_ptr<ResultModifier> OrderModifier::Deserialize(Deserializer &source) {
 	for (int64_t i = 0; i < order_count; i++) {
 		mod->orders.push_back(OrderByNode::Deserialize((source)));
 	}
+	return move(mod);
+}
+
+bool LimitPercentModifier::Equals(const ResultModifier *other_p) const {
+	if (!ResultModifier::Equals(other_p)) {
+		return false;
+	}
+	auto &other = (LimitPercentModifier &)*other_p;
+	if (!BaseExpression::Equals(limit.get(), other.limit.get())) {
+		return false;
+	}
+	if (!BaseExpression::Equals(offset.get(), other.offset.get())) {
+		return false;
+	}
+	return true;
+}
+
+unique_ptr<ResultModifier> LimitPercentModifier::Copy() {
+	auto copy = make_unique<LimitPercentModifier>();
+	if (limit) {
+		copy->limit = limit->Copy();
+	}
+	if (offset) {
+		copy->offset = offset->Copy();
+	}
+	return move(copy);
+}
+
+void LimitPercentModifier::Serialize(Serializer &serializer) {
+	ResultModifier::Serialize(serializer);
+	serializer.WriteOptional(limit);
+	serializer.WriteOptional(offset);
+}
+
+unique_ptr<ResultModifier> LimitPercentModifier::Deserialize(Deserializer &source) {
+	auto mod = make_unique<LimitPercentModifier>();
+	mod->limit = source.ReadOptional<ParsedExpression>();
+	mod->offset = source.ReadOptional<ParsedExpression>();
 	return move(mod);
 }
 

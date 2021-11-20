@@ -16,16 +16,25 @@ namespace duckdb {
 //! PhyisicalLimit represents the LIMIT operator
 class PhysicalLimit : public PhysicalOperator {
 public:
-	PhysicalLimit(vector<LogicalType> types, bool is_limit_percent, double limit, idx_t offset,
-	              unique_ptr<Expression> limit_expression, unique_ptr<Expression> offset_expression,
-	              idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types), estimated_cardinality),
-	      is_limit_percent(is_limit_percent), limit_value(limit), offset_value(offset),
-	      limit_expression(move(limit_expression)), offset_expression(move(offset_expression)) {
+	PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offset, unique_ptr<Expression> limit_expression,
+	              unique_ptr<Expression> offset_expression, idx_t estimated_cardinality)
+	    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types), estimated_cardinality), is_limit_percent(false),
+	      limit_value(limit), offset_value(offset), limit_expression(move(limit_expression)),
+	      offset_expression(move(offset_expression)) {
 	}
 
-	bool is_limit_percent = false;
-	double limit_value;
+	PhysicalLimit(vector<LogicalType> types, double limit_percent, idx_t offset,
+	              unique_ptr<Expression> limit_expression, unique_ptr<Expression> offset_expression,
+	              idx_t estimated_cardinality)
+	    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types), estimated_cardinality), is_limit_percent(true),
+	      limit_percent(limit_percent), offset_value(offset), limit_expression(move(limit_expression)),
+	      offset_expression(move(offset_expression)) {
+	}
+
+	idx_t limit_value;
+	bool is_limit_percent;
+	double limit_percent;
+	idx_t limit_count = INVALID_INDEX;
 	idx_t offset_value;
 	unique_ptr<Expression> limit_expression;
 	unique_ptr<Expression> offset_expression;
@@ -41,7 +50,6 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &state, LocalSinkState &lstate,
 	                    DataChunk &input) const override;
-	void Combine(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate) const override;
 
 	bool IsSink() const override {
 		return true;

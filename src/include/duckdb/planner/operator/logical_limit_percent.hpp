@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/operator/logical_limit.hpp
+// duckdb/planner/operator/logical_limit_percent.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,16 +12,17 @@
 
 namespace duckdb {
 
-//! LogicalLimit represents a LIMIT clause
-class LogicalLimit : public LogicalOperator {
+//! LogicalLimitPercent represents a LIMIT PERCENT clause
+class LogicalLimitPercent : public LogicalOperator {
 public:
-	LogicalLimit(int64_t limit_val, int64_t offset_val, unique_ptr<Expression> limit, unique_ptr<Expression> offset)
-	    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT), limit_val(limit_val), offset_val(offset_val),
-	      limit(move(limit)), offset(move(offset)) {
+	LogicalLimitPercent(double limit_percent, int64_t offset_val, unique_ptr<Expression> limit,
+	                    unique_ptr<Expression> offset)
+	    : LogicalOperator(LogicalOperatorType::LOGICAL_LIMIT_PERCENT), limit_percent(limit_percent),
+	      offset_val(offset_val), limit(move(limit)), offset(move(offset)) {
 	}
 
-	//! Limit and offset values in case they are constants, used in optimizations.
-	int64_t limit_val;
+	//! Limit percent and offset values in case they are constants, used in optimizations.
+	double limit_percent;
 	int64_t offset_val;
 	//! The maximum amount of elements to emit
 	unique_ptr<Expression> limit;

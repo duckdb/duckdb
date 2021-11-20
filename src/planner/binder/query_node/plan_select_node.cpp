@@ -97,30 +97,33 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 
 	for (size_t i = 0; i < statement.modifiers.size(); i++) {
 		auto &modifier = statement.modifiers[i];
-		if (modifier->type != ResultModifierType::LIMIT_MODIFIER) {
-			continue;
-		}
-		auto &limit_modifier = (BoundLimitModifier &)*modifier;
-		if (limit_modifier.limit || limit_modifier.offset) {
-			PlanSubqueries(&limit_modifier.limit, &root);
-			PlanSubqueries(&limit_modifier.offset, &root);
-			if (limit_modifier.limit_val.IsMaximum()) {
-				auto limit = make_unique<LogicalLimit>(limit_modifier.limit_val.is_percentage,
-				                                       NumericLimits<int64_t>::Maximum(), limit_modifier.offset_val,
+		if (modifier->type == ResultModifierType::LIMIT_MODIFIER) {
+			auto &limit_modifier = (BoundLimitModifier &)*modifier;
+			if (limit_modifier.limit || limit_modifier.offset) {
+				PlanSubqueries(&limit_modifier.limit, &root);
+				PlanSubqueries(&limit_modifier.offset, &root);
+				auto limit = make_unique<LogicalLimit>(limit_modifier.limit_val, limit_modifier.offset_val,
 				                                       move(limit_modifier.limit), move(limit_modifier.offset));
 				limit->AddChild(move(root));
 				root = move(limit);
-			} else {
-				auto limit = make_unique<LogicalLimit>(
-				    limit_modifier.limit_val.is_percentage, (int64_t)limit_modifier.limit_val.limit_value,
-				    limit_modifier.offset_val, move(limit_modifier.limit), move(limit_modifier.offset));
+				// Delete from modifiers
+				std::swap(statement.modifiers[i], statement.modifiers.back());
+				statement.modifiers.erase(statement.modifiers.end() - 1);
+				i--;
+			}
+		} else if (modifier->type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
+			auto &limit_modifier = (BoundLimitPercentModifier &)*modifier;
+			if (limit_modifier.limit) {
+				PlanSubqueries(&limit_modifier.limit, &root);
+				auto limit = make_unique<LogicalLimitPercent>(limit_modifier.limit_percent, limit_modifier.offset_val,
+				                                              move(limit_modifier.limit), move(limit_modifier.offset));
 				limit->AddChild(move(root));
 				root = move(limit);
+				// Delete from modifiers
+				std::swap(statement.modifiers[i], statement.modifiers.back());
+				statement.modifiers.erase(statement.modifiers.end() - 1);
+				i--;
 			}
-			// Delete from modifiers
-			std::swap(statement.modifiers[i], statement.modifiers.back());
-			statement.modifiers.erase(statement.modifiers.end() - 1);
-			i--;
 		}
 	}
 

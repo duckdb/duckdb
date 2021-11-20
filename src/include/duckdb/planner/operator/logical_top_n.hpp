@@ -16,13 +16,13 @@ namespace duckdb {
 //! LogicalTopN represents a comibination of ORDER BY and LIMIT clause, using Min/Max Heap
 class LogicalTopN : public LogicalOperator {
 public:
-	LogicalTopN(vector<BoundOrderByNode> orders, LimitCount limit, int64_t offset)
+	LogicalTopN(vector<BoundOrderByNode> orders, int64_t limit, int64_t offset)
 	    : LogicalOperator(LogicalOperatorType::LOGICAL_TOP_N), orders(move(orders)), limit(limit), offset(offset) {
 	}
 
 	vector<BoundOrderByNode> orders;
 	//! The maximum amount of elements to emit
-	LimitCount limit;
+	int64_t limit;
 	//! The offset from the start to begin emitting elements
 	int64_t offset;
 

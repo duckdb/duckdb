@@ -17,6 +17,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -236,6 +237,7 @@ private:
 
 	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
+	unique_ptr<BoundResultModifier> BindLimitPercent(LimitPercentModifier &limit_mod);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
 
 	unique_ptr<LogicalOperator> PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root);

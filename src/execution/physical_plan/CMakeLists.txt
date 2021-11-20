@@ -23,6 +23,7 @@ add_library_unity(
   plan_get.cpp
   plan_insert.cpp
   plan_limit.cpp
+  plan_limit_percent.cpp
   plan_order.cpp
   plan_pragma.cpp
   plan_prepare.cpp
@@ -33,6 +34,7 @@ add_library_unity(
   plan_show_select.cpp
   plan_simple.cpp
   plan_top_n.cpp
+  plan_top_n_percent.cpp
   plan_update.cpp
   plan_window.cpp
   plan_unnest.cpp
