@@ -437,6 +437,15 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		default:
 			Rf_error("duckdb_execute_R: Unknown enum type for convert: %s", TypeIdToString(physical_type).c_str());
 		}
+		// increment by one cause R factor offsets start at 1
+		auto dest_ptr = ((int32_t *)INTEGER_POINTER(dest)) + dest_offset;
+		for (idx_t i = 0; i < n; i++) {
+			if (dest_ptr[i] == NA_INTEGER) {
+				continue;
+			}
+			dest_ptr[i]++;
+		}
+
 		RProtector r;
 		auto levels_sexp = r.Protect(RApi::StringsToSexp(EnumType::GetValuesInsertOrder(src_vec.GetType())));
 		SET_LEVELS(dest, levels_sexp);

@@ -540,7 +540,7 @@ int64_t DatePart::MicrosecondsOperator::Operation(timestamp_t input) {
 template <>
 int64_t DatePart::MicrosecondsOperator::Operation(interval_t input) {
 	// remove everything but the second & microsecond part
-	return input.micros;
+	return input.micros % Interval::MICROS_PER_MINUTE;
 }
 
 template <>
@@ -620,8 +620,17 @@ int64_t DatePart::EpochOperator::Operation(timestamp_t input) {
 
 template <>
 int64_t DatePart::EpochOperator::Operation(interval_t input) {
-	auto secs = SecondsOperator::Operation<interval_t, int64_t>(input);
-	return (input.months * Interval::DAYS_PER_MONTH + input.days) * Interval::SECS_PER_DAY + secs;
+	int64_t interval_years = input.months / Interval::MONTHS_PER_YEAR;
+	int64_t interval_days;
+	interval_days = Interval::DAYS_PER_YEAR * interval_years;
+	interval_days += Interval::DAYS_PER_MONTH * (input.months % Interval::MONTHS_PER_YEAR);
+	interval_days += input.days;
+	int64_t interval_epoch;
+	interval_epoch = interval_days * Interval::SECS_PER_DAY;
+	// we add 0.25 days per year to sort of account for leap days
+	interval_epoch += interval_years * (Interval::SECS_PER_DAY / 4);
+	interval_epoch += input.micros / Interval::MICROS_PER_SEC;
+	return interval_epoch;
 }
 
 template <>
