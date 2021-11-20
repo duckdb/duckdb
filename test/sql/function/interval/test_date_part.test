@@ -6,10 +6,10 @@ statement ok
 PRAGMA enable_verification
 
 statement ok
-CREATE TABLE intervals(i INTERVAL, s VARCHAR)
+CREATE TABLE intervals(i INTERVAL, s VARCHAR);
 
 statement ok
-INSERT INTO intervals VALUES ('2 years', 'year'), ('16 months', 'quarter'), ('42 days', 'day'), ('2066343400 microseconds', 'minute')
+INSERT INTO intervals VALUES ('2 years', 'year'), ('16 months', 'quarter'), ('42 days', 'day'), ('2066343400 microseconds', 'minute');
 
 # test date_part with different combinations of constant/non-constant columns
 query I
@@ -51,6 +51,14 @@ SELECT date_part('seconds', i) FROM intervals;
 0
 0
 0
+26
+
+query I
+SELECT date_part('epoch', i) FROM intervals;
+----
+63115200
+41925600
+3628800
 2066
 
 query I
