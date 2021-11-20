@@ -740,20 +740,16 @@ void Executor::PreprocessPlan(PhysicalOperator *op) {
 				PreprocessPlan(pipeline_child);
 				auto plan_ptr = reinterpret_cast<duckdb::PhysicalTopN *>(op);
 				if (plan_ptr->is_limit_percent && plan_ptr->limit_count == INVALID_INDEX) {
-					// idx_t back_limit = plan_ptr->limit;
 					plan_ptr->limit = duckdb::NumericLimits<idx_t>::Maximum();
 					plan_ptr->limit_count = CalculateCount(op);
-					// plan_ptr->limit = back_limit;
 				}
 				return;
 			} else if (op->type == PhysicalOperatorType::LIMIT) {
 				PreprocessPlan(pipeline_child);
 				auto plan_ptr = reinterpret_cast<duckdb::PhysicalLimit *>(op);
 				if (plan_ptr->is_limit_percent && plan_ptr->limit_count == INVALID_INDEX) {
-					// idx_t back_limit = plan_ptr->limit_value;
 					plan_ptr->limit_value = duckdb::NumericLimits<idx_t>::Maximum();
 					plan_ptr->limit_count = CalculateCount(op);
-					// plan_ptr->limit_value = back_limit;
 				}
 				return;
 			}
