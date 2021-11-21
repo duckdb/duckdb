@@ -1,7 +1,9 @@
 #include "duckdb/optimizer/topn_optimizer.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
+#include "duckdb/planner/operator/logical_limit_percent.hpp"
 #include "duckdb/planner/operator/logical_top_n.hpp"
+#include "duckdb/planner/operator/logical_top_n_percent.hpp"
 #include "duckdb/common/limits.hpp"
 
 namespace duckdb {

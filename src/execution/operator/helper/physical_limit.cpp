@@ -121,6 +121,9 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 		state.is_offset_delimited = true;
 	}
 	idx_t max_element = limit + offset;
+	if (limit == INVALID_INDEX) {
+		max_element = INVALID_INDEX;
+	}
 	idx_t input_size = input.size();
 	if (limit == 0 || state.current_offset >= max_element) {
 		return SinkResultType::FINISHED;

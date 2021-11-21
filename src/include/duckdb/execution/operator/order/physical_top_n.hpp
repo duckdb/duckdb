@@ -25,9 +25,9 @@ public:
 	             idx_t estimated_cardinality);
 
 	vector<BoundOrderByNode> orders;
-	idx_t limit;
-	bool is_limit_percent;
-	double limit_percent;
+	idx_t limit = INVALID_INDEX;
+	bool is_limit_percent = false;
+	double limit_percent = 100.0;
 	idx_t limit_count = INVALID_INDEX;
 	idx_t offset;
 
