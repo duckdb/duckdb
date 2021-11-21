@@ -18,17 +18,18 @@ class PhysicalLimit : public PhysicalOperator {
 public:
 	PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offset, unique_ptr<Expression> limit_expression,
 	              unique_ptr<Expression> offset_expression, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types), estimated_cardinality), is_limit_percent(false),
-	      limit_value(limit), offset_value(offset), limit_expression(move(limit_expression)),
-	      offset_expression(move(offset_expression)) {
+	    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types), estimated_cardinality), limit_value(limit),
+	      offset_value(offset), limit_expression(move(limit_expression)), offset_expression(move(offset_expression)) {
+		is_limit_percent = false;
 	}
 
 	PhysicalLimit(vector<LogicalType> types, double limit_percent, idx_t offset,
 	              unique_ptr<Expression> limit_expression, unique_ptr<Expression> offset_expression,
 	              idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types), estimated_cardinality), is_limit_percent(true),
+	    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types), estimated_cardinality),
 	      limit_percent(limit_percent), offset_value(offset), limit_expression(move(limit_expression)),
 	      offset_expression(move(offset_expression)) {
+		is_limit_percent = true;
 	}
 
 	idx_t limit_value = INVALID_INDEX;

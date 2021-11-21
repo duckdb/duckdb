@@ -13,13 +13,15 @@ namespace duckdb {
 PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
                            idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::TOP_N, move(types), estimated_cardinality), orders(move(orders)),
-      limit(limit), is_limit_percent(false), offset(offset) {
+      limit(limit), offset(offset) {
+	is_limit_percent = false;
 }
 
 PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, double limit_percent,
                            idx_t offset, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::TOP_N, move(types), estimated_cardinality), orders(move(orders)),
-      limit_percent(limit_percent), is_limit_percent(true), offset(offset) {
+      limit_percent(limit_percent), offset(offset) {
+	is_limit_percent = true;
 }
 
 //===--------------------------------------------------------------------===//
