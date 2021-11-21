@@ -579,7 +579,38 @@ void FillEnumResultTemplate(Vector &source, Vector &result, idx_t count) {
 	}
 }
 
-static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message) {
+void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enum_physical_type) {
+	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		result.SetVectorType(source.GetVectorType());
+	} else {
+		result.SetVectorType(VectorType::FLAT_VECTOR);
+	}
+	for (idx_t i = 0; i < count; i++) {
+		auto src_val = source.GetValue(i);
+		if (src_val.is_null) {
+			result.SetValue(i, Value());
+			continue;
+		}
+		auto str_vec = EnumType::GetValuesInsertOrder(source.GetType());
+		uint64_t enum_idx;
+		switch (enum_physical_type) {
+		case PhysicalType::UINT8:
+			enum_idx = src_val.value_.utinyint;
+			break;
+		case PhysicalType::UINT16:
+			enum_idx = src_val.value_.usmallint;
+			break;
+		case PhysicalType::UINT32:
+			enum_idx = src_val.value_.uinteger;
+			break;
+		default:
+			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
+		}
+		result.SetValue(i, Value(str_vec[enum_idx]));
+	}
+}
+
+static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *error_message, bool strict) {
 	auto enum_physical_type = source.GetType().InternalType();
 	switch (result.GetType().id()) {
 	case LogicalTypeId::ENUM: {
@@ -600,38 +631,17 @@ static bool EnumCastSwitch(Vector &source, Vector &result, idx_t count, string *
 		break;
 	}
 	case LogicalTypeId::VARCHAR: {
-		if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			result.SetVectorType(source.GetVectorType());
-		} else {
-			result.SetVectorType(VectorType::FLAT_VECTOR);
-		}
-		for (idx_t i = 0; i < count; i++) {
-			auto src_val = source.GetValue(i);
-			if (src_val.is_null) {
-				result.SetValue(i, Value());
-				continue;
-			}
-			auto str_vec = EnumType::GetValuesInsertOrder(source.GetType());
-			uint64_t enum_idx;
-			switch (enum_physical_type) {
-			case PhysicalType::UINT8:
-				enum_idx = src_val.value_.utinyint;
-				break;
-			case PhysicalType::UINT16:
-				enum_idx = src_val.value_.usmallint;
-				break;
-			case PhysicalType::UINT32:
-				enum_idx = src_val.value_.uinteger;
-				break;
-			default:
-				throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
-			}
-			result.SetValue(i, Value(str_vec[enum_idx]));
-		}
+		EnumToVarchar(source, result, count, enum_physical_type);
 		break;
 	}
-	default:
-		throw InternalException("Cast from Enum is not allowed");
+	default: {
+		// Cast to varchar
+		Vector varchar_cast(LogicalType::VARCHAR, count);
+		EnumToVarchar(source, varchar_cast, count, enum_physical_type);
+		// Try to cast from varchar to whatever we wanted before
+		VectorOperations::TryCast(varchar_cast, result, count, error_message, strict);
+		break;
+	}
 	}
 	return true;
 }
@@ -746,7 +756,7 @@ bool VectorOperations::TryCast(Vector &source, Vector &result, idx_t count, stri
 	case LogicalTypeId::LIST:
 		return ListCastSwitch(source, result, count, error_message);
 	case LogicalTypeId::ENUM:
-		return EnumCastSwitch(source, result, count, error_message);
+		return EnumCastSwitch(source, result, count, error_message, strict);
 	default:
 		return TryVectorNullCast(source, result, count, error_message);
 	}
