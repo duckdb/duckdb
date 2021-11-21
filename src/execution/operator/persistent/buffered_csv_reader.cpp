@@ -25,7 +25,7 @@ namespace duckdb {
 void BufferedCSVReaderOptions::SetDelimiter(const string &input) {
 	this->delimiter = StringUtil::Replace(input, "\\t", "\t");
 	this->has_delimiter = true;
-	if (input.size() == 0) {
+	if (input.empty()) {
 		throw BinderException("DELIM or SEP must not be empty");
 	}
 }
