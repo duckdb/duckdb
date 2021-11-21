@@ -1,5 +1,4 @@
 #include "duckdb_odbc.hpp"
-#include "parameter_wrapper.hpp"
 #include "odbc_fetch.hpp"
 #include <odbcinst.h>
 #include <codecvt>
@@ -43,8 +42,11 @@ SQLRETURN SQL_API SQLFreeHandle(SQLSMALLINT handle_type, SQLHANDLE handle) {
 		delete hdl;
 		return SQL_SUCCESS;
 	}
-	case SQL_HANDLE_DESC:
+	case SQL_HANDLE_DESC: {
+		auto *hdl = (duckdb::OdbcHandleDesc *)handle;
+		delete hdl;
 		return SQL_ERROR;
+	}
 	case SQL_HANDLE_ENV: {
 		auto *hdl = (duckdb::OdbcHandleEnv *)handle;
 		delete hdl;
