@@ -291,6 +291,7 @@ bool BitpackingAnalyze(AnalyzeState &state, Vector &input, idx_t count) {
 template <class T, class PRE_CAST_TYPE>
 idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 	auto &bitpacking_state = (BitpackingAnalyzeState<T, PRE_CAST_TYPE> &)state;
+	bitpacking_state.state.template Flush<EmptyBitpackingWriter>();
 	return bitpacking_state.state.total_size;
 }
 
