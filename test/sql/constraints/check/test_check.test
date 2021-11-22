@@ -1,6 +1,6 @@
-# name: test/sql/constraints/test_check.test
+# name: test/sql/constraints/check/test_check.test
 # description: CHECK constraint
-# group: [constraints]
+# group: [check]
 
 statement ok
 CREATE TABLE integers(i INTEGER CHECK(i < 5))
@@ -46,3 +46,14 @@ CREATE TABLE integers2(i INTEGER CHECK(i > (SELECT 42)), j INTEGER)
 statement error
 CREATE TABLE integers2(i INTEGER CHECK(i > SUM(j)), j INTEGER)
 
+statement error
+CREATE TABLE integers3(i INTEGER CHECK(k < 10), j INTEGER)
+
+statement error
+CREATE TABLE integers3(i INTEGER CHECK(integers3.k < 10), j INTEGER)
+
+statement error
+CREATE TABLE integers3(i INTEGER CHECK(integers2.i < 10), j INTEGER)
+
+statement ok
+CREATE TABLE integers4(i INTEGER CHECK(integers4.i < 10), j INTEGER)

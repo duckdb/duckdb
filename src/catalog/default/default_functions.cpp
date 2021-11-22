@@ -90,6 +90,7 @@ static DefaultMacro internal_macros[] = {
 	{DEFAULT_SCHEMA, "array_append", {"arr", "el", nullptr}, "list_append(arr, el)"},
 	{DEFAULT_SCHEMA, "list_prepend", {"e", "l", nullptr}, "list_concat(list_value(e), l)"},
 	{DEFAULT_SCHEMA, "array_prepend", {"el", "arr", nullptr}, "list_prepend(el, arr)"},
+	{DEFAULT_SCHEMA, "generate_subscripts", {"arr", "dim", nullptr}, "unnest(generate_series(1, array_length(arr, dim)))"},
 	{nullptr, nullptr, {nullptr}, nullptr}};
 
 static unique_ptr<CreateFunctionInfo> GetDefaultFunction(const string &schema, const string &name) {

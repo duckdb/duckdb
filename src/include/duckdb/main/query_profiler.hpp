@@ -34,6 +34,7 @@ struct ExpressionInfo {
 	vector<unique_ptr<ExpressionInfo>> children;
 	// Extract ExpressionInformation from a given expression state
 	void ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state);
+
 	//! Whether or not expression has function
 	bool hasfunction;
 	//! The function Name
@@ -49,6 +50,7 @@ struct ExpressionInfo {
 //! The ExpressionRootInfo keeps information related to the root of an expression tree
 struct ExpressionRootInfo {
 	ExpressionRootInfo(ExpressionExecutorState &executor, string name);
+
 	//! Count the number of time the executor called
 	uint64_t total_count = 0;
 	//! Count the number of time the executor called since last sampling
@@ -72,6 +74,7 @@ struct ExpressionRootInfo {
 struct ExpressionExecutorInfo {
 	explicit ExpressionExecutorInfo() {};
 	explicit ExpressionExecutorInfo(ExpressionExecutor &executor, const string &name, int id);
+
 	//! A vector which contain the pointer to all ExpressionRootInfo
 	vector<unique_ptr<ExpressionRootInfo>> roots;
 	//! Id, it will be used as index for executors_info vector
@@ -79,11 +82,12 @@ struct ExpressionExecutorInfo {
 };
 
 struct OperatorInformation {
+	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
+	}
+
 	double time = 0;
 	idx_t elements = 0;
 	string name;
-	explicit OperatorInformation(double time_ = 0, idx_t elements_ = 0) : time(time_), elements(elements_) {
-	}
 	//! A vector of Expression Executor Info
 	vector<unique_ptr<ExpressionExecutorInfo>> executors_info;
 };
@@ -121,8 +125,15 @@ class QueryProfiler {
 public:
 	DUCKDB_API QueryProfiler()
 	    : automatic_print_format(ProfilerPrintFormat::NONE), enabled(false), detailed_enabled(false), running(false),
-	      query_requires_profiling(false) {
+	      query_requires_profiling(false), is_explain_analyze(false), stored_enabled(false),
+	      stored_automatic_print_format(ProfilerPrintFormat::NONE) {
 	}
+
+	//! The format to automatically print query profiling information in (default: disabled)
+	ProfilerPrintFormat automatic_print_format;
+	//! The file to save query profiling information to, instead of printing it to the console (empty = print to
+	//! console)
+	string save_location;
 
 public:
 	struct TreeNode {
@@ -167,8 +178,10 @@ public:
 		return detailed_enabled;
 	}
 
-	DUCKDB_API void StartQuery(string query);
+	DUCKDB_API void StartQuery(string query, bool is_explain_analyze = false);
 	DUCKDB_API void EndQuery();
+
+	DUCKDB_API void StartExplainAnalyze();
 
 	//! Adds the timings gathered by an OperatorProfiler to this query profiler
 	DUCKDB_API void Flush(OperatorProfiler &profiler);
@@ -184,12 +197,6 @@ public:
 
 	DUCKDB_API string ToJSON() const;
 	DUCKDB_API void WriteToFile(const char *path, string &info) const;
-
-	//! The format to automatically print query profiling information in (default: disabled)
-	ProfilerPrintFormat automatic_print_format;
-	//! The file to save query profiling information to, instead of printing it to the console (empty = print to
-	//! console)
-	string save_location;
 
 	idx_t OperatorSize() {
 		return tree_map.size();
@@ -215,6 +222,11 @@ private:
 	Profiler<system_clock> main_query;
 	//! A map of a Physical Operator pointer to a tree node
 	TreeMap tree_map;
+
+	bool is_explain_analyze;
+	bool stored_enabled;
+	ProfilerPrintFormat stored_automatic_print_format;
+	string stored_save_location;
 
 public:
 	const TreeMap &GetTreeMap() const {

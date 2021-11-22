@@ -12,11 +12,11 @@ ColumnAliasBinder::ColumnAliasBinder(BoundSelectNode &node, const unordered_map<
 
 BindResult ColumnAliasBinder::BindAlias(ExpressionBinder &enclosing_binder, ColumnRefExpression &expr, idx_t depth,
                                         bool root_expression) {
-	if (!expr.table_name.empty()) {
+	if (expr.IsQualified()) {
 		return BindResult(StringUtil::Format("Alias %s cannot be qualified.", expr.ToString()));
 	}
 
-	auto alias_entry = alias_map.find(expr.column_name);
+	auto alias_entry = alias_map.find(expr.column_names[0]);
 	if (alias_entry == alias_map.end()) {
 		return BindResult(StringUtil::Format("Alias %s is not found.", expr.ToString()));
 	}
