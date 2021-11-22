@@ -2,6 +2,8 @@
 # description: Test the forcing of a compression scheme
 # group: [compression]
 
+require vector_size 1024
+
 # load the DB from disk
 load __TEST_DIR__/test_compression_simple.db
 

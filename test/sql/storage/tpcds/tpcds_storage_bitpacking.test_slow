@@ -1,4 +1,4 @@
-# name: test/sql/storage/tpcds/tpcds_storage_rle.test_slow
+# name: test/sql/storage/tpcds/tpcds_storage_bitpacking.test_slow
 # description: Test TPC-DS SF1 queries on persistent storage
 # group: [tpcds]
 
