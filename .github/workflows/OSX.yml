@@ -117,6 +117,8 @@ jobs:
 
     - name: Deploy
       run: |
-        pip install --user awscli
-        ./scripts/extension-upload.sh osx-amd64
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+            pip install --user awscli
+            ./scripts/extension-upload.sh osx-amd64
+          fi
 
