@@ -10,6 +10,10 @@ text = text.replace('#pragma once', '''#pragma once
 
 #ifdef _WIN32
 #ifdef DUCKDB_MAIN_LIBRARY
+#ifndef _WINSOCKAPI_
+#define _WINSOCKAPI_
+#endif
+
 #include <windows.h>
 #endif
 #endif''')
