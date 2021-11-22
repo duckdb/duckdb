@@ -313,19 +313,18 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
 		auto index = indices[i];
 		auto next_ptr = key_locations[i] + pointer_offset;
-		auto next_entry_ptr = pointers[index];
 		// In case this is still a primary key and there is a conflict
-		if (has_primary_key && next_entry_ptr != 0) {
+		if (has_primary_key && pointers[index] != 0) {
 			// for each key pair in the entry
 			for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
 				auto key_type = condition_types[key_idx];
 				auto key_offset = col_offsets[key_idx];
 				// check whether the keys are the same
 				has_primary_key =
-				    !CompareKeysSwitch(key_locations[i] + key_offset, next_entry_ptr + key_offset, key_type);
+				    !CompareKeysSwitch(key_locations[i] + key_offset, pointers[index] + key_offset, key_type);
 			}
-			// store a ptr to the entry to evaluate the next_key later
-			conflict_entries.push_back(next_entry_ptr);
+			// store a ptr to the next entry to evaluate the next_key later
+			conflict_entries.push_back(pointers[index]);
 		}
 		// replace the hash_value in the current entry and point to a position in the hash_map
 		Store<data_ptr_t>(pointers[index], next_ptr);
@@ -335,16 +334,17 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	// It is  still necessary to handle multiple conflicts to the same key
 	if (has_primary_key) {
 		for (auto entry : conflict_entries) {
-			auto next_entry_ptr = entry + pointer_offset;
+			auto next_entry_ptr = Load<data_ptr_t>(entry + pointer_offset);
 			// check the whole chain
-			while (has_primary_key && next_entry_ptr != 0) {
+			while (has_primary_key && next_entry_ptr != nullptr) {
 				// check whether the keys are the same
 				for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
 					auto key_type = condition_types[key_idx];
 					auto key_offset = col_offsets[key_idx];
 					has_primary_key = !CompareKeysSwitch(entry + key_offset, next_entry_ptr + key_offset, key_type);
 				}
-				next_entry_ptr = next_entry_ptr + pointer_offset;
+				// walk to the next entry
+				next_entry_ptr = Load<data_ptr_t>(next_entry_ptr + pointer_offset);
 			}
 			// no more conflicts for this key
 		}
