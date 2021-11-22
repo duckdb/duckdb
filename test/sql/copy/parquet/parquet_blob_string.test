@@ -33,13 +33,12 @@ bar
 baz
 
 statement ok
-PRAGMA enable_parquet_binary_as_string
+SET binary_as_string=true
 
 query I
 SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet') limit 1
 ----
 VARCHAR
-
 
 query I
 SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet')
@@ -49,7 +48,7 @@ bar
 baz
 
 statement ok
-PRAGMA disable_parquet_binary_as_string
+SET binary_as_string=false
 
 query I
 SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet') limit 1
@@ -65,7 +64,7 @@ baz
 
 # Preference goes to variable set in scan
 statement ok
-PRAGMA enable_parquet_binary_as_string
+PRAGMA binary_as_string=1
 
 query I
 SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet' ,binary_as_string=False) limit 1

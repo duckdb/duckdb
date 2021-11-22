@@ -32,7 +32,8 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 		if (scope == SetScope::GLOBAL) {
 			config.set_variables[name] = value.CastAs(target_type);
 		} else {
-			ClientConfig::GetConfig(context.client).set_variables[name] = value.CastAs(target_type);
+			auto &client_config = ClientConfig::GetConfig(context.client);
+			client_config.set_variables[name] = value.CastAs(target_type);
 		}
 		return;
 	}

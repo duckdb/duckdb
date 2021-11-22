@@ -54,9 +54,10 @@ struct ParquetReaderScanState {
 };
 
 struct ParquetOptions {
-	explicit ParquetOptions(bool binary_as_string_p) : binary_as_string(binary_as_string_p) {
-	}
-	bool binary_as_string;
+	explicit ParquetOptions() {}
+	explicit ParquetOptions(ClientContext &context);
+
+	bool binary_as_string = false;
 };
 
 class ParquetReader {
@@ -80,7 +81,7 @@ public:
 	vector<LogicalType> return_types;
 	vector<string> names;
 	shared_ptr<ParquetFileMetadataCache> metadata;
-	ParquetOptions parquet_options {false};
+	ParquetOptions parquet_options;
 
 public:
 	void InitializeScan(ParquetReaderScanState &state, vector<column_t> column_ids, vector<idx_t> groups_to_read,

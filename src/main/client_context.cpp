@@ -935,8 +935,8 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 
 bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) {
 	// first check the built-in settings
-	auto &config = DBConfig::GetConfig(*this);
-	auto option = config.GetOptionByName(key);
+	auto &db_config = DBConfig::GetConfig(*this);
+	auto option = db_config.GetOptionByName(key);
 	if (option) {
 		result = option->get_setting(*this);
 		return true;
@@ -944,7 +944,7 @@ bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) 
 
 	// then check the session values
 	const auto &session_config_map = config.set_variables;
-	const auto &global_config_map = db->config.set_variables;
+	const auto &global_config_map = db_config.set_variables;
 
 	auto session_value = session_config_map.find(key);
 	bool found_session_value = session_value != session_config_map.end();

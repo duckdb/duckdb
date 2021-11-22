@@ -72,14 +72,6 @@ static void PragmaDisableForceParallelism(ClientContext &context, const Function
 	ClientConfig::GetConfig(context).verify_parallelism = false;
 }
 
-static void PragmaEnableParquetBinaryAsString(ClientContext &context, const FunctionParameters &parameters) {
-	context.parquet_binary_as_strings = true;
-}
-
-static void PragmaDisableParquetBinaryAsString(ClientContext &context, const FunctionParameters &parameters) {
-	context.parquet_binary_as_strings = false;
-}
-
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).object_cache_enable = true;
 }

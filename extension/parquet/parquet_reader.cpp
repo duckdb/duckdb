@@ -334,6 +334,14 @@ void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p
 	D_ASSERT(!return_types.empty());
 }
 
+ParquetOptions::ParquetOptions(ClientContext &context) {
+	Value binary_as_string_val;
+	if (context.TryGetCurrentSetting("binary_as_string", binary_as_string_val)) {
+		binary_as_string = binary_as_string_val.GetValue<bool>();
+	}
+}
+
+
 ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p,
                              const vector<LogicalType> &expected_types_p, const string &initial_filename_p)
     : allocator(allocator_p) {

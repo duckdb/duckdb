@@ -100,7 +100,7 @@ public:
 		if (result->files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
-		ParquetOptions parquet_options(context.parquet_binary_as_strings);
+		ParquetOptions parquet_options(context);
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options);
 		return move(result);
 	}
@@ -193,7 +193,7 @@ public:
 	                                                vector<string> &input_table_names,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto file_name = inputs[0].GetValue<string>();
-		ParquetOptions parquet_options {context.parquet_binary_as_strings};
+		ParquetOptions parquet_options(context);
 		for (auto &kv : named_parameters) {
 			if (kv.first == "binary_as_string") {
 				parquet_options.binary_as_string = kv.second.value_.boolean;
@@ -218,7 +218,7 @@ public:
 		if (files.empty()) {
 			throw IOException("Parquet reader needs at least one file to read");
 		}
-		ParquetOptions parquet_options {context.parquet_binary_as_strings};
+		ParquetOptions parquet_options(context);
 		for (auto &kv : named_parameters) {
 			if (kv.first == "binary_as_string") {
 				parquet_options.binary_as_string = kv.second.value_.boolean;
