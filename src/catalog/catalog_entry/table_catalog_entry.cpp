@@ -140,8 +140,8 @@ unique_ptr<CatalogEntry> TableCatalogEntry::AlterEntry(ClientContext &context, A
 static void RenameExpression(ParsedExpression &expr, RenameColumnInfo &info) {
 	if (expr.type == ExpressionType::COLUMN_REF) {
 		auto &colref = (ColumnRefExpression &)expr;
-		if (colref.column_name == info.old_name) {
-			colref.column_name = info.new_name;
+		if (colref.column_names[0] == info.old_name) {
+			colref.column_names[0] = info.new_name;
 		}
 	}
 	ParsedExpressionIterator::EnumerateChildren(

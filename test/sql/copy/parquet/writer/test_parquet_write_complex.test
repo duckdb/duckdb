@@ -1,6 +1,6 @@
-# name: test/sql/copy/parquet/test_parquet_write_complex.test
+# name: test/sql/copy/parquet/writer/test_parquet_write_complex.test
 # description: Parquet read and re-write various files
-# group: [parquet]
+# group: [writer]
 
 require parquet
 

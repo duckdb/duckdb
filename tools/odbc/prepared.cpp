@@ -1,7 +1,7 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
 #include "api_info.hpp"
-#include "parameter_wrapper.hpp"
+#include "parameter_descriptor.hpp"
 
 #include "duckdb/main/prepared_statement_data.hpp"
 
@@ -166,7 +166,7 @@ SQLRETURN SQL_API SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_
 
 SQLRETURN SQL_API SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_ptr) {
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		auto ret = stmt->param_wrapper->GetNextParam(value_ptr_ptr);
+		auto ret = stmt->param_desc->GetNextParam(value_ptr_ptr);
 		if (ret != SQL_NO_DATA) {
 			return ret;
 		}
@@ -177,7 +177,7 @@ SQLRETURN SQL_API SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_
 
 SQLRETURN SQL_API SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		auto ret = stmt->param_wrapper->PutData(data_ptr, str_len_or_ind_ptr);
+		auto ret = stmt->param_desc->PutData(data_ptr, str_len_or_ind_ptr);
 		if (ret == SQL_SUCCESS) {
 			return ret;
 		}

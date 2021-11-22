@@ -1,5 +1,7 @@
 #include "odbc_interval.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include <sqltypes.h>
+#include <sqlext.h>
 
 using duckdb::interval_t;
 using duckdb::OdbcInterval;
@@ -169,4 +171,91 @@ void OdbcInterval::SetMinuteToSecond(interval_t &interval, SQL_INTERVAL_STRUCT *
 	// remaning stores into the fraction
 	interval_struct->intval.day_second.fraction =
 	    interval_struct->intval.day_second.fraction % duckdb::Interval::MICROS_PER_SEC;
+}
+
+bool OdbcInterval::IsIntervalType(SQLSMALLINT value_type) {
+	switch (value_type) {
+	case SQL_C_INTERVAL_YEAR:
+	case SQL_C_INTERVAL_MONTH:
+	case SQL_C_INTERVAL_DAY:
+	case SQL_C_INTERVAL_HOUR:
+	case SQL_C_INTERVAL_MINUTE:
+	case SQL_C_INTERVAL_SECOND:
+	case SQL_C_INTERVAL_YEAR_TO_MONTH:
+	case SQL_C_INTERVAL_DAY_TO_HOUR:
+	case SQL_C_INTERVAL_DAY_TO_MINUTE:
+	case SQL_C_INTERVAL_DAY_TO_SECOND:
+	case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+	case SQL_C_INTERVAL_HOUR_TO_SECOND:
+	case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+		return true;
+	default:
+		return false;
+	}
+}
+
+SQLSMALLINT OdbcInterval::GetSQLIntervalType(SQLSMALLINT value_type) {
+	switch (value_type) {
+	case SQL_C_INTERVAL_YEAR:
+		return SQL_INTERVAL_YEAR;
+	case SQL_C_INTERVAL_MONTH:
+		return SQL_INTERVAL_MONTH;
+	case SQL_C_INTERVAL_DAY:
+		return SQL_INTERVAL_DAY;
+	case SQL_C_INTERVAL_HOUR:
+		return SQL_INTERVAL_HOUR;
+	case SQL_C_INTERVAL_MINUTE:
+		return SQL_INTERVAL_MINUTE;
+	case SQL_C_INTERVAL_SECOND:
+		return SQL_INTERVAL_SECOND;
+	case SQL_C_INTERVAL_YEAR_TO_MONTH:
+		return SQL_INTERVAL_YEAR_TO_MONTH;
+	case SQL_C_INTERVAL_DAY_TO_HOUR:
+		return SQL_INTERVAL_DAY_TO_HOUR;
+	case SQL_C_INTERVAL_DAY_TO_MINUTE:
+		return SQL_INTERVAL_DAY_TO_MINUTE;
+	case SQL_C_INTERVAL_DAY_TO_SECOND:
+		return SQL_INTERVAL_DAY_TO_SECOND;
+	case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+		return SQL_INTERVAL_HOUR_TO_MINUTE;
+	case SQL_C_INTERVAL_HOUR_TO_SECOND:
+		return SQL_INTERVAL_HOUR_TO_SECOND;
+	case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+		return SQL_INTERVAL_MINUTE_TO_SECOND;
+	default:
+		return SQL_ERROR;
+	}
+}
+
+SQLSMALLINT OdbcInterval::GetIntervalCode(SQLSMALLINT value_type) {
+	switch (value_type) {
+	case SQL_C_INTERVAL_YEAR:
+		return SQL_CODE_YEAR;
+	case SQL_C_INTERVAL_MONTH:
+		return SQL_CODE_MONTH;
+	case SQL_C_INTERVAL_DAY:
+		return SQL_CODE_DAY;
+	case SQL_C_INTERVAL_HOUR:
+		return SQL_CODE_HOUR;
+	case SQL_C_INTERVAL_MINUTE:
+		return SQL_CODE_MINUTE;
+	case SQL_C_INTERVAL_SECOND:
+		return SQL_CODE_SECOND;
+	case SQL_C_INTERVAL_YEAR_TO_MONTH:
+		return SQL_CODE_YEAR_TO_MONTH;
+	case SQL_C_INTERVAL_DAY_TO_HOUR:
+		return SQL_CODE_DAY_TO_HOUR;
+	case SQL_C_INTERVAL_DAY_TO_MINUTE:
+		return SQL_CODE_DAY_TO_MINUTE;
+	case SQL_C_INTERVAL_DAY_TO_SECOND:
+		return SQL_CODE_DAY_TO_SECOND;
+	case SQL_C_INTERVAL_HOUR_TO_MINUTE:
+		return SQL_CODE_HOUR_TO_MINUTE;
+	case SQL_C_INTERVAL_HOUR_TO_SECOND:
+		return SQL_CODE_HOUR_TO_SECOND;
+	case SQL_C_INTERVAL_MINUTE_TO_SECOND:
+		return SQL_CODE_MINUTE_TO_SECOND;
+	default:
+		return SQL_ERROR;
+	}
 }

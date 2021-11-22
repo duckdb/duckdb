@@ -167,11 +167,10 @@ CREATE MACRO IFELSE(a,b) AS a+b
 statement error
 CREATE MACRO ifelse(a,b) AS a+b
 
-# TODO: uncomment when macro parameters are pushed as a projection
-#query T
-#SELECT IFELSE(1, 'random', RANDOM())
-#----
-#random
+query T
+SELECT IFELSE(1, 'random', RANDOM())
+----
+random
 
 # macro in a different schema
 statement ok
@@ -196,20 +195,18 @@ CREATE MACRO myavg(x) AS SUM(x) / COUNT(x)
 statement ok
 INSERT INTO integers VALUES (21), (41);
 
-# TODO: uncomment when macro parameters are pushed as a projection
-#query T
-#SELECT myavg(a) FROM integers
-#----
-#21
+query T
+SELECT myavg(a) FROM integers
+----
+21
 
 statement ok
 CREATE MACRO weird_avg(x) AS (MIN(x) + MAX(x)) / COUNT(x)
 
-# TODO: uncomment when macro parameters are pushed as a projection
-#query T
-#SELECT weird_avg(a) FROM integers
-#----
-#14
+query T
+SELECT weird_avg(a) FROM integers
+----
+14
 
 statement error
 CREATE MACRO star() AS *
@@ -277,3 +274,21 @@ SELECT two_default_params(a := 5, a := 3)
 
 statement error
 SELECT two_default_params(b := 5, b := 3)
+
+statement error
+CREATE MACRO macros.add(a, b) AS a + b
+
+statement error
+CREATE MACRO my_macro(a.b) AS 42;
+
+statement error
+CREATE MACRO my_macro(a.b.c) AS 42;
+
+statement ok
+CREATE MACRO my_macro(a) AS 42;
+
+statement error
+SELECT my_macro(x := 42);
+
+statement error
+SELECT my_macro(a := 42, a := 42);
