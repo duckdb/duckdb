@@ -1,0 +1,38 @@
+# name: test/sql/alter/alter_type/alter_type_struct.test
+# description: ALTER TYPE with multi column references
+# group: [alter_type]
+
+statement ok
+CREATE TABLE test AS SELECT {'t': 42} t
+
+query I
+SELECT * FROM test
+----
+{'t': 42}
+
+statement ok
+ALTER TABLE test ALTER t TYPE ROW(t VARCHAR) USING {'t': concat('hello', (test.t.t + 42)::varchar)}
+
+query I
+SELECT * FROM test
+----
+{'t': hello84}
+
+statement ok
+DROP TABLE test;
+
+statement ok
+CREATE TABLE test AS SELECT {'t': 42} t
+
+query I
+SELECT * FROM test
+----
+{'t': 42}
+
+statement ok
+ALTER TABLE test ALTER t TYPE ROW(t VARCHAR) USING {'t': concat('hello', (t.t + 42)::varchar)}
+
+query I
+SELECT * FROM test
+----
+{'t': hello84}

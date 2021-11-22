@@ -41,7 +41,7 @@ string MacroFunction::ValidateArguments(MacroCatalogEntry &macro_func, FunctionE
 		error = StringUtil::Format(
 		    "Macro function '%s(%s)' requires ", macro_func.name,
 		    StringUtil::Join(parameters, parameters.size(), ", ", [](const unique_ptr<ParsedExpression> &p) {
-			    return ((ColumnRefExpression &)*p).column_name;
+			    return ((ColumnRefExpression &)*p).column_names[0];
 		    }));
 		error += parameters.size() == 1 ? "a single positional argument"
 		                                : StringUtil::Format("%i positional arguments", parameters.size());

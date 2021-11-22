@@ -85,13 +85,13 @@ BindResult GroupBinder::BindColumnRef(ColumnRefExpression &colref) {
 	// first try to bind to the base columns (original tables)
 	auto result = ExpressionBinder::BindExpression(colref, 0);
 	if (result.HasError()) {
-		// failed to bind the column and the node is the root expression with depth = 0
-		// check if refers to an alias in the select clause
-		auto alias_name = colref.column_name;
-		if (!colref.table_name.empty()) {
+		if (colref.IsQualified()) {
 			// explicit table name: not an alias reference
 			return result;
 		}
+		// failed to bind the column and the node is the root expression with depth = 0
+		// check if refers to an alias in the select clause
+		auto alias_name = colref.column_names[0];
 		auto entry = alias_map.find(alias_name);
 		if (entry == alias_map.end()) {
 			// no matching alias found

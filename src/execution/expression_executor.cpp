@@ -78,6 +78,7 @@ void ExpressionExecutor::ExecuteExpression(idx_t expr_idx, Vector &result) {
 
 Value ExpressionExecutor::EvaluateScalar(const Expression &expr) {
 	D_ASSERT(expr.IsFoldable());
+	D_ASSERT(expr.IsScalar());
 	// use an ExpressionExecutor to execute the expression
 	ExpressionExecutor executor(expr);
 
