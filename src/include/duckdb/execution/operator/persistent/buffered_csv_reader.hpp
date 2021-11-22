@@ -99,15 +99,9 @@ struct BufferedCSVReaderOptions {
 	//! Whether or not a type format is specified
 	std::map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
 
-	std::string toString() const {
-		return "DELIMITER='" + delimiter + (has_delimiter ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-		       ", QUOTE='" + quote + (has_quote ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-		       ", ESCAPE='" + escape + (has_escape ? "'" : (auto_detect ? "' (auto detected)" : "' (default)")) +
-		       ", HEADER=" + std::to_string(header) +
-		       (has_header ? "" : (auto_detect ? " (auto detected)" : "' (default)")) +
-		       ", SAMPLE_SIZE=" + std::to_string(sample_chunk_size * sample_chunks) +
-		       ", ALL_VARCHAR=" + std::to_string(all_varchar);
-	}
+	void SetDelimiter(const string &delimiter);
+
+	std::string ToString() const;
 };
 
 enum class ParserMode : uint8_t { PARSING = 0, SNIFFING_DIALECT = 1, SNIFFING_DATATYPES = 2, PARSING_HEADER = 3 };
