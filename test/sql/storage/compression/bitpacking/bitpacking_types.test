@@ -8,19 +8,39 @@ load __TEST_DIR__/test_bitpacking.db
 statement ok
 PRAGMA force_compression = 'bitpacking'
 
-statement ok
-CREATE TABLE test_signed (a BIGINT, b UINT32);
+foreach type int16
 
-
-# Insert values that fit in different widths, with different signs
 statement ok
-INSERT INTO test_signed SELECT -i, i FROM range(0, 10000) tbl(i);
-INSERT INTO test_signed SELECT -i, i FROM range(22767, 32767) tbl(i);
+CREATE TABLE test_${type}_table (a ${type});
+
+statement ok
+INSERT INTO test_${type}_table SELECT i FROM range(-128, 128) tbl(i);
 
 statement ok
 checkpoint
 
-query IIIII
-SELECT SUM(a), MIN(a), MAX(a), SUM(b), COUNT(*) FROM test_signed
+query IIII
+SELECT AVG(a), MIN(a), MAX(a), COUNT(*) FROM test_${type}_table
 ----
--327660000	-32766	0	327660000	20000
+-0.500000	-128	127	256
+
+endloop
+
+foreach type uint8 uint16 uint32 uint64
+
+statement ok
+CREATE TABLE test_${type}_table (a ${type});
+
+statement ok
+INSERT INTO test_${type}_table SELECT i FROM range(0, 256) tbl(i);
+
+statement ok
+checkpoint
+
+query IIII
+SELECT AVG(a), MIN(a), MAX(a), COUNT(*) FROM test_${type}_table
+----
+127.500000	0	255	256
+
+endloop
+

@@ -44,30 +44,28 @@ public:
 private:
 	template <class T>
 	static bitpacking_width_t MinimumBitWidth(T min_value, T max_value) {
+		bitpacking_width_t required_bits;
+
 		if (std::is_signed<T>::value) {
-			bitpacking_width_t required_bits_max;
-
 			max_value = MaxValue(-min_value, max_value);
-
-			if (max_value >= 0) {
-				required_bits_max = 1;
-				while (max_value) {
-					required_bits_max++;
-					max_value >>= 1;
-				}
-			} else {
-				required_bits_max = 0;
-			}
-
-			return required_bits_max;
-		} else {
-			bitpacking_width_t required_bits = 0;
-			while (max_value) {
-				required_bits++;
-				max_value >>= 1;
-			}
-			return required_bits;
 		}
+
+		if (max_value == 0) {
+			return 0;
+		}
+
+		if (std::is_signed<T>::value) {
+			required_bits = 1;
+		} else {
+			required_bits = 0;
+		}
+
+		while (max_value) {
+			required_bits++;
+			max_value >>= 1;
+		}
+
+		return required_bits;
 	}
 
 	template <class T, bool round_to_next_byte = false>
@@ -91,7 +89,7 @@ private:
 
 		// Assert results are correct
 #ifdef DEBUG
-		if (calc_width < sizeof(T) * 8) {
+		if (calc_width < sizeof(T) * 8 && calc_width != 0) {
 			if (std::is_signed<T>::value) {
 				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (calc_width - 1)) - 1);
 				D_ASSERT((int64_t)min_value >= (int64_t)(-1 * ((1L << (calc_width - 1)) - 1) - 1));
@@ -213,7 +211,7 @@ private:
 
 struct EmptyBitpackingWriter {
 	template <class T>
-	static void Operation(T *values, bitpacking_width_t width, idx_t count, void *data_ptr) {
+	static void Operation(T *values, bool *validity, bitpacking_width_t width, idx_t count, void *data_ptr) {
 	}
 };
 
@@ -223,6 +221,7 @@ struct BitpackingState {
 	}
 
 	PRE_CAST_TYPE compression_buffer[BITPACKING_WIDTH_GROUP_SIZE];
+	bool compression_buffer_validity[BITPACKING_WIDTH_GROUP_SIZE];
 	idx_t compression_buffer_idx;
 	idx_t total_size;
 	void *data_ptr;
@@ -230,25 +229,28 @@ struct BitpackingState {
 public:
 	template <class OP>
 	void Flush() {
-		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth<PRE_CAST_TYPE>(compression_buffer, compression_buffer_idx);
-		OP::Operation(compression_buffer, width, compression_buffer_idx, data_ptr);
+		bitpacking_width_t width =
+		    BitpackingPrimitives::MinimumBitWidth<PRE_CAST_TYPE>(compression_buffer, compression_buffer_idx);
+		OP::Operation(compression_buffer, compression_buffer_validity, width, compression_buffer_idx, data_ptr);
 		total_size += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t);
+		compression_buffer_idx = 0;
 	}
 
 	template <class OP = EmptyBitpackingWriter>
 	void Update(T *data, ValidityMask &validity, idx_t idx) {
 
 		if (validity.RowIsValid(idx)) {
+			compression_buffer_validity[compression_buffer_idx] = true;
 			compression_buffer[compression_buffer_idx++] = (PRE_CAST_TYPE)data[idx];
 		} else {
 			// We write zero for easy bitwidth analysis of the compression buffer later
+			compression_buffer_validity[compression_buffer_idx] = false;
 			compression_buffer[compression_buffer_idx++] = 0;
 		}
 
 		if (compression_buffer_idx == BITPACKING_WIDTH_GROUP_SIZE) {
 			// Calculate bitpacking width;
 			Flush<OP>();
-			compression_buffer_idx = 0;
 		}
 	}
 };
@@ -304,8 +306,23 @@ struct BitpackingCompressState : public CompressionState {
 
 	struct BitpackingWriter {
 		template <class VALUE_TYPE>
-		static void Operation(VALUE_TYPE *values, bitpacking_width_t width, idx_t count, void *data_ptr) {
+		static void Operation(VALUE_TYPE *values, bool *validity, bitpacking_width_t width, idx_t count,
+		                      void *data_ptr) {
 			auto state = (BitpackingCompressState<T, PRE_CAST_TYPE> *)data_ptr;
+
+			if (state->RemainingSize() < (width * BITPACKING_WIDTH_GROUP_SIZE) / 8 + sizeof(bitpacking_width_t)) {
+				// Segment is full
+				auto row_start = state->current_segment->start + state->current_segment->count;
+				state->FlushSegment();
+				state->CreateEmptySegment(row_start);
+			}
+
+			for (idx_t i = 0; i < count; i++) {
+				if (validity[i]) {
+					NumericStatistics::Update<T>(state->current_segment->stats, values[i]);
+				}
+			}
+
 			state->WriteValues(values, width, count);
 		}
 	};
@@ -332,24 +349,15 @@ struct BitpackingCompressState : public CompressionState {
 	void Append(VectorData &vdata, idx_t count) {
 		// TODO Optimization: avoid use of compression buffer if we can compress straight to result vector
 		auto data = (T *)vdata.data;
+
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
 			state.template Update<BitpackingCompressState<T, PRE_CAST_TYPE>::BitpackingWriter>(data, vdata.validity,
 			                                                                                   idx);
-			if (vdata.validity.RowIsValid(idx)) {
-				NumericStatistics::Update<T>(current_segment->stats, data[idx]);
-			}
 		}
 	}
 
 	void WriteValues(PRE_CAST_TYPE *values, bitpacking_width_t width, idx_t count) {
-		if (RemainingSize() < (width * BITPACKING_WIDTH_GROUP_SIZE) / 8 + sizeof(bitpacking_width_t)) {
-			// Segment is full
-			auto row_start = current_segment->start + current_segment->count;
-			FlushSegment();
-			CreateEmptySegment(row_start);
-		}
-
 		// TODO we can optimize this by stopping early if count < BITPACKING_WIDTH_GROUP_SIZE
 		idx_t compress_loops = BITPACKING_WIDTH_GROUP_SIZE / BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 		for (idx_t i = 0; i < compress_loops; i++) {
@@ -540,7 +548,8 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 			       to_scan * sizeof(T));
 		} else {
 			for (idx_t i = 0; i < to_scan; i++) {
-				current_result_ptr[i] = (T) *((PRE_CAST_TYPE*)(scan_state.decompression_buffer + offset_in_compression_group)+i);
+				current_result_ptr[i] =
+				    (T) * ((PRE_CAST_TYPE *)(scan_state.decompression_buffer + offset_in_compression_group) + i);
 			}
 		}
 
@@ -577,9 +586,9 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	                               scan_state.current_width);
 
 	if (std::is_same<T, PRE_CAST_TYPE>::value) {
-		*current_result_ptr = *(T*)(scan_state.decompression_buffer + offset_in_compression_group);
+		*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
 	} else {
-		*current_result_ptr = (T) *(PRE_CAST_TYPE*)(scan_state.decompression_buffer + offset_in_compression_group);
+		*current_result_ptr = (T) * (PRE_CAST_TYPE *)(scan_state.decompression_buffer + offset_in_compression_group);
 	}
 }
 template <class T, class PRE_CAST_TYPE>
@@ -593,10 +602,13 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 //===--------------------------------------------------------------------===//
 template <class T, class PRE_CAST_TYPE = T>
 CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_BITPACKING, data_type, BitpackingInitAnalyze<T, PRE_CAST_TYPE>,
-	                           BitpackingAnalyze<T, PRE_CAST_TYPE>, BitpackingFinalAnalyze<T, PRE_CAST_TYPE>, BitpackingInitCompression<T, PRE_CAST_TYPE>,
-	                           BitpackingCompress<T, PRE_CAST_TYPE>, BitpackingFinalizeCompress<T, PRE_CAST_TYPE>, BitpackingInitScan<T, PRE_CAST_TYPE>,
-	                           BitpackingScan<T, PRE_CAST_TYPE>, BitpackingScanPartial<T, PRE_CAST_TYPE>, BitpackingFetchRow<T, PRE_CAST_TYPE>, BitpackingSkip<T, PRE_CAST_TYPE>);
+	return CompressionFunction(CompressionType::COMPRESSION_BITPACKING, data_type,
+	                           BitpackingInitAnalyze<T, PRE_CAST_TYPE>, BitpackingAnalyze<T, PRE_CAST_TYPE>,
+	                           BitpackingFinalAnalyze<T, PRE_CAST_TYPE>, BitpackingInitCompression<T, PRE_CAST_TYPE>,
+	                           BitpackingCompress<T, PRE_CAST_TYPE>, BitpackingFinalizeCompress<T, PRE_CAST_TYPE>,
+	                           BitpackingInitScan<T, PRE_CAST_TYPE>, BitpackingScan<T, PRE_CAST_TYPE>,
+	                           BitpackingScanPartial<T, PRE_CAST_TYPE>, BitpackingFetchRow<T, PRE_CAST_TYPE>,
+	                           BitpackingSkip<T, PRE_CAST_TYPE>);
 }
 
 CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
