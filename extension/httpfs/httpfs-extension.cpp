@@ -31,5 +31,4 @@ void httpfs_init(duckdb::DatabaseInstance &db) {
 const char *httpfs_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
-
 }

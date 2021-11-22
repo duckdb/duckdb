@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-const vector<string> ExtensionHelper::PATH_COMPONENTS = {".duckdb", "extensions", DuckDB::SourceID(), DuckDB::Platform()};
+const vector<string> ExtensionHelper::PATH_COMPONENTS = {".duckdb", "extensions", DuckDB::SourceID(),
+                                                         DuckDB::Platform()};
 
 //===--------------------------------------------------------------------===//
 // Install Extension
