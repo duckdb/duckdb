@@ -289,10 +289,10 @@ void JoinHashTable::Finalize() {
 		}
 		pinned_handles.push_back(move(handle));
 	}
-	// In case of primary key do a semi-join instead
-	/* if (has_primary_key) {
-	    join_type = JoinType::SEMI;
-	} */
+	// In case of primary key with an inner join do a semi-join instead
+	if (join_type == JoinType::INNER && has_primary_key) {
+		join_type = JoinType::SEMI;
+	}
 	finalized = true;
 }
 
@@ -325,7 +325,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 				    !CompareKeysSwitch(key_locations[i] + key_offset, next_entry_ptr + key_offset, key_type);
 				key_offset += GetTypeIdSize(key_type.InternalType());
 			}
-			// store the tuple to evaluate the next_key later
+			// store a ptr to the entry to evaluate the next_key later
 			conflict_entries.push_back(next_entry_ptr);
 		}
 		// replace the hash_value in the current entry and point to a position in the hash_map
@@ -593,7 +593,6 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 
 template <bool MATCH>
 void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
-	D_ASSERT(left.ColumnCount() == result.ColumnCount());
 	D_ASSERT(keys.size() == left.size());
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
@@ -609,6 +608,15 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChu
 		// we only return the columns on the left side
 		// reference the columns of the left side from the result
 		result.Slice(left, sel, result_count);
+		// This was supposed to be an inner join,
+		if (ht.has_primary_key && left.ColumnCount() < result.ColumnCount()) {
+			// on the RHS, we need to fetch the data from the hash table
+			for (idx_t i = 0; i < ht.build_types.size(); i++) {
+				auto &vector = result.data[left.ColumnCount() + i];
+				D_ASSERT(vector.GetType() == ht.build_types[i]);
+				GatherResult(vector, sel, result_count, i + ht.condition_types.size());
+			}
+		}
 	} else {
 		D_ASSERT(result.size() == 0);
 	}
