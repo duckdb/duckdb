@@ -307,6 +307,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
+	auto col_offsets = layout.GetOffsets();
 	// First, fill the hash_map and handle conflicts with a next_pointer
 	for (idx_t i = 0; i < count_tuples; i++) {
 		// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
@@ -316,14 +317,12 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		// In case this is still a primary key and there is a conflict
 		if (has_primary_key && next_entry_ptr != 0) {
 			// for each key pair in the entry
-			auto col_offsets = layout.GetOffsets();
 			for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
 				auto key_type = condition_types[key_idx];
 				auto key_offset = col_offsets[key_idx];
 				// check whether the keys are the same
 				has_primary_key =
 				    !CompareKeysSwitch(key_locations[i] + key_offset, next_entry_ptr + key_offset, key_type);
-				key_offset += GetTypeIdSize(key_type.InternalType());
 			}
 			// store a ptr to the entry to evaluate the next_key later
 			conflict_entries.push_back(next_entry_ptr);
@@ -336,14 +335,16 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	// It is  still necessary to handle multiple conflicts to the same key
 	if (has_primary_key) {
 		for (auto entry : conflict_entries) {
-			auto next_key = entry + pointer_offset;
+			auto next_entry_ptr = entry + pointer_offset;
 			// check the whole chain
-			while (has_primary_key && next_key != 0) {
+			while (has_primary_key && next_entry_ptr != 0) {
 				// check whether the keys are the same
-				for (auto key_type : condition_types) {
-					has_primary_key = !CompareKeysSwitch(entry, next_key, key_type);
+				for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
+					auto key_type = condition_types[key_idx];
+					auto key_offset = col_offsets[key_idx];
+					has_primary_key = !CompareKeysSwitch(entry + key_offset, next_entry_ptr + key_offset, key_type);
 				}
-				next_key = next_key + pointer_offset;
+				next_entry_ptr = next_entry_ptr + pointer_offset;
 			}
 			// no more conflicts for this key
 		}
@@ -359,6 +360,9 @@ bool TemplatedKeysCompare(data_ptr_t left_ptr, data_ptr_t right_ptr) {
 
 bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key, LogicalType key_type) {
 
+	if (key_type.id() == LogicalTypeId::LIST) {
+		return false;
+	}
 	switch (key_type.InternalType()) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
