@@ -47,7 +47,12 @@ private:
 		bitpacking_width_t required_bits;
 
 		if (std::is_signed<T>::value) {
-			max_value = MaxValue(-min_value, max_value);
+			if (min_value == NumericLimits<T>::Minimum()) {
+				// handle special case of the minimal value, as it cannot be negated like all other values.
+				return sizeof(T) * 8;
+			} else {
+				max_value = MaxValue(-min_value, max_value);
+			}
 		}
 
 		if (max_value == 0) {
@@ -108,9 +113,9 @@ private:
 	template <class T>
 	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
 		if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
-			FastPForLib::fastunpack((const uint32_t *)src, (uint32_t *)dst, (uint32_t)width);
+			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint32_t *)dst, (uint32_t)width);
 		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
-			FastPForLib::fastunpack((const uint32_t *)src, (uint64_t *)dst, (uint32_t)width);
+			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint64_t *)dst, (uint32_t)width);
 		} else {
 			throw InternalException("Unsupported type found in bitpacking.");
 		}
@@ -141,10 +146,10 @@ private:
 	static void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
 		// TODO: types smaller than 32bits
 		if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
-			FastPForLib::fastpack((const uint32_t *)values, (uint32_t *)dst, (uint32_t)width);
+			duckdb_fastpforlib::fastpack((const uint32_t *)values, (uint32_t *)dst, (uint32_t)width);
 		}
 		if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
-			FastPForLib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
+			duckdb_fastpforlib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
 		}
 	}
 

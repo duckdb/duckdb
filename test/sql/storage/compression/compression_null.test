@@ -1,12 +1,14 @@
-# name: test/sql/storage/compression/bitpacking/bitpacking_null.test
-# description: Test storage with Bitpacking and many null values
-# group: [bitpacking]
+# name: test/sql/storage/compression/compression_null.test
+# description: Test storage with RLE and many null values
+# group: [compression]
 
 # load the DB from disk
-load __TEST_DIR__/test_bitpacking.db
+load __TEST_DIR__/test_rle.db
+
+foreach compression rle bitpacking
 
 statement ok
-PRAGMA force_compression = 'bitpacking'
+PRAGMA force_compression = '${compression}'
 
 # single NULL value
 statement ok
@@ -64,3 +66,10 @@ query III
 SELECT COUNT(*), COUNT(i), SUM(i) FROM nulls
 ----
 70006	6	9
+
+statement ok
+DROP TABLE nulls
+
+endloop
+
+

@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/compression_force_selection.test
-# description: Test that forcing the compression selection actually works
+# description: Test the forcing of a compression scheme
 # group: [compression]
 
 # load the DB from disk
