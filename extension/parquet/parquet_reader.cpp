@@ -220,8 +220,9 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 
 			auto element_reader =
 			    ColumnReader::CreateReader(*this, derived_type, s_ele, next_file_idx++, max_define, max_repeat);
-			
-			return make_unique<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat, move(element_reader));
+
+			return make_unique<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
+			                                     move(element_reader));
 		}
 
 		// TODO check return value of derive type or should we only do this on read()
