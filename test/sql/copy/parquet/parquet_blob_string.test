@@ -32,6 +32,9 @@ foo
 bar
 baz
 
+statement error
+SET binary_as_sting=true
+
 statement ok
 SET binary_as_string=true
 

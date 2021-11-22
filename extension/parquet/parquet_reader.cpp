@@ -341,7 +341,6 @@ ParquetOptions::ParquetOptions(ClientContext &context) {
 	}
 }
 
-
 ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p,
                              const vector<LogicalType> &expected_types_p, const string &initial_filename_p)
     : allocator(allocator_p) {

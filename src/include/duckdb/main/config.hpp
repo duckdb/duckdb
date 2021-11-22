@@ -21,6 +21,7 @@
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/common/enums/set_scope.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -52,12 +53,16 @@ struct ConfigurationOption {
 	get_setting_function_t get_setting;
 };
 
+typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
+
 struct ExtensionOption {
-	ExtensionOption(string description_p, LogicalType type_p) : description(move(description_p)), type(move(type_p)) {
+	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p)
+	    : description(move(description_p)), type(move(type_p)), set_function(set_function_p) {
 	}
 
 	string description;
 	LogicalType type;
+	set_option_callback_t set_function;
 };
 
 struct DBConfig {
@@ -124,8 +129,10 @@ public:
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 
-	void AddExtensionOption(string name, string description, LogicalType parameter) {
-		extension_parameters.insert(make_pair(move(name), ExtensionOption(move(description), move(parameter))));
+	void AddExtensionOption(string name, string description, LogicalType parameter,
+	                        set_option_callback_t function = nullptr) {
+		extension_parameters.insert(
+		    make_pair(move(name), ExtensionOption(move(description), move(parameter), function)));
 	}
 
 public:

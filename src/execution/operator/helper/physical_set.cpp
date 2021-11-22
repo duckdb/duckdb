@@ -28,12 +28,17 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 			                       StringUtil::CandidatesMessage(closest_settings, "Did you mean"));
 		}
 		//! it is!
-		auto &target_type = entry->second.type;
+		auto &extension_option = entry->second;
+		auto &target_type = extension_option.type;
+		Value target_value = value.CastAs(target_type);
+		if (extension_option.set_function) {
+			extension_option.set_function(context.client, scope, target_value);
+		}
 		if (scope == SetScope::GLOBAL) {
-			config.set_variables[name] = value.CastAs(target_type);
+			config.set_variables[name] = move(target_value);
 		} else {
 			auto &client_config = ClientConfig::GetConfig(context.client);
-			client_config.set_variables[name] = value.CastAs(target_type);
+			client_config.set_variables[name] = move(target_value);
 		}
 		return;
 	}

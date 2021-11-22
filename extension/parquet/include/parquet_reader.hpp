@@ -54,7 +54,8 @@ struct ParquetReaderScanState {
 };
 
 struct ParquetOptions {
-	explicit ParquetOptions() {}
+	explicit ParquetOptions() {
+	}
 	explicit ParquetOptions(ClientContext &context);
 
 	bool binary_as_string = false;
