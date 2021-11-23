@@ -56,19 +56,19 @@ struct TreeRendererConfig {
 	bool detailed = false;
 
 #ifndef DUCKDB_ASCII_TREE_RENDERER
-	const char *LTCORNER = "┌";
-	const char *RTCORNER = "┐";
-	const char *LDCORNER = "└";
-	const char *RDCORNER = "┘";
+	const char *LTCORNER = "\342\224\214"; // "┌";
+	const char *RTCORNER = "\342\224\220"; // "┐";
+	const char *LDCORNER = "\342\224\224"; // "└";
+	const char *RDCORNER = "\342\224\230"; // "┘";
 
-	const char *MIDDLE = "┼";
-	const char *TMIDDLE = "┬";
-	const char *LMIDDLE = "├";
-	const char *RMIDDLE = "┤";
-	const char *DMIDDLE = "┴";
+	const char *MIDDLE = "\342\224\274"; // "┼";
+	const char *TMIDDLE = "\342\224\254"; // "┬";
+	const char *LMIDDLE = "\342\224\234"; // "├";
+	const char *RMIDDLE = "\342\224\244"; // "┤";
+	const char *DMIDDLE = "\342\224\264"; // "┴";
 
-	const char *VERTICAL = "│";
-	const char *HORIZONTAL = "─";
+	const char *VERTICAL = "\342\224\202"; // "│";
+	const char *HORIZONTAL = "\342\224\200"; // "─";
 #else
 	// ASCII version
 	const char *LTCORNER = "<";
