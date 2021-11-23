@@ -23,6 +23,8 @@ public:
 		UNORDERED,
 		//! Only some entries have to be matched, the order of the matches does not matter
 		SOME,
+		//! Not initialized
+		INVALID
 	};
 
 	/* The double {{}} in the intializer for excluded_entries is intentional, workaround for bug in gcc-4.9 */
