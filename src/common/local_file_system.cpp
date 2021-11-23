@@ -491,7 +491,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
-	auto unicode_path = WindowsUtil::WindowsUTF8ToUnicode(path.c_str());
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
 	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
 	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
@@ -644,7 +644,7 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 }
 
 static DWORD WindowsGetFileAttributes(const string &filename) {
-	auto unicode_path = WindowsUtil::WindowsUTF8ToUnicode(filename.c_str());
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	return GetFileAttributesW(unicode_path.c_str());
 }
 
@@ -662,7 +662,7 @@ void LocalFileSystem::CreateDirectory(const string &directory) {
 	if (DirectoryExists(directory)) {
 		return;
 	}
-	auto unicode_path = WindowsUtil::WindowsUTF8ToUnicode(directory.c_str());
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
 		throw IOException("Could not create directory!");
 	}
@@ -676,7 +676,7 @@ static void DeleteDirectoryRecursive(FileSystem &fs, string directory) {
 			fs.RemoveFile(fs.JoinPath(directory, fname));
 		}
 	});
-	auto unicode_path = WindowsUtil::WindowsUTF8ToUnicode(directory.c_str());
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
 	if (!RemoveDirectoryW(unicode_path.c_str())) {
 		throw IOException("Failed to delete directory");
 	}
@@ -687,14 +687,14 @@ void LocalFileSystem::RemoveDirectory(const string &directory) {
 }
 
 void LocalFileSystem::RemoveFile(const string &filename) {
-	auto unicode_path = WindowsUtil::WindowsUTF8ToUnicode(filename.c_str());
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
 	DeleteFileW(unicode_path.c_str());
 }
 
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(string, bool)> &callback) {
 	string search_dir = JoinPath(directory, "*");
 
-	auto unicode_path = WindowsUtil::WindowsUTF8ToUnicode(search_dir.c_str());
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(search_dir.c_str());
 
 	WIN32_FIND_DATAW ffd;
 	HANDLE hFind = FindFirstFileW(unicode_path.c_str(), &ffd);
@@ -702,7 +702,7 @@ bool LocalFileSystem::ListFiles(const string &directory, const std::function<voi
 		return false;
 	}
 	do {
-		string cFileName = WindowsUtil::WindowsUnicodeToUTF8(ffd.cFileName);
+		string cFileName = WindowsUtil::UnicodeToUTF8(ffd.cFileName);
 		if (cFileName == "." || cFileName == "..") {
 			continue;
 		}
@@ -727,8 +727,8 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target) {
-	auto source_unicode = WindowsUtil::WindowsUTF8ToUnicode(source.c_str());
-	auto target_unicode = WindowsUtil::WindowsUTF8ToUnicode(target.c_str());
+	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
+	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
 	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
 		throw IOException("Could not move file");
 	}

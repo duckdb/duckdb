@@ -4,7 +4,7 @@ namespace duckdb {
 
 #ifdef DUCKDB_WINDOWS
 
-std::wstring WindowsUtil::WindowsUTF8ToUnicode(const char *input) {
+std::wstring WindowsUtil::UTF8ToUnicode(const char *input) {
 	idx_t result_size;
 
 	result_size = MultiByteToWideChar(CP_UTF8, 0, input, -1, nullptr, 0);
@@ -18,7 +18,6 @@ std::wstring WindowsUtil::WindowsUTF8ToUnicode(const char *input) {
 	}
 	return std::wstring(buffer.get(), result_size);
 }
-
 
 static string WideCharToMultiByteWrapper(LPCWSTR input, uint32_t code_page) {
 	idx_t result_size;
@@ -35,17 +34,17 @@ static string WideCharToMultiByteWrapper(LPCWSTR input, uint32_t code_page) {
 	return string(buffer.get(), result_size - 1);
 }
 
-string WindowsUtil::WindowsUnicodeToUTF8(LPCWSTR input) {
+string WindowsUtil::UnicodeToUTF8(LPCWSTR input) {
 	return WideCharToMultiByteWrapper(input, CP_UTF8);
 }
 
-static string WindowsUnicodeToMBCS(LPCWSTR unicode_text, int use_ansi){
-  uint32_t code_page = use_ansi ? CP_ACP : CP_OEMCP;
-  return WideCharToMultiByteWrapper(unicode_text, code_page);
+static string WindowsUnicodeToMBCS(LPCWSTR unicode_text, int use_ansi) {
+	uint32_t code_page = use_ansi ? CP_ACP : CP_OEMCP;
+	return WideCharToMultiByteWrapper(unicode_text, code_page);
 }
 
-string WindowsUtil::WindowsUTF8ToMBCS(const char *input, bool use_ansi) {
-	auto unicode = WindowsUtil::WindowsUTF8ToUnicode(input);
+string WindowsUtil::UTF8ToMBCS(const char *input, bool use_ansi) {
+	auto unicode = WindowsUtil::UTF8ToUnicode(input);
 	return WindowsUnicodeToMBCS(unicode.c_str(), use_ansi);
 }
 

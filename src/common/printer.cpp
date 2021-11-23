@@ -18,7 +18,7 @@ void Printer::Print(const string &str) {
 #ifdef DUCKDB_WINDOWS
 	if (IsTerminal()) {
 		// print utf8 to terminal
-		auto unicode = WindowsUtil::WindowsUTF8ToMBCS(str.c_str());
+		auto unicode = WindowsUtil::UTF8ToMBCS(str.c_str());
 		fprintf(stderr, "%s\n", unicode.c_str());
 		return;
 	}
