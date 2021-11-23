@@ -58,7 +58,7 @@ class TestParquet(object):
         res = conn.execute("SELECT * FROM parquet_scan('"+filename+"',binary_as_string=False)").fetchall()
         assert res[0] == (b'foo',)
 
-        conn.execute("PRAGMA disable_parquet_binary_as_string")
+        conn.execute("PRAGMA binary_as_string=0")
 
         res = conn.execute("SELECT typeof(#1) FROM parquet_scan('"+filename+"') limit 1").fetchall()
         assert res[0] == ('BLOB',)
