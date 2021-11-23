@@ -41,6 +41,8 @@ public:
 	vector<unique_ptr<ParsedExpression>> partitions;
 	//! The set of ordering clauses
 	vector<OrderByNode> orders;
+	//! True to ignore NULL values
+	bool ignore_nulls;
 	//! The window boundaries
 	WindowBoundary start = WindowBoundary::INVALID;
 	WindowBoundary end = WindowBoundary::INVALID;
