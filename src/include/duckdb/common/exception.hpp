@@ -78,15 +78,15 @@ enum class ExceptionType {
 
 class Exception : public std::exception {
 public:
-	explicit Exception(const string &msg);
-	Exception(ExceptionType exception_type, const string &message);
+	DUCKDB_API explicit Exception(const string &msg);
+	DUCKDB_API Exception(ExceptionType exception_type, const string &message);
 
 	ExceptionType type;
 
 public:
-	const char *what() const noexcept override;
+	DUCKDB_API const char *what() const noexcept override;
 
-	string ExceptionTypeToString(ExceptionType type);
+	DUCKDB_API string ExceptionTypeToString(ExceptionType type);
 
 	template <typename... Args>
 	static string ConstructMessage(const string &msg, Args... params) {
@@ -94,7 +94,7 @@ public:
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
-	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values);
+	DUCKDB_API static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values);
 
 	template <class T, typename... Args>
 	static string ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values, T param,
@@ -147,7 +147,7 @@ public:
 
 class ConversionException : public Exception {
 public:
-	explicit ConversionException(const string &msg);
+	DUCKDB_API explicit ConversionException(const string &msg);
 
 	template <typename... Args>
 	explicit ConversionException(const string &msg, Args... params)
@@ -157,7 +157,7 @@ public:
 
 class TransactionException : public Exception {
 public:
-	explicit TransactionException(const string &msg);
+	DUCKDB_API explicit TransactionException(const string &msg);
 
 	template <typename... Args>
 	explicit TransactionException(const string &msg, Args... params)
@@ -167,7 +167,7 @@ public:
 
 class NotImplementedException : public Exception {
 public:
-	explicit NotImplementedException(const string &msg);
+	DUCKDB_API explicit NotImplementedException(const string &msg);
 
 	template <typename... Args>
 	explicit NotImplementedException(const string &msg, Args... params)
@@ -177,7 +177,7 @@ public:
 
 class OutOfRangeException : public Exception {
 public:
-	explicit OutOfRangeException(const string &msg);
+	DUCKDB_API explicit OutOfRangeException(const string &msg);
 
 	template <typename... Args>
 	explicit OutOfRangeException(const string &msg, Args... params)
@@ -187,7 +187,7 @@ public:
 
 class OutOfMemoryException : public Exception {
 public:
-	explicit OutOfMemoryException(const string &msg);
+	DUCKDB_API explicit OutOfMemoryException(const string &msg);
 
 	template <typename... Args>
 	explicit OutOfMemoryException(const string &msg, Args... params)
@@ -197,7 +197,7 @@ public:
 
 class SyntaxException : public Exception {
 public:
-	explicit SyntaxException(const string &msg);
+	DUCKDB_API explicit SyntaxException(const string &msg);
 
 	template <typename... Args>
 	explicit SyntaxException(const string &msg, Args... params) : SyntaxException(ConstructMessage(msg, params...)) {
@@ -206,7 +206,7 @@ public:
 
 class ConstraintException : public Exception {
 public:
-	explicit ConstraintException(const string &msg);
+	DUCKDB_API explicit ConstraintException(const string &msg);
 
 	template <typename... Args>
 	explicit ConstraintException(const string &msg, Args... params)
@@ -216,7 +216,7 @@ public:
 
 class IOException : public Exception {
 public:
-	explicit IOException(const string &msg);
+	DUCKDB_API explicit IOException(const string &msg);
 
 	template <typename... Args>
 	explicit IOException(const string &msg, Args... params) : IOException(ConstructMessage(msg, params...)) {
@@ -225,7 +225,7 @@ public:
 
 class SerializationException : public Exception {
 public:
-	explicit SerializationException(const string &msg);
+	DUCKDB_API explicit SerializationException(const string &msg);
 
 	template <typename... Args>
 	explicit SerializationException(const string &msg, Args... params)
@@ -235,7 +235,7 @@ public:
 
 class SequenceException : public Exception {
 public:
-	explicit SequenceException(const string &msg);
+	DUCKDB_API explicit SequenceException(const string &msg);
 
 	template <typename... Args>
 	explicit SequenceException(const string &msg, Args... params)
@@ -245,12 +245,12 @@ public:
 
 class InterruptException : public Exception {
 public:
-	InterruptException();
+	DUCKDB_API InterruptException();
 };
 
 class FatalException : public Exception {
 public:
-	explicit FatalException(const string &msg);
+	DUCKDB_API explicit FatalException(const string &msg);
 
 	template <typename... Args>
 	explicit FatalException(const string &msg, Args... params) : FatalException(ConstructMessage(msg, params...)) {
@@ -259,7 +259,7 @@ public:
 
 class InternalException : public Exception {
 public:
-	explicit InternalException(const string &msg);
+	DUCKDB_API explicit InternalException(const string &msg);
 
 	template <typename... Args>
 	explicit InternalException(const string &msg, Args... params)
@@ -269,7 +269,7 @@ public:
 
 class InvalidInputException : public Exception {
 public:
-	explicit InvalidInputException(const string &msg);
+	DUCKDB_API explicit InvalidInputException(const string &msg);
 
 	template <typename... Args>
 	explicit InvalidInputException(const string &msg, Args... params)
@@ -279,28 +279,28 @@ public:
 
 class CastException : public Exception {
 public:
-	CastException(const PhysicalType origType, const PhysicalType newType);
-	CastException(const LogicalType &origType, const LogicalType &newType);
+	DUCKDB_API CastException(const PhysicalType origType, const PhysicalType newType);
+	DUCKDB_API CastException(const LogicalType &origType, const LogicalType &newType);
 };
 
 class InvalidTypeException : public Exception {
 public:
-	InvalidTypeException(PhysicalType type, const string &msg);
-	InvalidTypeException(const LogicalType &type, const string &msg);
+	DUCKDB_API InvalidTypeException(PhysicalType type, const string &msg);
+	DUCKDB_API InvalidTypeException(const LogicalType &type, const string &msg);
 };
 
 class TypeMismatchException : public Exception {
 public:
-	TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg);
-	TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
+	DUCKDB_API TypeMismatchException(const PhysicalType type_1, const PhysicalType type_2, const string &msg);
+	DUCKDB_API TypeMismatchException(const LogicalType &type_1, const LogicalType &type_2, const string &msg);
 };
 
 class ValueOutOfRangeException : public Exception {
 public:
-	ValueOutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType);
-	ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType, const PhysicalType newType);
-	ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
-	ValueOutOfRangeException(const PhysicalType varType, const idx_t length);
+	DUCKDB_API ValueOutOfRangeException(const int64_t value, const PhysicalType origType, const PhysicalType newType);
+	DUCKDB_API ValueOutOfRangeException(const hugeint_t value, const PhysicalType origType, const PhysicalType newType);
+	DUCKDB_API ValueOutOfRangeException(const double value, const PhysicalType origType, const PhysicalType newType);
+	DUCKDB_API ValueOutOfRangeException(const PhysicalType varType, const idx_t length);
 };
 
 } // namespace duckdb
