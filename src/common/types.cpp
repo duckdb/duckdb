@@ -125,41 +125,41 @@ PhysicalType LogicalType::GetInternalType() {
 	}
 }
 
-const LogicalTypeId LogicalType::INVALID;
-const LogicalTypeId LogicalType::SQLNULL;
-const LogicalTypeId LogicalType::BOOLEAN;
-const LogicalTypeId LogicalType::TINYINT;
-const LogicalTypeId LogicalType::UTINYINT;
-const LogicalTypeId LogicalType::SMALLINT;
-const LogicalTypeId LogicalType::USMALLINT;
-const LogicalTypeId LogicalType::INTEGER;
-const LogicalTypeId LogicalType::UINTEGER;
-const LogicalTypeId LogicalType::BIGINT;
-const LogicalTypeId LogicalType::UBIGINT;
-const LogicalTypeId LogicalType::HUGEINT;
-const LogicalTypeId LogicalType::UUID;
-const LogicalTypeId LogicalType::FLOAT;
-const LogicalTypeId LogicalType::DOUBLE;
-const LogicalTypeId LogicalType::DATE;
+constexpr const LogicalTypeId LogicalType::INVALID;
+constexpr const LogicalTypeId LogicalType::SQLNULL;
+constexpr const LogicalTypeId LogicalType::BOOLEAN;
+constexpr const LogicalTypeId LogicalType::TINYINT;
+constexpr const LogicalTypeId LogicalType::UTINYINT;
+constexpr const LogicalTypeId LogicalType::SMALLINT;
+constexpr const LogicalTypeId LogicalType::USMALLINT;
+constexpr const LogicalTypeId LogicalType::INTEGER;
+constexpr const LogicalTypeId LogicalType::UINTEGER;
+constexpr const LogicalTypeId LogicalType::BIGINT;
+constexpr const LogicalTypeId LogicalType::UBIGINT;
+constexpr const LogicalTypeId LogicalType::HUGEINT;
+constexpr const LogicalTypeId LogicalType::UUID;
+constexpr const LogicalTypeId LogicalType::FLOAT;
+constexpr const LogicalTypeId LogicalType::DOUBLE;
+constexpr const LogicalTypeId LogicalType::DATE;
 
-const LogicalTypeId LogicalType::TIMESTAMP;
-const LogicalTypeId LogicalType::TIMESTAMP_MS;
-const LogicalTypeId LogicalType::TIMESTAMP_NS;
-const LogicalTypeId LogicalType::TIMESTAMP_S;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_MS;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_NS;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_S;
 
-const LogicalTypeId LogicalType::TIME;
-const LogicalTypeId LogicalType::HASH;
-const LogicalTypeId LogicalType::POINTER;
+constexpr const LogicalTypeId LogicalType::TIME;
+constexpr const LogicalTypeId LogicalType::HASH;
+constexpr const LogicalTypeId LogicalType::POINTER;
 
-const LogicalTypeId LogicalType::VARCHAR;
+constexpr const LogicalTypeId LogicalType::VARCHAR;
 
-const LogicalTypeId LogicalType::BLOB;
-const LogicalTypeId LogicalType::INTERVAL;
+constexpr const LogicalTypeId LogicalType::BLOB;
+constexpr const LogicalTypeId LogicalType::INTERVAL;
 
 // TODO these are incomplete and should maybe not exist as such
-const LogicalTypeId LogicalType::TABLE;
+constexpr const LogicalTypeId LogicalType::TABLE;
 
-const LogicalTypeId LogicalType::ANY;
+constexpr const LogicalTypeId LogicalType::ANY;
 
 const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
                                                   LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
