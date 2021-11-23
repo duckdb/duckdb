@@ -331,7 +331,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		// store the pointer to the current tuple entry in the hash_map
 		pointers[index] = key_locations[i];
 	}
-	// It is  still necessary to handle multiple conflicts to the same key
+	// It is still necessary to handle multiple conflicts to the same key
 	if (has_primary_key) {
 		for (auto entry : conflict_entries) {
 			auto next_entry_ptr = Load<data_ptr_t>(entry + pointer_offset);
@@ -361,7 +361,7 @@ bool TemplatedKeysCompare(data_ptr_t left_ptr, data_ptr_t right_ptr) {
 bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key, LogicalType key_type) {
 
 	if (key_type.id() == LogicalTypeId::LIST) {
-		return false;
+		return true; // not handling this type for now, return as if they were equals
 	}
 	switch (key_type.InternalType()) {
 	case PhysicalType::BOOL:
@@ -394,7 +394,7 @@ bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key,
 	case PhysicalType::LIST:
 	case PhysicalType::MAP:
 	case PhysicalType::STRUCT:
-		return false;
+		return true; // not handling this type for now, return as if they were equals
 	default:
 		throw InternalException("Unsupported column type for ValueOperations::Equals");
 	}
