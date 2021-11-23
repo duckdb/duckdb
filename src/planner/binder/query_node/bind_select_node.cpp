@@ -52,12 +52,16 @@ unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	if (limit_mod.limit) {
 		Value val;
 		result->limit = BindDelimiter(context, move(limit_mod.limit), LogicalType::BIGINT, val);
-		result->limit_val = val.GetValue<int64_t>();
+		if (!result->limit) {
+			result->limit_val = val.GetValue<int64_t>();
+		}
 	}
 	if (limit_mod.offset) {
 		Value val;
 		result->offset = BindDelimiter(context, move(limit_mod.offset), LogicalType::BIGINT, val);
-		result->offset_val = val.GetValue<int64_t>();
+		if (!result->offset) {
+			result->offset_val = val.GetValue<int64_t>();
+		}
 	}
 	return move(result);
 }
@@ -67,15 +71,19 @@ unique_ptr<BoundResultModifier> Binder::BindLimitPercent(LimitPercentModifier &l
 	if (limit_mod.limit) {
 		Value val;
 		result->limit = BindDelimiter(context, move(limit_mod.limit), LogicalType::DOUBLE, val);
-		result->limit_percent = val.GetValue<double>();
-		if (result->limit_percent < 0.0) {
-			throw Exception("Limit percentage can't be negative value");
+		if (!result->limit) {
+			result->limit_percent = val.GetValue<double>();
+			if (result->limit_percent < 0.0) {
+				throw Exception("Limit percentage can't be negative value");
+			}
 		}
 	}
 	if (limit_mod.offset) {
 		Value val;
 		result->offset = BindDelimiter(context, move(limit_mod.offset), LogicalType::BIGINT, val);
-		result->offset_val = val.GetValue<int64_t>();
+		if (!result->offset) {
+			result->offset_val = val.GetValue<int64_t>();
+		}
 	}
 	return move(result);
 }
