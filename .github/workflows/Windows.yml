@@ -134,6 +134,7 @@ jobs:
  odbc-win-64:
     name: ODBC Windows
     runs-on: windows-latest
+    needs: win-release-64
     steps:
     - uses: actions/checkout@v2
       with:
@@ -179,3 +180,36 @@ jobs:
     - name: Print ODBC trace on failure
       if: ${{ failure() }}
       run: cat ODBC_TRACE.log
+
+ win-extensions-64:
+    name: Windows (64 Bit)
+    runs-on: windows-latest
+    needs: win-release-64
+    env:
+      BUILD_VISUALIZER: 1
+      BUILD_ICU: 1
+      BUILD_TPCH: 1
+      BUILD_TPCDS: 1
+      BUILD_FTS: 1
+      BUILD_HTTPFS: 1
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Build
+      run: |
+        make
+
+    - name: Test
+      run: test/Release/unittest.exe
+
+    - name: Deploy
+      run: |
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+          ./scripts/extension-upload.sh windows-amd64
+        fi

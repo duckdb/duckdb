@@ -11,7 +11,7 @@ static void LoadInternal(DatabaseInstance &instance) {
 	fs.RegisterSubSystem(make_unique<HTTPFileSystem>());
 	fs.RegisterSubSystem(make_unique<S3FileSystem>());
 
-	auto &config = DBConfig::GetConfig(*db.instance);
+	auto &config = DBConfig::GetConfig(instance);
 	config.AddExtensionOption("s3_region", "S3 Region", LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_access_key_id", "S3 Access Key ID", LogicalType::VARCHAR);
 	config.AddExtensionOption("s3_secret_access_key", "S3 Access Key", LogicalType::VARCHAR);
