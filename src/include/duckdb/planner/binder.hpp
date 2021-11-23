@@ -167,9 +167,7 @@ private:
 	void BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a delimiter value (LIMIT or OFFSET)
 	unique_ptr<Expression> BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
-	                                     int64_t &delimiter_value);
-	unique_ptr<Expression> BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
-	                                     double &delimiter_value);
+	                                     LogicalType type, Value &delimiter_value);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);

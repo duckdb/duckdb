@@ -14,8 +14,7 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_finish_event.hpp"
 #include "duckdb/parallel/pipeline_complete_event.hpp"
-#include "duckdb/execution/operator/helper/physical_limit.hpp"
-#include "duckdb/execution/operator/order/physical_top_n.hpp"
+#include "duckdb/execution/operator/helper/physical_limit_percent.hpp"
 
 #include <algorithm>
 
@@ -412,6 +411,7 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
 		case PhysicalOperatorType::LIMIT:
+		case PhysicalOperatorType::LIMIT_PERCENT:
 		case PhysicalOperatorType::EXPRESSION_SCAN:
 			D_ASSERT(op->children.size() == 1);
 			// single operator:
@@ -732,22 +732,15 @@ void Executor::PreprocessPlan(PhysicalOperator *op) {
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
 		case PhysicalOperatorType::LIMIT:
+		case PhysicalOperatorType::LIMIT_PERCENT:
 		case PhysicalOperatorType::EXPRESSION_SCAN:
 			D_ASSERT(op->children.size() == 1);
 			// we create a new pipeline starting from the child
 			pipeline_child = op->children[0].get();
-			if (op->type == PhysicalOperatorType::TOP_N) {
+			if (op->type == PhysicalOperatorType::LIMIT_PERCENT) {
 				PreprocessPlan(pipeline_child);
-				auto plan_ptr = reinterpret_cast<duckdb::PhysicalTopN *>(op);
-				if (plan_ptr->is_limit_percent && plan_ptr->limit_count == INVALID_INDEX) {
-					plan_ptr->limit = duckdb::NumericLimits<idx_t>::Maximum();
-					plan_ptr->limit_count = CalculateCount(op);
-				}
-				return;
-			} else if (op->type == PhysicalOperatorType::LIMIT) {
-				PreprocessPlan(pipeline_child);
-				auto plan_ptr = reinterpret_cast<duckdb::PhysicalLimit *>(op);
-				if (plan_ptr->is_limit_percent && plan_ptr->limit_count == INVALID_INDEX) {
+				auto plan_ptr = reinterpret_cast<duckdb::PhysicalLimitPercent *>(op);
+				if (plan_ptr->limit_count == INVALID_INDEX) {
 					plan_ptr->limit_value = duckdb::NumericLimits<idx_t>::Maximum();
 					plan_ptr->limit_count = CalculateCount(op);
 				}

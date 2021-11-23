@@ -34,7 +34,6 @@ add_library_unity(
   plan_show_select.cpp
   plan_simple.cpp
   plan_top_n.cpp
-  plan_top_n_percent.cpp
   plan_update.cpp
   plan_window.cpp
   plan_unnest.cpp

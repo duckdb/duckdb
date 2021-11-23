@@ -21,14 +21,8 @@ public:
 	PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, idx_t limit, idx_t offset,
 	             idx_t estimated_cardinality);
 
-	PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, double limit_percent, idx_t offset,
-	             idx_t estimated_cardinality);
-
 	vector<BoundOrderByNode> orders;
-	idx_t limit = INVALID_INDEX;
-	bool is_limit_percent = false;
-	double limit_percent = 100.0;
-	idx_t limit_count = INVALID_INDEX;
+	idx_t limit;
 	idx_t offset;
 
 public:
