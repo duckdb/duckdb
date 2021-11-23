@@ -20,8 +20,7 @@ namespace duckdb {
 class WindowsUtil {
 public:
 	//! Windows helper functions
-	static wstring WindowsUTF8ToUnicode(const char *input);
-	static wstring WindowsUTF8ToUnicode(const string &input);
+	static std::wstring WindowsUTF8ToUnicode(const char *input);
 	static string WindowsUnicodeToUTF8(LPCWSTR input);
 };
 #endif
