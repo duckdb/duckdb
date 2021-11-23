@@ -104,7 +104,7 @@ SELECT b FROM test LIMIT 70% OFFSET (((SELECT MIN(test.a) FROM test)-1)/10);
 
 # non-foldable expression in limit
 statement ok
-SELECT * FROM integers LIMIT 30% OFFSET RANDOM();
+SELECT * FROM test LIMIT 30% OFFSET RANDOM();
 
 query I
 SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM range(1000000) LIMIT 10%) LIMIT 10%) LIMIT 10%)

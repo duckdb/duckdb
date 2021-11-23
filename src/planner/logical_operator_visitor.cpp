@@ -85,6 +85,9 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		if (limit.limit) {
 			callback(&limit.limit);
 		}
+		if (limit.offset) {
+			callback(&limit.offset);
+		}
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {

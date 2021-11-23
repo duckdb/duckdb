@@ -284,6 +284,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
 		auto &limit = (LogicalLimitPercent &)*plan;
+		if (limit.offset_val > 0) {
+			throw ParserException("OFFSET not supported in correlated subquery");
+		}
 		if (limit.limit) {
 			throw ParserException("Non-constant limit percent not supported in correlated subquery");
 		}
