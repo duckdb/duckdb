@@ -147,7 +147,9 @@ jobs:
 
     - name: Deploy
       run: |
-        ./scripts/extension-upload.sh linux-amd64
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+          ./scripts/extension-upload.sh linux-amd64
+        fi
 
 
  linux-release-32:
