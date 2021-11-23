@@ -35,3 +35,33 @@ class TestParquet(object):
 
         res = rel.execute().fetchall()
         assert res[0] == ('foo',) 
+
+    def test__parquet_binary_as_string_pragma(self, duckdb_cursor):
+        conn = duckdb.connect()
+        res = conn.execute("SELECT typeof(#1) FROM parquet_scan('"+filename+"') limit 1").fetchall()
+        assert res[0] == ('BLOB',)
+
+        res = conn.execute("SELECT * FROM parquet_scan('"+filename+"')").fetchall()
+        assert res[0] == (b'foo',)
+
+        conn.execute("PRAGMA enable_parquet_binary_as_string")
+
+        res = conn.execute("SELECT typeof(#1) FROM parquet_scan('"+filename+"') limit 1").fetchall()
+        assert res[0] == ('VARCHAR',)
+
+        res = conn.execute("SELECT * FROM parquet_scan('"+filename+"')").fetchall()
+        assert res[0] == ('foo',)
+
+        res = conn.execute("SELECT typeof(#1) FROM parquet_scan('"+filename+"',binary_as_string=False) limit 1").fetchall()
+        assert res[0] == ('BLOB',)
+
+        res = conn.execute("SELECT * FROM parquet_scan('"+filename+"',binary_as_string=False)").fetchall()
+        assert res[0] == (b'foo',)
+
+        conn.execute("PRAGMA disable_parquet_binary_as_string")
+
+        res = conn.execute("SELECT typeof(#1) FROM parquet_scan('"+filename+"') limit 1").fetchall()
+        assert res[0] == ('BLOB',)
+
+        res = conn.execute("SELECT * FROM parquet_scan('"+filename+"')").fetchall()
+        assert res[0] == (b'foo',)

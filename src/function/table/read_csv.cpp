@@ -33,8 +33,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 		if (kv.first == "auto_detect") {
 			options.auto_detect = kv.second.value_.boolean;
 		} else if (kv.first == "sep" || kv.first == "delim") {
-			options.delimiter = kv.second.str_value;
-			options.has_delimiter = true;
+			options.SetDelimiter(kv.second.str_value);
 		} else if (kv.first == "header") {
 			options.header = kv.second.value_.boolean;
 			options.has_header = true;

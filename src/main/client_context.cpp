@@ -408,6 +408,17 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &l
 	return ExecutePreparedStatement(lock, query, move(prepared), move(bound_values), allow_stream_result);
 }
 
+static bool IsExplainAnalyze(SQLStatement *statement) {
+	if (!statement) {
+		return false;
+	}
+	if (statement->type != StatementType::EXPLAIN_STATEMENT) {
+		return false;
+	}
+	auto &explain = (ExplainStatement &)*statement;
+	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
+}
+
 unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
                                                                        unique_ptr<SQLStatement> statement,
                                                                        shared_ptr<PreparedStatementData> &prepared,
@@ -439,7 +450,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
 		statement = move(copied_statement);
 	}
 	// start the profiler
-	profiler->StartQuery(query);
+	profiler->StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
 	try {
 		if (statement) {
 			result = RunStatementInternal(lock, query, move(statement), allow_stream_result);
