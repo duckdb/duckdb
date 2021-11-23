@@ -7,6 +7,7 @@ add_library_unity(
   duckdb_indexes.cpp
   duckdb_schemas.cpp
   duckdb_sequences.cpp
+  duckdb_settings.cpp
   duckdb_tables.cpp
   duckdb_types.cpp
   duckdb_views.cpp

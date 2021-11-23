@@ -89,70 +89,131 @@ static shared_ptr<ParquetFileMetadataCache> LoadMetadata(Allocator &allocator, F
 LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
 	// inner node
 	D_ASSERT(s_ele.__isset.type && s_ele.num_children == 0);
-	switch (s_ele.type) {
-	case Type::BOOLEAN:
-		return LogicalType::BOOLEAN;
-	case Type::INT32:
-		if (s_ele.__isset.converted_type) {
-			switch (s_ele.converted_type) {
-			case ConvertedType::DATE:
-				return LogicalType::DATE;
-			case ConvertedType::UINT_8:
-				return LogicalType::UTINYINT;
-			case ConvertedType::UINT_16:
-				return LogicalType::USMALLINT;
-			default:
+	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
+		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
+	}
+	if (s_ele.__isset.converted_type) {
+		switch (s_ele.converted_type) {
+		case ConvertedType::INT_8:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::TINYINT;
+			} else {
+				throw IOException("INT8 converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::INT_16:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::SMALLINT;
+			} else {
+				throw IOException("INT16 converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::INT_32:
+			if (s_ele.type == Type::INT32) {
 				return LogicalType::INTEGER;
+			} else {
+				throw IOException("INT32 converted type can only be set for value of Type::INT32");
 			}
-		}
-		return LogicalType::INTEGER;
-	case Type::INT64:
-		if (s_ele.__isset.converted_type) {
-			switch (s_ele.converted_type) {
-			case ConvertedType::TIMESTAMP_MICROS:
-			case ConvertedType::TIMESTAMP_MILLIS:
-				return LogicalType::TIMESTAMP;
-			case ConvertedType::UINT_32:
-				return LogicalType::UINTEGER;
-			case ConvertedType::UINT_64:
-				return LogicalType::UBIGINT;
-			default:
+		case ConvertedType::INT_64:
+			if (s_ele.type == Type::INT64) {
 				return LogicalType::BIGINT;
+			} else {
+				throw IOException("INT64 converted type can only be set for value of Type::INT32");
 			}
-		}
-		return LogicalType::BIGINT;
-
-	case Type::INT96: // always a timestamp it would seem
-		return LogicalType::TIMESTAMP;
-	case Type::FLOAT:
-		return LogicalType::FLOAT;
-	case Type::DOUBLE:
-		return LogicalType::DOUBLE;
-	case Type::BYTE_ARRAY:
-	case Type::FIXED_LEN_BYTE_ARRAY:
-		if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
-			return LogicalType::INVALID;
-		}
-		if (s_ele.__isset.converted_type) {
-			switch (s_ele.converted_type) {
-			case ConvertedType::DECIMAL:
-				if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && s_ele.__isset.scale && s_ele.__isset.type_length) {
-					return LogicalType::DECIMAL(s_ele.precision, s_ele.scale);
-				}
-				return LogicalType::INVALID;
-
-			case ConvertedType::UTF8:
+		case ConvertedType::UINT_8:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::UTINYINT;
+			} else {
+				throw IOException("UINT8 converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::UINT_16:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::USMALLINT;
+			} else {
+				throw IOException("UINT16 converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::UINT_32:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::UINTEGER;
+			} else {
+				throw IOException("UINT32 converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::UINT_64:
+			if (s_ele.type == Type::INT64) {
+				return LogicalType::UBIGINT;
+			} else {
+				throw IOException("UINT64 converted type can only be set for value of Type::INT64");
+			}
+		case ConvertedType::DATE:
+			if (s_ele.type == Type::INT32) {
+				return LogicalType::DATE;
+			} else {
+				throw IOException("DATE converted type can only be set for value of Type::INT32");
+			}
+		case ConvertedType::TIMESTAMP_MICROS:
+		case ConvertedType::TIMESTAMP_MILLIS:
+			if (s_ele.type == Type::INT64) {
+				return LogicalType::TIMESTAMP;
+			} else {
+				throw IOException("TIMESTAMP converted type can only be set for value of Type::INT64");
+			}
+		case ConvertedType::DECIMAL:
+			if (!s_ele.__isset.precision || !s_ele.__isset.scale) {
+				throw IOException("DECIMAL requires a length and scale specifier!");
+			}
+			switch (s_ele.type) {
+			case Type::BYTE_ARRAY:
+			case Type::FIXED_LEN_BYTE_ARRAY:
+			case Type::INT32:
+			case Type::INT64:
+				return LogicalType::DECIMAL(s_ele.precision, s_ele.scale);
+			default:
+				throw IOException(
+				    "DECIMAL converted type can only be set for value of Type::(FIXED_LEN_)BYTE_ARRAY/INT32/INT64");
+			}
+		case ConvertedType::UTF8:
+			switch (s_ele.type) {
+			case Type::BYTE_ARRAY:
+			case Type::FIXED_LEN_BYTE_ARRAY:
 				return LogicalType::VARCHAR;
 			default:
-				return LogicalType::BLOB;
+				throw IOException("UTF8 converted type can only be set for Type::(FIXED_LEN_)BYTE_ARRAY");
 			}
+		case ConvertedType::MAP:
+		case ConvertedType::MAP_KEY_VALUE:
+		case ConvertedType::LIST:
+		case ConvertedType::ENUM:
+		case ConvertedType::TIME_MILLIS:
+		case ConvertedType::TIME_MICROS:
+		case ConvertedType::JSON:
+		case ConvertedType::BSON:
+		case ConvertedType::INTERVAL:
+		default:
+			throw IOException("Unsupported converted type");
 		}
-		if (parquet_options.binary_as_string) {
-			return LogicalType::VARCHAR;
+	} else {
+		// no converted type set
+		// use default type for each physical type
+		switch (s_ele.type) {
+		case Type::BOOLEAN:
+			return LogicalType::BOOLEAN;
+		case Type::INT32:
+			return LogicalType::INTEGER;
+		case Type::INT64:
+			return LogicalType::BIGINT;
+		case Type::INT96: // always a timestamp it would seem
+			return LogicalType::TIMESTAMP;
+		case Type::FLOAT:
+			return LogicalType::FLOAT;
+		case Type::DOUBLE:
+			return LogicalType::DOUBLE;
+		case Type::BYTE_ARRAY:
+		case Type::FIXED_LEN_BYTE_ARRAY:
+			if (parquet_options.binary_as_string) {
+				return LogicalType::VARCHAR;
+			}
+			return LogicalType::BLOB;
+		default:
+			return LogicalType::INVALID;
 		}
-		return LogicalType::BLOB;
-	default:
-		return LogicalType::INVALID;
 	}
 }
 
@@ -213,6 +274,18 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		}
 		return result;
 	} else { // leaf node
+
+		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+			const auto derived_type = DeriveLogicalType(s_ele);
+			auto list_type = LogicalType::LIST(derived_type);
+
+			auto element_reader =
+			    ColumnReader::CreateReader(*this, derived_type, s_ele, next_file_idx++, max_define, max_repeat);
+
+			return make_unique<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
+			                                     move(element_reader));
+		}
+
 		// TODO check return value of derive type or should we only do this on read()
 		return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
 		                                  max_repeat);
@@ -271,6 +344,13 @@ void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p
 	}
 	D_ASSERT(!names.empty());
 	D_ASSERT(!return_types.empty());
+}
+
+ParquetOptions::ParquetOptions(ClientContext &context) {
+	Value binary_as_string_val;
+	if (context.TryGetCurrentSetting("binary_as_string", binary_as_string_val)) {
+		binary_as_string = binary_as_string_val.GetValue<bool>();
+	}
 }
 
 ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p,
@@ -460,6 +540,12 @@ static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &
 		break;
 	case LogicalTypeId::UBIGINT:
 		TemplatedFilterOperation<uint64_t, OP>(v, constant.value_.ubigint, filter_mask, count);
+		break;
+	case LogicalTypeId::TINYINT:
+		TemplatedFilterOperation<int8_t, OP>(v, constant.value_.tinyint, filter_mask, count);
+		break;
+	case LogicalTypeId::SMALLINT:
+		TemplatedFilterOperation<int16_t, OP>(v, constant.value_.smallint, filter_mask, count);
 		break;
 	case LogicalTypeId::INTEGER:
 		TemplatedFilterOperation<int32_t, OP>(v, constant.value_.integer, filter_mask, count);

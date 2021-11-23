@@ -3,6 +3,7 @@ if(NOT CLANG_TIDY)
 endif()
 add_subdirectory(extension)
 add_subdirectory(relation)
+add_subdirectory(settings)
 
 if(FORCE_QUERY_LOG)
   add_definitions(-DDUCKDB_FORCE_QUERY_LOG="\""${FORCE_QUERY_LOG}"\"")

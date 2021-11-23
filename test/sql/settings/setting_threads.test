@@ -1,0 +1,16 @@
+# name: test/sql/settings/setting_threads.test
+# description: Test THREADS setting
+# group: [settings]
+
+foreach thread_type threads worker_threads
+
+statement ok
+SET ${thread_type} TO '3'
+
+statement error
+SET ${thread_type} TO '-1'
+
+statement error
+SET ${thread_type} TO 'blabla'
+
+endloop
