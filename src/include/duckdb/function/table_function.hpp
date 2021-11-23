@@ -21,13 +21,13 @@ struct ParallelState;
 class TableFilterSet;
 
 struct FunctionOperatorData {
-	virtual ~FunctionOperatorData() {
+	DUCKDB_API virtual ~FunctionOperatorData() {
 	}
 };
 
 struct TableFilterCollection {
 	TableFilterSet *table_filters;
-	explicit TableFilterCollection(TableFilterSet *table_filters) : table_filters(table_filters) {
+	DUCKDB_API explicit TableFilterCollection(TableFilterSet *table_filters) : table_filters(table_filters) {
 	}
 };
 
@@ -73,7 +73,7 @@ typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
 class TableFunction : public SimpleNamedParameterFunction {
 public:
-	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
+	DUCKDB_API TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_t init = nullptr,
 	              table_statistics_t statistics = nullptr, table_function_cleanup_t cleanup = nullptr,
 	              table_function_dependency_t dependency = nullptr, table_function_cardinality_t cardinality = nullptr,
@@ -91,7 +91,7 @@ public:
 	      parallel_state_next(parallel_state_next), table_scan_progress(query_progress),
 	      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
 	}
-	TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
+	DUCKDB_API TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_t init = nullptr, table_statistics_t statistics = nullptr,
 	              table_function_cleanup_t cleanup = nullptr, table_function_dependency_t dependency = nullptr,
 	              table_function_cardinality_t cardinality = nullptr,
@@ -106,7 +106,7 @@ public:
 	                    pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_function,
 	                    parallel_init, parallel_state_next, projection_pushdown, filter_pushdown, query_progress) {
 	}
-	TableFunction() : SimpleNamedParameterFunction("", {}) {
+	DUCKDB_API TableFunction() : SimpleNamedParameterFunction("", {}) {
 	}
 
 	//! Bind function
@@ -156,7 +156,7 @@ public:
 	//! that applies the table filter directly.
 	bool filter_pushdown;
 
-	string ToString() override {
+	DUCKDB_API string ToString() override {
 		return SimpleNamedParameterFunction::ToString();
 	}
 };

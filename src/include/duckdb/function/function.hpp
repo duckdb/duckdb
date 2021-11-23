@@ -33,16 +33,16 @@ class TableFunction;
 struct PragmaInfo;
 
 struct FunctionData {
-	virtual ~FunctionData() {
+	DUCKDB_API virtual ~FunctionData() {
 	}
 
-	virtual unique_ptr<FunctionData> Copy() {
+	DUCKDB_API virtual unique_ptr<FunctionData> Copy() {
 		throw InternalException("Unimplemented copy for FunctionData");
 	};
-	virtual bool Equals(FunctionData &other) {
+	DUCKDB_API virtual bool Equals(FunctionData &other) {
 		return true;
 	}
-	static bool Equals(FunctionData *left, FunctionData *right) {
+	DUCKDB_API static bool Equals(FunctionData *left, FunctionData *right) {
 		if (left == right) {
 			return true;
 		}
@@ -66,9 +66,9 @@ struct FunctionParameters {
 //! Function is the base class used for any type of function (scalar, aggregate or simple function)
 class Function {
 public:
-	explicit Function(string name) : name(name) {
+	DUCKDB_API explicit Function(string name) : name(name) {
 	}
-	virtual ~Function() {
+	DUCKDB_API virtual ~Function() {
 	}
 
 	//! The name of the function
@@ -86,33 +86,33 @@ public:
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! returns INVALID_INDEX and sets error if none could be found
-	static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments,
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments,
 	                          string &error);
-	static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions,
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions,
 	                          vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns INVALID_INDEX and sets error if none could be found
-	static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
 	                          string &error);
-	static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions,
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions,
 	                          vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns INVALID_INDEX and sets error if none could be found
-	static idx_t BindFunction(const string &name, vector<TableFunction> &functions, vector<LogicalType> &arguments,
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<TableFunction> &functions, vector<LogicalType> &arguments,
 	                          string &error);
-	static idx_t BindFunction(const string &name, vector<TableFunction> &functions,
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<TableFunction> &functions,
 	                          vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a pragma function from the set of functions and input arguments
-	static idx_t BindFunction(const string &name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error);
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error);
 };
 
 class SimpleFunction : public Function {
 public:
-	SimpleFunction(string name, vector<LogicalType> arguments,
+	DUCKDB_API SimpleFunction(string name, vector<LogicalType> arguments,
 	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
 	    : Function(name), arguments(move(arguments)), varargs(varargs) {
 	}
-	~SimpleFunction() override {
+	DUCKDB_API ~SimpleFunction() override {
 	}
 
 	//! The set of arguments of the function
@@ -122,49 +122,49 @@ public:
 	LogicalType varargs;
 
 public:
-	virtual string ToString() {
+	DUCKDB_API virtual string ToString() {
 		return Function::CallToString(name, arguments);
 	}
 
-	bool HasVarArgs() const {
+	DUCKDB_API bool HasVarArgs() const {
 		return varargs.id() != LogicalTypeId::INVALID;
 	}
 };
 
 class SimpleNamedParameterFunction : public SimpleFunction {
 public:
-	SimpleNamedParameterFunction(string name, vector<LogicalType> arguments,
+	DUCKDB_API SimpleNamedParameterFunction(string name, vector<LogicalType> arguments,
 	                             LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
 	    : SimpleFunction(name, move(arguments), varargs) {
 	}
-	~SimpleNamedParameterFunction() override {
+	DUCKDB_API ~SimpleNamedParameterFunction() override {
 	}
 
 	//! The named parameters of the function
 	unordered_map<string, LogicalType> named_parameters;
 
 public:
-	string ToString() override {
+	DUCKDB_API string ToString() override {
 		return Function::CallToString(name, arguments, named_parameters);
 	}
 
-	bool HasNamedParameters() {
+	DUCKDB_API bool HasNamedParameters() {
 		return named_parameters.size() != 0;
 	}
 
-	void EvaluateInputParameters(vector<LogicalType> &arguments, vector<Value> &parameters,
+	DUCKDB_API void EvaluateInputParameters(vector<LogicalType> &arguments, vector<Value> &parameters,
 	                             unordered_map<string, Value> &named_parameters,
 	                             vector<unique_ptr<ParsedExpression>> &children);
 };
 
 class BaseScalarFunction : public SimpleFunction {
 public:
-	BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, bool has_side_effects,
+	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, bool has_side_effects,
 	                   LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
 	    : SimpleFunction(move(name), move(arguments), move(varargs)), return_type(return_type),
 	      has_side_effects(has_side_effects) {
 	}
-	~BaseScalarFunction() override {
+	DUCKDB_API ~BaseScalarFunction() override {
 	}
 
 	//! Return type of the function
@@ -174,12 +174,12 @@ public:
 	bool has_side_effects;
 
 public:
-	hash_t Hash() const;
+	DUCKDB_API hash_t Hash() const;
 
 	//! Cast a set of expressions to the arguments of this function
-	void CastToFunctionArguments(vector<unique_ptr<Expression>> &children);
+	DUCKDB_API void CastToFunctionArguments(vector<unique_ptr<Expression>> &children);
 
-	string ToString() override {
+	DUCKDB_API string ToString() override {
 		return Function::CallToString(name, arguments, return_type);
 	}
 };
