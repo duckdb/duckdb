@@ -13,9 +13,10 @@
 namespace duckdb {
 
 enum class SetScope : uint8_t {
-	LOCAL = 0, /* Not implemented*/
-	SESSION = 1,
-	GLOBAL = 2
+	AUTOMATIC = 0,
+	LOCAL = 1, /* unused */
+	SESSION = 2,
+	GLOBAL = 3
 };
 
 } // namespace duckdb

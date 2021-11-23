@@ -29,7 +29,7 @@ public:
 	//! Starts the thread
 	void Start();
 	//! Stops the thread
-	void Stop();
+	void Stop(bool success = true);
 	//! Gets current percentage
 	int GetCurrentPercentage();
 
@@ -46,7 +46,7 @@ private:
 	std::condition_variable c;
 	mutex m;
 #endif
-	idx_t show_progress_after;
+	atomic<idx_t> show_progress_after;
 	idx_t time_update_bar;
 	atomic<int> current_percentage;
 	atomic<bool> stop;
