@@ -1,11 +1,12 @@
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/progress_bar.hpp"
+#include "duckdb/common/windows_util.hpp"
+#include "duckdb/common/windows.hpp"
 #include <stdio.h>
 
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
 #include <io.h>
-#include "duckdb/common/windows_util.hpp"
 #endif
 #endif
 
@@ -17,7 +18,7 @@ void Printer::Print(const string &str) {
 #ifdef DUCKDB_WINDOWS
 	if (IsTerminal()) {
 		// print utf8 to terminal
-		auto unicode = WindowsUtil::WindowsUTF8ToMBCS(str);
+		auto unicode = WindowsUtil::WindowsUTF8ToMBCS(str.c_str());
 		fprintf(stderr, "%s\n", unicode.c_str());
 		return;
 	}

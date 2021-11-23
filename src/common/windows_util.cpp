@@ -41,7 +41,7 @@ string WindowsUtil::WindowsUnicodeToUTF8(LPCWSTR input) {
 
 static string WindowsUnicodeToMBCS(LPCWSTR unicode_text, int use_ansi){
   uint32_t code_page = use_ansi ? CP_ACP : CP_OEMCP;
-  return WideCharToMultiByteWrapper(unicode_text, code_page)
+  return WideCharToMultiByteWrapper(unicode_text, code_page);
 }
 
 string WindowsUtil::WindowsUTF8ToMBCS(const char *input, bool use_ansi) {
