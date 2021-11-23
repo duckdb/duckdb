@@ -58,7 +58,7 @@ TEST_CASE("Test Progress Bar Fast", "[api]") {
 	REQUIRE_NO_FAIL(con.Query("create  table tbl as select range a, mod(range,10) b from range(10000);"));
 	REQUIRE_NO_FAIL(con.Query("create  table tbl_2 as select range a from range(10000);"));
 
-	REQUIRE_NO_FAIL(con.Query("PRAGMA set_progress_bar_time=10"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA progress_bar_time=10"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_print_progress_bar"));
 	//! Simple Aggregation
 	test_progress.Start();
@@ -122,7 +122,7 @@ TEST_CASE("Test Progress Bar", "[api][.]") {
 	REQUIRE_NO_FAIL(con.Query("create  table tbl as select range a, mod(range,10) b from range(10000000);"));
 	REQUIRE_NO_FAIL(con.Query("create  table tbl_2 as select range a from range(10000000);"));
 
-	REQUIRE_NO_FAIL(con.Query("PRAGMA set_progress_bar_time=10"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA progress_bar_time=10"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_print_progress_bar"));
 	//! Simple Aggregation
 	test_progress.Start();
@@ -184,7 +184,7 @@ TEST_CASE("Test Progress Bar CSV", "[api][.]") {
 	Connection con(db);
 
 	TestProgressBar test_progress(con.context.get());
-	REQUIRE_NO_FAIL(con.Query("PRAGMA set_progress_bar_time=1"));
+	REQUIRE_NO_FAIL(con.Query("PRAGMA progress_bar_time=1"));
 	REQUIRE_NO_FAIL(con.Query("PRAGMA disable_print_progress_bar"));
 
 	//! Create Tables From CSVs

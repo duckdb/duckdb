@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/enums/set_scope.h"
+#include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/function/copy_function.hpp"

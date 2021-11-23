@@ -16,7 +16,7 @@ SetScope ToSetScope(duckdb_libpgquery::VariableSetScope pg_scope) {
 	case duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_GLOBAL:
 		return SetScope::GLOBAL;
 	case duckdb_libpgquery::VariableSetScope::VAR_SET_SCOPE_DEFAULT:
-		return SetScope::SESSION;
+		return SetScope::AUTOMATIC;
 	default:
 		throw InternalException("Unexpected pg_scope: %d", pg_scope);
 	}

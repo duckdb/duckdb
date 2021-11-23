@@ -18,7 +18,7 @@ statement ok
 copy lineitem TO '__TEST_DIR__/progress_bar_lineitem2.parquet' (FORMAT 'parquet');
 
 statement ok
-PRAGMA set_progress_bar_time=1
+PRAGMA progress_bar_time=1
 
 statement ok
 PRAGMA disable_print_progress_bar
