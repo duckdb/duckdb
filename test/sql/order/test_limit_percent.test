@@ -92,8 +92,19 @@ SELECT a FROM test LIMIT (SELECT COUNT(*) FROM test) % OFFSET 1
 ----
 
 query I
-SELECT a FROM test LIMIT 50% OFFSET (SELECT MIN(b) FROM test);
+SELECT a FROM test LIMIT 50% OFFSET (((SELECT MIN(b) FROM test)-1)/10);
 ----
+13
+
+query I
+SELECT b FROM test LIMIT 70% OFFSET (((SELECT MIN(test.a) FROM test)-1)/10);
+----
+21
+22
+
+# non-foldable expression in limit
+statement ok
+SELECT * FROM integers LIMIT 30% OFFSET RANDOM();
 
 query I
 SELECT COUNT(*) FROM (SELECT * FROM (SELECT * FROM (SELECT * FROM range(1000000) LIMIT 10%) LIMIT 10%) LIMIT 10%)

@@ -109,7 +109,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundSelectNode &statement) {
 			}
 		} else if (modifier->type == ResultModifierType::LIMIT_PERCENT_MODIFIER) {
 			auto &limit_modifier = (BoundLimitPercentModifier &)*modifier;
-			if (limit_modifier.limit) {
+			if (limit_modifier.limit || limit_modifier.offset) {
 				PlanSubqueries(&limit_modifier.limit, &root);
 				PlanSubqueries(&limit_modifier.offset, &root);
 				limit = make_unique<LogicalLimitPercent>(limit_modifier.limit_percent, limit_modifier.offset_val,
