@@ -997,6 +997,21 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
+	// Equalities are only used in enums with different catalog entries
+	bool Equals(ExtraTypeInfo *other_p) override {
+		if (!other_p) {
+			return false;
+		}
+		if (type != other_p->type) {
+			return false;
+		}
+		auto &other = (EnumTypeInfo &)*other_p;
+		// We must check if all elements are equal
+		if (other.values_insert_order == values_insert_order) {
+			return true;
+		}
+		return false;
+	}
 	void Serialize(Serializer &serializer) const override {
 		serializer.Write<uint32_t>(values_insert_order.size());
 		serializer.WriteString(enum_name);
@@ -1018,37 +1033,6 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 		vector<string> values_insert_order;
 		source.ReadStringVector(values_insert_order);
 		return make_shared<EnumTypeInfoTemplated>(move(enum_name), move(values_insert_order));
-	}
-
-	bool Equals(ExtraTypeInfo *other_p) override {
-		if (!other_p) {
-			return false;
-		}
-		auto &other = (EnumTypeInfo &)*other_p;
-		if (catalog_entry && catalog_entry == other.catalog_entry) {
-			// If they are both pointing to the same catalog entry it's done.
-			return true;
-		}
-		// if size and name are equal we return true
-		if (other.values_insert_order.size() == values_insert_order.size() && other.enum_name == enum_name) {
-			return true;
-		}
-		// otherwise we check element-wise.
-		const idx_t max_enum_size_for_comparison = 1000;
-		// if the sizes are different we return false.
-		if (other.values_insert_order.size() != values_insert_order.size() ||
-		    values_insert_order.size() > max_enum_size_for_comparison) {
-			return false;
-		} else {
-			// otherwise we check if all values are present in both enums
-			for (auto &value : other.values_insert_order) {
-				auto it = values.find(value);
-				if (it == values.end()) {
-					return false;
-				}
-			}
-			return true;
-		}
 	}
 	unordered_map<string, T> values;
 };
