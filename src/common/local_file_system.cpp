@@ -683,6 +683,12 @@ static void DeleteDirectoryRecursive(FileSystem &fs, string directory) {
 }
 
 void LocalFileSystem::RemoveDirectory(const string &directory) {
+	if (FileExists(directory)) {
+		throw IOException("Attempting to delete directory \"%s\", but it is a file and not a directory!", directory);
+	}
+	if (!DirectoryExists(directory)) {
+		return;
+	}
 	DeleteDirectoryRecursive(*this, directory.c_str());
 }
 
