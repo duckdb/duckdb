@@ -2,12 +2,28 @@
 #include "duckdb/common/progress_bar.hpp"
 #include <stdio.h>
 
+#ifndef DUCKDB_DISABLE_PRINT
+#ifdef DUCKDB_WINDOWS
+#include <io.h>
+#include "duckdb/common/windows_util.hpp"
+#endif
+#endif
+
 namespace duckdb {
 
 // LCOV_EXCL_START
 void Printer::Print(const string &str) {
 #ifndef DUCKDB_DISABLE_PRINT
+#ifdef DUCKDB_WINDOWS
+	if (IsTerminal()) {
+		// print utf8 to terminal
+		auto unicode = WindowsUtil::WindowsUTF8ToMBCS(str);
+		fprintf(stderr, "%s\n", unicode.c_str());
+		return;
+	}
+#else
 	fprintf(stderr, "%s\n", str.c_str());
+#endif
 #endif
 }
 
@@ -25,6 +41,16 @@ void Printer::FinishProgressBarPrint(const char *pbstr, int pbwidth) {
 	PrintProgress(100, pbstr, pbwidth);
 	printf(" \n");
 	fflush(stdout);
+#endif
+}
+
+bool Printer::IsTerminal() {
+#ifndef DUCKDB_DISABLE_PRINT
+#ifdef DUCKDB_WINDOWS
+	return ::_isatty(1);
+#else
+	throw InternalException("IsTerminal is only implemented for Windows");
+#endif
 #endif
 }
 // LCOV_EXCL_STOP

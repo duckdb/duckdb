@@ -22,6 +22,7 @@ public:
 	//! Windows helper functions
 	static std::wstring WindowsUTF8ToUnicode(const char *input);
 	static string WindowsUnicodeToUTF8(LPCWSTR input);
+	static string WindowsUTF8ToMBCS(const char *input, bool use_ansi = false);
 };
 #endif
 

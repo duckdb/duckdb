@@ -19,19 +19,34 @@ std::wstring WindowsUtil::WindowsUTF8ToUnicode(const char *input) {
 	return std::wstring(buffer.get(), result_size);
 }
 
-string WindowsUtil::WindowsUnicodeToUTF8(LPCWSTR input) {
+
+static string WideCharToMultiByteWrapper(LPCWSTR input, uint32_t code_page) {
 	idx_t result_size;
 
-	result_size = WideCharToMultiByte(CP_UTF8, 0, input, -1, 0, 0, 0, 0);
+	result_size = WideCharToMultiByte(code_page, 0, input, -1, 0, 0, 0, 0);
 	if (result_size == 0) {
 		throw IOException("Failure in WideCharToMultiByte");
 	}
 	auto buffer = unique_ptr<char[]>(new char[result_size]);
-	result_size = WideCharToMultiByte(CP_UTF8, 0, input, -1, buffer.get(), result_size, 0, 0);
+	result_size = WideCharToMultiByte(code_page, 0, input, -1, buffer.get(), result_size, 0, 0);
 	if (result_size == 0) {
 		throw IOException("Failure in WideCharToMultiByte");
 	}
 	return string(buffer.get(), result_size - 1);
+}
+
+string WindowsUtil::WindowsUnicodeToUTF8(LPCWSTR input) {
+	return WideCharToMultiByteWrapper(input, CP_UTF8);
+}
+
+static string WindowsUnicodeToMBCS(LPCWSTR unicode_text, int use_ansi){
+  uint32_t code_page = use_ansi ? CP_ACP : CP_OEMCP;
+  return WideCharToMultiByteWrapper(unicode_text, code_page)
+}
+
+string WindowsUtil::WindowsUTF8ToMBCS(const char *input, bool use_ansi) {
+	auto unicode = WindowsUtil::WindowsUTF8ToUnicode(input);
+	return WindowsUnicodeToMBCS(unicode.c_str(), use_ansi);
 }
 
 #endif
