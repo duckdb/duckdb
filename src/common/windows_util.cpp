@@ -1,28 +1,22 @@
 #include "duckdb/common/windows_util.hpp"
-#include "duckdb/common/windows.hpp"
 
 namespace duckdb {
 
 #ifdef DUCKDB_WINDOWS
 
-wstring WindowsUtil::WindowsUTF8ToUnicode(const char *input) {
+std::wstring WindowsUtil::WindowsUTF8ToUnicode(const char *input) {
 	idx_t result_size;
 
 	result_size = MultiByteToWideChar(CP_UTF8, 0, input, -1, nullptr, 0);
 	if (result_size == 0) {
 		throw IOException("Failure in MultiByteToWideChar");
 	}
-	wstring result;
-	result.reserve(result_size);
-	result_size = MultiByteToWideChar(CP_UTF8, 0, zText, -1, &result[0], result_size);
+	auto buffer = unique_ptr<wchar_t[]>(new wchar_t[result_size]);
+	result_size = MultiByteToWideChar(CP_UTF8, 0, input, -1, buffer.get(), result_size);
 	if (result_size == 0) {
 		throw IOException("Failure in MultiByteToWideChar");
 	}
-	return result;
-}
-
-wstring WindowsUtil::WindowsUTF8ToUnicode(const string &input) {
-	return WindowsUTF8ToUnicode(input.c_str());
+	return std::wstring(buffer.get(), result_size);
 }
 
 string WindowsUtil::WindowsUnicodeToUTF8(LPCWSTR input) {
@@ -32,14 +26,12 @@ string WindowsUtil::WindowsUnicodeToUTF8(LPCWSTR input) {
 	if (result_size == 0) {
 		throw IOException("Failure in WideCharToMultiByte");
 	}
-	string result;
-	result.reserve(result_size);
-
-	result_size = WideCharToMultiByte(CP_UTF8, 0, input, -1, &result[0], result_size, 0, 0);
+	auto buffer = unique_ptr<char[]>(new char[result_size]);
+	result_size = WideCharToMultiByte(CP_UTF8, 0, input, -1, buffer.get(), result_size, 0, 0);
 	if (result_size == 0) {
 		throw IOException("Failure in WideCharToMultiByte");
 	}
-	return result;
+	return string(buffer.get(), result_size - 1);
 }
 
 
