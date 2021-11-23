@@ -1,0 +1,66 @@
+# name: test/sql/explain/test_explain_analyze.test
+# description: Test explain analyze
+# group: [explain]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(100) tbl(i);
+
+query II
+EXPLAIN ANALYZE SELECT SUM(i) FROM integers
+----
+analyzed_plan	<REGEX>:.*integers.*
+
+query II
+EXPLAIN ANALYZE SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+analyzed_plan	<REGEX>:.*CROSS_PRODUCT.*
+
+statement ok
+PRAGMA enable_profiling
+
+query II
+EXPLAIN ANALYZE SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+analyzed_plan	<REGEX>:.*CROSS_PRODUCT.*
+
+statement ok
+PRAGMA disable_profiling
+
+query II
+EXPLAIN ANALYZE SELECT SUM(i) FROM (SELECT * FROM integers i1, integers i2 UNION ALL SELECT * FROM integers i1, integers i2);
+----
+analyzed_plan	<REGEX>:.*CROSS_PRODUCT.*
+
+statement ok
+PRAGMA profiling_output='__TEST_DIR__/test.json'
+
+statement ok
+PRAGMA enable_profiling='json'
+
+statement ok
+SELECT 42
+
+statement ok
+PRAGMA disable_profiling
+
+query I nosort json_output
+SELECT * FROM read_csv('__TEST_DIR__/test.json', columns={'json': 'VARCHAR'}, sep='🦆');
+----
+
+statement ok
+PRAGMA enable_profiling='json'
+
+query II
+EXPLAIN ANALYZE SELECT SUM(i) FROM integers
+----
+analyzed_plan	<REGEX>:.*integers.*
+
+statement ok
+PRAGMA disable_profiling
+
+query I nosort json_output
+SELECT * FROM read_csv('__TEST_DIR__/test.json', columns={'json': 'VARCHAR'}, sep='🦆');
+----

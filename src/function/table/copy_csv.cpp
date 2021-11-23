@@ -61,11 +61,7 @@ static int64_t ParseInteger(vector<Value> &set) {
 //===--------------------------------------------------------------------===//
 static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, vector<Value> &set) {
 	if (StringUtil::StartsWith(loption, "delim") || StringUtil::StartsWith(loption, "sep")) {
-		options.delimiter = ParseString(set);
-		options.has_delimiter = true;
-		if (options.delimiter.length() == 0) {
-			throw BinderException("DELIM or SEP must not be empty");
-		}
+		options.SetDelimiter(ParseString(set));
 	} else if (loption == "quote") {
 		options.quote = ParseString(set);
 		options.has_quote = true;

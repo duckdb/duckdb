@@ -29,8 +29,8 @@ bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expres
 			auto &comp = (ComparisonExpression &)*child;
 			if (comp.left->type == ExpressionType::COLUMN_REF) {
 				auto &colref = (ColumnRefExpression &)*comp.left;
-				if (colref.table_name.empty()) {
-					parameter_name = colref.column_name;
+				if (!colref.IsQualified()) {
+					parameter_name = colref.GetColumnName();
 					child = move(comp.right);
 				}
 			}
