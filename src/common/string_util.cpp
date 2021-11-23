@@ -3,6 +3,9 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/exception.hpp"
+#ifdef DUCKDB_WINDOWS
+#include "duckdb/common/windows.hpp"
+#endif
 
 #include <algorithm>
 #include <cctype>
@@ -291,5 +294,9 @@ string StringUtil::CandidatesMessage(const vector<string> &candidates, const str
 	}
 	return result_str;
 }
+
+#ifdef DUCKDB_WINDOWS
+#else
+#endif
 
 } // namespace duckdb

@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #else
+#include "duckdb/common/windows_util.hpp"
 #include <string>
 
 #ifdef __MINGW32__
@@ -490,8 +491,9 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
+	auto unicode_path = WindowsUtil::WindowsUTF8ToUnicode(path);
 	HANDLE hFile =
-	    CreateFileA(path.c_str(), desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
+	    CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
