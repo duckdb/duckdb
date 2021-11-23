@@ -1393,3 +1393,18 @@ SELECT * FROM parquet_scan('data/parquet-testing/glob/t1.parquet') limit 50;
 ----
 1	hello	
 
+query III
+SELECT * FROM parquet_scan('data/parquet-testing/bug2557.parquet') limit 10
+----
+[adipiscing, elit]	[267]	NULL
+[adipiscing, elit]	[58, 146]	[3105.735731, 7332.144961, 2693.459659, 2058.830347]
+[dolor, sit, amet, consectetur, adipiscing, elit]	[26, 701]	[2252.315041]
+[Lorem, ipsum, dolor, sit, amet, consectetur, adipiscing, elit]	[763]	[4318.131164, 703.332322]
+[consectetur, adipiscing, elit]	NULL	[4921.065813]
+[ipsum, dolor, sit, amet, consectetur, adipiscing, elit]	[503]	[3143.311724]
+[amet, consectetur, adipiscing, elit]	[981]	[1556.844782, 5388.780546]
+[consectetur, adipiscing, elit]	[822, 843, 702, 469]	NULL
+[dolor, sit, amet, consectetur, adipiscing, elit]	[698, 385]	[3591.160509]
+[Lorem, ipsum, dolor, sit, amet, consectetur, adipiscing, elit]	[597, 719]	[1218.803740]
+
+

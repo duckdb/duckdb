@@ -32,10 +32,10 @@ statement ok
 CREATE TABLE test5.test5_table(i INTEGER);
 
 # Reading the config - It should be empty for now.
-statement error
+statement ok
 SELECT CURRENT_SETTING('search_path');
 
-statement error
+statement ok
 SELECT CURRENT_SETTING('schema');
 
 # Setting the default value.

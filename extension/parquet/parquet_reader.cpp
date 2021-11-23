@@ -274,6 +274,18 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(const FileMetaData
 		}
 		return result;
 	} else { // leaf node
+
+		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+			const auto derived_type = DeriveLogicalType(s_ele);
+			auto list_type = LogicalType::LIST(derived_type);
+
+			auto element_reader =
+			    ColumnReader::CreateReader(*this, derived_type, s_ele, next_file_idx++, max_define, max_repeat);
+
+			return make_unique<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
+			                                     move(element_reader));
+		}
+
 		// TODO check return value of derive type or should we only do this on read()
 		return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
 		                                  max_repeat);
@@ -332,6 +344,13 @@ void ParquetReader::InitializeSchema(const vector<LogicalType> &expected_types_p
 	}
 	D_ASSERT(!names.empty());
 	D_ASSERT(!return_types.empty());
+}
+
+ParquetOptions::ParquetOptions(ClientContext &context) {
+	Value binary_as_string_val;
+	if (context.TryGetCurrentSetting("binary_as_string", binary_as_string_val)) {
+		binary_as_string = binary_as_string_val.GetValue<bool>();
+	}
 }
 
 ParquetReader::ParquetReader(Allocator &allocator_p, unique_ptr<FileHandle> file_handle_p,
