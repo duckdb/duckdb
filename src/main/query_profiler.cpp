@@ -16,7 +16,10 @@
 
 namespace duckdb {
 
-void QueryProfiler::StartQuery(string query) {
+void QueryProfiler::StartQuery(string query, bool is_explain_analyze) {
+	if (is_explain_analyze) {
+		StartExplainAnalyze();
+	}
 	if (!enabled) {
 		return;
 	}
@@ -73,6 +76,17 @@ void QueryProfiler::Finalize(TreeNode &node) {
 	}
 }
 
+void QueryProfiler::StartExplainAnalyze() {
+	this->is_explain_analyze = true;
+	this->stored_enabled = enabled;
+	this->stored_automatic_print_format = automatic_print_format;
+	this->stored_save_location = save_location;
+
+	this->enabled = true;
+	this->save_location = string();
+	this->automatic_print_format = ProfilerPrintFormat::NONE;
+}
+
 void QueryProfiler::EndQuery() {
 	if (!enabled || !running) {
 		return;
@@ -101,6 +115,12 @@ void QueryProfiler::EndQuery() {
 		} else {
 			WriteToFile(save_location.c_str(), query_info);
 		}
+	}
+	if (is_explain_analyze) {
+		this->is_explain_analyze = false;
+		this->enabled = stored_enabled;
+		this->automatic_print_format = stored_automatic_print_format;
+		this->save_location = stored_save_location;
 	}
 }
 

@@ -80,7 +80,7 @@ bool ExpressionBinder::BindCorrelatedColumns(unique_ptr<ParsedExpression> &expr)
 	bool success = false;
 	while (!active_binders.empty()) {
 		auto &next_binder = active_binders.back();
-		ExpressionBinder::BindTableNames(next_binder->binder, *expr);
+		ExpressionBinder::QualifyColumnNames(next_binder->binder, expr);
 		auto bind_result = next_binder->Bind(&expr, depth);
 		if (bind_result.empty()) {
 			success = true;
@@ -239,33 +239,6 @@ string ExpressionBinder::Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, b
 		}
 		return string();
 	}
-}
-
-void ExpressionBinder::BindTableNames(Binder &binder, ParsedExpression &expr, unordered_map<string, idx_t> *alias_map) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
-		auto &colref = (ColumnRefExpression &)expr;
-		if (colref.table_name.empty()) {
-			// no table name: find a binding that contains this
-			if (binder.macro_binding != nullptr && binder.macro_binding->HasMatchingBinding(colref.column_name)) {
-				// macro parameters get priority
-				colref.table_name = binder.macro_binding->alias;
-			} else {
-				colref.table_name = binder.bind_context.GetMatchingBinding(colref.column_name);
-			}
-		}
-		binder.bind_context.BindColumn(colref, 0);
-	} else if (expr.type == ExpressionType::POSITIONAL_REFERENCE) {
-		auto &ref = (PositionalReferenceExpression &)expr;
-		if (ref.alias.empty()) {
-			string table_name, column_name;
-			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
-			if (error.empty()) {
-				ref.alias = column_name;
-			}
-		}
-	}
-	ParsedExpressionIterator::EnumerateChildren(
-	    expr, [&](const ParsedExpression &child) { BindTableNames(binder, (ParsedExpression &)child, alias_map); });
 }
 
 } // namespace duckdb

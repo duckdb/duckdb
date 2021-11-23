@@ -1,0 +1,28 @@
+# name: test/sql/constraints/check/check_struct.test
+# description: CHECK constraint on structs
+# group: [check]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(t ROW(t INTEGER) CHECK(t.t=42));
+
+statement error
+INSERT INTO tbl VALUES ({'t': 43})
+
+statement ok
+INSERT INTO tbl VALUES ({'t': 42})
+
+statement ok
+DROP TABLE tbl;
+
+# we can also do this while referencing the table name
+statement ok
+CREATE TABLE tbl(t ROW(t INTEGER) CHECK(tbl.t.t=42));
+
+statement error
+INSERT INTO tbl VALUES ({'t': 43})
+
+statement ok
+INSERT INTO tbl VALUES ({'t': 42})
