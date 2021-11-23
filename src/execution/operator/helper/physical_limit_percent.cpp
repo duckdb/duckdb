@@ -12,7 +12,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 class LimitPercentGlobalState : public GlobalSinkState {
 public:
-	explicit LimitPercentGlobalState(const PhysicalLimitPercent &op) : current_offset(0) {
+	explicit LimitPercentGlobalState(const PhysicalLimitPercent &op) : current_offset(0), limit(op.limit_value) {
 		if (!op.limit_expression) {
 			this->limit_percent = op.limit_percent;
 			is_limit_percent_delimited = true;
