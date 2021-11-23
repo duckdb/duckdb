@@ -47,7 +47,6 @@ public:
 	}
 
 	bool ParallelSink() const override {
-		// we can only parallelize if all aggregates are combinable
 		return true;
 	}
 };

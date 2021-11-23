@@ -62,6 +62,7 @@
 				columnref in_expr having_clause func_table
 %type <list>	rowsfrom_item rowsfrom_list opt_col_def_list
 %type <boolean> opt_ordinality
+%type <boolean> opt_ignore_nulls
 %type <list>	func_arg_list
 %type <node>	func_arg_expr
 %type <list>	row qualified_row type_list colid_type_list

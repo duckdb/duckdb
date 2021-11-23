@@ -31,3 +31,51 @@ SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet',binary_a
 foo
 bar
 baz
+
+statement ok
+PRAGMA enable_parquet_binary_as_string
+
+query I
+SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet') limit 1
+----
+VARCHAR
+
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet')
+----
+foo
+bar
+baz
+
+statement ok
+PRAGMA disable_parquet_binary_as_string
+
+query I
+SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet') limit 1
+----
+BLOB
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet')
+----
+foo
+bar
+baz
+
+# Preference goes to variable set in scan
+statement ok
+PRAGMA enable_parquet_binary_as_string
+
+query I
+SELECT typeof(#1) FROM parquet_scan('data/parquet-testing/binary_string.parquet' ,binary_as_string=False) limit 1
+----
+BLOB
+
+
+query I
+SELECT * FROM parquet_scan('data/parquet-testing/binary_string.parquet')
+----
+foo
+bar
+baz

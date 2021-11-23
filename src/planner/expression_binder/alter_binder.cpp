@@ -31,13 +31,13 @@ string AlterBinder::UnsupportedAggregateMessage() {
 }
 
 BindResult AlterBinder::BindColumn(ColumnRefExpression &colref) {
-	if (!colref.table_name.empty() && colref.table_name != table.name) {
-		throw BinderException("Cannot reference table %s from within alter statement for table %s!", colref.table_name,
-		                      table.name);
+	if (colref.column_names.size() > 1) {
+		return BindQualifiedColumnName(colref, table.name);
 	}
-	auto idx = table.GetColumnIndex(colref.column_name, true);
+	auto idx = table.GetColumnIndex(colref.column_names[0], true);
 	if (idx == INVALID_INDEX) {
-		throw BinderException("Table does not contain column %s referenced in alter statement!", colref.column_name);
+		throw BinderException("Table does not contain column %s referenced in alter statement!",
+		                      colref.column_names[0]);
 	}
 	bound_columns.push_back(idx);
 	return BindResult(make_unique<BoundReferenceExpression>(table.columns[idx].type, bound_columns.size() - 1));
