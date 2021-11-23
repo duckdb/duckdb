@@ -22,9 +22,8 @@ void Printer::Print(const string &str) {
 		fprintf(stderr, "%s\n", unicode.c_str());
 		return;
 	}
-#else
-	fprintf(stderr, "%s\n", str.c_str());
 #endif
+	fprintf(stderr, "%s\n", str.c_str());
 #endif
 }
 
@@ -48,7 +47,7 @@ void Printer::FinishProgressBarPrint(const char *pbstr, int pbwidth) {
 bool Printer::IsTerminal() {
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
-	return ::_isatty(1);
+	return GetFileType(stderr) == FILE_TYPE_CHAR;
 #else
 	throw InternalException("IsTerminal is only implemented for Windows");
 #endif
