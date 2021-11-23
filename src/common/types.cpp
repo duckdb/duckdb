@@ -125,41 +125,41 @@ PhysicalType LogicalType::GetInternalType() {
 	}
 }
 
-const LogicalType LogicalType::INVALID = LogicalType(LogicalTypeId::INVALID);
-const LogicalType LogicalType::SQLNULL = LogicalType(LogicalTypeId::SQLNULL);
-const LogicalType LogicalType::BOOLEAN = LogicalType(LogicalTypeId::BOOLEAN);
-const LogicalType LogicalType::TINYINT = LogicalType(LogicalTypeId::TINYINT);
-const LogicalType LogicalType::UTINYINT = LogicalType(LogicalTypeId::UTINYINT);
-const LogicalType LogicalType::SMALLINT = LogicalType(LogicalTypeId::SMALLINT);
-const LogicalType LogicalType::USMALLINT = LogicalType(LogicalTypeId::USMALLINT);
-const LogicalType LogicalType::INTEGER = LogicalType(LogicalTypeId::INTEGER);
-const LogicalType LogicalType::UINTEGER = LogicalType(LogicalTypeId::UINTEGER);
-const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
-const LogicalType LogicalType::UBIGINT = LogicalType(LogicalTypeId::UBIGINT);
-const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
-const LogicalType LogicalType::UUID = LogicalType(LogicalTypeId::UUID);
-const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
-const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
-const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
+const LogicalTypeId LogicalType::INVALID;
+const LogicalTypeId LogicalType::SQLNULL;
+const LogicalTypeId LogicalType::BOOLEAN;
+const LogicalTypeId LogicalType::TINYINT;
+const LogicalTypeId LogicalType::UTINYINT;
+const LogicalTypeId LogicalType::SMALLINT;
+const LogicalTypeId LogicalType::USMALLINT;
+const LogicalTypeId LogicalType::INTEGER;
+const LogicalTypeId LogicalType::UINTEGER;
+const LogicalTypeId LogicalType::BIGINT;
+const LogicalTypeId LogicalType::UBIGINT;
+const LogicalTypeId LogicalType::HUGEINT;
+const LogicalTypeId LogicalType::UUID;
+const LogicalTypeId LogicalType::FLOAT;
+const LogicalTypeId LogicalType::DOUBLE;
+const LogicalTypeId LogicalType::DATE;
 
-const LogicalType LogicalType::TIMESTAMP = LogicalType(LogicalTypeId::TIMESTAMP);
-const LogicalType LogicalType::TIMESTAMP_MS = LogicalType(LogicalTypeId::TIMESTAMP_MS);
-const LogicalType LogicalType::TIMESTAMP_NS = LogicalType(LogicalTypeId::TIMESTAMP_NS);
-const LogicalType LogicalType::TIMESTAMP_S = LogicalType(LogicalTypeId::TIMESTAMP_SEC);
+const LogicalTypeId LogicalType::TIMESTAMP;
+const LogicalTypeId LogicalType::TIMESTAMP_MS;
+const LogicalTypeId LogicalType::TIMESTAMP_NS;
+const LogicalTypeId LogicalType::TIMESTAMP_S;
 
-const LogicalType LogicalType::TIME = LogicalType(LogicalTypeId::TIME);
-const LogicalType LogicalType::HASH = LogicalType(LogicalTypeId::HASH);
-const LogicalType LogicalType::POINTER = LogicalType(LogicalTypeId::POINTER);
+const LogicalTypeId LogicalType::TIME;
+const LogicalTypeId LogicalType::HASH;
+const LogicalTypeId LogicalType::POINTER;
 
-const LogicalType LogicalType::VARCHAR = LogicalType(LogicalTypeId::VARCHAR);
+const LogicalTypeId LogicalType::VARCHAR;
 
-const LogicalType LogicalType::BLOB = LogicalType(LogicalTypeId::BLOB);
-const LogicalType LogicalType::INTERVAL = LogicalType(LogicalTypeId::INTERVAL);
+const LogicalTypeId LogicalType::BLOB;
+const LogicalTypeId LogicalType::INTERVAL;
 
 // TODO these are incomplete and should maybe not exist as such
-const LogicalType LogicalType::TABLE = LogicalType(LogicalTypeId::TABLE);
+const LogicalTypeId LogicalType::TABLE;
 
-const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
+const LogicalTypeId LogicalType::ANY;
 
 const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
                                                   LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,

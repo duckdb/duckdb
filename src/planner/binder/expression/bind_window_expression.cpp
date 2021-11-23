@@ -223,7 +223,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	// for ORDER BY DESC.
 	auto &config = DBConfig::GetConfig(context);
 	auto range_sense = OrderType::INVALID;
-	auto start_type = LogicalType::BIGINT;
+	LogicalType start_type = LogicalType::BIGINT;
 	if (window.start == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
 		range_sense = ResolveOrderType(config, window.orders[0].type);
@@ -236,7 +236,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		start_type = BindRangeExpression(context, name, window.start_expr, window.orders[0].expression);
 	}
 
-	auto end_type = LogicalType::BIGINT;
+	LogicalType end_type = LogicalType::BIGINT;
 	if (window.end == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		D_ASSERT(window.orders.size() == 1);
 		range_sense = ResolveOrderType(config, window.orders[0].type);
