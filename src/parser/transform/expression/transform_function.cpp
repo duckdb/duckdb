@@ -119,12 +119,17 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 			throw ParserException("ORDER BY is not implemented for window functions!");
 		}
 
-		auto win_fun_type = WindowToExpressionType(lowercase_name);
+		const auto win_fun_type = WindowToExpressionType(lowercase_name);
 		if (win_fun_type == ExpressionType::INVALID) {
 			throw InternalException("Unknown/unsupported window function");
 		}
 
+		if (win_fun_type == ExpressionType::WINDOW_AGGREGATE && root->agg_ignore_nulls) {
+			throw ParserException("IGNORE NULLS is not supported for windowed aggregates");
+		}
+
 		auto expr = make_unique<WindowExpression>(win_fun_type, schema, lowercase_name);
+		expr->ignore_nulls = root->agg_ignore_nulls;
 
 		if (root->args) {
 			vector<unique_ptr<ParsedExpression>> function_list;
@@ -184,6 +189,10 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		TransformWindowFrame(window_spec, expr.get());
 		expr->query_location = root->location;
 		return move(expr);
+	}
+
+	if (root->agg_ignore_nulls) {
+		throw ParserException("IGNORE NULLS is not supported for non-window functions");
 	}
 
 	//  TransformExpressionList??

@@ -171,6 +171,14 @@ static void PragmaDisableForceExternal(ClientContext &context, const FunctionPar
 	context.force_external = false;
 }
 
+static void PragmaEnableParquetBinaryAsString(ClientContext &context, const FunctionParameters &parameters) {
+	context.parquet_binary_as_strings = true;
+}
+
+static void PragmaDisableParquetBinaryAsString(ClientContext &context, const FunctionParameters &parameters) {
+	context.parquet_binary_as_strings = false;
+}
+
 static void PragmaEnableObjectCache(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).object_cache_enable = true;
 }
@@ -345,6 +353,11 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_print_progress_bar", PragmaEnablePrintProgressBar));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_print_progress_bar", PragmaDisablePrintProgressBar));
+
+	set.AddFunction(
+	    PragmaFunction::PragmaStatement("enable_parquet_binary_as_string", PragmaEnableParquetBinaryAsString));
+	set.AddFunction(
+	    PragmaFunction::PragmaStatement("disable_parquet_binary_as_string", PragmaDisableParquetBinaryAsString));
 
 	set.AddFunction(
 	    PragmaFunction::PragmaAssignment("set_progress_bar_time", PragmaSetProgressBarWaitTime, LogicalType::INTEGER));

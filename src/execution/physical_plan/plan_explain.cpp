@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/scan/physical_chunk_scan.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_explain.hpp"
+#include "duckdb/execution/operator/helper/physical_explain_analyze.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #include "duckdb/common/tree_renderer.hpp"
@@ -11,9 +12,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	D_ASSERT(op.children.size() == 1);
 	auto logical_plan_opt = op.children[0]->ToString();
 	auto plan = CreatePlan(*op.children[0]);
+	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
+		auto result = make_unique<PhysicalExplainAnalyze>(op.types);
+		result->children.push_back(move(plan));
+		return move(result);
+	}
 
 	op.physical_plan = plan->ToString();
-
 	// the output of the explain
 	vector<string> keys, values;
 	switch (context.explain_output_type) {
