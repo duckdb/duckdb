@@ -62,12 +62,12 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 	auto &limit_percent = state.limit_percent;
 	auto &offset = state.offset;
 
-	if (limit != INVALID_INDEX && offset != INVALID_INDEX) {
-		idx_t max_element = limit + offset;
-		if ((limit == 0 || state.current_offset >= max_element) && !(limit_expression || offset_expression)) {
-			return SinkResultType::FINISHED;
-		}
-	}
+	// if (limit != INVALID_INDEX && offset != INVALID_INDEX) {
+	//	idx_t max_element = limit + offset;
+	//	if ((limit == 0 || state.current_offset >= max_element) && !(limit_expression || offset_expression)) {
+	//		return SinkResultType::FINISHED;
+	//	}
+	//}
 
 	// get the next chunk from the child
 	if (!state.is_limit_percent_delimited) {
@@ -80,9 +80,9 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		}
 		state.is_limit_percent_delimited = true;
 	}
-	if (state.is_limit_percent_delimited && limit_count != INVALID_INDEX) {
-		limit = MinValue((idx_t)(limit_percent / 100 * limit_count), limit_count);
-	}
+	// if (state.is_limit_percent_delimited && limit_count != INVALID_INDEX) {
+	//	limit = MinValue((idx_t)(limit_percent / 100 * limit_count), limit_count);
+	//}
 	if (!state.is_offset_delimited) {
 		Value val;
 		val.value_.ubigint = 1ULL << 62ULL;
@@ -93,14 +93,14 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		}
 		state.is_offset_delimited = true;
 	}
-	idx_t max_element = limit + offset;
-	if (limit == INVALID_INDEX) {
-		max_element = INVALID_INDEX;
-	}
+	// idx_t max_element = limit + offset;
+	// if (limit == INVALID_INDEX) {
+	//	max_element = INVALID_INDEX;
+	//}
 	idx_t input_size = input.size();
-	if (limit == 0 || state.current_offset >= max_element) {
-		return SinkResultType::FINISHED;
-	}
+	// if (limit == 0 || state.current_offset >= max_element) {
+	//	return SinkResultType::FINISHED;
+	//}
 	if (state.current_offset < offset) {
 		// we are not yet at the offset point
 		if (state.current_offset + input.size() > offset) {
@@ -121,13 +121,13 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 	} else {
 		// have to copy either the entire chunk or part of it
 		idx_t chunk_count;
-		if (state.current_offset + input.size() >= max_element) {
-			// have to limit the count of the chunk
-			chunk_count = max_element - state.current_offset;
-		} else {
-			// we copy the entire chunk
-			chunk_count = input.size();
-		}
+		// if (state.current_offset + input.size() >= max_element) {
+		//	// have to limit the count of the chunk
+		//	chunk_count = max_element - state.current_offset;
+		//} else {
+		// we copy the entire chunk
+		chunk_count = input.size();
+		//}
 		// instead of copying we just change the pointer in the current chunk
 		input.Reference(input);
 		input.SetCardinality(chunk_count);
@@ -157,9 +157,38 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
                                    LocalSourceState &lstate) const {
 	auto &gstate = (LimitPercentGlobalState &)*sink_state;
 	auto &state = (LimitPercentOperatorState &)gstate_p;
+	auto &limit = gstate.limit;
+	auto &limit_percent = gstate.limit_percent;
+
+	if (gstate.is_limit_percent_delimited && limit == INVALID_INDEX) {
+		idx_t count = gstate.data.Count();
+		limit = MinValue((idx_t)(limit_percent / 100 * count), count);
+		if (limit == 0) {
+			return;
+		}
+
+		ChunkCollection chunk_col;
+		for (idx_t i = 0; i < gstate.data.ChunkCount(); i++) {
+			DataChunk &input = gstate.data.GetChunk(i);
+			idx_t chunk_count = MinValue(limit, input.size());
+			input.Reference(input);
+			input.SetCardinality(chunk_count);
+			chunk_col.Append(input);
+
+			limit -= chunk_count;
+			if (limit <= 0) {
+				break;
+			}
+		}
+
+		gstate.data.Reset();
+		gstate.data.Append(chunk_col);
+	}
+
 	if (state.chunk_idx >= gstate.data.ChunkCount()) {
 		return;
 	}
+
 	chunk.Reference(gstate.data.GetChunk(state.chunk_idx));
 	state.chunk_idx++;
 }
