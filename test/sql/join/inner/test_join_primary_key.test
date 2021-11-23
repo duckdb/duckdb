@@ -81,6 +81,24 @@ SELECT a, string1.b, c FROM string1, string2 WHERE string1.b = string2.b ORDER B
 13	2	20
 13	3	30
 
+# Multiple key matches
+query II
+select * from (
+	(select [1,2,3] a from range(3))) tbl(i)
+	join
+	((select [1,2,3] a from range(3))) tbl2(j)
+	on (i=j);
+----
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+[1, 2, 3]	[1, 2, 3]
+
 #statement ok
 #PRAGMA disable_profiling
 #
