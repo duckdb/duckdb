@@ -34,7 +34,7 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 }
 
 unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
-                                             LogicalType type, Value &delimiter_value) {
+                                             const LogicalType& type, Value &delimiter_value) {
 	auto new_binder = Binder::CreateBinder(context, this, true);
 	ExpressionBinder expr_binder(*new_binder, context);
 	expr_binder.target_type = type;
