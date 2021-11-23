@@ -34,7 +34,6 @@ string WindowsUtil::WindowsUnicodeToUTF8(LPCWSTR input) {
 	return string(buffer.get(), result_size - 1);
 }
 
-
 #endif
 
-}
+} // namespace duckdb

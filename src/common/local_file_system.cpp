@@ -492,8 +492,8 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
 	auto unicode_path = WindowsUtil::WindowsUTF8ToUnicode(path.c_str());
-	HANDLE hFile =
-	    CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
+	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
+	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);

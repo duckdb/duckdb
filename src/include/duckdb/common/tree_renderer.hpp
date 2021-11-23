@@ -61,13 +61,13 @@ struct TreeRendererConfig {
 	const char *LDCORNER = "\342\224\224"; // "└";
 	const char *RDCORNER = "\342\224\230"; // "┘";
 
-	const char *MIDDLE = "\342\224\274"; // "┼";
+	const char *MIDDLE = "\342\224\274";  // "┼";
 	const char *TMIDDLE = "\342\224\254"; // "┬";
 	const char *LMIDDLE = "\342\224\234"; // "├";
 	const char *RMIDDLE = "\342\224\244"; // "┤";
 	const char *DMIDDLE = "\342\224\264"; // "┴";
 
-	const char *VERTICAL = "\342\224\202"; // "│";
+	const char *VERTICAL = "\342\224\202";   // "│";
 	const char *HORIZONTAL = "\342\224\200"; // "─";
 #else
 	// ASCII version
