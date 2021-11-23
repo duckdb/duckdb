@@ -13,32 +13,14 @@ namespace duckdb {
 class LimitGlobalState : public GlobalSinkState {
 public:
 	explicit LimitGlobalState(const PhysicalLimit &op) : current_offset(0) {
-		if (!op.limit_expression) {
-			this->limit = op.limit_value;
-			is_limit_delimited = true;
-
-			this->limit_percent = op.limit_percent;
-			is_limit_percent_delimited = true;
-		}
-
-		this->is_limit_percent = op.is_limit_percent;
-
-		if (!op.offset_expression) {
-			this->offset = op.offset_value;
-			is_offset_delimited = true;
-		}
+		this->limit = op.limit_expression ? INVALID_INDEX : op.limit_value;
+		this->offset = op.offset_expression ? INVALID_INDEX : op.offset_value;
 	}
 
 	idx_t current_offset;
 	idx_t limit;
-	bool is_limit_percent;
-	double limit_percent;
 	idx_t offset;
 	ChunkCollection data;
-
-	bool is_limit_delimited = false;
-	bool is_limit_percent_delimited = false;
-	bool is_offset_delimited = false;
 };
 
 uint64_t GetDelimiter(DataChunk &input, Expression *expr, uint64_t original_value) {
@@ -60,28 +42,6 @@ uint64_t GetDelimiter(DataChunk &input, Expression *expr, uint64_t original_valu
 	return limit_value.value_.ubigint;
 }
 
-double GetDelimiter(DataChunk &input, Expression *expr, double original_value) {
-	if (!expr) {
-		return original_value;
-	}
-	DataChunk limit_chunk;
-	vector<LogicalType> types {expr->return_type};
-	limit_chunk.Initialize(types);
-	ExpressionExecutor limit_executor(expr);
-	auto input_size = input.size();
-	input.SetCardinality(1);
-	limit_executor.Execute(input, limit_chunk);
-	input.SetCardinality(input_size);
-	auto limit_value = limit_chunk.GetValue(0, 0);
-	if (limit_value.is_null) {
-		return original_value;
-	}
-	if (limit_value.value_.double_ < 0.0) {
-		throw BinderException("Percentage value(%f) can't be negative", limit_value.value_.double_);
-	}
-	return limit_value.value_.double_;
-}
-
 unique_ptr<GlobalSinkState> PhysicalLimit::GetGlobalSinkState(ClientContext &context) const {
 	return make_unique<LimitGlobalState>(*this);
 }
@@ -91,8 +51,6 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	D_ASSERT(input.size() > 0);
 	auto &state = (LimitGlobalState &)gstate;
 	auto &limit = state.limit;
-	auto &is_limit_percent = state.is_limit_percent;
-	auto &limit_percent = state.limit_percent;
 	auto &offset = state.offset;
 
 	if (limit != INVALID_INDEX && offset != INVALID_INDEX) {
@@ -103,27 +61,13 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	}
 
 	// get the next chunk from the child
-	if (!state.is_limit_delimited) {
-		if (!is_limit_percent) {
-			limit = GetDelimiter(input, limit_expression.get(), (idx_t)(1ULL << 62ULL));
-		}
-		state.is_limit_delimited = true;
+	if (limit == INVALID_INDEX) {
+		limit = GetDelimiter(input, limit_expression.get(), 1ULL << 62ULL);
 	}
-	if (is_limit_percent && !state.is_limit_percent_delimited) {
-		limit_percent = GetDelimiter(input, limit_expression.get(), 100.0);
-		state.is_limit_percent_delimited = true;
-	}
-	if (is_limit_percent && state.is_limit_percent_delimited && limit_count != INVALID_INDEX) {
-		limit = MinValue((idx_t)(limit_percent / 100 * limit_count), limit_count);
-	}
-	if (!state.is_offset_delimited) {
-		offset = GetDelimiter(input, offset_expression.get(), (idx_t)0);
-		state.is_offset_delimited = true;
+	if (offset == INVALID_INDEX) {
+		offset = GetDelimiter(input, offset_expression.get(), 0);
 	}
 	idx_t max_element = limit + offset;
-	if (limit == INVALID_INDEX) {
-		max_element = INVALID_INDEX;
-	}
 	idx_t input_size = input.size();
 	if (limit == 0 || state.current_offset >= max_element) {
 		return SinkResultType::FINISHED;

@@ -1,4 +1,4 @@
-#include "duckdb/execution/operator/helper/physical_limit.hpp"
+#include "duckdb/execution/operator/helper/physical_limit_percent.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_limit_percent.hpp"
 
@@ -9,8 +9,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalLimitPerce
 
 	auto plan = CreatePlan(*op.children[0]);
 
-	auto limit = make_unique<PhysicalLimit>(op.types, op.limit_percent, op.offset_val, move(op.limit), move(op.offset),
-	                                        op.estimated_cardinality);
+	auto limit = make_unique<PhysicalLimitPercent>(op.types, op.limit_percent, op.offset_val, move(op.limit),
+	                                               move(op.offset), op.estimated_cardinality);
 	limit->children.push_back(move(plan));
 	return move(limit);
 }

@@ -14,14 +14,6 @@ PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> o
                            idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::TOP_N, move(types), estimated_cardinality), orders(move(orders)),
       limit(limit), offset(offset) {
-	is_limit_percent = false;
-}
-
-PhysicalTopN::PhysicalTopN(vector<LogicalType> types, vector<BoundOrderByNode> orders, double limit_percent,
-                           idx_t offset, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::TOP_N, move(types), estimated_cardinality), orders(move(orders)),
-      limit_percent(limit_percent), offset(offset) {
-	is_limit_percent = true;
 }
 
 //===--------------------------------------------------------------------===//
@@ -268,9 +260,6 @@ void TopNHeap::Finalize() {
 }
 
 void TopNHeap::Reduce() {
-	if (limit == NumericLimits<idx_t>::Maximum()) {
-		return;
-	}
 	idx_t min_sort_threshold = MaxValue<idx_t>(STANDARD_VECTOR_SIZE * 5, 2 * (limit + offset));
 	if (sort_state.count < min_sort_threshold) {
 		// only reduce when we pass two times the limit + offset, or 5 vectors (whichever comes first)
@@ -445,11 +434,6 @@ void PhysicalTopN::Combine(ExecutionContext &context, GlobalSinkState &state, Lo
 	auto &gstate = (TopNGlobalState &)state;
 	auto &lstate = (TopNLocalState &)lstate_p;
 
-	// set limit value
-	if (limit_count != INVALID_INDEX) {
-		gstate.heap.limit = MinValue((idx_t)(limit_percent / 100 * limit_count), limit_count);
-	}
-
 	// scan the local top N and append it to the global heap
 	lock_guard<mutex> glock(gstate.lock);
 	gstate.heap.Combine(lstate.heap);
@@ -496,11 +480,7 @@ void PhysicalTopN::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSo
 
 string PhysicalTopN::ParamsToString() const {
 	string result;
-	if (is_limit_percent) {
-		result += "Top " + to_string(limit_percent) + "%";
-	} else {
-		result += "Top " + to_string(limit);
-	}
+	result += "Top " + to_string(limit);
 	if (offset > 0) {
 		result += "\n";
 		result += "Offset " + to_string(offset);

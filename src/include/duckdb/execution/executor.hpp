@@ -50,7 +50,7 @@ public:
 
 	unique_ptr<DataChunk> FetchChunk();
 	idx_t CountChunk();
-	//! Calculate limit value for PhysicalLimit and PhysicalTopN
+	//! Calculate limit value for PhysicalLimitPercent
 	idx_t CalculateCount(PhysicalOperator *plan);
 	void PreprocessPlan(PhysicalOperator *op);
 

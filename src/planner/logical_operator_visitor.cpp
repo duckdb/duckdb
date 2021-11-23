@@ -43,13 +43,6 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_TOP_N_PERCENT: {
-		auto &order = (LogicalTopNPercent &)op;
-		for (auto &node : order.orders) {
-			callback(&node.expression);
-		}
-		break;
-	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		auto &distinct = (LogicalDistinct &)op;
 		for (auto &target : distinct.distinct_targets) {
@@ -91,6 +84,9 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		auto &limit = (LogicalLimitPercent &)op;
 		if (limit.limit) {
 			callback(&limit.limit);
+		}
+		if (limit.offset) {
+			callback(&limit.offset);
 		}
 		break;
 	}
