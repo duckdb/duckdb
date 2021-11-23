@@ -52,6 +52,7 @@ bool Printer::IsTerminal() {
 	throw InternalException("IsTerminal is only implemented for Windows");
 #endif
 #endif
+	return false;
 }
 // LCOV_EXCL_STOP
 
