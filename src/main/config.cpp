@@ -97,6 +97,11 @@ void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) 
 	option.set_global(nullptr, *this, input);
 }
 
+void DBConfig::AddExtensionOption(string name, string description, LogicalType parameter,
+                                  set_option_callback_t function) {
+	extension_parameters.insert(make_pair(move(name), ExtensionOption(move(description), move(parameter), function)));
+}
+
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	if (arg[0] == '-' || arg == "null" || arg == "none") {
 		return DConstants::INVALID_INDEX;

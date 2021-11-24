@@ -21,14 +21,11 @@ class TableCatalogEntry;
 class Connection;
 
 //! The Appender class can be used to append elements to a table.
-class Appender {
+class BaseAppender {
+protected:
 	//! The amount of chunks that will be gathered in the chunk collection before flushing
 	static constexpr const idx_t FLUSH_COUNT = 100;
 
-	//! A reference to a database connection that created this appender
-	shared_ptr<ClientContext> context;
-	//! The table description (including column names)
-	unique_ptr<TableDescription> description;
 	//! The append types
 	vector<LogicalType> types;
 	//! The buffered data for the append
@@ -39,9 +36,9 @@ class Appender {
 	idx_t column = 0;
 
 public:
-	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
-	DUCKDB_API Appender(Connection &con, const string &table_name);
-	DUCKDB_API ~Appender();
+	DUCKDB_API BaseAppender();
+	DUCKDB_API BaseAppender(vector<LogicalType> types);
+	DUCKDB_API virtual ~BaseAppender();
 
 	//! Begins a new row append, after calling this the other AppendX() functions
 	//! should be called the correct amount of times. After that,
@@ -77,7 +74,8 @@ public:
 		return column;
 	}
 
-private:
+protected:
+	virtual void FlushInternal(ChunkCollection &collection) = 0;
 	void InitializeChunk();
 	void FlushChunk();
 
@@ -99,45 +97,72 @@ private:
 	void AppendValue(const Value &value);
 };
 
+class Appender : public BaseAppender {
+	//! A reference to a database connection that created this appender
+	shared_ptr<ClientContext> context;
+	//! The table description (including column names)
+	unique_ptr<TableDescription> description;
+
+public:
+	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
+	DUCKDB_API Appender(Connection &con, const string &table_name);
+
+protected:
+	void FlushInternal(ChunkCollection &collection) override;
+};
+
+class InternalAppender : public BaseAppender {
+	//! The client context
+	ClientContext &context;
+	//! The internal table entry to append to
+	TableCatalogEntry &table;
+
+public:
+	DUCKDB_API InternalAppender(ClientContext &context, TableCatalogEntry &table);
+
+protected:
+	void FlushInternal(ChunkCollection &collection) override;
+};
+
 template <>
-void DUCKDB_API Appender::Append(bool value);
+DUCKDB_API void BaseAppender::Append(bool value);
 template <>
-void DUCKDB_API Appender::Append(int8_t value);
+DUCKDB_API void BaseAppender::Append(int8_t value);
 template <>
-void DUCKDB_API Appender::Append(int16_t value);
+DUCKDB_API void BaseAppender::Append(int16_t value);
 template <>
-void DUCKDB_API Appender::Append(int32_t value);
+DUCKDB_API void BaseAppender::Append(int32_t value);
 template <>
-void DUCKDB_API Appender::Append(int64_t value);
+DUCKDB_API void BaseAppender::Append(int64_t value);
 template <>
-void DUCKDB_API Appender::Append(hugeint_t value);
+DUCKDB_API void BaseAppender::Append(hugeint_t value);
 template <>
-void DUCKDB_API Appender::Append(uint8_t value);
+DUCKDB_API void BaseAppender::Append(uint8_t value);
 template <>
-void DUCKDB_API Appender::Append(uint16_t value);
+DUCKDB_API void BaseAppender::Append(uint16_t value);
 template <>
-void DUCKDB_API Appender::Append(uint32_t value);
+DUCKDB_API void BaseAppender::Append(uint32_t value);
 template <>
-void DUCKDB_API Appender::Append(uint64_t value);
+DUCKDB_API void BaseAppender::Append(uint64_t value);
 template <>
-void DUCKDB_API Appender::Append(float value);
+DUCKDB_API void BaseAppender::Append(float value);
 template <>
-void DUCKDB_API Appender::Append(double value);
+DUCKDB_API void BaseAppender::Append(double value);
 template <>
-void DUCKDB_API Appender::Append(date_t value);
+DUCKDB_API void BaseAppender::Append(date_t value);
 template <>
-void DUCKDB_API Appender::Append(dtime_t value);
+DUCKDB_API void BaseAppender::Append(dtime_t value);
 template <>
-void DUCKDB_API Appender::Append(timestamp_t value);
+DUCKDB_API void BaseAppender::Append(timestamp_t value);
 template <>
-void DUCKDB_API Appender::Append(interval_t value);
+DUCKDB_API void BaseAppender::Append(interval_t value);
 template <>
-void DUCKDB_API Appender::Append(const char *value);
+DUCKDB_API void BaseAppender::Append(const char *value);
 template <>
-void DUCKDB_API Appender::Append(string_t value);
+DUCKDB_API void BaseAppender::Append(string_t value);
 template <>
-void DUCKDB_API Appender::Append(Value value);
+DUCKDB_API void BaseAppender::Append(Value value);
 template <>
-void DUCKDB_API Appender::Append(std::nullptr_t value);
+DUCKDB_API void BaseAppender::Append(std::nullptr_t value);
 
 } // namespace duckdb

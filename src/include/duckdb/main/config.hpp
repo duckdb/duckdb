@@ -129,11 +129,8 @@ public:
 	//! Database configuration variables as controlled by SET
 	case_insensitive_map_t<Value> set_variables;
 
-	void AddExtensionOption(string name, string description, LogicalType parameter,
-	                        set_option_callback_t function = nullptr) {
-		extension_parameters.insert(
-		    make_pair(move(name), ExtensionOption(move(description), move(parameter), function)));
-	}
+	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
+	                                   set_option_callback_t function = nullptr);
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
