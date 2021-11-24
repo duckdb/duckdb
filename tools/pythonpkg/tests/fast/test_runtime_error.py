@@ -1,4 +1,5 @@
 import duckdb
+import pytest
 
 class TestRuntimeError(object):
     def test_fetch_error(self, duckdb_cursor):
@@ -34,3 +35,9 @@ class TestRuntimeError(object):
         except:
             raised_error = True
         assert raised_error == True
+
+    def test_register_error(self, duckdb_cursor):
+        con = duckdb.connect()
+        py_obj = "this is a string"
+        with pytest.raises(Exception):
+            con.register(py_obj, "v")
