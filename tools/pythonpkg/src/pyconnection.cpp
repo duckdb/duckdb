@@ -167,7 +167,8 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		// keep a reference
 		auto object = make_unique<RegisteredObject>(python_object);
 		registered_objects[name] = move(object);
-	} else if (py_object_type == "Table" || py_object_type == "FileSystemDataset") {
+	} else if (py_object_type == "Table" || py_object_type == "FileSystemDataset" ||
+	           py_object_type == "InMemoryDataset") {
 		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr());
 
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
@@ -412,7 +413,8 @@ TryReplacement(py::dict &dict, py::str &table_name,
 		// keep a reference
 		auto object = make_unique<RegisteredObject>(entry);
 		registered_objects[name] = move(object);
-	} else if (py_object_type == "Table" || py_object_type == "FileSystemDataset") {
+	} else if (py_object_type == "Table" || py_object_type == "FileSystemDataset" ||
+	           py_object_type == "InMemoryDataset") {
 		string name = "arrow_" + GenerateRandomName();
 		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(entry.ptr());
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
