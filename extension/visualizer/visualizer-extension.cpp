@@ -114,8 +114,8 @@ void VisualizerExtension::Load(DuckDB &db) {
 	con.BeginTransaction();
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
-	auto vis_last_profiler_out_func = PragmaFunction::PragmaAssignment(
-	    "visualize_last_profiling_output", PragmaVisualizeLastProfilingOutput, LogicalType::VARCHAR);
+	auto vis_last_profiler_out_func = PragmaFunction::PragmaCall(
+	    "visualize_last_profiling_output", PragmaVisualizeLastProfilingOutput, {LogicalType::VARCHAR});
 	CreatePragmaFunctionInfo vis_last_profiler_out_info(vis_last_profiler_out_func);
 	catalog.CreatePragmaFunction(*con.context, &vis_last_profiler_out_info);
 

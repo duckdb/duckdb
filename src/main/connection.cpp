@@ -47,15 +47,15 @@ void Connection::DisableProfiling() {
 }
 
 void Connection::EnableQueryVerification() {
-	context->query_verification_enabled = true;
+	ClientConfig::GetConfig(*context).query_verification_enabled = true;
 }
 
 void Connection::DisableQueryVerification() {
-	context->query_verification_enabled = false;
+	ClientConfig::GetConfig(*context).query_verification_enabled = false;
 }
 
 void Connection::ForceParallelism() {
-	context->verify_parallelism = true;
+	ClientConfig::GetConfig(*context).verify_parallelism = true;
 }
 
 unique_ptr<QueryResult> Connection::SendQuery(const string &query) {

@@ -26,9 +26,6 @@ typedef void (*pragma_function_t)(ClientContext &context, const FunctionParamete
 //!   -> call statements can take multiple parameters
 //! * Statement: statement without parameters, e.g. PRAGMA show_tables
 //!   -> this is similar to a call pragma but without parameters
-//! * Assignment: value assignment, e.g. PRAGMA memory_limit='8GB'
-//!   -> assignments take a single parameter
-//!   -> assignments can also be called through SET memory_limit='8GB'
 //! Pragma functions can either return a new query to execute (pragma_query_t)
 //! or they can
 class PragmaFunction : public SimpleNamedParameterFunction {
@@ -41,9 +38,6 @@ public:
 	// Statement
 	static PragmaFunction PragmaStatement(const string &name, pragma_query_t query);
 	static PragmaFunction PragmaStatement(const string &name, pragma_function_t function);
-	// Assignment
-	static PragmaFunction PragmaAssignment(const string &name, pragma_query_t query, LogicalType type);
-	static PragmaFunction PragmaAssignment(const string &name, pragma_function_t function, LogicalType type);
 
 	string ToString() override;
 
