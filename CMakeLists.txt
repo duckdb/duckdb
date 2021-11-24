@@ -540,15 +540,18 @@ function(link_threads LIBRARY)
   endif()
 endfunction()
 
-function(build_loadable_extension NAME)
+function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   #  skip building extensions on mingw because its weird
   if(WIN32 AND NOT MSVC)
     return()
   endif()
 
-  # all parameters after name
   set(TARGET_NAME ${NAME}_loadable_extension)
+  # all parameters after output_directory
   set(FILES ${ARGV})
+  # remove name
+  list(REMOVE_AT FILES 0)
+  # remove output_directory
   list(REMOVE_AT FILES 0)
 
   add_library(${TARGET_NAME} SHARED ${FILES})
@@ -562,10 +565,10 @@ function(build_loadable_extension NAME)
   if(MSVC)
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
-            ${CMAKE_BINARY_DIR}/extension/${NAME})
+            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
     set_target_properties(
             ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
-            ${CMAKE_BINARY_DIR}/extension/${NAME})
+            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
   endif()
 
   if(WIN32)
@@ -577,6 +580,13 @@ function(build_loadable_extension NAME)
 
 endfunction()
 
+function(build_loadable_extension NAME)
+  # all parameters after name
+  set(FILES ${ARGV})
+  list(REMOVE_AT FILES 0)
+
+  build_loadable_extension_directory(${NAME} extension/${NAME} ${FILES})
+endfunction()
 
 if(${EXPORT_DLL_SYMBOLS})
   # For Windows DLL export symbols
