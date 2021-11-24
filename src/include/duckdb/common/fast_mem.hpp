@@ -26,6 +26,7 @@ namespace duckdb {
 //! but only when you are calling memcpy with a const size in a loop.
 //! For instance `while (<cond>) { memcpy(<dest>, <src>, const_size); ... }`
 static inline void FastMemcpy(void *dest, const void *src, const size_t size) {
+	// LCOV_EXCL_START
 	switch (size) {
 	case 0:
 		return;
@@ -544,12 +545,14 @@ static inline void FastMemcpy(void *dest, const void *src, const size_t size) {
 	default:
 		memcpy(dest, src, size);
 	}
+	// LCOV_EXCL_STOP
 }
 
 //! This templated memcmp is significantly faster than std::memcmp,
 //! but only when you are calling memcmp with a const size in a loop.
 //! For instance `while (<cond>) { memcmp(<str1>, <str2>, const_size); ... }`
 static inline int FastMemcmp(const void *str1, const void *str2, const size_t size) {
+	// LCOV_EXCL_START
 	switch (size) {
 	case 0:
 		return 0;
@@ -684,6 +687,7 @@ static inline int FastMemcmp(const void *str1, const void *str2, const size_t si
 	default:
 		return memcmp(str1, str2, size);
 	}
+	// LCOV_EXCL_STOP
 }
 
 } // namespace duckdb
