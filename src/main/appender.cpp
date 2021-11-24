@@ -21,7 +21,8 @@ BaseAppender::BaseAppender(vector<LogicalType> types_p) : types(move(types_p)), 
 	InitializeChunk();
 }
 
-BaseAppender::~BaseAppender() {}
+BaseAppender::~BaseAppender() {
+}
 
 void BaseAppender::Destructor() {
 	if (std::uncaught_exception()) {

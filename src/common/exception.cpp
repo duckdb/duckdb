@@ -95,7 +95,7 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
-StandardException::StandardException(ExceptionType exception_type, string message)
+StandardException::StandardException(ExceptionType exception_type, const string &message)
     : Exception(exception_type, message) {
 }
 
