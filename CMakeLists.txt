@@ -573,6 +573,10 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
 
   if(WIN32)
     set_target_properties(${TARGET_NAME}
+            PROPERTIES LINK_FLAGS_DEBUG "/DELAYLOAD:duckdb.dll")
+    set(CMAKE_EXE_LINKER_FLAGS_DEBUG
+            "${CMAKE_EXE_LINKER_FLAGS_DEBUG}  /DELAYLOAD:duckdb.dll")
+    set_target_properties(${TARGET_NAME}
             PROPERTIES LINK_FLAGS_RELEASE "/DELAYLOAD:duckdb.dll")
     set(CMAKE_EXE_LINKER_FLAGS_RELEASE
             "${CMAKE_EXE_LINKER_FLAGS_RELEASE}  /DELAYLOAD:duckdb.dll")

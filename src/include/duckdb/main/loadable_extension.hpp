@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/main/loadable_extension.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
@@ -10,7 +18,7 @@ extern "C" {
 This is interesting: Windows would normally require a duckdb.dll being on the DLL search path when we load an extension
 using LoadLibrary(). However, there is likely no such dll, because DuckDB was statically linked, or is running as part
 of an R or Python module with a completely different name (that we don't know) or something of the sorts. Amazingly,
-Windows supports lazy-loading DLLs by linking them with /DELAYLOAD. Then a callback will be triggerd whenever we access
+Windows supports lazy-loading DLLs by linking them with /DELAYLOAD. Then a callback will be triggered whenever we access
 symbols in the extension. Since DuckDB is already running in the host process (hopefully), we can use
 GetModuleHandle(NULL) to return the current process so the symbols are looked for there. See here for another
 explanation of this crazy process:
