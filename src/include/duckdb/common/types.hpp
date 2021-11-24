@@ -12,7 +12,6 @@
 #include "duckdb/common/constants.hpp"
 #include "duckdb/common/single_thread_ptr.hpp"
 #include "duckdb/common/vector.hpp"
-#include "duckdb/common/winapi.hpp"
 
 
 namespace duckdb {
@@ -372,42 +371,38 @@ struct LogicalType {
 	DUCKDB_API LogicalType();
 	DUCKDB_API LogicalType(LogicalTypeId id); // NOLINT: Allow implicit conversion from `LogicalTypeId`
 	DUCKDB_API LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info);
-
-	DUCKDB_API LogicalType(const LogicalType &other) :
-		id_(other.id_), physical_type_(other.physical_type_), type_info_(other.type_info_) {}
-
-	DUCKDB_API LogicalType(LogicalType &&other) :
-		id_(other.id_), physical_type_(other.physical_type_), type_info_(move(other.type_info_)) {}
+	DUCKDB_API LogicalType(const LogicalType &other);
+	DUCKDB_API LogicalType(LogicalType &&other);
 
 	DUCKDB_API ~LogicalType();
 
-	LogicalTypeId id() const {
+	inline LogicalTypeId id() const {
 		return id_;
 	}
-	PhysicalType InternalType() const {
+	inline PhysicalType InternalType() const {
 		return physical_type_;
 	}
-	const ExtraTypeInfo *AuxInfo() const {
+	inline const ExtraTypeInfo *AuxInfo() const {
 		return type_info_.get();
 	}
 
 	// copy assignment
-	LogicalType& operator=(const LogicalType &other) {
+	inline LogicalType& operator=(const LogicalType &other) {
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
 		type_info_ = other.type_info_;
 		return *this;
 	}
 	// move assignment
-	LogicalType& operator=(LogicalType&& other) {
+	inline LogicalType& operator=(LogicalType&& other) {
 		id_ = other.id_;
 		physical_type_ = other.physical_type_;
 		type_info_ = move(other.type_info_);
 		return *this;
 	}
 
-	bool operator==(const LogicalType &rhs) const;
-	bool operator!=(const LogicalType &rhs) const {
+	DUCKDB_API bool operator==(const LogicalType &rhs) const;
+	inline bool operator!=(const LogicalType &rhs) const {
 		return !(*this == rhs);
 	}
 

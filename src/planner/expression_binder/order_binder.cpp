@@ -81,7 +81,7 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// first check if the ORDER BY clause already points to an entry in the projection list
 	auto entry = projection_map.find(expr.get());
 	if (entry != projection_map.end()) {
-		if (entry->second == INVALID_INDEX) {
+		if (entry->second == DConstants::INVALID_INDEX) {
 			throw BinderException("Ambiguous reference to column");
 		}
 		// there is a matching entry in the projection list

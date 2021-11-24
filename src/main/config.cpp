@@ -99,7 +99,7 @@ void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) 
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	if (arg[0] == '-' || arg == "null" || arg == "none") {
-		return INVALID_INDEX;
+		return DConstants::INVALID_INDEX;
 	}
 	// split based on the number/non-number
 	idx_t idx = 0;

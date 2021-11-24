@@ -21,14 +21,13 @@ struct ParallelState;
 class TableFilterSet;
 
 struct FunctionOperatorData {
-	DUCKDB_API virtual ~FunctionOperatorData() {
-	}
+	DUCKDB_API virtual ~FunctionOperatorData();
 };
 
 struct TableFilterCollection {
+	DUCKDB_API explicit TableFilterCollection(TableFilterSet *table_filters);
+
 	TableFilterSet *table_filters;
-	DUCKDB_API explicit TableFilterCollection(TableFilterSet *table_filters) : table_filters(table_filters) {
-	}
 };
 
 typedef unique_ptr<FunctionData> (*table_function_bind_t)(ClientContext &context, vector<Value> &inputs,
@@ -83,14 +82,7 @@ public:
 	              table_function_parallel_t parallel_function = nullptr,
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
-	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr)
-	    : SimpleNamedParameterFunction(std::move(name), move(arguments)), bind(bind), init(init), function(function),
-	      statistics(statistics), cleanup(cleanup), dependency(dependency), cardinality(cardinality),
-	      pushdown_complex_filter(pushdown_complex_filter), to_string(to_string), max_threads(max_threads),
-	      init_parallel_state(init_parallel_state), parallel_function(parallel_function), parallel_init(parallel_init),
-	      parallel_state_next(parallel_state_next), table_scan_progress(query_progress),
-	      projection_pushdown(projection_pushdown), filter_pushdown(filter_pushdown) {
-	}
+	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr);
 	DUCKDB_API TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_t init = nullptr, table_statistics_t statistics = nullptr,
 	              table_function_cleanup_t cleanup = nullptr, table_function_dependency_t dependency = nullptr,
@@ -101,13 +93,8 @@ public:
 	              table_function_parallel_t parallel_function = nullptr,
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
-	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr)
-	    : TableFunction(string(), arguments, function, bind, init, statistics, cleanup, dependency, cardinality,
-	                    pushdown_complex_filter, to_string, max_threads, init_parallel_state, parallel_function,
-	                    parallel_init, parallel_state_next, projection_pushdown, filter_pushdown, query_progress) {
-	}
-	DUCKDB_API TableFunction() : SimpleNamedParameterFunction("", {}) {
-	}
+	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr);
+	DUCKDB_API TableFunction();
 
 	//! Bind function
 	//! This function is used for determining the return type of a table producing function and returning bind data
@@ -155,10 +142,6 @@ public:
 	//! Whether or not the table function supports filter pushdown. If not supported a filter will be added
 	//! that applies the table filter directly.
 	bool filter_pushdown;
-
-	DUCKDB_API string ToString() override {
-		return SimpleNamedParameterFunction::ToString();
-	}
 };
 
 } // namespace duckdb

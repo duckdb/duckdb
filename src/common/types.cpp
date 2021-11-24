@@ -27,6 +27,13 @@ LogicalType::LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info_p
 	physical_type_ = GetInternalType();
 }
 
+LogicalType::LogicalType(const LogicalType &other) :
+	id_(other.id_), physical_type_(other.physical_type_), type_info_(other.type_info_) {}
+
+LogicalType::LogicalType(LogicalType &&other) :
+	id_(other.id_), physical_type_(other.physical_type_), type_info_(move(other.type_info_)) {}
+
+
 hash_t LogicalType::Hash() const {
 	return duckdb::Hash<uint8_t>((uint8_t)id_);
 }

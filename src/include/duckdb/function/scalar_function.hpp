@@ -38,19 +38,13 @@ public:
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
 	               dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
 	               init_local_state_t init_local_state = nullptr,
-	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
-	    : BaseScalarFunction(name, arguments, return_type, has_side_effects, varargs), function(function), bind(bind),
-	      init_local_state(init_local_state), dependency(dependency), statistics(statistics) {
-	}
+	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 
 	DUCKDB_API ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
 	               bool has_side_effects = false, bind_scalar_function_t bind = nullptr,
 	               dependency_function_t dependency = nullptr, function_statistics_t statistics = nullptr,
 	               init_local_state_t init_local_state = nullptr,
-	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID))
-	    : ScalarFunction(string(), arguments, return_type, function, has_side_effects, bind, dependency, statistics,
-	                     init_local_state, varargs) {
-	}
+	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 
 	//! The main scalar function to execute
 	scalar_function_t function;
@@ -76,60 +70,16 @@ public:
 	                                                              vector<unique_ptr<Expression>> children,
 	                                                              bool is_operator = false);
 
-	DUCKDB_API bool operator==(const ScalarFunction &rhs) const {
-		return CompareScalarFunctionT(rhs.function) && bind == rhs.bind && dependency == rhs.dependency &&
-		       statistics == rhs.statistics;
-	}
-	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const {
-		return !(*this == rhs);
-	}
+	DUCKDB_API bool operator==(const ScalarFunction &rhs) const;
+	DUCKDB_API bool operator!=(const ScalarFunction &rhs) const;
 
-	DUCKDB_API bool Equal(const ScalarFunction &rhs) const {
-		// number of types
-		if (this->arguments.size() != rhs.arguments.size()) {
-			return false;
-		}
-		// argument types
-		for (idx_t i = 0; i < this->arguments.size(); ++i) {
-			if (this->arguments[i] != rhs.arguments[i]) {
-				return false;
-			}
-		}
-		// return type
-		if (this->return_type != rhs.return_type) {
-			return false;
-		}
-		// varargs
-		if (this->varargs != rhs.varargs) {
-			return false;
-		}
-
-		return true; // they are equal
-	}
+	DUCKDB_API bool Equal(const ScalarFunction &rhs) const;
 
 private:
-	bool CompareScalarFunctionT(const scalar_function_t other) const {
-		typedef void(scalar_function_ptr_t)(DataChunk &, ExpressionState &, Vector &);
-
-		auto func_ptr = (scalar_function_ptr_t **)function.template target<scalar_function_ptr_t *>();
-		auto other_ptr = (scalar_function_ptr_t **)other.template target<scalar_function_ptr_t *>();
-
-		// Case the functions were created from lambdas the target will return a nullptr
-		if (!func_ptr && !other_ptr) {
-			return true;
-		}
-		if (func_ptr == nullptr || other_ptr == nullptr) {
-			// scalar_function_t (std::functions) from lambdas cannot be compared
-			return false;
-		}
-		return ((size_t)*func_ptr == (size_t)*other_ptr);
-	}
+	bool CompareScalarFunctionT(const scalar_function_t other) const;
 
 public:
-	DUCKDB_API static void NopFunction(DataChunk &input, ExpressionState &state, Vector &result) {
-		D_ASSERT(input.ColumnCount() >= 1);
-		result.Reference(input.data[0]);
-	}
+	DUCKDB_API static void NopFunction(DataChunk &input, ExpressionState &state, Vector &result);
 
 	template <class TA, class TR, class OP>
 	static void UnaryFunction(DataChunk &input, ExpressionState &state, Vector &result) {

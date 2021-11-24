@@ -195,7 +195,7 @@ BindResult SelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		// bind the aggregate
 		string error;
 		auto best_function = Function::BindFunction(func->name, func->functions, types, error);
-		if (best_function == INVALID_INDEX) {
+		if (best_function == DConstants::INVALID_INDEX) {
 			throw BinderException(binder.FormatError(window, error));
 		}
 		// found a matching function! bind it as an aggregate

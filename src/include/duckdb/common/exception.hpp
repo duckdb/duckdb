@@ -114,13 +114,12 @@ private:
 //! Exceptions that are StandardExceptions do NOT invalidate the current transaction when thrown
 class StandardException : public Exception {
 public:
-	StandardException(ExceptionType exception_type, string message) : Exception(exception_type, message) {
-	}
+	DUCKDB_API StandardException(ExceptionType exception_type, string message);
 };
 
 class CatalogException : public StandardException {
 public:
-	explicit CatalogException(const string &msg);
+	DUCKDB_API explicit CatalogException(const string &msg);
 
 	template <typename... Args>
 	explicit CatalogException(const string &msg, Args... params) : CatalogException(ConstructMessage(msg, params...)) {
@@ -129,7 +128,7 @@ public:
 
 class ParserException : public StandardException {
 public:
-	explicit ParserException(const string &msg);
+	DUCKDB_API explicit ParserException(const string &msg);
 
 	template <typename... Args>
 	explicit ParserException(const string &msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
@@ -138,7 +137,7 @@ public:
 
 class BinderException : public StandardException {
 public:
-	explicit BinderException(const string &msg);
+	DUCKDB_API explicit BinderException(const string &msg);
 
 	template <typename... Args>
 	explicit BinderException(const string &msg, Args... params) : BinderException(ConstructMessage(msg, params...)) {

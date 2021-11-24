@@ -18,6 +18,7 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
+  extension.cpp
   materialized_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp

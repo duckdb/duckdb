@@ -15,14 +15,14 @@ unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, v
 	auto table_filter_set = make_unique<TableFilterSet>();
 	for (auto &table_filter : table_filters.filters) {
 		// find the relative column index from the absolute column index into the table
-		idx_t column_index = INVALID_INDEX;
+		idx_t column_index = DConstants::INVALID_INDEX;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
 			if (table_filter.first == column_ids[i]) {
 				column_index = i;
 				break;
 			}
 		}
-		if (column_index == INVALID_INDEX) {
+		if (column_index == DConstants::INVALID_INDEX) {
 			throw InternalException("Could not find column index for table filter");
 		}
 		table_filter_set->filters[column_index] = move(table_filter.second);

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/constants.hpp"
+#include "duckdb/common/common.hpp"
 
 namespace duckdb {
 
@@ -16,10 +16,10 @@ namespace duckdb {
 class Printer {
 public:
 	//! Print the object to stderr
-	static void Print(const string &str);
+	DUCKDB_API static void Print(const string &str);
 	//! Prints Progress
-	static void PrintProgress(int percentage, const char *pbstr, int pbwidth);
+	DUCKDB_API static void PrintProgress(int percentage, const char *pbstr, int pbwidth);
 	//! Prints an empty line when progress bar is done
-	static void FinishProgressBarPrint(const char *pbstr, int pbwidth);
+	DUCKDB_API static void FinishProgressBarPrint(const char *pbstr, int pbwidth);
 };
 } // namespace duckdb
