@@ -1,4 +1,4 @@
-# name: test/sql/window/test_window_wide_frame.test_slow
+# name: test/sql/window/test_window_wide_frame.test_coverage
 # description: Test date truncate functionality
 # group: [window]
 
