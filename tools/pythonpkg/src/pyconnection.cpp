@@ -23,7 +23,7 @@
 namespace duckdb {
 
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::default_connection = nullptr;
-
+// LCOV_EXCL_START
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local())
 	    .def("cursor", &DuckDBPyConnection::Cursor, "Create a duplicate of the current connection")
@@ -90,6 +90,8 @@ void DuckDBPyConnection::Initialize(py::handle &m) {
 
 	PyDateTime_IMPORT;
 }
+
+// LCOV_EXCL_STOP
 
 DuckDBPyConnection *DuckDBPyConnection::ExecuteMany(const string &query, py::object params) {
 	Execute(query, std::move(params), true);

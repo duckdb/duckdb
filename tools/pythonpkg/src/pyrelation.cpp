@@ -5,7 +5,7 @@
 #include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
-
+// LCOV_EXCL_START
 void DuckDBPyRelation::Initialize(py::handle &m) {
 	py::class_<DuckDBPyRelation>(m, "DuckDBPyRelation", py::module_local())
 	    .def_property_readonly("type", &DuckDBPyRelation::Type, "Get the type of the relation.")
@@ -62,6 +62,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	    .def("__str__", &DuckDBPyRelation::Print)
 	    .def("__repr__", &DuckDBPyRelation::Print);
 }
+// LCOV_EXCL_STOP
 
 DuckDBPyRelation::DuckDBPyRelation(shared_ptr<Relation> rel) : rel(move(rel)) {
 }

@@ -81,6 +81,7 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      "Create a DuckDB database instance. Can take a database file name to read/write persistent data and a "
 	      "read_only flag if no changes are desired",
 	      py::arg("database") = ":memory:", py::arg("read_only") = false, py::arg("config") = py::dict());
+	m.def("default_connection", &DuckDBPyConnection::DefaultConnection, "Gets DuckDB's Default Connection");
 	m.def("tokenize", PyTokenize,
 	      "Tokenizes a SQL string, returning a list of (position, type) tuples that can be "
 	      "used for e.g. syntax highlighting",

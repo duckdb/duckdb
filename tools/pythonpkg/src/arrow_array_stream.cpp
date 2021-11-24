@@ -118,9 +118,9 @@ py::object GetScalar(Value &constant) {
 		}
 		}
 	}
-	default:
-		throw NotImplementedException("Unimplemented type \"%s\" for Arrow Filter Pushdown",
-		                              constant.type().ToString());
+	default:                                                                                 // LCOV_EXCL_LINE
+		throw NotImplementedException("Unimplemented type \"%s\" for Arrow Filter Pushdown", // LCOV_EXCL_LINE
+		                              constant.type().ToString());                           // LCOV_EXCL_LINE
 	}
 }
 
@@ -148,8 +148,8 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
 			return constant_field.attr("__ge__")(constant_value);
 		}
-		default:
-			throw NotImplementedException("Comparison Type can't be an Arrow Scan Pushdown Filter");
+		default:                                                                                     // LCOV_EXCL_LINE
+			throw NotImplementedException("Comparison Type can't be an Arrow Scan Pushdown Filter"); // LCOV_EXCL_LINE
 		}
 	}
 	//! We do not pushdown is null yet
@@ -187,8 +187,8 @@ py::object TransformFilterRecursive(TableFilter *filter, const string &column_na
 		}
 		return expression;
 	}
-	default:
-		throw NotImplementedException("Pushdown Filter Type not supported in Arrow Scans");
+	default:                                                                                // LCOV_EXCL_LINE
+		throw NotImplementedException("Pushdown Filter Type not supported in Arrow Scans"); // LCOV_EXCL_LINE
 	}
 }
 
