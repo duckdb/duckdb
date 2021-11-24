@@ -206,12 +206,12 @@ std::string TPCDSExtension::Name() {
 } // namespace duckdb
 
 extern "C" {
-void tpcds_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void tpcds_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
 	db_wrapper.LoadExtension<duckdb::TPCDSExtension>();
 }
 
-const char *tpcds_version() {
+DUCKDB_EXTENSION_API const char *tpcds_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 }

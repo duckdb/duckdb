@@ -201,12 +201,12 @@ std::string TPCHExtension::Name() {
 
 extern "C" {
 
-void tpch_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void tpch_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
 	db_wrapper.LoadExtension<duckdb::TPCHExtension>();
 }
 
-const char *tpch_version() {
+DUCKDB_EXTENSION_API const char *tpch_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 }

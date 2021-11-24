@@ -156,12 +156,12 @@ std::string ICUExtension::Name() {
 
 extern "C" {
 
-void icu_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void icu_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
 	db_wrapper.LoadExtension<duckdb::ICUExtension>();
 }
 
-const char *icu_version() {
+DUCKDB_EXTENSION_API const char *icu_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 }

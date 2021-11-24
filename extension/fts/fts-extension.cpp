@@ -81,12 +81,12 @@ std::string FTSExtension::Name() {
 } // namespace duckdb
 
 extern "C" {
-void fts_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void fts_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
 	db_wrapper.LoadExtension<duckdb::FTSExtension>();
 }
 
-const char *fts_version() {
+DUCKDB_EXTENSION_API const char *fts_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 }

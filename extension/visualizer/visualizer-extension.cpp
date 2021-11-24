@@ -140,12 +140,12 @@ std::string VisualizerExtension::Name() {
 } // namespace duckdb
 
 extern "C" {
-void visualizer_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void visualizer_init(duckdb::DatabaseInstance &db) {
 	duckdb::DuckDB db_wrapper(db);
 	db_wrapper.LoadExtension<duckdb::VisualizerExtension>();
 }
 
-const char *visualizer_version() {
+DUCKDB_EXTENSION_API const char *visualizer_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 }

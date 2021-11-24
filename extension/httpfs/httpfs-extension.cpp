@@ -31,11 +31,11 @@ std::string HTTPFsExtension::Name() {
 
 extern "C" {
 
-void httpfs_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void httpfs_init(duckdb::DatabaseInstance &db) {
 	LoadInternal(db);
 }
 
-const char *httpfs_version() {
+DUCKDB_EXTENSION_API const char *httpfs_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 }
