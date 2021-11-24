@@ -1,27 +1,59 @@
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/main/settings.hpp"
 
 namespace duckdb {
 
-static ConfigurationOption internal_options[] = {
-    {ConfigurationOptionType::ACCESS_MODE, "access_mode",
-     "Access mode of the database ([AUTOMATIC], READ_ONLY or READ_WRITE)", LogicalTypeId::VARCHAR},
-    {ConfigurationOptionType::DEFAULT_ORDER_TYPE, "default_order",
-     "The order type used when none is specified ([ASC] or DESC)", LogicalTypeId::VARCHAR},
-    {ConfigurationOptionType::DEFAULT_NULL_ORDER, "default_null_order",
-     "Null ordering used when none is specified ([NULLS_FIRST] or NULLS_LAST)", LogicalTypeId::VARCHAR},
-    {ConfigurationOptionType::ENABLE_EXTERNAL_ACCESS, "enable_external_access",
-     "Allow the database to access external state (through e.g. COPY TO/FROM, CSV readers, pandas replacement scans, "
-     "etc)",
-     LogicalTypeId::BOOLEAN},
-    {ConfigurationOptionType::ENABLE_OBJECT_CACHE, "enable_object_cache",
-     "Whether or not object cache is used to cache e.g. Parquet metadata", LogicalTypeId::BOOLEAN},
-    {ConfigurationOptionType::MAXIMUM_MEMORY, "max_memory", "The maximum memory of the system (e.g. 1GB)",
-     LogicalTypeId::VARCHAR},
-    {ConfigurationOptionType::THREADS, "threads", "The number of total threads used by the system",
-     LogicalTypeId::BIGINT},
-    {ConfigurationOptionType::INVALID, nullptr, nullptr, LogicalTypeId::INVALID}};
+#define DUCKDB_GLOBAL(_PARAM)                                                                                          \
+	{ _PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::GetSetting }
+#define DUCKDB_GLOBAL_ALIAS(_ALIAS, _PARAM)                                                                            \
+	{ _ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, nullptr, _PARAM::GetSetting }
+
+#define DUCKDB_LOCAL(_PARAM)                                                                                           \
+	{ _PARAM::Name, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, _PARAM::GetSetting }
+#define DUCKDB_LOCAL_ALIAS(_ALIAS, _PARAM)                                                                             \
+	{ _ALIAS, _PARAM::Description, _PARAM::InputType, nullptr, _PARAM::SetLocal, _PARAM::GetSetting }
+
+#define DUCKDB_GLOBAL_LOCAL(_PARAM)                                                                                    \
+	{ _PARAM::Name, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal, _PARAM::GetSetting }
+#define DUCKDB_GLOBAL_LOCAL_ALIAS(_ALIAS, _PARAM)                                                                      \
+	{ _ALIAS, _PARAM::Description, _PARAM::InputType, _PARAM::SetGlobal, _PARAM::SetLocal, _PARAM::GetSetting }
+#define FINAL_SETTING                                                                                                  \
+	{ nullptr, nullptr, LogicalTypeId::INVALID, nullptr, nullptr, nullptr }
+
+static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting),
+                                                 DUCKDB_GLOBAL(CheckpointThresholdSetting),
+                                                 DUCKDB_GLOBAL(DebugCheckpointAbort),
+                                                 DUCKDB_LOCAL(DebugForceExternal),
+                                                 DUCKDB_GLOBAL(DebugManyFreeListBlocks),
+                                                 DUCKDB_GLOBAL(DebugWindowMode),
+                                                 DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
+                                                 DUCKDB_GLOBAL(DefaultOrderSetting),
+                                                 DUCKDB_GLOBAL(DefaultNullOrderSetting),
+                                                 DUCKDB_GLOBAL(EnableExternalAccessSetting),
+                                                 DUCKDB_GLOBAL(EnableObjectCacheSetting),
+                                                 DUCKDB_LOCAL(EnableProfilingSetting),
+                                                 DUCKDB_LOCAL(EnableProgressBarSetting),
+                                                 DUCKDB_LOCAL(ExplainOutputSetting),
+                                                 DUCKDB_GLOBAL(ForceCompressionSetting),
+                                                 DUCKDB_LOCAL(LogQueryPathSetting),
+                                                 DUCKDB_GLOBAL(MaximumMemorySetting),
+                                                 DUCKDB_GLOBAL_ALIAS("memory_limit", MaximumMemorySetting),
+                                                 DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
+                                                 DUCKDB_LOCAL(PerfectHashThresholdSetting),
+                                                 DUCKDB_LOCAL(ProfilerHistorySize),
+                                                 DUCKDB_LOCAL(ProfileOutputSetting),
+                                                 DUCKDB_LOCAL(ProfilingModeSetting),
+                                                 DUCKDB_LOCAL_ALIAS("profiling_output", ProfileOutputSetting),
+                                                 DUCKDB_LOCAL(ProgressBarTimeSetting),
+                                                 DUCKDB_LOCAL(SchemaSetting),
+                                                 DUCKDB_LOCAL(SearchPathSetting),
+                                                 DUCKDB_GLOBAL(TempDirectorySetting),
+                                                 DUCKDB_GLOBAL(ThreadsSetting),
+                                                 DUCKDB_GLOBAL_ALIAS("wal_autocheckpoint", CheckpointThresholdSetting),
+                                                 DUCKDB_GLOBAL_ALIAS("worker_threads", ThreadsSetting),
+                                                 FINAL_SETTING};
 
 vector<ConfigurationOption> DBConfig::GetOptions() {
 	vector<ConfigurationOption> options;
@@ -58,64 +90,11 @@ ConfigurationOption *DBConfig::GetOptionByName(const string &name) {
 }
 
 void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) {
-	switch (option.type) {
-	case ConfigurationOptionType::ACCESS_MODE: {
-		auto parameter = StringUtil::Lower(value.ToString());
-		if (parameter == "automatic") {
-			access_mode = AccessMode::AUTOMATIC;
-		} else if (parameter == "read_only") {
-			access_mode = AccessMode::READ_ONLY;
-		} else if (parameter == "read_write") {
-			access_mode = AccessMode::READ_WRITE;
-		} else {
-			throw InvalidInputException(
-			    "Unrecognized parameter for option ACCESS_MODE \"%s\". Expected READ_ONLY or READ_WRITE.", parameter);
-		}
-		break;
+	if (!option.set_global) {
+		throw InternalException("Could not set option \"%s\" as a global option", option.name);
 	}
-	case ConfigurationOptionType::DEFAULT_ORDER_TYPE: {
-		auto parameter = StringUtil::Lower(value.ToString());
-		if (parameter == "asc") {
-			default_order_type = OrderType::ASCENDING;
-		} else if (parameter == "desc") {
-			default_order_type = OrderType::DESCENDING;
-		} else {
-			throw InvalidInputException("Unrecognized parameter for option DEFAULT_ORDER \"%s\". Expected ASC or DESC.",
-			                            parameter);
-		}
-		break;
-	}
-	case ConfigurationOptionType::DEFAULT_NULL_ORDER: {
-		auto parameter = StringUtil::Lower(value.ToString());
-		if (parameter == "nulls_first") {
-			default_null_order = OrderByNullType::NULLS_FIRST;
-		} else if (parameter == "nulls_last") {
-			default_null_order = OrderByNullType::NULLS_LAST;
-		} else {
-			throw InvalidInputException(
-			    "Unrecognized parameter for option NULL_ORDER \"%s\". Expected NULLS_FIRST or NULLS_LAST.", parameter);
-		}
-		break;
-	}
-	case ConfigurationOptionType::ENABLE_EXTERNAL_ACCESS: {
-		enable_external_access = value.CastAs(LogicalType::BOOLEAN).GetValueUnsafe<int8_t>();
-		break;
-	}
-	case ConfigurationOptionType::ENABLE_OBJECT_CACHE: {
-		object_cache_enable = value.CastAs(LogicalType::BOOLEAN).GetValueUnsafe<int8_t>();
-		break;
-	}
-	case ConfigurationOptionType::MAXIMUM_MEMORY: {
-		maximum_memory = ParseMemoryLimit(value.ToString());
-		break;
-	}
-	case ConfigurationOptionType::THREADS: {
-		maximum_threads = value.GetValue<int64_t>();
-		break;
-	}
-	default: // LCOV_EXCL_START
-		break;
-	} // LCOV_EXCL_STOP
+	Value input = value.CastAs(option.parameter_type);
+	option.set_global(nullptr, *this, input);
 }
 
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
@@ -133,7 +112,7 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 		idx++;
 	}
 	if (idx == num_start) {
-		throw ParserException("Memory limit must have a number (e.g. PRAGMA memory_limit=1GB");
+		throw ParserException("Memory limit must have a number (e.g. SET memory_limit=1GB");
 	}
 	string number = arg.substr(num_start, idx - num_start);
 

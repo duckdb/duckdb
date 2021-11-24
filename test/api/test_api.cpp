@@ -187,6 +187,10 @@ TEST_CASE("Test multiple result sets", "[api]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	con.EnableQueryVerification();
+	con.DisableQueryVerification();
+	con.EnableQueryVerification();
+
+	con.ForceParallelism();
 
 	result = con.Query("SELECT 42; SELECT 84");
 	REQUIRE(CHECK_COLUMN(result, 0, {42}));

@@ -2,7 +2,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
-#include "duckdb/common/unordered_set.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/storage/statistics/struct_statistics.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -31,7 +31,7 @@ static void StructPackFunction(DataChunk &args, ExpressionState &state, Vector &
 
 static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFunction &bound_function,
                                                vector<unique_ptr<Expression>> &arguments) {
-	unordered_set<string> name_collision_set;
+	case_insensitive_set_t name_collision_set;
 
 	// collect names and deconflict, construct return type
 	if (arguments.empty()) {

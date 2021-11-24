@@ -59,7 +59,7 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 	std::random_device rd;
 	random_engine.seed(rd());
 
-	progress_bar = make_unique<ProgressBar>(&executor, wait_time);
+	progress_bar = make_unique<ProgressBar>(&executor, config.wait_time);
 }
 
 ClientContext::~ClientContext() {
@@ -193,7 +193,7 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->value_map = move(planner.value_map);
 	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
 
-	if (enable_optimizer) {
+	if (config.enable_optimizer) {
 		profiler->StartPhase("optimizer");
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
@@ -230,8 +230,8 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 	if (ActiveTransaction().IsInvalidated() && statement.requires_valid_transaction) {
 		throw Exception("Current transaction is aborted (please ROLLBACK)");
 	}
-	auto &config = DBConfig::GetConfig(*this);
-	if (config.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
+	auto &db_config = DBConfig::GetConfig(*this);
+	if (db_config.access_mode == AccessMode::READ_ONLY && !statement.read_only) {
 		throw Exception(StringUtil::Format("Cannot execute statement of type \"%s\" in read-only mode!",
 		                                   StatementTypeToString(statement.statement_type)));
 	}
@@ -240,8 +240,8 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 	statement.Bind(move(bound_values));
 
 	bool create_stream_result = statement.allow_stream_result && allow_stream_result;
-	if (enable_progress_bar) {
-		progress_bar->Initialize(wait_time);
+	if (config.enable_progress_bar) {
+		progress_bar->Initialize(config.wait_time);
 		progress_bar->Start();
 	}
 	// store the physical plan in the context for calls to Fetch()
@@ -252,7 +252,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 	D_ASSERT(types == statement.types);
 
 	if (create_stream_result) {
-		if (enable_progress_bar) {
+		if (config.enable_progress_bar) {
 			progress_bar->Stop();
 		}
 		// successfully compiled SELECT clause and it is the last statement
@@ -276,7 +276,7 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 #endif
 		result->collection.Append(*chunk);
 	}
-	if (enable_progress_bar) {
+	if (config.enable_progress_bar) {
 		progress_bar->Stop();
 	}
 	return move(result);
@@ -326,7 +326,7 @@ unique_ptr<LogicalOperator> ClientContext::ExtractPlan(const string &query) {
 
 		plan = move(planner.plan);
 
-		if (enable_optimizer) {
+		if (config.enable_optimizer) {
 			Optimizer optimizer(*planner.binder, *this);
 			plan = optimizer.Optimize(move(plan));
 		}
@@ -405,6 +405,17 @@ unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &l
 	return ExecutePreparedStatement(lock, query, move(prepared), move(bound_values), allow_stream_result);
 }
 
+static bool IsExplainAnalyze(SQLStatement *statement) {
+	if (!statement) {
+		return false;
+	}
+	if (statement->type != StatementType::EXPLAIN_STATEMENT) {
+		return false;
+	}
+	auto &explain = (ExplainStatement &)*statement;
+	return explain.explain_type == ExplainType::EXPLAIN_ANALYZE;
+}
+
 unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
                                                                        unique_ptr<SQLStatement> statement,
                                                                        shared_ptr<PreparedStatementData> &prepared,
@@ -418,7 +429,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
 		transaction.BeginTransaction();
 	}
 	ActiveTransaction().active_query = db->GetTransactionManager().GetQueryNumber();
-	if (statement && query_verification_enabled) {
+	if (statement && config.query_verification_enabled) {
 		// query verification is enabled
 		// create a copy of the statement, and use the copy
 		// this way we verify that the copy correctly copies all properties
@@ -436,7 +447,7 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
 		statement = move(copied_statement);
 	}
 	// start the profiler
-	profiler->StartQuery(query);
+	profiler->StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
 	try {
 		if (statement) {
 			result = RunStatementInternal(lock, query, move(statement), allow_stream_result);
@@ -699,7 +710,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		interrupted = false;
 	}
 	// now execute the unoptimized statement
-	enable_optimizer = false;
+	config.enable_optimizer = false;
 	try {
 		auto result = RunStatementInternal(lock, query, move(unoptimized_stmt), false);
 		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
@@ -708,7 +719,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		unoptimized_result->success = false;
 		interrupted = false;
 	}
-	enable_optimizer = true;
+	config.enable_optimizer = true;
 
 	if (profiling_is_enabled) {
 		profiler->Enable();
@@ -874,7 +885,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 	InitialCleanup(*lock);
 
 	string query;
-	if (query_verification_enabled) {
+	if (config.query_verification_enabled) {
 		// run the ToString method of any relation we run, mostly to ensure it doesn't crash
 		relation->ToString();
 		relation->GetAlias();
@@ -923,8 +934,17 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 }
 
 bool ClientContext::TryGetCurrentSetting(const std::string &key, Value &result) {
-	const auto &session_config_map = set_variables;
-	const auto &global_config_map = db->config.set_variables;
+	// first check the built-in settings
+	auto &db_config = DBConfig::GetConfig(*this);
+	auto option = db_config.GetOptionByName(key);
+	if (option) {
+		result = option->get_setting(*this);
+		return true;
+	}
+
+	// then check the session values
+	const auto &session_config_map = config.set_variables;
+	const auto &global_config_map = db_config.set_variables;
 
 	auto session_value = session_config_map.find(key);
 	bool found_session_value = session_value != session_config_map.end();

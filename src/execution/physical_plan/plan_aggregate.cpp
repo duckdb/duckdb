@@ -102,7 +102,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		bits_per_group.push_back(required_bits);
 		perfect_hash_bits += required_bits;
 		// check if we have exceeded the bits for the hash
-		if (perfect_hash_bits > context.perfect_ht_threshold) {
+		if (perfect_hash_bits > ClientConfig::GetConfig(context).perfect_ht_threshold) {
 			// too many bits for perfect hash
 			return false;
 		}

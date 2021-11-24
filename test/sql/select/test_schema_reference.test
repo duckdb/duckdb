@@ -1,0 +1,24 @@
+# name: test/sql/select/test_schema_reference.test
+# description: Test schema reference in column reference
+# group: [select]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE SCHEMA s1;
+
+statement ok
+CREATE TABLE s1.tbl(i INTEGER)
+
+# standard schema reference
+statement ok
+SELECT s1.tbl.i FROM s1.tbl;
+
+# schema mismatch
+statement error
+SELECT s2.tbl.i FROM s1.tbl;
+
+# no schema present
+statement error
+SELECT a.tbl.i FROM range(10) tbl(i)
