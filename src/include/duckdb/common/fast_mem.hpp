@@ -26,7 +26,6 @@ namespace duckdb {
 //! but only when you are calling memcpy with a const size in a loop.
 //! For instance `while (<cond>) { memcpy(<dest>, <src>, const_size); ... }`
 static inline void FastMemcpy(void *dest, const void *src, const size_t size) {
-	D_ASSERT(size % 8 == 0);
 	switch (size) {
 	case 0:
 		return;
@@ -543,9 +542,7 @@ static inline void FastMemcpy(void *dest, const void *src, const size_t size) {
 	case 256:
 		return MemcpyFixed<256>(dest, src);
 	default:
-		MemcpyFixed<256>(dest, src);
-		return FastMemcpy(reinterpret_cast<unsigned char *>(dest) + 256,
-		                  reinterpret_cast<const unsigned char *>(src) + 256, size - 256);
+		memcpy(dest, src, size);
 	}
 }
 
