@@ -28,7 +28,7 @@ FunctionData::~FunctionData() {
 
 unique_ptr<FunctionData> FunctionData::Copy() {
 	throw InternalException("Unimplemented copy for FunctionData");
-};
+}
 
 bool FunctionData::Equals(FunctionData &other) {
 	return true;
@@ -77,7 +77,7 @@ string SimpleNamedParameterFunction::ToString() {
 }
 
 bool SimpleNamedParameterFunction::HasNamedParameters() {
-	return named_parameters.size() != 0;
+	return !named_parameters.empty();
 }
 
 BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,

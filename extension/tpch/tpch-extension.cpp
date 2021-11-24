@@ -40,7 +40,7 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, vector<Value> 
 			result->overwrite = kv.second.value_.boolean;
 		}
 	}
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 	return move(result);
 }
@@ -74,10 +74,10 @@ static unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, vector<Val
                                               vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                               vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("query");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
@@ -109,13 +109,13 @@ static unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, vect
                                                     vector<string> &input_table_names,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("scale_factor");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("answer");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }

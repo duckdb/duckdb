@@ -77,7 +77,7 @@ public:
 	DUCKDB_API bool Equal(const ScalarFunction &rhs) const;
 
 private:
-	bool CompareScalarFunctionT(const scalar_function_t other) const;
+	bool CompareScalarFunctionT(const scalar_function_t &other) const;
 
 public:
 	DUCKDB_API static void NopFunction(DataChunk &input, ExpressionState &state, Vector &result);

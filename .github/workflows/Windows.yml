@@ -191,7 +191,6 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_HTTPFS: 1
     steps:
     - uses: actions/checkout@v2
       with:

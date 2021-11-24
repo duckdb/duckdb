@@ -15,9 +15,9 @@ static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, vector
                                                   vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                   vector<string> &names) {
 	names.emplace_back("library_version");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("source_id");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 	return nullptr;
 }
 

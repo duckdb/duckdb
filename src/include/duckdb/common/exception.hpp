@@ -114,7 +114,7 @@ private:
 //! Exceptions that are StandardExceptions do NOT invalidate the current transaction when thrown
 class StandardException : public Exception {
 public:
-	DUCKDB_API StandardException(ExceptionType exception_type, string message);
+	DUCKDB_API StandardException(ExceptionType exception_type, const string &message);
 };
 
 class CatalogException : public StandardException {

@@ -43,7 +43,7 @@ static unique_ptr<FunctionData> DsdgenBind(ClientContext &context, vector<Value>
 			result->keys = kv.second.GetValue<bool>();
 		}
 	}
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 	return move(result);
 }
@@ -78,10 +78,10 @@ static unique_ptr<FunctionData> TPCDSQueryBind(ClientContext &context, vector<Va
                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                vector<string> &names) {
 	names.emplace_back("query_nr");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("query");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
@@ -113,13 +113,13 @@ static unique_ptr<FunctionData> TPCDSQueryAnswerBind(ClientContext &context, vec
                                                      vector<string> &input_table_names,
                                                      vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("scale_factor");
-	return_types.push_back(LogicalType::DOUBLE);
+	return_types.emplace_back(LogicalType::DOUBLE);
 
 	names.emplace_back("answer");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }

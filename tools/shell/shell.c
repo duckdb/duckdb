@@ -11607,19 +11607,19 @@ static int shell_callback(
       if (nArg != 2) {
         break;
       }
-      fputs("\n┌─────────────────────────────┐\n", p->out);
-      fputs("│┌───────────────────────────┐│\n", p->out);
+      utf8_printf(p->out, "\n┌─────────────────────────────┐\n");
+      utf8_printf(p->out, "│┌───────────────────────────┐│\n");
       if (strcmp(azArg[0], "logical_plan") == 0) {
-      fputs("││ Unoptimized Logical Plan  ││\n", p->out);
+      utf8_printf(p->out, "││ Unoptimized Logical Plan  ││\n");
       } else if (strcmp(azArg[0], "logical_opt") == 0) {
-      fputs("││  Optimized Logical Plan   ││\n", p->out);
+      utf8_printf(p->out, "││  Optimized Logical Plan   ││\n");
       } else if (strcmp(azArg[0], "physical_plan") == 0) {
-      fputs("││       Physical Plan       ││\n", p->out);
+      utf8_printf(p->out, "││       Physical Plan       ││\n");
 
       }
-      fputs("│└───────────────────────────┘│\n", p->out);
-      fputs("└─────────────────────────────┘\n", p->out);
-      fputs(azArg[1], p->out);
+      utf8_printf(p->out, "│└───────────────────────────┘│\n");
+      utf8_printf(p->out, "└─────────────────────────────┘\n");
+      utf8_printf(p->out, "%s", azArg[1]);
       break;
     }
     case MODE_Semi: {   /* .schema and .fullschema output */
