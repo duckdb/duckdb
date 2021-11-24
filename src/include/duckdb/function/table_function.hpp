@@ -72,7 +72,8 @@ typedef string (*table_function_to_string_t)(const FunctionData *bind_data);
 
 class TableFunction : public SimpleNamedParameterFunction {
 public:
-	DUCKDB_API TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
+	DUCKDB_API
+	TableFunction(string name, vector<LogicalType> arguments, table_function_t function,
 	              table_function_bind_t bind = nullptr, table_function_init_t init = nullptr,
 	              table_statistics_t statistics = nullptr, table_function_cleanup_t cleanup = nullptr,
 	              table_function_dependency_t dependency = nullptr, table_function_cardinality_t cardinality = nullptr,
@@ -83,7 +84,8 @@ public:
 	              table_function_init_parallel_t parallel_init = nullptr,
 	              table_function_parallel_state_next_t parallel_state_next = nullptr, bool projection_pushdown = false,
 	              bool filter_pushdown = false, table_function_progress_t query_progress = nullptr);
-	DUCKDB_API TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
+	DUCKDB_API
+	TableFunction(const vector<LogicalType> &arguments, table_function_t function, table_function_bind_t bind = nullptr,
 	              table_function_init_t init = nullptr, table_statistics_t statistics = nullptr,
 	              table_function_cleanup_t cleanup = nullptr, table_function_dependency_t dependency = nullptr,
 	              table_function_cardinality_t cardinality = nullptr,

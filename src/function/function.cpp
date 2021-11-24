@@ -23,7 +23,6 @@
 
 namespace duckdb {
 
-
 FunctionData::~FunctionData() {
 }
 
@@ -45,12 +44,10 @@ bool FunctionData::Equals(FunctionData *left, FunctionData *right) {
 	return left->Equals(*right);
 }
 
-
 Function::Function(string name_p) : name(move(name_p)) {
 }
 Function::~Function() {
 }
-
 
 SimpleFunction::SimpleFunction(string name_p, vector<LogicalType> arguments_p, LogicalType varargs_p)
     : Function(move(name_p)), arguments(move(arguments_p)), varargs(move(varargs_p)) {
@@ -67,14 +64,13 @@ bool SimpleFunction::HasVarArgs() const {
 	return varargs.id() != LogicalTypeId::INVALID;
 }
 
-
-SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector<LogicalType> arguments_p, LogicalType varargs_p)
+SimpleNamedParameterFunction::SimpleNamedParameterFunction(string name_p, vector<LogicalType> arguments_p,
+                                                           LogicalType varargs_p)
     : SimpleFunction(move(name_p), move(arguments_p), move(varargs_p)) {
 }
 
 SimpleNamedParameterFunction::~SimpleNamedParameterFunction() {
 }
-
 
 string SimpleNamedParameterFunction::ToString() {
 	return Function::CallToString(name, arguments, named_parameters);
@@ -84,8 +80,8 @@ bool SimpleNamedParameterFunction::HasNamedParameters() {
 	return named_parameters.size() != 0;
 }
 
-BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p, bool has_side_effects,
-                   LogicalType varargs_p)
+BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
+                                       bool has_side_effects, LogicalType varargs_p)
     : SimpleFunction(move(name_p), move(arguments_p), move(varargs_p)), return_type(move(return_type_p)),
       has_side_effects(has_side_effects) {
 }
@@ -96,7 +92,6 @@ BaseScalarFunction::~BaseScalarFunction() {
 string BaseScalarFunction::ToString() {
 	return Function::CallToString(name, arguments, return_type);
 }
-
 
 // add your initializer for new functions here
 void BuiltinFunctions::Initialize() {

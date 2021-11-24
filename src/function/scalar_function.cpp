@@ -2,27 +2,26 @@
 
 namespace duckdb {
 
-ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
-				bool has_side_effects, bind_scalar_function_t bind,
-				dependency_function_t dependency, function_statistics_t statistics,
-				init_local_state_t init_local_state,
-				LogicalType varargs)
-	: BaseScalarFunction(move(name), move(arguments), move(return_type), has_side_effects, move(varargs)), function(move(function)), bind(bind),
-		init_local_state(init_local_state), dependency(dependency), statistics(statistics) {
+ScalarFunction::ScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+                               scalar_function_t function, bool has_side_effects, bind_scalar_function_t bind,
+                               dependency_function_t dependency, function_statistics_t statistics,
+                               init_local_state_t init_local_state, LogicalType varargs)
+    : BaseScalarFunction(move(name), move(arguments), move(return_type), has_side_effects, move(varargs)),
+      function(move(function)), bind(bind), init_local_state(init_local_state), dependency(dependency),
+      statistics(statistics) {
 }
 
 ScalarFunction::ScalarFunction(vector<LogicalType> arguments, LogicalType return_type, scalar_function_t function,
-				bool has_side_effects, bind_scalar_function_t bind,
-				dependency_function_t dependency, function_statistics_t statistics,
-				init_local_state_t init_local_state,
-				LogicalType varargs)
-	: ScalarFunction(string(), move(arguments), move(return_type), move(function), has_side_effects, bind, dependency, statistics,
-						init_local_state, move(varargs)) {
+                               bool has_side_effects, bind_scalar_function_t bind, dependency_function_t dependency,
+                               function_statistics_t statistics, init_local_state_t init_local_state,
+                               LogicalType varargs)
+    : ScalarFunction(string(), move(arguments), move(return_type), move(function), has_side_effects, bind, dependency,
+                     statistics, init_local_state, move(varargs)) {
 }
 
 bool ScalarFunction::operator==(const ScalarFunction &rhs) const {
 	return CompareScalarFunctionT(rhs.function) && bind == rhs.bind && dependency == rhs.dependency &&
-			statistics == rhs.statistics;
+	       statistics == rhs.statistics;
 }
 bool ScalarFunction::operator!=(const ScalarFunction &rhs) const {
 	return !(*this == rhs);
@@ -73,4 +72,4 @@ void ScalarFunction::NopFunction(DataChunk &input, ExpressionState &state, Vecto
 	result.Reference(input.data[0]);
 }
 
-}
+} // namespace duckdb

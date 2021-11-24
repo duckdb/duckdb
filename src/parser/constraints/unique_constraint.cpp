@@ -6,6 +6,14 @@
 
 namespace duckdb {
 
+UniqueConstraint::UniqueConstraint(uint64_t index, bool is_primary_key)
+    : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
+}
+UniqueConstraint::UniqueConstraint(vector<string> columns, bool is_primary_key)
+    : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), columns(move(columns)),
+      is_primary_key(is_primary_key) {
+}
+
 string UniqueConstraint::ToString() const {
 	string base = is_primary_key ? "PRIMARY KEY(" : "UNIQUE(";
 	for (idx_t i = 0; i < columns.size(); i++) {

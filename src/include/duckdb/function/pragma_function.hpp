@@ -32,9 +32,10 @@ class PragmaFunction : public SimpleNamedParameterFunction {
 public:
 	// Call
 	DUCKDB_API static PragmaFunction PragmaCall(const string &name, pragma_query_t query, vector<LogicalType> arguments,
-	                                 LogicalType varargs = LogicalType::INVALID);
-	DUCKDB_API static PragmaFunction PragmaCall(const string &name, pragma_function_t function, vector<LogicalType> arguments,
-	                                 LogicalType varargs = LogicalType::INVALID);
+	                                            LogicalType varargs = LogicalType::INVALID);
+	DUCKDB_API static PragmaFunction PragmaCall(const string &name, pragma_function_t function,
+	                                            vector<LogicalType> arguments,
+	                                            LogicalType varargs = LogicalType::INVALID);
 	// Statement
 	DUCKDB_API static PragmaFunction PragmaStatement(const string &name, pragma_query_t query);
 	DUCKDB_API static PragmaFunction PragmaStatement(const string &name, pragma_function_t function);

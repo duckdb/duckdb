@@ -48,7 +48,7 @@ public:
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
 	DUCKDB_API bool CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
-	                 unordered_set<CatalogEntry *> &dependencies);
+	                            unordered_set<CatalogEntry *> &dependencies);
 
 	DUCKDB_API bool AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info);
 

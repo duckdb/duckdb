@@ -28,6 +28,7 @@ struct CreateViewInfo;
 struct CreateSequenceInfo;
 struct CreateCollationInfo;
 struct CreateTypeInfo;
+struct CreateTableInfo;
 
 class ClientContext;
 class Transaction;
@@ -104,6 +105,8 @@ public:
 	DUCKDB_API CatalogEntry *CreateSchema(ClientContext &context, CreateSchemaInfo *info);
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateTable(ClientContext &context, BoundCreateTableInfo *info);
+	//! Creates a table in the catalog.
+	DUCKDB_API CatalogEntry *CreateTable(ClientContext &context, unique_ptr<CreateTableInfo> info);
 	//! Create a table function in the catalog
 	DUCKDB_API CatalogEntry *CreateTableFunction(ClientContext &context, CreateTableFunctionInfo *info);
 	//! Create a copy function in the catalog
@@ -122,38 +125,45 @@ public:
 	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, CreateCollationInfo *info);
 
 	//! Creates a table in the catalog.
-	DUCKDB_API CatalogEntry *CreateTable(ClientContext &context, SchemaCatalogEntry *schema, BoundCreateTableInfo *info);
+	DUCKDB_API CatalogEntry *CreateTable(ClientContext &context, SchemaCatalogEntry *schema,
+	                                     BoundCreateTableInfo *info);
 	//! Create a table function in the catalog
 	DUCKDB_API CatalogEntry *CreateTableFunction(ClientContext &context, SchemaCatalogEntry *schema,
-	                                  CreateTableFunctionInfo *info);
+	                                             CreateTableFunctionInfo *info);
 	//! Create a copy function in the catalog
-	DUCKDB_API CatalogEntry *CreateCopyFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateCopyFunctionInfo *info);
+	DUCKDB_API CatalogEntry *CreateCopyFunction(ClientContext &context, SchemaCatalogEntry *schema,
+	                                            CreateCopyFunctionInfo *info);
 	//! Create a pragma function in the catalog
 	DUCKDB_API CatalogEntry *CreatePragmaFunction(ClientContext &context, SchemaCatalogEntry *schema,
-	                                   CreatePragmaFunctionInfo *info);
+	                                              CreatePragmaFunctionInfo *info);
 	//! Create a scalar or aggregate function in the catalog
-	DUCKDB_API CatalogEntry *CreateFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info);
+	DUCKDB_API CatalogEntry *CreateFunction(ClientContext &context, SchemaCatalogEntry *schema,
+	                                        CreateFunctionInfo *info);
 	//! Creates a table in the catalog.
 	DUCKDB_API CatalogEntry *CreateView(ClientContext &context, SchemaCatalogEntry *schema, CreateViewInfo *info);
 	//! Creates a table in the catalog.
-	DUCKDB_API CatalogEntry *CreateSequence(ClientContext &context, SchemaCatalogEntry *schema, CreateSequenceInfo *info);
+	DUCKDB_API CatalogEntry *CreateSequence(ClientContext &context, SchemaCatalogEntry *schema,
+	                                        CreateSequenceInfo *info);
 	//! Creates a enum in the catalog.
 	DUCKDB_API CatalogEntry *CreateType(ClientContext &context, SchemaCatalogEntry *schema, CreateTypeInfo *info);
 	//! Creates a collation in the catalog
-	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, SchemaCatalogEntry *schema, CreateCollationInfo *info);
+	DUCKDB_API CatalogEntry *CreateCollation(ClientContext &context, SchemaCatalogEntry *schema,
+	                                         CreateCollationInfo *info);
 
 	//! Drops an entry from the catalog
 	DUCKDB_API void DropEntry(ClientContext &context, DropInfo *info);
 
 	//! Returns the schema object with the specified name, or throws an exception if it does not exist
-	DUCKDB_API SchemaCatalogEntry *GetSchema(ClientContext &context, const string &name = DEFAULT_SCHEMA, bool if_exists = false,
-	                              QueryErrorContext error_context = QueryErrorContext());
+	DUCKDB_API SchemaCatalogEntry *GetSchema(ClientContext &context, const string &name = DEFAULT_SCHEMA,
+	                                         bool if_exists = false,
+	                                         QueryErrorContext error_context = QueryErrorContext());
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API void ScanSchemas(ClientContext &context, std::function<void(CatalogEntry *)> callback);
 	//! Gets the "schema.name" entry of the specified type, if if_exists=true returns nullptr if entry does not exist,
 	//! otherwise an exception is thrown
-	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &schema, const string &name,
-	                       bool if_exists = false, QueryErrorContext error_context = QueryErrorContext());
+	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, CatalogType type, const string &schema,
+	                                  const string &name, bool if_exists = false,
+	                                  QueryErrorContext error_context = QueryErrorContext());
 
 	template <class T>
 	T *GetEntry(ClientContext &context, const string &schema_name, const string &name, bool if_exists = false,
@@ -185,24 +195,28 @@ private:
 
 template <>
 DUCKDB_API TableCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                     bool if_exists, QueryErrorContext error_context);
+                                                bool if_exists, QueryErrorContext error_context);
 template <>
-DUCKDB_API SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                        bool if_exists, QueryErrorContext error_context);
+DUCKDB_API SequenceCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name,
+                                                   const string &name, bool if_exists, QueryErrorContext error_context);
 template <>
-DUCKDB_API TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                             bool if_exists, QueryErrorContext error_context);
+DUCKDB_API TableFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name,
+                                                        const string &name, bool if_exists,
+                                                        QueryErrorContext error_context);
 template <>
-DUCKDB_API CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                            bool if_exists, QueryErrorContext error_context);
+DUCKDB_API CopyFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name,
+                                                       const string &name, bool if_exists,
+                                                       QueryErrorContext error_context);
 template <>
-DUCKDB_API PragmaFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                              bool if_exists, QueryErrorContext error_context);
+DUCKDB_API PragmaFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name,
+                                                         const string &name, bool if_exists,
+                                                         QueryErrorContext error_context);
 template <>
-DUCKDB_API AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                                 bool if_exists, QueryErrorContext error_context);
+DUCKDB_API AggregateFunctionCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name,
+                                                            const string &name, bool if_exists,
+                                                            QueryErrorContext error_context);
 template <>
 DUCKDB_API CollateCatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema_name, const string &name,
-                                       bool if_exists, QueryErrorContext error_context);
+                                                  bool if_exists, QueryErrorContext error_context);
 
 } // namespace duckdb

@@ -95,8 +95,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
-
-StandardException::StandardException(ExceptionType exception_type, string message) : Exception(exception_type, message) {
+StandardException::StandardException(ExceptionType exception_type, string message)
+    : Exception(exception_type, message) {
 }
 
 CastException::CastException(const PhysicalType orig_type, const PhysicalType new_type)

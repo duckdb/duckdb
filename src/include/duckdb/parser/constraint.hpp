@@ -29,21 +29,20 @@ enum class ConstraintType : uint8_t {
 //! Constraint is the base class of any type of table constraint.
 class Constraint {
 public:
-	explicit Constraint(ConstraintType type) : type(type) {};
-	virtual ~Constraint() {
-	}
+	DUCKDB_API explicit Constraint(ConstraintType type);
+	DUCKDB_API virtual ~Constraint();
 
 	ConstraintType type;
 
 public:
-	virtual string ToString() const = 0;
-	void Print();
+	DUCKDB_API virtual string ToString() const = 0;
+	DUCKDB_API void Print();
 
-	virtual unique_ptr<Constraint> Copy() = 0;
+	DUCKDB_API virtual unique_ptr<Constraint> Copy() = 0;
 	//! Serializes a Constraint to a stand-alone binary blob
-	virtual void Serialize(Serializer &serializer);
+	DUCKDB_API virtual void Serialize(Serializer &serializer);
 	//! Deserializes a blob back into a Constraint, returns NULL if
 	//! deserialization is not possible
-	static unique_ptr<Constraint> Deserialize(Deserializer &source);
+	DUCKDB_API static unique_ptr<Constraint> Deserialize(Deserializer &source);
 };
 } // namespace duckdb

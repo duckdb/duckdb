@@ -5,4 +5,4 @@ namespace duckdb {
 Extension::~Extension() {
 }
 
-}
+} // namespace duckdb

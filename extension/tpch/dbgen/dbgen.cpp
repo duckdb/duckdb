@@ -459,11 +459,10 @@ struct SupplierInfo {
 };
 const char *SupplierInfo::Columns[] = {"s_suppkey", "s_name",    "s_address", "s_nationkey",
                                        "s_phone",   "s_acctbal", "s_comment"};
-const LogicalType SupplierInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
-    LogicalType(LogicalTypeId::VARCHAR)};
+const LogicalType SupplierInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+                                           LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
+                                           LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
+                                           LogicalType(LogicalTypeId::VARCHAR)};
 
 struct CustomerInfo {
 	static constexpr char *Name = "customer";
@@ -473,11 +472,10 @@ struct CustomerInfo {
 };
 const char *CustomerInfo::Columns[] = {"c_custkey", "c_name",    "c_address",    "c_nationkey",
                                        "c_phone",   "c_acctbal", "c_mktsegment", "c_comment"};
-const LogicalType CustomerInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR)};
+const LogicalType CustomerInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+                                           LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
+                                           LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
+                                           LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR)};
 
 struct PartInfo {
 	static constexpr char *Name = "part";
@@ -487,11 +485,10 @@ struct PartInfo {
 };
 const char *PartInfo::Columns[] = {"p_partkey", "p_name",      "p_mfgr",        "p_brand",  "p_type",
                                    "p_size",    "p_container", "p_retailprice", "p_comment"};
-const LogicalType PartInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
-                                       LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
-                                       LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
-                                       LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
-                                       LogicalType(LogicalTypeId::VARCHAR)};
+const LogicalType PartInfo::Types[] = {
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR)};
 
 struct PartsuppInfo {
 	static constexpr char *Name = "partsupp";
@@ -500,9 +497,9 @@ struct PartsuppInfo {
 	static const LogicalType Types[];
 };
 const char *PartsuppInfo::Columns[] = {"ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
-const LogicalType PartsuppInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType::DECIMAL(15, 2), LogicalType(LogicalTypeId::VARCHAR)};
+const LogicalType PartsuppInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
+                                           LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),
+                                           LogicalType(LogicalTypeId::VARCHAR)};
 
 struct OrdersInfo {
 	static constexpr char *Name = "orders";
@@ -513,11 +510,9 @@ struct OrdersInfo {
 const char *OrdersInfo::Columns[] = {"o_orderkey",      "o_custkey", "o_orderstatus",  "o_totalprice", "o_orderdate",
                                      "o_orderpriority", "o_clerk",   "o_shippriority", "o_comment"};
 const LogicalType OrdersInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
-    LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::VARCHAR)};
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR)};
 
 struct LineitemInfo {
 	static constexpr char *Name = "lineitem";
@@ -530,14 +525,12 @@ const char *LineitemInfo::Columns[] = {"l_orderkey",    "l_partkey",       "l_su
                                        "l_returnflag",  "l_linestatus",    "l_shipdate", "l_commitdate",
                                        "l_receiptdate", "l_shipinstruct",  "l_shipmode", "l_comment"};
 const LogicalType LineitemInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER),        LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::INTEGER),        LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::INTEGER),        LogicalType::DECIMAL(15, 2),
-    LogicalType::DECIMAL(15, 2), LogicalType::DECIMAL(15, 2),
-    LogicalType(LogicalTypeId::VARCHAR),        LogicalType(LogicalTypeId::VARCHAR),
-    LogicalType(LogicalTypeId::DATE),           LogicalType(LogicalTypeId::DATE),
-    LogicalType(LogicalTypeId::DATE),           LogicalType(LogicalTypeId::VARCHAR),
-    LogicalType(LogicalTypeId::VARCHAR),        LogicalType(LogicalTypeId::VARCHAR)};
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),
+    LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::DATE),
+    LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR)};
 
 template <class T>
 static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
@@ -550,11 +543,8 @@ static void CreateTPCHTable(ClientContext &context, string schema, string suffix
 		info->columns.push_back(ColumnDefinition(T::Columns[i], T::Types[i]));
 		info->constraints.push_back(make_unique<NotNullConstraint>(i));
 	}
-	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindCreateTableInfo(move(info));
 	auto &catalog = Catalog::GetCatalog(context);
-
-	catalog.CreateTable(context, bound_info.get());
+	catalog.CreateTable(context, move(info));
 }
 
 void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string schema, string suffix) {

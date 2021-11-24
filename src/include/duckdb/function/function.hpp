@@ -71,30 +71,31 @@ public:
 
 	//! Bind a scalar function from the set of functions and input arguments. Returns the index of the chosen function,
 	//! returns DConstants::INVALID_INDEX and sets error if none could be found
-	DUCKDB_API static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions, vector<LogicalType> &arguments,
-	                          string &error);
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions,
-	                          vector<unique_ptr<Expression>> &arguments, string &error);
+	                                     vector<LogicalType> &arguments, string &error);
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<ScalarFunction> &functions,
+	                                     vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind an aggregate function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns DConstants::INVALID_INDEX and sets error if none could be found
-	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions, vector<LogicalType> &arguments,
-	                          string &error);
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions,
-	                          vector<unique_ptr<Expression>> &arguments, string &error);
+	                                     vector<LogicalType> &arguments, string &error);
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<AggregateFunction> &functions,
+	                                     vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a table function from the set of functions and input arguments. Returns the index of the chosen
 	//! function, returns DConstants::INVALID_INDEX and sets error if none could be found
-	DUCKDB_API static idx_t BindFunction(const string &name, vector<TableFunction> &functions, vector<LogicalType> &arguments,
-	                          string &error);
 	DUCKDB_API static idx_t BindFunction(const string &name, vector<TableFunction> &functions,
-	                          vector<unique_ptr<Expression>> &arguments, string &error);
+	                                     vector<LogicalType> &arguments, string &error);
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<TableFunction> &functions,
+	                                     vector<unique_ptr<Expression>> &arguments, string &error);
 	//! Bind a pragma function from the set of functions and input arguments
-	DUCKDB_API static idx_t BindFunction(const string &name, vector<PragmaFunction> &functions, PragmaInfo &info, string &error);
+	DUCKDB_API static idx_t BindFunction(const string &name, vector<PragmaFunction> &functions, PragmaInfo &info,
+	                                     string &error);
 };
 
 class SimpleFunction : public Function {
 public:
 	DUCKDB_API SimpleFunction(string name, vector<LogicalType> arguments,
-	               LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
+	                          LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleFunction() override;
 
 	//! The set of arguments of the function
@@ -112,7 +113,7 @@ public:
 class SimpleNamedParameterFunction : public SimpleFunction {
 public:
 	DUCKDB_API SimpleNamedParameterFunction(string name, vector<LogicalType> arguments,
-	                             LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
+	                                        LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~SimpleNamedParameterFunction() override;
 
 	//! The named parameters of the function
@@ -123,14 +124,14 @@ public:
 	DUCKDB_API bool HasNamedParameters();
 
 	DUCKDB_API void EvaluateInputParameters(vector<LogicalType> &arguments, vector<Value> &parameters,
-	                             unordered_map<string, Value> &named_parameters,
-	                             vector<unique_ptr<ParsedExpression>> &children);
+	                                        unordered_map<string, Value> &named_parameters,
+	                                        vector<unique_ptr<ParsedExpression>> &children);
 };
 
 class BaseScalarFunction : public SimpleFunction {
 public:
-	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type, bool has_side_effects,
-	                   LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
+	DUCKDB_API BaseScalarFunction(string name, vector<LogicalType> arguments, LogicalType return_type,
+	                              bool has_side_effects, LogicalType varargs = LogicalType(LogicalTypeId::INVALID));
 	DUCKDB_API ~BaseScalarFunction() override;
 
 	//! Return type of the function

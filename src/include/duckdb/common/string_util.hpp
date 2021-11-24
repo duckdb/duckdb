@@ -112,11 +112,13 @@ public:
 	//! Get the top-n strings (sorted by the given score distance) from a set of scores.
 	//! At least one entry is returned (if there is one).
 	//! Strings are only returned if they have a score less than the threshold.
-	DUCKDB_API static vector<string> TopNStrings(vector<std::pair<string, idx_t>> scores, idx_t n = 5, idx_t threshold = 5);
+	DUCKDB_API static vector<string> TopNStrings(vector<std::pair<string, idx_t>> scores, idx_t n = 5,
+	                                             idx_t threshold = 5);
 	//! Computes the levenshtein distance of each string in strings, and compares it to target, then returns TopNStrings
 	//! with the given params.
 	DUCKDB_API static vector<string> TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n = 5,
-	                                      idx_t threshold = 5);
-	DUCKDB_API static string CandidatesMessage(const vector<string> &candidates, const string &candidate = "Candidate bindings");
+	                                                 idx_t threshold = 5);
+	DUCKDB_API static string CandidatesMessage(const vector<string> &candidates,
+	                                           const string &candidate = "Candidate bindings");
 };
 } // namespace duckdb
