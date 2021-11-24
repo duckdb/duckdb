@@ -11,9 +11,9 @@ namespace duckdb {
 // Range (integers)
 //===--------------------------------------------------------------------===//
 struct RangeFunctionBindData : public TableFunctionData {
-	int64_t start;
-	int64_t end;
-	int64_t increment;
+	hugeint_t start;
+	hugeint_t end;
+	hugeint_t increment;
 };
 
 template <bool GENERATE_SERIES>
@@ -79,10 +79,16 @@ static void RangeFunction(ClientContext &context, const FunctionData *bind_data_
 
 	auto increment = bind_data.increment;
 	auto end = bind_data.end;
-	int64_t current_value = bind_data.start + (int64_t)increment * state.current_idx;
+	hugeint_t current_value = bind_data.start + increment * state.current_idx;
+	int64_t current_value_i64;
+	if (!Hugeint::TryCast<int64_t>(current_value, current_value_i64)) {
+		return;
+	}
 	// set the result vector as a sequence vector
-	output.data[0].Sequence(current_value, increment);
-	idx_t remaining = MinValue<idx_t>((end - current_value) / increment, STANDARD_VECTOR_SIZE);
+	output.data[0].Sequence(current_value_i64, Hugeint::Cast<int64_t>(increment));
+	int64_t offset = increment < 0 ? 1 : -1;
+	idx_t remaining = MinValue<idx_t>(Hugeint::Cast<idx_t>((end - current_value + (increment + offset)) / increment),
+	                                  STANDARD_VECTOR_SIZE);
 	// increment the index pointer by the remaining count
 	state.current_idx += remaining;
 	output.SetCardinality(remaining);
@@ -90,7 +96,7 @@ static void RangeFunction(ClientContext &context, const FunctionData *bind_data_
 
 unique_ptr<NodeStatistics> RangeCardinality(ClientContext &context, const FunctionData *bind_data_p) {
 	auto &bind_data = (RangeFunctionBindData &)*bind_data_p;
-	idx_t cardinality = (bind_data.end - bind_data.start) / bind_data.increment;
+	idx_t cardinality = Hugeint::Cast<idx_t>((bind_data.end - bind_data.start) / bind_data.increment);
 	return make_unique<NodeStatistics>(cardinality, cardinality);
 }
 

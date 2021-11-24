@@ -1,3 +1,22 @@
+# helper to clean up non-utf and posixlt vectors
+encode_values <- function(value) {
+  value <- as.data.frame(value)
+  names(value) <- enc2utf8(names(value))
+
+  is_character <- vapply(value, is.character, logical(1))
+  value[is_character] <- lapply(value[is_character], enc2utf8)
+  is_factor <- vapply(value, is.factor, logical(1))
+  value[is_factor] <- lapply(value[is_factor], function(x) {
+    levels(x) <- enc2utf8(levels(x))
+    x
+   })
+
+  is_posixlt <- vapply(value, inherits, "POSIXlt", FUN.VALUE = logical(1))
+  value[is_posixlt] <- lapply(value[is_posixlt], as.POSIXct)
+  value
+}
+
+
 #' Register a data frame as a virtual table
 #'
 #' `duckdb_register()` registers a data frame as a virtual table (view)
@@ -24,7 +43,8 @@
 #' dbDisconnect(con)
 duckdb_register <- function(conn, name, df) {
   stopifnot(dbIsValid(conn))
-  .Call(duckdb_register_R, conn@conn_ref, as.character(name), as.data.frame(df))
+  df <- encode_values(as.data.frame(df))
+  .Call(duckdb_register_R, conn@conn_ref, enc2utf8(as.character(name)), df)
   invisible(TRUE)
 }
 
@@ -32,7 +52,7 @@ duckdb_register <- function(conn, name, df) {
 #' @export
 duckdb_unregister <- function(conn, name) {
   stopifnot(dbIsValid(conn))
-  .Call(duckdb_unregister_R, conn@conn_ref, as.character(name))
+  .Call(duckdb_unregister_R, conn@conn_ref, enc2utf8(as.character(name)))
   invisible(TRUE)
 }
 
@@ -57,14 +77,14 @@ duckdb_register_arrow <- function(conn, name, arrow_scannable) {
     }
    # pass some functions to c land so we don't have to look them up there
    function_list <- list(export_fun, arrow::Expression$create, arrow::Expression$field_ref, arrow::Expression$scalar)
-  .Call(duckdb_register_arrow_R, conn@conn_ref, as.character(name), function_list, arrow_scannable)
+  .Call(duckdb_register_arrow_R, conn@conn_ref, enc2utf8(as.character(name)), function_list, arrow_scannable)
   invisible(TRUE)
 }
 
 #' @rdname duckdb_register_arrow
 #' @export
 duckdb_unregister_arrow <- function(conn, name) {
-  .Call(duckdb_unregister_arrow_R, conn@conn_ref, as.character(name))
+  .Call(duckdb_unregister_arrow_R, conn@conn_ref, enc2utf8(as.character(name)))
   invisible(TRUE)
 }
 

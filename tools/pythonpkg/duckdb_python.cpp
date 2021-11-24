@@ -102,6 +102,9 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	m.def("from_csv_auto", &DuckDBPyRelation::FromCsvAuto, "Creates a relation object from the CSV file in file_name",
 	      py::arg("file_name"));
 	m.def("from_parquet", &DuckDBPyRelation::FromParquet,
+	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"),
+	      py::arg("binary_as_string"));
+	m.def("from_parquet", &DuckDBPyRelation::FromParquetDefault,
 	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"));
 	m.def("df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"));
 	m.def("from_df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"));

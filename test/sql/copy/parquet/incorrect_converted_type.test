@@ -1,0 +1,39 @@
+# name: test/sql/copy/parquet/incorrect_converted_type.test
+# description: Test parquet files with incorrect converted type annotations
+# group: [parquet]
+
+require parquet
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_bigint.parquet';
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_date.parquet';
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_int.parquet';
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_smallint.parquet';
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_timestamp.parquet';
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_timestamp_ms.parquet';
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_tinyint.parquet';
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_ubigint.parquet';
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_uinteger.parquet';
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_usmallint.parquet';
+
+statement error
+SELECT * FROM 'data/parquet-testing/broken/broken_utinyint.parquet';
+

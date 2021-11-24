@@ -3,7 +3,6 @@ import os
 import sys
 import glob
 import time
-import mimetypes
 import urllib.request
 
 api_url = 'https://api.github.com/repos/duckdb/duckdb/'
@@ -36,7 +35,7 @@ token = os.getenv("GH_TOKEN", "")
 if token == "":
 	raise ValueError('need a GitHub token in GH_TOKEN')
 
-def gh_api(suburl, filename='', method='GET'):
+def internal_gh_api(suburl, filename='', method='GET'):
 	url = api_url + suburl
 	headers = {
 		"Content-Type": "application/json",
@@ -44,38 +43,46 @@ def gh_api(suburl, filename='', method='GET'):
 	}
 
 	body_data = b''
-
+	raw_resp = None
 	if len(filename) > 0:
 		method = 'POST'
 		body_data = open(filename, 'rb')
-
-		mime_type = mimetypes.guess_type(local_filename)[0]
-		if mime_type is None:
-			mime_type = "application/octet-stream"
-		headers["Content-Type"] = mime_type
+		headers["Content-Type"] = "binary/octet-stream"
 		headers["Content-Length"] = os.path.getsize(local_filename)
-
 		url = suburl # cough
 
 	req = urllib.request.Request(url, body_data, headers)
 	req.get_method = lambda: method
-	timeout = 1
-	nretries = 10
-	for i in range(nretries):
-		success = True
-		try:
-			raw_resp = urllib.request.urlopen(req).read().decode()
-		except:
-			success = False
-		if success:
-			break
-		time.sleep(timeout)
-		timeout *= 2
+
+	print(f'GH API URL: "{url}" Filename: "{filename}" Method: "{method}"')
+	raw_resp = urllib.request.urlopen(req).read().decode()
 
 	if (method != 'DELETE'):
 		return json.loads(raw_resp)
 	else:
 		return {}
+
+def gh_api(suburl, filename='', method='GET'):
+	timeout = 1
+	nretries = 10
+	success = False
+	for i in range(nretries+1):
+		try:
+			response = internal_gh_api(suburl, filename, method)
+			success = True
+		except urllib.error.HTTPError as e:
+			print(e.read().decode()) # gah
+		except Exception as e:
+			print(e)
+		if success:
+			break
+		print(f"Failed upload, retrying in {timeout} seconds... ({i}/{nretries})")
+		time.sleep(timeout)
+		timeout = timeout * 2
+	if not success:
+		raise Exception("Failed to open URL " + suburl)
+	return response
+
 
 # check if tag exists
 resp = gh_api('git/ref/tags/%s' % tag)
@@ -85,6 +92,7 @@ if 'object' not in resp or 'sha' not in resp['object'] : # or resp['object']['sh
 resp = gh_api('releases/tags/%s' % tag)
 if 'id' not in resp or 'upload_url' not in resp:
 	raise ValueError('release does not exist for tag ' % tag)
+
 
 # double-check that release exists and has correct sha
 # disabled to not spam people watching releases
@@ -113,7 +121,7 @@ for filename in files:
 		if asset['name'] == asset_filename:
 			gh_api('releases/assets/%s' % asset['id'], method='DELETE')
 
-	resp = gh_api(upload_url + '?name=%s' % asset_filename, filename=local_filename)
+	resp = gh_api(f'{upload_url}?name={asset_filename}', filename=local_filename)
 	if 'id' not in resp:
 		raise ValueError('upload failed :/ ' + str(resp))
 	print("%s -> %s" % (local_filename, resp['browser_download_url']))

@@ -2,6 +2,7 @@ if(NOT CLANG_TIDY)
   add_subdirectory(capi)
 endif()
 add_subdirectory(relation)
+add_subdirectory(settings)
 
 if(FORCE_QUERY_LOG)
   add_definitions(-DDUCKDB_FORCE_QUERY_LOG="\""${FORCE_QUERY_LOG}"\"")
@@ -16,6 +17,7 @@ add_library_unity(
   config.cpp
   connection.cpp
   database.cpp
+  extension_helper.cpp
   materialized_query_result.cpp
   prepared_statement.cpp
   prepared_statement_data.cpp
@@ -26,3 +28,5 @@ add_library_unity(
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main>
     PARENT_SCOPE)
+
+add_extension_definitions(duckdb_main)

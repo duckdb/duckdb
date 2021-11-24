@@ -9,6 +9,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/function/compression_function.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -78,6 +79,10 @@ DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {
 	return db.config;
 }
 
+ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
+	return context.config;
+}
+
 TransactionManager &TransactionManager::Get(ClientContext &context) {
 	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
 }
@@ -134,6 +139,9 @@ void DatabaseInstance::Initialize(const char *path, DBConfig *new_config) {
 
 DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<DatabaseInstance>()) {
 	instance->Initialize(path, new_config);
+	if (instance->config.load_extensions) {
+		ExtensionHelper::LoadAllExtensions(*this);
+	}
 }
 
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {
@@ -205,6 +213,7 @@ void DatabaseInstance::Configure(DBConfig &new_config) {
 	} else {
 		config.maximum_threads = new_config.maximum_threads;
 	}
+	config.load_extensions = new_config.load_extensions;
 	config.force_compression = new_config.force_compression;
 	config.allocator = move(new_config.allocator);
 	config.checkpoint_wal_size = new_config.checkpoint_wal_size;

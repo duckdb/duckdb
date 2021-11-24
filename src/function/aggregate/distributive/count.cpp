@@ -53,12 +53,16 @@ struct CountFunction : public BaseCountFunction {
 };
 
 AggregateFunction CountFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountFunction>(LogicalType(LogicalTypeId::ANY),
-	                                                                                   LogicalType::BIGINT);
+	auto fun = AggregateFunction::UnaryAggregate<int64_t, int64_t, int64_t, CountFunction>(
+	    LogicalType(LogicalTypeId::ANY), LogicalType::BIGINT);
+	fun.name = "count";
+	return fun;
 }
 
 AggregateFunction CountStarFun::GetFunction() {
-	return AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
+	auto fun = AggregateFunction::NullaryAggregate<int64_t, int64_t, CountStarFunction>(LogicalType::BIGINT);
+	fun.name = "count_star";
+	return fun;
 }
 
 unique_ptr<BaseStatistics> CountPropagateStats(ClientContext &context, BoundAggregateExpression &expr,

@@ -10,12 +10,12 @@ statement ok
 PRAGMA threads=3
 
 # internal/external, different memory limits
-foreach pragma force_external disable_force_external
+foreach pragma true false
 
 foreach mem 50 500
 
 statement ok
-PRAGMA ${pragma}
+PRAGMA debug_force_external=${pragma}
 
 statement ok
 PRAGMA memory_limit='${mem}MB'
