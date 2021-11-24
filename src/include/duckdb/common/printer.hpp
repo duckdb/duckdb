@@ -21,5 +21,7 @@ public:
 	static void PrintProgress(int percentage, const char *pbstr, int pbwidth);
 	//! Prints an empty line when progress bar is done
 	static void FinishProgressBarPrint(const char *pbstr, int pbwidth);
+	//! Whether or not we are printing to a terminal
+	static bool IsTerminal();
 };
 } // namespace duckdb

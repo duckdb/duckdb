@@ -87,8 +87,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filenam
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetDefault(const string &filename) {
-	return DuckDBPyConnection::DefaultConnection()->FromParquet(
-	    filename, DuckDBPyConnection::DefaultConnection()->connection->context->parquet_binary_as_strings);
+	auto connection = DuckDBPyConnection::DefaultConnection();
+	bool binary_as_string = false;
+	Value result;
+	if (connection->connection->context->TryGetCurrentSetting("binary_as_string", result)) {
+		binary_as_string = result.GetValue<bool>();
+	}
+	return connection->FromParquet(filename, binary_as_string);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(py::object &table) {
