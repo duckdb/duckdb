@@ -314,7 +314,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		auto index = indices[i];
 		auto next_ptr = key_locations[i] + pointer_offset;
 		// In case this is still a primary key and there is a conflict
-		if (has_primary_key && pointers[index] != 0) {
+		if (has_primary_key && pointers[index] != nullptr) {
 			// for each key pair in the entry
 			for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
 				auto key_type = condition_types[key_idx];
@@ -358,7 +358,7 @@ bool TemplatedKeysCompare(data_ptr_t left_ptr, data_ptr_t right_ptr) {
 	return Equals::Operation<T>(left_val, right_val);
 }
 
-bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key, LogicalType key_type) {
+bool JoinHashTable::CompareKeysSwitch(data_ptr_t left_key, data_ptr_t right_key, const LogicalType &key_type) {
 
 	if (key_type.id() == LogicalTypeId::LIST) {
 		return true; // not handling this type for now, return as if they were equals

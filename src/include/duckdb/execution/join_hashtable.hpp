@@ -125,7 +125,7 @@ public:
 		return block_collection->count;
 	}
 	//! Compare Switch function to specify the type in which the keys will be compared
-	bool CompareKeysSwitch(data_ptr_t left_entry, data_ptr_t right_entry, LogicalType key_type);
+	bool CompareKeysSwitch(data_ptr_t left_entry, data_ptr_t right_entry, const LogicalType &key_type);
 
 	//! BufferManager
 	BufferManager &buffer_manager;
@@ -152,7 +152,7 @@ public:
 	//! Whether or not the HT has been finalized
 	bool finalized;
 	//! Whether or not any of the key elements contain NULL
-	bool has_null;
+	std::atomic<bool> has_null;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 	//! Flag to control weather the build side has a primary key
