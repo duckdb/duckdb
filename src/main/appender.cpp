@@ -17,11 +17,13 @@ namespace duckdb {
 BaseAppender::BaseAppender() : column(0) {
 }
 
-BaseAppender::BaseAppender(vector<LogicalType> types_p) : column(0), types(move(types_p)) {
+BaseAppender::BaseAppender(vector<LogicalType> types_p) : types(move(types_p)), column(0) {
 	InitializeChunk();
 }
 
-BaseAppender::~BaseAppender() {
+BaseAppender::~BaseAppender() {}
+
+void BaseAppender::Destructor() {
 	if (std::uncaught_exception()) {
 		return;
 	}
@@ -35,6 +37,10 @@ BaseAppender::~BaseAppender() {
 
 InternalAppender::InternalAppender(ClientContext &context_p, TableCatalogEntry &table_p)
     : BaseAppender(table_p.GetTypes()), context(context_p), table(table_p) {
+}
+
+InternalAppender::~InternalAppender() {
+	Destructor();
 }
 
 Appender::Appender(Connection &con, const string &schema_name, const string &table_name)
@@ -51,6 +57,10 @@ Appender::Appender(Connection &con, const string &schema_name, const string &tab
 }
 
 Appender::Appender(Connection &con, const string &table_name) : Appender(con, DEFAULT_SCHEMA, table_name) {
+}
+
+Appender::~Appender() {
+	Destructor();
 }
 
 void BaseAppender::InitializeChunk() {

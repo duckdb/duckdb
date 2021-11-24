@@ -33,7 +33,7 @@ public:
 protected:
 	void ResolveTypes() override {
 		if (types.size() == 0) {
-			types.push_back(LogicalType::INTEGER);
+			types.emplace_back(LogicalType::INTEGER);
 		}
 	}
 };

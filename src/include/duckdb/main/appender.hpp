@@ -75,6 +75,7 @@ public:
 	}
 
 protected:
+	void Destructor();
 	virtual void FlushInternal(ChunkCollection &collection) = 0;
 	void InitializeChunk();
 	void FlushChunk();
@@ -106,6 +107,7 @@ class Appender : public BaseAppender {
 public:
 	DUCKDB_API Appender(Connection &con, const string &schema_name, const string &table_name);
 	DUCKDB_API Appender(Connection &con, const string &table_name);
+	DUCKDB_API ~Appender() override;
 
 protected:
 	void FlushInternal(ChunkCollection &collection) override;
@@ -119,6 +121,7 @@ class InternalAppender : public BaseAppender {
 
 public:
 	DUCKDB_API InternalAppender(ClientContext &context, TableCatalogEntry &table);
+	DUCKDB_API ~InternalAppender() override;
 
 protected:
 	void FlushInternal(ChunkCollection &collection) override;
