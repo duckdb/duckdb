@@ -10,8 +10,6 @@
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_set.hpp"
-#include "duckdb/common/atomic.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/deque.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/progress_bar.hpp"
@@ -22,8 +20,9 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
-
 #include <random>
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/main/client_config.hpp"
 
 
 namespace duckdb {
