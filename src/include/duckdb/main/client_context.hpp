@@ -24,7 +24,6 @@
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/main/client_config.hpp"
 
-
 namespace duckdb {
 class Catalog;
 class CatalogSearchPath;
