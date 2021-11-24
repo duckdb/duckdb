@@ -1005,6 +1005,7 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
+	// Equalities are only used in enums with different catalog entries
 	bool Equals(ExtraTypeInfo *other_p) override {
 		if (!other_p) {
 			return false;
@@ -1013,9 +1014,12 @@ public:
 			return false;
 		}
 		auto &other = (EnumTypeInfo &)*other_p;
-		return other.enum_name == enum_name && other.values_insert_order == values_insert_order;
+		// We must check if all elements are equal
+		if (other.values_insert_order == values_insert_order) {
+			return true;
+		}
+		return false;
 	}
-
 	void Serialize(Serializer &serializer) const override {
 		serializer.Write<uint32_t>(values_insert_order.size());
 		serializer.WriteString(enum_name);

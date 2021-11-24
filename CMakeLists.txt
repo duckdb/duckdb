@@ -73,7 +73,7 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
-option( "Enable address sanitizer." TRUE)
+option("Enable address sanitizer." TRUE)
 
 set(M32_FLAG "")
 if(FORCE_32_BIT)
@@ -297,7 +297,7 @@ if(NOT MSVC)
   endif()
 else()
   set(CMAKE_CXX_WINDOWS_FLAGS
-      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS")
+      "/wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS /utf-8")
   if(TREAT_WARNINGS_AS_ERRORS)
     set(CMAKE_CXX_WINDOWS_FLAGS "${CMAKE_CXX_WINDOWS_FLAGS} /WX")
   endif()
@@ -305,7 +305,7 @@ else()
   string(REGEX REPLACE "/W[0-4]" "" CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
   # add to-be-ignored warnings
   set(CMAKE_CXX_FLAGS
-      "${CMAKE_CXX_FLAGS} /wd4244 /wd4267 /wd4200 /wd26451 /wd26495 /D_CRT_SECURE_NO_WARNINGS"
+      "${CMAKE_CXX_FLAGS} ${CMAKE_CXX_WINDOWS_FLAGS}"
   )
 endif()
 
