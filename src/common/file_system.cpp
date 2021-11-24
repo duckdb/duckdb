@@ -132,11 +132,15 @@ string FileSystem::ExtractBaseName(const string &path) {
 }
 
 string FileSystem::GetHomeDirectory() {
+#ifdef DUCKDB_WINDOWS
+	const char *homedir = getenv("USERPROFILE");
+#else
 	const char *homedir = getenv("HOME");
-	if (!homedir) {
-		return string();
+#endif
+	if (homedir) {
+		return homedir;
 	}
-	return homedir;
+	return string();
 }
 
 // LCOV_EXCL_START
