@@ -558,7 +558,7 @@ function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
   set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
   set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
   target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
-  target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+  target_link_libraries(${TARGET_NAME} duckdb delayimp ${DUCKDB_EXTRA_LINK_FLAGS})
   set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
           ".duckdb_extension")
 
