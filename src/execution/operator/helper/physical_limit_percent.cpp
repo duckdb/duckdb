@@ -62,13 +62,6 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 	auto &limit_percent = state.limit_percent;
 	auto &offset = state.offset;
 
-	// if (limit != INVALID_INDEX && offset != INVALID_INDEX) {
-	//	idx_t max_element = limit + offset;
-	//	if ((limit == 0 || state.current_offset >= max_element) && !(limit_expression || offset_expression)) {
-	//		return SinkResultType::FINISHED;
-	//	}
-	//}
-
 	// get the next chunk from the child
 	if (!state.is_limit_percent_delimited) {
 		Value val;
@@ -80,9 +73,6 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		}
 		state.is_limit_percent_delimited = true;
 	}
-	// if (state.is_limit_percent_delimited && limit_count != INVALID_INDEX) {
-	//	limit = MinValue((idx_t)(limit_percent / 100 * limit_count), limit_count);
-	//}
 	if (!state.is_offset_delimited) {
 		Value val;
 		val.value_.ubigint = 1ULL << 62ULL;
@@ -93,14 +83,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		}
 		state.is_offset_delimited = true;
 	}
-	// idx_t max_element = limit + offset;
-	// if (limit == INVALID_INDEX) {
-	//	max_element = INVALID_INDEX;
-	//}
 	idx_t input_size = input.size();
-	// if (limit == 0 || state.current_offset >= max_element) {
-	//	return SinkResultType::FINISHED;
-	//}
 	if (state.current_offset < offset) {
 		// we are not yet at the offset point
 		if (state.current_offset + input.size() > offset) {
@@ -120,17 +103,9 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		}
 	} else {
 		// have to copy either the entire chunk or part of it
-		idx_t chunk_count;
-		// if (state.current_offset + input.size() >= max_element) {
-		//	// have to limit the count of the chunk
-		//	chunk_count = max_element - state.current_offset;
-		//} else {
-		// we copy the entire chunk
-		chunk_count = input.size();
-		//}
 		// instead of copying we just change the pointer in the current chunk
 		input.Reference(input);
-		input.SetCardinality(chunk_count);
+		input.SetCardinality(input_size);
 	}
 
 	state.current_offset += input_size;
