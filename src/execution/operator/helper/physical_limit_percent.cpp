@@ -69,6 +69,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		}
 		state.is_offset_delimited = true;
 	}
+
 	if (!PhysicalLimit::HandleOffset(input, state.current_offset, offset, INVALID_INDEX)) {
 		return SinkResultType::NEED_MORE_INPUT;
 	}
