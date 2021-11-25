@@ -114,7 +114,6 @@ public:
 
 	static vector<Value> TransformPythonParamList(py::handle params);
 
-private:
 	//! Default connection to an in-memory database
 	static shared_ptr<DuckDBPyConnection> default_connection;
 };

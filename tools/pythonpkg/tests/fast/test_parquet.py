@@ -66,15 +66,14 @@ class TestParquet(object):
         res = conn.execute("SELECT * FROM parquet_scan('"+filename+"')").fetchall()
         assert res[0] == (b'foo',)
 
-    # def test_from_parquet_binary_as_string_default_conn(self,duckdb_cursor):
-    #     duckdb.default_connection().execute("PRAGMA binary_as_string=1")
+    def test_from_parquet_binary_as_string_default_conn(self,duckdb_cursor):
+        duckdb.default_connection.execute("PRAGMA binary_as_string=1")
         
-    #     rel = duckdb.from_parquet(filename,True)
-    #     assert rel.types == ['VARCHAR']
+        rel = duckdb.from_parquet(filename,True)
+        assert rel.types == ['VARCHAR']
 
-    #     res = rel.execute().fetchall()
-    #     assert res[0] == ('foo',)
-    #     conn.close()
+        res = rel.execute().fetchall()
+        assert res[0] == ('foo',)
 
 
 
