@@ -40,6 +40,12 @@ public:
 	string Group() override;
 	string Subgroup() override;
 
+	string GetDatabasePath();
+
+	bool InMemory() {
+		return true;
+	}
+
 private:
 	bool is_loaded = false;
 	std::unordered_map<string, string> replacement_mapping;

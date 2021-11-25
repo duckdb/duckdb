@@ -1,6 +1,7 @@
 #include "interpreted_benchmark.hpp"
 #include "benchmark_runner.hpp"
 #include "duckdb.hpp"
+#include "test_helpers.hpp"
 
 #include <fstream>
 #include <sstream>
@@ -36,7 +37,8 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	DuckDB db;
 	Connection con;
 	unique_ptr<MaterializedQueryResult> result;
-	InterpretedBenchmarkState() : benchmark_config(GetBenchmarkConfig()), db(nullptr, benchmark_config.get()), con(db) {
+
+	explicit InterpretedBenchmarkState(string path) : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()), con(db) {
 		con.EnableProfiling();
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
@@ -255,7 +257,7 @@ void InterpretedBenchmark::LoadBenchmark() {
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
 	unique_ptr<QueryResult> result;
 	LoadBenchmark();
-	auto state = make_unique<InterpretedBenchmarkState>();
+	auto state = make_unique<InterpretedBenchmarkState>(GetDatabasePath());
 	for (auto &extension : extensions) {
 		auto result = ExtensionHelper::LoadExtension(state->db, extension);
 		if (result == ExtensionLoadResult::EXTENSION_UNKNOWN) {
@@ -330,6 +332,16 @@ void InterpretedBenchmark::Cleanup(BenchmarkState *state_p) {
 			}
 			result = move(result->next);
 		}
+	}
+}
+
+string InterpretedBenchmark::GetDatabasePath() {
+	if (!InMemory()) {
+		string path = "duckdb_benchmark_db.db";
+		DeleteDatabase(path);
+		return path;
+	} else {
+		return string();
 	}
 }
 
