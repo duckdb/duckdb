@@ -205,7 +205,7 @@ jobs:
         make
 
     - name: Test
-      run: build/release/test/Release/unittest.exe
+      run: build\release\test\Debug\unittest.exe
 
     - name: Deploy
       run: |
