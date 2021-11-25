@@ -3,6 +3,7 @@
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
+#include "duckdb/main/config.hpp"
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
@@ -37,7 +38,7 @@ struct IcuBindData : public FunctionData {
 };
 
 static int32_t ICUGetSortKey(icu::Collator &collator, string_t input, unique_ptr<char[]> &buffer,
-                                int32_t &buffer_size) {
+                             int32_t &buffer_size) {
 	int32_t string_size =
 	    collator.getSortKey(icu::UnicodeString::fromUTF8(icu::StringPiece(input.GetDataUnsafe(), input.GetSize())),
 	                        (uint8_t *)buffer.get(), buffer_size);
@@ -80,7 +81,7 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 }
 
 static unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, ScalarFunction &bound_function,
-                                                 vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 	auto splits = StringUtil::Split(bound_function.name, "_");
 	if (splits.size() == 1) {
 		return make_unique<IcuBindData>(splits[0], "");
@@ -92,7 +93,7 @@ static unique_ptr<FunctionData> ICUCollateBind(ClientContext &context, ScalarFun
 }
 
 static unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFunction &bound_function,
-                                                  vector<unique_ptr<Expression>> &arguments) {
+                                               vector<unique_ptr<Expression>> &arguments) {
 	if (!arguments[1]->IsFoldable()) {
 		throw NotImplementedException("ICU_SORT_KEY(VARCHAR, VARCHAR) with non-constant collation is not supported");
 	}
@@ -113,6 +114,15 @@ static unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFun
 static ScalarFunction GetICUFunction(string collation) {
 	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, false,
 	                      ICUCollateBind);
+}
+
+static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parameter) {
+	icu::StringPiece utf8(parameter.Value::GetValueUnsafe<string>());
+	const auto uid = icu::UnicodeString::fromUTF8(utf8);
+	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(uid));
+	if (*tz == icu::TimeZone::getUnknown()) {
+		throw NotImplementedException("Unknown TimeZone setting");
+	}
 }
 
 void ICUExtension::Load(DuckDB &db) {
@@ -145,6 +155,12 @@ void ICUExtension::Load(DuckDB &db) {
 
 	CreateScalarFunctionInfo sort_key_info(move(sort_key));
 	catalog.CreateFunction(*con.context, &sort_key_info);
+
+	// Time Zones
+	auto &config = DBConfig::GetConfig(*db.instance);
+	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, SetICUTimeZone);
+	Value utc("UTC");
+	config.set_variables["TimeZone"] = move(utc);
 
 	con.Commit();
 }

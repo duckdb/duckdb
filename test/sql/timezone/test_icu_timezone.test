@@ -1,0 +1,22 @@
+# name: test/sql/timezone/test_icu_timezone.test
+# description: Test the ICU TimeZone interface
+# group: [timezone]
+
+require icu
+
+query IIII
+SELECT * FROM duckdb_settings() WHERE name = 'TimeZone';
+----
+TimeZone	UTC	The current time zone	VARCHAR
+
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+query IIII
+SELECT * FROM duckdb_settings() WHERE name = 'TimeZone';
+----
+TimeZone	America/Los_Angeles	The current time zone	VARCHAR
+
+statement error
+SET TimeZone = 'fnord';
+
