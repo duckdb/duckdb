@@ -31,7 +31,7 @@ LogicalType::LogicalType(const LogicalType &other)
     : id_(other.id_), physical_type_(other.physical_type_), type_info_(other.type_info_) {
 }
 
-LogicalType::LogicalType(LogicalType &&other)
+LogicalType::LogicalType(LogicalType &&other) noexcept
     : id_(other.id_), physical_type_(other.physical_type_), type_info_(move(other.type_info_)) {
 }
 
