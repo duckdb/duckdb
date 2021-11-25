@@ -135,3 +135,80 @@ SELECT * FROM range(100) LIMIT -10 %;
 #Subqueries that return strings that can't be converted to integers
 statement error
 SELECT * FROM test LIMIT (SELECT 'ab') %
+
+# can only limit % by integers
+statement error
+select 1 limit date '2021-11-25' %;
+
+statement error
+select * from test limit "Hello World" %;
+
+#LIMIT % with strings
+statement ok
+CREATE TABLE test2 (a STRING);
+
+statement ok
+INSERT INTO test2 VALUES ('first'), ('second'), ('third'), ('4th'), ('5th') 
+
+statement ok
+PREPARE v1 AS SELECT * FROM test2 LIMIT 40%
+
+query I
+EXECUTE v1
+----
+first
+second
+
+# LIMIT % with multiple lists
+statement ok
+CREATE VIEW v3 AS SELECT i % 5 g, LIST(CASE WHEN i=6 or i=8 then null else i end) l FROM RANGE(20) tbl(i) group by g
+
+query II
+SELECT g, 5=ANY(l) FROM v3 ORDER BY g LIMIT 80%;
+----
+0	true
+1	NULL
+2	false
+3	NULL
+
+query II
+SELECT g, 3>ANY(l) FROM v3 ORDER BY g LIMIT 50%;
+----
+0	true
+1	true
+
+# LIMIT % with struct
+statement ok
+CREATE TABLE struct_data (g INTEGER, e INTEGER)
+
+statement ok
+INSERT INTO struct_data VALUES (1, 1), (1, 2), (2, 3), (2, 4), (2, 5), (3, 6), (5, NULL)
+
+query T
+SELECT STRUCT_PACK(a := 42, b := 43)
+----
+{'a': 42, 'b': 43}
+
+query IT
+SELECT e, STRUCT_PACK(e) FROM struct_data ORDER BY e LIMIT 60%
+----
+NULL	{'e': NULL}
+1	{'e': 1}
+2	{'e': 2}
+3	{'e': 3}
+
+# LIMIT % of NULL
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (4), (5);
+
+query I
+SELECT * FROM integers as int LIMIT (SELECT max(integers.i) FROM integers where i > 5) %
+----
+1
+2
+3
+4
+5

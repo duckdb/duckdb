@@ -24,9 +24,7 @@ public:
 	      offset_expression(move(offset_expression)) {
 	}
 
-	idx_t limit_value = INVALID_INDEX;
-	double limit_percent = 100.0;
-	idx_t limit_count = INVALID_INDEX;
+	double limit_percent;
 	idx_t offset_value;
 	unique_ptr<Expression> limit_expression;
 	unique_ptr<Expression> offset_expression;
