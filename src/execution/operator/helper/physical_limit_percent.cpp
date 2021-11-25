@@ -16,11 +16,15 @@ public:
 		if (!op.limit_expression) {
 			this->limit_percent = op.limit_percent;
 			is_limit_percent_delimited = true;
+		} else {
+			this->limit_percent = 100.0;
 		}
 
 		if (!op.offset_expression) {
 			this->offset = op.offset_value;
 			is_offset_delimited = true;
+		} else {
+			this->offset = INVALID_INDEX;
 		}
 	}
 

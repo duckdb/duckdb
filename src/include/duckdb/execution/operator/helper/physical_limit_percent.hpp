@@ -24,7 +24,7 @@ public:
 	      offset_expression(move(offset_expression)) {
 	}
 
-	double limit_percent = 100.0;
+	double limit_percent;
 	idx_t offset_value;
 	unique_ptr<Expression> limit_expression;
 	unique_ptr<Expression> offset_expression;

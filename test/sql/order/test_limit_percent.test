@@ -207,3 +207,8 @@ INSERT INTO integers VALUES (1), (2), (3), (4), (5);
 query I
 SELECT * FROM integers as int LIMIT (SELECT max(integers.i) FROM integers where i > 5) %
 ----
+1
+2
+3
+4
+5
