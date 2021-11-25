@@ -164,9 +164,8 @@ def get_formatted_text(f, full_path, directory, ext):
         return result
 
     if ext == ".hpp" and directory.startswith("src/include"):
-        f = open_utf8(full_path, 'r')
-        lines = f.readlines()
-        f.close()
+        with open_utf8(full_path, 'r') as f:
+            lines = f.readlines()
 
         # format header in files
         header_middle = "// " + os.path.relpath(full_path, base_dir) + "\n"
@@ -179,16 +178,14 @@ def get_formatted_text(f, full_path, directory, ext):
                 text += line
 
     if ext == '.test' or ext == '.test_slow' or ext == '.test_coverage':
-        f = open_utf8(full_path, 'r')
-        lines = f.readlines()
-        f.close()
+        with open_utf8(full_path, 'r') as f:
+            lines = f.readlines()
 
         found_name = False
         found_group = False
         group_name = full_path.split('/')[-2]
         new_path_line = '# name: ' + full_path + '\n'
         new_group_line =  '# group: [' + group_name + ']' + '\n'
-        found_diff = False
         for i in range(0, len(lines)):
             line = lines[i]
             if line.startswith('# name: ') or line.startswith('#name: '):
@@ -220,13 +217,13 @@ def get_formatted_text(f, full_path, directory, ext):
         print(' '.join(proc_command))
         print(stderr)
         exit(1)
-    return new_text
+    return new_text.replace('\r', '')
 
 def format_file(f, full_path, directory, ext):
     global difference_files
-    f = open_utf8(full_path, 'r')
-    old_lines = f.read().split('\n')
-    f.close()
+    with open_utf8(full_path, 'r') as f:
+        old_text = f.read()
+    old_lines = old_text.split('\n')
 
     new_text = get_formatted_text(f, full_path, directory, ext)
     if check_only:
@@ -238,6 +235,7 @@ def format_file(f, full_path, directory, ext):
         for diff_line in diff_result:
             total_diff += diff_line + "\n"
         total_diff = total_diff.strip()
+
         if len(total_diff) > 0:
             print("----------------------------------------")
             print("----------------------------------------")
@@ -248,10 +246,10 @@ def format_file(f, full_path, directory, ext):
             difference_files.append(full_path)
     else:
         tmpfile = full_path + ".tmp"
-        f = open_utf8(tmpfile, 'w+')
-        f.write(new_text)
-        f.close()
+        with open_utf8(tmpfile, 'w+') as f:
+            f.write(new_text)
         os.rename(tmpfile, full_path)
+
 
 def format_directory(directory):
     files = os.listdir(directory)
