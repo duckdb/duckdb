@@ -43,7 +43,11 @@ public:
 	string GetDatabasePath();
 
 	bool InMemory() {
-		return true;
+		return in_memory;
+	}
+
+	bool RequireReinit() override {
+		return require_reinit;
 	}
 
 private:
@@ -62,6 +66,9 @@ private:
 	string display_name;
 	string display_group;
 	string subgroup;
+
+	bool in_memory = false;
+	bool require_reinit = false;
 };
 
 } // namespace duckdb

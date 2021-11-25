@@ -1,14 +1,15 @@
 #include "interpreted_benchmark.hpp"
+
 #include "benchmark_runner.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/string_util.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/extension_helper.hpp"
+#include "duckdb/main/query_profiler.hpp"
 #include "test_helpers.hpp"
 
 #include <fstream>
 #include <sstream>
-#include "duckdb/main/query_profiler.hpp"
-#include "duckdb/main/extension_helper.hpp"
-#include "duckdb/common/string_util.hpp"
-#include "duckdb/main/client_context.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,9 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	Connection con;
 	unique_ptr<MaterializedQueryResult> result;
 
-	explicit InterpretedBenchmarkState(string path) : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()), con(db) {
+	explicit InterpretedBenchmarkState(string path)
+	    : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
+	      con(db) {
 		con.EnableProfiling();
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
@@ -146,6 +149,22 @@ void InterpretedBenchmark::LoadBenchmark() {
 				throw std::runtime_error(reader.FormatException("cache requires a single parameter"));
 			}
 			data_cache = splits[1];
+		} else if (splits[0] == "storage") {
+			if (splits.size() != 2) {
+				throw std::runtime_error(reader.FormatException("storage requires a single parameter"));
+			}
+			if (splits[1] == "transient") {
+				in_memory = true;
+			} else if (splits[1] == "persistent") {
+				in_memory = false;
+			} else {
+				throw std::runtime_error(reader.FormatException("Invalid argument for storage"));
+			}
+		} else if (splits[0] == "require_reinit") {
+			if (splits.size() != 1) {
+				throw std::runtime_error(reader.FormatException("require_reinit does not take any parameters"));
+			}
+			require_reinit = true;
 		} else if (splits[0] == "name" || splits[0] == "group" || splits[0] == "subgroup") {
 			if (splits.size() == 1) {
 				throw std::runtime_error(reader.FormatException(splits[0] + " requires a parameter"));

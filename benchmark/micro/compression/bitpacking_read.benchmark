@@ -1,0 +1,19 @@
+# name: benchmark/micro/compression/bitpacking_read.benchmark
+# description: Scanning 1GB of ints compressed at ~3x compression
+# group: [compression]
+
+name Bitpacking Insert
+group aggregate
+storage persistent
+
+load
+DROP TABLE IF EXISTS integers;
+PRAGMA force_compression='bitpacking';
+CREATE TABLE integers AS SELECT i % 4000000 AS i FROM range(0, 250000000) tbl(i);
+checkpoint;
+
+run
+select avg(i) from integers;
+
+result I
+1991999.5
