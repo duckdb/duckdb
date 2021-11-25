@@ -12,7 +12,7 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.NODE_PRE_GYP_SECRETACCESSKEY }}
   NODE_AUTH_TOKEN: ${{secrets.NODE_AUTH_TOKEN}}
 
-#jobs:
+jobs:
 # linux-debug:
 #    name: Linux Debug
 #    runs-on: ubuntu-20.04

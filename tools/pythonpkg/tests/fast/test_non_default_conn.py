@@ -5,7 +5,7 @@ import os
 import tempfile
 
 class TestNonDefaultConn(object):
-    
+
     def test_values(self, duckdb_cursor):
         conn = duckdb.connect()
         conn.execute("create table t (a integer)")
@@ -30,6 +30,10 @@ class TestNonDefaultConn(object):
         assert rel.query('t_2','select count(*) from t inner join t_2 on (a = i)').fetchall()[0] ==  (1,)
        
     def test_from_parquet(self, duckdb_cursor):
+        try:
+            import pyarrow as pa
+        except:
+            return
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         conn = duckdb.connect()
         conn.execute("create table t (a integer)")
