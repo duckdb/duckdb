@@ -12,7 +12,7 @@ endif()
 
 set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
 
-if(MSVC)
+if(MSVC OR MINGW)
   set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32 wsock32)
 endif()
 
