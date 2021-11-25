@@ -283,21 +283,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		}
 	}
 	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
-		auto &limit = (LogicalLimitPercent &)*plan;
-		if (limit.offset_val > 0) {
-			throw ParserException("OFFSET not supported in correlated subquery");
-		}
-		if (limit.limit) {
-			throw ParserException("Non-constant limit percent not supported in correlated subquery");
-		}
-		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
-		if (limit.limit_percent <= 0.0) {
-			// limit = 0 means we return zero columns here
-			return plan;
-		} else {
-			// limit > 0 does nothing
-			return move(plan->children[0]);
-		}
+		throw ParserException("Limit percent operator not supported in correlated subquery");
 	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		auto &window = (LogicalWindow &)*plan;
