@@ -152,66 +152,6 @@ private:
 			duckdb_fastpforlib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
 		}
 	}
-
-	template <class T>
-	static void PackValueGroupedFallbackByteAligned(data_ptr_t dst, T *values, bitpacking_width_t width) {
-		D_ASSERT(width % 8 == 0);
-
-		switch (width) {
-		case 8:
-			PackValues<T, uint8_t>(dst, values);
-			break;
-		case 16:
-			PackValues<T, uint16_t>(dst, values);
-			break;
-		case 32:
-			PackValues<T, uint32_t>(dst, values);
-			break;
-		case 64:
-			PackValues<T, uint64_t>(dst, values);
-			break;
-		default:
-			throw InternalException("Unsupported width in Bitpacking");
-		}
-	}
-
-	template <class FROM_TYPE, class TO_TYPE>
-	static void PackValues(data_ptr_t dst, FROM_TYPE *values) {
-		for (idx_t i = 0; i < BITPACKING_ALGORITHM_GROUP_SIZE; i++) {
-			(*((TO_TYPE *)dst + i)) = (TO_TYPE) * (values + i);
-		}
-	}
-
-	template <class T>
-	static void UnPackGroupedFallbackByteAligned(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
-		D_ASSERT(width % 8 == 0);
-
-		switch (width) {
-		case 8:
-			UnpackValues<uint8_t, T>(dst, src);
-			break;
-		case 16:
-			UnpackValues<uint16_t, T>(dst, src);
-			break;
-		case 32:
-			UnpackValues<uint32_t, T>(dst, src);
-			break;
-		case 64:
-			UnpackValues<uint64_t, T>(dst, src);
-			break;
-		}
-
-		if (std::is_signed<T>::value) {
-			SignExtend<T>(dst, width);
-		}
-	}
-
-	template <class FROM_TYPE, class TO_TYPE>
-	static void UnpackValues(data_ptr_t dst, data_ptr_t src) {
-		for (idx_t i = 0; i < BITPACKING_ALGORITHM_GROUP_SIZE; i++) {
-			*(((TO_TYPE *)dst) + i) = (TO_TYPE) * (((FROM_TYPE *)src) + i);
-		}
-	}
 };
 
 struct EmptyBitpackingWriter {
