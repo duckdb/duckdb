@@ -95,9 +95,11 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	    .value("comment", PySQLTokenType::PY_SQL_TOKEN_COMMENT)
 	    .export_values();
 
-	m.def("values", &DuckDBPyRelation::Values, "Create a relation object from the passed values", py::arg("values"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("values", &DuckDBPyRelation::Values, "Create a relation object from the passed values", py::arg("values"),
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_query", &DuckDBPyRelation::FromQuery, "Create a relation object from the given SQL query",
-	      py::arg("query"), py::arg("alias") = "query_relation", py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("query"), py::arg("alias") = "query_relation",
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("query", &DuckDBPyRelation::FromQuery, "Create a relation object from the given SQL query", py::arg("query"),
 	      py::arg("alias") = "query_relation", py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_csv_auto", &DuckDBPyRelation::FromCsvAuto, "Creates a relation object from the CSV file in file_name",
@@ -106,14 +108,18 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"),
 	      py::arg("binary_as_string"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_parquet", &DuckDBPyRelation::FromParquetDefault,
-	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
-	m.def("df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
-	m.def("from_df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      "Creates a relation object from the Parquet file in file_name", py::arg("file_name"),
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"),
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("from_df", &DuckDBPyRelation::FromDf, "Create a relation object from the Data.Frame df", py::arg("df"),
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("from_arrow_table", &DuckDBPyRelation::FromArrowTable, "Create a relation object from an Arrow table",
 	      py::arg("table"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
-	m.def("arrow", &DuckDBPyRelation::FromArrowTable, "Create a relation object from an Arrow table", py::arg("table"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
-	m.def("filter", &DuckDBPyRelation::FilterDf, "Filter the Data.Frame df by the filter in filter_expr",
-	      py::arg("df"),py::arg("filter_expr"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("arrow", &DuckDBPyRelation::FromArrowTable, "Create a relation object from an Arrow table", py::arg("table"),
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("filter", &DuckDBPyRelation::FilterDf, "Filter the Data.Frame df by the filter in filter_expr", py::arg("df"),
+	      py::arg("filter_expr"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("project", &DuckDBPyRelation::ProjectDf, "Project the Data.Frame df by the projection in project_expr",
 	      py::arg("df"), py::arg("project_expr"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("alias", &DuckDBPyRelation::AliasDF, "Create a relation from Data.Frame df with the passed alias",
@@ -122,8 +128,10 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      py::arg("order_expr"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("aggregate", &DuckDBPyRelation::AggregateDF,
 	      "Compute the aggregate aggr_expr by the optional groups group_expr on Data.frame df", py::arg("df"),
-	      py::arg("aggr_expr"), py::arg("group_expr") = "", py::arg("connection") = DuckDBPyConnection::DefaultConnection());
-	m.def("distinct", &DuckDBPyRelation::DistinctDF, "Compute the distinct rows from Data.Frame df ", py::arg("df"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("aggr_expr"), py::arg("group_expr") = "",
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	m.def("distinct", &DuckDBPyRelation::DistinctDF, "Compute the distinct rows from Data.Frame df ", py::arg("df"),
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	m.def("limit", &DuckDBPyRelation::LimitDF, "Retrieve the first n rows from the Data.Frame df", py::arg("df"),
 	      py::arg("n"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 
@@ -132,7 +140,8 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) {
 	      "query_df(self, df: pandas.DataFrame, virtual_table_name: str, sql_query: str) -> DuckDBPyRelation \n"
 	      "Run the given SQL query in sql_query on the view named virtual_table_name that contains the content of "
 	      "Data.Frame df",
-	      py::arg("df"), py::arg("virtual_table_name"), py::arg("sql_query"), py::arg("connection") = DuckDBPyConnection::DefaultConnection());
+	      py::arg("df"), py::arg("virtual_table_name"), py::arg("sql_query"),
+	      py::arg("connection") = DuckDBPyConnection::DefaultConnection());
 	pybind_opts.enable_function_signatures();
 
 	m.def("write_csv", &DuckDBPyRelation::WriteCsvDF, "Write the Data.Frame df to a CSV file in file_name",

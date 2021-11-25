@@ -75,7 +75,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Values(py::object values, DuckDBP
 	return conn->Values(std::move(values));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, const string &alias, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromQuery(const string &query, const string &alias,
+                                                         DuckDBPyConnection *conn) {
 	return conn->FromQuery(query, alias);
 }
 
@@ -83,7 +84,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filenam
 	return conn->FromCsvAuto(filename);
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filename, bool binary_as_string, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filename, bool binary_as_string,
+                                                           DuckDBPyConnection *conn) {
 	return conn->FromParquet(filename, binary_as_string);
 }
 
@@ -151,7 +153,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Aggregate(const string &expr, con
 	return make_unique<DuckDBPyRelation>(rel->Aggregate(expr));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(py::object df, const string &expr, const string &groups, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::AggregateDF(py::object df, const string &expr, const string &groups,
+                                                           DuckDBPyConnection *conn) {
 	return conn->FromDF(std::move(df))->Aggregate(expr, groups);
 }
 
@@ -262,7 +265,8 @@ unique_ptr<DuckDBPyResult> DuckDBPyRelation::Execute() {
 	return res;
 }
 
-unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string &view_name, const string &sql_query, DuckDBPyConnection *conn) {
+unique_ptr<DuckDBPyResult> DuckDBPyRelation::QueryDF(py::object df, const string &view_name, const string &sql_query,
+                                                     DuckDBPyConnection *conn) {
 	return conn->FromDF(std::move(df))->Query(view_name, sql_query);
 }
 
