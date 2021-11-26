@@ -10,7 +10,23 @@
 
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #ifdef _WIN32
-#include "duckdb/common/windows.hpp"
+
+#ifndef DUCKDB_WINDOWS_H
+#define DUCKDB_WINDOWS_H
+
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include <winsock2.h>
+#include <windows.h>
+
+#undef CreateDirectory
+#undef MoveFile
+#undef RemoveDirectory
+
+#endif
+
 #include <delayimp.h>
 
 extern "C" {
