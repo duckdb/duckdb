@@ -176,18 +176,13 @@ static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind
 			break;
 		}
 
-		//	We don't have the zone tree for determining abbreviated names,
-		//	so we fake it by skipping anything without a slash.
-		if (long_id->indexOf(char16_t('/')) < 0) {
-			continue;
-		}
-
 		//	The LONG name is the one we looked up
 		std::string utf8;
         long_id->toUTF8String(utf8);
 		output.SetValue(0, index, Value(utf8));
 
-		//	The SHORT name is the first equivalent TZ without a slash.
+		//	We don't have the zone tree for determining abbreviated names,
+		//	so the SHORT name is the first equivalent TZ without a slash.
 		icu::UnicodeString short_id = *long_id;
 		const auto nIDs = icu::TimeZone::countEquivalentIDs(*long_id);
 		for (int32_t idx = 0; idx < nIDs; ++idx) {
