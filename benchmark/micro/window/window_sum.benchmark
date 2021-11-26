@@ -1,6 +1,6 @@
 # name: benchmark/micro/window/window_sum.benchmark
 # description: Window Sum
-# group: [micro]
+# group: [window]
 
 name Window Sum
 group window
