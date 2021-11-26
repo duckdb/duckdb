@@ -1,0 +1,13 @@
+# name: test/sql/copy/parquet/lineitem_arrow.test
+# description: Issue #2261: TPC-H Q6 fails on Parquet input
+# group: [parquet]
+
+require parquet
+
+query III
+SELECT * FROM 'data/parquet-testing/simple.parquet'
+----
+
+
+SELECT * FROM 'data/parquet-testing/complex.parquet'
+----

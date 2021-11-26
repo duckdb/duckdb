@@ -254,6 +254,32 @@ static uint8_t ComputeBitWidth(idx_t val) {
 	return ret;
 }
 
+
+
+template<class T>
+T zigzagToInt(const T n) {
+	return (n >> 1) ^ -(n & 1);
+}
+
+
+template<class T>
+T VarintDecode(ByteBuffer &buf) {
+	T result = 0;
+	uint8_t shift = 0;
+	while (true) {
+		auto byte = buf.read<uint8_t>();
+		result |= (byte & 127) << shift;
+		if ((byte & 128) == 0)
+			break;
+		shift += 7;
+		if (shift > sizeof(T) * 8) {
+			throw std::runtime_error("Varint-decoding found too large number");
+		}
+	}
+	return result;
+}
+
+
 void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (page_hdr.type == PageType::DATA_PAGE && !page_hdr.__isset.data_page_header) {
 		throw std::runtime_error("Missing data page header from data page");
@@ -298,6 +324,48 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		block->inc(block->len);
 		break;
 	}
+	case Encoding::DELTA_BINARY_PACKED:
+	{
+		//<block size in values> <number of miniblocks in a block> <total value count> <first value>
+		auto block_value_count = VarintDecode<uint64_t>(*block);
+		auto miniblocks_per_block = VarintDecode<uint64_t>(*block);
+		auto total_value_count = VarintDecode<uint64_t>(*block);
+		auto first_value = zigzagToInt(VarintDecode<int64_t>(*block));
+
+
+		printf("block_value_count=%llu\ttotal_value_count=%llu\tminiblocks_per_block=%llu\tfirst_value=%lld\n", block_value_count, total_value_count,miniblocks_per_block,first_value);
+
+
+		if (total_value_count == 1) { // I guess it's a special case
+			printf("Value=%lld\n", first_value);
+			break;
+		}
+
+		auto miniblock_bit_widths = std::unique_ptr<uint8_t[]>(new data_t[miniblocks_per_block]);
+		idx_t values_read = 0;
+		idx_t values_left_in_block = 0;
+		while (values_read < total_value_count) {
+			if (values_left_in_block == 0) { // need to open new block
+				auto min_delta = zigzagToInt(VarintDecode<int64_t>(*block));
+
+				for (idx_t miniblock_idx = 0; miniblock_idx < miniblocks_per_block; miniblock_idx++ ) {\
+					miniblock_bit_widths[miniblock_idx] = block->read<uint8_t>();
+					printf("miniblock width=%d\n", miniblock_bit_widths[miniblock_idx]);
+				}
+
+				values_left_in_block = block_value_count;
+			}
+			// read miniblocks
+		}
+		break;
+	}
+	case Encoding::DELTA_BYTE_ARRAY:
+
+		// This is also known as incremental encoding or front compression: for each element in a sequence of strings, store the prefix length of the previous entry plus the suffix.
+		// This is stored as a sequence of delta-encoded prefix lengths (DELTA_BINARY_PACKED), followed by the suffixes encoded as delta length byte arrays (DELTA_LENGTH_BYTE_ARRAY).
+		// DELTA_LENGTH_BYTE_ARRAY: The encoded data would be DeltaEncoding(5, 5, 6, 6) "HelloWorldFoobarABCDEF"
+
+		break;
 	case Encoding::PLAIN:
 		// nothing to do here, will be read directly below
 		break;
