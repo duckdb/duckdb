@@ -38,7 +38,7 @@ struct ClientConfig {
 	//! elements)
 	idx_t perfect_ht_threshold = 12;
 	//! Flag used in the hash join to set whether the build is a primary key
-	bool  has_primary_key = false;
+	bool has_primary_key = false;
 
 	//! The explain output type used when none is specified (default: PHYSICAL_ONLY)
 	ExplainOutputType explain_output_type = ExplainOutputType::PHYSICAL_ONLY;
