@@ -196,7 +196,7 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 	unique_ptr<VectorData[]> key_data;
 	const SelectionVector *current_sel;
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	idx_t prepared_keys_count = PrepareKeys(keys, key_data, current_sel, sel, true);// filter nulls out
+	idx_t prepared_keys_count = PrepareKeys(keys, key_data, current_sel, sel, true); // filter nulls out
 	if (prepared_keys_count < keys.size()) {
 		has_null = true;
 	}
