@@ -10,7 +10,7 @@
 
 #ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #ifdef _WIN32
-#include <windows.h>
+#include "duckdb/common/windows.hpp"
 #include <delayimp.h>
 
 extern "C" {
