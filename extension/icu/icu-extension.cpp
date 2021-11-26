@@ -11,6 +11,7 @@
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
@@ -125,6 +126,97 @@ static void SetICUTimeZone(ClientContext &context, SetScope scope, Value &parame
 	}
 }
 
+struct ICUTimeZoneData : public FunctionOperatorData {
+	ICUTimeZoneData() : tzs(icu::TimeZone::createEnumeration()) {
+		UErrorCode status = U_ZERO_ERROR;
+		std::unique_ptr<icu::Calendar> calendar(icu::Calendar::createInstance(status));
+		now = calendar->getNow();
+	}
+
+	std::unique_ptr<icu::StringEnumeration> tzs;
+	UDate now;
+};
+
+static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, vector<Value> &inputs,
+                                                  unordered_map<string, Value> &named_parameters,
+                                                  vector<LogicalType> &input_table_types,
+                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                  vector<string> &names) {
+	names.emplace_back("name");
+	return_types.push_back(LogicalType::VARCHAR);
+	names.emplace_back("abbrev");
+	return_types.push_back(LogicalType::VARCHAR);
+	names.emplace_back("utc_offset");
+	return_types.push_back(LogicalType::INTERVAL);
+	names.emplace_back("is_dst");
+	return_types.push_back(LogicalType::BOOLEAN);
+
+	return nullptr;
+}
+
+static unique_ptr<FunctionOperatorData> ICUTimeZoneInit(ClientContext &context, const FunctionData *bind_data,
+                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
+	return make_unique<ICUTimeZoneData>();
+}
+
+static void ICUTimeZoneCleanup(ClientContext &context, const FunctionData *bind_data,
+							   FunctionOperatorData *operator_state) {
+	auto &data = (ICUTimeZoneData &) *operator_state;
+	data.tzs.release();
+}
+
+static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind_data,
+                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	auto &data = (ICUTimeZoneData &) *operator_state;
+	idx_t index = 0;
+	while (index < STANDARD_VECTOR_SIZE) {
+		UErrorCode status = U_ZERO_ERROR;
+		auto long_id = data.tzs->snext(status);
+		if (U_FAILURE(status) || !long_id) {
+			break;
+		}
+
+		//	We don't have the zone tree for determining abbreviated names,
+		//	so we fake it by skipping anything without a slash.
+		if (long_id->indexOf(char16_t('/')) < 0) {
+			continue;
+		}
+
+		//	The LONG name is the one we looked up
+		std::string utf8;
+        long_id->toUTF8String(utf8);
+		output.SetValue(0, index, Value(utf8));
+
+		//	The SHORT name is the first equivalent TZ without a slash.
+		icu::UnicodeString short_id = *long_id;
+		const auto nIDs = icu::TimeZone::countEquivalentIDs(*long_id);
+		for (int32_t idx = 0; idx < nIDs; ++idx) {
+			const auto eid = icu::TimeZone::getEquivalentID(*long_id, idx);
+			if (eid.indexOf(char16_t('/')) < 0) {
+				short_id = eid;
+				break;
+			}
+		}
+
+        utf8.clear();
+		short_id.toUTF8String(utf8);
+		output.SetValue(1, index, Value(utf8));
+
+		std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
+		int32_t rawOffsetMS;
+		int32_t dstOffsetMS;
+		tz->getOffset(data.now, false, rawOffsetMS, dstOffsetMS, status);
+        if (U_FAILURE(status)) {
+            break;
+        }
+
+		output.SetValue(2, index, Value::INTERVAL(Interval::FromMicro(rawOffsetMS * Interval::MICROS_PER_MSEC)));
+		output.SetValue(3, index, Value(dstOffsetMS != 0));
+		++index;
+	}
+	output.SetCardinality(index);
+}
+
 void ICUExtension::Load(DuckDB &db) {
 	// load the collations
 	Connection con(db);
@@ -161,6 +253,10 @@ void ICUExtension::Load(DuckDB &db) {
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, SetICUTimeZone);
 	Value utc("UTC");
 	config.set_variables["TimeZone"] = move(utc);
+
+	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit, nullptr, ICUTimeZoneCleanup);
+	CreateTableFunctionInfo tz_names_info(move(tz_names));
+	catalog.CreateTableFunction(*con.context, &tz_names_info);
 
 	con.Commit();
 }
