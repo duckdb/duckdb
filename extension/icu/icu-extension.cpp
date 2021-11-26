@@ -138,10 +138,10 @@ struct ICUTimeZoneData : public FunctionOperatorData {
 };
 
 static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, vector<Value> &inputs,
-                                                  unordered_map<string, Value> &named_parameters,
-                                                  vector<LogicalType> &input_table_types,
-                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
-                                                  vector<string> &names) {
+                                                unordered_map<string, Value> &named_parameters,
+                                                vector<LogicalType> &input_table_types,
+                                                vector<string> &input_table_names, vector<LogicalType> &return_types,
+                                                vector<string> &names) {
 	names.emplace_back("name");
 	return_types.push_back(LogicalType::VARCHAR);
 	names.emplace_back("abbrev");
@@ -155,19 +155,20 @@ static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, vector<V
 }
 
 static unique_ptr<FunctionOperatorData> ICUTimeZoneInit(ClientContext &context, const FunctionData *bind_data,
-                                                   const vector<column_t> &column_ids, TableFilterCollection *filters) {
+                                                        const vector<column_t> &column_ids,
+                                                        TableFilterCollection *filters) {
 	return make_unique<ICUTimeZoneData>();
 }
 
 static void ICUTimeZoneCleanup(ClientContext &context, const FunctionData *bind_data,
-							   FunctionOperatorData *operator_state) {
-	auto &data = (ICUTimeZoneData &) *operator_state;
+                               FunctionOperatorData *operator_state) {
+	auto &data = (ICUTimeZoneData &)*operator_state;
 	data.tzs.release();
 }
 
 static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind_data,
-                                  FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
-	auto &data = (ICUTimeZoneData &) *operator_state;
+                                FunctionOperatorData *operator_state, DataChunk *input, DataChunk &output) {
+	auto &data = (ICUTimeZoneData &)*operator_state;
 	idx_t index = 0;
 	while (index < STANDARD_VECTOR_SIZE) {
 		UErrorCode status = U_ZERO_ERROR;
@@ -178,7 +179,7 @@ static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind
 
 		//	The LONG name is the one we looked up
 		std::string utf8;
-        long_id->toUTF8String(utf8);
+		long_id->toUTF8String(utf8);
 		output.SetValue(0, index, Value(utf8));
 
 		//	We don't have the zone tree for determining abbreviated names,
@@ -193,7 +194,7 @@ static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind
 			}
 		}
 
-        utf8.clear();
+		utf8.clear();
 		short_id.toUTF8String(utf8);
 		output.SetValue(1, index, Value(utf8));
 
@@ -201,9 +202,9 @@ static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind
 		int32_t rawOffsetMS;
 		int32_t dstOffsetMS;
 		tz->getOffset(data.now, false, rawOffsetMS, dstOffsetMS, status);
-        if (U_FAILURE(status)) {
-            break;
-        }
+		if (U_FAILURE(status)) {
+			break;
+		}
 
 		output.SetValue(2, index, Value::INTERVAL(Interval::FromMicro(rawOffsetMS * Interval::MICROS_PER_MSEC)));
 		output.SetValue(3, index, Value(dstOffsetMS != 0));
@@ -211,6 +212,95 @@ static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind
 	}
 	output.SetCardinality(index);
 }
+
+struct ICUDatePart {
+	using CalendarPtr = unique_ptr<icu::Calendar>;
+	using PartCode = UCalendarDateFields;
+
+	static PartCode PartCodeFromFunction(const string &name) {
+		if (name == "icu_year") {
+			return UCAL_YEAR;
+		} else if (name == "icu_month") {
+			return UCAL_MONTH;
+		} else if (name == "icu_day") {
+			return UCAL_DATE;
+		} else if (name == "icu_dayofweek") {
+			return UCAL_DAY_OF_WEEK;
+		} else if (name == "icu_dayofyear") {
+			return UCAL_DAY_OF_YEAR;
+		} else if (name == "icu_week") {
+			return UCAL_WEEK_OF_YEAR;
+		} else if (name == "icu_hour") {
+			return UCAL_HOUR_OF_DAY;
+		} else if (name == "icu_minute") {
+			return UCAL_MINUTE;
+		} else if (name == "icu_second") {
+			return UCAL_SECOND;
+		} else if (name == "icu_millisecond") {
+			return UCAL_MILLISECOND;
+		} else {
+			// decade, century, millenium, quarter, isodow, epoch, microsecond
+			throw NotImplementedException("Unknown ICU date part");
+		}
+	}
+
+	struct BindData : public FunctionData {
+		BindData(CalendarPtr calendar_p, PartCode part_p) : calendar(move(calendar_p)), part(part_p) {
+		}
+
+		CalendarPtr calendar;
+		const PartCode part;
+
+		unique_ptr<FunctionData> Copy() override {
+			return make_unique<BindData>(CalendarPtr(calendar->clone()), part);
+		}
+	};
+
+	static void UnaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &info = (BindData &)*func_expr.bind_info;
+		CalendarPtr calendar(info.calendar->clone());
+
+		UnaryExecutor::Execute<timestamp_t, int32_t>(args.data[0], result, args.size(), [&](timestamp_t input) {
+			UErrorCode status = U_ZERO_ERROR;
+
+			const UDate millis = input.value / Interval::MICROS_PER_MSEC;
+			calendar->setTime(millis, status);
+
+			const auto result = calendar->get(info.part, status);
+			if (U_FAILURE(status)) {
+				throw Exception("Unable to compute ICU date part.");
+			}
+
+			return result;
+		});
+	}
+
+	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
+	                                     vector<unique_ptr<Expression>> &arguments) {
+		auto part = PartCodeFromFunction(bound_function.name);
+		auto tz_us = icu::TimeZone::createTimeZone("America/Los_Angeles");
+
+		UErrorCode success = U_ZERO_ERROR;
+		CalendarPtr calendar(icu::Calendar::createInstance(tz_us, success));
+		if (U_FAILURE(success)) {
+			throw Exception("Unable to create ICU date part calendar.");
+		}
+
+		return make_unique<BindData>(move(calendar), part);
+	}
+
+	static ScalarFunction GetUnaryTimestampFunction(const string &name) {
+		return ScalarFunction(name, {LogicalType::TIMESTAMP}, LogicalType::INTEGER, UnaryFunction, false, Bind);
+	}
+
+	static void AddUnaryTimestampFunction(const string &name, ClientContext &context) {
+		auto &catalog = Catalog::GetCatalog(context);
+		ScalarFunction func = GetUnaryTimestampFunction(name);
+		CreateScalarFunctionInfo func_info(move(func));
+		catalog.CreateFunction(context, &func_info);
+	}
+};
 
 void ICUExtension::Load(DuckDB &db) {
 	// load the collations
@@ -249,9 +339,22 @@ void ICUExtension::Load(DuckDB &db) {
 	Value utc("UTC");
 	config.set_variables["TimeZone"] = move(utc);
 
-	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit, nullptr, ICUTimeZoneCleanup);
+	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit, nullptr,
+	                       ICUTimeZoneCleanup);
 	CreateTableFunctionInfo tz_names_info(move(tz_names));
 	catalog.CreateTableFunction(*con.context, &tz_names_info);
+
+	// Part functions
+	ICUDatePart::AddUnaryTimestampFunction("icu_year", *con.context);
+	ICUDatePart::AddUnaryTimestampFunction("icu_month", *con.context);
+	ICUDatePart::AddUnaryTimestampFunction("icu_day", *con.context);
+	ICUDatePart::AddUnaryTimestampFunction("icu_dayofweek", *con.context);
+	ICUDatePart::AddUnaryTimestampFunction("icu_dayofyear", *con.context);
+	ICUDatePart::AddUnaryTimestampFunction("icu_week", *con.context);
+	ICUDatePart::AddUnaryTimestampFunction("icu_hour", *con.context);
+	ICUDatePart::AddUnaryTimestampFunction("icu_minute", *con.context);
+	ICUDatePart::AddUnaryTimestampFunction("icu_second", *con.context);
+	ICUDatePart::AddUnaryTimestampFunction("icu_millisecond", *con.context);
 
 	con.Commit();
 }
