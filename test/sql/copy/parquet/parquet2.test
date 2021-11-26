@@ -19,7 +19,7 @@
 require parquet
 
 query I
-SELECT * FROM '/Users/hannes/source/p2.parquet/*.parquet' limit 100;
+SELECT * FROM 'data/parquet-testing/p2.parquet' limit 100;
 ----
 1322
 4232
