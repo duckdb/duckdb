@@ -67,7 +67,7 @@ private:
 	string display_group;
 	string subgroup;
 
-	bool in_memory = false;
+	bool in_memory = true;
 	bool require_reinit = false;
 };
 
