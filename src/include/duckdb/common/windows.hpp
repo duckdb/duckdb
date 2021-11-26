@@ -1,7 +1,7 @@
+#ifdef _WIN32
+
 #ifndef DUCKDB_WINDOWS_H
 #define DUCKDB_WINDOWS_H
-
-#ifdef _WIN32
 
 #ifndef NOMINMAX
 #define NOMINMAX

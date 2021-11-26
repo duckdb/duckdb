@@ -8,14 +8,7 @@ with open(common_path, 'r') as f:
 
 text = text.replace('#pragma once', '''#pragma once
 
-#ifdef _WIN32
-#ifdef DUCKDB_MAIN_LIBRARY
-#define DUCKDB_WINDOWS_H
-
-#include <winsock2.h>
-#include <windows.h>
-#endif
-#endif''')
+#include "duckdb/common/windows.hpp"''')
 
 with open(common_path, 'w+') as f:
 	f.write(text)
