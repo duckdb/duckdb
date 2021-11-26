@@ -23,7 +23,9 @@
 #  define _THRIFT_TRANSPORT_PLATFORM_SOCKET_H_
 
 #ifdef _WIN32
+#ifndef DUCKDB_WINDOWS_H
 #  include <winsock2.h>
+#endif
 #  define THRIFT_GET_SOCKET_ERROR ::WSAGetLastError()
 #  define THRIFT_ERRNO (*_errno())
 #  define THRIFT_EINPROGRESS WSAEINPROGRESS

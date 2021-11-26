@@ -1,4 +1,5 @@
-#pragma once
+#ifndef DUCKDB_WINDOWS_H
+#define DUCKDB_WINDOWS_H
 
 #ifdef _WIN32
 
@@ -12,5 +13,7 @@
 #undef CreateDirectory
 #undef MoveFile
 #undef RemoveDirectory
+
+#endif
 
 #endif

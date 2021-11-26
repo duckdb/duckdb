@@ -138,7 +138,9 @@ using ssize_t = int;
 #endif // NOMINMAX
 
 #include <io.h>
+#ifndef DUCKDB_WINDOWS_H
 #include <winsock2.h>
+#endif
 
 #include <wincrypt.h>
 #include <ws2tcpip.h>
