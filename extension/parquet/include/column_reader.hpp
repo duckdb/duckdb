@@ -13,6 +13,7 @@
 #include "resizable_buffer.hpp"
 
 #include "parquet_rle_bp_decoder.hpp"
+#include "parquet_dbp_decoder.hpp"
 #include "parquet_statistics.hpp"
 
 #include "duckdb.hpp"
@@ -153,6 +154,7 @@ private:
 	unique_ptr<RleBpDecoder> dict_decoder;
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> repeated_decoder;
+	unique_ptr<DbpDecoder> dbp_decoder;
 
 	// dummies for Skip()
 	parquet_filter_t none_filter;

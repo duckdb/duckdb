@@ -58,7 +58,7 @@ private:
 	uint8_t byte_encoded_len;
 	uint32_t max_val;
 
-	int8_t bitpack_pos = 0;
+	uint8_t bitpack_pos = 0;
 
 	// this is slow but whatever, calls are rare
 	uint32_t VarintDecode() {

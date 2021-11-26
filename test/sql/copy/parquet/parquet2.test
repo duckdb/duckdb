@@ -1,13 +1,132 @@
-# name: test/sql/copy/parquet/lineitem_arrow.test
+# name: test/sql/copy/parquet/parquet2.test
 # description: Issue #2261: TPC-H Q6 fails on Parquet input
 # group: [parquet]
 
+
+# Here's how we generate this
+# from pyspark.sql import SparkSession
+# from pyspark.sql.types import *
+# 
+# spark = SparkSession.builder.master("local").config("spark.hadoop.parquet.writer.version", "v2").getOrCreate()
+# sc = spark.sparkContext
+# 
+# ref = spark.range(42, 10000, 2).toDF("id").orderBy(rand())
+# ref.show(10)
+# 
+# ref.write.parquet("p2.parquet")
+
+
 require parquet
 
-query III
-SELECT * FROM 'data/parquet-testing/simple.parquet'
+query I
+SELECT * FROM '/Users/hannes/source/p2.parquet/*.parquet' limit 100;
 ----
+1322
+4232
+2294
+3944
+4476
+2760
+5402
+1954
+542
+4298
+8886
+9104
+1180
+1302
+7248
+6458
+5752
+6444
+4814
+2540
+2230
+5882
+4270
+5120
+9138
+7238
+8028
+6530
+556
+5110
+9324
+8660
+1174
+1884
+5506
+2156
+2244
+1636
+1962
+9080
+5168
+5166
+8472
+4984
+9098
+7844
+184
+6032
+6502
+7944
+550
+8086
+318
+1098
+8714
+272
+3720
+9308
+8184
+5512
+5390
+7128
+9784
+6834
+1610
+1046
+5598
+3290
+252
+4428
+6034
+8420
+2308
+182
+9110
+5036
+8458
+8126
+4050
+6258
+2232
+6300
+5366
+4454
+5798
+6120
+106
+1818
+5494
+4168
+8598
+6234
+878
+80
+9980
+4972
+1764
+5246
+3578
+9162
 
 
-SELECT * FROM 'data/parquet-testing/complex.parquet'
-----
+# query III
+# SELECT * FROM 'data/parquet-testing/simple.parquet'
+# ----
+# 
+# 
+# SELECT * FROM 'data/parquet-testing/complex.parquet'
+# ----

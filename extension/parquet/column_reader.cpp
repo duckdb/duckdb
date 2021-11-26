@@ -37,6 +37,14 @@ const uint32_t RleBpDecoder::BITPACK_MASKS[] = {
 
 const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
 
+// TODO not copy this stuff
+const uint32_t DbpDecoder::BITPACK_MASKS[] = {
+    0,       1,       3,        7,        15,       31,        63,        127,       255,        511,       1023,
+    2047,    4095,    8191,     16383,    32767,    65535,     131071,    262143,    524287,     1048575,   2097151,
+    4194303, 8388607, 16777215, 33554431, 67108863, 134217727, 268435455, 536870911, 1073741823, 2147483647};
+
+const uint8_t DbpDecoder::BITPACK_DLEN = 8;
+
 ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                            idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
@@ -254,32 +262,6 @@ static uint8_t ComputeBitWidth(idx_t val) {
 	return ret;
 }
 
-
-
-template<class T>
-T zigzagToInt(const T n) {
-	return (n >> 1) ^ -(n & 1);
-}
-
-
-template<class T>
-T VarintDecode(ByteBuffer &buf) {
-	T result = 0;
-	uint8_t shift = 0;
-	while (true) {
-		auto byte = buf.read<uint8_t>();
-		result |= (byte & 127) << shift;
-		if ((byte & 128) == 0)
-			break;
-		shift += 7;
-		if (shift > sizeof(T) * 8) {
-			throw std::runtime_error("Varint-decoding found too large number");
-		}
-	}
-	return result;
-}
-
-
 void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (page_hdr.type == PageType::DATA_PAGE && !page_hdr.__isset.data_page_header) {
 		throw std::runtime_error("Missing data page header from data page");
@@ -324,47 +306,20 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		block->inc(block->len);
 		break;
 	}
-	case Encoding::DELTA_BINARY_PACKED:
-	{
-		//<block size in values> <number of miniblocks in a block> <total value count> <first value>
-		auto block_value_count = VarintDecode<uint64_t>(*block);
-		auto miniblocks_per_block = VarintDecode<uint64_t>(*block);
-		auto total_value_count = VarintDecode<uint64_t>(*block);
-		auto first_value = zigzagToInt(VarintDecode<int64_t>(*block));
-
-
-		printf("block_value_count=%llu\ttotal_value_count=%llu\tminiblocks_per_block=%llu\tfirst_value=%lld\n", block_value_count, total_value_count,miniblocks_per_block,first_value);
-
-
-		if (total_value_count == 1) { // I guess it's a special case
-			printf("Value=%lld\n", first_value);
-			break;
-		}
-
-		auto miniblock_bit_widths = std::unique_ptr<uint8_t[]>(new data_t[miniblocks_per_block]);
-		idx_t values_read = 0;
-		idx_t values_left_in_block = 0;
-		while (values_read < total_value_count) {
-			if (values_left_in_block == 0) { // need to open new block
-				auto min_delta = zigzagToInt(VarintDecode<int64_t>(*block));
-
-				for (idx_t miniblock_idx = 0; miniblock_idx < miniblocks_per_block; miniblock_idx++ ) {\
-					miniblock_bit_widths[miniblock_idx] = block->read<uint8_t>();
-					printf("miniblock width=%d\n", miniblock_bit_widths[miniblock_idx]);
-				}
-
-				values_left_in_block = block_value_count;
-			}
-			// read miniblocks
-		}
+	case Encoding::DELTA_BINARY_PACKED: {
+		dbp_decoder = make_unique<DbpDecoder>((const uint8_t *)block->ptr, block->len);
+		block->inc(block->len);
 		break;
 	}
 	case Encoding::DELTA_BYTE_ARRAY:
 
-		// This is also known as incremental encoding or front compression: for each element in a sequence of strings, store the prefix length of the previous entry plus the suffix.
-		// This is stored as a sequence of delta-encoded prefix lengths (DELTA_BINARY_PACKED), followed by the suffixes encoded as delta length byte arrays (DELTA_LENGTH_BYTE_ARRAY).
-		// DELTA_LENGTH_BYTE_ARRAY: The encoded data would be DeltaEncoding(5, 5, 6, 6) "HelloWorldFoobarABCDEF"
+		// This is also known as incremental encoding or front compression: for each element in a sequence of strings,
+		// store the prefix length of the previous entry plus the suffix. This is stored as a sequence of delta-encoded
+		// prefix lengths (DELTA_BINARY_PACKED), followed by the suffixes encoded as delta length byte arrays
+		// (DELTA_LENGTH_BYTE_ARRAY). DELTA_LENGTH_BYTE_ARRAY: The encoded data would be DeltaEncoding(5, 5, 6, 6)
+		// "HelloWorldFoobarABCDEF"
 
+		// TODO actually do something here
 		break;
 	case Encoding::PLAIN:
 		// nothing to do here, will be read directly below
@@ -405,7 +360,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 		}
 
 		if (dict_decoder) {
-			// we need the null count because the offsets and plain values have no entries for nulls
+			// we need the null count because the offsets have no entries for nulls
 			idx_t null_count = 0;
 			if (HasDefines()) {
 				for (idx_t i = 0; i < read_now; i++) {
@@ -419,6 +374,16 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
 			DictReference(result);
 			Offsets((uint32_t *)offset_buffer.ptr, define_out, read_now, filter, result_offset, result);
+		} else if (dbp_decoder) {
+			auto read_buf = make_shared<ResizeableBuffer>();
+			// TODO does the null count matter here?
+			// TODO this hardcodes bigint
+			D_ASSERT(type.id() == LogicalTypeId::BIGINT);
+			read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now));
+			dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now);
+
+			Plain(read_buf, define_out, read_now, filter, result_offset, result);
+
 		} else {
 			PlainReference(block, result);
 			Plain(block, define_out, read_now, filter, result_offset, result);
