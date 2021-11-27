@@ -1,6 +1,6 @@
 # name: benchmark/micro/list/unnest.benchmark
 # description: Large unnest
-# group: [micro]
+# group: [list]
 
 name Unnest
 group micro
