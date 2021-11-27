@@ -309,7 +309,7 @@ namespace duckdb_libpgquery {
 #if defined (__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
 
 /* C99 says to define __STDC_LIMIT_MACROS before including stdint.h,
- * if you want the limit (max/min) macros for int types. 
+ * if you want the limit (max/min) macros for int types.
  */
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS 1
@@ -327,7 +327,7 @@ typedef uint64_t flex_uint64_t;
 typedef signed char flex_int8_t;
 typedef short int flex_int16_t;
 typedef int flex_int32_t;
-typedef unsigned char flex_uint8_t; 
+typedef unsigned char flex_uint8_t;
 typedef unsigned short int flex_uint16_t;
 typedef unsigned int flex_uint32_t;
 
@@ -451,10 +451,10 @@ typedef size_t yy_size_t;
 #define EOB_ACT_CONTINUE_SCAN 0
 #define EOB_ACT_END_OF_FILE 1
 #define EOB_ACT_LAST_MATCH 2
-    
+
     #define YY_LESS_LINENO(n)
     #define YY_LINENO_REWIND_TO(ptr)
-    
+
 /* Return all but the first "n" matched characters back to the input stream. */
 #define yyless(n) \
 	do \
@@ -1364,9 +1364,9 @@ static int yy_init_globals ( yyscan_t yyscanner );
     /* This must go here because YYSTYPE and YYLTYPE are included
      * from bison output in section 1.*/
     #    define yylval yyg->yylval_r
-    
+
     #    define yylloc yyg->yylloc_r
-    
+
 int yylex_init (yyscan_t* scanner);
 
 int yylex_init_extra ( YY_EXTRA_TYPE user_defined, yyscan_t* scanner);
@@ -1409,9 +1409,9 @@ YYSTYPE * yyget_lval ( yyscan_t yyscanner );
 void yyset_lval ( YYSTYPE * yylval_param , yyscan_t yyscanner );
 
        YYLTYPE *yyget_lloc ( yyscan_t yyscanner );
-    
+
         void yyset_lloc ( YYLTYPE * yylloc_param , yyscan_t yyscanner );
-    
+
 /* Macros after this point can all be overridden by user definitions in
  * section 1.
  */
@@ -1425,7 +1425,7 @@ extern int yywrap ( yyscan_t yyscanner );
 #endif
 
 #ifndef YY_NO_UNPUT
-    
+
 #endif
 
 #ifndef yytext_ptr
@@ -3123,7 +3123,7 @@ static void yy_load_buffer_state  (yyscan_t yyscanner)
     YY_BUFFER_STATE yy_create_buffer  (FILE * file, int  size , yyscan_t yyscanner)
 {
 	YY_BUFFER_STATE b;
-    
+
 	b = (YY_BUFFER_STATE) yyalloc( sizeof( struct yy_buffer_state ) , yyscanner );
 	if ( ! b )
 		YY_FATAL_ERROR( "out of dynamic memory in yy_create_buffer()" );
@@ -3189,7 +3189,7 @@ static void yy_load_buffer_state  (yyscan_t yyscanner)
     }
 
         b->yy_is_interactive = 0;
-    
+
 	errno = oerrno;
 }
 
@@ -3331,7 +3331,7 @@ static void yyensure_buffer_stack (yyscan_t yyscanner)
 YY_BUFFER_STATE yy_scan_buffer  (char * base, yy_size_t  size , yyscan_t yyscanner)
 {
 	YY_BUFFER_STATE b;
-    
+
 	if ( size < 2 ||
 	     base[size-2] != YY_END_OF_BUFFER_CHAR ||
 	     base[size-1] != YY_END_OF_BUFFER_CHAR )
@@ -3367,7 +3367,7 @@ YY_BUFFER_STATE yy_scan_buffer  (char * base, yy_size_t  size , yyscan_t yyscann
  */
 YY_BUFFER_STATE yy_scan_string (const char * yystr , yyscan_t yyscanner)
 {
-    
+
 	return yy_scan_bytes( yystr, (int) strlen(yystr) , yyscanner);
 }
 
@@ -3384,7 +3384,7 @@ YY_BUFFER_STATE yy_scan_bytes  (const char * yybytes, yy_size_t  _yybytes_len , 
 	char *buf;
 	yy_size_t n;
 	yy_size_t i;
-    
+
 	/* Get memory for full buffer, including space for trailing EOB's. */
 	n = (yy_size_t) (_yybytes_len + 2);
 	buf = (char *) yyalloc( n , yyscanner );
@@ -3416,7 +3416,6 @@ static void yynoreturn yy_fatal_error (const char* msg , yyscan_t yyscanner)
 {
 	struct yyguts_t * yyg = (struct yyguts_t*)yyscanner;
 	(void)yyg;
-	fprintf( stderr, "%s\n", msg );
 	throw std::runtime_error(msg); // YY_EXIT_FAILURE );
 }
 
@@ -3457,7 +3456,7 @@ int yyget_lineno  (yyscan_t yyscanner)
 
         if (! YY_CURRENT_BUFFER)
             return 0;
-    
+
     return yylineno;
 }
 
@@ -3470,7 +3469,7 @@ int yyget_column  (yyscan_t yyscanner)
 
         if (! YY_CURRENT_BUFFER)
             return 0;
-    
+
     return yycolumn;
 }
 
@@ -3532,7 +3531,7 @@ void yyset_lineno (int  _line_number , yyscan_t yyscanner)
         /* lineno is only valid if an input buffer exists. */
         if (! YY_CURRENT_BUFFER )
            YY_FATAL_ERROR( "yyset_lineno called with no buffer" );
-    
+
     yylineno = _line_number;
 }
 
@@ -3547,7 +3546,7 @@ void yyset_column (int  _column_no , yyscan_t yyscanner)
         /* column is only valid if an input buffer exists. */
         if (! YY_CURRENT_BUFFER )
            YY_FATAL_ERROR( "yyset_column called with no buffer" );
-    
+
     yycolumn = _column_no;
 }
 
@@ -3600,13 +3599,13 @@ YYLTYPE *yyget_lloc  (yyscan_t yyscanner)
     struct yyguts_t * yyg = (struct yyguts_t*)yyscanner;
     return yylloc;
 }
-    
+
 void yyset_lloc (YYLTYPE *  yylloc_param , yyscan_t yyscanner)
 {
     struct yyguts_t * yyg = (struct yyguts_t*)yyscanner;
     yylloc = yylloc_param;
 }
-    
+
 /* User-visible API */
 
 /* yylex_init is special because it creates the scanner itself, so it is
@@ -3686,13 +3685,8 @@ static int yy_init_globals (yyscan_t yyscanner)
     yyg->yy_start_stack =  NULL;
 
 /* Defined in main.c */
-#ifdef YY_STDINIT
-    yyin = stdin;
-    yyout = stdout;
-#else
     yyin = NULL;
     yyout = NULL;
-#endif
 
     /* For future reference: Set errno on error, since we are called by
      * yylex_init()

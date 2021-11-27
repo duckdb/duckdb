@@ -57,6 +57,8 @@ private:
 	Vector statep;
 	//! The frame boundaries, used for the window functions
 	FrameBounds frame;
+	//! The active data in the inputs. Used for the window functions
+	FrameBounds active;
 	//! Reused result state container for the window functions
 	Vector statev;
 
