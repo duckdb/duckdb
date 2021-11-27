@@ -1,7 +1,6 @@
-# group: [aggregates]
 # name: test/sql/aggregate/aggregates/test_last.test
 # description: Test the LAST function
-# GROUP: [aggregates]
+# group: [aggregates]
 
 statement ok
 PRAGMA enable_verification

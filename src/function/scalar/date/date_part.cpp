@@ -21,7 +21,7 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 		result = DatePartSpecifier::DECADE;
 	} else if (specifier == "century" || specifier == "centuries") {
 		result = DatePartSpecifier::CENTURY;
-	} else if (specifier == "millennium" || specifier == "millenia") {
+	} else if (specifier == "millennium" || specifier == "millennia") {
 		result = DatePartSpecifier::MILLENNIUM;
 	} else if (specifier == "microseconds" || specifier == "microsecond") {
 		result = DatePartSpecifier::MICROSECONDS;
@@ -37,7 +37,7 @@ bool TryGetDatePartSpecifier(const string &specifier_p, DatePartSpecifier &resul
 	} else if (specifier == "epoch") {
 		// seconds since 1970-01-01
 		result = DatePartSpecifier::EPOCH;
-	} else if (specifier == "dow") {
+	} else if (specifier == "dow" || specifier == "dayofweek") {
 		// day of the week (Sunday = 0, Saturday = 6)
 		result = DatePartSpecifier::DOW;
 	} else if (specifier == "isodow") {
@@ -793,7 +793,7 @@ void DatePartFun::RegisterFunction(BuiltinFunctions &set) {
 	AddDatePartOperator<DatePart::DayOperator>(set, "day");
 	AddDatePartOperator<DatePart::DecadeOperator>(set, "decade");
 	AddDatePartOperator<DatePart::CenturyOperator>(set, "century");
-	AddDatePartOperator<DatePart::MilleniumOperator>(set, "millenium");
+	AddDatePartOperator<DatePart::MilleniumOperator>(set, "millennium");
 	AddDatePartOperator<DatePart::QuarterOperator>(set, "quarter");
 	AddDatePartOperator<DatePart::DayOfWeekOperator>(set, "dayofweek");
 	AddDatePartOperator<DatePart::ISODayOfWeekOperator>(set, "isodow");
