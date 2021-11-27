@@ -1,5 +1,5 @@
 # name: test/sql/fts/test_indexing_and_schema.test
-# Description: Refer default schema when the table name doesn't have a qualifier.
+# description: Refer default schema when the table name doesn't have a qualifier.
 # group: [fts]
 
 require fts
