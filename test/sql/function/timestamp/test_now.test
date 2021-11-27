@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-# get the millenium of the current date
+# get the millennium of the current date
 # FIXME: this needs to be updated in 982 years
 query I
 SELECT EXTRACT(MILLENNIUM FROM NOW())
