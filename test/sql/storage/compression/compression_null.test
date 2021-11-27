@@ -5,7 +5,7 @@
 # load the DB from disk
 load __TEST_DIR__/test_rle.db
 
-foreach compression rle bitpacking
+foreach compression <compression>
 
 statement ok
 PRAGMA force_compression = '${compression}'
