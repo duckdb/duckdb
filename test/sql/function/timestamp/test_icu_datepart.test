@@ -24,16 +24,15 @@ SELECT icu_year(ts), year(ts) FROM timestamps;
 2021	2021
 2021	2021
 
-# TODO: Add 1
 query II
 SELECT icu_month(ts), month(ts) FROM timestamps;
 ----
-11	1
-1	2
-10	11
-10	11
-10	11
-11	12
+12	1
+2	2
+11	11
+11	11
+11	11
+12	12
 
 query II
 SELECT icu_day(ts), day(ts) FROM timestamps;
@@ -45,56 +44,54 @@ SELECT icu_day(ts), day(ts) FROM timestamps;
 15	15
 24	24
 
-# TODO: Add 1
 query II
-SELECT icu_dayofweek(ts), dayofweek(ts) FROM timestamps;
+SELECT icu_decade(ts), decade(ts) FROM timestamps;
 ----
-5	5
-2	2
-6	5
-2	1
-2	1
-6	5
+202	202
+202	202
+202	202
+202	202
+202	202
+202	202
 
 query II
-SELECT icu_dayofyear(ts), dayofyear(ts) FROM timestamps;
+SELECT icu_century(ts), century(ts) FROM timestamps;
 ----
-366	1
-32	33
-330	330
-319	319
-319	319
-358	358
-
-# TODO: Correct(?)
-query II
-SELECT icu_week(ts), week(ts) FROM timestamps;
-----
-1	53
-6	5
-48	47
-47	45
-47	45
-52	51
+21	21
+21	21
+21	21
+21	21
+21	21
+21	21
 
 query II
-SELECT icu_hour(ts), hour(ts) FROM timestamps;
+SELECT icu_millennium(ts), millennium(ts) FROM timestamps;
 ----
-16	0
-16	0
-2	10
-2	10
-1	9
-14	22
+3	3
+3	3
+3	3
+3	3
+3	3
+3	3
 
 query II
-SELECT icu_minute(ts), minute(ts) FROM timestamps;
+SELECT icu_microsecond(ts), microsecond(ts) FROM timestamps;
 ----
 0	0
 0	0
-15	15
-30	30
-30	30
+13123000	13123456
+0	0
+0	0
+0	0
+
+query II
+SELECT icu_millisecond(ts), millisecond(ts) FROM timestamps;
+----
+0	0
+0	0
+13123	13123
+0	0
+0	0
 0	0
 
 query II
@@ -107,13 +104,92 @@ SELECT icu_second(ts), second(ts) FROM timestamps;
 0	0
 0	0
 
-# TODO: Include seconds(!)
 query II
-SELECT icu_millisecond(ts), millisecond(ts) FROM timestamps;
+SELECT icu_minute(ts), minute(ts) FROM timestamps;
 ----
 0	0
 0	0
-123	13123
+15	15
+30	30
+30	30
 0	0
-0	0
-0	0
+
+query II
+SELECT icu_hour(ts), hour(ts) FROM timestamps;
+----
+16	0
+16	0
+2	10
+2	10
+1	9
+14	22
+
+query II
+SELECT icu_dayofweek(ts), dayofweek(ts) FROM timestamps;
+----
+4	5
+1	2
+5	5
+1	1
+1	1
+5	5
+
+query II
+SELECT icu_isodow(ts), isodow(ts) FROM timestamps;
+----
+5	5
+2	2
+6	5
+2	1
+2	1
+6	5
+
+query II
+SELECT icu_week(ts), week(ts) FROM timestamps;
+----
+53	53
+5	5
+47	47
+46	45
+46	45
+51	51
+
+query II
+SELECT icu_dayofyear(ts), dayofyear(ts) FROM timestamps;
+----
+366	1
+32	33
+330	330
+319	319
+319	319
+358	358
+
+query II
+SELECT icu_quarter(ts), quarter(ts) FROM timestamps;
+----
+4	1
+1	1
+4	4
+4	4
+4	4
+4	4
+
+query II
+SELECT icu_yearweek(ts), yearweek(ts) FROM timestamps;
+----
+202053	202153
+202105	202105
+202147	202147
+202146	202145
+202146	202145
+202151	202151
+
+query II
+SELECT icu_epoch(ts), epoch(ts) FROM timestamps;
+----
+1609488000	1609459200
+1612252800	1612224000
+1637950513	1637921713
+1637001000	1636972200
+1636997400	1636968600
+1640412000	1640383200
