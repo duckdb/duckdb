@@ -182,21 +182,67 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	PageHeader page_hdr;
 	page_hdr.read(protocol);
 
-//		page_hdr.printTo(std::cout);
-//		std::cout << '\n';
-
-	PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
+	//		page_hdr.printTo(std::cout);
+	//		std::cout << '\n';
 
 	switch (page_hdr.type) {
 	case PageType::DATA_PAGE_V2:
+		PreparePageV2(page_hdr);
+		PrepareDataPage(page_hdr);
+		break;
 	case PageType::DATA_PAGE:
+		PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
 		PrepareDataPage(page_hdr);
 		break;
 	case PageType::DICTIONARY_PAGE:
+		PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
 		Dictionary(move(block), page_hdr.dictionary_page_header.num_values);
 		break;
 	default:
 		break; // ignore INDEX page type and any other custom extensions
+	}
+}
+
+void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
+	// FIXME this is copied from the other prepare, merge the decomp part
+
+	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
+
+	auto &trans = (ThriftFileTransport &)*protocol->getTransport();
+
+	block = make_shared<ResizeableBuffer>(reader.allocator, page_hdr.uncompressed_page_size + 1);
+	// copy repeats & defines as-is because FOR SOME REASON they are uncompressed
+	auto uncompressed_bytes = page_hdr.data_page_header_v2.repetition_levels_byte_length +
+	                          page_hdr.data_page_header_v2.definition_levels_byte_length;
+	auto possibly_compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
+	trans.read((uint8_t *)block->ptr, uncompressed_bytes);
+
+	switch (chunk->meta_data.codec) {
+	case CompressionCodec::UNCOMPRESSED:
+		trans.read(((uint8_t *)block->ptr) + uncompressed_bytes, possibly_compressed_bytes);
+		break;
+
+	case CompressionCodec::SNAPPY: {
+
+		// TODO move allocation outta here
+		ResizeableBuffer compressed_bytes_buffer(reader.allocator, possibly_compressed_bytes);
+		trans.read((uint8_t *)compressed_bytes_buffer.ptr, possibly_compressed_bytes);
+
+		auto res = snappy::RawUncompress((const char *)compressed_bytes_buffer.ptr, possibly_compressed_bytes,
+		                                 ((char *)block->ptr) + uncompressed_bytes);
+		if (!res) {
+			throw std::runtime_error("Decompression failure");
+		}
+		break;
+	}
+
+	default: {
+		std::stringstream codec_name;
+		codec_name << chunk->meta_data.codec;
+		throw std::runtime_error("Unsupported compression codec \"" + codec_name.str() +
+		                         "\". Supported options are uncompressed, gzip or snappy");
+		break;
+	}
 	}
 }
 
@@ -206,6 +252,7 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 	block = make_shared<ResizeableBuffer>(reader.allocator, compressed_page_size + 1);
 	trans.read((uint8_t *)block->ptr, compressed_page_size);
 
+	// TODO this allocation should probably be avoided
 	shared_ptr<ResizeableBuffer> unpacked_block;
 	if (chunk->meta_data.codec != CompressionCodec::UNCOMPRESSED) {
 		unpacked_block = make_shared<ResizeableBuffer>(reader.allocator, uncompressed_page_size + 1);
@@ -375,16 +422,16 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 			DictReference(result);
 			Offsets((uint32_t *)offset_buffer.ptr, define_out, read_now, filter, result_offset, result);
 		} else if (dbp_decoder) {
-            idx_t null_count = 0;
+			idx_t null_count = 0;
 
-            // TODO this is duplicated
-            if (HasDefines()) {
-                for (idx_t i = 0; i < read_now; i++) {
-                    if (define_out[i + result_offset] != max_define) {
-                        null_count++;
-                    }
-                }
-            }
+			// TODO this is duplicated
+			if (HasDefines()) {
+				for (idx_t i = 0; i < read_now; i++) {
+					if (define_out[i + result_offset] != max_define) {
+						null_count++;
+					}
+				}
+			}
 
 			auto read_buf = make_shared<ResizeableBuffer>();
 			// TODO does the null count matter here?

@@ -139,6 +139,7 @@ private:
 	void PrepareRead(parquet_filter_t &filter);
 	void PreparePage(idx_t compressed_page_size, idx_t uncompressed_page_size);
 	void PrepareDataPage(PageHeader &page_hdr);
+	void PreparePageV2(PageHeader &page_hdr);
 
 	const duckdb_parquet::format::ColumnChunk *chunk;
 

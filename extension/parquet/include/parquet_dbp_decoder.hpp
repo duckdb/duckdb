@@ -2,26 +2,26 @@
 namespace duckdb {
 class DbpDecoder {
 public:
-	DbpDecoder(const uint8_t *buffer, uint32_t buffer_len) : buffer_((char *)buffer, buffer_len){
+	DbpDecoder(const uint8_t *buffer, uint32_t buffer_len) : buffer_((char *)buffer, buffer_len) {
 
 		//<block size in values> <number of miniblocks in a block> <total value count> <first value>
-        // overall header
+		// overall header
 		block_value_count = VarintDecode<uint64_t>(buffer_);
 		miniblocks_per_block = VarintDecode<uint64_t>(buffer_);
 		total_value_count = VarintDecode<uint64_t>(buffer_);
 		first_value = zigzagToInt(VarintDecode<int64_t>(buffer_));
 
-        // some derivatives
+		// some derivatives
 		values_per_miniblock = block_value_count / miniblocks_per_block;
-        miniblock_bit_widths = std::unique_ptr<uint8_t[]>(new data_t[miniblocks_per_block]);
+		miniblock_bit_widths = std::unique_ptr<uint8_t[]>(new data_t[miniblocks_per_block]);
 
-        // init state to something sane
-        values_left_in_block = 0;
-        values_left_in_miniblock = 0;
-        miniblock_offset = 0;
-        value_offset = 1;
-        min_delta = 0;
-        bitpack_pos = 0;
+		// init state to something sane
+		values_left_in_block = 0;
+		values_left_in_miniblock = 0;
+		miniblock_offset = 0;
+		value_offset = 1;
+		min_delta = 0;
+		bitpack_pos = 0;
 	};
 
 	template <typename T>
@@ -83,16 +83,15 @@ private:
 	int64_t first_value;
 	idx_t values_per_miniblock;
 
-    // TODO make this re-entrant
-    std::unique_ptr<uint8_t[]> miniblock_bit_widths;
-    idx_t values_left_in_block;
-    idx_t values_left_in_miniblock;
-    idx_t miniblock_offset;
-    idx_t value_offset;
-    int64_t min_delta;
+	// TODO make this re-entrant
+	std::unique_ptr<uint8_t[]> miniblock_bit_widths;
+	idx_t values_left_in_block;
+	idx_t values_left_in_miniblock;
+	idx_t miniblock_offset;
+	idx_t value_offset;
+	int64_t min_delta;
 
-
-    uint8_t bitpack_pos;
+	uint8_t bitpack_pos;
 
 	template <class T>
 	T zigzagToInt(const T n) {
