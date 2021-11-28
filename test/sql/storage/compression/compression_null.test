@@ -1,5 +1,5 @@
 # name: test/sql/storage/compression/compression_null.test
-# description: Test storage with RLE and many null values
+# description: Test storage with compression and many null values
 # group: [compression]
 
 # load the DB from disk

@@ -11,6 +11,9 @@ PRAGMA force_compression = 'bitpacking'
 statement ok
 CREATE TABLE test_unsigned AS SELECT cast(2**i as UINT64) i FROM range(64) tbl(i);
 
+statement ok
+CHECKPOINT;
+
 query II
 SELECT COUNT(i), AVG(i) FROM test_unsigned;
 ----
@@ -21,6 +24,9 @@ CREATE TABLE test_signed AS SELECT cast(-(2**i) as INT32) i FROM range(32) tbl(i
 
 statement ok
 INSERT INTO test_signed SELECT cast(2**i as INT32) i FROM range(31) tbl(i);
+
+statement ok
+CHECKPOINT;
 
 query II
 SELECT COUNT(i), AVG(i) FROM test_signed;
