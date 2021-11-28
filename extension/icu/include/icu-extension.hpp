@@ -15,6 +15,9 @@ namespace duckdb {
 class ICUExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
+
+private:
+	void RegisterDatePartFunctions(ClientContext &context);
 };
 
 } // namespace duckdb
