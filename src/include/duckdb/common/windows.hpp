@@ -1,19 +1,19 @@
-#ifdef _WIN32
+#pragma once
 
-#ifndef DUCKDB_WINDOWS_H
-#define DUCKDB_WINDOWS_H
+#ifdef _WIN32
 
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 
-#include <winsock2.h>
+#ifndef _WINSOCKAPI_
+#define _WINSOCKAPI_
+#endif
+
 #include <windows.h>
 
 #undef CreateDirectory
 #undef MoveFile
 #undef RemoveDirectory
-
-#endif
 
 #endif
