@@ -8,14 +8,14 @@ statement ok
 SET TimeZone = 'America/Los_Angeles';
 
 statement ok
-CREATE TABLE timestamps AS SELECT ts::TIMESTAMP AS ts FROM (VALUES
-	('2021-01-01 00:00:00'),
-	('2021-02-02 00:00:00'),
-	('2021-11-26 10:15:13.123456'),
-	('2021-11-15 02:30:00-08'),
-	('2021-11-15 02:30:00-07'),
-	('2021-12-25 00:00:00+02')
-) tbl(ts);
+CREATE TABLE timestamps AS SELECT ts::TIMESTAMP AS ts, part FROM (VALUES
+	('2021-01-01 00:00:00', 'year'),
+	('2021-02-02 00:00:00', 'month'),
+	('2021-11-26 10:15:13.123456', 'microsecond'),
+	('2021-11-15 02:30:00-08', 'hour'),
+	('2021-11-15 02:30:00-07', 'minute'),
+	('2021-12-25 00:00:00+02', 'day')
+) tbl(ts, part);
 
 query II
 SELECT icu_year(ts), year(ts) FROM timestamps;
@@ -196,3 +196,13 @@ SELECT icu_epoch(ts), epoch(ts) FROM timestamps;
 1637001000	1636972200
 1636997400	1636968600
 1640412000	1640383200
+
+query II
+SELECT icu_date_part(part, ts), date_part(part, ts) FROM timestamps;
+----
+2020	2021
+2	2
+13123456	13123456
+2	10
+30	30
+24	24

@@ -11,6 +11,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/parser/parsed_data/create_collation_info.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
@@ -370,11 +371,14 @@ struct ICUDatePart {
 	};
 
 	static void UnaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+		D_ASSERT(args.ColumnCount() == 1);
+		auto &date_arg = args.data[0];
+
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 
-		UnaryExecutor::Execute<timestamp_t, int32_t>(args.data[0], result, args.size(), [&](timestamp_t input) {
+		UnaryExecutor::Execute<timestamp_t, int32_t>(date_arg, result, args.size(), [&](timestamp_t input) {
 			UErrorCode status = U_ZERO_ERROR;
 
 			const UDate millis = input.value / Interval::MICROS_PER_MSEC;
@@ -387,11 +391,32 @@ struct ICUDatePart {
 		});
 	}
 
+	static void BinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+		D_ASSERT(args.ColumnCount() == 2);
+		auto &part_arg = args.data[0];
+		auto &date_arg = args.data[1];
+
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &info = (BindData &)*func_expr.bind_info;
+		CalendarPtr calendar(info.calendar->clone());
+
+		BinaryExecutor::Execute<string_t, timestamp_t, int32_t>(
+		    part_arg, date_arg, result, args.size(), [&](string_t specifier, timestamp_t input) {
+			    UErrorCode status = U_ZERO_ERROR;
+
+			    const UDate millis = input.value / Interval::MICROS_PER_MSEC;
+			    const auto micros = input.value % Interval::MICROS_PER_MSEC;
+			    calendar->setTime(millis, status);
+			    if (U_FAILURE(status)) {
+				    throw Exception("Unable to compute ICU date part.");
+			    }
+			    auto adapter = PartCodeAdapterFactory(GetDatePartSpecifier(specifier.GetString()));
+			    return adapter(calendar.get(), micros);
+		    });
+	}
+
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments) {
-		auto part = PartCodeFromFunction(bound_function.name);
-		auto adapter = PartCodeAdapterFactory(part);
-
 		Value tz_value;
 		string tz_id;
 		if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
@@ -405,6 +430,9 @@ struct ICUDatePart {
 			throw Exception("Unable to create ICU date part calendar.");
 		}
 
+		auto adapter =
+		    (arguments.size() == 1) ? PartCodeAdapterFactory(PartCodeFromFunction(bound_function.name)) : nullptr;
+
 		return make_unique<BindData>(move(calendar), adapter);
 	}
 
@@ -415,6 +443,18 @@ struct ICUDatePart {
 	static void AddUnaryTimestampFunction(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
 		ScalarFunction func = GetUnaryTimestampFunction(name);
+		CreateScalarFunctionInfo func_info(move(func));
+		catalog.CreateFunction(context, &func_info);
+	}
+
+	static ScalarFunction GetBinaryTimestampFunction(const string &name) {
+		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::INTEGER,
+		                      BinaryFunction, false, Bind);
+	}
+
+	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
+		auto &catalog = Catalog::GetCatalog(context);
+		ScalarFunction func = GetBinaryTimestampFunction(name);
 		CreateScalarFunctionInfo func_info(move(func));
 		catalog.CreateFunction(context, &func_info);
 	}
@@ -481,6 +521,8 @@ void ICUExtension::Load(DuckDB &db) {
 	ICUDatePart::AddUnaryTimestampFunction("icu_quarter", *con.context);
 	ICUDatePart::AddUnaryTimestampFunction("icu_yearweek", *con.context);
 	ICUDatePart::AddUnaryTimestampFunction("icu_epoch", *con.context);
+
+	ICUDatePart::AddBinaryTimestampFunction("icu_date_part", *con.context);
 
 	con.Commit();
 }
