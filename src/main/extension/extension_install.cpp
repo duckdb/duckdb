@@ -2,6 +2,7 @@
 #include "duckdb/common/gzip_file_system.hpp"
 
 #include "httplib.hpp"
+#include "duckdb/common/windows_undefs.hpp"
 
 #include <fstream>
 
