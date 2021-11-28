@@ -138,6 +138,9 @@ using ssize_t = int;
 #endif // NOMINMAX
 
 #include <io.h>
+#ifdef _WINSOCKAPI_
+#undef _WINSOCKAPI_
+#endif
 #include <winsock2.h>
 
 #include <wincrypt.h>
