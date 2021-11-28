@@ -39,7 +39,9 @@
 #ifndef THIRD_PARTY_SNAPPY_SNAPPY_H__
 #define THIRD_PARTY_SNAPPY_SNAPPY_H__
 
-#include <cstddef>
+#include <stddef.h>
+#include <stdint.h>
+
 #include <string>
 
 #include "snappy-stubs-public.h"
@@ -63,17 +65,18 @@ namespace snappy {
   // Also note that this leaves "*source" in a state that is unsuitable for
   // further operations, such as RawUncompress(). You will need to rewind
   // or recreate the source yourself before attempting any further calls.
-  bool GetUncompressedLength(Source* source, uint32* result);
+  bool GetUncompressedLength(Source* source, uint32_t* result);
 
   // ------------------------------------------------------------------------
   // Higher-level string based routines (should be sufficient for most users)
   // ------------------------------------------------------------------------
 
-  // Sets "*output" to the compressed version of "input[0,input_length-1]".
-  // Original contents of *output are lost.
+  // Sets "*compressed" to the compressed version of "input[0,input_length-1]".
+  // Original contents of *compressed are lost.
   //
-  // REQUIRES: "input[]" is not an alias of "*output".
-  size_t Compress(const char* input, size_t input_length, string* output);
+  // REQUIRES: "input[]" is not an alias of "*compressed".
+  size_t Compress(const char* input, size_t input_length,
+                  std::string* compressed);
 
   // Decompresses "compressed[0,compressed_length-1]" to "*uncompressed".
   // Original contents of "*uncompressed" are lost.
@@ -82,7 +85,7 @@ namespace snappy {
   //
   // returns false if the message is corrupted and could not be decompressed
   bool Uncompress(const char* compressed, size_t compressed_length,
-                  string* uncompressed);
+                  std::string* uncompressed);
 
   // Decompresses "compressed" to "*uncompressed".
   //
@@ -184,6 +187,23 @@ namespace snappy {
   // unspecified prefix of *compressed.
   bool IsValidCompressed(Source* compressed);
 
+  // The size of a compression block. Note that many parts of the compression
+  // code assumes that kBlockSize <= 65536; in particular, the hash table
+  // can only store 16-bit offsets, and EmitCopy() also assumes the offset
+  // is 65535 bytes or less. Note also that if you change this, it will
+  // affect the framing format (see framing_format.txt).
+  //
+  // Note that there might be older data around that is compressed with larger
+  // block sizes, so the decompression code should not rely on the
+  // non-existence of long backreferences.
+  static constexpr int kBlockLog = 16;
+  static constexpr size_t kBlockSize = 1 << kBlockLog;
+
+  static constexpr int kMinHashTableBits = 8;
+  static constexpr size_t kMinHashTableSize = 1 << kMinHashTableBits;
+
+  static constexpr int kMaxHashTableBits = 14;
+  static constexpr size_t kMaxHashTableSize = 1 << kMaxHashTableBits;
 }  // end namespace snappy
 
 #endif  // THIRD_PARTY_SNAPPY_SNAPPY_H__
