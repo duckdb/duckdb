@@ -182,8 +182,8 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	PageHeader page_hdr;
 	page_hdr.read(protocol);
 
-	//	page_hdr.printTo(std::cout);
-	//	std::cout << '\n';
+//		page_hdr.printTo(std::cout);
+//		std::cout << '\n';
 
 	PreparePage(page_hdr.compressed_page_size, page_hdr.uncompressed_page_size);
 
@@ -375,12 +375,23 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 			DictReference(result);
 			Offsets((uint32_t *)offset_buffer.ptr, define_out, read_now, filter, result_offset, result);
 		} else if (dbp_decoder) {
+            idx_t null_count = 0;
+
+            // TODO this is duplicated
+            if (HasDefines()) {
+                for (idx_t i = 0; i < read_now; i++) {
+                    if (define_out[i + result_offset] != max_define) {
+                        null_count++;
+                    }
+                }
+            }
+
 			auto read_buf = make_shared<ResizeableBuffer>();
 			// TODO does the null count matter here?
 			// TODO this hardcodes bigint
 			D_ASSERT(type.id() == LogicalTypeId::BIGINT);
-			read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now));
-			dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now);
+			read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now - null_count));
+			dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now - null_count);
 
 			Plain(read_buf, define_out, read_now, filter, result_offset, result);
 
