@@ -5,6 +5,9 @@
 require icu
 
 statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+statement ok
 CREATE TABLE timestamps AS SELECT ts::TIMESTAMP AS ts FROM (VALUES
 	('2021-01-01 00:00:00'),
 	('2021-02-02 00:00:00'),
@@ -79,7 +82,7 @@ SELECT icu_microsecond(ts), microsecond(ts) FROM timestamps;
 ----
 0	0
 0	0
-13123000	13123456
+13123456	13123456
 0	0
 0	0
 0	0

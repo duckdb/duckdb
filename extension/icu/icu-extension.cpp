@@ -2,6 +2,7 @@
 #include "icu-collate.hpp"
 
 #include "duckdb/main/database.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "duckdb/main/connection.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -216,7 +217,7 @@ static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind
 
 struct ICUDatePart {
 	using CalendarPtr = unique_ptr<icu::Calendar>;
-	typedef int32_t (*PartAdapter)(icu::Calendar *calendar);
+	typedef int32_t (*PartAdapter)(icu::Calendar *calendar, const uint64_t micros);
 
 	static DatePartSpecifier PartCodeFromFunction(const string &name) {
 		return GetDatePartSpecifier(name.substr(4));
@@ -232,79 +233,79 @@ struct ICUDatePart {
 	}
 
 	// Date part adapters
-	static int32_t ExtractYear(icu::Calendar *calendar) {
+	static int32_t ExtractYear(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_YEAR);
 	}
 
-	static int32_t ExtractDecade(icu::Calendar *calendar) {
-		return ExtractYear(calendar) / 10;
+	static int32_t ExtractDecade(icu::Calendar *calendar, const uint64_t micros) {
+		return ExtractYear(calendar, micros) / 10;
 	}
 
-	static int32_t ExtractCentury(icu::Calendar *calendar) {
-		return 1 + ExtractYear(calendar) / 100;
+	static int32_t ExtractCentury(icu::Calendar *calendar, const uint64_t micros) {
+		return 1 + ExtractYear(calendar, micros) / 100;
 	}
 
-	static int32_t ExtractMillenium(icu::Calendar *calendar) {
-		return 1 + ExtractYear(calendar) / 1000;
+	static int32_t ExtractMillenium(icu::Calendar *calendar, const uint64_t micros) {
+		return 1 + ExtractYear(calendar, micros) / 1000;
 	}
 
-	static int32_t ExtractMonth(icu::Calendar *calendar) {
+	static int32_t ExtractMonth(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_MONTH) + 1;
 	}
 
-	static int32_t ExtractQuarter(icu::Calendar *calendar) {
+	static int32_t ExtractQuarter(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_MONTH) / Interval::MONTHS_PER_QUARTER + 1;
 	}
 
-	static int32_t ExtractDay(icu::Calendar *calendar) {
+	static int32_t ExtractDay(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_DATE);
 	}
 
-	static int32_t ExtractDayOfWeek(icu::Calendar *calendar) {
+	static int32_t ExtractDayOfWeek(icu::Calendar *calendar, const uint64_t micros) {
 		calendar->setFirstDayOfWeek(UCAL_SUNDAY);
 		return ExtractField(calendar, UCAL_DAY_OF_WEEK) - UCAL_SUNDAY;
 	}
 
-	static int32_t ExtractISODayOfWeek(icu::Calendar *calendar) {
+	static int32_t ExtractISODayOfWeek(icu::Calendar *calendar, const uint64_t micros) {
 		calendar->setFirstDayOfWeek(UCAL_MONDAY);
 		return ExtractField(calendar, UCAL_DAY_OF_WEEK);
 	}
 
-	static int32_t ExtractWeek(icu::Calendar *calendar) {
+	static int32_t ExtractWeek(icu::Calendar *calendar, const uint64_t micros) {
 		calendar->setFirstDayOfWeek(UCAL_SUNDAY);
 		calendar->setMinimalDaysInFirstWeek(4);
 		return ExtractField(calendar, UCAL_WEEK_OF_YEAR);
 	}
 
-	static int32_t ExtractYearWeek(icu::Calendar *calendar) {
-		return ExtractYear(calendar) * 100 + ExtractWeek(calendar);
+	static int32_t ExtractYearWeek(icu::Calendar *calendar, const uint64_t micros) {
+		return ExtractYear(calendar, micros) * 100 + ExtractWeek(calendar, micros);
 	}
 
-	static int32_t ExtractDayOfYear(icu::Calendar *calendar) {
+	static int32_t ExtractDayOfYear(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_DAY_OF_YEAR);
 	}
 
-	static int32_t ExtractHour(icu::Calendar *calendar) {
+	static int32_t ExtractHour(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_HOUR_OF_DAY);
 	}
 
-	static int32_t ExtractMinute(icu::Calendar *calendar) {
+	static int32_t ExtractMinute(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_MINUTE);
 	}
 
-	static int32_t ExtractSecond(icu::Calendar *calendar) {
+	static int32_t ExtractSecond(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_SECOND);
 	}
 
-	static int32_t ExtractMillisecond(icu::Calendar *calendar) {
-		return ExtractSecond(calendar) * Interval::MSECS_PER_SEC + ExtractField(calendar, UCAL_MILLISECOND);
+	static int32_t ExtractMillisecond(icu::Calendar *calendar, const uint64_t micros) {
+		return ExtractSecond(calendar, micros) * Interval::MSECS_PER_SEC + ExtractField(calendar, UCAL_MILLISECOND);
 	}
 
-	static int32_t ExtractMicrosecond(icu::Calendar *calendar) {
-		return ExtractMillisecond(calendar) * Interval::MICROS_PER_MSEC;
+	static int32_t ExtractMicrosecond(icu::Calendar *calendar, const uint64_t micros) {
+		return ExtractMillisecond(calendar, micros) * Interval::MICROS_PER_MSEC + micros;
 	}
 
-	static int32_t ExtractEpoch(icu::Calendar *calendar) {
+	static int32_t ExtractEpoch(icu::Calendar *calendar, const uint64_t micros) {
 		UErrorCode status = U_ZERO_ERROR;
 		auto millis = calendar->getTime(status);
 		millis -= ExtractField(calendar, UCAL_ZONE_OFFSET);
@@ -377,11 +378,12 @@ struct ICUDatePart {
 			UErrorCode status = U_ZERO_ERROR;
 
 			const UDate millis = input.value / Interval::MICROS_PER_MSEC;
+			const auto micros = input.value % Interval::MICROS_PER_MSEC;
 			calendar->setTime(millis, status);
 			if (U_FAILURE(status)) {
 				throw Exception("Unable to compute ICU date part.");
 			}
-			return info.adapter(calendar.get());
+			return info.adapter(calendar.get(), micros);
 		});
 	}
 
@@ -389,10 +391,16 @@ struct ICUDatePart {
 	                                     vector<unique_ptr<Expression>> &arguments) {
 		auto part = PartCodeFromFunction(bound_function.name);
 		auto adapter = PartCodeAdapterFactory(part);
-		auto tz_us = icu::TimeZone::createTimeZone("America/Los_Angeles");
+
+		Value tz_value;
+		string tz_id;
+		if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
+			tz_id = tz_value.ToString();
+		}
+		auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id)));
 
 		UErrorCode success = U_ZERO_ERROR;
-		CalendarPtr calendar(icu::Calendar::createInstance(tz_us, success));
+		CalendarPtr calendar(icu::Calendar::createInstance(tz, success));
 		if (U_FAILURE(success)) {
 			throw Exception("Unable to create ICU date part calendar.");
 		}
