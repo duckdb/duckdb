@@ -428,7 +428,6 @@ struct BitpackingScanState : public SegmentScanState {
 
 	void LoadDecompressFunction() {
 		decompress_function = &BitpackingPrimitives::UnPackBlock<PRE_CAST_TYPE>;
-		return;
 	}
 
 	idx_t position_in_group = 0;

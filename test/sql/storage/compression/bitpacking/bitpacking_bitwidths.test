@@ -1,0 +1,28 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_bitwidsths.test
+# description: Test bitpacking with values that compress to all different widths
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE test_unsigned AS SELECT cast(2**i as UINT64) i FROM range(64) tbl(i);
+
+query II
+SELECT COUNT(i), AVG(i) FROM test_unsigned;
+----
+64	288230376151711744.000000
+
+statement ok
+CREATE TABLE test_signed AS SELECT cast(-(2**i) as INT32) i FROM range(32) tbl(i);
+
+statement ok
+INSERT INTO test_signed SELECT cast(2**i as INT32) i FROM range(31) tbl(i);
+
+query II
+SELECT COUNT(i), AVG(i) FROM test_signed;
+----
+63	-34087042.031746
