@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common.windows.hpp"
+#include "duckdb/common/windows.hpp"
 
 #ifndef _WIN32
 #include <dlfcn.h>

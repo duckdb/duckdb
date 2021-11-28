@@ -26,4 +26,16 @@
 #undef small
 #endif
 
+#ifdef CreateDirectory
+#undef CreateDirectory
+#endif
+
+#ifdef MoveFile
+#undef MoveFile
+#endif
+
+#ifdef RemoveDirectory
+#undef RemoveDirectory
+#endif
+
 #endif
