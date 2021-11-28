@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// icu-extension.hpp
+// icu-datepart.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,9 +12,6 @@
 
 namespace duckdb {
 
-class ICUExtension : public Extension {
-public:
-	void Load(DuckDB &db) override;
-};
+void RegisterICUDatePartFunctions(ClientContext &context);
 
 } // namespace duckdb

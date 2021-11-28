@@ -1,4 +1,4 @@
-#include "icu-extension.hpp"
+#include "icu-datepart.hpp"
 #include "icu-collate.hpp"
 
 #include "duckdb/common/enums/date_part_specifier.hpp"
@@ -254,8 +254,7 @@ struct ICUDatePart {
 	}
 };
 
-void ICUExtension::RegisterDatePartFunctions(ClientContext &context) {
-	// Part functions
+void RegisterICUDatePartFunctions(ClientContext &context) {
 	ICUDatePart::AddUnaryTimestampFunction("icu_year", context);
 	ICUDatePart::AddUnaryTimestampFunction("icu_month", context);
 	ICUDatePart::AddUnaryTimestampFunction("icu_day", context);

@@ -1,5 +1,6 @@
 #include "icu-extension.hpp"
 #include "icu-collate.hpp"
+#include "icu-datepart.hpp"
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
@@ -255,7 +256,7 @@ void ICUExtension::Load(DuckDB &db) {
 	CreateTableFunctionInfo tz_names_info(move(tz_names));
 	catalog.CreateTableFunction(*con.context, &tz_names_info);
 
-	RegisterDatePartFunctions(*con.context);
+	RegisterICUDatePartFunctions(*con.context);
 
 	con.Commit();
 }
