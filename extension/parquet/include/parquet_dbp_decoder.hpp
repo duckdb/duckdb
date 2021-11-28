@@ -70,7 +70,7 @@ public:
 			values_left_in_block -= read_now;
 		}
 
-		if (value_offset != batch_size) {
+		if (value_offset < batch_size) {
 			throw std::runtime_error("DBP decode did not find enough values");
 		}
 	}
