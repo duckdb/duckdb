@@ -213,5 +213,6 @@ jobs:
     - name: Deploy
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+          pip install awscli
           ./scripts/extension-upload.sh windows-amd64
         fi
