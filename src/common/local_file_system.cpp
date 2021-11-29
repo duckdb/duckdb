@@ -516,18 +516,22 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 
 void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	DWORD bytes_read;
+	DWORD bytes_read = 0;
 	OVERLAPPED ov = {};
 	ov.Internal = 0;
 	ov.InternalHigh = 0;
 	ov.Offset = location & 0xFFFFFFFF;
 	ov.OffsetHigh = location >> 32;
 	ov.hEvent = 0;
-	ReadFile(hFile, buffer, (DWORD)nr_bytes, NULL, &ov);
-	auto rc = GetOverlappedResult(hFile, &ov, &bytes_read, true);
+	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, NULL, &ov);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Could not read file \"%s\": %s", handle.path, error);
+		throw IOException("Could not read file \"%s\" (error in ReadFile): %s", handle.path, error);
+	}
+	rc = GetOverlappedResult(hFile, &ov, &bytes_read, true);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not read file \"%s\" (error in GetOverlappedResult): %s", handle.path, error);
 	}
 	if (bytes_read != nr_bytes) {
 		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes,
@@ -546,11 +550,15 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 	ov.OffsetHigh = pos >> 32;
 	ov.hEvent = 0;
 	auto n = std::min<idx_t>(std::max<idx_t>(GetFileSize(handle), pos) - pos, nr_bytes);
-	ReadFile(hFile, buffer, (DWORD)n, NULL, &ov);
-	auto rc = GetOverlappedResult(hFile, &ov, &bytes_read, true);
+	auto rc = ReadFile(hFile, buffer, (DWORD)n, NULL, &ov);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Could not read file \"%s\": %s", handle.path, error);
+		throw IOException("Could not read file \"%s\" (error in ReadFile): %s", handle.path, error);
+	}
+	rc = GetOverlappedResult(hFile, &ov, &bytes_read, true);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not read file \"%s\" (error in GetOverlappedResult): %s", handle.path, error);
 	}
 	pos += bytes_read;
 	return bytes_read;
@@ -565,11 +573,15 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 	ov.Offset = location & 0xFFFFFFFF;
 	ov.OffsetHigh = location >> 32;
 	ov.hEvent = 0;
-	WriteFile(hFile, buffer, (DWORD)nr_bytes, NULL, &ov);
-	auto rc = GetOverlappedResult(hFile, &ov, &bytes_written, true);
+	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, NULL, &ov);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
-		throw IOException("Could not write file \"%s\": %s", handle.path, error);
+		throw IOException("Could not write file \"%s\" (error in WriteFile): %s", handle.path, error);
+	}
+	rc = GetOverlappedResult(hFile, &ov, &bytes_written, true);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not write file \"%s\" (error in GetOverlappedResult): %s", handle.path, error);
 	}
 	if (bytes_written != nr_bytes) {
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
@@ -587,8 +599,12 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 	ov.Offset = pos & 0xFFFFFFFF;
 	ov.OffsetHigh = pos >> 32;
 	ov.hEvent = 0;
-	WriteFile(hFile, buffer, (DWORD)nr_bytes, NULL, &ov);
-	auto rc = GetOverlappedResult(hFile, &ov, &bytes_written, true);
+	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, NULL, &ov);
+	if (rc == 0) {
+		auto error = GetLastErrorAsString();
+		throw IOException("Could not write file \"%s\" (error in WriteFile): %s", handle.path, error);
+	}
+	rc = GetOverlappedResult(hFile, &ov, &bytes_written, true);
 	if (rc == 0) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Could not write file \"%s\": %s", handle.path, error);
