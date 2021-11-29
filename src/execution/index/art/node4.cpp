@@ -36,11 +36,11 @@ idx_t Node4::GetMin() {
 }
 
 idx_t Node4::GetNextPos(idx_t pos) {
-	if (pos == INVALID_INDEX) {
+	if (pos == DConstants::INVALID_INDEX) {
 		return 0;
 	}
 	pos++;
-	return pos < count ? pos : INVALID_INDEX;
+	return pos < count ? pos : DConstants::INVALID_INDEX;
 }
 
 unique_ptr<Node> *Node4::GetChild(idx_t pos) {

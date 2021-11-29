@@ -128,7 +128,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				for (auto &expr : distinct.target_distincts) {
 					D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
 					auto &bound_colref = (BoundColumnRefExpression &)*expr;
-					if (bound_colref.binding.column_index == INVALID_INDEX) {
+					if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 						throw BinderException("Ambiguous name in DISTINCT ON!");
 					}
 					D_ASSERT(bound_colref.binding.column_index < sql_types.size());
@@ -151,7 +151,7 @@ void Binder::BindModifierTypes(BoundQueryNode &result, const vector<LogicalType>
 				auto &expr = order_node.expression;
 				D_ASSERT(expr->type == ExpressionType::BOUND_COLUMN_REF);
 				auto &bound_colref = (BoundColumnRefExpression &)*expr;
-				if (bound_colref.binding.column_index == INVALID_INDEX) {
+				if (bound_colref.binding.column_index == DConstants::INVALID_INDEX) {
 					throw BinderException("Ambiguous name in ORDER BY!");
 				}
 				D_ASSERT(bound_colref.binding.column_index < sql_types.size());

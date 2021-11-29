@@ -11,6 +11,7 @@
 #include <memory>
 #include <cstdint>
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/winapi.hpp"
 
 namespace duckdb {
 
@@ -36,9 +37,6 @@ typedef int64_t row_t;
 //! The type used for hashes
 typedef uint64_t hash_t;
 
-//! The value used to signify an invalid index entry
-extern const idx_t INVALID_INDEX;
-
 //! data pointers
 typedef uint8_t data_t;
 typedef data_t *data_ptr_t;
@@ -63,6 +61,11 @@ extern const transaction_t MAXIMUM_QUERY_ID;
 extern const transaction_t NOT_DELETED_ID;
 
 extern const double PI;
+
+struct DConstants {
+	//! The value used to signify an invalid index entry
+	static constexpr const idx_t INVALID_INDEX = idx_t(-1);
+};
 
 struct Storage {
 	//! The size of a hard disk sector, only really needed for Direct IO

@@ -8,6 +8,8 @@ add_subdirectory(dbgen)
 
 add_library(tpch_extension STATIC tpch-extension.cpp ${DBGEN_OBJECT_FILES})
 
+build_loadable_extension(tpch tpch-extension.cpp ${DBGEN_OBJECT_FILES})
+
 install(
   TARGETS tpch_extension
   EXPORT "${DUCKDB_EXPORT_SET}"
