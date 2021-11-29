@@ -115,7 +115,7 @@ inline void fastunpack(const uint32_t *__restrict in,
     internal::__fastunpack32(in, out);
     break;
   default:
-    throw duckdb::InternalException("Invalid bit width for bitpacking");
+    throw std::logic_error("Invalid bit width for bitpacking");
   }
 }
 
@@ -321,7 +321,7 @@ inline void fastunpack(const uint32_t *__restrict in,
     internal::__fastunpack64(in, out);
     break;
   default:
-	throw duckdb::InternalException("Invalid bit width for bitpacking");
+	throw std::logic_error("Invalid bit width for bitpacking");
   }
 }
 
@@ -431,7 +431,7 @@ inline void fastpack(const uint32_t *__restrict in,
     internal::__fastpack32(in, out);
     break;
   default:
-	throw duckdb::InternalException("Invalid bit width for bitpacking");
+	throw std::logic_error("Invalid bit width for bitpacking");
   }
 }
 
@@ -634,28 +634,7 @@ inline void fastpack(const uint64_t *__restrict in,
     internal::__fastpack64(in, out);
     break;
   default:
-	throw duckdb::InternalException("Invalid bit width for bitpacking");
+	throw std::logic_error("Invalid bit width for bitpacking");
   }
 }
-
-template <uint32_t BlockSize, typename IntType = uint32_t>
-uint32_t *packblockup(const IntType * source, uint32_t *out,
-                      const uint32_t bit) {
-  for (uint32_t j = 0; j != BlockSize; j += 32) {
-    fastpack(source + j, out, bit);
-    out += bit;
-  }
-  return out;
-}
-
-template <uint32_t BlockSize, typename IntType = uint32_t>
-const uint32_t *unpackblock(const uint32_t *source, IntType *out,
-                            const uint32_t bit) {
-  for (uint32_t j = 0; j != BlockSize; j += 32) {
-    fastunpack(source, out + j, bit);
-    source += bit;
-  }
-  return source;
-}
-
 } // namespace fastpfor_lib

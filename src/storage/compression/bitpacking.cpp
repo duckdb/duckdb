@@ -70,7 +70,7 @@ private:
 			max_value >>= 1;
 		}
 
-		return required_bits;
+		return GetEffectiveWidth<T>(required_bits);
 	}
 
 	template <class T, bool round_to_next_byte = false>
@@ -120,9 +120,27 @@ private:
 			throw InternalException("Unsupported type found in bitpacking.");
 		}
 
-		if (NumericLimits<T>::IsSigned() && width > 0) {
+		if (NumericLimits<T>::IsSigned() && width > 0 && width < sizeof(T) * 8) {
 			SignExtend<T>(dst, width);
 		}
+	}
+
+	// Prevent compression at widths that are ineffective
+	template <class T>
+	static bitpacking_width_t GetEffectiveWidth(bitpacking_width_t width) {
+		if (width > 56) {
+			return 64;
+		}
+
+		if (width > 28 && (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value)) {
+			return 32;
+		}
+
+		else if (width > 14 && (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value)) {
+			return 16;
+		}
+
+		return width;
 	}
 
 	// Sign bit extension
@@ -162,6 +180,7 @@ struct EmptyBitpackingWriter {
 
 template <class T, class PRE_CAST_TYPE>
 struct BitpackingState {
+public:
 	BitpackingState() : compression_buffer_idx(0), total_size(0), data_ptr(nullptr) {
 	}
 
@@ -240,6 +259,7 @@ idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 //===--------------------------------------------------------------------===//
 template <class T, class PRE_CAST_TYPE>
 struct BitpackingCompressState : public CompressionState {
+public:
 	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
 		auto &db = checkpointer.GetDatabase();
 		auto &type = checkpointer.GetType();
@@ -250,6 +270,19 @@ struct BitpackingCompressState : public CompressionState {
 		state.data_ptr = (void *)this;
 	}
 
+	ColumnDataCheckpointer &checkpointer;
+	CompressionFunction *function;
+	unique_ptr<ColumnSegment> current_segment;
+	unique_ptr<BufferHandle> handle;
+
+	// Ptr to next free spot in segment;
+	data_ptr_t data_ptr;
+	// Ptr to next free spot for storing bitwidths (growing downwards).
+	data_ptr_t width_ptr;
+
+	BitpackingState<T, PRE_CAST_TYPE> state;
+
+public:
 	struct BitpackingWriter {
 		template <class VALUE_TYPE>
 		static void Operation(VALUE_TYPE *values, bool *validity, bitpacking_width_t width, idx_t count,
@@ -339,18 +372,6 @@ struct BitpackingCompressState : public CompressionState {
 		FlushSegment();
 		current_segment.reset();
 	}
-
-	ColumnDataCheckpointer &checkpointer;
-	CompressionFunction *function;
-	unique_ptr<ColumnSegment> current_segment;
-	unique_ptr<BufferHandle> handle;
-
-	// Ptr to next free spot in segment;
-	data_ptr_t data_ptr;
-	// Ptr to next free spot for storing bitwidths (growing downwards).
-	data_ptr_t width_ptr;
-
-	BitpackingState<T, PRE_CAST_TYPE> state;
 };
 
 template <class T, class PRE_CAST_TYPE>
@@ -378,19 +399,13 @@ void BitpackingFinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 template <class T, class PRE_CAST_TYPE>
 struct BitpackingScanState : public SegmentScanState {
-	unique_ptr<BufferHandle> handle;
-	PhysicalType compress_type;
-
-	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t);
-
+public:
 	explicit BitpackingScanState(ColumnSegment &segment) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 		handle = buffer_manager.Pin(segment.block);
 
 		current_width_group_ptr =
 		    handle->node->buffer + segment.GetBlockOffset() + BitpackingPrimitives::BITPACKING_HEADER_SIZE;
-
-		type = segment.type.InternalType();
 
 		// load offset to bitpacking widths pointer
 		auto bitpacking_widths_offset = Load<idx_t>(handle->node->buffer + segment.GetBlockOffset());
@@ -400,6 +415,17 @@ struct BitpackingScanState : public SegmentScanState {
 		LoadCurrentBitWidth();
 	}
 
+	unique_ptr<BufferHandle> handle;
+
+	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t);
+	PRE_CAST_TYPE decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
+
+	idx_t position_in_group = 0;
+	data_ptr_t current_width_group_ptr;
+	data_ptr_t bitpacking_width_ptr;
+	bitpacking_width_t current_width;
+
+public:
 	void LoadCurrentBitWidth() {
 		current_width = Load<bitpacking_width_t>(bitpacking_width_ptr);
 		LoadDecompressFunction();
@@ -429,15 +455,6 @@ struct BitpackingScanState : public SegmentScanState {
 	void LoadDecompressFunction() {
 		decompress_function = &BitpackingPrimitives::UnPackBlock<PRE_CAST_TYPE>;
 	}
-
-	idx_t position_in_group = 0;
-	data_ptr_t current_width_group_ptr;
-	data_ptr_t bitpacking_width_ptr;
-	bitpacking_width_t current_width;
-
-	PhysicalType type;
-
-	PRE_CAST_TYPE decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 };
 
 template <class T, class PRE_CAST_TYPE>
@@ -456,6 +473,17 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 	T *result_data = FlatVector::GetData<T>(result);
 	result.SetVectorType(VectorType::FLAT_VECTOR);
+
+	// Fast path for when no compression was used, we can do a single memcopy
+	if (scan_state.current_width == sizeof(PRE_CAST_TYPE) * 8 && scan_count <= BITPACKING_WIDTH_GROUP_SIZE &&
+	    scan_state.position_in_group == 0 && std::is_same<T, PRE_CAST_TYPE>::value) {
+
+		memcpy(result_data + result_offset, scan_state.current_width_group_ptr, scan_count * sizeof(PRE_CAST_TYPE));
+		scan_state.current_width_group_ptr += scan_count * sizeof(PRE_CAST_TYPE);
+		scan_state.bitpacking_width_ptr -= sizeof(bitpacking_width_t);
+		scan_state.LoadCurrentBitWidth();
+		return;
+	}
 
 	idx_t scanned = 0;
 
