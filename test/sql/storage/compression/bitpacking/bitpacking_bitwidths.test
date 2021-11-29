@@ -9,7 +9,7 @@ statement ok
 PRAGMA force_compression = 'bitpacking'
 
 statement ok
-CREATE TABLE test_unsigned AS SELECT cast(2**i as UINT64) i FROM range(64) tbl(i);
+CREATE TABLE test_unsigned AS SELECT cast(2**(i/2048) as UINT64) i FROM range(64*2048) tbl(i);
 
 statement ok
 CHECKPOINT;
@@ -17,13 +17,13 @@ CHECKPOINT;
 query II
 SELECT COUNT(i), AVG(i) FROM test_unsigned;
 ----
-64	288230376151711744.000000
+131072	288230376151711744.000000
 
 statement ok
-CREATE TABLE test_signed AS SELECT cast(-(2**i) as INT32) i FROM range(32) tbl(i);
+CREATE TABLE test_signed AS SELECT cast(-(2**(i/2048)) as INT32) i FROM range(32*2048) tbl(i);
 
 statement ok
-INSERT INTO test_signed SELECT cast(2**i as INT32) i FROM range(31) tbl(i);
+INSERT INTO test_signed SELECT cast(2**(i/2048) as INT32) i FROM range(31*2048) tbl(i);
 
 statement ok
 CHECKPOINT;
@@ -31,4 +31,4 @@ CHECKPOINT;
 query II
 SELECT COUNT(i), AVG(i) FROM test_signed;
 ----
-63	-34087042.031746
+129024	-34087042.031746

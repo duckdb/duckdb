@@ -70,3 +70,17 @@ query IIIII
 SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
 ----
 5665461940419088384.000000	1903811655.425532	25716.671975	127.500000	3256
+
+statement ok
+CREATE TABLE test_bool (id VARCHAR, col BOOL)
+
+statement ok
+INSERT INTO test_bool SELECT i::VARCHAR id, CAST (i%2 as BOOL) col FROM range(10000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM test_bool WHERE col = TRUE
+----
+5000

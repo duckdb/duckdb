@@ -474,27 +474,31 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		idx_t to_scan = MinValue<idx_t>(scan_count - scanned, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE -
 		                                                          offset_in_compression_group);
 
-		// TODO Optimization: avoid use of decompression buffer if we can compress straight to result vector
 		// Calculate start of compression algorithm group
 		data_ptr_t current_position_ptr =
 		    scan_state.current_width_group_ptr + scan_state.position_in_group * scan_state.current_width / 8;
 		data_ptr_t decompression_group_start_pointer =
 		    current_position_ptr - offset_in_compression_group * scan_state.current_width / 8;
 
-		// Decompress compression algorithm to buffer
-		scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
-		                               scan_state.current_width);
-
-		// Copy decompressed result to vector
 		T *current_result_ptr = result_data + result_offset + scanned;
 
-		if (std::is_same<T, PRE_CAST_TYPE>::value) {
-			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
-			       to_scan * sizeof(T));
+		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0 && std::is_same<T, PRE_CAST_TYPE>::value) {
+			// Decompress directly into result vector
+			scan_state.decompress_function((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
+			                               scan_state.current_width);
 		} else {
-			for (idx_t i = 0; i < to_scan; i++) {
-				current_result_ptr[i] =
-				    (T) * ((PRE_CAST_TYPE *)(scan_state.decompression_buffer + offset_in_compression_group) + i);
+			// Decompress compression algorithm to buffer
+			scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
+			                               scan_state.current_width);
+
+			if (std::is_same<T, PRE_CAST_TYPE>::value) {
+				memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
+				       to_scan * sizeof(T));
+			} else {
+				for (idx_t i = 0; i < to_scan; i++) {
+					current_result_ptr[i] =
+					    (T) * ((PRE_CAST_TYPE *)(scan_state.decompression_buffer + offset_in_compression_group) + i);
+				}
 			}
 		}
 
@@ -566,6 +570,7 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 		return GetBitpackingFunction<int32_t>(type);
 	case PhysicalType::INT64:
 		return GetBitpackingFunction<int64_t>(type);
+	case PhysicalType::BOOL:
 	case PhysicalType::UINT8:
 		return GetBitpackingFunction<uint8_t, uint32_t>(type);
 	case PhysicalType::UINT16:
@@ -581,6 +586,7 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 
 bool BitpackingFun::TypeIsSupported(PhysicalType type) {
 	switch (type) {
+	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:

@@ -115,7 +115,7 @@ inline void fastunpack(const uint32_t *__restrict in,
     internal::__fastunpack32(in, out);
     break;
   default:
-    break;
+    throw duckdb::InternalException("Invalid bit width for bitpacking");
   }
 }
 
@@ -321,7 +321,7 @@ inline void fastunpack(const uint32_t *__restrict in,
     internal::__fastunpack64(in, out);
     break;
   default:
-    break;
+	throw duckdb::InternalException("Invalid bit width for bitpacking");
   }
 }
 
@@ -431,7 +431,7 @@ inline void fastpack(const uint32_t *__restrict in,
     internal::__fastpack32(in, out);
     break;
   default:
-    break;
+	throw duckdb::InternalException("Invalid bit width for bitpacking");
   }
 }
 
@@ -634,7 +634,7 @@ inline void fastpack(const uint64_t *__restrict in,
     internal::__fastpack64(in, out);
     break;
   default:
-    break;
+	throw duckdb::InternalException("Invalid bit width for bitpacking");
   }
 }
 
