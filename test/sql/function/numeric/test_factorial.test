@@ -2,7 +2,6 @@
 # description: Mod test
 # group: [numeric]
 
-
 statement ok
 PRAGMA enable_verification
 
