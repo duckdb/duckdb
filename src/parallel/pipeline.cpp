@@ -146,7 +146,8 @@ void Pipeline::Finalize(Event &event) {
 	D_ASSERT(ready);
 	try {
 		auto sink_state = sink->Finalize(*this, event, executor.context, *sink->sink_state);
-		executor.context.config.has_primary_key = sink->sink_state->has_primary_key;
+		auto primary_key_flag = sink->sink_state->has_primary_key.load(); // atomically load
+		executor.context.config.has_primary_key.store(primary_key_flag);  // atomically store it
 		sink->sink_state->state = sink_state;
 	} catch (Exception &ex) { // LCOV_EXCL_START
 		executor.PushError(ex.type, ex.what());
