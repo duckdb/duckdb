@@ -89,7 +89,7 @@ SELECT EXTRACT(YEARWEEK FROM i) FROM dates
 199332
 NULL
 
-# millenium (change of millenium is January 1, X001)
+# millennium (change of millennium is January 1, X001)
 query I
 SELECT EXTRACT(millennium FROM i) FROM dates
 ----

@@ -1,0 +1,208 @@
+# name: test/sql/function/timestamp/test_icu_datepart.test
+# description: Test moving ICU date part functions
+# group: [timestamp]
+
+require icu
+
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+statement ok
+CREATE TABLE timestamps AS SELECT ts::TIMESTAMP AS ts, part FROM (VALUES
+	('2021-01-01 00:00:00', 'year'),
+	('2021-02-02 00:00:00', 'month'),
+	('2021-11-26 10:15:13.123456', 'microsecond'),
+	('2021-11-15 02:30:00-08', 'hour'),
+	('2021-11-15 02:30:00-07', 'minute'),
+	('2021-12-25 00:00:00+02', 'day')
+) tbl(ts, part);
+
+query II
+SELECT icu_year(ts), year(ts) FROM timestamps;
+----
+2020	2021
+2021	2021
+2021	2021
+2021	2021
+2021	2021
+2021	2021
+
+query II
+SELECT icu_month(ts), month(ts) FROM timestamps;
+----
+12	1
+2	2
+11	11
+11	11
+11	11
+12	12
+
+query II
+SELECT icu_day(ts), day(ts) FROM timestamps;
+----
+31	1
+1	2
+26	26
+15	15
+15	15
+24	24
+
+query II
+SELECT icu_decade(ts), decade(ts) FROM timestamps;
+----
+202	202
+202	202
+202	202
+202	202
+202	202
+202	202
+
+query II
+SELECT icu_century(ts), century(ts) FROM timestamps;
+----
+21	21
+21	21
+21	21
+21	21
+21	21
+21	21
+
+query II
+SELECT icu_millennium(ts), millennium(ts) FROM timestamps;
+----
+3	3
+3	3
+3	3
+3	3
+3	3
+3	3
+
+query II
+SELECT icu_microsecond(ts), microsecond(ts) FROM timestamps;
+----
+0	0
+0	0
+13123456	13123456
+0	0
+0	0
+0	0
+
+query II
+SELECT icu_millisecond(ts), millisecond(ts) FROM timestamps;
+----
+0	0
+0	0
+13123	13123
+0	0
+0	0
+0	0
+
+query II
+SELECT icu_second(ts), second(ts) FROM timestamps;
+----
+0	0
+0	0
+13	13
+0	0
+0	0
+0	0
+
+query II
+SELECT icu_minute(ts), minute(ts) FROM timestamps;
+----
+0	0
+0	0
+15	15
+30	30
+30	30
+0	0
+
+query II
+SELECT icu_hour(ts), hour(ts) FROM timestamps;
+----
+16	0
+16	0
+2	10
+2	10
+1	9
+14	22
+
+query II
+SELECT icu_dayofweek(ts), dayofweek(ts) FROM timestamps;
+----
+4	5
+1	2
+5	5
+1	1
+1	1
+5	5
+
+query II
+SELECT icu_isodow(ts), isodow(ts) FROM timestamps;
+----
+5	5
+2	2
+6	5
+2	1
+2	1
+6	5
+
+query II
+SELECT icu_week(ts), week(ts) FROM timestamps;
+----
+53	53
+5	5
+47	47
+46	45
+46	45
+51	51
+
+query II
+SELECT icu_dayofyear(ts), dayofyear(ts) FROM timestamps;
+----
+366	1
+32	33
+330	330
+319	319
+319	319
+358	358
+
+query II
+SELECT icu_quarter(ts), quarter(ts) FROM timestamps;
+----
+4	1
+1	1
+4	4
+4	4
+4	4
+4	4
+
+query II
+SELECT icu_yearweek(ts), yearweek(ts) FROM timestamps;
+----
+202053	202153
+202105	202105
+202147	202147
+202146	202145
+202146	202145
+202151	202151
+
+query II
+SELECT icu_epoch(ts), epoch(ts) FROM timestamps;
+----
+1609488000	1609459200
+1612252800	1612224000
+1637950513	1637921713
+1637001000	1636972200
+1636997400	1636968600
+1640412000	1640383200
+
+query II
+SELECT icu_date_part(part, ts), date_part(part, ts) FROM timestamps;
+----
+2020	2021
+2	2
+13123456	13123456
+2	10
+30	30
+24	24

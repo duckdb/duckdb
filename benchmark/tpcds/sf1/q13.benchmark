@@ -1,5 +1,4 @@
-
-# name: benchmark/tpcds/sf1/qpadded.benchmark
+# name: benchmark/tpcds/sf1/q13.benchmark
 # description: Run query 13 from the TPC-DS benchmark
 # group: [sf1]
 
