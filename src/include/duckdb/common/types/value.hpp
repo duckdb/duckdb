@@ -85,10 +85,12 @@ public:
 	DUCKDB_API static Value POINTER(uintptr_t value);
 	//! Create a date Value from a specified date
 	DUCKDB_API static Value DATE(date_t date);
+	DUCKDB_API static Value DATE_TZ(date_t date);
 	//! Create a date Value from a specified date
 	DUCKDB_API static Value DATE(int32_t year, int32_t month, int32_t day);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(dtime_t time);
+	DUCKDB_API static Value TIME_TZ(dtime_t time);
 	//! Create a time Value from a specified time
 	DUCKDB_API static Value TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros);
 	//! Create a timestamp Value from a specified date/time combination
@@ -98,6 +100,7 @@ public:
 	DUCKDB_API static Value TimestampNs(timestamp_t timestamp);
 	DUCKDB_API static Value TimestampMs(timestamp_t timestamp);
 	DUCKDB_API static Value TimestampSec(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMP_TZ(timestamp_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	DUCKDB_API static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
 	                                  int32_t micros);

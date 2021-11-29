@@ -45,6 +45,7 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::UINT16;
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::INTEGER:
 		return PhysicalType::INT32;
 	case LogicalTypeId::UINTEGER:
@@ -55,6 +56,8 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return PhysicalType::INT64;
 	case LogicalTypeId::UBIGINT:
 		return PhysicalType::UINT64;
@@ -148,6 +151,11 @@ const LogicalType LogicalType::TIMESTAMP_NS = LogicalType(LogicalTypeId::TIMESTA
 const LogicalType LogicalType::TIMESTAMP_S = LogicalType(LogicalTypeId::TIMESTAMP_SEC);
 
 const LogicalType LogicalType::TIME = LogicalType(LogicalTypeId::TIME);
+
+const LogicalType LogicalType::DATE_TZ = LogicalType(LogicalTypeId::DATE_TZ);
+const LogicalType LogicalType::TIME_TZ = LogicalType(LogicalTypeId::TIME_TZ);
+const LogicalType LogicalType::TIMESTAMP_TZ = LogicalType(LogicalTypeId::TIMESTAMP_TZ);
+
 const LogicalType LogicalType::HASH = LogicalType(LogicalTypeId::HASH);
 const LogicalType LogicalType::POINTER = LogicalType(LogicalTypeId::POINTER);
 
@@ -176,7 +184,8 @@ const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,      LogicalType::INTERVAL,
     LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,  LogicalType::USMALLINT,
     LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,      LogicalTypeId::LIST,
-    LogicalTypeId::STRUCT, LogicalTypeId::MAP,     LogicalType::UUID};
+    LogicalTypeId::STRUCT, LogicalType::DATE_TZ,   LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
+    LogicalTypeId::MAP,    LogicalType::UUID};
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
 const PhysicalType ROW_TYPE = PhysicalType::INT64;
@@ -358,6 +367,12 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "TIMESTAMP (NS)";
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return "TIMESTAMP (SEC)";
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return "TIMESTAMP WITH TIME ZONE";
+	case LogicalTypeId::TIME_TZ:
+		return "TIME WITH TIME ZONE";
+	case LogicalTypeId::DATE_TZ:
+		return "DATE WITH TIME ZONE";
 	case LogicalTypeId::FLOAT:
 		return "FLOAT";
 	case LogicalTypeId::DOUBLE:
@@ -515,6 +530,12 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::UINTEGER;
 	} else if (lower_str == "ubigint" || lower_str == "uint64") {
 		return LogicalTypeId::UBIGINT;
+	} else if (lower_str == "timestamptz") {
+		return LogicalTypeId::TIMESTAMP_TZ;
+	} else if (lower_str == "timetz") {
+		return LogicalTypeId::TIME_TZ;
+	} else if (lower_str == "datetz") {
+		return LogicalTypeId::DATE_TZ;
 	} else {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder

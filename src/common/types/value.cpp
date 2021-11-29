@@ -421,6 +421,13 @@ Value Value::DATE(date_t value) {
 	return result;
 }
 
+Value Value::DATE_TZ(date_t value) {
+	Value result(LogicalType::DATE_TZ);
+	result.value_.date = value;
+	result.is_null = false;
+	return result;
+}
+
 Value Value::DATE(int32_t year, int32_t month, int32_t day) {
 	return Value::DATE(Date::FromDate(year, month, day));
 }
@@ -432,12 +439,26 @@ Value Value::TIME(dtime_t value) {
 	return result;
 }
 
+Value Value::TIME_TZ(dtime_t value) {
+	Value result(LogicalType::TIME_TZ);
+	result.value_.time = value;
+	result.is_null = false;
+	return result;
+}
+
 Value Value::TIME(int32_t hour, int32_t min, int32_t sec, int32_t micros) {
 	return Value::TIME(Time::FromTime(hour, min, sec, micros));
 }
 
 Value Value::TIMESTAMP(timestamp_t value) {
 	Value result(LogicalType::TIMESTAMP);
+	result.value_.timestamp = value;
+	result.is_null = false;
+	return result;
+}
+
+Value Value::TIMESTAMP_TZ(timestamp_t value) {
+	Value result(LogicalType::TIMESTAMP_TZ);
 	result.value_.timestamp = value;
 	result.is_null = false;
 	return result;
@@ -697,10 +718,13 @@ T Value::GetValueInternal() const {
 	case LogicalTypeId::UUID:
 		return Cast::Operation<hugeint_t, T>(value_.hugeint);
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		return Cast::Operation<date_t, T>(value_.date);
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		return Cast::Operation<dtime_t, T>(value_.time);
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return Cast::Operation<timestamp_t, T>(value_.timestamp);
 	case LogicalTypeId::UTINYINT:
 		return Cast::Operation<uint8_t, T>(value_.utinyint);
@@ -749,12 +773,18 @@ int32_t Value::GetValue() const {
 }
 template <>
 int64_t Value::GetValue() const {
-	if (type_.id() == LogicalTypeId::TIMESTAMP || type_.id() == LogicalTypeId::TIME ||
-	    type_.id() == LogicalTypeId::TIMESTAMP_SEC || type_.id() == LogicalTypeId::TIMESTAMP_NS ||
-	    type_.id() == LogicalTypeId::TIMESTAMP_MS) {
+	switch (type_.id()) {
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return value_.bigint;
+	default:
+		return GetValueInternal<int64_t>();
 	}
-	return GetValueInternal<int64_t>();
 }
 template <>
 hugeint_t Value::GetValue() const {
@@ -1032,6 +1062,12 @@ string Value::ToString() const {
 		return Time::ToString(value_.time);
 	case LogicalTypeId::TIMESTAMP:
 		return Timestamp::ToString(value_.timestamp);
+	case LogicalTypeId::DATE_TZ:
+		return Date::ToString(value_.date) + Time::ToUTCOffset(0, 0);
+	case LogicalTypeId::TIME_TZ:
+		return Time::ToString(value_.time) + Time::ToUTCOffset(0, 0);
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Timestamp::ToString(value_.timestamp) + Time::ToUTCOffset(0, 0);
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Timestamp::ToString(Timestamp::FromEpochSeconds(value_.timestamp.value));
 	case LogicalTypeId::TIMESTAMP_MS:
