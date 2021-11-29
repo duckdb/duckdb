@@ -7,6 +7,8 @@
 #pragma once
 #include "bitpacking.h"
 
+#include <stdexcept>
+
 namespace duckdb_fastpforlib {
 
 inline void fastunpack(const uint32_t *__restrict in,
