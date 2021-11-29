@@ -38,7 +38,7 @@ public:
 	}
 
 	SinkFinalizeType state;
-	bool has_primary_key {false};
+	std::atomic<bool> has_primary_key;
 };
 
 class LocalSinkState {
