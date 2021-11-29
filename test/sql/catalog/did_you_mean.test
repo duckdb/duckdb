@@ -1,6 +1,7 @@
 # name: test/sql/catalog/did_you_mean.test
-# Description: The error messages suggest possible alternative
+# description: The error messages suggest possible alternative
 # group: [catalog]
+
 require test_helper
 
 statement ok

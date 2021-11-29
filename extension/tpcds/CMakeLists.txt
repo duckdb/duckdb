@@ -8,6 +8,8 @@ add_subdirectory(dsdgen)
 
 add_library(tpcds_extension STATIC tpcds-extension.cpp ${DSDGEN_OBJECT_FILES})
 
+build_loadable_extension(tpcds tpcds-extension.cpp ${DSDGEN_OBJECT_FILES})
+
 install(
   TARGETS tpcds_extension
   EXPORT "${DUCKDB_EXPORT_SET}"

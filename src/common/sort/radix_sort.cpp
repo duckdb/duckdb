@@ -1,3 +1,4 @@
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/sort.hpp"
 
@@ -40,7 +41,7 @@ static void SortTiedBlobs(BufferManager &buffer_manager, const data_ptr_t datapt
 	    buffer_manager.Allocate(MaxValue((end - start) * sort_layout.entry_size, (idx_t)Storage::BLOCK_SIZE));
 	data_ptr_t temp_ptr = temp_block->Ptr();
 	for (idx_t i = 0; i < end - start; i++) {
-		memcpy(temp_ptr, entry_ptrs[i], sort_layout.entry_size);
+		FastMemcpy(temp_ptr, entry_ptrs[i], sort_layout.entry_size);
 		temp_ptr += sort_layout.entry_size;
 	}
 	memcpy(dataptr + start * sort_layout.entry_size, temp_block->Ptr(), (end - start) * sort_layout.entry_size);
@@ -100,7 +101,7 @@ static void ComputeTies(data_ptr_t dataptr, const idx_t &count, const idx_t &col
 	// Align dataptr
 	dataptr += col_offset;
 	for (idx_t i = 0; i < count - 1; i++) {
-		ties[i] = ties[i] && memcmp(dataptr, dataptr + sort_layout.entry_size, tie_size) == 0;
+		ties[i] = ties[i] && FastMemcmp(dataptr, dataptr + sort_layout.entry_size, tie_size) == 0;
 		dataptr += sort_layout.entry_size;
 	}
 }
@@ -138,7 +139,7 @@ void RadixSortLSD(BufferManager &buffer_manager, const data_ptr_t &dataptr, cons
 		data_ptr_t row_ptr = source_ptr + (count - 1) * row_width;
 		for (idx_t i = 0; i < count; i++) {
 			idx_t &radix_offset = --counts[*(row_ptr + offset)];
-			memcpy(target_ptr + radix_offset * row_width, row_ptr, row_width);
+			FastMemcpy(target_ptr + radix_offset * row_width, row_ptr, row_width);
 			row_ptr -= row_width;
 		}
 		swap = !swap;
@@ -161,14 +162,14 @@ inline void InsertionSort(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, 
 		const data_ptr_t val = temp_val.get();
 		const auto comp_width = total_comp_width - offset;
 		for (idx_t i = 1; i < count; i++) {
-			memcpy(val, source_ptr + i * row_width, row_width);
+			FastMemcpy(val, source_ptr + i * row_width, row_width);
 			idx_t j = i;
 			while (j > 0 &&
-			       memcmp(source_ptr + (j - 1) * row_width + total_offset, val + total_offset, comp_width) > 0) {
-				memcpy(source_ptr + j * row_width, source_ptr + (j - 1) * row_width, row_width);
+			       FastMemcmp(source_ptr + (j - 1) * row_width + total_offset, val + total_offset, comp_width) > 0) {
+				FastMemcpy(source_ptr + j * row_width, source_ptr + (j - 1) * row_width, row_width);
 				j--;
 			}
-			memcpy(source_ptr + j * row_width, val, row_width);
+			FastMemcpy(source_ptr + j * row_width, val, row_width);
 		}
 	}
 	if (swap) {
@@ -202,7 +203,7 @@ void RadixSortMSD(const data_ptr_t orig_ptr, const data_ptr_t temp_ptr, const id
 		data_ptr_t row_ptr = source_ptr;
 		for (idx_t i = 0; i < count; i++) {
 			const idx_t &radix_offset = locations[*(row_ptr + total_offset)]++;
-			memcpy(target_ptr + radix_offset * row_width, row_ptr, row_width);
+			FastMemcpy(target_ptr + radix_offset * row_width, row_ptr, row_width);
 			row_ptr += row_width;
 		}
 		swap = !swap;

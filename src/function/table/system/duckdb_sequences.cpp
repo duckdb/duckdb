@@ -22,40 +22,40 @@ static unique_ptr<FunctionData> DuckDBSequencesBind(ClientContext &context, vect
                                                     vector<string> &input_table_names,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("schema_oid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("sequence_name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("sequence_oid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("temporary");
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	names.emplace_back("start_value");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("min_value");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("max_value");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("increment_by");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("cycle");
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	names.emplace_back("last_value");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("sql");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }

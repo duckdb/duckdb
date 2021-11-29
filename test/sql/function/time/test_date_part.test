@@ -79,7 +79,7 @@ statement error
 SELECT century(i) FROM times
 
 statement error
-SELECT millenium(i) FROM times
+SELECT millennium(i) FROM times
 
 statement error
 SELECT quarter(i) FROM times

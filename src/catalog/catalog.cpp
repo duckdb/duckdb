@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/planner/binder.hpp"
 
 namespace duckdb {
 
@@ -47,6 +48,12 @@ Catalog &Catalog::GetCatalog(ClientContext &context) {
 CatalogEntry *Catalog::CreateTable(ClientContext &context, BoundCreateTableInfo *info) {
 	auto schema = GetSchema(context, info->base->schema);
 	return CreateTable(context, schema, info);
+}
+
+CatalogEntry *Catalog::CreateTable(ClientContext &context, unique_ptr<CreateTableInfo> info) {
+	auto binder = Binder::CreateBinder(context);
+	auto bound_info = binder->BindCreateTableInfo(move(info));
+	return CreateTable(context, bound_info.get());
 }
 
 CatalogEntry *Catalog::CreateTable(ClientContext &context, SchemaCatalogEntry *schema, BoundCreateTableInfo *info) {

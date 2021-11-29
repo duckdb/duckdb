@@ -207,13 +207,13 @@ static unique_ptr<FunctionData> MyScanBind(ClientContext &context, vector<Value>
 	auto table_name = inputs[0].ToString();
 	if (table_name == "mytable") {
 		names.emplace_back("i");
-		return_types.push_back(LogicalType::INTEGER);
+		return_types.emplace_back(LogicalType::INTEGER);
 
 		names.emplace_back("j");
-		return_types.push_back(LogicalType::INTEGER);
+		return_types.emplace_back(LogicalType::INTEGER);
 	} else if (table_name == "myothertable") {
 		names.emplace_back("k");
-		return_types.push_back(LogicalType::INTEGER);
+		return_types.emplace_back(LogicalType::INTEGER);
 	} else {
 		throw std::runtime_error("Unknown table " + table_name);
 	}

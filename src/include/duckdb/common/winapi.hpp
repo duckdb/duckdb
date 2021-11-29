@@ -20,9 +20,13 @@
 #endif
 #endif
 
-#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
+#ifndef DUCKDB_EXTENSION_API
 #ifdef _WIN32
+#ifdef DUCKDB_BUILD_LOADABLE_EXTENSION
 #define DUCKDB_EXTENSION_API __declspec(dllexport)
+#else
+#define DUCKDB_EXTENSION_API
+#endif
 #else
 #define DUCKDB_EXTENSION_API
 #endif
