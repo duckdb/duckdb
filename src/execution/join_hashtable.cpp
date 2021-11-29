@@ -334,7 +334,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		pointers[index] = key_locations[i];
 	}
 	// It is still necessary to handle multiple conflicts to the same key
-	if (has_primary_key) {
+	if (has_primary_key && join_type != JoinType::SEMI) {
 		for (auto entry : conflict_entries) {
 			auto next_entry_ptr = Load<data_ptr_t>(entry + pointer_offset);
 			// check the whole chain
