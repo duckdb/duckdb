@@ -283,6 +283,19 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 	return {nullptr, nullptr};
 }
 
+CatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
+	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::VIEW_ENTRY, CatalogType::SEQUENCE_ENTRY};
+
+	for (auto entry_type : entry_types) {
+		CatalogEntry *result = GetEntry(context, entry_type, schema, name, true);
+		if (result != nullptr) {
+			return result;
+		}
+	}
+
+	throw CatalogException("CatalogElement " + schema + " " + name + "does not exist!");
+}
+
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name, const string &name,
                                 bool if_exists, QueryErrorContext error_context) {
 	return LookupEntry(context, type, schema_name, name, if_exists, error_context).entry;

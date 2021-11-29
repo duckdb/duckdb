@@ -186,10 +186,16 @@ void DependencyManager::Scan(const std::function<void(CatalogEntry *, CatalogEnt
 void DependencyManager::AddOwnership(ClientContext &context, CatalogEntry *owner, CatalogEntry *entry) {
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
-	// if the entry is already owned, throw error
+
 	for (auto &dep : dependents_map[entry]) {
+		// if the entry is already owned, throw error
 		if (dep.entry != owner) {
-			throw CatalogException(entry->name + " is already owned by " + dep.entry->name);
+			throw CatalogException(entry->name + " already depends on " + dep.entry->name);
+		}
+		// if the entry owns the owner, throw error
+		if (dep.entry == owner && dep.dependency_type == DependencyType::DEPENDENCY_OWNS) {
+			throw CatalogException(entry->name + " already owns " + owner->name +
+			                       ". Cannot have circular dependencies");
 		}
 	}
 

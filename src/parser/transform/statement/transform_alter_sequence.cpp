@@ -47,10 +47,8 @@ unique_ptr<AlterStatement> Transformer::TransformAlterSequence(duckdb_libpgquery
 				} else {
 					throw ParserException("Expected an argument for option %s", opt_name);
 				}
-				// TODO: How to make this generic? we dont want only table entries
-				auto info =
-				    make_unique<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_schema, sequence_name,
-				                                     CatalogType::TABLE_ENTRY, owner_schema, owner_name);
+				auto info = make_unique<ChangeOwnershipInfo>(CatalogType::SEQUENCE_ENTRY, sequence_schema,
+				                                             sequence_name, owner_schema, owner_name);
 				result->info = move(info);
 			}
 		}

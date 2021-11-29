@@ -45,25 +45,22 @@ public:
 // Change Ownership
 //===--------------------------------------------------------------------===//
 struct ChangeOwnershipInfo : public AlterInfo {
-	ChangeOwnershipInfo(CatalogType entry_catalog_type, string entry_schema, string entry_name,
-	                    CatalogType owner_catalog_type, string owner_schema, string owner_name)
+	ChangeOwnershipInfo(CatalogType entry_catalog_type, string entry_schema, string entry_name, string owner_schema,
+	                    string owner_name)
 	    : AlterInfo(AlterType::CHANGE_OWNERSHIP, entry_schema, entry_name), entry_catalog_type(entry_catalog_type),
-	      owner_catalog_type(owner_catalog_type), owner_schema(owner_schema), owner_name(owner_name) {
+	      owner_schema(owner_schema), owner_name(owner_name) {
 	}
 
-	// Catalog type refers to the entry type, since struct is usually built from an
+	// Catalog type refers to the entry type, since this struct is usually built from an
 	// ALTER <TYPE> <schema>.<name> OWNED BY <owner_schema>.<owner_name> statement
 	// here it is only possible to know the type of who is to be owned
 	CatalogType entry_catalog_type;
-	CatalogType owner_catalog_type;
 
 	string owner_schema;
 	string owner_name;
 
 public:
 	CatalogType GetCatalogType() override;
-	CatalogType GetEntryCatalogType();
-	CatalogType GetOwnerCatalogType();
 	unique_ptr<AlterInfo> Copy() const override;
 };
 

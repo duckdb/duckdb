@@ -165,6 +165,9 @@ public:
 	                                  const string &name, bool if_exists = false,
 	                                  QueryErrorContext error_context = QueryErrorContext());
 
+	//! Gets the "schema.name" entry without a specified type, if entry does not exist an exception is thrown
+	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, const string &schema, const string &name);
+
 	template <class T>
 	T *GetEntry(ClientContext &context, const string &schema_name, const string &name, bool if_exists = false,
 	            QueryErrorContext error_context = QueryErrorContext());

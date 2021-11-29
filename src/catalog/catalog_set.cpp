@@ -109,7 +109,7 @@ bool CatalogSet::AlterOwnership(ClientContext &context, ChangeOwnershipInfo *inf
 		return false;
 	}
 
-	auto owner_entry = catalog.GetEntry(context, info->GetOwnerCatalogType(), info->owner_schema, info->owner_name);
+	auto owner_entry = catalog.GetEntry(context, info->owner_schema, info->owner_name);
 	if (!owner_entry) {
 		return false;
 	}
@@ -192,7 +192,6 @@ void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, Ca
 		entries[entry_index].get()->deleted = old_deleted;
 		throw ex;
 	}
-	entries[entry_index].get()->deleted = old_deleted;
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
