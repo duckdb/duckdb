@@ -21,16 +21,16 @@ class ClientContext;
 //! The schema search path, in order by which entries are searched if no schema entry is provided
 class CatalogSearchPath {
 public:
-	explicit CatalogSearchPath(ClientContext &client_p);
-	CatalogSearchPath(const CatalogSearchPath &other) = delete;
+	DUCKDB_API explicit CatalogSearchPath(ClientContext &client_p);
+	DUCKDB_API CatalogSearchPath(const CatalogSearchPath &other) = delete;
 
-	void Set(const string &new_value, bool is_set_schema);
-	const vector<string> &Get();
-	const vector<string> &GetSetPaths() {
+	DUCKDB_API void Set(const string &new_value, bool is_set_schema);
+	DUCKDB_API const vector<string> &Get();
+	DUCKDB_API const vector<string> &GetSetPaths() {
 		return set_paths;
 	}
-	const string &GetDefault();
-	const string &GetOrDefault(const string &name);
+	DUCKDB_API const string &GetDefault();
+	DUCKDB_API const string &GetOrDefault(const string &name);
 
 private:
 	static vector<string> ParsePaths(const string &value);

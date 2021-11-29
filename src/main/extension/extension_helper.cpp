@@ -1,4 +1,8 @@
 #include "duckdb/main/extension_helper.hpp"
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/windows.hpp"
+#include "duckdb/main/database.hpp"
+#include "duckdb/main/client_context.hpp"
 
 #ifdef BUILD_ICU_EXTENSION
 #include "icu-extension.hpp"
@@ -37,6 +41,9 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// Load Statically Compiled Extension
+//===--------------------------------------------------------------------===//
 ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
 	if (extension == "parquet") {
 #ifdef BUILD_PARQUET_EXTENSION

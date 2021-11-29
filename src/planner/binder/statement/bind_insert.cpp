@@ -57,8 +57,8 @@ BoundStatement Binder::Bind(InsertStatement &stmt) {
 			auto &col = table->columns[i];
 			auto entry = column_name_map.find(col.name);
 			if (entry == column_name_map.end()) {
-				// column not specified, set index to INVALID_INDEX
-				insert->column_index_map.push_back(INVALID_INDEX);
+				// column not specified, set index to DConstants::INVALID_INDEX
+				insert->column_index_map.push_back(DConstants::INVALID_INDEX);
 			} else {
 				// column was specified, set to the index
 				insert->column_index_map.push_back(entry->second);

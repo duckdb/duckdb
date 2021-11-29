@@ -95,6 +95,10 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 	}
 }
 
+StandardException::StandardException(ExceptionType exception_type, const string &message)
+    : Exception(exception_type, message) {
+}
+
 CastException::CastException(const PhysicalType orig_type, const PhysicalType new_type)
     : Exception(ExceptionType::CONVERSION,
                 "Type " + TypeIdToString(orig_type) + " can't be cast as " + TypeIdToString(new_type)) {

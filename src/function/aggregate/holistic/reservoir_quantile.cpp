@@ -218,7 +218,7 @@ AggregateFunction GetReservoirQuantileAggregate(PhysicalType type) {
 	auto fun = GetReservoirQuantileAggregateFunction(type);
 	fun.bind = BindReservoirQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::DOUBLE);
+	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	return fun;
 }
 
