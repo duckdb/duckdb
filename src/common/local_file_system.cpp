@@ -560,7 +560,6 @@ int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes
 	return bytes_read;
 }
 
-
 static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
 	DWORD bytes_written = 0;
 	bool overlapped_write = false;
