@@ -4,7 +4,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
 
-namespace httplib {
+namespace duckdb_httplib_openssl {
 struct Response;
 }
 
@@ -14,7 +14,7 @@ using HeaderMap = unordered_map<string, string>;
 
 struct ResponseWrapper { /* avoid including httplib in header */
 public:
-	ResponseWrapper(httplib::Response &res);
+	ResponseWrapper(duckdb_httplib_openssl::Response &res);
 	int code;
 	string error;
 	HeaderMap headers;

@@ -29,19 +29,19 @@ static unique_ptr<FunctionData> PragmaLastProfilingOutputBind(ClientContext &con
                                                               vector<LogicalType> &return_types,
                                                               vector<string> &names) {
 	names.emplace_back("OPERATOR_ID");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("NAME");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("TIME");
-	return_types.push_back(LogicalType::DOUBLE);
+	return_types.emplace_back(LogicalType::DOUBLE);
 
 	names.emplace_back("CARDINALITY");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("DESCRIPTION");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return make_unique<PragmaLastProfilingOutputData>(return_types);
 }

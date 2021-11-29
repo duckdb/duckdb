@@ -8,6 +8,7 @@ add_library(icu_extension STATIC icu-collate.cpp icu-extension.cpp)
 link_threads(icu_extension)
 disable_target_warnings(icu_extension)
 
+build_loadable_extension(icu icu-collate.cpp icu-extension.cpp)
 install(
   TARGETS icu_extension
   EXPORT "${DUCKDB_EXPORT_SET}"

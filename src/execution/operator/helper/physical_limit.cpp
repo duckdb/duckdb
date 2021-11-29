@@ -13,8 +13,8 @@ namespace duckdb {
 class LimitGlobalState : public GlobalSinkState {
 public:
 	explicit LimitGlobalState(const PhysicalLimit &op) : current_offset(0) {
-		this->limit = op.limit_expression ? INVALID_INDEX : op.limit_value;
-		this->offset = op.offset_expression ? INVALID_INDEX : op.offset_value;
+		this->limit = op.limit_expression ? DConstants::INVALID_INDEX : op.limit_value;
+		this->offset = op.offset_expression ? DConstants::INVALID_INDEX : op.offset_value;
 	}
 
 	idx_t current_offset;
@@ -34,7 +34,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	auto &limit = state.limit;
 	auto &offset = state.offset;
 
-	if (limit != INVALID_INDEX && offset != INVALID_INDEX) {
+	if (limit != DConstants::INVALID_INDEX && offset != DConstants::INVALID_INDEX) {
 		idx_t max_element = limit + offset;
 		if ((limit == 0 || state.current_offset >= max_element) && !(limit_expression || offset_expression)) {
 			return SinkResultType::FINISHED;

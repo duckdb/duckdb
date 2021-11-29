@@ -40,7 +40,7 @@ static unique_ptr<FunctionData> DbgenBind(ClientContext &context, vector<Value> 
 			result->overwrite = kv.second.value_.boolean;
 		}
 	}
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 	names.emplace_back("Success");
 	return move(result);
 }
@@ -74,10 +74,10 @@ static unique_ptr<FunctionData> TPCHQueryBind(ClientContext &context, vector<Val
                                               vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                               vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("query");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
@@ -109,13 +109,13 @@ static unique_ptr<FunctionData> TPCHQueryAnswerBind(ClientContext &context, vect
                                                     vector<string> &input_table_names,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("query_nr");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("scale_factor");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("answer");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }
@@ -155,6 +155,7 @@ static string PragmaTpchQuery(ClientContext &context, const FunctionParameters &
 void TPCHExtension::Load(DuckDB &db) {
 	Connection con(db);
 	con.BeginTransaction();
+	auto &catalog = Catalog::GetCatalog(*con.context);
 
 	TableFunction dbgen_func("dbgen", {}, DbgenFunction, DbgenBind);
 	dbgen_func.named_parameters["sf"] = LogicalType::DOUBLE;
@@ -164,7 +165,6 @@ void TPCHExtension::Load(DuckDB &db) {
 	CreateTableFunctionInfo dbgen_info(dbgen_func);
 
 	// create the dbgen function
-	auto &catalog = Catalog::GetCatalog(*con.context);
 	catalog.CreateTableFunction(*con.context, &dbgen_info);
 
 	// create the TPCH pragma that allows us to run the query
@@ -193,4 +193,20 @@ std::string TPCHExtension::GetAnswer(double sf, int query) {
 	return tpch::DBGenWrapper::GetAnswer(sf, query);
 }
 
+std::string TPCHExtension::Name() {
+	return "tpch";
+}
+
 } // namespace duckdb
+
+extern "C" {
+
+DUCKDB_EXTENSION_API void tpch_init(duckdb::DatabaseInstance &db) {
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::TPCHExtension>();
+}
+
+DUCKDB_EXTENSION_API const char *tpch_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
+}

@@ -17,13 +17,13 @@ static unique_ptr<FunctionData> PragmaDatabaseListBind(ClientContext &context, v
                                                        vector<string> &input_table_names,
                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("seq");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("file");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }

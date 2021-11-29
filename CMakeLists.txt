@@ -323,6 +323,26 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
       CACHE STRING "Choose the type of build." FORCE)
 endif()
 
+
+set(OS_NAME "unknown")
+set(OS_ARCH "amd64")
+
+string(REGEX MATCH "(arm64|aarch64)" IS_ARM "${CMAKE_SYSTEM_PROCESSOR}")
+if(IS_ARM)
+  set(OS_ARCH "arm64")
+endif()
+
+if(APPLE)
+  set(OS_NAME "osx")
+endif()
+if(WIN32)
+  set(OS_NAME "windows")
+endif()
+if(UNIX AND NOT APPLE)
+  set(OS_NAME "linux") # sorry BSD
+endif()
+
+
 include_directories(src/include)
 include_directories(third_party/fmt/include)
 include_directories(third_party/hyperloglog)
@@ -518,6 +538,59 @@ function(link_threads LIBRARY)
   else()
     target_link_libraries(${LIBRARY} Threads::Threads)
   endif()
+endfunction()
+
+function(build_loadable_extension_directory NAME OUTPUT_DIRECTORY)
+  #  skip building extensions on mingw because its weird
+  if(WIN32 AND NOT MSVC)
+    return()
+  endif()
+
+  set(TARGET_NAME ${NAME}_loadable_extension)
+  # all parameters after output_directory
+  set(FILES ${ARGV})
+  # remove name
+  list(REMOVE_AT FILES 0)
+  # remove output_directory
+  list(REMOVE_AT FILES 0)
+
+  add_library(${TARGET_NAME} SHARED ${FILES})
+  set_target_properties(${TARGET_NAME} PROPERTIES OUTPUT_NAME ${NAME})
+  set_target_properties(${TARGET_NAME} PROPERTIES PREFIX "")
+  target_compile_definitions(${TARGET_NAME} PUBLIC -DDUCKDB_BUILD_LOADABLE_EXTENSION)
+  target_link_libraries(${TARGET_NAME} duckdb ${DUCKDB_EXTRA_LINK_FLAGS})
+  set_target_properties(${TARGET_NAME} PROPERTIES SUFFIX
+          ".duckdb_extension")
+
+  if(MSVC)
+    target_link_libraries(${TARGET_NAME} delayimp)
+    set_target_properties(
+            ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_DEBUG
+            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+    set_target_properties(
+            ${TARGET_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY_RELEASE
+            "${CMAKE_BINARY_DIR}/${OUTPUT_DIRECTORY}")
+  endif()
+
+  if(WIN32)
+    set_target_properties(${TARGET_NAME}
+            PROPERTIES LINK_FLAGS_DEBUG "/DELAYLOAD:duckdb.dll")
+    set(CMAKE_EXE_LINKER_FLAGS_DEBUG
+            "${CMAKE_EXE_LINKER_FLAGS_DEBUG}  /DELAYLOAD:duckdb.dll")
+    set_target_properties(${TARGET_NAME}
+            PROPERTIES LINK_FLAGS_RELEASE "/DELAYLOAD:duckdb.dll")
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE
+            "${CMAKE_EXE_LINKER_FLAGS_RELEASE}  /DELAYLOAD:duckdb.dll")
+  endif()
+
+endfunction()
+
+function(build_loadable_extension NAME)
+  # all parameters after name
+  set(FILES ${ARGV})
+  list(REMOVE_AT FILES 0)
+
+  build_loadable_extension_directory(${NAME} extension/${NAME} ${FILES})
 endfunction()
 
 if(${EXPORT_DLL_SYMBOLS})

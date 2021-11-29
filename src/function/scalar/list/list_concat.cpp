@@ -91,7 +91,7 @@ static unique_ptr<FunctionData> ListConcatBind(ClientContext &context, ScalarFun
 		D_ASSERT(rhs.id() == LogicalTypeId::LIST);
 
 		// Resolve list type
-		auto child_type = LogicalType::SQLNULL;
+		LogicalType child_type = LogicalType::SQLNULL;
 		for (const auto &argument : arguments) {
 			child_type = LogicalType::MaxLogicalType(child_type, ListType::GetChildType(argument->return_type));
 		}

@@ -25,25 +25,25 @@ class Value {
 
 public:
 	//! Create an empty NULL value of the specified type
-	explicit Value(LogicalType type = LogicalType::SQLNULL);
+	DUCKDB_API explicit Value(LogicalType type = LogicalType::SQLNULL);
 	//! Create an INTEGER value
-	Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
+	DUCKDB_API Value(int32_t val); // NOLINT: Allow implicit conversion from `int32_t`
 	//! Create a BIGINT value
-	Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
+	DUCKDB_API Value(int64_t val); // NOLINT: Allow implicit conversion from `int64_t`
 	//! Create a FLOAT value
-	Value(float val); // NOLINT: Allow implicit conversion from `float`
+	DUCKDB_API Value(float val); // NOLINT: Allow implicit conversion from `float`
 	//! Create a DOUBLE value
-	Value(double val); // NOLINT: Allow implicit conversion from `double`
+	DUCKDB_API Value(double val); // NOLINT: Allow implicit conversion from `double`
 	//! Create a VARCHAR value
-	Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
+	DUCKDB_API Value(const char *val); // NOLINT: Allow implicit conversion from `const char *`
 	//! Create a NULL value
-	Value(std::nullptr_t val); // NOLINT: Allow implicit conversion from `nullptr_t`
+	DUCKDB_API Value(std::nullptr_t val); // NOLINT: Allow implicit conversion from `nullptr_t`
 	//! Create a VARCHAR value
-	Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
+	DUCKDB_API Value(string_t val); // NOLINT: Allow implicit conversion from `string_t`
 	//! Create a VARCHAR value
-	Value(string val); // NOLINT: Allow implicit conversion from `string`
+	DUCKDB_API Value(string val); // NOLINT: Allow implicit conversion from `string`
 
-	const LogicalType &type() const {
+	inline const LogicalType &type() const {
 		return type_;
 	}
 
@@ -174,32 +174,32 @@ public:
 	//===--------------------------------------------------------------------===//
 	// Numeric Operators
 	//===--------------------------------------------------------------------===//
-	Value operator+(const Value &rhs) const;
-	Value operator-(const Value &rhs) const;
-	Value operator*(const Value &rhs) const;
-	Value operator/(const Value &rhs) const;
-	Value operator%(const Value &rhs) const;
+	DUCKDB_API Value operator+(const Value &rhs) const;
+	DUCKDB_API Value operator-(const Value &rhs) const;
+	DUCKDB_API Value operator*(const Value &rhs) const;
+	DUCKDB_API Value operator/(const Value &rhs) const;
+	DUCKDB_API Value operator%(const Value &rhs) const;
 
 	//===--------------------------------------------------------------------===//
 	// Comparison Operators
 	//===--------------------------------------------------------------------===//
-	bool operator==(const Value &rhs) const;
-	bool operator!=(const Value &rhs) const;
-	bool operator<(const Value &rhs) const;
-	bool operator>(const Value &rhs) const;
-	bool operator<=(const Value &rhs) const;
-	bool operator>=(const Value &rhs) const;
+	DUCKDB_API bool operator==(const Value &rhs) const;
+	DUCKDB_API bool operator!=(const Value &rhs) const;
+	DUCKDB_API bool operator<(const Value &rhs) const;
+	DUCKDB_API bool operator>(const Value &rhs) const;
+	DUCKDB_API bool operator<=(const Value &rhs) const;
+	DUCKDB_API bool operator>=(const Value &rhs) const;
 
-	bool operator==(const int64_t &rhs) const;
-	bool operator!=(const int64_t &rhs) const;
-	bool operator<(const int64_t &rhs) const;
-	bool operator>(const int64_t &rhs) const;
-	bool operator<=(const int64_t &rhs) const;
-	bool operator>=(const int64_t &rhs) const;
+	DUCKDB_API bool operator==(const int64_t &rhs) const;
+	DUCKDB_API bool operator!=(const int64_t &rhs) const;
+	DUCKDB_API bool operator<(const int64_t &rhs) const;
+	DUCKDB_API bool operator>(const int64_t &rhs) const;
+	DUCKDB_API bool operator<=(const int64_t &rhs) const;
+	DUCKDB_API bool operator>=(const int64_t &rhs) const;
 
-	static bool FloatIsValid(float value);
-	static bool DoubleIsValid(double value);
-	static bool StringIsValid(const char *str, idx_t length);
+	DUCKDB_API static bool FloatIsValid(float value);
+	DUCKDB_API static bool DoubleIsValid(double value);
+	DUCKDB_API static bool StringIsValid(const char *str, idx_t length);
 	static bool StringIsValid(const string &str) {
 		return StringIsValid(str.c_str(), str.size());
 	}
@@ -211,13 +211,13 @@ public:
 
 	//! Returns true if the values are (approximately) equivalent. Note this is NOT the SQL equivalence. For this
 	//! function, NULL values are equivalent and floating point values that are close are equivalent.
-	static bool ValuesAreEqual(const Value &result_value, const Value &value);
+	DUCKDB_API static bool ValuesAreEqual(const Value &result_value, const Value &value);
 
 	friend std::ostream &operator<<(std::ostream &out, const Value &val) {
 		out << val.ToString();
 		return out;
 	}
-	void Print() const;
+	DUCKDB_API void Print() const;
 
 private:
 	//! The logical of the value

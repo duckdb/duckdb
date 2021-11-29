@@ -53,22 +53,24 @@ typedef void (*aggregate_window_t)(Vector inputs[], FunctionData *bind_data, idx
 
 class AggregateFunction : public BaseScalarFunction {
 public:
-	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
-	                  aggregate_size_t state_size, aggregate_initialize_t initialize, aggregate_update_t update,
-	                  aggregate_combine_t combine, aggregate_finalize_t finalize,
-	                  aggregate_simple_update_t simple_update = nullptr, bind_aggregate_function_t bind = nullptr,
-	                  aggregate_destructor_t destructor = nullptr, aggregate_statistics_t statistics = nullptr,
-	                  aggregate_window_t window = nullptr)
+	DUCKDB_API AggregateFunction(const string &name, const vector<LogicalType> &arguments,
+	                             const LogicalType &return_type, aggregate_size_t state_size,
+	                             aggregate_initialize_t initialize, aggregate_update_t update,
+	                             aggregate_combine_t combine, aggregate_finalize_t finalize,
+	                             aggregate_simple_update_t simple_update = nullptr,
+	                             bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
+	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
 	    : BaseScalarFunction(name, arguments, return_type, false), state_size(state_size), initialize(initialize),
 	      update(update), combine(combine), finalize(finalize), simple_update(simple_update), window(window),
 	      bind(bind), destructor(destructor), statistics(statistics) {
 	}
 
-	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
-	                  aggregate_initialize_t initialize, aggregate_update_t update, aggregate_combine_t combine,
-	                  aggregate_finalize_t finalize, aggregate_simple_update_t simple_update = nullptr,
-	                  bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
-	                  aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
+	DUCKDB_API AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type,
+	                             aggregate_size_t state_size, aggregate_initialize_t initialize,
+	                             aggregate_update_t update, aggregate_combine_t combine, aggregate_finalize_t finalize,
+	                             aggregate_simple_update_t simple_update = nullptr,
+	                             bind_aggregate_function_t bind = nullptr, aggregate_destructor_t destructor = nullptr,
+	                             aggregate_statistics_t statistics = nullptr, aggregate_window_t window = nullptr)
 	    : AggregateFunction(string(), arguments, return_type, state_size, initialize, update, combine, finalize,
 	                        simple_update, bind, destructor, statistics, window) {
 	}
@@ -96,23 +98,23 @@ public:
 	//! The statistics propagation function (may be null)
 	aggregate_statistics_t statistics;
 
-	bool operator==(const AggregateFunction &rhs) const {
+	DUCKDB_API bool operator==(const AggregateFunction &rhs) const {
 		return state_size == rhs.state_size && initialize == rhs.initialize && update == rhs.update &&
 		       combine == rhs.combine && finalize == rhs.finalize && window == rhs.window;
 	}
-	bool operator!=(const AggregateFunction &rhs) const {
+	DUCKDB_API bool operator!=(const AggregateFunction &rhs) const {
 		return !(*this == rhs);
 	}
 
-	static unique_ptr<BoundAggregateExpression>
+	DUCKDB_API static unique_ptr<BoundAggregateExpression>
 	BindAggregateFunction(ClientContext &context, AggregateFunction bound_function,
 	                      vector<unique_ptr<Expression>> children, unique_ptr<Expression> filter = nullptr,
 	                      bool is_distinct = false, unique_ptr<BoundOrderModifier> order_bys = nullptr);
 
-	static unique_ptr<FunctionData> BindSortedAggregate(AggregateFunction &bound_function,
-	                                                    vector<unique_ptr<Expression>> &children,
-	                                                    unique_ptr<FunctionData> bind_info,
-	                                                    unique_ptr<BoundOrderModifier> order_bys);
+	DUCKDB_API static unique_ptr<FunctionData> BindSortedAggregate(AggregateFunction &bound_function,
+	                                                               vector<unique_ptr<Expression>> &children,
+	                                                               unique_ptr<FunctionData> bind_info,
+	                                                               unique_ptr<BoundOrderModifier> order_bys);
 
 public:
 	template <class STATE, class RESULT_TYPE, class OP>
