@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/enums/set_scope.h"
+#include "duckdb/common/enums/set_scope.hpp"
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/parser/parsed_data/vacuum_info.hpp"
 
@@ -31,10 +31,6 @@ public:
 	const std::string name;
 	const Value value;
 	const SetScope scope;
-
-private:
-	//! Returns the normalized key name.
-	string ValidateInput(ExecutionContext &context) const;
 };
 
 } // namespace duckdb

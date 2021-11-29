@@ -66,7 +66,8 @@ public:
 
 class ComparisonExpressionMatcher : public ExpressionMatcher {
 public:
-	ComparisonExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_COMPARISON) {
+	ComparisonExpressionMatcher()
+	    : ExpressionMatcher(ExpressionClass::BOUND_COMPARISON), policy(SetMatcher::Policy::INVALID) {
 	}
 	//! The matchers for the child expressions
 	vector<unique_ptr<ExpressionMatcher>> matchers;
@@ -100,7 +101,8 @@ public:
 
 class ConjunctionExpressionMatcher : public ExpressionMatcher {
 public:
-	ConjunctionExpressionMatcher() : ExpressionMatcher(ExpressionClass::BOUND_CONJUNCTION) {
+	ConjunctionExpressionMatcher()
+	    : ExpressionMatcher(ExpressionClass::BOUND_CONJUNCTION), policy(SetMatcher::Policy::INVALID) {
 	}
 	//! The matchers for the child expressions
 	vector<unique_ptr<ExpressionMatcher>> matchers;

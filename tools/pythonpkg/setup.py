@@ -10,7 +10,7 @@ from setuptools import setup, Extension
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts','tpch', 'tpcds', 'visualizer']
+extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer']
 
 if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts','tpch']

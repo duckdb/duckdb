@@ -95,7 +95,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 
 	// select the function based on the input parameters
 	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);
-	if (best_function_idx == INVALID_INDEX) {
+	if (best_function_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(ref, error));
 	}
 	auto &table_function = function->functions[best_function_idx];

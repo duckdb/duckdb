@@ -103,7 +103,11 @@ TaskScheduler::~TaskScheduler() {
 }
 
 TaskScheduler &TaskScheduler::GetScheduler(ClientContext &context) {
-	return context.db->GetScheduler();
+	return TaskScheduler::GetScheduler(DatabaseInstance::GetDatabase(context));
+}
+
+TaskScheduler &TaskScheduler::GetScheduler(DatabaseInstance &db) {
+	return db.GetScheduler();
 }
 
 unique_ptr<ProducerToken> TaskScheduler::CreateProducer() {

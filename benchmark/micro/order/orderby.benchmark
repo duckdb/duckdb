@@ -1,6 +1,6 @@
-# name: benchmark/micro/arithmetic/multiplications.benchmark
+# name: benchmark/micro/order/orderby.benchmark
 # description: Order by integer table with 1000000 values
-# group: [micro]
+# group: [order]
 
 name Order By (Single Integer)
 group micro

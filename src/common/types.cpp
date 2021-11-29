@@ -27,6 +27,14 @@ LogicalType::LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info_p
 	physical_type_ = GetInternalType();
 }
 
+LogicalType::LogicalType(const LogicalType &other)
+    : id_(other.id_), physical_type_(other.physical_type_), type_info_(other.type_info_) {
+}
+
+LogicalType::LogicalType(LogicalType &&other) noexcept
+    : id_(other.id_), physical_type_(other.physical_type_), type_info_(move(other.type_info_)) {
+}
+
 hash_t LogicalType::Hash() const {
 	return duckdb::Hash<uint8_t>((uint8_t)id_);
 }
@@ -125,41 +133,41 @@ PhysicalType LogicalType::GetInternalType() {
 	}
 }
 
-const LogicalType LogicalType::INVALID = LogicalType(LogicalTypeId::INVALID);
-const LogicalType LogicalType::SQLNULL = LogicalType(LogicalTypeId::SQLNULL);
-const LogicalType LogicalType::BOOLEAN = LogicalType(LogicalTypeId::BOOLEAN);
-const LogicalType LogicalType::TINYINT = LogicalType(LogicalTypeId::TINYINT);
-const LogicalType LogicalType::UTINYINT = LogicalType(LogicalTypeId::UTINYINT);
-const LogicalType LogicalType::SMALLINT = LogicalType(LogicalTypeId::SMALLINT);
-const LogicalType LogicalType::USMALLINT = LogicalType(LogicalTypeId::USMALLINT);
-const LogicalType LogicalType::INTEGER = LogicalType(LogicalTypeId::INTEGER);
-const LogicalType LogicalType::UINTEGER = LogicalType(LogicalTypeId::UINTEGER);
-const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
-const LogicalType LogicalType::UBIGINT = LogicalType(LogicalTypeId::UBIGINT);
-const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
-const LogicalType LogicalType::UUID = LogicalType(LogicalTypeId::UUID);
-const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
-const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
-const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
+constexpr const LogicalTypeId LogicalType::INVALID;
+constexpr const LogicalTypeId LogicalType::SQLNULL;
+constexpr const LogicalTypeId LogicalType::BOOLEAN;
+constexpr const LogicalTypeId LogicalType::TINYINT;
+constexpr const LogicalTypeId LogicalType::UTINYINT;
+constexpr const LogicalTypeId LogicalType::SMALLINT;
+constexpr const LogicalTypeId LogicalType::USMALLINT;
+constexpr const LogicalTypeId LogicalType::INTEGER;
+constexpr const LogicalTypeId LogicalType::UINTEGER;
+constexpr const LogicalTypeId LogicalType::BIGINT;
+constexpr const LogicalTypeId LogicalType::UBIGINT;
+constexpr const LogicalTypeId LogicalType::HUGEINT;
+constexpr const LogicalTypeId LogicalType::UUID;
+constexpr const LogicalTypeId LogicalType::FLOAT;
+constexpr const LogicalTypeId LogicalType::DOUBLE;
+constexpr const LogicalTypeId LogicalType::DATE;
 
-const LogicalType LogicalType::TIMESTAMP = LogicalType(LogicalTypeId::TIMESTAMP);
-const LogicalType LogicalType::TIMESTAMP_MS = LogicalType(LogicalTypeId::TIMESTAMP_MS);
-const LogicalType LogicalType::TIMESTAMP_NS = LogicalType(LogicalTypeId::TIMESTAMP_NS);
-const LogicalType LogicalType::TIMESTAMP_S = LogicalType(LogicalTypeId::TIMESTAMP_SEC);
+constexpr const LogicalTypeId LogicalType::TIMESTAMP;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_MS;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_NS;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_S;
 
-const LogicalType LogicalType::TIME = LogicalType(LogicalTypeId::TIME);
-const LogicalType LogicalType::HASH = LogicalType(LogicalTypeId::HASH);
-const LogicalType LogicalType::POINTER = LogicalType(LogicalTypeId::POINTER);
+constexpr const LogicalTypeId LogicalType::TIME;
+constexpr const LogicalTypeId LogicalType::HASH;
+constexpr const LogicalTypeId LogicalType::POINTER;
 
-const LogicalType LogicalType::VARCHAR = LogicalType(LogicalTypeId::VARCHAR);
+constexpr const LogicalTypeId LogicalType::VARCHAR;
 
-const LogicalType LogicalType::BLOB = LogicalType(LogicalTypeId::BLOB);
-const LogicalType LogicalType::INTERVAL = LogicalType(LogicalTypeId::INTERVAL);
+constexpr const LogicalTypeId LogicalType::BLOB;
+constexpr const LogicalTypeId LogicalType::INTERVAL;
 
 // TODO these are incomplete and should maybe not exist as such
-const LogicalType LogicalType::TABLE = LogicalType(LogicalTypeId::TABLE);
+constexpr const LogicalTypeId LogicalType::TABLE;
 
-const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
+constexpr const LogicalTypeId LogicalType::ANY;
 
 const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
                                                   LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
@@ -997,6 +1005,7 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
+	// Equalities are only used in enums with different catalog entries
 	bool Equals(ExtraTypeInfo *other_p) override {
 		if (!other_p) {
 			return false;
@@ -1005,9 +1014,12 @@ public:
 			return false;
 		}
 		auto &other = (EnumTypeInfo &)*other_p;
-		return other.enum_name == enum_name && other.values_insert_order == values_insert_order;
+		// We must check if all elements are equal
+		if (other.values_insert_order == values_insert_order) {
+			return true;
+		}
+		return false;
 	}
-
 	void Serialize(Serializer &serializer) const override {
 		serializer.Write<uint32_t>(values_insert_order.size());
 		serializer.WriteString(enum_name);

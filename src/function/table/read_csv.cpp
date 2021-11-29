@@ -144,7 +144,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 		D_ASSERT(return_types.size() == names.size());
 	}
 	if (result->include_file_name) {
-		return_types.push_back(LogicalType::VARCHAR);
+		return_types.emplace_back(LogicalType::VARCHAR);
 		names.emplace_back("filename");
 	}
 	return move(result);

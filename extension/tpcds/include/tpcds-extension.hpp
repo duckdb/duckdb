@@ -16,6 +16,7 @@ namespace duckdb {
 class TPCDSExtension : public Extension {
 public:
 	void Load(DuckDB &db) override;
+	std::string Name() override;
 
 	//! Gets the specified TPC-DS Query number as a string
 	static std::string GetQuery(int query);

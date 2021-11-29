@@ -703,6 +703,9 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 
 void SQLLogicTestRunner::EndLoop() {
 	// finish a loop: pop it from the active_loop queue
+	if (active_loops.empty()) {
+		throw std::runtime_error("endloop without active loop!");
+	}
 	active_loops.pop_back();
 	if (active_loops.empty()) {
 		// not in a loop
