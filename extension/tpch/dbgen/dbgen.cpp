@@ -6,13 +6,10 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/parser/column_definition.hpp"
-#include "duckdb/storage/data_table.hpp"
-#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
-#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/constraints/not_null_constraint.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "duckdb/planner/binder.hpp"
+#include "duckdb/main/appender.hpp"
 #endif
 
 #define DECLARER /* EXTERN references get defined here */
@@ -98,71 +95,24 @@ static tdef *tdefs = DBGenGlobals::tdefs;
 
 namespace tpch {
 
-struct UnsafeAppender {
-	UnsafeAppender(ClientContext &context, TableCatalogEntry *tbl) : context(context), tbl(tbl), col(0) {
-		vector<LogicalType> types;
-		for (idx_t i = 0; i < tbl->columns.size(); i++) {
-			types.push_back(tbl->columns[i].type);
-		}
-		chunk.Initialize(types);
-	}
-
-	void BeginRow() {
-		col = 0;
-	}
-
-	void EndRow() {
-		assert(col == chunk.ColumnCount());
-		chunk.SetCardinality(chunk.size() + 1);
-		if (chunk.size() == STANDARD_VECTOR_SIZE) {
-			Flush();
-		}
-	}
-
-	void Flush() {
-		if (chunk.size() == 0) {
-			return;
-		}
-		tbl->storage->Append(*tbl, context, chunk);
-		chunk.Reset();
-	}
-
-	template <class T>
-	void AppendValue(T value) {
-		assert(col < chunk.ColumnCount());
-		FlatVector::GetData<T>(chunk.data[col])[chunk.size()] = value;
-		col++;
-	}
-
-	void AppendString(const char *value) {
-		AppendValue<string_t>(StringVector::AddString(chunk.data[col], value));
-	}
-
-private:
-	ClientContext &context;
-	TableCatalogEntry *tbl;
-	DataChunk chunk;
-	idx_t col;
-};
-
 struct tpch_append_information {
-	unique_ptr<UnsafeAppender> appender;
+	unique_ptr<InternalAppender> appender;
 };
 
 void append_value(tpch_append_information &info, int32_t value) {
-	info.appender->AppendValue<int32_t>(value);
+	info.appender->Append<int32_t>(value);
 }
 
 void append_string(tpch_append_information &info, const char *value) {
-	info.appender->AppendString(value);
+	info.appender->Append<const char *>(value);
 }
 
 void append_decimal(tpch_append_information &info, int64_t value) {
-	info.appender->AppendValue<int64_t>(value);
+	info.appender->Append<int64_t>(value);
 }
 
 void append_date(tpch_append_information &info, string value) {
-	info.appender->AppendValue<date_t>(Date::FromString(value));
+	info.appender->Append<date_t>(Date::FromString(value));
 }
 
 void append_char(tpch_append_information &info, char value) {
@@ -459,11 +409,10 @@ struct SupplierInfo {
 };
 const char *SupplierInfo::Columns[] = {"s_suppkey", "s_name",    "s_address", "s_nationkey",
                                        "s_phone",   "s_acctbal", "s_comment"};
-const LogicalType SupplierInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
-    LogicalType(LogicalTypeId::VARCHAR)};
+const LogicalType SupplierInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+                                           LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
+                                           LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
+                                           LogicalType(LogicalTypeId::VARCHAR)};
 
 struct CustomerInfo {
 	static constexpr char *Name = "customer";
@@ -473,11 +422,10 @@ struct CustomerInfo {
 };
 const char *CustomerInfo::Columns[] = {"c_custkey", "c_name",    "c_address",    "c_nationkey",
                                        "c_phone",   "c_acctbal", "c_mktsegment", "c_comment"};
-const LogicalType CustomerInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR)};
+const LogicalType CustomerInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+                                           LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
+                                           LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
+                                           LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR)};
 
 struct PartInfo {
 	static constexpr char *Name = "part";
@@ -487,11 +435,10 @@ struct PartInfo {
 };
 const char *PartInfo::Columns[] = {"p_partkey", "p_name",      "p_mfgr",        "p_brand",  "p_type",
                                    "p_size",    "p_container", "p_retailprice", "p_comment"};
-const LogicalType PartInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
-                                       LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
-                                       LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
-                                       LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
-                                       LogicalType(LogicalTypeId::VARCHAR)};
+const LogicalType PartInfo::Types[] = {
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR)};
 
 struct PartsuppInfo {
 	static constexpr char *Name = "partsupp";
@@ -500,9 +447,9 @@ struct PartsuppInfo {
 	static const LogicalType Types[];
 };
 const char *PartsuppInfo::Columns[] = {"ps_partkey", "ps_suppkey", "ps_availqty", "ps_supplycost", "ps_comment"};
-const LogicalType PartsuppInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType::DECIMAL(15, 2), LogicalType(LogicalTypeId::VARCHAR)};
+const LogicalType PartsuppInfo::Types[] = {LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
+                                           LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),
+                                           LogicalType(LogicalTypeId::VARCHAR)};
 
 struct OrdersInfo {
 	static constexpr char *Name = "orders";
@@ -513,11 +460,9 @@ struct OrdersInfo {
 const char *OrdersInfo::Columns[] = {"o_orderkey",      "o_custkey", "o_orderstatus",  "o_totalprice", "o_orderdate",
                                      "o_orderpriority", "o_clerk",   "o_shippriority", "o_comment"};
 const LogicalType OrdersInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType::DECIMAL(15, 2),
-    LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR),
-    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::VARCHAR)};
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::VARCHAR)};
 
 struct LineitemInfo {
 	static constexpr char *Name = "lineitem";
@@ -530,14 +475,12 @@ const char *LineitemInfo::Columns[] = {"l_orderkey",    "l_partkey",       "l_su
                                        "l_returnflag",  "l_linestatus",    "l_shipdate", "l_commitdate",
                                        "l_receiptdate", "l_shipinstruct",  "l_shipmode", "l_comment"};
 const LogicalType LineitemInfo::Types[] = {
-    LogicalType(LogicalTypeId::INTEGER),        LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::INTEGER),        LogicalType(LogicalTypeId::INTEGER),
-    LogicalType(LogicalTypeId::INTEGER),        LogicalType::DECIMAL(15, 2),
-    LogicalType::DECIMAL(15, 2), LogicalType::DECIMAL(15, 2),
-    LogicalType(LogicalTypeId::VARCHAR),        LogicalType(LogicalTypeId::VARCHAR),
-    LogicalType(LogicalTypeId::DATE),           LogicalType(LogicalTypeId::DATE),
-    LogicalType(LogicalTypeId::DATE),           LogicalType(LogicalTypeId::VARCHAR),
-    LogicalType(LogicalTypeId::VARCHAR),        LogicalType(LogicalTypeId::VARCHAR)};
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER),
+    LogicalType(LogicalTypeId::INTEGER), LogicalType(LogicalTypeId::INTEGER), LogicalType::DECIMAL(15, 2),
+    LogicalType::DECIMAL(15, 2),         LogicalType::DECIMAL(15, 2),         LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::DATE),
+    LogicalType(LogicalTypeId::DATE),    LogicalType(LogicalTypeId::VARCHAR), LogicalType(LogicalTypeId::VARCHAR),
+    LogicalType(LogicalTypeId::VARCHAR)};
 
 template <class T>
 static void CreateTPCHTable(ClientContext &context, string schema, string suffix) {
@@ -550,11 +493,8 @@ static void CreateTPCHTable(ClientContext &context, string schema, string suffix
 		info->columns.push_back(ColumnDefinition(T::Columns[i], T::Types[i]));
 		info->constraints.push_back(make_unique<NotNullConstraint>(i));
 	}
-	auto binder = Binder::CreateBinder(context);
-	auto bound_info = binder->BindCreateTableInfo(move(info));
 	auto &catalog = Catalog::GetCatalog(context);
-
-	catalog.CreateTable(context, bound_info.get());
+	catalog.CreateTable(context, move(info));
 }
 
 void DBGenWrapper::CreateTPCHSchema(ClientContext &context, string schema, string suffix) {
@@ -643,7 +583,7 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 		if (!tname.empty()) {
 			string full_tname = string(tname) + string(suffix);
 			auto tbl_catalog = catalog.GetEntry<TableCatalogEntry>(context, schema, full_tname);
-			append_info[i].appender = make_unique<UnsafeAppender>(context, tbl_catalog);
+			append_info[i].appender = make_unique<InternalAppender>(context, *tbl_catalog);
 		}
 	}
 

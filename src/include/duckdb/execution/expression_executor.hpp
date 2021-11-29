@@ -18,51 +18,51 @@ class ExecutionContext;
 //! ExpressionExecutor is responsible for executing a set of expressions and storing the result in a data chunk
 class ExpressionExecutor {
 public:
-	ExpressionExecutor();
-	explicit ExpressionExecutor(const Expression *expression);
-	explicit ExpressionExecutor(const Expression &expression);
-	explicit ExpressionExecutor(const vector<unique_ptr<Expression>> &expressions);
+	DUCKDB_API ExpressionExecutor();
+	DUCKDB_API explicit ExpressionExecutor(const Expression *expression);
+	DUCKDB_API explicit ExpressionExecutor(const Expression &expression);
+	DUCKDB_API explicit ExpressionExecutor(const vector<unique_ptr<Expression>> &expressions);
 
 	//! Add an expression to the set of to-be-executed expressions of the executor
-	void AddExpression(const Expression &expr);
+	DUCKDB_API void AddExpression(const Expression &expr);
 
 	//! Execute the set of expressions with the given input chunk and store the result in the output chunk
-	void Execute(DataChunk *input, DataChunk &result);
-	void Execute(DataChunk &input, DataChunk &result) {
+	DUCKDB_API void Execute(DataChunk *input, DataChunk &result);
+	inline void Execute(DataChunk &input, DataChunk &result) {
 		Execute(&input, result);
 	}
-	void Execute(DataChunk &result) {
+	inline void Execute(DataChunk &result) {
 		Execute(nullptr, result);
 	}
 
 	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression
 	//! executors with a single expression
-	void ExecuteExpression(DataChunk &input, Vector &result);
+	DUCKDB_API void ExecuteExpression(DataChunk &input, Vector &result);
 	//! Execute the ExpressionExecutor and put the result in the result vector; this should only be used for expression
 	//! executors with a single expression
-	void ExecuteExpression(Vector &result);
+	DUCKDB_API void ExecuteExpression(Vector &result);
 	//! Execute the ExpressionExecutor and generate a selection vector from all true values in the result; this should
 	//! only be used with a single boolean expression
-	idx_t SelectExpression(DataChunk &input, SelectionVector &sel);
+	DUCKDB_API idx_t SelectExpression(DataChunk &input, SelectionVector &sel);
 
 	//! Execute the expression with index `expr_idx` and store the result in the result vector
-	void ExecuteExpression(idx_t expr_idx, Vector &result);
+	DUCKDB_API void ExecuteExpression(idx_t expr_idx, Vector &result);
 	//! Evaluate a scalar expression and fold it into a single value
-	static Value EvaluateScalar(const Expression &expr);
+	DUCKDB_API static Value EvaluateScalar(const Expression &expr);
 	//! Try to evaluate a scalar expression and fold it into a single value, returns false if an exception is thrown
-	static bool TryEvaluateScalar(const Expression &expr, Value &result);
+	DUCKDB_API static bool TryEvaluateScalar(const Expression &expr, Value &result);
 
 	//! Initialize the state of a given expression
 	static unique_ptr<ExpressionState> InitializeState(const Expression &expr, ExpressionExecutorState &state);
 
-	void SetChunk(DataChunk *chunk) {
+	inline void SetChunk(DataChunk *chunk) {
 		this->chunk = chunk;
 	}
-	void SetChunk(DataChunk &chunk) {
+	inline void SetChunk(DataChunk &chunk) {
 		SetChunk(&chunk);
 	}
 
-	vector<unique_ptr<ExpressionExecutorState>> &GetStates();
+	DUCKDB_API vector<unique_ptr<ExpressionExecutorState>> &GetStates();
 
 	//! The expressions of the executor
 	vector<const Expression *> expressions;

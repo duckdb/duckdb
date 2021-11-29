@@ -14,8 +14,11 @@ TEST_CASE("Test TPC-H SF0.01 with relations", "[tpch][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);
 	double sf = 0.01;
+	if (!db.ExtensionIsLoaded("tpch")) {
+		return;
+	}
 
-	con.Query("CALL dbgen(sf=" + to_string(sf) + ")");
+	REQUIRE_NO_FAIL(con.Query("CALL dbgen(sf=" + to_string(sf) + ")"));
 
 	auto lineitem = con.Table("lineitem");
 	auto part = con.Table("part");

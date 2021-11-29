@@ -21,7 +21,7 @@ BindResult SelectBinder::BindExpression(unique_ptr<ParsedExpression> *expr_ptr, 
 	auto &expr = **expr_ptr;
 	// check if the expression binds to one of the groups
 	auto group_index = TryBindGroup(expr, depth);
-	if (group_index != INVALID_INDEX) {
+	if (group_index != DConstants::INVALID_INDEX) {
 		return BindGroup(expr, depth, group_index);
 	}
 	switch (expr.expression_class) {
@@ -58,7 +58,7 @@ idx_t SelectBinder::TryBindGroup(ParsedExpression &expr, idx_t depth) {
 		D_ASSERT(!expr.Equals(entry.first));
 	}
 #endif
-	return INVALID_INDEX;
+	return DConstants::INVALID_INDEX;
 }
 
 BindResult SelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t depth) {
@@ -76,7 +76,7 @@ BindResult SelectBinder::BindGroupingFunction(OperatorExpression &op, idx_t dept
 	for (auto &child : op.children) {
 		ExpressionBinder::QualifyColumnNames(binder, child);
 		auto idx = TryBindGroup(*child, depth);
-		if (idx == INVALID_INDEX) {
+		if (idx == DConstants::INVALID_INDEX) {
 			return BindResult(binder.FormatError(
 			    op, StringUtil::Format("GROUPING child \"%s\" must be a grouping column", child->GetName())));
 		}

@@ -84,7 +84,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 	if (!bound_insert.column_index_map.empty()) {
 		expected_names.resize(bound_insert.expected_types.size());
 		for (idx_t i = 0; i < table->columns.size(); i++) {
-			if (bound_insert.column_index_map[i] != INVALID_INDEX) {
+			if (bound_insert.column_index_map[i] != DConstants::INVALID_INDEX) {
 				expected_names[bound_insert.column_index_map[i]] = table->columns[i].name;
 			}
 		}

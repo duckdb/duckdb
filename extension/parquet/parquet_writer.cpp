@@ -278,6 +278,8 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		hdr.data_page_header.encoding = Encoding::PLAIN;
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::BIT_PACKED;
+		// hdr.data_page_header.statistics.__isset.max
+		// hdr.data_page_header.statistics.max
 
 		// record the current offset of the writer into the file
 		// this is the starting position of the current page
