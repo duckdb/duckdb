@@ -22,7 +22,7 @@ public:
 
 protected:
 	void ResolveTypes() override {
-		types.push_back(LogicalType::BIGINT);
+		types.emplace_back(LogicalType::BIGINT);
 	}
 };
 } // namespace duckdb

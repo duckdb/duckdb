@@ -1,7 +1,7 @@
 #include "duckdb_odbc.hpp"
 #include "statement_functions.hpp"
 #include "api_info.hpp"
-#include "parameter_wrapper.hpp"
+#include "parameter_descriptor.hpp"
 
 #include "duckdb/main/prepared_statement_data.hpp"
 
@@ -13,21 +13,21 @@ using duckdb::Load;
 using duckdb::LogicalType;
 using duckdb::Value;
 
-SQLRETURN SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT input_output_type,
-                           SQLSMALLINT value_type, SQLSMALLINT parameter_type, SQLULEN column_size,
-                           SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr, SQLLEN buffer_length,
-                           SQLLEN *str_len_or_ind_ptr) {
+SQLRETURN SQL_API SQLBindParameter(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number,
+                                   SQLSMALLINT input_output_type, SQLSMALLINT value_type, SQLSMALLINT parameter_type,
+                                   SQLULEN column_size, SQLSMALLINT decimal_digits, SQLPOINTER parameter_value_ptr,
+                                   SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	return duckdb::BindParameterStmt(statement_handle, parameter_number, input_output_type, value_type, parameter_type,
 	                                 column_size, decimal_digits, parameter_value_ptr, buffer_length,
 	                                 str_len_or_ind_ptr);
 }
 
-SQLRETURN SQLExecute(SQLHSTMT statement_handle) {
+SQLRETURN SQL_API SQLExecute(SQLHSTMT statement_handle) {
 	return duckdb::WithStatement(statement_handle,
 	                             [&](duckdb::OdbcHandleStmt *stmt) { return duckdb::BatchExecuteStmt(stmt); });
 }
 
-SQLRETURN SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *column_count_ptr) {
+SQLRETURN SQL_API SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *column_count_ptr) {
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (!column_count_ptr) {
 			return SQL_ERROR;
@@ -37,7 +37,7 @@ SQLRETURN SQLNumResultCols(SQLHSTMT statement_handle, SQLSMALLINT *column_count_
 	});
 }
 
-SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_ptr) {
+SQLRETURN SQL_API SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_ptr) {
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (!parameter_count_ptr) {
 			return SQL_ERROR;
@@ -47,8 +47,8 @@ SQLRETURN SQLNumParams(SQLHSTMT statement_handle, SQLSMALLINT *parameter_count_p
 	});
 }
 
-SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
-                     SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
+SQLRETURN SQL_API SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLSMALLINT target_type,
+                             SQLPOINTER target_value_ptr, SQLLEN buffer_length, SQLLEN *str_len_or_ind_ptr) {
 	return duckdb::WithStatement(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		D_ASSERT(column_number > 0);
 
@@ -68,8 +68,9 @@ SQLRETURN SQLBindCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLS
 }
 
 // https://docs.microsoft.com/en-us/sql/odbc/reference/syntax/sqldescribeparam-function
-SQLRETURN SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT *data_type_ptr,
-                           SQLULEN *parameter_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr) {
+SQLRETURN SQL_API SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT parameter_number, SQLSMALLINT *data_type_ptr,
+                                   SQLULEN *parameter_size_ptr, SQLSMALLINT *decimal_digits_ptr,
+                                   SQLSMALLINT *nullable_ptr) {
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (parameter_number < 0 || parameter_number > stmt->stmt->n_param) {
 			return SQL_ERROR;
@@ -117,9 +118,9 @@ SQLRETURN SQLDescribeParam(SQLHSTMT statement_handle, SQLUSMALLINT parameter_num
 	});
 }
 
-SQLRETURN SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLCHAR *column_name,
-                         SQLSMALLINT buffer_length, SQLSMALLINT *name_length_ptr, SQLSMALLINT *data_type_ptr,
-                         SQLULEN *column_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr) {
+SQLRETURN SQL_API SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, SQLCHAR *column_name,
+                                 SQLSMALLINT buffer_length, SQLSMALLINT *name_length_ptr, SQLSMALLINT *data_type_ptr,
+                                 SQLULEN *column_size_ptr, SQLSMALLINT *decimal_digits_ptr, SQLSMALLINT *nullable_ptr) {
 
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) {
 		if (column_number > stmt->stmt->ColumnCount()) {
@@ -163,9 +164,9 @@ SQLRETURN SQLDescribeCol(SQLHSTMT statement_handle, SQLUSMALLINT column_number, 
 	});
 }
 
-SQLRETURN SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_ptr) {
+SQLRETURN SQL_API SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_ptr) {
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		auto ret = stmt->param_wrapper->GetNextParam(value_ptr_ptr);
+		auto ret = stmt->param_desc->GetNextParam(value_ptr_ptr);
 		if (ret != SQL_NO_DATA) {
 			return ret;
 		}
@@ -174,9 +175,9 @@ SQLRETURN SQLParamData(SQLHSTMT statement_handle, SQLPOINTER *value_ptr_ptr) {
 	});
 }
 
-SQLRETURN SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
+SQLRETURN SQL_API SQLPutData(SQLHSTMT statement_handle, SQLPOINTER data_ptr, SQLLEN str_len_or_ind_ptr) {
 	return duckdb::WithStatementPrepared(statement_handle, [&](duckdb::OdbcHandleStmt *stmt) -> SQLRETURN {
-		auto ret = stmt->param_wrapper->PutData(data_ptr, str_len_or_ind_ptr);
+		auto ret = stmt->param_desc->PutData(data_ptr, str_len_or_ind_ptr);
 		if (ret == SQL_SUCCESS) {
 			return ret;
 		}

@@ -9,7 +9,7 @@ static const R_CallMethodDef R_CallDef[] = {{"duckdb_startup_R", (DL_FUNC)RApi::
                                             {"duckdb_bind_R", (DL_FUNC)RApi::Bind, 3},
                                             {"duckdb_execute_R", (DL_FUNC)RApi::Execute, 2},
                                             {"duckdb_fetch_arrow_R", (DL_FUNC)RApi::DuckDBExecuteArrow, 4},
-                                            {"duckdb_fetch_record_batch_R", (DL_FUNC)RApi::DuckDBRecordBatchR, 1},
+                                            {"duckdb_fetch_record_batch_R", (DL_FUNC)RApi::DuckDBRecordBatchR, 2},
                                             {"duckdb_release_R", (DL_FUNC)RApi::Release, 1},
                                             {"duckdb_register_R", (DL_FUNC)RApi::RegisterDataFrame, 3},
                                             {"duckdb_unregister_R", (DL_FUNC)RApi::UnregisterDataFrame, 2},
@@ -26,8 +26,5 @@ void R_init_duckdb(DllInfo *dll) {
 	R_useDynamicSymbols(dll, FALSE);
 
 	AltrepString::Initialize(dll);
-	AltrepStringSubset::Initialize(dll);
-
-	// TODO implement SEXP (*R_altvec_Extract_subset_method_t)(SEXP, SEXP, SEXP);
 }
 } // extern "C"

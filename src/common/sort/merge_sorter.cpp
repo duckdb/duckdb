@@ -1,3 +1,4 @@
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/sort/comparators.hpp"
 #include "duckdb/common/sort/sort.hpp"
 
@@ -154,7 +155,7 @@ int MergeSorter::CompareUsingGlobalIndex(SortedBlock &l, SortedBlock &r, const i
 
 	int comp_res;
 	if (sort_layout.all_constant) {
-		comp_res = memcmp(l_ptr, r_ptr, sort_layout.comparison_size);
+		comp_res = FastMemcmp(l_ptr, r_ptr, sort_layout.comparison_size);
 	} else {
 		l.blob_sorting_data->block_idx = l_block_idx;
 		l.blob_sorting_data->entry_idx = l_entry_idx;
@@ -298,7 +299,7 @@ void MergeSorter::ComputeMerge(const idx_t &count, bool left_smaller[]) {
 		if (sort_layout.all_constant) {
 			// All sorting columns are constant size
 			for (; compared < count && l_entry_idx < l_count && r_entry_idx < r_count; compared++) {
-				left_smaller[compared] = memcmp(l_radix_ptr, r_radix_ptr, sort_layout.comparison_size) < 0;
+				left_smaller[compared] = FastMemcmp(l_radix_ptr, r_radix_ptr, sort_layout.comparison_size) < 0;
 				const bool &l_smaller = left_smaller[compared];
 				const bool r_smaller = !l_smaller;
 				// Use comparison bool (0 or 1) to increment entries and pointers
@@ -546,8 +547,8 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 					const bool &l_smaller = left_smaller[copied + i];
 					const bool r_smaller = !l_smaller;
 					const auto &entry_size = next_entry_sizes[copied + i];
-					memcpy(result_heap_ptr, l_heap_ptr, l_smaller * entry_size);
-					memcpy(result_heap_ptr, r_heap_ptr, r_smaller * entry_size);
+					memcpy(result_heap_ptr, (data_ptr_t)(l_smaller * (idx_t)l_heap_ptr + r_smaller * (idx_t)r_heap_ptr),
+					       entry_size);
 					D_ASSERT(Load<uint32_t>(result_heap_ptr) == entry_size);
 					result_heap_ptr += entry_size;
 					l_heap_ptr += l_smaller * entry_size;
@@ -583,8 +584,7 @@ void MergeSorter::MergeRows(data_ptr_t &l_ptr, idx_t &l_entry_idx, const idx_t &
 		const bool &l_smaller = left_smaller[copied + i];
 		const bool r_smaller = !l_smaller;
 		// Use comparison bool (0 or 1) to copy an entry from either side
-		memcpy(target_ptr, l_ptr, l_smaller * entry_size);
-		memcpy(target_ptr, r_ptr, r_smaller * entry_size);
+		FastMemcpy(target_ptr, (data_ptr_t)(l_smaller * (idx_t)l_ptr + r_smaller * (idx_t)r_ptr), entry_size);
 		target_ptr += entry_size;
 		// Use the comparison bool to increment entries and pointers
 		l_entry_idx += l_smaller;

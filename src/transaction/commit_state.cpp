@@ -159,7 +159,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	// initialize the update chunk
 	vector<LogicalType> update_types;
 	if (column_data.type.id() == LogicalTypeId::VALIDITY) {
-		update_types.push_back(LogicalType::BOOLEAN);
+		update_types.emplace_back(LogicalType::BOOLEAN);
 	} else {
 		update_types.push_back(column_data.type);
 	}

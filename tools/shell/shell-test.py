@@ -166,6 +166,11 @@ test('''
 SELECT x::INT FROM (SELECT x::VARCHAR x FROM range(10) tbl(x) UNION ALL SELECT 'hello' x) tbl(x);
 ''', err='Could not convert string')
 
+# test explain
+test('explain select sum(i) from range(1000) tbl(i)', out='RANGE')
+test('explain analyze select sum(i) from range(1000) tbl(i)', out='RANGE')
+
+
 # this should be fixed
 test('.selftest', err='sqlite3_table_column_metadata')
 

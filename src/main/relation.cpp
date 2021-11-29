@@ -121,10 +121,10 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const str
 				throw ParserException("Expected a single expression as join condition");
 			}
 			auto &colref = (ColumnRefExpression &)*expr;
-			if (!colref.table_name.empty()) {
-				throw ParserException("Expected empty table name for column in USING clause");
+			if (colref.IsQualified()) {
+				throw ParserException("Expected unqualified column for column in USING clause");
 			}
-			using_columns.push_back(colref.column_name);
+			using_columns.push_back(colref.column_names[0]);
 		}
 		return make_shared<JoinRelation>(shared_from_this(), other, move(using_columns), type);
 	} else {
@@ -262,6 +262,11 @@ void Relation::Update(const string &update, const string &condition) {
 
 void Relation::Delete(const string &condition) {
 	throw Exception("DELETE can only be used on base tables!");
+}
+
+shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vector<Value> &values,
+                                             const unordered_map<string, Value> &named_parameters) {
+	return make_shared<TableFunctionRelation>(context, fname, values, named_parameters, shared_from_this());
 }
 
 shared_ptr<Relation> Relation::TableFunction(const std::string &fname, const vector<Value> &values) {

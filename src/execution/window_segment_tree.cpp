@@ -9,10 +9,11 @@
 namespace duckdb {
 
 WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData *bind_info,
-                                     const LogicalType &result_type_p, ChunkCollection *input)
+                                     const LogicalType &result_type_p, ChunkCollection *input,
+                                     WindowAggregationMode mode_p)
     : aggregate(aggregate), bind_info(bind_info), result_type(result_type_p), state(aggregate.state_size()),
-      statep(Value::POINTER((idx_t)state.data())), frame(0, 0), statev(Value::POINTER((idx_t)state.data())),
-      internal_nodes(0), input_ref(input) {
+      statep(Value::POINTER((idx_t)state.data())), frame(0, 0), active(0, 1),
+      statev(Value::POINTER((idx_t)state.data())), internal_nodes(0), input_ref(input), mode(mode_p) {
 #if STANDARD_VECTOR_SIZE < 512
 	throw NotImplementedException("Window functions are not supported for vector sizes < 512");
 #endif
@@ -22,9 +23,10 @@ WindowSegmentTree::WindowSegmentTree(AggregateFunction &aggregate, FunctionData 
 	if (input_ref && input_ref->ColumnCount() > 0) {
 		inputs.Initialize(input_ref->Types());
 		// if we have a frame-by-frame method, share the single state
-		if (aggregate.window) {
+		if (aggregate.window && UseWindowAPI()) {
 			AggregateInit();
-		} else if (aggregate.combine) {
+			inputs.Reference(input_ref->GetChunk(0));
+		} else if (aggregate.combine && UseCombineAPI()) {
 			ConstructTree();
 		}
 	}
@@ -50,7 +52,7 @@ WindowSegmentTree::~WindowSegmentTree() {
 		aggregate.destructor(addresses, count);
 	}
 
-	if (aggregate.window) {
+	if (aggregate.window && UseWindowAPI()) {
 		aggregate.destructor(statev, 1);
 	}
 }
@@ -184,22 +186,51 @@ void WindowSegmentTree::Compute(Vector &result, idx_t rid, idx_t begin, idx_t en
 	}
 
 	// If we have a window function, use that
-	if (aggregate.window) {
+	if (aggregate.window && UseWindowAPI()) {
 		// Frame boundaries
 		auto prev = frame;
 		frame = FrameBounds(begin, end);
 
 		// Extract the range
-		ExtractFrame(MinValue(frame.first, prev.first), MaxValue(frame.second, prev.second));
+		auto &coll = *input_ref;
+		const auto prev_active = active;
+		const FrameBounds combined(MinValue(frame.first, prev.first), MaxValue(frame.second, prev.second));
 
-		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result, rid);
+		// The chunk bounds are the range that includes the begin and end - 1
+		const FrameBounds prev_chunks(coll.LocateChunk(prev_active.first), coll.LocateChunk(prev_active.second - 1));
+		const FrameBounds active_chunks(coll.LocateChunk(combined.first), coll.LocateChunk(combined.second - 1));
+
+		// Extract the range
+		if (active_chunks.first == active_chunks.second) {
+			// If all the data is in a single chunk, then just reference it
+			if (prev_chunks != active_chunks || (!prev.first && !prev.second)) {
+				inputs.Reference(coll.GetChunk(active_chunks.first));
+			}
+		} else if (active_chunks.first == prev_chunks.first && prev_chunks.first != prev_chunks.second) {
+			// If the start chunk did not change, and we are not just a reference, then extend if necessary
+			for (auto chunk_idx = prev_chunks.second + 1; chunk_idx <= active_chunks.second; ++chunk_idx) {
+				inputs.Append(coll.GetChunk(chunk_idx), true);
+			}
+		} else {
+			// If the first chunk changed, start over
+			inputs.Reset();
+			for (auto chunk_idx = active_chunks.first; chunk_idx <= active_chunks.second; ++chunk_idx) {
+				inputs.Append(coll.GetChunk(chunk_idx), true);
+			}
+		}
+
+		active = FrameBounds(active_chunks.first * STANDARD_VECTOR_SIZE,
+		                     MinValue((active_chunks.second + 1) * STANDARD_VECTOR_SIZE, coll.Count()));
+
+		aggregate.window(inputs.data.data(), bind_info, inputs.ColumnCount(), state.data(), frame, prev, result, rid,
+		                 active.first);
 		return;
 	}
 
 	AggregateInit();
 
 	// Aggregate everything at once if we can't combine states
-	if (!aggregate.combine) {
+	if (!aggregate.combine || !UseCombineAPI()) {
 		WindowSegmentValue(0, begin, end);
 		AggegateFinal(result, rid);
 		return;

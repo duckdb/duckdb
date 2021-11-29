@@ -11,10 +11,10 @@ test_that("duckdb_register_arrow() works", {
   con <- dbConnect(duckdb::duckdb())
   on.exit(dbDisconnect(con, shutdown = TRUE))
 
-  res <- arrow::read_parquet("userdata1.parquet", as_data_frame=FALSE)
+  res <- arrow::read_parquet("data/userdata1.parquet", as_data_frame=FALSE)
   duckdb::duckdb_register_arrow(con, "myreader", res)
   res1 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
-  res2 <- dbGetQuery(con, "SELECT first_name, last_name FROM parquet_scan('userdata1.parquet') LIMIT 10")
+  res2 <- dbGetQuery(con, "SELECT first_name, last_name FROM parquet_scan('data/userdata1.parquet') LIMIT 10")
   expect_true(identical(res1, res2))
   # we can re-read
   res3 <- dbGetQuery(con, "SELECT first_name, last_name FROM myreader LIMIT 10")
@@ -32,10 +32,10 @@ test_that("duckdb_register_arrow() works with datasets", {
     on.exit(dbDisconnect(con, shutdown = TRUE))
 
     # Registering a dataset + aggregation
-    ds <- arrow::open_dataset("userdata1.parquet")
+    ds <- arrow::open_dataset("data/userdata1.parquet")
     duckdb::duckdb_register_arrow(con, "mydatasetreader", ds)
     res1 <- dbGetQuery(con, "SELECT count(*) FROM mydatasetreader")
-    res2 <- dbGetQuery(con, "SELECT count(*) FROM parquet_scan('userdata1.parquet')")
+    res2 <- dbGetQuery(con, "SELECT count(*) FROM parquet_scan('data/userdata1.parquet')")
     expect_true(identical(res1, res2))
     # we can read with > 3 cores
     dbExecute(con, "PRAGMA threads=4")
@@ -50,11 +50,11 @@ test_that("duckdb_register_arrow() performs projection pushdown", {
     on.exit(dbDisconnect(con, shutdown = TRUE))
 
     # Registering a dataset + aggregation
-    ds <- arrow::open_dataset("userdata1.parquet")
+    ds <- arrow::open_dataset("data/userdata1.parquet")
     duckdb::duckdb_register_arrow(con, "mydatasetreader", ds)
 
     res1 <- dbGetQuery(con, "SELECT last_name, salary, first_name FROM mydatasetreader")
-    res2 <- dbGetQuery(con, "SELECT last_name, salary, first_name FROM parquet_scan('userdata1.parquet')")
+    res2 <- dbGetQuery(con, "SELECT last_name, salary, first_name FROM parquet_scan('data/userdata1.parquet')")
     expect_true(identical(res1, res2))
     # we can read with > 3 cores
     dbExecute(con, "PRAGMA threads=4")
@@ -68,11 +68,11 @@ test_that("duckdb_register_arrow() performs selection pushdown", {
     on.exit(dbDisconnect(con, shutdown = TRUE))
 
     # Registering a dataset + aggregation
-    ds <- arrow::open_dataset("userdata1.parquet")
+    ds <- arrow::open_dataset("data/userdata1.parquet")
     duckdb::duckdb_register_arrow(con, "mydatasetreader", ds)
 
     res1 <- dbGetQuery(con, "SELECT last_name, first_name FROM mydatasetreader where salary > 130000")
-    res2 <- dbGetQuery(con, "SELECT last_name, first_name FROM parquet_scan('userdata1.parquet')  where salary > 130000")
+    res2 <- dbGetQuery(con, "SELECT last_name, first_name FROM parquet_scan('data/userdata1.parquet')  where salary > 130000")
     expect_true(identical(res1, res2))
     # we can read with > 3 cores
     dbExecute(con, "PRAGMA threads=4")
@@ -120,32 +120,17 @@ numeric_operators <- function(data_type) {
 
 test_that("duckdb_register_arrow() performs selection pushdown numeric types", {
     numeric_types <- c('TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'UTINYINT', 'USMALLINT', 'UINTEGER', 'UBIGINT',
-    'FLOAT', 'DOUBLE')
+    'FLOAT', 'DOUBLE', 'HUGEINT')
 
     for (data_type in numeric_types)
         numeric_operators(data_type)
 
 })
 
-# ArrowNotImplementedError: Function equal has no kernel matching input types (array[decimal128(4, 1)], scalar[decimal128(4, 1)])
-
-test_that("duckdb_register_arrow() performs selection pushdown hugeint type", {
-    skip_if_not_installed("arrow", "4.0.1")
-    numeric_types <- c('HUGEINT')
-
-    for (data_type in numeric_types)
-        expect_error(numeric_operators(data_type))
-
-
-})
-
-# ArrowNotImplementedError: Function equal has no kernel matching input types (array[decimal128(4, 1)], scalar[decimal128(4, 1)])
-
 test_that("duckdb_register_arrow() performs selection pushdown decimal types", {
-    skip_if_not_installed("arrow", "4.0.1")
     numeric_types <- c('DECIMAL(4,1)','DECIMAL(9,1)','DECIMAL(18,4)','DECIMAL(30,12)')
     for (data_type in numeric_types)
-        expect_error(numeric_operators(data_type))
+        numeric_operators(data_type)
 
 })
 

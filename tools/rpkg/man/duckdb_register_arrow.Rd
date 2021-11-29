@@ -9,6 +9,8 @@
 duckdb_register_arrow(conn, name, arrow_scannable)
 
 duckdb_unregister_arrow(conn, name)
+
+duckdb_list_arrow(conn)
 }
 \arguments{
 \item{conn}{A DuckDB connection, created by \code{dbConnect()}.}

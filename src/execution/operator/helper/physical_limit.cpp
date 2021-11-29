@@ -13,8 +13,8 @@ namespace duckdb {
 class LimitGlobalState : public GlobalSinkState {
 public:
 	explicit LimitGlobalState(const PhysicalLimit &op) : current_offset(0) {
-		this->limit = op.limit_expression ? INVALID_INDEX : op.limit_value;
-		this->offset = op.offset_expression ? INVALID_INDEX : op.offset_value;
+		this->limit = op.limit_expression ? DConstants::INVALID_INDEX : op.limit_value;
+		this->offset = op.offset_expression ? DConstants::INVALID_INDEX : op.offset_value;
 	}
 
 	idx_t current_offset;
@@ -53,7 +53,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	auto &limit = state.limit;
 	auto &offset = state.offset;
 
-	if (limit != INVALID_INDEX && offset != INVALID_INDEX) {
+	if (limit != DConstants::INVALID_INDEX && offset != DConstants::INVALID_INDEX) {
 		idx_t max_element = limit + offset;
 		if ((limit == 0 || state.current_offset >= max_element) && !(limit_expression || offset_expression)) {
 			return SinkResultType::FINISHED;
@@ -61,10 +61,10 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	}
 
 	// get the next chunk from the child
-	if (limit == INVALID_INDEX) {
+	if (limit == DConstants::INVALID_INDEX) {
 		limit = GetDelimiter(input, limit_expression.get(), 1ULL << 62ULL);
 	}
-	if (offset == INVALID_INDEX) {
+	if (offset == DConstants::INVALID_INDEX) {
 		offset = GetDelimiter(input, offset_expression.get(), 0);
 	}
 	idx_t max_element = limit + offset;

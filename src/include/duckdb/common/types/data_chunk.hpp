@@ -38,8 +38,8 @@ class VectorCache;
 class DataChunk {
 public:
 	//! Creates an empty DataChunk
-	DataChunk();
-	~DataChunk();
+	DUCKDB_API DataChunk();
+	DUCKDB_API ~DataChunk();
 
 	//! The vectors owned by the DataChunk.
 	vector<Vector> data;
@@ -51,12 +51,15 @@ public:
 	DUCKDB_API idx_t ColumnCount() const {
 		return data.size();
 	}
-	void SetCardinality(idx_t count_p) {
-		D_ASSERT(count <= STANDARD_VECTOR_SIZE);
+	inline void SetCardinality(idx_t count_p) {
+		D_ASSERT(count_p <= capacity);
 		this->count = count_p;
 	}
-	void SetCardinality(const DataChunk &other) {
+	inline void SetCardinality(const DataChunk &other) {
 		this->count = other.size();
+	}
+	inline void SetCapacity(const DataChunk &other) {
+		this->capacity = other.capacity;
 	}
 
 	DUCKDB_API Value GetValue(idx_t col_idx, idx_t index) const;
@@ -71,15 +74,15 @@ public:
 	//! This will create one vector of the specified type for each LogicalType in the
 	//! types list. The vector will be referencing vector to the data owned by
 	//! the DataChunk.
-	void Initialize(const vector<LogicalType> &types);
+	DUCKDB_API void Initialize(const vector<LogicalType> &types);
 	//! Initializes an empty DataChunk with the given types. The vectors will *not* have any data allocated for them.
-	void InitializeEmpty(const vector<LogicalType> &types);
+	DUCKDB_API void InitializeEmpty(const vector<LogicalType> &types);
 	//! Append the other DataChunk to this one. The column count and types of
 	//! the two DataChunks have to match exactly. Throws an exception if there
-	//! is not enough space in the chunk.
-	DUCKDB_API void Append(const DataChunk &other);
-	//! Append a selection of the other DataChunk to this one
-	DUCKDB_API void Append(const DataChunk &other, const SelectionVector &sel, idx_t count);
+	//! is not enough space in the chunk and resize is not allowed.
+	DUCKDB_API void Append(const DataChunk &other, bool resize = false, SelectionVector *sel = nullptr,
+	                       idx_t count = 0);
+
 	//! Destroy all data and columns owned by this DataChunk
 	DUCKDB_API void Destroy();
 
@@ -131,6 +134,8 @@ public:
 private:
 	//! The amount of tuples stored in the data chunk
 	idx_t count;
+	//! The amount of tuples that can be stored in the data chunk
+	idx_t capacity;
 	//! Vector caches, used to store data when ::Initialize is called
 	vector<VectorCache> vector_caches;
 };

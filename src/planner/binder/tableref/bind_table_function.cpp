@@ -29,8 +29,8 @@ bool Binder::BindFunctionParameters(vector<unique_ptr<ParsedExpression>> &expres
 			auto &comp = (ComparisonExpression &)*child;
 			if (comp.left->type == ExpressionType::COLUMN_REF) {
 				auto &colref = (ColumnRefExpression &)*comp.left;
-				if (colref.table_name.empty()) {
-					parameter_name = colref.column_name;
+				if (!colref.IsQualified()) {
+					parameter_name = colref.GetColumnName();
 					child = move(comp.right);
 				}
 			}
@@ -95,7 +95,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 
 	// select the function based on the input parameters
 	idx_t best_function_idx = Function::BindFunction(function->name, function->functions, arguments, error);
-	if (best_function_idx == INVALID_INDEX) {
+	if (best_function_idx == DConstants::INVALID_INDEX) {
 		throw BinderException(FormatError(ref, error));
 	}
 	auto &table_function = function->functions[best_function_idx];

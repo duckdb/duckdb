@@ -35,6 +35,12 @@ public:
 	static void SetHourToSecond(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
 
 	static void SetMinuteToSecond(interval_t &interval, SQL_INTERVAL_STRUCT *interval_struct);
+
+	static bool IsIntervalType(SQLSMALLINT value_type);
+
+	static SQLSMALLINT GetSQLIntervalType(SQLSMALLINT value_type);
+
+	static SQLSMALLINT GetIntervalCode(SQLSMALLINT value_type);
 };
 } // namespace duckdb
 #endif

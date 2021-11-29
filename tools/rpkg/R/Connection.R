@@ -181,7 +181,7 @@ setMethod(
         col_idx <- 1
         for (name in col_names) {
             if (name %in% names(field.types)) {
-                cols <- c(cols, sprintf("#%d::%s %s", col_idx, field.types[name], name))
+                cols <- c(cols, sprintf("#%d::%s %s", col_idx, field.types[name], dbQuoteIdentifier(conn, name)))
             }
             else {
                 cols <- c(cols, sprintf("#%d", col_idx))
@@ -213,8 +213,6 @@ setMethod(
       stop("Column `", setdiff(names(value), target_names)[[1]], "` does not exist in target table.")
     }
 
-    value <- encode_values(value)
-
     if (nrow(value)) {
       table_name <- dbQuoteIdentifier(conn, name)
 
@@ -237,25 +235,6 @@ setMethod(
   }
 )
 
-encode_values <- function(value) {
-  is_factor <- vapply(value, is.factor, logical(1))
-  if (any(is_factor)) {
-    warning("Factors converted to character")
-  }
-
-  value[is_factor] <- lapply(value[is_factor], function(x) {
-    levels(x) <- enc2utf8(levels(x))
-    as.character(x)
-  })
-
-  is_character <- vapply(value, is.character, logical(1))
-  value[is_character] <- lapply(value[is_character], enc2utf8)
-
-  is_posixlt <- vapply(value, inherits, "POSIXlt", FUN.VALUE = logical(1))
-  value[is_posixlt] <- lapply(value[is_posixlt], as.POSIXct)
-
-  value
-}
 
 #' @rdname duckdb_connection-class
 #' @inheritParams DBI::dbListTables

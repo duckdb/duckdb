@@ -47,15 +47,15 @@ void Connection::DisableProfiling() {
 }
 
 void Connection::EnableQueryVerification() {
-	context->query_verification_enabled = true;
+	ClientConfig::GetConfig(*context).query_verification_enabled = true;
 }
 
 void Connection::DisableQueryVerification() {
-	context->query_verification_enabled = false;
+	ClientConfig::GetConfig(*context).query_verification_enabled = false;
 }
 
 void Connection::ForceParallelism() {
-	context->verify_parallelism = true;
+	ClientConfig::GetConfig(*context).verify_parallelism = true;
 }
 
 unique_ptr<QueryResult> Connection::SendQuery(const string &query) {
@@ -138,7 +138,13 @@ shared_ptr<Relation> Connection::View(const string &schema_name, const string &t
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname) {
 	vector<Value> values;
-	return TableFunction(fname, values);
+	unordered_map<string, Value> named_parameters;
+	return TableFunction(fname, values, named_parameters);
+}
+
+shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values,
+                                               const unordered_map<string, Value> &named_parameters) {
+	return make_shared<TableFunctionRelation>(*context, fname, values, named_parameters);
 }
 
 shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector<Value> &values) {

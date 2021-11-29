@@ -102,7 +102,7 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 		bits_per_group.push_back(required_bits);
 		perfect_hash_bits += required_bits;
 		// check if we have exceeded the bits for the hash
-		if (perfect_hash_bits > context.perfect_ht_threshold) {
+		if (perfect_hash_bits > ClientConfig::GetConfig(context).perfect_ht_threshold) {
 			// too many bits for perfect hash
 			return false;
 		}
@@ -147,9 +147,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalAggregate 
 				break;
 			}
 		}
-		if (use_simple_aggregation) {
-			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(
-			    op.types, move(op.expressions), all_combinable, op.estimated_cardinality);
+		if (use_simple_aggregation && all_combinable) {
+			groupby = make_unique_base<PhysicalOperator, PhysicalSimpleAggregate>(op.types, move(op.expressions),
+			                                                                      op.estimated_cardinality);
 		} else {
 			groupby = make_unique_base<PhysicalOperator, PhysicalHashAggregate>(context, op.types, move(op.expressions),
 			                                                                    op.estimated_cardinality);

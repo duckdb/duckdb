@@ -39,73 +39,73 @@ string PrintParquetElementToString(T &&entry) {
 
 void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("file_name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("row_group_id");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("row_group_num_rows");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("row_group_num_columns");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("row_group_bytes");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("column_id");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("file_offset");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("num_values");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("path_in_schema");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("type");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("stats_min");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("stats_max");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("stats_null_count");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("stats_distinct_count");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("stats_min_value");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("stats_max_value");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("compression");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("encodings");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("index_page_offset");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("dictionary_page_offset");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("data_page_offset");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("total_compressed_size");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("total_uncompressed_size");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 }
 
 Value ConvertParquetStats(duckdb_parquet::format::Type::type type, bool stats_is_set, const std::string &stats) {
@@ -160,8 +160,8 @@ Value ConvertParquetStats(duckdb_parquet::format::Type::type type, bool stats_is
 void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const vector<LogicalType> &return_types,
                                                    const string &file_path) {
 	collection.Reset();
-
-	auto reader = make_unique<ParquetReader>(context, file_path);
+	ParquetOptions parquet_options(context);
+	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(return_types);
@@ -268,37 +268,37 @@ void ParquetMetaDataOperatorData::LoadFileMetaData(ClientContext &context, const
 
 void ParquetMetaDataOperatorData::BindSchema(vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("file_name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("type");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("type_length");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("repetition_type");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("num_children");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("converted_type");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("scale");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("precision");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("field_id");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("logical_type");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 }
 
 Value ParquetLogicalTypeToString(const duckdb_parquet::format::LogicalType &type) {
@@ -348,8 +348,8 @@ Value ParquetLogicalTypeToString(const duckdb_parquet::format::LogicalType &type
 void ParquetMetaDataOperatorData::LoadSchemaData(ClientContext &context, const vector<LogicalType> &return_types,
                                                  const string &file_path) {
 	collection.Reset();
-
-	auto reader = make_unique<ParquetReader>(context, file_path);
+	ParquetOptions parquet_options(context);
+	auto reader = make_unique<ParquetReader>(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(return_types);

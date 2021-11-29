@@ -1,6 +1,6 @@
 # name: benchmark/micro/nulls/no_nulls_addition.benchmark
 # description: Benchmark of sum and addition without nulls
-# group: [micro]
+# group: [nulls]
 
 name NULL Addition (no nulls)
 group micro

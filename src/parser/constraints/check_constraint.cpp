@@ -4,6 +4,10 @@
 
 namespace duckdb {
 
+CheckConstraint::CheckConstraint(unique_ptr<ParsedExpression> expression)
+    : Constraint(ConstraintType::CHECK), expression(move(expression)) {
+}
+
 string CheckConstraint::ToString() const {
 	return "CHECK(" + expression->ToString() + ")";
 }

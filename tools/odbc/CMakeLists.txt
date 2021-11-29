@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.12.0)
+
 find_package(ODBC)
 
 if(NOT ODBC_FOUND)
@@ -36,7 +37,10 @@ add_library(
   statement_functions.cpp
   odbc_interval.cpp
   odbc_fetch.cpp
-  parameter_wrapper.cpp)
+  empty_stubs.cpp
+  descriptor.cpp
+  parameter_descriptor.cpp
+  duckdb_odbc.def)
 
 set_target_properties(duckdb_odbc PROPERTIES DEFINE_SYMBOL "DUCKDB_ODBC_API")
 

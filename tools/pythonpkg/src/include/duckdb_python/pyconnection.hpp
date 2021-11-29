@@ -75,7 +75,7 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromCsvAuto(const string &filename);
 
-	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename);
+	unique_ptr<DuckDBPyRelation> FromParquet(const string &filename, bool binary_as_string);
 
 	unique_ptr<DuckDBPyRelation> FromArrowTable(py::object &table, const idx_t rows_per_tuple = 1000000);
 
@@ -108,7 +108,7 @@ public:
 
 	py::object FetchArrowChunk(const idx_t vectors_per_chunk, bool return_table) const;
 
-	py::object FetchRecordBatchReader() const;
+	py::object FetchRecordBatchReader(const idx_t vectors_per_chunk) const;
 
 	static shared_ptr<DuckDBPyConnection> Connect(const string &database, bool read_only, const py::dict &config);
 

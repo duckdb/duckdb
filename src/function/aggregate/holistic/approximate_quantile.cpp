@@ -150,7 +150,7 @@ AggregateFunction GetApproximateQuantileAggregate(PhysicalType type) {
 	auto fun = GetApproximateQuantileAggregateFunction(type);
 	fun.bind = BindApproxQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::FLOAT);
+	fun.arguments.emplace_back(LogicalType::FLOAT);
 	return fun;
 }
 

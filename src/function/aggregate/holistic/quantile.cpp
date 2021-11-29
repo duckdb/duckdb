@@ -408,9 +408,6 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vecto
 
 	D_ASSERT(bind_data_p);
 	auto bind_data = (QuantileBindData *)bind_data_p;
-	if (offset == 0) {
-		ListVector::SetListSize(result, 0);
-	}
 
 	if (states.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -423,7 +420,7 @@ static void ExecuteListFinalize(Vector &states, FunctionData *bind_data_p, Vecto
 	} else {
 		D_ASSERT(states.GetVectorType() == VectorType::FLAT_VECTOR);
 		result.SetVectorType(VectorType::FLAT_VECTOR);
-		ListVector::Reserve(result, count * bind_data->quantiles.size());
+		ListVector::Reserve(result, (offset + count) * bind_data->quantiles.size());
 
 		auto sdata = FlatVector::GetData<STATE_TYPE *>(states);
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
@@ -465,11 +462,11 @@ struct QuantileScalarOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t ridx) {
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t ridx, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
+		QuantileNotNull not_null(dmask, bias);
 
 		//  Lazily initialise frame state
 		auto prev_pos = state->pos;
@@ -614,11 +611,11 @@ struct QuantileListOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &list, idx_t lidx) {
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &list, idx_t lidx, idx_t bias) {
 		D_ASSERT(bind_data_p);
 		auto bind_data = (QuantileBindData *)bind_data_p;
 
-		QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
+		QuantileNotNull not_null(dmask, bias);
 
 		// Result is a constant LIST<RESULT_TYPE> with a fixed length
 		auto ldata = FlatVector::GetData<RESULT_TYPE>(list);
@@ -967,11 +964,11 @@ struct MedianAbsoluteDeviationOperation : public QuantileOperation {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t ridx) {
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t ridx, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		QuantileNotNull not_null(dmask, MinValue(frame.first, prev.first));
+		QuantileNotNull not_null(dmask, bias);
 
 		//  Lazily initialise frame state
 		auto prev_pos = state->pos;
@@ -1189,7 +1186,7 @@ AggregateFunction GetDiscreteQuantileAggregate(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::DOUBLE);
+	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	return fun;
 }
 
@@ -1206,7 +1203,7 @@ AggregateFunction GetContinuousQuantileAggregate(const LogicalType &type) {
 	auto fun = GetContinuousQuantileAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::DOUBLE);
+	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	return fun;
 }
 

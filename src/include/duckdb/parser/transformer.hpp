@@ -106,7 +106,7 @@ private:
 	//! Transform a Postgres duckdb_libpgquery::T_PGUpdateStmt node into a UpdateStatement
 	unique_ptr<UpdateStatement> TransformUpdate(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGPragmaStmt node into a PragmaStatement
-	unique_ptr<PragmaStatement> TransformPragma(duckdb_libpgquery::PGNode *node);
+	unique_ptr<SQLStatement> TransformPragma(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGExportStmt node into a ExportStatement
 	unique_ptr<ExportStatement> TransformExport(duckdb_libpgquery::PGNode *node);
 	//! Transform a Postgres duckdb_libpgquery::T_PGImportStmt node into a PragmaStatement

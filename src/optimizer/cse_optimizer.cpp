@@ -15,7 +15,7 @@ struct CSENode {
 	idx_t count;
 	idx_t column_index;
 
-	CSENode() : count(1), column_index(INVALID_INDEX) {
+	CSENode() : count(1), column_index(DConstants::INVALID_INDEX) {
 	}
 };
 
@@ -95,7 +95,7 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 			// check if it has already been pushed into the projection
 			auto alias = expr.alias;
 			auto type = expr.return_type;
-			if (node.column_index == INVALID_INDEX) {
+			if (node.column_index == DConstants::INVALID_INDEX) {
 				// has not been pushed yet: push it
 				node.column_index = state.expressions.size();
 				state.expressions.push_back(move(*expr_ptr));

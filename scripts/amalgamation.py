@@ -4,7 +4,7 @@ import re
 import sys
 import shutil
 import subprocess
-from python_helpers import open_utf8
+from python_helpers import open_utf8, normalize_path
 
 amal_dir = os.path.join('src', 'amalgamation')
 header_file = os.path.join(amal_dir, "duckdb.hpp")
@@ -26,6 +26,7 @@ hll_dir = os.path.join('third_party', 'hyperloglog')
 tdigest_dir = os.path.join('third_party', 'tdigest')
 utf8proc_dir = os.path.join('third_party', 'utf8proc')
 utf8proc_include_dir = os.path.join('third_party', 'utf8proc', 'include')
+httplib_include_dir = os.path.join('third_party', 'httplib')
 
 moodycamel_include_dir = os.path.join('third_party', 'concurrentqueue')
 pcg_include_dir = os.path.join('third_party', 'pcg')
@@ -81,13 +82,15 @@ if '--extended' in sys.argv:
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/expression'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/parsed_data'))
     main_header_files += add_include_dir(os.path.join(include_dir, 'duckdb/parser/tableref'))
+    main_header_files = normalize_path(main_header_files)
+
 # include paths for where to search for include files during amalgamation
-include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, tdigest_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir,pcg_include_dir]
+include_paths = [include_dir, fmt_include_dir, re2_dir, miniz_dir, utf8proc_include_dir, hll_dir, tdigest_dir, utf8proc_dir, pg_query_include_dir, pg_query_dir, moodycamel_include_dir, pcg_include_dir, httplib_include_dir]
 # paths of where to look for files to compile and include to the final amalgamation
 compile_directories = [src_dir, fmt_dir, miniz_dir, re2_dir, hll_dir, utf8proc_dir, pg_query_dir]
 
 # files always excluded
-always_excluded = ['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-amalgamation.cpp', 'src/amalgamation/parquet-amalgamation.hpp']
+always_excluded = normalize_path(['src/amalgamation/duckdb.cpp', 'src/amalgamation/duckdb.hpp', 'src/amalgamation/parquet-amalgamation.cpp', 'src/amalgamation/parquet-amalgamation.hpp'])
 # files excluded from the amalgamation
 excluded_files = ['grammar.cpp', 'grammar.hpp', 'symbols.cpp']
 # files excluded from individual file compilation during test_compile
@@ -104,6 +107,8 @@ def get_includes(fpath, text):
     for x in regex_include_statements:
         included_file = x[1]
         if skip_duckdb_includes and 'duckdb' in included_file:
+            continue
+        if 'extension_helper.cpp' in fpath and included_file.endswith('-extension.hpp'):
             continue
         include_statements.append(x[0])
         included_file = os.sep.join(included_file.split('/'))
@@ -257,6 +262,7 @@ def generate_duckdb_hpp(header_file):
             hfile.write("#define DUCKDB_AMALGAMATION_EXTENDED 1\n")
         hfile.write("#define DUCKDB_SOURCE_ID \"%s\"\n" % git_commit_hash())
         hfile.write("#define DUCKDB_VERSION \"%s\"\n" % git_dev_version())
+
         for fpath in main_header_files:
             hfile.write(write_file(fpath))
 

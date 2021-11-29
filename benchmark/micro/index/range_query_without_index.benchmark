@@ -1,4 +1,4 @@
-# name: benchmark/micro/index/point_query_without_index.benchmark
+# name: benchmark/micro/index/range_query_without_index.benchmark
 # description: Range query without index
 # group: [index]
 

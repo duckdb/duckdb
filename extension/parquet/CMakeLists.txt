@@ -51,6 +51,12 @@ endif()
 
 add_library(parquet_extension STATIC ${PARQUET_EXTENSION_FILES})
 
+install(
+  TARGETS parquet_extension
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
+
 if(NOT CLANG_TIDY)
   add_executable(parquetcli parquetcli.cpp)
   target_link_libraries(parquetcli parquet_extension)

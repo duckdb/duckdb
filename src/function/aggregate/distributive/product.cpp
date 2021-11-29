@@ -54,8 +54,10 @@ struct ProductFunction {
 };
 
 AggregateFunction ProductFun::GetFunction() {
-	return AggregateFunction::UnaryAggregate<ProductState, double, double, ProductFunction>(
+	auto fun = AggregateFunction::UnaryAggregate<ProductState, double, double, ProductFunction>(
 	    LogicalType(LogicalTypeId::DOUBLE), LogicalType::DOUBLE);
+	fun.name = "product";
+	return fun;
 }
 
 void ProductFun::RegisterFunction(BuiltinFunctions &set) {

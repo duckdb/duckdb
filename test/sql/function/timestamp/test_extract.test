@@ -87,7 +87,7 @@ SELECT EXTRACT(ISODOW FROM i) FROM timestamps
 6
 NULL
 
-# millenium (change of millenium is January 1, X001)
+# millennium (change of millennium is January 1, X001)
 query I
 SELECT EXTRACT(millennium FROM i) FROM timestamps
 ----
