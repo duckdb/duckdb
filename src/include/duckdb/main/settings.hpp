@@ -92,6 +92,14 @@ struct DefaultNullOrderSetting {
 	static Value GetSetting(ClientContext &context);
 };
 
+struct DisabledOptimizersSetting {
+	static constexpr const char *Name = "disabled_optimizers";
+	static constexpr const char *Description = "DEBUG SETTING: disable a specific set of optimizers (comma separated)";
+	static constexpr const LogicalTypeId InputType = LogicalTypeId::VARCHAR;
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static Value GetSetting(ClientContext &context);
+};
+
 struct EnableExternalAccessSetting {
 	static constexpr const char *Name = "enable_external_access";
 	static constexpr const char *Description =

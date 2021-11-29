@@ -49,6 +49,9 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:
+	// skip conjunctions and case, since short-circuiting might be incorrectly disabled otherwise
+	case ExpressionClass::BOUND_CONJUNCTION:
+	case ExpressionClass::BOUND_CASE:
 		return;
 	default:
 		break;
@@ -70,6 +73,11 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 
 void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> *expr_ptr, CSEReplacementState &state) {
 	Expression &expr = **expr_ptr;
+	// skip conjunctions and case, since short-circuiting might be incorrectly disabled otherwise
+	if (expr.expression_class == ExpressionClass::BOUND_CONJUNCTION ||
+	    expr.expression_class == ExpressionClass::BOUND_CASE) {
+		return;
+	}
 	if (expr.expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = (BoundColumnRefExpression &)expr;
 		// bound column ref, check if this one has already been recorded in the expression list

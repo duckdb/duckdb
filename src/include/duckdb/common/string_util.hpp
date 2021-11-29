@@ -118,5 +118,10 @@ public:
 	static vector<string> TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n = 5,
 	                                      idx_t threshold = 5);
 	static string CandidatesMessage(const vector<string> &candidates, const string &candidate = "Candidate bindings");
+
+	//! Generate an error message in the form of "{message_prefix}: nearest_string, nearest_string2, ...
+	//! Equivalent to calling TopNLevenshtein followed by CandidatesMessage
+	static string CandidatesErrorMessage(const vector<string> &strings, const string &target,
+	                                     const string &message_prefix, idx_t n = 5);
 };
 } // namespace duckdb
