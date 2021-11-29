@@ -99,7 +99,7 @@ private:
 				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (calc_width - 1)) - 1);
 				D_ASSERT((int64_t)min_value >= (int64_t)(-1 * ((1L << (calc_width - 1)) - 1) - 1));
 			} else {
-				D_ASSERT((int64_t)max_value <= (int64_t)(1L << (calc_width)) - 1);
+				D_ASSERT((uint64_t)max_value <= (uint64_t)(1L << (calc_width)) - 1);
 			}
 		}
 #endif
