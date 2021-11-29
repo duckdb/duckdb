@@ -25,7 +25,7 @@ public:
 			this->offset = op.offset_value;
 			is_offset_delimited = true;
 		} else {
-			this->offset = INVALID_INDEX;
+			this->offset = DConstants::INVALID_INDEX;
 		}
 	}
 
@@ -71,7 +71,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		state.is_offset_delimited = true;
 	}
 
-	if (!PhysicalLimit::HandleOffset(input, state.current_offset, offset, INVALID_INDEX)) {
+	if (!PhysicalLimit::HandleOffset(input, state.current_offset, offset, DConstants::INVALID_INDEX)) {
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
@@ -84,7 +84,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 //===--------------------------------------------------------------------===//
 class LimitPercentOperatorState : public GlobalSourceState {
 public:
-	LimitPercentOperatorState() : chunk_idx(0), limit(INVALID_INDEX) {
+	LimitPercentOperatorState() : chunk_idx(0), limit(DConstants::INVALID_INDEX) {
 	}
 
 	idx_t chunk_idx;
@@ -102,7 +102,7 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 	auto &limit_percent = gstate.limit_percent;
 	auto &limit = state.limit;
 
-	if (gstate.is_limit_percent_delimited && limit == INVALID_INDEX) {
+	if (gstate.is_limit_percent_delimited && limit == DConstants::INVALID_INDEX) {
 		idx_t count = gstate.data.Count();
 		limit = MinValue((idx_t)(limit_percent / 100 * count), count);
 		if (limit == 0) {
