@@ -86,6 +86,7 @@ query I
 SELECT a FROM test LIMIT 50% OFFSET 2
 ----
 13
+14
 
 query I
 SELECT * FROM range(10) LIMIT 50% OFFSET 2
@@ -94,6 +95,7 @@ SELECT * FROM range(10) LIMIT 50% OFFSET 2
 3
 4
 5
+6
 
 query I
 SELECT a FROM test LIMIT (SELECT COUNT(*) FROM test) % OFFSET 1
@@ -103,12 +105,14 @@ query I
 SELECT a FROM test LIMIT 50% OFFSET (((SELECT MIN(b) FROM test)-1)/10);
 ----
 13
+14
 
 query I
 SELECT b FROM test LIMIT 70% OFFSET (((SELECT MIN(test.a) FROM test)-1)/10);
 ----
 21
 22
+32
 
 # non-foldable expression in limit
 statement ok
