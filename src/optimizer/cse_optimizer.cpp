@@ -73,11 +73,6 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 
 void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> *expr_ptr, CSEReplacementState &state) {
 	Expression &expr = **expr_ptr;
-	// skip conjunctions and case, since short-circuiting might be incorrectly disabled otherwise
-	if (expr.expression_class == ExpressionClass::BOUND_CONJUNCTION ||
-	    expr.expression_class == ExpressionClass::BOUND_CASE) {
-		return;
-	}
 	if (expr.expression_class == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = (BoundColumnRefExpression &)expr;
 		// bound column ref, check if this one has already been recorded in the expression list
@@ -96,7 +91,9 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 		return;
 	}
 	// check if this child is eligible for CSE elimination
-	if (state.expression_count.find(&expr) != state.expression_count.end()) {
+	bool can_cse = expr.expression_class != ExpressionClass::BOUND_CONJUNCTION &&
+	               expr.expression_class != ExpressionClass::BOUND_CASE;
+	if (can_cse && state.expression_count.find(&expr) != state.expression_count.end()) {
 		auto &node = state.expression_count[&expr];
 		if (node.count > 1) {
 			// this expression occurs more than once! push it into the projection
