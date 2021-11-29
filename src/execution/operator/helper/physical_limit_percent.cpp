@@ -71,7 +71,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		state.is_offset_delimited = true;
 	}
 
-	if (!PhysicalLimit::HandleOffset(input, state.current_offset, offset, DConstants::INVALID_INDEX)) {
+	if (!PhysicalLimit::HandleOffset(input, state.current_offset, 0, DConstants::INVALID_INDEX)) {
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
@@ -84,11 +84,12 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 //===--------------------------------------------------------------------===//
 class LimitPercentOperatorState : public GlobalSourceState {
 public:
-	LimitPercentOperatorState() : chunk_idx(0), limit(DConstants::INVALID_INDEX) {
+	LimitPercentOperatorState() : chunk_idx(0), limit(DConstants::INVALID_INDEX), current_offset(0) {
 	}
 
 	idx_t chunk_idx;
 	idx_t limit;
+	idx_t current_offset;
 };
 
 unique_ptr<GlobalSourceState> PhysicalLimitPercent::GetGlobalSourceState(ClientContext &context) const {
@@ -100,7 +101,9 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 	auto &gstate = (LimitPercentGlobalState &)*sink_state;
 	auto &state = (LimitPercentOperatorState &)gstate_p;
 	auto &limit_percent = gstate.limit_percent;
+	auto &offset = gstate.offset;
 	auto &limit = state.limit;
+	auto &current_offset = state.current_offset;
 
 	if (gstate.is_limit_percent_delimited && limit == DConstants::INVALID_INDEX) {
 		idx_t count = gstate.data.Count();
@@ -110,21 +113,15 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 		}
 	}
 
-	if (state.chunk_idx >= gstate.data.ChunkCount() || limit <= 0) {
+	if (state.chunk_idx >= gstate.data.ChunkCount() || current_offset >= limit + offset) {
 		return;
 	}
 
 	DataChunk &input = gstate.data.GetChunk(state.chunk_idx);
-	idx_t chunk_count = MinValue(limit, input.size());
-	limit -= chunk_count;
-	if (chunk_count < input.size()) {
-		input.Reference(input);
-		input.SetCardinality(chunk_count);
-	} else {
-		state.chunk_idx++;
+	if (PhysicalLimit::HandleOffset(input, current_offset, offset, limit)) {
+		chunk.Reference(input);
 	}
-
-	chunk.Reference(input);
+	state.chunk_idx++;
 }
 
 } // namespace duckdb
