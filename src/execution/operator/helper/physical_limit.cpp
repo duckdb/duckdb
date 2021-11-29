@@ -42,7 +42,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 	}
 
 	// get the next chunk from the child
-	if (limit == INVALID_INDEX) {
+	if (limit == DConstants::INVALID_INDEX) {
 		limit = 1ULL << 62ULL;
 		Value val = GetDelimiter(input, limit_expression.get());
 		if (!val.is_null) {
@@ -52,7 +52,7 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 			throw BinderException("Max value %lld for LIMIT/OFFSET is %lld", limit, 1ULL << 62ULL);
 		}
 	}
-	if (offset == INVALID_INDEX) {
+	if (offset == DConstants::INVALID_INDEX) {
 		offset = 0;
 		Value val = GetDelimiter(input, offset_expression.get());
 		if (!val.is_null) {
@@ -102,8 +102,8 @@ void PhysicalLimit::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 
 bool PhysicalLimit::HandleOffset(DataChunk &input, idx_t &current_offset, idx_t offset, idx_t limit) {
 	idx_t max_element = limit + offset;
-	if (limit == INVALID_INDEX) {
-		max_element = INVALID_INDEX;
+	if (limit == DConstants::INVALID_INDEX) {
+		max_element = DConstants::INVALID_INDEX;
 	}
 	idx_t input_size = input.size();
 	if (current_offset < offset) {
