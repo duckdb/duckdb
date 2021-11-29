@@ -1,5 +1,5 @@
-#include "icu-datepart.hpp"
-#include "icu-collate.hpp"
+#include "include/icu-datepart.hpp"
+#include "include/icu-collate.hpp"
 
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
@@ -12,7 +12,7 @@ namespace duckdb {
 
 struct ICUDatePart {
 	using CalendarPtr = unique_ptr<icu::Calendar>;
-	typedef int32_t (*PartAdapter)(icu::Calendar *calendar, const uint64_t micros);
+	typedef int32_t (*part_adapter_t)(icu::Calendar *calendar, const uint64_t micros);
 
 	static DatePartSpecifier PartCodeFromFunction(const string &name) {
 		return GetDatePartSpecifier(name.substr(4));
@@ -109,7 +109,7 @@ struct ICUDatePart {
 		return int32_t(millis / Interval::MSECS_PER_SEC);
 	}
 
-	static PartAdapter PartCodeAdapterFactory(DatePartSpecifier part) {
+	static part_adapter_t PartCodeAdapterFactory(DatePartSpecifier part) {
 		switch (part) {
 		case DatePartSpecifier::YEAR:
 			return ExtractYear;
@@ -153,11 +153,11 @@ struct ICUDatePart {
 	}
 
 	struct BindData : public FunctionData {
-		BindData(CalendarPtr calendar_p, PartAdapter adapter_p) : calendar(move(calendar_p)), adapter(adapter_p) {
+		BindData(CalendarPtr calendar_p, part_adapter_t adapter_p) : calendar(move(calendar_p)), adapter(adapter_p) {
 		}
 
 		CalendarPtr calendar;
-		PartAdapter adapter;
+		part_adapter_t adapter;
 
 		unique_ptr<FunctionData> Copy() override {
 			return make_unique<BindData>(CalendarPtr(calendar->clone()), adapter);
@@ -175,9 +175,10 @@ struct ICUDatePart {
 		UnaryExecutor::Execute<timestamp_t, int32_t>(date_arg, result, args.size(), [&](timestamp_t input) {
 			UErrorCode status = U_ZERO_ERROR;
 
-			const UDate millis = input.value / Interval::MICROS_PER_MSEC;
-			const auto micros = input.value % Interval::MICROS_PER_MSEC;
-			calendar->setTime(millis, status);
+			const int64_t millis = input.value / Interval::MICROS_PER_MSEC;
+			const uint64_t micros = input.value % Interval::MICROS_PER_MSEC;
+			const auto udate = UDate(millis);
+			calendar->setTime(udate, status);
 			if (U_FAILURE(status)) {
 				throw Exception("Unable to compute ICU date part.");
 			}
@@ -198,9 +199,10 @@ struct ICUDatePart {
 		    part_arg, date_arg, result, args.size(), [&](string_t specifier, timestamp_t input) {
 			    UErrorCode status = U_ZERO_ERROR;
 
-			    const UDate millis = input.value / Interval::MICROS_PER_MSEC;
-			    const auto micros = input.value % Interval::MICROS_PER_MSEC;
-			    calendar->setTime(millis, status);
+			    const int64_t millis = input.value / Interval::MICROS_PER_MSEC;
+			    const uint64_t micros = input.value % Interval::MICROS_PER_MSEC;
+			    const auto udate = UDate(millis);
+			    calendar->setTime(udate, status);
 			    if (U_FAILURE(status)) {
 				    throw Exception("Unable to compute ICU date part.");
 			    }

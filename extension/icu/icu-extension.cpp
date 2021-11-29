@@ -1,6 +1,7 @@
-#include "icu-extension.hpp"
-#include "icu-collate.hpp"
-#include "icu-datepart.hpp"
+#include "include/icu-extension.hpp"
+#include "include/icu-collate.hpp"
+#include "include/icu-datepart.hpp"
+#include "include/icu-datetrunc.hpp"
 
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/connection.hpp"
@@ -69,11 +70,11 @@ static void ICUCollateFunction(DataChunk &args, ExpressionState &state, Vector &
 		// create a sort key from the string
 		int32_t string_size = ICUGetSortKey(collator, input, buffer, buffer_size);
 		// convert the sort key to hexadecimal
-		auto str_result = StringVector::EmptyString(result, (string_size - 1) * 2);
+		auto str_result = StringVector::EmptyString(result, idx_t(string_size - 1) * 2);
 		auto str_data = str_result.GetDataWriteable();
 		for (idx_t i = 0; i < string_size - 1; i++) {
 			uint8_t byte = uint8_t(buffer[i]);
-			assert(byte != 0);
+			D_ASSERT(byte != 0);
 			str_data[i * 2] = HEX_TABLE[byte / 16];
 			str_data[i * 2 + 1] = HEX_TABLE[byte % 16];
 		}
@@ -113,7 +114,7 @@ static unique_ptr<FunctionData> ICUSortKeyBind(ClientContext &context, ScalarFun
 	}
 }
 
-static ScalarFunction GetICUFunction(string collation) {
+static ScalarFunction GetICUFunction(const string &collation) {
 	return ScalarFunction(collation, {LogicalType::VARCHAR}, LogicalType::VARCHAR, ICUCollateFunction, false,
 	                      ICUCollateBind);
 }
@@ -164,7 +165,7 @@ static unique_ptr<FunctionOperatorData> ICUTimeZoneInit(ClientContext &context, 
 static void ICUTimeZoneCleanup(ClientContext &context, const FunctionData *bind_data,
                                FunctionOperatorData *operator_state) {
 	auto &data = (ICUTimeZoneData &)*operator_state;
-	data.tzs.release();
+	(void)data.tzs.release();
 }
 
 static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind_data,
@@ -200,15 +201,15 @@ static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind
 		output.SetValue(1, index, Value(utf8));
 
 		std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createTimeZone(*long_id));
-		int32_t rawOffsetMS;
-		int32_t dstOffsetMS;
-		tz->getOffset(data.now, false, rawOffsetMS, dstOffsetMS, status);
+		int32_t raw_offset_ms;
+		int32_t dst_offset_ms;
+		tz->getOffset(data.now, false, raw_offset_ms, dst_offset_ms, status);
 		if (U_FAILURE(status)) {
 			break;
 		}
 
-		output.SetValue(2, index, Value::INTERVAL(Interval::FromMicro(rawOffsetMS * Interval::MICROS_PER_MSEC)));
-		output.SetValue(3, index, Value(dstOffsetMS != 0));
+		output.SetValue(2, index, Value::INTERVAL(Interval::FromMicro(raw_offset_ms * Interval::MICROS_PER_MSEC)));
+		output.SetValue(3, index, Value(dst_offset_ms != 0));
 		++index;
 	}
 	output.SetCardinality(index);
@@ -257,6 +258,7 @@ void ICUExtension::Load(DuckDB &db) {
 	catalog.CreateTableFunction(*con.context, &tz_names_info);
 
 	RegisterICUDatePartFunctions(*con.context);
+	RegisterICUDateTruncFunctions(*con.context);
 
 	con.Commit();
 }
