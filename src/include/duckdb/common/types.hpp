@@ -507,6 +507,7 @@ struct EnumType{
 	DUCKDB_API static const string& GetValue(const Value &val);
 	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
 	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
+	DUCKDB_API static PhysicalType GetPhysicalType(idx_t size);
 };
 
 struct StructType {

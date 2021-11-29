@@ -13,7 +13,7 @@ InClauseSimplificationRule::InClauseSimplificationRule(ExpressionRewriter &rewri
 }
 
 unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, vector<Expression *> &bindings,
-                                                         bool &changes_made) {
+                                                         bool &changes_made, bool is_root) {
 	D_ASSERT(bindings[0]->expression_class == ExpressionClass::BOUND_OPERATOR);
 	auto expr = (BoundOperatorExpression *)bindings[0];
 	if (expr->children[0]->expression_class != ExpressionClass::BOUND_CAST) {

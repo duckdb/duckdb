@@ -9,6 +9,7 @@ add_library_unity(
   date_part_simplification.cpp
   distributivity.cpp
   empty_needle_removal.cpp
+  enum_comparison.cpp
   move_constants.cpp
   like_optimizations.cpp
   in_clause_simplification_rule.cpp)

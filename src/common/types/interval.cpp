@@ -231,13 +231,13 @@ posix_interval:
 	return false;
 }
 
-string Interval::ToString(interval_t interval) {
+string Interval::ToString(const interval_t &interval) {
 	char buffer[70];
 	idx_t length = IntervalToStringCast::Format(interval, buffer);
 	return string(buffer, length);
 }
 
-int64_t Interval::GetMilli(interval_t val) {
+int64_t Interval::GetMilli(const interval_t &val) {
 	int64_t milli_month, milli_day, milli;
 	if (!TryMultiplyOperator::Operation((int64_t)val.months, Interval::MICROS_PER_MONTH / 1000, milli_month)) {
 		throw ConversionException("Could not convert Interval to Milliseconds");
@@ -255,28 +255,35 @@ int64_t Interval::GetMilli(interval_t val) {
 	return milli;
 }
 
-int64_t Interval::GetNanoseconds(interval_t val) {
-	int64_t micro_month, micro_day, micro_total, nano;
-	int64_t ns_in_us = 1000;
+int64_t Interval::GetMicro(const interval_t &val) {
+	int64_t micro_month, micro_day, micro_total;
 	micro_total = val.micros;
-	if (!TryMultiplyOperator::Operation((int64_t)val.months, Interval::MICROS_PER_MONTH, micro_month)) {
-		throw ConversionException("Could not convert Month to Nanoseconds");
+	if (!TryMultiplyOperator::Operation((int64_t)val.months, MICROS_PER_MONTH, micro_month)) {
+		throw ConversionException("Could not convert Month to Microseconds");
 	}
-	if (!TryMultiplyOperator::Operation((int64_t)val.days, Interval::MICROS_PER_DAY, micro_day)) {
-		throw ConversionException("Could not convert Day to Nanoseconds");
+	if (!TryMultiplyOperator::Operation((int64_t)val.days, MICROS_PER_DAY, micro_day)) {
+		throw ConversionException("Could not convert Day to Microseconds");
 	}
 	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(micro_total, micro_month, micro_total)) {
-		throw ConversionException("Could not convert Interval to Nanoseconds");
+		throw ConversionException("Could not convert Interval to Microseconds");
 	}
 	if (!TryAddOperator::Operation<int64_t, int64_t, int64_t>(micro_total, micro_day, micro_total)) {
-		throw ConversionException("Could not convert Interval to Nanoseconds");
+		throw ConversionException("Could not convert Interval to Microseconds");
 	}
-	if (!TryMultiplyOperator::Operation(micro_total, ns_in_us, nano)) {
+
+	return micro_total;
+}
+
+int64_t Interval::GetNanoseconds(const interval_t &val) {
+	int64_t nano;
+	const auto micro_total = GetMicro(val);
+	if (!TryMultiplyOperator::Operation(micro_total, NANOS_PER_MICRO, nano)) {
 		throw ConversionException("Could not convert Interval to Nanoseconds");
 	}
 
 	return nano;
 }
+
 interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 	date_t date1, date2;
 	dtime_t time1, time2;
@@ -365,11 +372,15 @@ interval_t Interval::GetAge(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 
 	return interval;
 }
+
 interval_t Interval::GetDifference(timestamp_t timestamp_1, timestamp_t timestamp_2) {
 	const auto us_1 = Timestamp::GetEpochMicroSeconds(timestamp_1);
 	const auto us_2 = Timestamp::GetEpochMicroSeconds(timestamp_2);
 	const auto delta_us = us_1 - us_2;
+	return FromMicro(delta_us);
+}
 
+interval_t Interval::FromMicro(int64_t delta_us) {
 	interval_t result;
 	result.months = 0;
 	result.days = delta_us / Interval::MICROS_PER_DAY;
