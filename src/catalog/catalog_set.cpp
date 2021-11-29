@@ -180,25 +180,19 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	return true;
 }
 
-void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
-                                   set_lock_map_t &lock_set) {
+void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade) {
 	auto &transaction = Transaction::GetTransaction(context);
 
 	auto old_deleted = entries[entry_index].get()->deleted;
 	entries[entry_index].get()->deleted = true;
 	try {
 		// check any dependencies of this object
-		entry.catalog->dependency_manager->DropObject(context, &entry, cascade, lock_set);
+		entry.catalog->dependency_manager->DropObject(context, &entry, cascade);
 	} catch (Exception &ex) {
 		entries[entry_index].get()->deleted = old_deleted;
 		throw ex;
 	}
 	entries[entry_index].get()->deleted = old_deleted;
-
-	// add this catalog to the lock set, if it is not there yet
-	if (lock_set.find(this) == lock_set.end()) {
-		lock_set.insert(make_pair(this, unique_lock<mutex>(catalog_lock)));
-	}
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
@@ -229,9 +223,7 @@ bool CatalogSet::DropEntry(ClientContext &context, const string &name, bool casc
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
-	// create the lock set for this delete operation
-	set_lock_map_t lock_set;
-	DropEntryInternal(context, entry_index, *entry, cascade, lock_set);
+	DropEntryInternal(context, entry_index, *entry, cascade);
 	return true;
 }
 

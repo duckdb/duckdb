@@ -34,8 +34,7 @@ void DependencyManager::AddObject(ClientContext &context, CatalogEntry *object,
 	dependencies_map[object] = dependencies;
 }
 
-void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object, bool cascade,
-                                   set_lock_map_t &lock_set) {
+void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object, bool cascade) {
 	D_ASSERT(dependents_map.find(object) != dependents_map.end());
 
 	// first check the objects that depend on this object
@@ -58,7 +57,7 @@ void DependencyManager::DropObject(ClientContext &context, CatalogEntry *object,
 		if (cascade || dep.dependency_type == DependencyType::DEPENDENCY_AUTOMATIC ||
 		    dep.dependency_type == DependencyType::DEPENDENCY_OWNS) {
 			// cascade: drop the dependent object
-			catalog_set.DropEntryInternal(context, entry_index, *dependency_entry, cascade, lock_set);
+			catalog_set.DropEntryInternal(context, entry_index, *dependency_entry, cascade);
 		} else {
 			// no cascade and there are objects that depend on this object: throw error
 			throw CatalogException("Cannot drop entry \"%s\" because there are entries that "

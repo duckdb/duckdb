@@ -102,8 +102,7 @@ private:
 	bool GetEntryInternal(ClientContext &context, const string &name, idx_t &entry_index, CatalogEntry *&entry);
 	bool GetEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry *&entry);
 	//! Drops an entry from the catalog set; must hold the catalog_lock to safely call this
-	void DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade,
-	                       set_lock_map_t &lock_set);
+	void DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade);
 	CatalogEntry *CreateEntryInternal(ClientContext &context, unique_ptr<CatalogEntry> entry);
 	MappingValue *GetMapping(ClientContext &context, const string &name, bool get_latest = false);
 	void PutMapping(ClientContext &context, const string &name, idx_t entry_index);

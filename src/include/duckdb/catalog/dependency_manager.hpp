@@ -44,7 +44,7 @@ private:
 
 private:
 	void AddObject(ClientContext &context, CatalogEntry *object, unordered_set<CatalogEntry *> &dependencies);
-	void DropObject(ClientContext &context, CatalogEntry *object, bool cascade, set_lock_map_t &lock_set);
+	void DropObject(ClientContext &context, CatalogEntry *object, bool cascade);
 	void AlterObject(ClientContext &context, CatalogEntry *old_obj, CatalogEntry *new_obj);
 	void EraseObjectInternal(CatalogEntry *object);
 };
