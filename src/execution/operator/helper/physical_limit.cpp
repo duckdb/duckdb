@@ -63,9 +63,6 @@ SinkResultType PhysicalLimit::Sink(ExecutionContext &context, GlobalSinkState &g
 		}
 	}
 	idx_t max_element = limit + offset;
-	if (limit == INVALID_INDEX) {
-		max_element = INVALID_INDEX;
-	}
 	if (limit == 0 || state.current_offset >= max_element) {
 		return SinkResultType::FINISHED;
 	}
