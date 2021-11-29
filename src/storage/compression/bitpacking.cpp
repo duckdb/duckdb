@@ -482,14 +482,15 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 
 		T *current_result_ptr = result_data + result_offset + scanned;
 
-		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0 && std::is_same<T, PRE_CAST_TYPE>::value) {
+		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0 &&
+		    std::is_same<T, PRE_CAST_TYPE>::value) {
 			// Decompress directly into result vector
 			scan_state.decompress_function((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
 			                               scan_state.current_width);
 		} else {
 			// Decompress compression algorithm to buffer
-			scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
-			                               scan_state.current_width);
+			scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer,
+			                               decompression_group_start_pointer, scan_state.current_width);
 
 			if (std::is_same<T, PRE_CAST_TYPE>::value) {
 				memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
