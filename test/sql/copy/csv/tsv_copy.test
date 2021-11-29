@@ -2,7 +2,6 @@
 # description: Test TSV Copy round-trip
 # group: [csv]
 
-
 statement ok
 CREATE TABLE people(id INTEGER, name VARCHAR);
 

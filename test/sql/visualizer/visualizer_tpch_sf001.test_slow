@@ -2,7 +2,6 @@
 # description: Test Visualizer for TPC-H SF0.1
 # group: [visualizer]
 
-
 require visualizer
 
 require tpch

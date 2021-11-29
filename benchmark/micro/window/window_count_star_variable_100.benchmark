@@ -1,6 +1,6 @@
 # name: benchmark/micro/window/window_count_star_variable_100.benchmark
 # description: Moving COUNT(*) performance, variable 100 element window
-# group: [micro]
+# group: [window]
 
 name Windowed COUNT(*), Variable 100
 group window
