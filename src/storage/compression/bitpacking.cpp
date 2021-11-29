@@ -15,6 +15,8 @@ namespace duckdb {
 
 using bitpacking_width_t = uint8_t;
 
+// Note that optimizations in scanning only work if this value is equal to STANDARD_VECTOR_SIZE, however we keep them
+// separated to prevent the code from break on lower vector sizes
 static constexpr const idx_t BITPACKING_WIDTH_GROUP_SIZE = 1024;
 
 class BitpackingPrimitives {
@@ -475,14 +477,16 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
 	// Fast path for when no compression was used, we can do a single memcopy
-	if (scan_state.current_width == sizeof(PRE_CAST_TYPE) * 8 && scan_count <= BITPACKING_WIDTH_GROUP_SIZE &&
-	    scan_state.position_in_group == 0 && std::is_same<T, PRE_CAST_TYPE>::value) {
+	if (STANDARD_VECTOR_SIZE == BITPACKING_WIDTH_GROUP_SIZE && std::is_same<T, PRE_CAST_TYPE>::value) {
+		if (scan_state.current_width == sizeof(PRE_CAST_TYPE) * 8 && scan_count <= BITPACKING_WIDTH_GROUP_SIZE &&
+		    scan_state.position_in_group == 0) {
 
-		memcpy(result_data + result_offset, scan_state.current_width_group_ptr, scan_count * sizeof(PRE_CAST_TYPE));
-		scan_state.current_width_group_ptr += scan_count * sizeof(PRE_CAST_TYPE);
-		scan_state.bitpacking_width_ptr -= sizeof(bitpacking_width_t);
-		scan_state.LoadCurrentBitWidth();
-		return;
+			memcpy(result_data + result_offset, scan_state.current_width_group_ptr, scan_count * sizeof(PRE_CAST_TYPE));
+			scan_state.current_width_group_ptr += scan_count * sizeof(PRE_CAST_TYPE);
+			scan_state.bitpacking_width_ptr -= sizeof(bitpacking_width_t);
+			scan_state.LoadCurrentBitWidth();
+			return;
+		}
 	}
 
 	idx_t scanned = 0;
