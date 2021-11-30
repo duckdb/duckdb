@@ -196,27 +196,9 @@ struct ICUDateTrunc {
 	}
 
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
-		auto add_func = GetBinaryTimestampFunction(name);
-
-		ScalarFunctionSet set(add_func.name);
-
-		// Extract any previous functions into the set
+		CreateScalarFunctionInfo func_info(GetBinaryTimestampFunction(name));
 		auto &catalog = Catalog::GetCatalog(context);
-		auto funcs = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, add_func.name, true);
-		if (funcs) {
-			auto &entry = *(ScalarFunctionCatalogEntry *)funcs;
-			for (const auto &f : entry.functions) {
-				set.AddFunction(f);
-			}
-		}
-
-		// Add the new one
-		set.AddFunction(add_func);
-
-		CreateScalarFunctionInfo func_info(move(set));
-		func_info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
-
-		catalog.CreateFunction(context, &func_info);
+		catalog.AddFunction(context, &func_info);
 	}
 };
 
