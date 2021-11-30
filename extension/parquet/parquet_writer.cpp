@@ -11,6 +11,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/date.hpp"
+#include "duckdb/common/types/hugeint.hpp"
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
@@ -69,6 +70,7 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::DATE:
 		return Type::INT32;
 	case LogicalTypeId::BIGINT:
 		return Type::INT64;
@@ -76,13 +78,22 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 		return Type::FLOAT;
 	case LogicalTypeId::DECIMAL: // for now...
 	case LogicalTypeId::DOUBLE:
+	case LogicalTypeId::HUGEINT:
 		return Type::DOUBLE;
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 		return Type::BYTE_ARRAY;
-	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIMESTAMP:
-		return Type::INT96;
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		return Type::INT64;
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+		return Type::INT32;
+	case LogicalTypeId::UBIGINT:
+		return Type::INT64;
 	default:
 		throw NotImplementedException(duckdb_type.ToString());
 	}
@@ -90,8 +101,43 @@ static Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type) {
 
 static bool DuckDBTypeToConvertedType(const LogicalType &duckdb_type, ConvertedType::type &result) {
 	switch (duckdb_type.id()) {
+	case LogicalTypeId::TINYINT:
+		result = ConvertedType::INT_8;
+		return true;
+	case LogicalTypeId::SMALLINT:
+		result = ConvertedType::INT_16;
+		return true;
+	case LogicalTypeId::INTEGER:
+		result = ConvertedType::INT_32;
+		return true;
+	case LogicalTypeId::BIGINT:
+		result = ConvertedType::INT_64;
+		return true;
+	case LogicalTypeId::UTINYINT:
+		result = ConvertedType::UINT_8;
+		return true;
+	case LogicalTypeId::USMALLINT:
+		result = ConvertedType::UINT_16;
+		return true;
+	case LogicalTypeId::UINTEGER:
+		result = ConvertedType::UINT_32;
+		return true;
+	case LogicalTypeId::UBIGINT:
+		result = ConvertedType::UINT_64;
+		return true;
+	case LogicalTypeId::DATE:
+		result = ConvertedType::DATE;
+		return true;
 	case LogicalTypeId::VARCHAR:
 		result = ConvertedType::UTF8;
+		return true;
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+		result = ConvertedType::TIMESTAMP_MICROS;
+		return true;
+	case LogicalTypeId::TIMESTAMP_MS:
+		result = ConvertedType::TIMESTAMP_MILLIS;
 		return true;
 	default:
 		return false;
@@ -122,12 +168,40 @@ static uint8_t GetVarintSize(uint32_t val) {
 	return res;
 }
 
-template <class SRC, class TGT>
+struct ParquetCastOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return TGT(input);
+	}
+};
+
+struct ParquetTimestampNSOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return Timestamp::FromEpochNanoSeconds(input).value;
+	}
+};
+
+struct ParquetTimestampSOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return Timestamp::FromEpochSeconds(input).value;
+	}
+};
+
+struct ParquetHugeintOperator {
+	template <class SRC, class TGT>
+	static TGT Operation(SRC input) {
+		return Hugeint::Cast<double>(input);
+	}
+};
+
+template <class SRC, class TGT, class OP = ParquetCastOperator>
 static void TemplatedWritePlain(Vector &col, idx_t length, ValidityMask &mask, Serializer &ser) {
 	auto *ptr = FlatVector::GetData<SRC>(col);
 	for (idx_t r = 0; r < length; r++) {
 		if (mask.RowIsValid(r)) {
-			ser.Write<TGT>((TGT)ptr[r]);
+			ser.Write<TGT>(OP::template Operation<SRC, TGT>(ptr[r]));
 		}
 	}
 }
@@ -204,6 +278,8 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 		hdr.data_page_header.encoding = Encoding::PLAIN;
 		hdr.data_page_header.definition_level_encoding = Encoding::RLE;
 		hdr.data_page_header.repetition_level_encoding = Encoding::BIT_PACKED;
+		// hdr.data_page_header.statistics.__isset.max
+		// hdr.data_page_header.statistics.max
 
 		// record the current offset of the writer into the file
 		// this is the starting position of the current page
@@ -273,10 +349,37 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 				TemplatedWritePlain<int16_t, int32_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::INTEGER:
+			case LogicalTypeId::DATE:
 				TemplatedWritePlain<int32_t, int32_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::BIGINT:
+			case LogicalTypeId::TIMESTAMP:
+			case LogicalTypeId::TIMESTAMP_MS:
 				TemplatedWritePlain<int64_t, int64_t>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::HUGEINT:
+				TemplatedWritePlain<hugeint_t, double, ParquetHugeintOperator>(input_column, input.size(), mask,
+				                                                               temp_writer);
+				break;
+			case LogicalTypeId::TIMESTAMP_NS:
+				TemplatedWritePlain<int64_t, int64_t, ParquetTimestampNSOperator>(input_column, input.size(), mask,
+				                                                                  temp_writer);
+				break;
+			case LogicalTypeId::TIMESTAMP_SEC:
+				TemplatedWritePlain<int64_t, int64_t, ParquetTimestampSOperator>(input_column, input.size(), mask,
+				                                                                 temp_writer);
+				break;
+			case LogicalTypeId::UTINYINT:
+				TemplatedWritePlain<uint8_t, int32_t>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::USMALLINT:
+				TemplatedWritePlain<uint16_t, int32_t>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::UINTEGER:
+				TemplatedWritePlain<uint32_t, uint32_t>(input_column, input.size(), mask, temp_writer);
+				break;
+			case LogicalTypeId::UBIGINT:
+				TemplatedWritePlain<uint64_t, uint64_t>(input_column, input.size(), mask, temp_writer);
 				break;
 			case LogicalTypeId::FLOAT:
 				TemplatedWritePlain<float, float>(input_column, input.size(), mask, temp_writer);
@@ -291,25 +394,6 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			case LogicalTypeId::DOUBLE:
 				TemplatedWritePlain<double, double>(input_column, input.size(), mask, temp_writer);
 				break;
-			case LogicalTypeId::DATE: {
-				auto *ptr = FlatVector::GetData<date_t>(input_column);
-				for (idx_t r = 0; r < input.size(); r++) {
-					if (mask.RowIsValid(r)) {
-						auto ts = Timestamp::FromDatetime(ptr[r], dtime_t(0));
-						temp_writer.Write<Int96>(TimestampToImpalaTimestamp(ts));
-					}
-				}
-				break;
-			}
-			case LogicalTypeId::TIMESTAMP: {
-				auto *ptr = FlatVector::GetData<timestamp_t>(input_column);
-				for (idx_t r = 0; r < input.size(); r++) {
-					if (mask.RowIsValid(r)) {
-						temp_writer.Write<Int96>(TimestampToImpalaTimestamp(ptr[r]));
-					}
-				}
-				break;
-			}
 			case LogicalTypeId::BLOB:
 			case LogicalTypeId::VARCHAR: {
 				auto *ptr = FlatVector::GetData<string_t>(input_column);

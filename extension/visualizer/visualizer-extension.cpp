@@ -114,8 +114,8 @@ void VisualizerExtension::Load(DuckDB &db) {
 	con.BeginTransaction();
 	auto &catalog = Catalog::GetCatalog(*con.context);
 
-	auto vis_last_profiler_out_func = PragmaFunction::PragmaAssignment(
-	    "visualize_last_profiling_output", PragmaVisualizeLastProfilingOutput, LogicalType::VARCHAR);
+	auto vis_last_profiler_out_func = PragmaFunction::PragmaCall(
+	    "visualize_last_profiling_output", PragmaVisualizeLastProfilingOutput, {LogicalType::VARCHAR});
 	CreatePragmaFunctionInfo vis_last_profiler_out_info(vis_last_profiler_out_func);
 	catalog.CreatePragmaFunction(*con.context, &vis_last_profiler_out_info);
 
@@ -134,4 +134,18 @@ void VisualizerExtension::Load(DuckDB &db) {
 	con.Commit();
 }
 
+std::string VisualizerExtension::Name() {
+	return "visualizer";
+}
 } // namespace duckdb
+
+extern "C" {
+DUCKDB_EXTENSION_API void visualizer_init(duckdb::DatabaseInstance &db) {
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::VisualizerExtension>();
+}
+
+DUCKDB_EXTENSION_API const char *visualizer_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
+}

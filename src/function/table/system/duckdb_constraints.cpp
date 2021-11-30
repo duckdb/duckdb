@@ -30,29 +30,29 @@ static unique_ptr<FunctionData> DuckDBConstraintsBind(ClientContext &context, ve
                                                       vector<string> &input_table_names,
                                                       vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("schema_name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("schema_oid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("table_name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("table_oid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("constraint_index");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	// CHECK, PRIMARY KEY or UNIQUE
 	names.emplace_back("constraint_type");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("constraint_text");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("expression");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("constraint_column_indexes");
 	;

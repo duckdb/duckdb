@@ -23,3 +23,6 @@ indent_size = tab
 trim_trailing_whitespace = true
 charset = utf-8
 x-soft-wrap-text = false
+
+[*keywords.list]
+insert_final_newline = false

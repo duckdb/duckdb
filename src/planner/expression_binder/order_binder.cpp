@@ -55,11 +55,11 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 		// check if we can bind it to an alias in the select list
 		auto &colref = (ColumnRefExpression &)*expr;
 		// if there is an explicit table name we can't bind to an alias
-		if (!colref.table_name.empty()) {
+		if (colref.IsQualified()) {
 			break;
 		}
 		// check the alias list
-		auto entry = alias_map.find(colref.column_name);
+		auto entry = alias_map.find(colref.column_names[0]);
 		if (entry != alias_map.end()) {
 			// it does! point it to that entry
 			return CreateProjectionReference(*expr, entry->second);
@@ -76,12 +76,12 @@ unique_ptr<Expression> OrderBinder::Bind(unique_ptr<ParsedExpression> expr) {
 	// general case
 	// first bind the table names of this entry
 	for (auto &binder : binders) {
-		ExpressionBinder::BindTableNames(*binder, *expr);
+		ExpressionBinder::QualifyColumnNames(*binder, expr);
 	}
 	// first check if the ORDER BY clause already points to an entry in the projection list
 	auto entry = projection_map.find(expr.get());
 	if (entry != projection_map.end()) {
-		if (entry->second == INVALID_INDEX) {
+		if (entry->second == DConstants::INVALID_INDEX) {
 			throw BinderException("Ambiguous reference to column");
 		}
 		// there is a matching entry in the projection list

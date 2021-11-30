@@ -48,7 +48,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	payload_layout.Initialize(types);
 	auto state = make_unique<OrderGlobalState>(BufferManager::GetBufferManager(context), *this, payload_layout);
 	// Set external (can be force with the PRAGMA)
-	state->global_sort_state.external = context.force_external;
+	state->global_sort_state.external = ClientConfig::GetConfig(context).force_external;
 	// Memory usage per thread should scale with max mem / num threads
 	// We take 1/4th of this, to be conservative
 	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();

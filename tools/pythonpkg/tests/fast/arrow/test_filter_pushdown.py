@@ -20,7 +20,7 @@ def numeric_operators(data_type):
         arrow_table = duck_tbl.arrow()
         print (arrow_table)
 
-        duckdb_conn.register_arrow("testarrow",arrow_table)
+        duckdb_conn.register("testarrow",arrow_table)
         # Try ==
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a =1").fetchone()[0] == 1
         # Try >
@@ -68,7 +68,7 @@ class TestArrowFilterPushdown(object):
         duck_tbl = duckdb_conn.table("test")
         arrow_table = duck_tbl.arrow()
 
-        duckdb_conn.register_arrow("testarrow",arrow_table)
+        duckdb_conn.register("testarrow",arrow_table)
         # Try ==
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a ='1'").fetchone()[0] == 1
         # Try >
@@ -100,7 +100,7 @@ class TestArrowFilterPushdown(object):
         duck_tbl = duckdb_conn.table("test")
         arrow_table = duck_tbl.arrow()
 
-        duckdb_conn.register_arrow("testarrow",arrow_table)
+        duckdb_conn.register("testarrow",arrow_table)
         # Try ==
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a =True").fetchone()[0] == 2
         
@@ -123,7 +123,7 @@ class TestArrowFilterPushdown(object):
         duck_tbl = duckdb_conn.table("test")
         arrow_table = duck_tbl.arrow()
 
-        duckdb_conn.register_arrow("testarrow",arrow_table)
+        duckdb_conn.register("testarrow",arrow_table)
         # Try ==
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a ='00:01:00'").fetchone()[0] == 1
         # Try >
@@ -156,7 +156,7 @@ class TestArrowFilterPushdown(object):
         arrow_table = duck_tbl.arrow()
         print (arrow_table)
 
-        duckdb_conn.register_arrow("testarrow",arrow_table)
+        duckdb_conn.register("testarrow",arrow_table)
         # Try ==
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a ='2008-01-01 00:00:01'").fetchone()[0] == 1
         # Try >
@@ -188,7 +188,7 @@ class TestArrowFilterPushdown(object):
         duck_tbl = duckdb_conn.table("test")
         arrow_table = duck_tbl.arrow()
 
-        duckdb_conn.register_arrow("testarrow",arrow_table)
+        duckdb_conn.register("testarrow",arrow_table)
         # Try ==
         assert duckdb_conn.execute("SELECT count(*) from testarrow where a ='2000-01-01'").fetchone()[0] == 1
         # Try >
@@ -220,10 +220,10 @@ class TestArrowFilterPushdown(object):
         duckdb_conn.execute("INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
         duck_tbl = duckdb_conn.table("test")
         arrow_table = duck_tbl.arrow()
-        duckdb_conn.register_arrow("testarrowtable",arrow_table)
+        duckdb_conn.register("testarrowtable",arrow_table)
         assert duckdb_conn.execute("SELECT * FROM  testarrowtable VALUES where a =1").fetchall() == [(1, 1, 1)]
         arrow_dataset = ds.dataset(arrow_table)
-        duckdb_conn.register_arrow("testarrowdataset",arrow_dataset)
+        duckdb_conn.register("testarrowdataset",arrow_dataset)
         assert duckdb_conn.execute("SELECT * FROM  testarrowdataset VALUES where a =1").fetchall() == [(1, 1, 1)]
 
     def test_filter_pushdown_2145(self,duckdb_cursor):
@@ -244,7 +244,7 @@ class TestArrowFilterPushdown(object):
         table = pq.ParquetDataset(["data1.parquet", "data2.parquet"]).read()
 
         con = duckdb.connect()
-        con.register_arrow("testarrow",table)
+        con.register("testarrow",table)
 
         output_df = duckdb.arrow(table).filter("date > '2019-01-01'").df()
         expected_df = duckdb.from_parquet("data*.parquet").filter("date > '2019-01-01'").df()

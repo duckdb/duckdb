@@ -20,6 +20,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #else
+#include "duckdb/common/windows_util.hpp"
 #include <string>
 
 #ifdef __MINGW32__
@@ -490,8 +491,9 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t fla
 	if (flags & FileFlags::FILE_FLAGS_DIRECT_IO) {
 		flags_and_attributes |= FILE_FLAG_NO_BUFFERING;
 	}
-	HANDLE hFile =
-	    CreateFileA(path.c_str(), desired_access, share_mode, NULL, creation_disposition, flags_and_attributes, NULL);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(path.c_str());
+	HANDLE hFile = CreateFileW(unicode_path.c_str(), desired_access, share_mode, NULL, creation_disposition,
+	                           flags_and_attributes, NULL);
 	if (hFile == INVALID_HANDLE_VALUE) {
 		auto error = GetLastErrorAsString();
 		throw IOException("Cannot open file \"%s\": %s", path.c_str(), error);
@@ -512,21 +514,37 @@ idx_t LocalFileSystem::GetFilePointer(FileHandle &handle) {
 	return ((WindowsFileHandle &)handle).position;
 }
 
-void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	DWORD bytes_read;
+static DWORD FSInternalRead(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
+	DWORD bytes_read = 0;
+	bool overlapped_read = false;
 	OVERLAPPED ov = {};
 	ov.Internal = 0;
 	ov.InternalHigh = 0;
 	ov.Offset = location & 0xFFFFFFFF;
 	ov.OffsetHigh = location >> 32;
 	ov.hEvent = 0;
-	ReadFile(hFile, buffer, (DWORD)nr_bytes, NULL, &ov);
-	auto rc = GetOverlappedResult(hFile, &ov, &bytes_read, true);
+	auto rc = ReadFile(hFile, buffer, (DWORD)nr_bytes, &bytes_read, &ov);
 	if (rc == 0) {
-		auto error = GetLastErrorAsString();
-		throw IOException("Could not read file \"%s\": %s", handle.path, error);
+		if (GetLastError() != ERROR_IO_PENDING) {
+			auto error = GetLastErrorAsString();
+			throw IOException("Could not read file \"%s\" (error in ReadFile): %s", handle.path, error);
+		} else {
+			overlapped_read = true;
+		}
 	}
+	if (overlapped_read) {
+		rc = GetOverlappedResult(hFile, &ov, &bytes_read, true);
+		if (rc == 0) {
+			auto error = GetLastErrorAsString();
+			throw IOException("Could not read file \"%s\" (error in GetOverlappedResult): %s", handle.path, error);
+		}
+	}
+	return bytes_read;
+}
+
+void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	auto bytes_read = FSInternalRead(handle, hFile, buffer, nr_bytes, location);
 	if (bytes_read != nr_bytes) {
 		throw IOException("Could not read all bytes from file \"%s\": wanted=%lld read=%lld", handle.path, nr_bytes,
 		                  bytes_read);
@@ -535,40 +553,44 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	DWORD bytes_read;
 	auto &pos = ((WindowsFileHandle &)handle).position;
-	OVERLAPPED ov = {};
-	ov.Internal = 0;
-	ov.InternalHigh = 0;
-	ov.Offset = pos & 0xFFFFFFFF;
-	ov.OffsetHigh = pos >> 32;
-	ov.hEvent = 0;
 	auto n = std::min<idx_t>(std::max<idx_t>(GetFileSize(handle), pos) - pos, nr_bytes);
-	ReadFile(hFile, buffer, (DWORD)n, NULL, &ov);
-	auto rc = GetOverlappedResult(hFile, &ov, &bytes_read, true);
-	if (rc == 0) {
-		auto error = GetLastErrorAsString();
-		throw IOException("Could not read file \"%s\": %s", handle.path, error);
-	}
+	auto bytes_read = FSInternalRead(handle, hFile, buffer, n, pos);
 	pos += bytes_read;
 	return bytes_read;
 }
 
-void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
-	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	DWORD bytes_written;
+static DWORD FSInternalWrite(FileHandle &handle, HANDLE hFile, void *buffer, int64_t nr_bytes, idx_t location) {
+	DWORD bytes_written = 0;
+	bool overlapped_write = false;
 	OVERLAPPED ov = {};
 	ov.Internal = 0;
 	ov.InternalHigh = 0;
 	ov.Offset = location & 0xFFFFFFFF;
 	ov.OffsetHigh = location >> 32;
 	ov.hEvent = 0;
-	WriteFile(hFile, buffer, (DWORD)nr_bytes, NULL, &ov);
-	auto rc = GetOverlappedResult(hFile, &ov, &bytes_written, true);
+	auto rc = WriteFile(hFile, buffer, (DWORD)nr_bytes, &bytes_written, &ov);
 	if (rc == 0) {
-		auto error = GetLastErrorAsString();
-		throw IOException("Could not write file \"%s\": %s", handle.path, error);
+		if (GetLastError() != ERROR_IO_PENDING) {
+			auto error = GetLastErrorAsString();
+			throw IOException("Could not write file \"%s\" (error in WriteFile): %s", handle.path, error);
+		} else {
+			overlapped_write = true;
+		}
 	}
+	if (overlapped_write) {
+		rc = GetOverlappedResult(hFile, &ov, &bytes_written, true);
+		if (rc == 0) {
+			auto error = GetLastErrorAsString();
+			throw IOException("Could not write file \"%s\" (error in GetOverlappedResult): %s", handle.path, error);
+		}
+	}
+	return bytes_written;
+}
+
+void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
+	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
+	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, location);
 	if (bytes_written != nr_bytes) {
 		throw IOException("Could not write all bytes from file \"%s\": wanted=%lld wrote=%lld", handle.path, nr_bytes,
 		                  bytes_written);
@@ -577,20 +599,8 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	HANDLE hFile = ((WindowsFileHandle &)handle).fd;
-	DWORD bytes_written;
 	auto &pos = ((WindowsFileHandle &)handle).position;
-	OVERLAPPED ov = {};
-	ov.Internal = 0;
-	ov.InternalHigh = 0;
-	ov.Offset = pos & 0xFFFFFFFF;
-	ov.OffsetHigh = pos >> 32;
-	ov.hEvent = 0;
-	WriteFile(hFile, buffer, (DWORD)nr_bytes, NULL, &ov);
-	auto rc = GetOverlappedResult(hFile, &ov, &bytes_written, true);
-	if (rc == 0) {
-		auto error = GetLastErrorAsString();
-		throw IOException("Could not write file \"%s\": %s", handle.path, error);
-	}
+	auto bytes_written = FSInternalWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
 	return bytes_written;
 }
@@ -641,13 +651,18 @@ void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {
 	}
 }
 
+static DWORD WindowsGetFileAttributes(const string &filename) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	return GetFileAttributesW(unicode_path.c_str());
+}
+
 bool LocalFileSystem::DirectoryExists(const string &directory) {
-	DWORD attrs = GetFileAttributesA(directory.c_str());
+	DWORD attrs = WindowsGetFileAttributes(directory);
 	return (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
 bool LocalFileSystem::FileExists(const string &filename) {
-	DWORD attrs = GetFileAttributesA(filename.c_str());
+	DWORD attrs = WindowsGetFileAttributes(filename);
 	return (attrs != INVALID_FILE_ATTRIBUTES && !(attrs & FILE_ATTRIBUTE_DIRECTORY));
 }
 
@@ -655,79 +670,58 @@ void LocalFileSystem::CreateDirectory(const string &directory) {
 	if (DirectoryExists(directory)) {
 		return;
 	}
-	if (directory.empty() || !CreateDirectoryA(directory.c_str(), NULL) || !DirectoryExists(directory)) {
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
+	if (directory.empty() || !CreateDirectoryW(unicode_path.c_str(), NULL) || !DirectoryExists(directory)) {
 		throw IOException("Could not create directory!");
 	}
 }
 
-static void delete_dir_special_snowflake_windows(FileSystem &fs, string directory) {
-	if (directory.size() + 3 > MAX_PATH) {
-		throw IOException("Pathname too long");
-	}
-	// create search pattern
-	TCHAR szDir[MAX_PATH];
-	snprintf(szDir, MAX_PATH, "%s\\*", directory.c_str());
-
-	WIN32_FIND_DATA ffd;
-	HANDLE hFind = FindFirstFile(szDir, &ffd);
-	if (hFind == INVALID_HANDLE_VALUE) {
-		return;
-	}
-
-	do {
-		if (string(ffd.cFileName) == "." || string(ffd.cFileName) == "..") {
-			continue;
-		}
-		if (ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-			// recurse to zap directory contents
-			delete_dir_special_snowflake_windows(fs, fs.JoinPath(directory, ffd.cFileName));
+static void DeleteDirectoryRecursive(FileSystem &fs, string directory) {
+	fs.ListFiles(directory, [&](const string &fname, bool is_directory) {
+		if (is_directory) {
+			DeleteDirectoryRecursive(fs, fs.JoinPath(directory, fname));
 		} else {
-			if (strlen(ffd.cFileName) + directory.size() + 1 > MAX_PATH) {
-				throw IOException("Pathname too long");
-			}
-			// create search pattern
-			TCHAR del_path[MAX_PATH];
-			snprintf(del_path, MAX_PATH, "%s\\%s", directory.c_str(), ffd.cFileName);
-			if (!DeleteFileA(del_path)) {
-				throw IOException("Failed to delete directory entry");
-			}
+			fs.RemoveFile(fs.JoinPath(directory, fname));
 		}
-	} while (FindNextFile(hFind, &ffd) != 0);
-
-	DWORD dwError = GetLastError();
-	if (dwError != ERROR_NO_MORE_FILES) {
-		throw IOException("Something went wrong");
-	}
-	FindClose(hFind);
-
-	if (!RemoveDirectoryA(directory.c_str())) {
+	});
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(directory.c_str());
+	if (!RemoveDirectoryW(unicode_path.c_str())) {
 		throw IOException("Failed to delete directory");
 	}
 }
 
 void LocalFileSystem::RemoveDirectory(const string &directory) {
-	delete_dir_special_snowflake_windows(*this, directory.c_str());
+	if (FileExists(directory)) {
+		throw IOException("Attempting to delete directory \"%s\", but it is a file and not a directory!", directory);
+	}
+	if (!DirectoryExists(directory)) {
+		return;
+	}
+	DeleteDirectoryRecursive(*this, directory.c_str());
 }
 
 void LocalFileSystem::RemoveFile(const string &filename) {
-	DeleteFileA(filename.c_str());
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(filename.c_str());
+	DeleteFileW(unicode_path.c_str());
 }
 
 bool LocalFileSystem::ListFiles(const string &directory, const std::function<void(string, bool)> &callback) {
 	string search_dir = JoinPath(directory, "*");
 
-	WIN32_FIND_DATA ffd;
-	HANDLE hFind = FindFirstFile(search_dir.c_str(), &ffd);
+	auto unicode_path = WindowsUtil::UTF8ToUnicode(search_dir.c_str());
+
+	WIN32_FIND_DATAW ffd;
+	HANDLE hFind = FindFirstFileW(unicode_path.c_str(), &ffd);
 	if (hFind == INVALID_HANDLE_VALUE) {
 		return false;
 	}
 	do {
-		string cFileName = string(ffd.cFileName);
+		string cFileName = WindowsUtil::UnicodeToUTF8(ffd.cFileName);
 		if (cFileName == "." || cFileName == "..") {
 			continue;
 		}
 		callback(cFileName, ffd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
-	} while (FindNextFile(hFind, &ffd) != 0);
+	} while (FindNextFileW(hFind, &ffd) != 0);
 
 	DWORD dwError = GetLastError();
 	if (dwError != ERROR_NO_MORE_FILES) {
@@ -747,7 +741,9 @@ void LocalFileSystem::FileSync(FileHandle &handle) {
 }
 
 void LocalFileSystem::MoveFile(const string &source, const string &target) {
-	if (!MoveFileA(source.c_str(), target.c_str())) {
+	auto source_unicode = WindowsUtil::UTF8ToUnicode(source.c_str());
+	auto target_unicode = WindowsUtil::UTF8ToUnicode(target.c_str());
+	if (!MoveFileW(source_unicode.c_str(), target_unicode.c_str())) {
 		throw IOException("Could not move file");
 	}
 }
@@ -758,7 +754,7 @@ FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	if (strncmp(path.c_str(), PIPE_PREFIX, strlen(PIPE_PREFIX)) == 0) {
 		return FileType::FILE_TYPE_FIFO;
 	}
-	DWORD attrs = GetFileAttributesA(path.c_str());
+	DWORD attrs = WindowsGetFileAttributes(path.c_str());
 	if (attrs != INVALID_FILE_ATTRIBUTES) {
 		if (attrs & FILE_ATTRIBUTE_DIRECTORY) {
 			return FileType::FILE_TYPE_DIR;

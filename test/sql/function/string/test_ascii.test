@@ -1,5 +1,5 @@
 # name: test/sql/function/string/test_ascii.test
-# description:  test ascii() and chr() functions
+# description: test ascii() and chr() functions
 # group: [string]
 
 #statement ok

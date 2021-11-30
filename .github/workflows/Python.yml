@@ -54,7 +54,7 @@ jobs:
     strategy:
       matrix:
         arch: [auto, aarch64]
-        python_build: [cp37-*, cp38-*,cp39-*]
+        python_build: [cp37-*, cp38-*,cp39-*,cp310-*]
     needs: linux-python3-9
     env:
       CIBW_BUILD: ${{ matrix.python_build}}
@@ -65,6 +65,7 @@ jobs:
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
+      DUCKDB_BUILD_UNITY: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -109,7 +110,7 @@ jobs:
       runs-on: macos-latest
       strategy:
        matrix:
-        python_build: [cp36-*, cp37-*, cp38-*, cp39-*]
+        python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*]
       needs: linux-python3-9
       env:
         CIBW_BUILD: ${{ matrix.python_build}}
@@ -120,6 +121,7 @@ jobs:
         CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: 'hfmuehleisen'
+        DUCKDB_BUILD_UNITY: 1
 
       steps:
       - uses: actions/checkout@v2
@@ -151,7 +153,7 @@ jobs:
       runs-on: windows-latest
       strategy:
        matrix:
-        python_build: [cp36-*, cp37-*, cp38-*, cp39-*]
+        python_build: [cp36-*, cp37-*, cp38-*, cp39-*, cp310-*]
       needs: linux-python3-9
 
       env:
@@ -162,6 +164,7 @@ jobs:
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: 'hfmuehleisen'
+        DUCKDB_BUILD_UNITY: 1
 
       steps:
       - uses: actions/checkout@v2

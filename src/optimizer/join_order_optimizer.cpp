@@ -27,7 +27,7 @@ bool JoinOrderOptimizer::ExtractBindings(Expression &expression, unordered_set<i
 	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expression;
 		D_ASSERT(colref.depth == 0);
-		D_ASSERT(colref.binding.table_index != INVALID_INDEX);
+		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
 		D_ASSERT(relation_mapping.find(colref.binding.table_index) != relation_mapping.end());
 		bindings.insert(relation_mapping[colref.binding.table_index]);

@@ -6,6 +6,12 @@
 
 namespace duckdb {
 
+Constraint::Constraint(ConstraintType type) : type(type) {
+}
+
+Constraint::~Constraint() {
+}
+
 void Constraint::Serialize(Serializer &serializer) {
 	serializer.Write<ConstraintType>(type);
 }

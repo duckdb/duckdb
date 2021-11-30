@@ -79,6 +79,10 @@ DBConfig &DBConfig::GetConfig(DatabaseInstance &db) {
 	return db.config;
 }
 
+ClientConfig &ClientConfig::GetConfig(ClientContext &context) {
+	return context.config;
+}
+
 TransactionManager &TransactionManager::Get(ClientContext &context) {
 	return TransactionManager::Get(DatabaseInstance::GetDatabase(context));
 }
@@ -141,6 +145,9 @@ DuckDB::DuckDB(const char *path, DBConfig *new_config) : instance(make_shared<Da
 }
 
 DuckDB::DuckDB(const string &path, DBConfig *config) : DuckDB(path.c_str(), config) {
+}
+
+DuckDB::DuckDB(DatabaseInstance &instance_p) : instance(instance_p.shared_from_this()) {
 }
 
 DuckDB::~DuckDB() {
@@ -234,6 +241,13 @@ idx_t DatabaseInstance::NumberOfThreads() {
 
 idx_t DuckDB::NumberOfThreads() {
 	return instance->NumberOfThreads();
+}
+
+bool DuckDB::ExtensionIsLoaded(const std::string &name) {
+	return instance->loaded_extensions.find(name) != instance->loaded_extensions.end();
+}
+void DuckDB::SetExtensionLoaded(const std::string &name) {
+	instance->loaded_extensions.insert(name);
 }
 
 } // namespace duckdb

@@ -126,17 +126,22 @@ string FileSystem::ConvertSeparators(const string &path) {
 }
 
 string FileSystem::ExtractBaseName(const string &path) {
+	auto normalized_path = ConvertSeparators(path);
 	auto sep = PathSeparator();
-	auto vec = StringUtil::Split(StringUtil::Split(path, sep).back(), ".");
+	auto vec = StringUtil::Split(StringUtil::Split(normalized_path, sep).back(), ".");
 	return vec[0];
 }
 
 string FileSystem::GetHomeDirectory() {
+#ifdef DUCKDB_WINDOWS
+	const char *homedir = getenv("USERPROFILE");
+#else
 	const char *homedir = getenv("HOME");
-	if (!homedir) {
-		return string();
+#endif
+	if (homedir) {
+		return homedir;
 	}
-	return homedir;
+	return string();
 }
 
 // LCOV_EXCL_START

@@ -69,7 +69,7 @@ string_t SubstringASCII(Vector &result, string_t input, int64_t offset, int64_t 
 	return SubstringSlice(result, input_data, start, end - start);
 }
 
-string_t SubstringFun::SubstringScalarFunction(Vector &result, string_t input, int32_t offset, int32_t length) {
+string_t SubstringFun::SubstringScalarFunction(Vector &result, string_t input, int64_t offset, int64_t length) {
 	auto input_data = input.GetDataUnsafe();
 	auto input_size = input.GetSize();
 
@@ -112,7 +112,7 @@ string_t SubstringFun::SubstringScalarFunction(Vector &result, string_t input, i
 
 	// now scan the graphemes of the string to find the positions of the start and end characters
 	int64_t current_character = 0;
-	idx_t start_pos = INVALID_INDEX, end_pos = input_size;
+	idx_t start_pos = DConstants::INVALID_INDEX, end_pos = input_size;
 	utf8proc_grapheme_callback(input_data, input_size, [&](size_t gstart, size_t gend) {
 		if (current_character == start) {
 			start_pos = gstart;
@@ -123,7 +123,7 @@ string_t SubstringFun::SubstringScalarFunction(Vector &result, string_t input, i
 		current_character++;
 		return true;
 	});
-	if (start_pos == INVALID_INDEX) {
+	if (start_pos == DConstants::INVALID_INDEX) {
 		return SubstringEmptyString(result);
 	}
 	// after we have found these, we can slice the substring
@@ -136,16 +136,16 @@ static void SubstringFunction(DataChunk &args, ExpressionState &state, Vector &r
 	if (args.ColumnCount() == 3) {
 		auto &length_vector = args.data[2];
 
-		TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
+		TernaryExecutor::Execute<string_t, int64_t, int64_t, string_t>(
 		    input_vector, offset_vector, length_vector, result, args.size(),
-		    [&](string_t input_string, int32_t offset, int32_t length) {
+		    [&](string_t input_string, int64_t offset, int64_t length) {
 			    return SubstringFun::SubstringScalarFunction(result, input_string, offset, length);
 		    });
 	} else {
-		BinaryExecutor::Execute<string_t, int32_t, string_t>(
-		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
+		BinaryExecutor::Execute<string_t, int64_t, string_t>(
+		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int64_t offset) {
 			    return SubstringFun::SubstringScalarFunction(result, input_string, offset,
-			                                                 NumericLimits<int32_t>::Maximum());
+			                                                 NumericLimits<int64_t>::Maximum() - offset);
 		    });
 	}
 }
@@ -156,15 +156,15 @@ static void SubstringFunctionASCII(DataChunk &args, ExpressionState &state, Vect
 	if (args.ColumnCount() == 3) {
 		auto &length_vector = args.data[2];
 
-		TernaryExecutor::Execute<string_t, int32_t, int32_t, string_t>(
+		TernaryExecutor::Execute<string_t, int64_t, int64_t, string_t>(
 		    input_vector, offset_vector, length_vector, result, args.size(),
-		    [&](string_t input_string, int32_t offset, int32_t length) {
+		    [&](string_t input_string, int64_t offset, int64_t length) {
 			    return SubstringASCII(result, input_string, offset, length);
 		    });
 	} else {
-		BinaryExecutor::Execute<string_t, int32_t, string_t>(
-		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int32_t offset) {
-			    return SubstringASCII(result, input_string, offset, NumericLimits<int32_t>::Maximum());
+		BinaryExecutor::Execute<string_t, int64_t, string_t>(
+		    input_vector, offset_vector, result, args.size(), [&](string_t input_string, int64_t offset) {
+			    return SubstringASCII(result, input_string, offset, NumericLimits<int64_t>::Maximum() - offset);
 		    });
 	}
 }
@@ -186,10 +186,10 @@ static unique_ptr<BaseStatistics> SubstringPropagateStats(ClientContext &context
 
 void SubstringFun::RegisterFunction(BuiltinFunctions &set) {
 	ScalarFunctionSet substr("substring");
-	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER, LogicalType::INTEGER},
+	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT, LogicalType::BIGINT},
 	                                  LogicalType::VARCHAR, SubstringFunction, false, nullptr, nullptr,
 	                                  SubstringPropagateStats));
-	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::INTEGER}, LogicalType::VARCHAR,
+	substr.AddFunction(ScalarFunction({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR,
 	                                  SubstringFunction, false, nullptr, nullptr, SubstringPropagateStats));
 	set.AddFunction(substr);
 	substr.name = "substr";

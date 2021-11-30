@@ -39,9 +39,11 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = (BoundCaseExpression &)expr;
-		callback(case_expr.check);
-		callback(case_expr.result_if_true);
-		callback(case_expr.result_if_false);
+		for (auto &case_check : case_expr.case_checks) {
+			callback(case_check.when_expr);
+			callback(case_check.then_expr);
+		}
+		callback(case_expr.else_expr);
 		break;
 	}
 	case ExpressionClass::BOUND_CAST: {

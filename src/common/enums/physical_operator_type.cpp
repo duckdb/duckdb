@@ -71,6 +71,8 @@ string PhysicalOperatorToString(PhysicalOperatorType type) {
 		return "CREATE_INDEX";
 	case PhysicalOperatorType::EXPLAIN:
 		return "EXPLAIN";
+	case PhysicalOperatorType::EXPLAIN_ANALYZE:
+		return "EXPLAIN_ANALYZE";
 	case PhysicalOperatorType::EXECUTE:
 		return "EXECUTE";
 	case PhysicalOperatorType::VACUUM:

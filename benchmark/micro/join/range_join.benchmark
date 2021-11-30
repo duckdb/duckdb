@@ -1,6 +1,6 @@
 # name: benchmark/micro/join/range_join.benchmark
 # description: Range join between integers
-# group: [micro]
+# group: [join]
 
 name Range Join
 group join

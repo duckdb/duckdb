@@ -11,6 +11,8 @@ add_library_unity(
   function.cpp
   pragma_function.cpp
   macro_function.cpp
+  scalar_function.cpp
+  table_function.cpp
   udf_function.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_function>
