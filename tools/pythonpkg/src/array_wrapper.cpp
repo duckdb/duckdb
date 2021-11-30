@@ -216,6 +216,33 @@ struct BlobConvert {
 	}
 };
 
+struct ListConvert {
+	static py::list ConvertValue(Vector &input, idx_t chunk_offset) {
+		auto val = input.GetValue(chunk_offset);
+		py::list list;
+		for (auto &list_elem : val.list_value) {
+			list.append(DuckDBPyResult::GetValueToPython(list_elem, ListType::GetChildType(input.GetType())));
+		}
+		return list;
+	}
+};
+
+struct StructMapConvert {
+	static py::dict ConvertValue(Vector &input, idx_t chunk_offset) {
+		py::dict py_struct;
+		auto val = input.GetValue(chunk_offset);
+		auto &child_types = StructType::GetChildTypes(input.GetType());
+
+		for (idx_t i = 0; i < val.struct_value.size(); i++) {
+			auto &child_entry = child_types[i];
+			auto &child_name = child_entry.first;
+			auto &child_type = child_entry.second;
+			py_struct[child_name.c_str()] = DuckDBPyResult::GetValueToPython(val.struct_value[i], child_type);
+		}
+		return py_struct;
+	}
+};
+
 struct IntegralConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static NUMPY_T ConvertValue(DUCKDB_T val) {
@@ -294,27 +321,18 @@ static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t tar
 	return false;
 }
 
-py::list ConvertListValue(Vector &input, idx_t chunk_offset) {
-	auto val = input.GetValue(chunk_offset);
-	py::list list;
-	for (auto &list_elem : val.list_value) {
-		list.append(DuckDBPyResult::GetValueToPython(list_elem, ListType::GetChildType(input.GetType())));
-	}
-	return std::move(list);
-}
-static bool ConvertList(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &input,
-                        VectorData &idata, idx_t count) {
-	auto out_ptr = (py::list *)target_data;
+template <class NUMPY_T, class CONVERT>
+static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &input,
+                          VectorData &idata, idx_t count) {
+	auto out_ptr = (NUMPY_T *)target_data;
 	if (!idata.validity.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
 			idx_t offset = target_offset + i;
 			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
 				target_mask[offset] = true;
-				out_ptr[offset] = py::list(0);
 			} else {
-				out_ptr[offset] = ConvertListValue(input, src_idx);
-
+				out_ptr[offset] = CONVERT::ConvertValue(input, src_idx);
 				target_mask[offset] = false;
 			}
 		}
@@ -323,7 +341,7 @@ static bool ConvertList(idx_t target_offset, data_ptr_t target_data, bool *targe
 		for (idx_t i = 0; i < count; i++) {
 			idx_t src_idx = idata.sel->get_index(i);
 			idx_t offset = target_offset + i;
-			out_ptr[offset] = ConvertListValue(input, src_idx);
+			out_ptr[offset] = CONVERT::ConvertValue(input, src_idx);
 			target_mask[offset] = false;
 		}
 		return false;
@@ -655,10 +673,15 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(current_offset, dataptr,
 		                                                                                    maskptr, idata, count);
 		break;
-	case LogicalTypeId::LIST: {
-		may_have_null = ConvertList(current_offset, dataptr, maskptr, input, idata, count);
+	case LogicalTypeId::LIST:
+		may_have_null = ConvertNested<py::list, duckdb_py_convert::ListConvert>(current_offset, dataptr, maskptr, input,
+		                                                                        idata, count);
 		break;
-	}
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::STRUCT:
+		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructMapConvert>(current_offset, dataptr, maskptr,
+		                                                                             input, idata, count);
+		break;
 	default:
 		throw std::runtime_error("unsupported type " + input.GetType().ToString());
 	}
