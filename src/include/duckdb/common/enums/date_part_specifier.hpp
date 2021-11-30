@@ -33,7 +33,7 @@ enum class DatePartSpecifier : uint8_t {
 	YEARWEEK
 };
 
-bool TryGetDatePartSpecifier(const string &specifier, DatePartSpecifier &result);
-DatePartSpecifier GetDatePartSpecifier(const string &specifier);
+DUCKDB_API bool TryGetDatePartSpecifier(const string &specifier, DatePartSpecifier &result);
+DUCKDB_API DatePartSpecifier GetDatePartSpecifier(const string &specifier);
 
 } // namespace duckdb
