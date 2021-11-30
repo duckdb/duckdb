@@ -12,12 +12,26 @@
 #include "duckdb/common/file_system.hpp"
 
 namespace duckdb {
+class CompressedFile;
+
+struct StreamData {
+	// various buffers & pointers
+	unique_ptr<data_t[]> in_buff;
+	unique_ptr<data_t[]> out_buff;
+	data_ptr_t out_buff_start = nullptr;
+	data_ptr_t out_buff_end = nullptr;
+	data_ptr_t in_buff_start = nullptr;
+	data_ptr_t in_buff_end = nullptr;
+
+	idx_t in_buf_size = 0;
+	idx_t out_buf_size = 0;
+};
 
 struct StreamWrapper {
 	DUCKDB_API virtual ~StreamWrapper();
 
-	DUCKDB_API virtual void Initialize() = 0;
-	DUCKDB_API virtual bool Read(data_ptr_t &in_buff_start, data_ptr_t &in_buff_end, data_ptr_t &out_buff_start, data_ptr_t &out_buff_end, idx_t out_buff_size) = 0;
+	DUCKDB_API virtual void Initialize(CompressedFile &file) = 0;
+	DUCKDB_API virtual bool Read(StreamData &stream_data) = 0;
 };
 
 class CompressedFileSystem : public FileSystem {
@@ -53,16 +67,7 @@ protected:
 
 private:
 	unique_ptr<StreamWrapper> stream_wrapper;
-	// various buffers & pointers
-	unique_ptr<data_t[]> in_buff;
-	unique_ptr<data_t[]> out_buff;
-	data_ptr_t out_buff_start = nullptr;
-	data_ptr_t out_buff_end = nullptr;
-	data_ptr_t in_buff_start = nullptr;
-	data_ptr_t in_buff_end = nullptr;
-
-	idx_t in_buf_size = 0;
-	idx_t out_buf_size = 0;
+	StreamData stream_data;
 };
 
 } // namespace duckdb

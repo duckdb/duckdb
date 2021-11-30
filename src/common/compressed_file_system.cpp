@@ -16,30 +16,30 @@ CompressedFile::~CompressedFile() {
 void CompressedFile::Initialize() {
 	Close();
 
-	in_buf_size = compressed_fs.InBufferSize();
-	out_buf_size = compressed_fs.OutBufferSize();
-	in_buff = unique_ptr<data_t[]>(new data_t[in_buf_size]);
-	in_buff_start = in_buff.get();
-	in_buff_end = in_buff.get();
-	out_buff = unique_ptr<data_t[]>(new data_t[out_buf_size]);
-	out_buff_start = out_buff.get();
-	out_buff_end = out_buff.get();
+	stream_data.in_buf_size = compressed_fs.InBufferSize();
+	stream_data.out_buf_size = compressed_fs.OutBufferSize();
+	stream_data.in_buff = unique_ptr<data_t[]>(new data_t[stream_data.in_buf_size]);
+	stream_data.in_buff_start = stream_data.in_buff.get();
+	stream_data.in_buff_end = stream_data.in_buff.get();
+	stream_data.out_buff = unique_ptr<data_t[]>(new data_t[stream_data.out_buf_size]);
+	stream_data.out_buff_start = stream_data.out_buff.get();
+	stream_data.out_buff_end = stream_data.out_buff.get();
 
 	stream_wrapper = compressed_fs.CreateStream();
-	stream_wrapper->Initialize();
+	stream_wrapper->Initialize(*this);
 }
 
 int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 	idx_t total_read = 0;
 	while (true) {
 		// first check if there are input bytes available in the output buffers
-		if (out_buff_start != out_buff_end) {
+		if (stream_data.out_buff_start != stream_data.out_buff_end) {
 			// there is! copy it into the output buffer
-			idx_t available = MinValue<idx_t>(remaining, out_buff_end - out_buff_start);
-			memcpy(data_ptr_t(buffer) + total_read, out_buff_start, available);
+			idx_t available = MinValue<idx_t>(remaining, stream_data.out_buff_end - stream_data.out_buff_start);
+			memcpy(data_ptr_t(buffer) + total_read, stream_data.out_buff_start, available);
 
 			// increment the total read variables as required
-			out_buff_start += available;
+			stream_data.out_buff_start += available;
 			total_read += available;
 			remaining -= available;
 			if (remaining == 0) {
@@ -52,25 +52,25 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 		}
 
 		// ran out of buffer: read more data from the child stream
-		out_buff_start = out_buff.get();
-		out_buff_end = out_buff.get();
-		D_ASSERT(in_buff_start <= in_buff_end);
-		D_ASSERT(in_buff_end <= in_buff_start + in_buf_size);
+		stream_data.out_buff_start = stream_data.out_buff.get();
+		stream_data.out_buff_end = stream_data.out_buff.get();
+		D_ASSERT(stream_data.in_buff_start <= stream_data.in_buff_end);
+		D_ASSERT(stream_data.in_buff_end <= stream_data.in_buff_start + stream_data.in_buf_size);
 
 		// read more input if none available
-		if (in_buff_start == in_buff_end) {
+		if (stream_data.in_buff_start == stream_data.in_buff_end) {
 			// empty input buffer: refill from the start
-			in_buff_start = in_buff.get();
-			in_buff_end = in_buff_start;
-			auto sz = child_handle->Read(in_buff.get(), in_buf_size);
+			stream_data.in_buff_start = stream_data.in_buff.get();
+			stream_data.in_buff_end = stream_data.in_buff_start;
+			auto sz = child_handle->Read(stream_data.in_buff.get(), stream_data.in_buf_size);
 			if (sz <= 0) {
 				stream_wrapper.reset();
 				break;
 			}
-			in_buff_end = in_buff_start + sz;
+			stream_data.in_buff_end = stream_data.in_buff_start + sz;
 		}
 
-		auto finished = stream_wrapper->Read(in_buff_start, in_buff_end, out_buff_start, out_buff_end, out_buf_size);
+		auto finished = stream_wrapper->Read(stream_data);
 		if (finished) {
 			stream_wrapper.reset();
 		}
@@ -81,8 +81,14 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 
 void CompressedFile::Close() {
 	stream_wrapper.reset();
-	in_buff.reset();
-	out_buff.reset();
+	stream_data.in_buff.reset();
+	stream_data.out_buff.reset();
+	stream_data.out_buff_start = nullptr;
+	stream_data.out_buff_end = nullptr;
+	stream_data.in_buff_start = nullptr;
+	stream_data.in_buff_end = nullptr;
+	stream_data.in_buf_size = 0;
+	stream_data.out_buf_size = 0;
 }
 
 int64_t CompressedFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
