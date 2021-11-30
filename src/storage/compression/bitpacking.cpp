@@ -204,8 +204,7 @@ public:
 public:
 	template <class OP>
 	void Flush() {
-		bitpacking_width_t width =
-		    BitpackingPrimitives::MinimumBitWidth<T>(compression_buffer, compression_buffer_idx);
+		bitpacking_width_t width = BitpackingPrimitives::MinimumBitWidth<T>(compression_buffer, compression_buffer_idx);
 		OP::Operation(compression_buffer, compression_buffer_validity, width, compression_buffer_idx, data_ptr);
 		total_size += (BITPACKING_WIDTH_GROUP_SIZE * width) / 8 + sizeof(bitpacking_width_t);
 		compression_buffer_idx = 0;
@@ -342,8 +341,7 @@ public:
 
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = vdata.sel->get_index(i);
-			state.template Update<BitpackingCompressState<T>::BitpackingWriter>(data, vdata.validity,
-			                                                                                   idx);
+			state.template Update<BitpackingCompressState<T>::BitpackingWriter>(data, vdata.validity, idx);
 		}
 	}
 
@@ -438,6 +436,8 @@ public:
 
 public:
 	void LoadCurrentBitWidth() {
+		D_ASSERT(bitpacking_width_ptr > handle->node->buffer &&
+		         bitpacking_width_ptr < handle->node->buffer + Storage::BLOCK_SIZE);
 		current_width = Load<bitpacking_width_t>(bitpacking_width_ptr);
 		LoadDecompressFunction();
 	}
