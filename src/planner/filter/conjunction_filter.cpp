@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-ConjunctionOrFilter::ConjunctionOrFilter() : TableFilter(TableFilterType::CONJUNCTION_OR) {
+ConjunctionOrFilter::ConjunctionOrFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_OR) {
 }
 
 FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats) {
@@ -30,8 +30,8 @@ string ConjunctionOrFilter::ToString(const string &column_name) {
 	return result;
 }
 
-bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
+bool ConjunctionOrFilter::Equals(const ConjunctionFilter &other_p) const {
+	if (!ConjunctionFilter::Equals(other_p)) {
 		return false;
 	}
 	auto &other = (ConjunctionOrFilter &)other_p;
@@ -46,7 +46,7 @@ bool ConjunctionOrFilter::Equals(const TableFilter &other_p) const {
 	return true;
 }
 
-ConjunctionAndFilter::ConjunctionAndFilter() : TableFilter(TableFilterType::CONJUNCTION_AND) {
+ConjunctionAndFilter::ConjunctionAndFilter() : ConjunctionFilter(TableFilterType::CONJUNCTION_AND) {
 }
 
 FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stats) {
@@ -75,8 +75,8 @@ string ConjunctionAndFilter::ToString(const string &column_name) {
 	return result;
 }
 
-bool ConjunctionAndFilter::Equals(const TableFilter &other_p) const {
-	if (!TableFilter::Equals(other_p)) {
+bool ConjunctionAndFilter::Equals(const ConjunctionFilter &other_p) const {
+	if (!ConjunctionFilter::Equals(other_p)) {
 		return false;
 	}
 	auto &other = (ConjunctionAndFilter &)other_p;
