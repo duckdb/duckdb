@@ -293,7 +293,7 @@ CatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema, co
 		}
 	}
 
-	throw CatalogException("CatalogElement " + schema + " " + name + "does not exist!");
+	throw CatalogException("CatalogElement " + schema + "." + name + "does not exist!");
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, CatalogType type, const string &schema_name, const string &name,

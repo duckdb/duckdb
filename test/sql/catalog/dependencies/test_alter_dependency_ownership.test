@@ -367,7 +367,8 @@ DROP SEQUENCE sequence1;
 statement ok
 DROP TABLE tablename;
 
-##TEST: Wrong argument for alter sequence
+
+##TEST: Wrong arguments for alter sequence
 statement ok
 CREATE SEQUENCE sequence1;
 
@@ -376,6 +377,12 @@ ALTER SEQUENCE sequence1 OWNED BY;
 
 statement error
 ALTER SEQUENCE sequence1 OWNED BY 2;
+
+statement error
+ALTER SEQUENCE sequence1 OWNED BY misssing_schema.missing_table;
+
+statement error
+ALTER SEQUENCE sequence1 OWNED BY misssing_schema.missing_table.extra_argument;
 
 statement ok
 DROP SEQUENCE sequence1;

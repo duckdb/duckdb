@@ -19,6 +19,10 @@ unique_ptr<AlterInfo> AlterInfo::Deserialize(Deserializer &source) {
 	}
 }
 
+//===--------------------------------------------------------------------===//
+// ChangeOwnershipInfo
+//===--------------------------------------------------------------------===//
+
 CatalogType ChangeOwnershipInfo::GetCatalogType() {
 	return entry_catalog_type;
 }
@@ -26,6 +30,10 @@ CatalogType ChangeOwnershipInfo::GetCatalogType() {
 unique_ptr<AlterInfo> ChangeOwnershipInfo::Copy() const {
 	return make_unique_base<AlterInfo, ChangeOwnershipInfo>(entry_catalog_type, schema, name, owner_schema, owner_name);
 }
+
+//===--------------------------------------------------------------------===//
+// AlterTableInfo
+//===--------------------------------------------------------------------===//
 
 void AlterTableInfo::Serialize(Serializer &serializer) {
 	AlterInfo::Serialize(serializer);
