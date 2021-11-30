@@ -1,4 +1,4 @@
-# name: test/sql/function/time/test_extract.test
+# name: test/sql/function/time/epoch.test
 # description: Extract function
 # group: [time]
 
