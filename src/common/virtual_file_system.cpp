@@ -7,6 +7,7 @@
 namespace duckdb {
 
 VirtualFileSystem::VirtualFileSystem() : default_fs(FileSystem::CreateLocal()) {
+	RegisterSubSystem(FileCompressionType::GZIP, make_unique<GZipFileSystem>());
 }
 
 unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock,
@@ -16,6 +17,8 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 		auto lower_path = StringUtil::Lower(path);
 		if (StringUtil::EndsWith(lower_path, ".gz")) {
 			compression = FileCompressionType::GZIP;
+		} else if (StringUtil::EndsWith(lower_path, ".zst")) {
+			compression = FileCompressionType::ZSTD;
 		} else {
 			compression = FileCompressionType::UNCOMPRESSED;
 		}
@@ -25,13 +28,11 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 	if (file_handle->GetType() == FileType::FILE_TYPE_FIFO) {
 		file_handle = PipeFileSystem::OpenPipe(move(file_handle));
 	} else if (compression != FileCompressionType::UNCOMPRESSED) {
-		switch (compression) {
-		case FileCompressionType::GZIP:
-			file_handle = GZipFileSystem::OpenCompressedFile(move(file_handle));
-			break;
-		default:
-			throw NotImplementedException("Unimplemented compression type");
+		auto entry = compressed_fs.find(compression);
+		if (entry == compressed_fs.end()) {
+			throw NotImplementedException("Attempting to open a compressed file, but the compression type is not supported");
 		}
+		file_handle = entry->second->OpenCompressedFile(move(file_handle));
 	}
 	return file_handle;
 }

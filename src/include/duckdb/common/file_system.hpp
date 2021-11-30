@@ -174,6 +174,7 @@ public:
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
+	virtual void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs);
 
 	//! Whether or not a sub-system can handle a specific file path
 	virtual bool CanHandleFile(const string &fpath);
@@ -189,6 +190,8 @@ public:
 	//! Whether or not the FS handles plain files on disk. This is relevant for certain optimizations, as random reads
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	virtual bool OnDiskFile(FileHandle &handle);
+
+	virtual unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle);
 
 	//! Create a LocalFileSystem.
 	static unique_ptr<FileSystem> CreateLocal();

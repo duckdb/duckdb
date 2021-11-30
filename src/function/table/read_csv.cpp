@@ -256,7 +256,7 @@ void ReadCSVTableFunction::RegisterFunction(BuiltinFunctions &set) {
 unique_ptr<TableFunctionRef> ReadCSVReplacement(const string &table_name, void *data) {
 	auto lower_name = StringUtil::Lower(table_name);
 	if (!StringUtil::EndsWith(lower_name, ".csv") && !StringUtil::EndsWith(lower_name, ".tsv") &&
-	    !StringUtil::EndsWith(lower_name, ".csv.gz")) {
+	    !StringUtil::EndsWith(lower_name, ".csv.gz") && !StringUtil::EndsWith(lower_name, ".csv.zst")) {
 		return nullptr;
 	}
 	auto table_function = make_unique<TableFunctionRef>();

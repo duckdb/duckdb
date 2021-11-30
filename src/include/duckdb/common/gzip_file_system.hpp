@@ -14,7 +14,7 @@ namespace duckdb {
 
 class GZipFileSystem : public FileSystem {
 public:
-	static unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle);
+	unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle) override;
 
 	int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 

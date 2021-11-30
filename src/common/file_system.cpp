@@ -222,6 +222,10 @@ void FileSystem::RegisterSubSystem(unique_ptr<FileSystem> sub_fs) {
 	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
 }
 
+void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> sub_fs) {
+	throw NotImplementedException("%s: Can't register a sub system on a non-virtual file system", GetName());
+}
+
 bool FileSystem::CanHandleFile(const string &fpath) {
 	throw NotImplementedException("%s: CanHandleFile is not implemented!", GetName());
 }
@@ -240,6 +244,10 @@ idx_t FileSystem::SeekPosition(FileHandle &handle) {
 
 bool FileSystem::CanSeek() {
 	throw NotImplementedException("%s: CanSeek is not implemented!", GetName());
+}
+
+unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle) {
+	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 
 bool FileSystem::OnDiskFile(FileHandle &handle) {
