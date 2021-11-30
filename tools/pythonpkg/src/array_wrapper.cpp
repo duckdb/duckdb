@@ -5,6 +5,7 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/interval.hpp"
+#include "duckdb_python/pyresult.hpp"
 
 namespace duckdb {
 
@@ -293,6 +294,42 @@ static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t tar
 	return false;
 }
 
+py::list ConvertListValue(Vector &input, idx_t chunk_offset) {
+	auto val = input.GetValue(chunk_offset);
+	py::list list;
+	for (auto &list_elem : val.list_value) {
+		list.append(DuckDBPyResult::GetValueToPython(list_elem, ListType::GetChildType(input.GetType())));
+	}
+	return std::move(list);
+}
+static bool ConvertList(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &input,
+                        VectorData &idata, idx_t count) {
+	auto out_ptr = (py::list *)target_data;
+	if (!idata.validity.AllValid()) {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			if (!idata.validity.RowIsValidUnsafe(src_idx)) {
+				target_mask[offset] = true;
+				out_ptr[offset] = py::list(0);
+			} else {
+				out_ptr[offset] = ConvertListValue(input, src_idx);
+
+				target_mask[offset] = false;
+			}
+		}
+		return true;
+	} else {
+		for (idx_t i = 0; i < count; i++) {
+			idx_t src_idx = idata.sel->get_index(i);
+			idx_t offset = target_offset + i;
+			out_ptr[offset] = ConvertListValue(input, src_idx);
+			target_mask[offset] = false;
+		}
+		return false;
+	}
+}
+
 template <class NUMPY_T>
 static bool ConvertColumnCategorical(idx_t target_offset, data_ptr_t target_data, VectorData &idata, idx_t count,
                                      PhysicalType physical_type) {
@@ -412,6 +449,9 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::ENUM:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::STRUCT:
 		type_width = sizeof(PyObject *);
 		break;
 	default:
@@ -470,6 +510,9 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
+	case LogicalTypeId::LIST:
+	case LogicalTypeId::MAP:
+	case LogicalTypeId::STRUCT:
 		dtype = "object";
 		break;
 	case LogicalTypeId::ENUM: {
@@ -612,6 +655,10 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(current_offset, dataptr,
 		                                                                                    maskptr, idata, count);
 		break;
+	case LogicalTypeId::LIST: {
+		may_have_null = ConvertList(current_offset, dataptr, maskptr, input, idata, count);
+		break;
+	}
 	default:
 		throw std::runtime_error("unsupported type " + input.GetType().ToString());
 	}
