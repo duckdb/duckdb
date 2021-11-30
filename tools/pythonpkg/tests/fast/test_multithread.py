@@ -351,14 +351,20 @@ class TestDuckMultithread(object):
         duck_threads.multithread_test()
 
     def test_fetcharrow(self, duckdb_cursor):
+        if not can_run:
+            return
         duck_threads = DuckDBThreaded(10,fetch_arrow_query)
         duck_threads.multithread_test()
 
     def test_fetch_arrow_chunk(self, duckdb_cursor):
+        if not can_run:
+            return
         duck_threads = DuckDBThreaded(10,fetch_arrow_chunk_query)
         duck_threads.multithread_test()
 
     def test_fetch_record_batch(self, duckdb_cursor):
+        if not can_run:
+            return
         duck_threads = DuckDBThreaded(10,fetch_record_batch_query)
         duck_threads.multithread_test()
 
@@ -394,10 +400,6 @@ class TestDuckMultithread(object):
 
     def test_values(self, duckdb_cursor):
         duck_threads = DuckDBThreaded(10,values)
-        duck_threads.multithread_test()
-
-    def test_table_function(self, duckdb_cursor):
-        duck_threads = DuckDBThreaded(10,arrow_register_unregister)
         duck_threads.multithread_test()
     
     def test_from_query(self, duckdb_cursor):
