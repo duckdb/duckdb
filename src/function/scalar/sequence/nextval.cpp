@@ -44,7 +44,7 @@ struct NextSequenceValueOperator {
 		lock_guard<mutex> seqlock(seq->lock);
 		int64_t result;
 		result = seq->counter;
-		bool overflow = TryAddOperator::Operation(seq->counter, seq->increment, seq->counter);
+		bool overflow = !TryAddOperator::Operation(seq->counter, seq->increment, seq->counter);
 		if (seq->cycle) {
 			if (overflow) {
 				throw SequenceException("overflow in sequence");
