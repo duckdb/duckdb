@@ -179,7 +179,7 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		sink.hash_table->Finalize();
 	}
 	sink.finalized = true;
-	gstate.has_primary_key = sink.hash_table->has_primary_key;
+	context.config.has_primary_key = sink.hash_table->has_primary_key;
 	if (sink.hash_table->Count() == 0 && EmptyResultIfRHSIsEmpty()) {
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
