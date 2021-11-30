@@ -79,11 +79,7 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 			throw BinderException("Copy is only supported for UTF-8 encoded files, ENCODING 'UTF-8'");
 		}
 	} else if (loption == "compression") {
-		options.compression = ParseString(set);
-		if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "zstd" ||
-		      options.compression == "none" || options.compression.empty())) {
-			throw BinderException("read_csv currently only supports 'gzip' and 'zstd' compression.");
-		}
+		options.compression = FileCompressionTypeFromString(ParseString(set));
 	} else if (loption == "skip") {
 		options.skip_rows = ParseInteger(set);
 	} else {
@@ -399,9 +395,10 @@ struct LocalReadCSVData : public LocalFunctionData {
 };
 
 struct GlobalWriteCSVData : public GlobalFunctionData {
-	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileOpener *opener) : fs(fs) {
+	GlobalWriteCSVData(FileSystem &fs, const string &file_path, FileOpener *opener, FileCompressionType compression)
+	    : fs(fs) {
 		handle = fs.OpenFile(file_path, FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE_NEW,
-		                     FileLockType::WRITE_LOCK, FileCompressionType::AUTO_DETECT, opener);
+		                     FileLockType::WRITE_LOCK, compression, opener);
 	}
 
 	void WriteData(const_data_ptr_t data, idx_t size) {
@@ -432,7 +429,7 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	auto &csv_data = (WriteCSVData &)bind_data;
 	auto &options = csv_data.options;
 	auto global_data = make_unique<GlobalWriteCSVData>(FileSystem::GetFileSystem(context), csv_data.files[0],
-	                                                   FileSystem::GetFileOpener(context));
+	                                                   FileSystem::GetFileOpener(context), options.compression);
 
 	if (options.header) {
 		BufferedSerializer serializer;
