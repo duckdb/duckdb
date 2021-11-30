@@ -107,7 +107,7 @@ if 'BUILD_HTTPFS' in os.environ:
     extensions += ['httpfs']
 
 # if 'BUILD_COVERAGE' in os.environ:
-#toolchain_args.extend('-coverage')
+toolchain_args.append('-coverage')
 
 extra_files = []
 header_files = []
