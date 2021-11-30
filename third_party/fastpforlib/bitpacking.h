@@ -11,6 +11,24 @@
 namespace duckdb_fastpforlib {
 namespace internal {
 
+void __fastunpack0(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack1(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack2(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack3(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack4(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack5(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack6(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack7(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack8(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack9(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack10(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack11(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack12(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack13(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack14(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack15(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastunpack16(const uint16_t *__restrict in, uint16_t *__restrict out);
+
 void __fastunpack0(const uint32_t *__restrict in, uint32_t *__restrict out);
 void __fastunpack1(const uint32_t *__restrict in, uint32_t *__restrict out);
 void __fastunpack2(const uint32_t *__restrict in, uint32_t *__restrict out);
@@ -110,6 +128,24 @@ void __fastunpack61(const uint32_t *__restrict in, uint64_t *__restrict out);
 void __fastunpack62(const uint32_t *__restrict in, uint64_t *__restrict out);
 void __fastunpack63(const uint32_t *__restrict in, uint64_t *__restrict out);
 void __fastunpack64(const uint32_t *__restrict in, uint64_t *__restrict out);
+
+void __fastpack0(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack1(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack2(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack3(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack4(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack5(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack6(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack7(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack8(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack9(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack10(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack11(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack12(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack13(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack14(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack15(const uint16_t *__restrict in, uint16_t *__restrict out);
+void __fastpack16(const uint16_t *__restrict in, uint16_t *__restrict out);
 
 void __fastpack0(const uint32_t *__restrict in, uint32_t *__restrict out);
 void __fastpack1(const uint32_t *__restrict in, uint32_t *__restrict out);

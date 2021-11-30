@@ -11,6 +11,138 @@
 
 namespace duckdb_fastpforlib {
 
+namespace internal {
+// Note that this only packs 16 values
+inline void fastunpack_half(const uint16_t *__restrict in, uint16_t *__restrict out, const uint32_t bit) {
+	// Could have used function pointers instead of switch.
+	// Switch calls do offer the compiler more opportunities for optimization in
+	// theory. In this case, it makes no difference with a good compiler.
+	switch (bit) {
+	case 0:
+		internal::__fastunpack0(in, out);
+		break;
+	case 1:
+		internal::__fastunpack1(in, out);
+		break;
+	case 2:
+		internal::__fastunpack2(in, out);
+		break;
+	case 3:
+		internal::__fastunpack3(in, out);
+		break;
+	case 4:
+		internal::__fastunpack4(in, out);
+		break;
+	case 5:
+		internal::__fastunpack5(in, out);
+		break;
+	case 6:
+		internal::__fastunpack6(in, out);
+		break;
+	case 7:
+		internal::__fastunpack7(in, out);
+		break;
+	case 8:
+		internal::__fastunpack8(in, out);
+		break;
+	case 9:
+		internal::__fastunpack9(in, out);
+		break;
+	case 10:
+		internal::__fastunpack10(in, out);
+		break;
+	case 11:
+		internal::__fastunpack11(in, out);
+		break;
+	case 12:
+		internal::__fastunpack12(in, out);
+		break;
+	case 13:
+		internal::__fastunpack13(in, out);
+		break;
+	case 14:
+		internal::__fastunpack14(in, out);
+		break;
+	case 15:
+		internal::__fastunpack15(in, out);
+		break;
+	case 16:
+		internal::__fastunpack16(in, out);
+		break;
+	default:
+		throw std::logic_error("Invalid bit width for bitpacking");
+	}
+}
+
+// Note that this only packs 16 values
+inline void fastpack_half(const uint16_t *__restrict in, uint16_t *__restrict out, const uint32_t bit) {
+	// Could have used function pointers instead of switch.
+	// Switch calls do offer the compiler more opportunities for optimization in
+	// theory. In this case, it makes no difference with a good compiler.
+	switch (bit) {
+	case 0:
+		internal::__fastpack0(in, out);
+		break;
+	case 1:
+		internal::__fastpack1(in, out);
+		break;
+	case 2:
+		internal::__fastpack2(in, out);
+		break;
+	case 3:
+		internal::__fastpack3(in, out);
+		break;
+	case 4:
+		internal::__fastpack4(in, out);
+		break;
+	case 5:
+		internal::__fastpack5(in, out);
+		break;
+	case 6:
+		internal::__fastpack6(in, out);
+		break;
+	case 7:
+		internal::__fastpack7(in, out);
+		break;
+	case 8:
+		internal::__fastpack8(in, out);
+		break;
+	case 9:
+		internal::__fastpack9(in, out);
+		break;
+	case 10:
+		internal::__fastpack10(in, out);
+		break;
+	case 11:
+		internal::__fastpack11(in, out);
+		break;
+	case 12:
+		internal::__fastpack12(in, out);
+		break;
+	case 13:
+		internal::__fastpack13(in, out);
+		break;
+	case 14:
+		internal::__fastpack14(in, out);
+		break;
+	case 15:
+		internal::__fastpack15(in, out);
+		break;
+	case 16:
+		internal::__fastpack16(in, out);
+		break;
+	default:
+		throw std::logic_error("Invalid bit width for bitpacking");
+	}
+}
+}
+
+inline void fastunpack(const uint16_t *__restrict in,
+                            uint16_t *__restrict out, const uint32_t bit) {
+	internal::fastunpack_half(in, out, bit);
+	internal::fastunpack_half(in + bit, out+16, bit);
+}
+
 inline void fastunpack(const uint32_t *__restrict in,
                        uint32_t *__restrict out, const uint32_t bit) {
   // Could have used function pointers instead of switch.
@@ -325,6 +457,13 @@ inline void fastunpack(const uint32_t *__restrict in,
   default:
 	throw std::logic_error("Invalid bit width for bitpacking");
   }
+}
+
+// Compress all 32 values
+inline void fastpack(const uint16_t *__restrict in,
+                     uint16_t *__restrict out, const uint32_t bit) {
+	internal::fastpack_half(in, out, bit);
+	internal::fastpack_half(in+16, out + bit, bit);
 }
 
 inline void fastpack(const uint32_t *__restrict in,

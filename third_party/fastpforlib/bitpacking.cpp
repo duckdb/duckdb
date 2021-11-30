@@ -7,6 +7,22 @@ namespace duckdb_fastpforlib {
 namespace internal {
 
 template <uint8_t DELTA, uint8_t SHR>
+typename std::enable_if<(DELTA + SHR) < 16>::type unpack_single_out(const uint16_t *__restrict in,
+                                                                    uint16_t *__restrict out) {
+	*out = ((*in) >> SHR) % (1 << DELTA);
+}
+
+template <uint8_t DELTA, uint8_t SHR>
+typename std::enable_if<(DELTA + SHR) >= 16>::type unpack_single_out(const uint16_t *__restrict &in,
+                                                                     uint16_t *__restrict out) {
+	*out = (*in) >> SHR;
+	++in;
+
+	static const uint8_t NEXT_SHR = SHR + DELTA - 16;
+	*out |= ((*in) % (1U << NEXT_SHR)) << (16 - SHR);
+}
+
+template <uint8_t DELTA, uint8_t SHR>
 typename std::enable_if<(DELTA + SHR) < 32>::type unpack_single_out(const uint32_t *__restrict in,
                                                                     uint32_t *__restrict out) {
 	*out = ((*in) >> SHR) % (1 << DELTA);
@@ -73,6 +89,27 @@ typename std::enable_if<DELTA + SHL >= 32>::type pack_single_in(const uint32_t i
 	}
 }
 
+// DELTA AND SHL COULD BE SMALLER?
+template <uint16_t DELTA, uint16_t SHL, uint16_t MASK>
+    typename std::enable_if < DELTA + SHL<16>::type pack_single_in(const uint16_t in, uint16_t *__restrict out) {
+	if (SHL == 0) {
+		*out = in & MASK;
+	} else {
+		*out |= (in & MASK) << SHL;
+	}
+}
+
+// DELTA AND SHL COULD BE SMALLER?
+template <uint16_t DELTA, uint16_t SHL, uint16_t MASK>
+typename std::enable_if<DELTA + SHL >= 16>::type pack_single_in(const uint16_t in, uint16_t *__restrict &out) {
+	*out |= in << SHL;
+	++out;
+
+	if (DELTA + SHL > 16) {
+		*out = (in & MASK) >> (16 - SHL);
+	}
+}
+
 template <uint16_t DELTA, uint16_t SHL, uint64_t MASK>
     typename std::enable_if < DELTA + SHL<32>::type pack_single_in64(const uint64_t in, uint32_t *__restrict out) {
 	if (SHL == 0) {
@@ -110,6 +147,36 @@ typename std::enable_if<DELTA + SHL >= 64>::type pack_single_in64(const uint64_t
 		*out = (in & MASK) >> (64 - SHL);
 	}
 }
+
+
+template <uint16_t DELTA, uint16_t OINDEX = 0>
+struct Unroller16 {
+	static void Unpack(const uint16_t *__restrict &in, uint16_t *__restrict out) {
+		unpack_single_out<DELTA, (DELTA * OINDEX) % 16>(in, out + OINDEX);
+
+		Unroller16<DELTA, OINDEX + 1>::Unpack(in, out);
+	}
+
+	static void Pack(const uint16_t *__restrict in, uint16_t *__restrict out) {
+		pack_single_in<DELTA, (DELTA * OINDEX) % 16, (1U << DELTA) - 1>(in[OINDEX], out);
+
+		Unroller16<DELTA, OINDEX + 1>::Pack(in, out);
+	}
+
+};
+
+template <uint16_t DELTA>
+struct Unroller16<DELTA, 15> {
+	enum { SHIFT = (DELTA * 15) % 16 };
+
+	static void Unpack(const uint16_t *__restrict in, uint16_t *__restrict out) {
+		out[15] = (*in) >> SHIFT;
+	}
+
+	static void Pack(const uint16_t *__restrict in, uint16_t *__restrict out) {
+		*out |= (in[15] << SHIFT);
+	}
+};
 
 template <uint16_t DELTA, uint16_t OINDEX = 0>
 struct Unroller {
@@ -168,6 +235,11 @@ struct Unroller<DELTA, 31> {
 };
 
 // Special cases
+void __fastunpack0(const uint16_t *__restrict, uint16_t *__restrict out) {
+	for (uint16_t i = 0; i < 32; ++i)
+		*(out++) = 0;
+}
+
 void __fastunpack0(const uint32_t *__restrict, uint32_t *__restrict out) {
 	for (uint32_t i = 0; i < 32; ++i)
 		*(out++) = 0;
@@ -178,9 +250,85 @@ void __fastunpack0(const uint32_t *__restrict, uint64_t *__restrict out) {
 		*(out++) = 0;
 }
 
+void __fastpack0(const uint16_t *__restrict, uint16_t *__restrict) {
+}
 void __fastpack0(const uint32_t *__restrict, uint32_t *__restrict) {
 }
 void __fastpack0(const uint64_t *__restrict, uint32_t *__restrict) {
+}
+
+// fastunpack for 16 bits
+void __fastunpack1(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<1>::Unpack(in, out);
+}
+
+void __fastunpack2(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<2>::Unpack(in, out);
+}
+
+void __fastunpack3(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<3>::Unpack(in, out);
+}
+
+void __fastunpack4(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	for (uint16_t outer = 0; outer < 4; ++outer) {
+		for (uint16_t inwordpointer = 0; inwordpointer < 16; inwordpointer += 4)
+			*(out++) = ((*in) >> inwordpointer) % (1U << 4);
+		++in;
+	}
+}
+
+void __fastunpack5(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<5>::Unpack(in, out);
+}
+
+void __fastunpack6(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<6>::Unpack(in, out);
+}
+
+void __fastunpack7(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<7>::Unpack(in, out);
+}
+
+void __fastunpack8(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	for (uint16_t outer = 0; outer < 8; ++outer) {
+		for (uint16_t inwordpointer = 0; inwordpointer < 16; inwordpointer += 8)
+			*(out++) = ((*in) >> inwordpointer) % (1U << 8);
+		++in;
+	}
+}
+
+void __fastunpack9(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<9>::Unpack(in, out);
+}
+
+void __fastunpack10(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<10>::Unpack(in, out);
+}
+
+void __fastunpack11(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<11>::Unpack(in, out);
+}
+
+void __fastunpack12(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<12>::Unpack(in, out);
+}
+
+void __fastunpack13(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<13>::Unpack(in, out);
+}
+
+void __fastunpack14(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<14>::Unpack(in, out);
+}
+
+void __fastunpack15(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<15>::Unpack(in, out);
+}
+
+void __fastunpack16(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	for (int k = 0; k < 16; ++k)
+		out[k] = in[k];
 }
 
 // fastunpack for 32 bits
@@ -598,6 +746,74 @@ void __fastunpack64(const uint32_t *__restrict in, uint64_t *__restrict out) {
 		out[k] |= static_cast<uint64_t>(in[k * 2 + 1]) << 32;
 	}
 }
+
+// fastpack for 16 bits
+
+void __fastpack1(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<1>::Pack(in, out);
+}
+
+void __fastpack2(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<2>::Pack(in, out);
+}
+
+void __fastpack3(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<3>::Pack(in, out);
+}
+
+void __fastpack4(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<4>::Pack(in, out);
+}
+
+void __fastpack5(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<5>::Pack(in, out);
+}
+
+void __fastpack6(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<6>::Pack(in, out);
+}
+
+void __fastpack7(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<7>::Pack(in, out);
+}
+
+void __fastpack8(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<8>::Pack(in, out);
+}
+
+void __fastpack9(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<9>::Pack(in, out);
+}
+
+void __fastpack10(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<10>::Pack(in, out);
+}
+
+void __fastpack11(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<11>::Pack(in, out);
+}
+
+void __fastpack12(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<12>::Pack(in, out);
+}
+
+void __fastpack13(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<13>::Pack(in, out);
+}
+
+void __fastpack14(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<14>::Pack(in, out);
+}
+
+void __fastpack15(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	Unroller16<15>::Pack(in, out);
+}
+
+void __fastpack16(const uint16_t *__restrict in, uint16_t *__restrict out) {
+	for (int k = 0; k < 16; ++k)
+		out[k] = in[k];
+}
+
 
 // fastpack for 32 bits
 

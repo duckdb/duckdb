@@ -53,7 +53,7 @@ private:
 				// handle special case of the minimal value, as it cannot be negated like all other values.
 				return sizeof(T) * 8;
 			} else {
-				max_value = MaxValue(-min_value, max_value);
+				max_value = MaxValue((T)-min_value, max_value);
 			}
 		}
 
@@ -114,7 +114,9 @@ private:
 
 	template <class T>
 	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
-		if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
+		if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
+			duckdb_fastpforlib::fastunpack((const uint16_t *)src, (uint16_t *)dst, (uint32_t)width);
+		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
 			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint32_t *)dst, (uint32_t)width);
 		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
 			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint64_t *)dst, (uint32_t)width);
@@ -165,11 +167,14 @@ private:
 	template <class T>
 	static void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
 		// TODO: types smaller than 32bits
-		if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
+		if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
+			duckdb_fastpforlib::fastpack((const uint16_t *)values, (uint16_t *)dst, (uint32_t)width);
+		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
 			duckdb_fastpforlib::fastpack((const uint32_t *)values, (uint32_t *)dst, (uint32_t)width);
-		}
-		if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
+		} else if (std::is_same<T, uint64_t>::value || std::is_same<T, int64_t>::value) {
 			duckdb_fastpforlib::fastpack((const uint64_t *)values, (uint32_t *)dst, (uint32_t)width);
+		} else {
+			throw InternalException("Unsupported type found in bitpacking.");
 		}
 	}
 };
@@ -598,7 +603,7 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 	case PhysicalType::INT8:
 		return GetBitpackingFunction<int8_t, int32_t>(type);
 	case PhysicalType::INT16:
-		return GetBitpackingFunction<int16_t, int32_t>(type);
+		return GetBitpackingFunction<int16_t>(type);
 	case PhysicalType::INT32:
 		return GetBitpackingFunction<int32_t>(type);
 	case PhysicalType::INT64:
@@ -607,7 +612,7 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 	case PhysicalType::UINT8:
 		return GetBitpackingFunction<uint8_t, uint32_t>(type);
 	case PhysicalType::UINT16:
-		return GetBitpackingFunction<uint16_t, uint32_t>(type);
+		return GetBitpackingFunction<uint16_t>(type);
 	case PhysicalType::UINT32:
 		return GetBitpackingFunction<uint32_t>(type);
 	case PhysicalType::UINT64:
