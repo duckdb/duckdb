@@ -1200,7 +1200,7 @@ AggregateFunction GetDiscreteQuantileAggregate(const LogicalType &type) {
 	auto fun = GetDiscreteQuantileAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::DOUBLE);
+	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	return fun;
 }
 
@@ -1217,7 +1217,7 @@ AggregateFunction GetContinuousQuantileAggregate(const LogicalType &type) {
 	auto fun = GetContinuousQuantileAggregateFunction(type);
 	fun.bind = BindQuantile;
 	// temporarily push an argument so we can bind the actual quantile
-	fun.arguments.push_back(LogicalType::DOUBLE);
+	fun.arguments.emplace_back(LogicalType::DOUBLE);
 	return fun;
 }
 

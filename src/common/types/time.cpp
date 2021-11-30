@@ -164,7 +164,7 @@ string Time::ToUTCOffset(int hour_offset, int minute_offset) {
 	char buffer[1 + 2 + 1 + 2];
 	idx_t length = 0;
 	buffer[length++] = (time.micros < 0 ? '-' : '+');
-	time.micros = abs(time.micros);
+	time.micros = std::abs(time.micros);
 
 	int32_t time_units[4];
 	Time::Convert(time, time_units[0], time_units[1], time_units[2], time_units[3]);

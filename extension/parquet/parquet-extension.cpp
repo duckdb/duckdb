@@ -524,4 +524,8 @@ void ParquetExtension::Load(DuckDB &db) {
 	                          LogicalType::BOOLEAN);
 }
 
+std::string ParquetExtension::Name() {
+	return "parquet";
+}
+
 } // namespace duckdb

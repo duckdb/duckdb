@@ -492,7 +492,7 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 }
 
 void RawArrayWrapper::Resize(idx_t new_capacity) {
-	vector<ssize_t> new_shape {ssize_t(new_capacity)};
+	vector<py::ssize_t> new_shape {py::ssize_t(new_capacity)};
 	array.resize(new_shape, false);
 	data = (data_ptr_t)array.mutable_data();
 }

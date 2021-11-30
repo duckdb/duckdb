@@ -134,4 +134,18 @@ void VisualizerExtension::Load(DuckDB &db) {
 	con.Commit();
 }
 
+std::string VisualizerExtension::Name() {
+	return "visualizer";
+}
 } // namespace duckdb
+
+extern "C" {
+DUCKDB_EXTENSION_API void visualizer_init(duckdb::DatabaseInstance &db) {
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::VisualizerExtension>();
+}
+
+DUCKDB_EXTENSION_API const char *visualizer_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
+}

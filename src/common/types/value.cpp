@@ -421,7 +421,7 @@ Value Value::DATE(date_t value) {
 	return result;
 }
 
-Value Value::DATE_TZ(date_t value) {
+Value Value::DATETZ(date_t value) {
 	Value result(LogicalType::DATE_TZ);
 	result.value_.date = value;
 	result.is_null = false;
@@ -439,7 +439,7 @@ Value Value::TIME(dtime_t value) {
 	return result;
 }
 
-Value Value::TIME_TZ(dtime_t value) {
+Value Value::TIMETZ(dtime_t value) {
 	Value result(LogicalType::TIME_TZ);
 	result.value_.time = value;
 	result.is_null = false;
@@ -457,7 +457,7 @@ Value Value::TIMESTAMP(timestamp_t value) {
 	return result;
 }
 
-Value Value::TIMESTAMP_TZ(timestamp_t value) {
+Value Value::TIMESTAMPTZ(timestamp_t value) {
 	Value result(LogicalType::TIMESTAMP_TZ);
 	result.value_.timestamp = value;
 	result.is_null = false;

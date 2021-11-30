@@ -118,7 +118,7 @@ unique_ptr<AnalyzeState> ColumnDataCheckpointer::DetectBestCompressionMethod(idx
 	// now that we have passed over all the data, we need to figure out the best method
 	// we do this using the final_analyze method
 	unique_ptr<AnalyzeState> state;
-	compression_idx = INVALID_INDEX;
+	compression_idx = DConstants::INVALID_INDEX;
 	idx_t best_score = NumericLimits<idx_t>::Maximum();
 	for (idx_t i = 0; i < compression_functions.size(); i++) {
 		if (!compression_functions[i]) {

@@ -467,11 +467,11 @@ Value Vector::GetValue(idx_t index) const {
 	case LogicalTypeId::DATE:
 		return Value::DATE(((date_t *)data)[index]);
 	case LogicalTypeId::DATE_TZ:
-		return Value::DATE_TZ(((date_t *)data)[index]);
+		return Value::DATETZ(((date_t *)data)[index]);
 	case LogicalTypeId::TIME:
 		return Value::TIME(((dtime_t *)data)[index]);
 	case LogicalTypeId::TIME_TZ:
-		return Value::TIME_TZ(((dtime_t *)data)[index]);
+		return Value::TIMETZ(((dtime_t *)data)[index]);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(((int64_t *)data)[index]);
 	case LogicalTypeId::UTINYINT:
@@ -491,7 +491,7 @@ Value Vector::GetValue(idx_t index) const {
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TimestampSec(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
-		return Value::TIMESTAMP_TZ(((timestamp_t *)data)[index]);
+		return Value::TIMESTAMPTZ(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
 	case LogicalTypeId::UUID:

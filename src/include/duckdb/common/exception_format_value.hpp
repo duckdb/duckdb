@@ -20,15 +20,9 @@ enum class ExceptionFormatValueType : uint8_t {
 };
 
 struct ExceptionFormatValue {
-	ExceptionFormatValue(double dbl_val) // NOLINT
-	    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_DOUBLE), dbl_val(dbl_val) {
-	}
-	ExceptionFormatValue(int64_t int_val) // NOLINT
-	    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_INTEGER), int_val(int_val) {
-	}
-	ExceptionFormatValue(string str_val) // NOLINT
-	    : type(ExceptionFormatValueType::FORMAT_VALUE_TYPE_STRING), str_val(move(str_val)) {
-	}
+	DUCKDB_API ExceptionFormatValue(double dbl_val);  // NOLINT
+	DUCKDB_API ExceptionFormatValue(int64_t int_val); // NOLINT
+	DUCKDB_API ExceptionFormatValue(string str_val);  // NOLINT
 
 	ExceptionFormatValueType type;
 
@@ -45,18 +39,18 @@ public:
 };
 
 template <>
-ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value);
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(PhysicalType value);
 template <>
-ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value);
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(LogicalType value);
 template <>
-ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value);
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(float value);
 template <>
-ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value);
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(double value);
 template <>
-ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value);
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(string value);
 template <>
-ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(const char *value);
 template <>
-ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value);
+DUCKDB_API ExceptionFormatValue ExceptionFormatValue::CreateFormatValue(char *value);
 
 } // namespace duckdb

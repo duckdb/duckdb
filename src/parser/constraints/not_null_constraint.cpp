@@ -4,6 +4,12 @@
 
 namespace duckdb {
 
+NotNullConstraint::NotNullConstraint(column_t index) : Constraint(ConstraintType::NOT_NULL), index(index) {
+}
+
+NotNullConstraint::~NotNullConstraint() {
+}
+
 string NotNullConstraint::ToString() const {
 	return "NOT NULL";
 }

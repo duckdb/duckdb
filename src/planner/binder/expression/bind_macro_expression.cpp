@@ -55,13 +55,13 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, MacroCatalo
 	vector<string> names;
 	// positional parameters
 	for (idx_t i = 0; i < macro_def.parameters.size(); i++) {
-		types.push_back(LogicalType::SQLNULL);
+		types.emplace_back(LogicalType::SQLNULL);
 		auto &param = (ColumnRefExpression &)*macro_def.parameters[i];
 		names.push_back(param.GetColumnName());
 	}
 	// default parameters
 	for (auto it = macro_def.default_parameters.begin(); it != macro_def.default_parameters.end(); it++) {
-		types.push_back(LogicalType::SQLNULL);
+		types.emplace_back(LogicalType::SQLNULL);
 		names.push_back(it->first);
 		// now push the defaults into the positionals
 		positionals.push_back(move(defaults[it->first]));

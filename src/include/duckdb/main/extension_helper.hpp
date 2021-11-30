@@ -21,6 +21,12 @@ public:
 	static void LoadAllExtensions(DuckDB &db);
 
 	static ExtensionLoadResult LoadExtension(DuckDB &db, const std::string &extension);
+
+	static void InstallExtension(DatabaseInstance &db, const string &extension, bool force_install);
+	static void LoadExternalExtension(DatabaseInstance &db, const string &extension);
+
+private:
+	static const vector<string> PATH_COMPONENTS;
 };
 
 } // namespace duckdb

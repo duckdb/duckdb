@@ -216,7 +216,6 @@ static void ICUTimeZoneFunction(ClientContext &context, const FunctionData *bind
 }
 
 void ICUExtension::Load(DuckDB &db) {
-	// load the collations
 	Connection con(db);
 	con.BeginTransaction();
 
@@ -263,4 +262,20 @@ void ICUExtension::Load(DuckDB &db) {
 	con.Commit();
 }
 
+std::string ICUExtension::Name() {
+	return "icu";
+}
+
 } // namespace duckdb
+
+extern "C" {
+
+DUCKDB_EXTENSION_API void icu_init(duckdb::DatabaseInstance &db) {
+	duckdb::DuckDB db_wrapper(db);
+	db_wrapper.LoadExtension<duckdb::ICUExtension>();
+}
+
+DUCKDB_EXTENSION_API const char *icu_version() {
+	return duckdb::DuckDB::LibraryVersion();
+}
+}
