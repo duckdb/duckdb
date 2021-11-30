@@ -65,6 +65,7 @@ jobs:
       SETUPTOOLS_SCM_NO_LOCAL: 'yes'
       TWINE_USERNAME: 'hfmuehleisen'
       PYTEST_TIMEOUT: '600'
+      DUCKDB_BUILD_UNITY: 1
 
     steps:
     - uses: actions/checkout@v2
@@ -120,6 +121,7 @@ jobs:
         CIBW_ARCHS_MACOS: 'x86_64 universal2 arm64'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: 'hfmuehleisen'
+        DUCKDB_BUILD_UNITY: 1
 
       steps:
       - uses: actions/checkout@v2
@@ -162,6 +164,7 @@ jobs:
         CIBW_TEST_COMMAND: 'python -m pytest {project}/tests/fast'
         SETUPTOOLS_SCM_NO_LOCAL: 'yes'
         TWINE_USERNAME: 'hfmuehleisen'
+        DUCKDB_BUILD_UNITY: 1
 
       steps:
       - uses: actions/checkout@v2
