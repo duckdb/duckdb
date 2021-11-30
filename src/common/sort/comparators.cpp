@@ -1,5 +1,6 @@
 #include "duckdb/common/sort/comparators.hpp"
 
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/sort/sort.hpp"
 
 namespace duckdb {
@@ -32,7 +33,7 @@ int Comparators::CompareTuple(const SortedBlock &left, const SortedBlock &right,
 	data_ptr_t l_ptr_offset = l_ptr;
 	data_ptr_t r_ptr_offset = r_ptr;
 	for (idx_t col_idx = 0; col_idx < sort_layout.column_count; col_idx++) {
-		comp_res = memcmp(l_ptr_offset, r_ptr_offset, sort_layout.column_sizes[col_idx]);
+		comp_res = FastMemcmp(l_ptr_offset, r_ptr_offset, sort_layout.column_sizes[col_idx]);
 		if (comp_res == 0 && !sort_layout.constant_size[col_idx]) {
 			comp_res =
 			    BreakBlobTie(col_idx, *left.blob_sorting_data, *right.blob_sorting_data, sort_layout, external_sort);
