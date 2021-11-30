@@ -1,0 +1,27 @@
+# name: test/sql/catalog/sequence/sequence_overflow.test
+# description: Issue #2678: overflow in sequences
+# group: [sequence]
+
+statement ok
+create sequence seq1 INCREMENT BY 1 MINVALUE 9223372036854775800 MAXVALUE 9223372036854775807 CYCLE;
+
+statement error
+SELECT nextval('seq1') from generate_series(0,20);
+
+statement ok
+create sequence seq2 INCREMENT BY -1 MINVALUE -9223372036854775808 MAXVALUE -9223372036854775800 CYCLE;
+
+statement error
+SELECT nextval('seq2') from generate_series(0,20);
+
+statement ok
+create sequence seq3 INCREMENT BY 1 MINVALUE 9223372036854775800 MAXVALUE 9223372036854775807;
+
+statement error
+SELECT nextval('seq3') from generate_series(0,20);
+
+statement ok
+create sequence seq4 INCREMENT BY -1 MINVALUE -9223372036854775808 MAXVALUE -9223372036854775800;
+
+statement error
+SELECT nextval('seq4') from generate_series(0,20);
