@@ -23,9 +23,9 @@ void PhysicalSet::GetData(ExecutionContext &context, DataChunk &chunk, GlobalSou
 			for (auto &entry : config.extension_parameters) {
 				potential_names.push_back(entry.first);
 			}
-			auto closest_settings = StringUtil::TopNLevenshtein(potential_names, name);
+
 			throw CatalogException("unrecognized configuration parameter \"%s\"\n%s", name,
-			                       StringUtil::CandidatesMessage(closest_settings, "Did you mean"));
+			                       StringUtil::CandidatesErrorMessage(potential_names, name, "Did you mean"));
 		}
 		//! it is!
 		auto &extension_option = entry->second;
