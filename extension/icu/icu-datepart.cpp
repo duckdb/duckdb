@@ -15,7 +15,16 @@ struct ICUDatePart {
 	typedef int32_t (*part_adapter_t)(icu::Calendar *calendar, const uint64_t micros);
 
 	static DatePartSpecifier PartCodeFromFunction(const string &name) {
-		return GetDatePartSpecifier(name.substr(4));
+		//	Missing part aliases
+		if (name == "dayofmonth") {
+			return DatePartSpecifier::DAY;
+		} else if (name == "weekday") {
+			return DatePartSpecifier::DOW;
+		} else if (name == "weekofyear") {
+			return DatePartSpecifier::WEEK;
+		} else {
+			return GetDatePartSpecifier(name);
+		}
 	}
 
 	static int32_t ExtractField(icu::Calendar *calendar, UCalendarDateFields field) {
@@ -233,18 +242,18 @@ struct ICUDatePart {
 	}
 
 	static ScalarFunction GetUnaryTimestampFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::TIMESTAMP}, LogicalType::INTEGER, UnaryFunction, false, Bind);
+		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::INTEGER, UnaryFunction, false, Bind);
 	}
 
 	static void AddUnaryTimestampFunction(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
 		ScalarFunction func = GetUnaryTimestampFunction(name);
 		CreateScalarFunctionInfo func_info(move(func));
-		catalog.CreateFunction(context, &func_info);
+		catalog.AddFunction(context, &func_info);
 	}
 
 	static ScalarFunction GetBinaryTimestampFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::INTEGER,
+		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::INTEGER,
 		                      BinaryFunction, false, Bind);
 	}
 
@@ -252,31 +261,41 @@ struct ICUDatePart {
 		auto &catalog = Catalog::GetCatalog(context);
 		ScalarFunction func = GetBinaryTimestampFunction(name);
 		CreateScalarFunctionInfo func_info(move(func));
-		catalog.CreateFunction(context, &func_info);
+		catalog.AddFunction(context, &func_info);
 	}
 };
 
 void RegisterICUDatePartFunctions(ClientContext &context) {
-	ICUDatePart::AddUnaryTimestampFunction("icu_year", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_month", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_day", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_decade", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_century", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_millennium", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_microsecond", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_millisecond", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_second", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_minute", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_hour", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_dayofweek", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_isodow", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_week", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_dayofyear", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_quarter", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_yearweek", context);
-	ICUDatePart::AddUnaryTimestampFunction("icu_epoch", context);
+	// register the individual operators
+	ICUDatePart::AddUnaryTimestampFunction("year", context);
+	ICUDatePart::AddUnaryTimestampFunction("month", context);
+	ICUDatePart::AddUnaryTimestampFunction("day", context);
+	ICUDatePart::AddUnaryTimestampFunction("decade", context);
+	ICUDatePart::AddUnaryTimestampFunction("century", context);
+	ICUDatePart::AddUnaryTimestampFunction("millennium", context);
+	ICUDatePart::AddUnaryTimestampFunction("microsecond", context);
+	ICUDatePart::AddUnaryTimestampFunction("millisecond", context);
+	ICUDatePart::AddUnaryTimestampFunction("second", context);
+	ICUDatePart::AddUnaryTimestampFunction("minute", context);
+	ICUDatePart::AddUnaryTimestampFunction("hour", context);
+	ICUDatePart::AddUnaryTimestampFunction("dayofweek", context);
+	ICUDatePart::AddUnaryTimestampFunction("isodow", context);
+	ICUDatePart::AddUnaryTimestampFunction("week", context); //  Note that WeekOperator is ISO-8601, not US
+	ICUDatePart::AddUnaryTimestampFunction("dayofyear", context);
+	ICUDatePart::AddUnaryTimestampFunction("quarter", context);
+	ICUDatePart::AddUnaryTimestampFunction("epoch", context);
 
-	ICUDatePart::AddBinaryTimestampFunction("icu_date_part", context);
+	//  register combinations
+	ICUDatePart::AddUnaryTimestampFunction("yearweek", context);
+
+	//  register various aliases
+	ICUDatePart::AddUnaryTimestampFunction("dayofmonth", context);
+	ICUDatePart::AddUnaryTimestampFunction("weekday", context);
+	ICUDatePart::AddUnaryTimestampFunction("weekofyear", context);
+
+	// finally the actual date_part function
+	ICUDatePart::AddBinaryTimestampFunction("date_part", context);
+	ICUDatePart::AddBinaryTimestampFunction("datepart", context);
 }
 
 } // namespace duckdb
