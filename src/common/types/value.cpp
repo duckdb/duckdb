@@ -104,6 +104,12 @@ Value Value::MinimumValue(const LogicalType &type) {
 		return Value::TimestampMs(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::TIMESTAMP_NS:
 		return Value::TimestampNs(timestamp_t(NumericLimits<int64_t>::Minimum()));
+	case LogicalTypeId::DATE_TZ:
+		return Value::DATETZ(date_t(NumericLimits<int32_t>::Minimum()));
+	case LogicalTypeId::TIME_TZ:
+		return Value::TIMETZ(dtime_t(0));
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_t(NumericLimits<int64_t>::Minimum()));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Minimum());
 	case LogicalTypeId::DOUBLE:
@@ -189,6 +195,12 @@ Value Value::MaximumValue(const LogicalType &type) {
 		return Value::TimestampNs(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TimestampSec(timestamp_t(NumericLimits<int64_t>::Maximum()));
+	case LogicalTypeId::DATE_TZ:
+		return Value::DATETZ(date_t(NumericLimits<int32_t>::Maximum()));
+	case LogicalTypeId::TIME_TZ:
+		return Value::TIMETZ(dtime_t(Interval::SECS_PER_DAY * Interval::MICROS_PER_SEC));
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_t(NumericLimits<int64_t>::Maximum()));
 	case LogicalTypeId::FLOAT:
 		return Value::FLOAT(NumericLimits<float>::Maximum());
 	case LogicalTypeId::DOUBLE:

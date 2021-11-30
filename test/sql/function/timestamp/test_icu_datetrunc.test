@@ -8,7 +8,7 @@ statement ok
 SET TimeZone = 'America/Los_Angeles';
 
 statement ok
-CREATE TABLE timestamps(d TIMESTAMP, s VARCHAR);
+CREATE TABLE timestamps(d TIMESTAMPTZ, s VARCHAR);
 
 statement ok
 INSERT INTO timestamps VALUES
@@ -28,21 +28,21 @@ INSERT INTO timestamps VALUES
 
 # test date_trunc with different combinations of constant/non-constant columns on timestamps
 query T
-SELECT icu_date_trunc(NULL::VARCHAR, NULL::TIMESTAMP) FROM timestamps LIMIT 3;
+SELECT date_trunc(NULL::VARCHAR, NULL::TIMESTAMPTZ) FROM timestamps LIMIT 3;
 ----
 NULL
 NULL
 NULL
 
 query T
-SELECT icu_date_trunc(s, NULL::TIMESTAMP) FROM timestamps LIMIT 3;
+SELECT date_trunc(s, NULL::TIMESTAMPTZ) FROM timestamps LIMIT 3;
 ----
 NULL
 NULL
 NULL
 
 query T
-SELECT icu_date_trunc(NULL, d) FROM timestamps LIMIT 3;
+SELECT date_trunc(NULL, d) FROM timestamps LIMIT 3;
 ----
 NULL
 NULL
@@ -50,9 +50,9 @@ NULL
 
 # Timestamps should return timestamp type
 query T
-SELECT icu_date_trunc('minute', TIMESTAMP '1992-02-02 04:03:02') FROM timestamps LIMIT 1;
+SELECT date_trunc('minute', TIMESTAMPTZ '1992-02-02 04:03:02') FROM timestamps LIMIT 1;
 ----
-1992-02-02 04:03:00
+1992-02-02 04:03:00+00
 
 # Test all truncate operators on timestamps
 # Note that the output is displayed as instants (UTC)
@@ -62,100 +62,118 @@ SELECT icu_date_trunc('minute', TIMESTAMP '1992-02-02 04:03:02') FROM timestamps
 # which results in a 5 day change for the millennium,
 # The use of double for UDate by ICU also reduces the representation accuracy far from the epoch.
 query II
-SELECT icu_date_trunc(s, d), s FROM timestamps;
+SELECT date_trunc(s, d), s FROM timestamps;
 ----
-1000-01-06 07:52:58	millennium
-1900-01-01 08:00:00	century
-1990-01-01 08:00:00	decade
-1992-01-01 08:00:00	year
-1992-01-01 08:00:00	quarter
-1992-02-01 08:00:00	month
-1992-01-27 08:00:00	week
-1992-02-02 08:00:00	day
-1992-02-02 10:00:00	hour
-1992-02-02 10:02:00	minute
-1992-02-02 10:02:03	second
-1992-02-02 10:02:03.123	milliseconds
-1992-02-02 10:02:03.123456	microseconds
+1000-01-06 07:52:58+00	millennium
+1900-01-01 08:00:00+00	century
+1990-01-01 08:00:00+00	decade
+1992-01-01 08:00:00+00	year
+1992-01-01 08:00:00+00	quarter
+1992-02-01 08:00:00+00	month
+1992-01-27 08:00:00+00	week
+1992-02-02 08:00:00+00	day
+1992-02-02 10:00:00+00	hour
+1992-02-02 10:02:00+00	minute
+1992-02-02 10:02:03+00	second
+1992-02-02 10:02:03.123+00	milliseconds
+1992-02-02 10:02:03.123456+00	microseconds
+
+# Test alias
+query II
+SELECT datetrunc(s, d), s FROM timestamps;
+----
+1000-01-06 07:52:58+00	millennium
+1900-01-01 08:00:00+00	century
+1990-01-01 08:00:00+00	decade
+1992-01-01 08:00:00+00	year
+1992-01-01 08:00:00+00	quarter
+1992-02-01 08:00:00+00	month
+1992-01-27 08:00:00+00	week
+1992-02-02 08:00:00+00	day
+1992-02-02 10:00:00+00	hour
+1992-02-02 10:02:00+00	minute
+1992-02-02 10:02:03+00	second
+1992-02-02 10:02:03.123+00	milliseconds
+1992-02-02 10:02:03.123456+00	microseconds
 
 # Test week operator special cases
 query T
-SELECT icu_date_trunc('week', TIMESTAMP '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('week', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2018-12-31 08:00:00
+2018-12-31 08:00:00+00
 
 query T
-SELECT icu_date_trunc('yearweek', TIMESTAMP '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('yearweek', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2018-12-31 08:00:00
+2018-12-31 08:00:00+00
 
 query T
-SELECT icu_date_trunc('week', TIMESTAMP '2020-01-01 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('week', TIMESTAMPTZ '2020-01-01 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-12-30 08:00:00
+2019-12-30 08:00:00+00
 
 query T
-SELECT icu_date_trunc('yearweek', TIMESTAMP '2020-01-01 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('yearweek', TIMESTAMPTZ '2020-01-01 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-12-30 08:00:00
+2019-12-30 08:00:00+00
 
 # Test quarter operator more thoroughly
 query T
-SELECT icu_date_trunc('quarter', TIMESTAMP '2020-12-02 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('quarter', TIMESTAMPTZ '2020-12-02 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2020-10-01 07:00:00
+2020-10-01 07:00:00+00
 
 query T
-SELECT icu_date_trunc('quarter', TIMESTAMP '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('quarter', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-01-01 08:00:00
+2019-01-01 08:00:00+00
 
 query T
-SELECT icu_date_trunc('millennium', TIMESTAMP '1996-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('millennium', TIMESTAMPTZ '1996-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-1000-01-06 07:52:58
+1000-01-06 07:52:58+00
 
 query T
-SELECT icu_date_trunc('century', TIMESTAMP '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('century', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2000-01-01 08:00:00
+2000-01-01 08:00:00+00
 
 query T
-SELECT icu_date_trunc('decade', TIMESTAMP '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('decade', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2010-01-01 08:00:00
+2010-01-01 08:00:00+00
 
 query T
-SELECT icu_date_trunc('year', TIMESTAMP '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('year', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-01-01 08:00:00
+2019-01-01 08:00:00+00
 
 query T
-SELECT icu_date_trunc('day', TIMESTAMP '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('day', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-01-06 08:00:00
+2019-01-06 08:00:00+00
 
 query T
-SELECT icu_date_trunc('hour', TIMESTAMP '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('hour', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
 ----
-2019-01-06 12:00:00
+2019-01-06 12:00:00+00
 
 query T
-SELECT icu_date_trunc('milliseconds', TIMESTAMP '2019-01-06 04:03:02.123456-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('milliseconds', TIMESTAMPTZ '2019-01-06 04:03:02.123456-08') FROM timestamps LIMIT 1;
 ----
-2019-01-06 12:03:02.123
+2019-01-06 12:03:02.123+00
 
 query T
-SELECT icu_date_trunc('microseconds', TIMESTAMP '2019-01-06 04:03:02.123456-08');
+SELECT date_trunc('microseconds', TIMESTAMPTZ '2019-01-06 04:03:02.123456-08');
 ----
-2019-01-06 12:03:02.123456
+2019-01-06 12:03:02.123456+00
 
 # Synonym for second
 query T
-SELECT icu_date_trunc('epoch', TIMESTAMP '2019-01-06 04:03:02.5-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('epoch', TIMESTAMPTZ '2019-01-06 04:03:02.5-08') FROM timestamps LIMIT 1;
 ----
-2019-01-06 12:03:02
+2019-01-06 12:03:02+00
 
 # Unknown specifier should fail
 statement error
-SELECT icu_date_trunc('duck', TIMESTAMP '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;
+SELECT date_trunc('duck', TIMESTAMPTZ '2019-01-06 04:03:02-08') FROM timestamps LIMIT 1;

@@ -1,6 +1,7 @@
 #include "include/icu-datetrunc.hpp"
 #include "include/icu-collate.hpp"
 
+#include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -190,20 +191,38 @@ struct ICUDateTrunc {
 	}
 
 	static ScalarFunction GetBinaryTimestampFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP}, LogicalType::TIMESTAMP,
+		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP_TZ,
 		                      BinaryFunction, false, Bind);
 	}
 
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
+		auto add_func = GetBinaryTimestampFunction(name);
+
+		ScalarFunctionSet set(add_func.name);
+
+		// Extract any previous functions into the set
 		auto &catalog = Catalog::GetCatalog(context);
-		ScalarFunction func = GetBinaryTimestampFunction(name);
-		CreateScalarFunctionInfo func_info(move(func));
+		auto funcs = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, add_func.name, true);
+		if (funcs) {
+			auto &entry = *(ScalarFunctionCatalogEntry *)funcs;
+			for (const auto &f : entry.functions) {
+				set.AddFunction(f);
+			}
+		}
+
+		// Add the new one
+		set.AddFunction(add_func);
+
+		CreateScalarFunctionInfo func_info(move(set));
+		func_info.on_conflict = OnCreateConflict::REPLACE_ON_CONFLICT;
+
 		catalog.CreateFunction(context, &func_info);
 	}
 };
 
 void RegisterICUDateTruncFunctions(ClientContext &context) {
-	ICUDateTrunc::AddBinaryTimestampFunction("icu_date_trunc", context);
+	ICUDateTrunc::AddBinaryTimestampFunction("date_trunc", context);
+	ICUDateTrunc::AddBinaryTimestampFunction("datetrunc", context);
 }
 
 } // namespace duckdb
