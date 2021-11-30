@@ -183,6 +183,8 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade) {
 	auto &transaction = Transaction::GetTransaction(context);
 
+    // To correctly delete the object and its dependencies, it temporarily is set to deleted.
+    // After the try/catch block it is returned to its previous state.
 	auto old_deleted = entries[entry_index].get()->deleted;
 	entries[entry_index].get()->deleted = true;
 	try {
@@ -192,6 +194,7 @@ void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, Ca
 		entries[entry_index].get()->deleted = old_deleted;
 		throw ex;
 	}
+    entries[entry_index].get()->deleted = old_deleted;
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
