@@ -2,6 +2,7 @@
 #include "include/icu-collate.hpp"
 
 #include "duckdb/common/enums/date_part_specifier.hpp"
+#include "duckdb/common/types/date.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -12,7 +13,7 @@ namespace duckdb {
 
 struct ICUDatePart {
 	using CalendarPtr = unique_ptr<icu::Calendar>;
-	typedef int32_t (*part_adapter_t)(icu::Calendar *calendar, const uint64_t micros);
+	typedef int64_t (*part_adapter_t)(icu::Calendar *calendar, const uint64_t micros);
 
 	static DatePartSpecifier PartCodeFromFunction(const string &name) {
 		//	Missing part aliases
@@ -37,85 +38,85 @@ struct ICUDatePart {
 	}
 
 	// Date part adapters
-	static int32_t ExtractYear(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractYear(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_YEAR);
 	}
 
-	static int32_t ExtractDecade(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractDecade(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractYear(calendar, micros) / 10;
 	}
 
-	static int32_t ExtractCentury(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractCentury(icu::Calendar *calendar, const uint64_t micros) {
 		return 1 + ExtractYear(calendar, micros) / 100;
 	}
 
-	static int32_t ExtractMillenium(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractMillenium(icu::Calendar *calendar, const uint64_t micros) {
 		return 1 + ExtractYear(calendar, micros) / 1000;
 	}
 
-	static int32_t ExtractMonth(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractMonth(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_MONTH) + 1;
 	}
 
-	static int32_t ExtractQuarter(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractQuarter(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_MONTH) / Interval::MONTHS_PER_QUARTER + 1;
 	}
 
-	static int32_t ExtractDay(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractDay(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_DATE);
 	}
 
-	static int32_t ExtractDayOfWeek(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractDayOfWeek(icu::Calendar *calendar, const uint64_t micros) {
 		calendar->setFirstDayOfWeek(UCAL_SUNDAY);
 		return ExtractField(calendar, UCAL_DAY_OF_WEEK) - UCAL_SUNDAY;
 	}
 
-	static int32_t ExtractISODayOfWeek(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractISODayOfWeek(icu::Calendar *calendar, const uint64_t micros) {
 		calendar->setFirstDayOfWeek(UCAL_MONDAY);
 		return ExtractField(calendar, UCAL_DAY_OF_WEEK);
 	}
 
-	static int32_t ExtractWeek(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractWeek(icu::Calendar *calendar, const uint64_t micros) {
 		calendar->setFirstDayOfWeek(UCAL_SUNDAY);
 		calendar->setMinimalDaysInFirstWeek(4);
 		return ExtractField(calendar, UCAL_WEEK_OF_YEAR);
 	}
 
-	static int32_t ExtractYearWeek(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractYearWeek(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractYear(calendar, micros) * 100 + ExtractWeek(calendar, micros);
 	}
 
-	static int32_t ExtractDayOfYear(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractDayOfYear(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_DAY_OF_YEAR);
 	}
 
-	static int32_t ExtractHour(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractHour(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_HOUR_OF_DAY);
 	}
 
-	static int32_t ExtractMinute(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractMinute(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_MINUTE);
 	}
 
-	static int32_t ExtractSecond(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractSecond(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractField(calendar, UCAL_SECOND);
 	}
 
-	static int32_t ExtractMillisecond(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractMillisecond(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractSecond(calendar, micros) * Interval::MSECS_PER_SEC + ExtractField(calendar, UCAL_MILLISECOND);
 	}
 
-	static int32_t ExtractMicrosecond(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractMicrosecond(icu::Calendar *calendar, const uint64_t micros) {
 		return ExtractMillisecond(calendar, micros) * Interval::MICROS_PER_MSEC + micros;
 	}
 
-	static int32_t ExtractEpoch(icu::Calendar *calendar, const uint64_t micros) {
+	static int64_t ExtractEpoch(icu::Calendar *calendar, const uint64_t micros) {
 		UErrorCode status = U_ZERO_ERROR;
 		auto millis = calendar->getTime(status);
-		millis -= ExtractField(calendar, UCAL_ZONE_OFFSET);
-		millis -= ExtractField(calendar, UCAL_DST_OFFSET);
+		millis += ExtractField(calendar, UCAL_ZONE_OFFSET);
+		millis += ExtractField(calendar, UCAL_DST_OFFSET);
 		//	Truncate
-		return int32_t(millis / Interval::MSECS_PER_SEC);
+		return millis / Interval::MSECS_PER_SEC;
 	}
 
 	static part_adapter_t PartCodeAdapterFactory(DatePartSpecifier part) {
@@ -161,27 +162,49 @@ struct ICUDatePart {
 		}
 	}
 
+	static date_t MakeLastDay(icu::Calendar *calendar, const uint64_t micros) {
+		// Set the calendar to midnight on the last day of the month
+		calendar->set(UCAL_MILLISECOND, 0);
+		calendar->set(UCAL_SECOND, 0);
+		calendar->set(UCAL_MINUTE, 0);
+		calendar->set(UCAL_HOUR_OF_DAY, 0);
+
+		UErrorCode status = U_ZERO_ERROR;
+		const auto dd = calendar->getActualMaximum(UCAL_DATE, status);
+		if (U_FAILURE(status)) {
+			throw Exception("Unable to extract ICU last day.");
+		}
+
+		calendar->set(UCAL_DATE, dd);
+
+		// DATETZ only makes sense as a number of days from the local epoch.
+		return Date::EpochToDate(ExtractEpoch(calendar, 0));
+	}
+
+	template <typename ADAPTER_TYPE>
 	struct BindData : public FunctionData {
-		BindData(CalendarPtr calendar_p, part_adapter_t adapter_p) : calendar(move(calendar_p)), adapter(adapter_p) {
+		BindData(CalendarPtr calendar_p, ADAPTER_TYPE adapter_p) : calendar(move(calendar_p)), adapter(adapter_p) {
 		}
 
 		CalendarPtr calendar;
-		part_adapter_t adapter;
+		ADAPTER_TYPE adapter;
 
 		unique_ptr<FunctionData> Copy() override {
 			return make_unique<BindData>(CalendarPtr(calendar->clone()), adapter);
 		}
 	};
 
+	template <typename RESULT_TYPE, typename ADAPTER_TYPE>
 	static void UnaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+		using BIND_TYPE = BindData<ADAPTER_TYPE>;
 		D_ASSERT(args.ColumnCount() == 1);
 		auto &date_arg = args.data[0];
 
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = (BIND_TYPE &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 
-		UnaryExecutor::Execute<timestamp_t, int32_t>(date_arg, result, args.size(), [&](timestamp_t input) {
+		UnaryExecutor::Execute<timestamp_t, RESULT_TYPE>(date_arg, result, args.size(), [&](timestamp_t input) {
 			UErrorCode status = U_ZERO_ERROR;
 
 			const int64_t millis = input.value / Interval::MICROS_PER_MSEC;
@@ -196,15 +219,16 @@ struct ICUDatePart {
 	}
 
 	static void BinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+		using BIND_TYPE = BindData<part_adapter_t>;
 		D_ASSERT(args.ColumnCount() == 2);
 		auto &part_arg = args.data[0];
 		auto &date_arg = args.data[1];
 
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		auto &info = (BindData &)*func_expr.bind_info;
+		auto &info = (BIND_TYPE &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 
-		BinaryExecutor::Execute<string_t, timestamp_t, int32_t>(
+		BinaryExecutor::Execute<string_t, timestamp_t, int64_t>(
 		    part_arg, date_arg, result, args.size(), [&](string_t specifier, timestamp_t input) {
 			    UErrorCode status = U_ZERO_ERROR;
 
@@ -220,8 +244,9 @@ struct ICUDatePart {
 		    });
 	}
 
+	template <typename ADAPTER_TYPE>
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
+	                                     vector<unique_ptr<Expression>> &arguments, ADAPTER_TYPE adapter) {
 		Value tz_value;
 		string tz_id;
 		if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
@@ -235,31 +260,54 @@ struct ICUDatePart {
 			throw Exception("Unable to create ICU date part calendar.");
 		}
 
+		return make_unique<BindData<ADAPTER_TYPE>>(move(calendar), adapter);
+	}
+
+	static unique_ptr<FunctionData> BindDatePart(ClientContext &context, ScalarFunction &bound_function,
+	                                             vector<unique_ptr<Expression>> &arguments) {
 		auto adapter =
 		    (arguments.size() == 1) ? PartCodeAdapterFactory(PartCodeFromFunction(bound_function.name)) : nullptr;
-
-		return make_unique<BindData>(move(calendar), adapter);
+		return Bind(context, bound_function, arguments, adapter);
 	}
 
-	static ScalarFunction GetUnaryTimestampFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::INTEGER, UnaryFunction, false, Bind);
+	template <typename RESULT_TYPE, typename ADAPTER_TYPE>
+	static ScalarFunction GetUnaryPartCodeFunction(const string &name) {
+		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT,
+		                      UnaryFunction<RESULT_TYPE, ADAPTER_TYPE>, false, BindDatePart);
 	}
 
-	static void AddUnaryTimestampFunction(const string &name, ClientContext &context) {
+	static void AddUnaryPartCodeFunction(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
-		ScalarFunction func = GetUnaryTimestampFunction(name);
+		ScalarFunction func = GetUnaryPartCodeFunction<int64_t, part_adapter_t>(name);
 		CreateScalarFunctionInfo func_info(move(func));
 		catalog.AddFunction(context, &func_info);
 	}
 
-	static ScalarFunction GetBinaryTimestampFunction(const string &name) {
+	static ScalarFunction GetBinaryPartCodeFunction(const string &name) {
 		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::INTEGER,
-		                      BinaryFunction, false, Bind);
+		                      BinaryFunction, false, BindDatePart);
 	}
 
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
-		ScalarFunction func = GetBinaryTimestampFunction(name);
+		ScalarFunction func = GetBinaryPartCodeFunction(name);
+		CreateScalarFunctionInfo func_info(move(func));
+		catalog.AddFunction(context, &func_info);
+	}
+
+	static unique_ptr<FunctionData> BindLastDate(ClientContext &context, ScalarFunction &bound_function,
+	                                             vector<unique_ptr<Expression>> &arguments) {
+		return Bind(context, bound_function, arguments, MakeLastDay);
+	}
+
+	static ScalarFunction GetLastDayFunction(const string &name) {
+		typedef date_t (*date_adapter_t)(icu::Calendar * calendar, const uint64_t micros);
+		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::DATE_TZ,
+		                      UnaryFunction<date_t, date_adapter_t>, false, BindLastDate);
+	}
+	static void AddLastDayFunction(const string &name, ClientContext &context) {
+		auto &catalog = Catalog::GetCatalog(context);
+		ScalarFunction func = GetLastDayFunction(name);
 		CreateScalarFunctionInfo func_info(move(func));
 		catalog.AddFunction(context, &func_info);
 	}
@@ -267,31 +315,34 @@ struct ICUDatePart {
 
 void RegisterICUDatePartFunctions(ClientContext &context) {
 	// register the individual operators
-	ICUDatePart::AddUnaryTimestampFunction("year", context);
-	ICUDatePart::AddUnaryTimestampFunction("month", context);
-	ICUDatePart::AddUnaryTimestampFunction("day", context);
-	ICUDatePart::AddUnaryTimestampFunction("decade", context);
-	ICUDatePart::AddUnaryTimestampFunction("century", context);
-	ICUDatePart::AddUnaryTimestampFunction("millennium", context);
-	ICUDatePart::AddUnaryTimestampFunction("microsecond", context);
-	ICUDatePart::AddUnaryTimestampFunction("millisecond", context);
-	ICUDatePart::AddUnaryTimestampFunction("second", context);
-	ICUDatePart::AddUnaryTimestampFunction("minute", context);
-	ICUDatePart::AddUnaryTimestampFunction("hour", context);
-	ICUDatePart::AddUnaryTimestampFunction("dayofweek", context);
-	ICUDatePart::AddUnaryTimestampFunction("isodow", context);
-	ICUDatePart::AddUnaryTimestampFunction("week", context); //  Note that WeekOperator is ISO-8601, not US
-	ICUDatePart::AddUnaryTimestampFunction("dayofyear", context);
-	ICUDatePart::AddUnaryTimestampFunction("quarter", context);
-	ICUDatePart::AddUnaryTimestampFunction("epoch", context);
+	ICUDatePart::AddUnaryPartCodeFunction("year", context);
+	ICUDatePart::AddUnaryPartCodeFunction("month", context);
+	ICUDatePart::AddUnaryPartCodeFunction("day", context);
+	ICUDatePart::AddUnaryPartCodeFunction("decade", context);
+	ICUDatePart::AddUnaryPartCodeFunction("century", context);
+	ICUDatePart::AddUnaryPartCodeFunction("millennium", context);
+	ICUDatePart::AddUnaryPartCodeFunction("microsecond", context);
+	ICUDatePart::AddUnaryPartCodeFunction("millisecond", context);
+	ICUDatePart::AddUnaryPartCodeFunction("second", context);
+	ICUDatePart::AddUnaryPartCodeFunction("minute", context);
+	ICUDatePart::AddUnaryPartCodeFunction("hour", context);
+	ICUDatePart::AddUnaryPartCodeFunction("dayofweek", context);
+	ICUDatePart::AddUnaryPartCodeFunction("isodow", context);
+	ICUDatePart::AddUnaryPartCodeFunction("week", context); //  Note that WeekOperator is ISO-8601, not US
+	ICUDatePart::AddUnaryPartCodeFunction("dayofyear", context);
+	ICUDatePart::AddUnaryPartCodeFunction("quarter", context);
+	ICUDatePart::AddUnaryPartCodeFunction("epoch", context);
 
 	//  register combinations
-	ICUDatePart::AddUnaryTimestampFunction("yearweek", context);
+	ICUDatePart::AddUnaryPartCodeFunction("yearweek", context);
 
 	//  register various aliases
-	ICUDatePart::AddUnaryTimestampFunction("dayofmonth", context);
-	ICUDatePart::AddUnaryTimestampFunction("weekday", context);
-	ICUDatePart::AddUnaryTimestampFunction("weekofyear", context);
+	ICUDatePart::AddUnaryPartCodeFunction("dayofmonth", context);
+	ICUDatePart::AddUnaryPartCodeFunction("weekday", context);
+	ICUDatePart::AddUnaryPartCodeFunction("weekofyear", context);
+
+	//  register the last_day function
+	ICUDatePart::AddLastDayFunction("last_day", context);
 
 	// finally the actual date_part function
 	ICUDatePart::AddBinaryTimestampFunction("date_part", context);
