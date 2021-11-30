@@ -31,6 +31,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
                                                  DUCKDB_GLOBAL(DefaultOrderSetting),
                                                  DUCKDB_GLOBAL(DefaultNullOrderSetting),
+                                                 DUCKDB_GLOBAL(DisabledOptimizersSetting),
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
