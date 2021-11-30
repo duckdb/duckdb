@@ -11,6 +11,16 @@
 namespace duckdb_fastpforlib {
 namespace internal {
 
+void __fastunpack0(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastunpack1(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastunpack2(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastunpack3(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastunpack4(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastunpack5(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastunpack6(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastunpack7(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastunpack8(const uint8_t *__restrict in, uint8_t *__restrict out);
+
 void __fastunpack0(const uint16_t *__restrict in, uint16_t *__restrict out);
 void __fastunpack1(const uint16_t *__restrict in, uint16_t *__restrict out);
 void __fastunpack2(const uint16_t *__restrict in, uint16_t *__restrict out);
@@ -128,6 +138,16 @@ void __fastunpack61(const uint32_t *__restrict in, uint64_t *__restrict out);
 void __fastunpack62(const uint32_t *__restrict in, uint64_t *__restrict out);
 void __fastunpack63(const uint32_t *__restrict in, uint64_t *__restrict out);
 void __fastunpack64(const uint32_t *__restrict in, uint64_t *__restrict out);
+
+void __fastpack0(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastpack1(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastpack2(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastpack3(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastpack4(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastpack5(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastpack6(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastpack7(const uint8_t *__restrict in, uint8_t *__restrict out);
+void __fastpack8(const uint8_t *__restrict in, uint8_t *__restrict out);
 
 void __fastpack0(const uint16_t *__restrict in, uint16_t *__restrict out);
 void __fastpack1(const uint16_t *__restrict in, uint16_t *__restrict out);

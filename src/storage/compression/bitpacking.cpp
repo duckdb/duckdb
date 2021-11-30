@@ -114,7 +114,9 @@ private:
 
 	template <class T>
 	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
-		if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
+		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
+			duckdb_fastpforlib::fastunpack((const uint8_t *)src, (uint8_t *)dst, (uint32_t)width);
+		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
 			duckdb_fastpforlib::fastunpack((const uint16_t *)src, (uint16_t *)dst, (uint32_t)width);
 		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
 			duckdb_fastpforlib::fastunpack((const uint32_t *)src, (uint32_t *)dst, (uint32_t)width);
@@ -167,7 +169,9 @@ private:
 	template <class T>
 	static void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
 		// TODO: types smaller than 32bits
-		if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
+		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
+			duckdb_fastpforlib::fastpack((const uint8_t *)values, (uint8_t *)dst, (uint32_t)width);
+		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
 			duckdb_fastpforlib::fastpack((const uint16_t *)values, (uint16_t *)dst, (uint32_t)width);
 		} else if (std::is_same<T, uint32_t>::value || std::is_same<T, int32_t>::value) {
 			duckdb_fastpforlib::fastpack((const uint32_t *)values, (uint32_t *)dst, (uint32_t)width);
@@ -601,7 +605,7 @@ CompressionFunction GetBitpackingFunction(PhysicalType data_type) {
 CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT8:
-		return GetBitpackingFunction<int8_t, int32_t>(type);
+		return GetBitpackingFunction<int8_t>(type);
 	case PhysicalType::INT16:
 		return GetBitpackingFunction<int16_t>(type);
 	case PhysicalType::INT32:
@@ -610,7 +614,7 @@ CompressionFunction BitpackingFun::GetFunction(PhysicalType type) {
 		return GetBitpackingFunction<int64_t>(type);
 	case PhysicalType::BOOL:
 	case PhysicalType::UINT8:
-		return GetBitpackingFunction<uint8_t, uint32_t>(type);
+		return GetBitpackingFunction<uint8_t>(type);
 	case PhysicalType::UINT16:
 		return GetBitpackingFunction<uint16_t>(type);
 	case PhysicalType::UINT32:
