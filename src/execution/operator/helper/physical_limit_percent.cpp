@@ -25,7 +25,7 @@ public:
 			this->offset = op.offset_value;
 			is_offset_delimited = true;
 		} else {
-			this->offset = DConstants::INVALID_INDEX;
+			this->offset = 0;
 		}
 	}
 
@@ -113,15 +113,18 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 		}
 	}
 
-	if (state.chunk_idx >= gstate.data.ChunkCount() || current_offset >= limit + offset) {
+	if (current_offset >= limit + offset) {
 		return;
 	}
 
-	DataChunk &input = gstate.data.GetChunk(state.chunk_idx);
-	if (PhysicalLimit::HandleOffset(input, current_offset, offset, limit)) {
-		chunk.Reference(input);
+	while (state.chunk_idx < gstate.data.ChunkCount()) {
+		DataChunk &input = gstate.data.GetChunk(state.chunk_idx);
+		state.chunk_idx++;
+		if (PhysicalLimit::HandleOffset(input, current_offset, offset, limit)) {
+			chunk.Reference(input);
+			break;
+		}
 	}
-	state.chunk_idx++;
 }
 
 } // namespace duckdb
