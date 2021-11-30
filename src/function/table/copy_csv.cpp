@@ -80,9 +80,9 @@ static bool ParseBaseOption(BufferedCSVReaderOptions &options, string &loption, 
 		}
 	} else if (loption == "compression") {
 		options.compression = ParseString(set);
-		if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "none" ||
-		      options.compression.empty())) {
-			throw BinderException("read_csv currently only supports 'gzip' compression.");
+		if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "zstd" ||
+		      options.compression == "none" || options.compression.empty())) {
+			throw BinderException("read_csv currently only supports 'gzip' and 'zstd' compression.");
 		}
 	} else if (loption == "skip") {
 		options.skip_rows = ParseInteger(set);
@@ -406,7 +406,7 @@ struct GlobalWriteCSVData : public GlobalFunctionData {
 
 	void WriteData(const_data_ptr_t data, idx_t size) {
 		lock_guard<mutex> flock(lock);
-		handle->Write((void *) data, size);
+		handle->Write((void *)data, size);
 	}
 
 	FileSystem &fs;

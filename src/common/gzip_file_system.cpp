@@ -102,7 +102,8 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 		MiniZStream::InitializeGZIPHeader(gzip_hdr);
 		file.child_handle->Write(gzip_hdr, GZIP_HEADER_MINSIZE);
 
-		auto ret = mz_deflateInit2((duckdb_miniz::mz_streamp)mz_stream_ptr, duckdb_miniz::MZ_DEFAULT_LEVEL, MZ_DEFLATED, -MZ_DEFAULT_WINDOW_BITS, 1, 0);
+		auto ret = mz_deflateInit2((duckdb_miniz::mz_streamp)mz_stream_ptr, duckdb_miniz::MZ_DEFAULT_LEVEL, MZ_DEFLATED,
+		                           -MZ_DEFAULT_WINDOW_BITS, 1, 0);
 		if (ret != duckdb_miniz::MZ_OK) {
 			throw InternalException("Failed to initialize miniz");
 		}
@@ -148,19 +149,17 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 	return false;
 }
 
-void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t uncompressed_data, int64_t uncompressed_size) {
-	if (uncompressed_size == 0) {
-		return;
-	}
+void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t uncompressed_data,
+                               int64_t uncompressed_size) {
 	// update the src and the total size
-	crc = duckdb_miniz::mz_crc32(crc, (const unsigned char*) uncompressed_data, uncompressed_size);
+	crc = duckdb_miniz::mz_crc32(crc, (const unsigned char *)uncompressed_data, uncompressed_size);
 	total_size += uncompressed_size;
 
 	auto remaining = uncompressed_size;
-	while(remaining > 0) {
+	while (remaining > 0) {
 		idx_t output_remaining = (sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_start;
 
-		mz_stream_ptr->next_in = (const unsigned char*) uncompressed_data;
+		mz_stream_ptr->next_in = (const unsigned char *)uncompressed_data;
 		mz_stream_ptr->avail_in = remaining;
 		mz_stream_ptr->next_out = sd.out_buff_start;
 		mz_stream_ptr->avail_out = output_remaining;
@@ -186,7 +185,7 @@ void MiniZStreamWrapper::FlushStream() {
 	auto &sd = file->stream_data;
 	mz_stream_ptr->next_in = nullptr;
 	mz_stream_ptr->avail_in = 0;
-	while(true) {
+	while (true) {
 		auto output_remaining = (sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_start;
 		mz_stream_ptr->next_out = sd.out_buff_start;
 		mz_stream_ptr->avail_out = output_remaining;
@@ -230,8 +229,8 @@ void MiniZStreamWrapper::Close() {
 
 class GZipFile : public CompressedFile {
 public:
-	GZipFile(unique_ptr<FileHandle> child_handle_p, const string &path, bool write) :
-		CompressedFile(gzip_fs, move(child_handle_p), path) {
+	GZipFile(unique_ptr<FileHandle> child_handle_p, const string &path, bool write)
+	    : CompressedFile(gzip_fs, move(child_handle_p), path) {
 		Initialize(write);
 	}
 

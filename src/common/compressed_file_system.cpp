@@ -6,7 +6,7 @@ StreamWrapper::~StreamWrapper() {
 }
 
 CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path)
-	: FileHandle(fs, path), compressed_fs(fs), child_handle(move(child_handle_p)) {
+    : FileHandle(fs, path), compressed_fs(fs), child_handle(move(child_handle_p)) {
 }
 
 CompressedFile::~CompressedFile() {
@@ -103,7 +103,7 @@ int64_t CompressedFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_
 
 int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
 	auto &compressed_file = (CompressedFile &)handle;
-	return compressed_file.WriteData((data_ptr_t) buffer, nr_bytes);
+	return compressed_file.WriteData((data_ptr_t)buffer, nr_bytes);
 }
 
 void CompressedFileSystem::Reset(FileHandle &handle) {
@@ -126,4 +126,4 @@ bool CompressedFileSystem::CanSeek() {
 	return false;
 }
 
-}
+} // namespace duckdb

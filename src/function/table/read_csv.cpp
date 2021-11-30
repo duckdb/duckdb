@@ -124,9 +124,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
 		throw BinderException("read_csv requires columns to be specified. Use read_csv_auto or set read_csv(..., "
 		                      "AUTO_DETECT=TRUE) to automatically guess columns.");
 	}
-	if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "none" ||
-	      options.compression.empty())) {
-		throw BinderException("read_csv currently only supports 'gzip' compression.");
+	if (!(options.compression == "infer" || options.compression == "gzip" || options.compression == "zstd" ||
+	      options.compression == "none" || options.compression.empty())) {
+		throw BinderException("read_csv currently only supports 'gzip' and 'zstd' compression.");
 	}
 	if (options.auto_detect) {
 		options.file_path = result->files[0];
