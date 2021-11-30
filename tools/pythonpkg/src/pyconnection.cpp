@@ -175,7 +175,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		{
 			py::gil_scoped_release release;
 			connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)python_object.ptr())})
-		    ->CreateView(name, true, true);
+			    ->CreateView(name, true, true);
 		}
 
 		// keep a reference
@@ -188,7 +188,8 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 		{
 			py::gil_scoped_release release;
-			connection->TableFunction("arrow_scan",
+			connection
+			    ->TableFunction("arrow_scan",
 			                    {Value::POINTER((uintptr_t)stream_factory.get()),
 			                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
 			    ->CreateView(name, true, true);
