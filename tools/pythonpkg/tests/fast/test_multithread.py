@@ -215,7 +215,7 @@ def arrow_register_unregister(duckdb_conn, queue):
     duckdb_conn = duckdb.connect()
     arrow_tbl = pa.Table.from_pydict({'my_column':pa.array([1,2,3,4,5],type=pa.int64())})
     try:
-        duckdb_conn.register_arrow('T',arrow_tbl)
+        duckdb_conn.register('T',arrow_tbl)
         duckdb_conn.unregister('T')
         queue.put(True)
     except:
