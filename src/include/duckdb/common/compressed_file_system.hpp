@@ -16,6 +16,7 @@ class CompressedFile;
 
 struct StreamData {
 	// various buffers & pointers
+	bool write = false;
 	unique_ptr<data_t[]> in_buff;
 	unique_ptr<data_t[]> out_buff;
 	data_ptr_t out_buff_start = nullptr;
@@ -30,13 +31,15 @@ struct StreamData {
 struct StreamWrapper {
 	DUCKDB_API virtual ~StreamWrapper();
 
-	DUCKDB_API virtual void Initialize(CompressedFile &file) = 0;
+	DUCKDB_API virtual void Initialize(CompressedFile &file, bool write) = 0;
 	DUCKDB_API virtual bool Read(StreamData &stream_data) = 0;
+	DUCKDB_API virtual void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) = 0;
 };
 
 class CompressedFileSystem : public FileSystem {
 public:
 	DUCKDB_API int64_t Read(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
+	DUCKDB_API int64_t Write(FileHandle &handle, void *buffer, int64_t nr_bytes) override;
 
 	DUCKDB_API void Reset(FileHandle &handle) override;
 
@@ -57,17 +60,20 @@ public:
 
 	CompressedFileSystem &compressed_fs;
 	unique_ptr<FileHandle> child_handle;
+	//! Whether the file is opened for reading or for writing
+	bool write = false;
+	StreamData stream_data;
 
 public:
-	DUCKDB_API void Initialize();
+	DUCKDB_API void Initialize(bool write);
 	DUCKDB_API int64_t ReadData(void *buffer, int64_t nr_bytes);
+	DUCKDB_API int64_t WriteData(data_ptr_t buffer, int64_t nr_bytes);
 
 protected:
 	DUCKDB_API void Close() override;
 
 private:
 	unique_ptr<StreamWrapper> stream_wrapper;
-	StreamData stream_data;
 };
 
 } // namespace duckdb

@@ -246,7 +246,7 @@ bool FileSystem::CanSeek() {
 	throw NotImplementedException("%s: CanSeek is not implemented!", GetName());
 }
 
-unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle) {
+unique_ptr<FileHandle> FileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
 	throw NotImplementedException("%s: OpenCompressedFile is not implemented!", GetName());
 }
 

@@ -13,9 +13,10 @@ CompressedFile::~CompressedFile() {
 	Close();
 }
 
-void CompressedFile::Initialize() {
+void CompressedFile::Initialize(bool write) {
 	Close();
 
+	this->write = write;
 	stream_data.in_buf_size = compressed_fs.InBufferSize();
 	stream_data.out_buf_size = compressed_fs.OutBufferSize();
 	stream_data.in_buff = unique_ptr<data_t[]>(new data_t[stream_data.in_buf_size]);
@@ -26,7 +27,7 @@ void CompressedFile::Initialize() {
 	stream_data.out_buff_end = stream_data.out_buff.get();
 
 	stream_wrapper = compressed_fs.CreateStream();
-	stream_wrapper->Initialize(*this);
+	stream_wrapper->Initialize(*this, write);
 }
 
 int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
@@ -76,7 +77,11 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 		}
 	}
 	return total_read;
+}
 
+int64_t CompressedFile::WriteData(data_ptr_t buffer, int64_t nr_bytes) {
+	stream_wrapper->Write(*this, stream_data, buffer, nr_bytes);
+	return nr_bytes;
 }
 
 void CompressedFile::Close() {
@@ -96,10 +101,15 @@ int64_t CompressedFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_
 	return compressed_file.ReadData(buffer, nr_bytes);
 }
 
+int64_t CompressedFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+	auto &compressed_file = (CompressedFile &)handle;
+	return compressed_file.WriteData((data_ptr_t) buffer, nr_bytes);
+}
+
 void CompressedFileSystem::Reset(FileHandle &handle) {
 	auto &compressed_file = (CompressedFile &)handle;
 	compressed_file.child_handle->Reset();
-	compressed_file.Initialize();
+	compressed_file.Initialize(compressed_file.write);
 }
 
 int64_t CompressedFileSystem::GetFileSize(FileHandle &handle) {

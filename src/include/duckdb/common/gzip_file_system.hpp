@@ -15,7 +15,7 @@ namespace duckdb {
 class GZipFileSystem : public CompressedFileSystem {
 	static constexpr const idx_t BUFFER_SIZE = 1024;
 public:
-	unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle) override;
+	unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) override;
 
 	std::string GetName() const override {
 		return "GZipFileSystem";

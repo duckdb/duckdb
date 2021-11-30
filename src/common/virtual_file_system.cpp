@@ -32,7 +32,7 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, uint8_t f
 		if (entry == compressed_fs.end()) {
 			throw NotImplementedException("Attempting to open a compressed file, but the compression type is not supported");
 		}
-		file_handle = entry->second->OpenCompressedFile(move(file_handle));
+		file_handle = entry->second->OpenCompressedFile(move(file_handle), flags & FileFlags::FILE_FLAGS_WRITE);
 	}
 	return file_handle;
 }

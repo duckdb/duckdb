@@ -191,7 +191,7 @@ public:
 	//! in a file on-disk are much cheaper than e.g. random reads in a file over the network
 	virtual bool OnDiskFile(FileHandle &handle);
 
-	virtual unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle);
+	virtual unique_ptr<FileHandle> OpenCompressedFile(unique_ptr<FileHandle> handle, bool write);
 
 	//! Create a LocalFileSystem.
 	static unique_ptr<FileSystem> CreateLocal();

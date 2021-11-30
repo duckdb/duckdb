@@ -11,15 +11,19 @@ struct ZstdStreamWrapper : public StreamWrapper {
 	duckdb_zstd::ZSTD_DStream *zstd_stream_ptr = nullptr;
 
 public:
-	void Initialize(CompressedFile &file) override;
+	void Initialize(CompressedFile &file, bool write) override;
 	bool Read(StreamData &stream_data) override;
+	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
 
 	void Close();
 };
 
-void ZstdStreamWrapper::Initialize(CompressedFile &file) {
+void ZstdStreamWrapper::Initialize(CompressedFile &file, bool write) {
 	Close();
 	zstd_stream_ptr = duckdb_zstd::ZSTD_createDStream();
+	if (write) {
+		throw InternalException("FIXME: writing to gzip FS not supported");
+	}
 }
 
 bool ZstdStreamWrapper::Read(StreamData &sd) {
@@ -45,6 +49,10 @@ bool ZstdStreamWrapper::Read(StreamData &sd) {
 	return false;
 }
 
+void ZstdStreamWrapper::Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) {
+	throw InternalException("FIXME: write zstd");
+}
+
 void ZstdStreamWrapper::Close() {
 	if (!zstd_stream_ptr) {
 		return;
@@ -55,17 +63,17 @@ void ZstdStreamWrapper::Close() {
 
 class ZStdFile : public CompressedFile {
 public:
-	ZStdFile(unique_ptr<FileHandle> child_handle_p, const string &path) :
+	ZStdFile(unique_ptr<FileHandle> child_handle_p, const string &path, bool write) :
 		CompressedFile(zstd_fs, move(child_handle_p), path) {
-		Initialize();
+		Initialize(write);
 	}
 
 	ZStdFileSystem zstd_fs;
 };
 
-unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle) {
+unique_ptr<FileHandle> ZStdFileSystem::OpenCompressedFile(unique_ptr<FileHandle> handle, bool write) {
 	auto path = handle->path;
-	return make_unique<ZStdFile>(move(handle), path);
+	return make_unique<ZStdFile>(move(handle), path, write);
 }
 
 unique_ptr<StreamWrapper> ZStdFileSystem::CreateStream() {

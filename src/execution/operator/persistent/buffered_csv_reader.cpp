@@ -830,9 +830,8 @@ void BufferedCSVReader::DetectHeader(const vector<vector<LogicalType>> &best_sql
 
 	} else {
 		options.header = false;
-		idx_t total_columns = parse_chunk.ColumnCount();
-		for (idx_t col = 0; col < total_columns; col++) {
-			string column_name = GenerateColumnName(total_columns, col);
+		for (idx_t col = 0; col < options.num_cols; col++) {
+			string column_name = GenerateColumnName(options.num_cols, col);
 			col_names.push_back(column_name);
 		}
 	}
@@ -984,6 +983,7 @@ vector<LogicalType> BufferedCSVReader::SniffCSV(const vector<LogicalType> &reque
 	// #######
 	// ### header detection
 	// #######
+	options.num_cols = best_num_cols;
 	DetectHeader(best_sql_types_candidates, best_header_row);
 
 	// #######
