@@ -406,9 +406,9 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 			defined_decoder->GetBatch<uint8_t>((char *)define_out + result_offset, read_now);
 		}
 
-		if (dict_decoder) {
-			// we need the null count because the offsets have no entries for nulls
-			idx_t null_count = 0;
+		idx_t null_count = 0;
+
+		if (dict_decoder || dbp_decoder) {
 			if (HasDefines()) {
 				for (idx_t i = 0; i < read_now; i++) {
 					if (define_out[i + result_offset] != max_define) {
@@ -416,22 +416,16 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 					}
 				}
 			}
+		}
+
+		if (dict_decoder) {
+			// we need the null count because the offsets have no entries for nulls
 
 			offset_buffer.resize(reader.allocator, sizeof(uint32_t) * (read_now - null_count));
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
 			DictReference(result);
 			Offsets((uint32_t *)offset_buffer.ptr, define_out, read_now, filter, result_offset, result);
 		} else if (dbp_decoder) {
-			idx_t null_count = 0;
-
-			// TODO this is duplicated
-			if (HasDefines()) {
-				for (idx_t i = 0; i < read_now; i++) {
-					if (define_out[i + result_offset] != max_define) {
-						null_count++;
-					}
-				}
-			}
 
 			auto read_buf = make_shared<ResizeableBuffer>();
 			// TODO does the null count matter here?
