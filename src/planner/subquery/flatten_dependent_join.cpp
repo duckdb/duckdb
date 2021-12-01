@@ -324,9 +324,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 		// now we add all the correlated columns to each of the expressions of the expression scan
 		auto expr_get = (LogicalExpressionGet *)plan.get();
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
-			for(auto &expr_list : expr_get->expressions) {
+			for (auto &expr_list : expr_get->expressions) {
 				auto colref = make_unique<BoundColumnRefExpression>(
-					correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+				    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 				expr_list.push_back(move(colref));
 			}
 			expr_get->expr_types.push_back(correlated_columns[i].type);

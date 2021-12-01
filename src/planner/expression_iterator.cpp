@@ -148,8 +148,8 @@ void ExpressionIterator::EnumerateTableRefChildren(BoundTableRef &ref,
 	}
 	case TableReferenceType::EXPRESSION_LIST: {
 		auto &bound_expr_list = (BoundExpressionListRef &)ref;
-		for(auto &expr_list : bound_expr_list.values) {
-			for(auto &expr : expr_list) {
+		for (auto &expr_list : bound_expr_list.values) {
+			for (auto &expr : expr_list) {
 				EnumerateExpression(expr, callback);
 			}
 		}
