@@ -45,3 +45,12 @@ query II
 SELECT * FROM test WHERE id=150001
 ----
 150001	[1, 1, 1]
+
+# large lists
+statement ok
+CREATE TABLE test_large_list AS SELECT i%100 AS id, LIST(-i) AS list FROM range(0,100000) tbl(i) GROUP BY id;
+
+query II
+SELECT COUNT(*), SUM(i) FROM (SELECT UNNEST(list) FROM test_large_list) tbl(i)
+----
+100000	-4999950000
