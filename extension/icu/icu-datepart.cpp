@@ -284,7 +284,7 @@ struct ICUDatePart {
 	}
 
 	static ScalarFunction GetBinaryPartCodeFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::INTEGER,
+		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT,
 		                      BinaryFunction, false, BindDatePart);
 	}
 
