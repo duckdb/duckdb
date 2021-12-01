@@ -148,13 +148,17 @@ unique_ptr<DataChunk> FetchNextRaw(QueryResult &result) {
 }
 
 py::object DuckDBPyResult::Fetchone() {
-	if (!result) {
-		throw std::runtime_error("result closed");
+	{
+		py::gil_scoped_release release;
+		if (!result) {
+			throw std::runtime_error("result closed");
+		}
+		if (!current_chunk || chunk_offset >= current_chunk->size()) {
+			current_chunk = FetchNext(*result);
+			chunk_offset = 0;
+		}
 	}
-	if (!current_chunk || chunk_offset >= current_chunk->size()) {
-		current_chunk = FetchNext(*result);
-		chunk_offset = 0;
-	}
+
 	if (!current_chunk || current_chunk->size() == 0) {
 		return py::none();
 	}
@@ -227,7 +231,11 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 	} else {
 		if (!stream) {
 			while (true) {
-				auto chunk = FetchNextRaw(*result);
+				unique_ptr<DataChunk> chunk;
+				{
+					py::gil_scoped_release release;
+					chunk = FetchNextRaw(*result);
+				}
 				if (!chunk || chunk->size() == 0) {
 					//! finished
 					break;
@@ -240,7 +248,11 @@ py::dict DuckDBPyResult::FetchNumpyInternal(bool stream, idx_t vectors_per_chunk
 				if (!stream_result->is_open) {
 					break;
 				}
-				auto chunk = FetchNextRaw(*stream_result);
+				unique_ptr<DataChunk> chunk;
+				{
+					py::gil_scoped_release release;
+					chunk = FetchNextRaw(*stream_result);
+				}
 				if (!chunk || chunk->size() == 0) {
 					//! finished
 					break;
