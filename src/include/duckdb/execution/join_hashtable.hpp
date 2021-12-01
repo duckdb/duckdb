@@ -126,6 +126,9 @@ public:
 	}
 	//! Compare Switch function to specify the type in which the keys will be compared
 	bool CompareKeysSwitch(data_ptr_t left_entry, data_ptr_t right_entry, const LogicalType &key_type);
+	//! Insert Hashes and check for primary key
+	inline void InsertHashesAndCheckPrimaryKey(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
+	                                           data_ptr_t *pointers);
 
 	//! BufferManager
 	BufferManager &buffer_manager;
