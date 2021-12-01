@@ -1,5 +1,6 @@
 #include "include/icu-extension.hpp"
 #include "include/icu-collate.hpp"
+#include "include/icu-dateadd.hpp"
 #include "include/icu-datepart.hpp"
 #include "include/icu-datetrunc.hpp"
 
@@ -145,13 +146,13 @@ static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, vector<V
                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                 vector<string> &names) {
 	names.emplace_back("name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("abbrev");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("utc_offset");
-	return_types.push_back(LogicalType::INTERVAL);
+	return_types.emplace_back(LogicalType::INTERVAL);
 	names.emplace_back("is_dst");
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	return nullptr;
 }
@@ -256,6 +257,7 @@ void ICUExtension::Load(DuckDB &db) {
 	CreateTableFunctionInfo tz_names_info(move(tz_names));
 	catalog.CreateTableFunction(*con.context, &tz_names_info);
 
+	RegisterICUDateAddFunctions(*con.context);
 	RegisterICUDatePartFunctions(*con.context);
 	RegisterICUDateTruncFunctions(*con.context);
 
@@ -270,12 +272,12 @@ std::string ICUExtension::Name() {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void icu_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void icu_init(duckdb::DatabaseInstance &db) { // NOLINT
 	duckdb::DuckDB db_wrapper(db);
 	db_wrapper.LoadExtension<duckdb::ICUExtension>();
 }
 
-DUCKDB_EXTENSION_API const char *icu_version() {
+DUCKDB_EXTENSION_API const char *icu_version() { // NOLINT
 	return duckdb::DuckDB::LibraryVersion();
 }
 }
