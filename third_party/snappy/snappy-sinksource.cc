@@ -30,7 +30,7 @@
 
 #include "snappy-sinksource.h"
 
-namespace snappy {
+namespace duckdb_snappy {
 
 Source::~Source() { }
 

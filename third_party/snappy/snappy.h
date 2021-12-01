@@ -44,7 +44,7 @@
 
 #include "snappy-stubs-public.h"
 
-namespace snappy {
+namespace duckdb_snappy {
   class Source;
   class Sink;
 

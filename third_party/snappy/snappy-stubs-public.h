@@ -49,7 +49,7 @@
 #define SNAPPY_VERSION \
     ((SNAPPY_MAJOR << 16) | (SNAPPY_MINOR << 8) | SNAPPY_PATCHLEVEL)
 
-namespace snappy {
+namespace duckdb_snappy {
 
 using int8 = std::int8_t;
 using uint8 = std::uint8_t;

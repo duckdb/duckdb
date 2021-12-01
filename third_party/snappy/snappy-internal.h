@@ -33,7 +33,7 @@
 
 #include "snappy-stubs-internal.h"
 
-namespace snappy {
+namespace duckdb_snappy {
 namespace internal {
 
 // Working memory performs a single allocation to hold all scratch space

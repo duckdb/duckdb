@@ -31,7 +31,7 @@
 
 #include "snappy-stubs-internal.h"
 
-namespace snappy {
+namespace duckdb_snappy {
 
 void Varint::Append32(string* s, uint32 value) {
   char buf[Varint::kMax32];
