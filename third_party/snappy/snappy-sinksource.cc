@@ -101,4 +101,4 @@ char* UncheckedByteArraySink::GetAppendBufferVariable(
   return dest_;
 }
 
-}  // namespace snappy
+}  // namespace duckdb_snappy

@@ -503,6 +503,6 @@ inline char* string_as_array(string* str) {
   return str->empty() ? NULL : &*str->begin();
 }
 
-}  // namespace snappy
+}  // namespace duckdb_snappy
 
 #endif  // THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_

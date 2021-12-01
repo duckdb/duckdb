@@ -244,6 +244,6 @@ static const int kMaxHashTableBits = 14;
 static const size_t kMaxHashTableSize = 1 << kMaxHashTableBits;
 
 
-}  // end namespace snappy
+}  // end namespace duckdb_snappy
 
 #endif  // THIRD_PARTY_SNAPPY_SNAPPY_INTERNAL_H_

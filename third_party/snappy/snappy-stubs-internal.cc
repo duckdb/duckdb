@@ -39,4 +39,4 @@ void Varint::Append32(string* s, uint32 value) {
   s->append(buf, p - buf);
 }
 
-}  // namespace snappy
+}  // namespace duckdb_snappy

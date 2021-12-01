@@ -184,6 +184,6 @@ namespace duckdb_snappy {
   // unspecified prefix of *compressed.
   bool IsValidCompressed(Source* compressed);
 
-}  // end namespace snappy
+}  // end namespace duckdb_snappy
 
 #endif  // THIRD_PARTY_SNAPPY_SNAPPY_H__

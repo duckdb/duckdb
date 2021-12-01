@@ -1659,4 +1659,4 @@ bool Uncompress(Source* compressed, Sink* uncompressed) {
   }
 }
 
-}  // namespace snappy
+}  // namespace duckdb_snappy
