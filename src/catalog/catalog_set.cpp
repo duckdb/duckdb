@@ -183,18 +183,7 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade) {
 	auto &transaction = Transaction::GetTransaction(context);
 
-	// To correctly delete the object and its dependencies, it temporarily is set to deleted.
-	// After the try/catch block it is returned to its previous state.
-	auto old_deleted = entries[entry_index].get()->deleted;
-	entries[entry_index].get()->deleted = true;
-	try {
-		// check any dependencies of this object
-		entry.catalog->dependency_manager->DropObject(context, &entry, cascade);
-	} catch (Exception &ex) {
-		entries[entry_index].get()->deleted = old_deleted;
-		throw ex;
-	}
-	entries[entry_index].get()->deleted = old_deleted;
+	EntryDropper::DropEntryDependencies(this, context, entry_index, entry, cascade);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
@@ -549,4 +538,29 @@ void CatalogSet::Scan(const std::function<void(CatalogEntry *)> &callback) {
 	}
 }
 
+EntryDropper::EntryDropper(CatalogSet *catalog_set, idx_t entry_index)
+    : catalog_set(catalog_set), entry_index(entry_index) {
+	old_deleted = catalog_set->entries[entry_index].get()->deleted;
+}
+
+EntryDropper::~EntryDropper() {
+	catalog_set->entries[entry_index].get()->deleted = old_deleted;
+}
+
+void EntryDropper::DropEntryDependencies(CatalogSet *catalog_set, ClientContext &context, idx_t entry_index,
+                                         CatalogEntry &entry, bool cascade) {
+
+	// Stores the deleted value of the entry before starting the process
+	auto dropper = EntryDropper(catalog_set, entry_index);
+
+	// To correctly delete the object and its dependencies, it temporarily is set to deleted.
+	catalog_set->entries[entry_index].get()->deleted = true;
+
+	// check any dependencies of this object
+	entry.catalog->dependency_manager->DropObject(context, &entry, cascade);
+
+	// dropper destructor is called here
+	// the destructor makes sure to return the value to the previous state
+	// dropper.~EntryDropper()
+}
 } // namespace duckdb

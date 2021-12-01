@@ -43,6 +43,7 @@ struct MappingValue {
 //! The Catalog Set stores (key, value) map of a set of CatalogEntries
 class CatalogSet {
 	friend class DependencyManager;
+	friend class EntryDropper;
 
 public:
 	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
@@ -122,4 +123,29 @@ private:
 	unique_ptr<DefaultGenerator> defaults;
 };
 
+//! Class responsible to remove entries from the catalog.
+//! When deleting many types of errors can be thrown, since we want to avoid try/catch blocks
+//! this class makes sure that whatever elements were modified are returned to a correct state
+//! when exceptions are thrown.
+//! The idea here is to use RAII (Resource acquisition is initialization) to mimic a try/catch/finally block.
+//! If any exception is raised during DropEntryDependencies, then the destructor of EntryDropper will be called
+//! and the entry will return to its previous state.
+class EntryDropper {
+public:
+	static void DropEntryDependencies(CatalogSet *catalog_set, ClientContext &context, idx_t entry_index,
+	                                  CatalogEntry &entry, bool cascade);
+
+private:
+	//! Both constructor and destructor are privates because they should only be called by DropEntryDependencies
+	explicit EntryDropper(CatalogSet *catalog_set, idx_t entry_index);
+	~EntryDropper();
+
+private:
+	//! The current catalog_set
+	CatalogSet *catalog_set;
+	//! Keeps track of the state of the entry before starting the delete
+	bool old_deleted;
+	//! Index of entry to be deleted
+	idx_t entry_index;
+};
 } // namespace duckdb

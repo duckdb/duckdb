@@ -367,26 +367,6 @@ DROP SEQUENCE sequence1;
 statement ok
 DROP TABLE tablename;
 
-
-##TEST: Wrong arguments for alter sequence
-statement ok
-CREATE SEQUENCE sequence1;
-
-statement error
-ALTER SEQUENCE sequence1 OWNED BY;
-
-statement error
-ALTER SEQUENCE sequence1 OWNED BY 2;
-
-statement error
-ALTER SEQUENCE sequence1 OWNED BY misssing_schema.missing_table;
-
-statement error
-ALTER SEQUENCE sequence1 OWNED BY misssing_schema.missing_table.extra_argument;
-
-statement ok
-DROP SEQUENCE sequence1;
-
 ##TEST: View can own a sequence
 statement ok
 CREATE SEQUENCE sequence1;
@@ -440,3 +420,46 @@ ALTER SEQUENCE sequence2 OWNED BY sequence1;
 
 statement ok
 DROP SEQUENCE sequence2;
+
+##TEST: Dependency cycle should throw error
+statement ok
+CREATE SEQUENCE sequence1;
+
+statement ok
+CREATE SEQUENCE sequence2;
+
+statement ok
+CREATE SEQUENCE sequence3;
+
+statement ok
+CREATE SEQUENCE sequence4;
+
+statement ok
+ALTER SEQUENCE sequence2 OWNED BY sequence1;
+
+statement error
+ALTER SEQUENCE sequence3 OWNED BY sequence2;
+
+statement error
+ALTER SEQUENCE sequence1 OWNED BY sequence3;
+
+statement ok
+ALTER SEQUENCE sequence3 OWNED BY sequence4;
+
+statement ok
+DROP SEQUENCE sequence1;
+
+statement ok
+DROP SEQUENCE sequence4;
+
+statement error
+SELECT nextval('sequence1');
+
+statement error
+SELECT nextval('sequence2');
+
+statement error
+SELECT nextval('sequence3');
+
+statement error
+SELECT nextval('sequence4');

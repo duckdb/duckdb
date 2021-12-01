@@ -187,6 +187,14 @@ void DependencyManager::AddOwnership(ClientContext &context, CatalogEntry *owner
 	// lock the catalog for writing
 	lock_guard<mutex> write_lock(catalog.write_lock);
 
+	// If the owner is already owned by something else, throw an error
+	for (auto &dep : dependents_map[owner]) {
+		if (dep.dependency_type == DependencyType::DEPENDENCY_OWNED_BY) {
+			throw CatalogException(owner->name + " already owned by " + dep.entry->name);
+		}
+	}
+
+	// If the entry is already owned, throw an error
 	for (auto &dep : dependents_map[entry]) {
 		// if the entry is already owned, throw error
 		if (dep.entry != owner) {

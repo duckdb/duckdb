@@ -284,7 +284,7 @@ CatalogEntryLookup Catalog::LookupEntry(ClientContext &context, CatalogType type
 }
 
 CatalogEntry *Catalog::GetEntry(ClientContext &context, const string &schema, const string &name) {
-	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::VIEW_ENTRY, CatalogType::SEQUENCE_ENTRY};
+	vector<CatalogType> entry_types {CatalogType::TABLE_ENTRY, CatalogType::SEQUENCE_ENTRY};
 
 	for (auto entry_type : entry_types) {
 		CatalogEntry *result = GetEntry(context, entry_type, schema, name, true);
