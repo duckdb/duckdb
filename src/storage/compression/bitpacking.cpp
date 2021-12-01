@@ -33,8 +33,9 @@ public:
 
 	// Unpacks a block of BITPACKING_ALGORITHM_GROUP_SIZE values
 	template <class T>
-	inline static void UnPackBlock(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
-		return UnPackGroup<T>(dst, src, width);
+	inline static void UnPackBlock(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
+	                               bool skip_sign_extension = false) {
+		return UnPackGroup<T>(dst, src, width, skip_sign_extension);
 	}
 
 	// Calculates the minimum required number of bits per value that can store all values
@@ -113,7 +114,8 @@ private:
 	}
 
 	template <class T>
-	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width) {
+	static void UnPackGroup(data_ptr_t dst, data_ptr_t src, bitpacking_width_t width,
+	                        bool skip_sign_extension = false) {
 		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
 			duckdb_fastpforlib::fastunpack((const uint8_t *)src, (uint8_t *)dst, (uint32_t)width);
 		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
@@ -126,7 +128,7 @@ private:
 			throw InternalException("Unsupported type found in bitpacking.");
 		}
 
-		if (NumericLimits<T>::IsSigned() && width > 0 && width < sizeof(T) * 8) {
+		if (NumericLimits<T>::IsSigned() && !skip_sign_extension && width > 0 && width < sizeof(T) * 8) {
 			SignExtend<T>(dst, width);
 		}
 	}
@@ -168,7 +170,6 @@ private:
 
 	template <class T>
 	static void PackGroup(data_ptr_t dst, T *values, bitpacking_width_t width) {
-		// TODO: types smaller than 32bits
 		if (std::is_same<T, uint8_t>::value || std::is_same<T, int8_t>::value) {
 			duckdb_fastpforlib::fastpack((const uint8_t *)values, (uint8_t *)dst, (uint32_t)width);
 		} else if (std::is_same<T, uint16_t>::value || std::is_same<T, int16_t>::value) {
@@ -426,7 +427,7 @@ public:
 
 	unique_ptr<BufferHandle> handle;
 
-	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t);
+	void (*decompress_function)(data_ptr_t, data_ptr_t, bitpacking_width_t, bool skip_sign_extension);
 	T decompression_buffer[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 
 	idx_t position_in_group = 0;
@@ -498,6 +499,10 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		}
 	}
 
+	// Determine if we can skip sign extension during compression
+	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
+	bool skip_sign_extend = std::is_signed<T>::value && nstats.min >= 0;
+
 	idx_t scanned = 0;
 
 	while (scanned < scan_count) {
@@ -526,11 +531,12 @@ void BitpackingScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t
 		if (to_scan == BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE && offset_in_compression_group == 0) {
 			// Decompress directly into result vector
 			scan_state.decompress_function((data_ptr_t)current_result_ptr, decompression_group_start_pointer,
-			                               scan_state.current_width);
+			                               scan_state.current_width, skip_sign_extend);
 		} else {
 			// Decompress compression algorithm to buffer
 			scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer,
-			                               decompression_group_start_pointer, scan_state.current_width);
+			                               decompression_group_start_pointer, scan_state.current_width,
+			                               skip_sign_extend);
 
 			memcpy(current_result_ptr, scan_state.decompression_buffer + offset_in_compression_group,
 			       to_scan * sizeof(T));
@@ -557,7 +563,7 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	auto result_data = FlatVector::GetData<T>(result);
 	T *current_result_ptr = result_data + result_idx;
 
-	// Todo clean up, is reused in partialscan
+	// TODO clean up, is reused in partialscan
 	idx_t offset_in_compression_group =
 	    scan_state.position_in_group % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
 
@@ -565,8 +571,11 @@ void BitpackingFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t r
 	    scan_state.current_width_group_ptr +
 	    (scan_state.position_in_group - offset_in_compression_group) * scan_state.current_width / 8;
 
+	auto &nstats = (NumericStatistics &)*segment.stats.statistics;
+	bool skip_sign_extend = std::is_signed<T>::value && nstats.min >= 0;
+
 	scan_state.decompress_function((data_ptr_t)scan_state.decompression_buffer, decompression_group_start_pointer,
-	                               scan_state.current_width);
+	                               scan_state.current_width, skip_sign_extend);
 
 	*current_result_ptr = *(T *)(scan_state.decompression_buffer + offset_in_compression_group);
 }
