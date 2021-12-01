@@ -522,6 +522,7 @@ static void WriteCSVCombine(ClientContext &context, FunctionData &bind_data, Glo
 //===--------------------------------------------------------------------===//
 void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &global_state = (GlobalWriteCSVData &)gstate;
+	global_state.handle->Close();
 	global_state.handle.reset();
 }
 

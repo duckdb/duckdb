@@ -35,6 +35,7 @@ struct StreamWrapper {
 	DUCKDB_API virtual bool Read(StreamData &stream_data) = 0;
 	DUCKDB_API virtual void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer,
 	                              int64_t nr_bytes) = 0;
+	DUCKDB_API virtual void Close() = 0;
 };
 
 class CompressedFileSystem : public FileSystem {
@@ -69,8 +70,6 @@ public:
 	DUCKDB_API void Initialize(bool write);
 	DUCKDB_API int64_t ReadData(void *buffer, int64_t nr_bytes);
 	DUCKDB_API int64_t WriteData(data_ptr_t buffer, int64_t nr_bytes);
-
-protected:
 	DUCKDB_API void Close() override;
 
 private:

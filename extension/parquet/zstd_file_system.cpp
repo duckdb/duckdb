@@ -4,9 +4,7 @@
 namespace duckdb {
 
 struct ZstdStreamWrapper : public StreamWrapper {
-	~ZstdStreamWrapper() override {
-		Close();
-	}
+	~ZstdStreamWrapper() override;
 
 	CompressedFile *file = nullptr;
 	duckdb_zstd::ZSTD_DStream *zstd_stream_ptr = nullptr;
@@ -18,10 +16,20 @@ public:
 	bool Read(StreamData &stream_data) override;
 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
 
-	void FlushStream();
+	void Close() override;
 
-	void Close();
+	void FlushStream();
 };
+
+ZstdStreamWrapper::~ZstdStreamWrapper() {
+	if (std::uncaught_exception()) {
+		return;
+	}
+	try {
+		Close();
+	} catch (...) {
+	}
+}
 
 void ZstdStreamWrapper::Initialize(CompressedFile &file, bool write) {
 	Close();

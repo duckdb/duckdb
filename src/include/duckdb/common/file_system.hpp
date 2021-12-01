@@ -70,7 +70,7 @@ public:
 	idx_t GetFileSize();
 	FileType GetType();
 
-protected:
+	//! Closes the file handle.
 	virtual void Close() = 0;
 
 public:

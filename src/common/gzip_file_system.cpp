@@ -65,9 +65,7 @@ static idx_t GZipConsumeString(FileHandle &input) {
 }
 
 struct MiniZStreamWrapper : public StreamWrapper {
-	~MiniZStreamWrapper() override {
-		Close();
-	}
+	~MiniZStreamWrapper() override;
 
 	CompressedFile *file = nullptr;
 	duckdb_miniz::mz_stream *mz_stream_ptr = nullptr;
@@ -81,10 +79,21 @@ public:
 	bool Read(StreamData &stream_data) override;
 	void Write(CompressedFile &file, StreamData &stream_data, data_ptr_t buffer, int64_t nr_bytes) override;
 
-	void FlushStream();
+	void Close() override;
 
-	void Close();
+	void FlushStream();
 };
+
+MiniZStreamWrapper::~MiniZStreamWrapper() {
+	// avoid closing if destroyed during stack unwinding
+	if (std::uncaught_exception()) {
+		return;
+	}
+	try {
+		Close();
+	} catch (...) {
+	}
+}
 
 void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 	Close();

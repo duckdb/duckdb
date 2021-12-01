@@ -85,7 +85,10 @@ int64_t CompressedFile::WriteData(data_ptr_t buffer, int64_t nr_bytes) {
 }
 
 void CompressedFile::Close() {
-	stream_wrapper.reset();
+	if (stream_wrapper) {
+		stream_wrapper->Close();
+		stream_wrapper.reset();
+	}
 	stream_data.in_buff.reset();
 	stream_data.out_buff.reset();
 	stream_data.out_buff_start = nullptr;
