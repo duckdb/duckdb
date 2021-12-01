@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/bitpacking/bitpacking_bitwidths.test
+# name: test/sql/storage/compression/bitpacking/bitpacking_bitwidths.test_coverage
 # description: Test bitpacking with values that compress to all different widths
 # group: [bitpacking]
 
