@@ -4,6 +4,7 @@ add_library_unity(
   catalog_type.cpp
   compression_type.cpp
   expression_type.cpp
+  file_compression_type.cpp
   join_type.cpp
   logical_operator_type.cpp
   optimizer_type.cpp
