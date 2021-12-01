@@ -31,7 +31,7 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	PyDateTime_IMPORT;
 }
 
-py::object GetValueToPython(Value &val, const LogicalType &type) {
+py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type) {
 	if (val.is_null) {
 		return py::none();
 	}
