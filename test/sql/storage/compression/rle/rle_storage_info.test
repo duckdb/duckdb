@@ -1,4 +1,4 @@
-# name: test/sql/storage/compression/rle/storage_info.test
+# name: test/sql/storage/compression/rle/rle_storage_info.test
 # description: Test storage with RLE
 # group: [rle]
 
