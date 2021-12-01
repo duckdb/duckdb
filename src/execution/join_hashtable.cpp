@@ -300,8 +300,6 @@ void JoinHashTable::Finalize() {
 
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t key_locations[]) {
 	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
-	vector<data_ptr_t> conflict_entries;
-	conflict_entries.reserve(count_tuples);
 
 	// create a vector for indices and apply the bitmask in the hash_values
 	ApplyBitmask(hashes, count_tuples);
@@ -309,8 +307,28 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
-	auto col_offsets = layout.GetOffsets();
 	// First, fill the hash_map and handle conflicts with a next_pointer
+	if (has_primary_key && join_type == JoinType::INNER) {
+		// For inner joins we check whether the build is a primary key during the insertion into the hashmap
+		InsertHashesAndCheckPrimaryKey(count_tuples, indices, key_locations, pointers); // inlined
+	} else {
+		for (idx_t i = 0; i < count_tuples; i++) {
+			// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
+			auto index = indices[i];
+			auto next_ptr = key_locations[i] + pointer_offset;
+			// replace the hash_value in the current entry and point to a position in the hash_map
+			Store<data_ptr_t>(pointers[index], next_ptr);
+			// store the pointer to the current tuple entry in the hash_map
+			pointers[index] = key_locations[i];
+		}
+	}
+}
+
+void JoinHashTable::InsertHashesAndCheckPrimaryKey(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
+                                                   data_ptr_t *pointers) {
+	auto col_offsets = layout.GetOffsets();
+	vector<data_ptr_t> conflict_entries;
+	conflict_entries.reserve(count_tuples);
 	for (idx_t i = 0; i < count_tuples; i++) {
 		// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
 		auto index = indices[i];
@@ -334,7 +352,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 		pointers[index] = key_locations[i];
 	}
 	// It is still necessary to handle multiple conflicts to the same key
-	if (has_primary_key && join_type != JoinType::SEMI) {
+	if (has_primary_key) {
 		for (auto entry : conflict_entries) {
 			auto next_entry_ptr = Load<data_ptr_t>(entry + pointer_offset);
 			// check the whole chain
