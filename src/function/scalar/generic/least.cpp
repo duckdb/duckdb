@@ -38,7 +38,7 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 		VectorData vdata;
 		args.data[0].Orrify(args.size(), vdata);
 		auto input_data = (T *)vdata.data;
-		for(idx_t i = 0; i < args.size(); i++) {
+		for (idx_t i = 0; i < args.size(); i++) {
 			auto vindex = vdata.sel->get_index(i);
 			if (vdata.validity.RowIsValid(vindex)) {
 				result_data[i] = input_data[vindex];
@@ -50,7 +50,8 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 	}
 	// now handle the remainder of the columns
 	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
-		if (args.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR && ConstantVector::IsNull(args.data[col_idx])) {
+		if (args.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		    ConstantVector::IsNull(args.data[col_idx])) {
 			// ignore null vector
 			continue;
 		}
@@ -85,7 +86,7 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 			}
 		}
 	}
-	for(idx_t i = 0; i < args.size(); i++) {
+	for (idx_t i = 0; i < args.size(); i++) {
 		if (!result_has_value[i]) {
 			result_mask.SetInvalid(i);
 		}
