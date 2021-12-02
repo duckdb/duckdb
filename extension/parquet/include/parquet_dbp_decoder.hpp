@@ -9,7 +9,7 @@ public:
 		block_value_count = VarintDecode<uint64_t>(buffer_);
 		miniblocks_per_block = VarintDecode<uint64_t>(buffer_);
 		total_value_count = VarintDecode<uint64_t>(buffer_);
-		first_value = zigzagToInt(VarintDecode<int64_t>(buffer_));
+		start_value = zigzagToInt(VarintDecode<int64_t>(buffer_));
 
 		// some derivatives
 		values_per_miniblock = block_value_count / miniblocks_per_block;
@@ -19,9 +19,9 @@ public:
 		values_left_in_block = 0;
 		values_left_in_miniblock = 0;
 		miniblock_offset = 0;
-		value_offset = 1;
 		min_delta = 0;
 		bitpack_pos = 0;
+		is_first_value = true;
 	};
 
 	template <typename T>
@@ -31,7 +31,13 @@ public:
 		if (batch_size == 0) {
 			return;
 		}
-		values[0] = first_value;
+		idx_t value_offset = 0;
+
+		if (is_first_value) {
+			values[0] = start_value;
+			value_offset++;
+			is_first_value = false;
+		}
 
 		if (total_value_count == 1) { // I guess it's a special case
 			if (batch_size > 1) {
@@ -63,16 +69,17 @@ public:
 			auto read_now = MinValue(values_left_in_miniblock, (idx_t)batch_size - value_offset);
 			BitUnpack<T>(&values[value_offset], read_now, miniblock_bit_widths[miniblock_offset]);
 			for (idx_t i = value_offset; i < value_offset + read_now; i++) {
-				values[i] = values[i - 1] + min_delta + values[i];
+				values[i] = ((i == 0) ? start_value : values[i - 1]) + min_delta + values[i];
 			}
 			value_offset += read_now;
 			values_left_in_miniblock -= read_now;
 			values_left_in_block -= read_now;
 		}
 
-		if (value_offset < batch_size) {
+		if (value_offset != batch_size) {
 			throw std::runtime_error("DBP decode did not find enough values");
 		}
+		start_value = values[batch_size - 1];
 	}
 
 private:
@@ -80,18 +87,18 @@ private:
 	idx_t block_value_count;
 	idx_t miniblocks_per_block;
 	idx_t total_value_count;
-	int64_t first_value;
+	int64_t start_value;
 	idx_t values_per_miniblock;
 
-	// TODO make this re-entrant
 	std::unique_ptr<uint8_t[]> miniblock_bit_widths;
 	idx_t values_left_in_block;
 	idx_t values_left_in_miniblock;
 	idx_t miniblock_offset;
-	idx_t value_offset;
 	int64_t min_delta;
 
 	uint8_t bitpack_pos;
+
+	bool is_first_value;
 
 	template <class T>
 	T zigzagToInt(const T n) {
