@@ -36,7 +36,6 @@ Vector::Vector(LogicalType type_p, data_ptr_t dataptr)
 	}
 }
 
-
 Vector::Vector(const VectorCache &cache) : type(cache.GetType()) {
 	ResetFromCache(cache);
 }
