@@ -10,8 +10,7 @@ add_library(
 link_threads(icu_extension)
 disable_target_warnings(icu_extension)
 
-build_loadable_extension(icu icu-collate.cpp icu-extension.cpp icu-dateadd.cpp
-                         icu-datepart.cpp icu-datetrunc.cpp)
+build_loadable_extension(icu icu-collate.cpp icu-extension.cpp)
 install(
   TARGETS icu_extension
   EXPORT "${DUCKDB_EXPORT_SET}"
