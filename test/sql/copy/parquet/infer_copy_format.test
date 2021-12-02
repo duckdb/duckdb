@@ -1,0 +1,24 @@
+# name: test/sql/copy/parquet/infer_copy_format.test
+# description: Infer COPY TO format test
+# group: [parquet]
+
+require parquet
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(6) tbl(i);
+
+statement ok
+COPY integers TO '__TEST_DIR__/integers.parquet';
+
+query I
+SELECT SUM(i) FROM '__TEST_DIR__/integers.parquet';
+----
+15
+
+statement ok
+COPY integers TO '__TEST_DIR__/integers.csv';
+
+query I
+SELECT SUM(i) FROM '__TEST_DIR__/integers.csv' tbl(i);
+----
+15
