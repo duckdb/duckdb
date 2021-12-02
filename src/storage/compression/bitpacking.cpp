@@ -152,19 +152,15 @@ private:
 	}
 
 	// Sign bit extension
-	// TODO check if we can implement faster algorithm, e.g. from
-	// TODO http://graphics.stanford.edu/~seander/bithacks.html#FixedSignExtend
 	template <class T, class T_U = typename std::make_unsigned<T>::type>
 	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
-		idx_t shift = width - 1;
 		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
-			T_U most_significant_compressed_bit = *((T_U *)dst + i) >> shift;
-			D_ASSERT(most_significant_compressed_bit == 1 || most_significant_compressed_bit == 0);
-
-			if (most_significant_compressed_bit == 1) {
-				T_U mask = ((T_U)-1) << shift;
-				*(T_U *)(dst + i * sizeof(T)) |= mask;
-			}
+			T val = *((T *)dst + i);
+			T result;
+			T const m = 1UL << (width - 1);   // mask can be pre-computed if b is fixed
+			val = val & ((1UL << width) - 1); // (Skip this if bits in x above position b are already zero.)
+			result = (val ^ m) - m;
+			*((T *)dst + i) = result;
 		}
 	}
 
