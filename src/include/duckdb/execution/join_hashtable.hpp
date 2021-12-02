@@ -134,7 +134,7 @@ public:
 	BufferManager &buffer_manager;
 	//! The types of the keys used in equality comparison
 	vector<LogicalType> equality_types;
-	//! The types of the keysπ
+	//! The types of the keys
 	vector<LogicalType> condition_types;
 	//! The types of all conditions
 	vector<LogicalType> build_types;
@@ -204,7 +204,6 @@ private:
 	unique_ptr<BufferHandle> hash_map;
 	//! Whether or not NULL values are considered equal in each of the comparisons
 	vector<bool> null_values_are_equal;
-	unordered_set<hash_t> hash_values;
 
 	//! Copying not allowed
 	JoinHashTable(const JoinHashTable &) = delete;
