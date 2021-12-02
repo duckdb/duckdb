@@ -217,6 +217,9 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	auto possibly_compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 	trans.read((uint8_t *)block->ptr, uncompressed_bytes);
 
+    if (!page_hdr.data_page_header_v2.is_compressed) {
+        return;
+    }
 	switch (chunk->meta_data.codec) {
 	case CompressionCodec::UNCOMPRESSED:
 		trans.read(((uint8_t *)block->ptr) + uncompressed_bytes, possibly_compressed_bytes);
@@ -228,7 +231,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		ResizeableBuffer compressed_bytes_buffer(reader.allocator, possibly_compressed_bytes);
 		trans.read((uint8_t *)compressed_bytes_buffer.ptr, possibly_compressed_bytes);
 
-		auto res = snappy::RawUncompress((const char *)compressed_bytes_buffer.ptr, possibly_compressed_bytes,
+		auto res = duckdb_snappy::RawUncompress((const char *)compressed_bytes_buffer.ptr, possibly_compressed_bytes,
 		                                 ((char *)block->ptr) + uncompressed_bytes);
 		if (!res) {
 			throw std::runtime_error("Decompression failure");
