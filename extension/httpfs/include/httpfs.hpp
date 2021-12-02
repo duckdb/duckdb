@@ -26,15 +26,6 @@ public:
 	// This two-phase construction allows subclasses more flexible setup.
 	virtual void InitializeMetadata();
 
-<<<<<<< HEAD
-=======
-protected:
-	void Close() override {
-	}
-
-private:
-public:
->>>>>>> Initial commit
 	idx_t length;
 	time_t last_modified;
 
@@ -45,13 +36,10 @@ public:
 	idx_t file_offset;
 	idx_t buffer_start;
 	idx_t buffer_end;
-<<<<<<< HEAD
 
 public:
 	void Close() override {
 	}
-=======
->>>>>>> Initial commit
 };
 
 class HTTPFileSystem : public FileSystem {

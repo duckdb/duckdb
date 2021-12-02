@@ -98,7 +98,6 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 	if (!connection) {
 		throw std::runtime_error("connection closed");
 	}
-<<<<<<< HEAD
 	if (std::this_thread::get_id() != thread_id) {
 		throw std::runtime_error("DuckDB objects created in a thread can only be used in that same thread. The object "
 		                         "was created in thread id " +
@@ -129,29 +128,6 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		}
 	}
 
-=======
-	result = nullptr;
-
-	auto statements = connection->ExtractStatements(query);
-	if (statements.empty()) {
-		// no statements to execute
-		return this;
-	}
-	// if there are multiple statements, we directly execute the statements besides the last one
-	// we only return the result of the last statement to the user, unless one of the previous statements fails
-	for (idx_t i = 0; i + 1 < statements.size(); i++) {
-		auto res = connection->Query(move(statements[i]));
-		if (!res->success) {
-			throw std::runtime_error(res->error);
-		}
-	}
-
-	auto prep = connection->Prepare(move(statements.back()));
-	if (!prep->success) {
-		throw std::runtime_error(prep->error);
-	}
-
->>>>>>> Initial commit
 	// this is a list of a list of parameters in executemany
 	py::list params_set;
 	if (!many) {
@@ -171,18 +147,11 @@ DuckDBPyConnection *DuckDBPyConnection::Execute(const string &query, py::object 
 		{
 			py::gil_scoped_release release;
 			res->result = prep->Execute(args);
-<<<<<<< HEAD
 			if (!res->result->success) {
 				throw std::runtime_error(res->result->error);
 			}
 		}
 
-=======
-		}
-		if (!res->result->success) {
-			throw std::runtime_error(res->result->error);
-		}
->>>>>>> Initial commit
 		if (!many) {
 			result = move(res);
 		}
@@ -203,17 +172,12 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 	auto py_object_type = string(py::str(python_object.get_type().attr("__name__")));
 
 	if (py_object_type == "DataFrame") {
-<<<<<<< HEAD
 		{
 			py::gil_scoped_release release;
 			connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)python_object.ptr())})
 			    ->CreateView(name, true, true);
 		}
 
-=======
-		connection->TableFunction("pandas_scan", {Value::POINTER((uintptr_t)python_object.ptr())})
-		    ->CreateView(name, true, true);
->>>>>>> Initial commit
 		// keep a reference
 		auto object = make_unique<RegisteredObject>(python_object);
 		registered_objects[name] = move(object);
@@ -222,7 +186,6 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 		auto stream_factory = make_unique<PythonTableArrowArrayStreamFactory>(python_object.ptr());
 
 		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-<<<<<<< HEAD
 		{
 			py::gil_scoped_release release;
 			connection
@@ -231,13 +194,6 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 			                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
 			    ->CreateView(name, true, true);
 		}
-=======
-		connection
-		    ->TableFunction("arrow_scan",
-		                    {Value::POINTER((uintptr_t)stream_factory.get()),
-		                     Value::POINTER((uintptr_t)stream_factory_produce), Value::UBIGINT(rows_per_tuple)})
-		    ->CreateView(name, true, true);
->>>>>>> Initial commit
 		auto object = make_unique<RegisteredArrow>(move(stream_factory), move(python_object));
 		registered_objects[name] = move(object);
 	} else {
@@ -245,10 +201,6 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 	}
 	return this;
 }
-<<<<<<< HEAD
-
-=======
->>>>>>> Initial commit
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
@@ -354,11 +306,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrowTable(py::object &tabl
 
 DuckDBPyConnection *DuckDBPyConnection::UnregisterPythonObject(const string &name) {
 	registered_objects.erase(name);
-<<<<<<< HEAD
 	py::gil_scoped_release release;
-=======
-
->>>>>>> Initial commit
 	if (connection) {
 		connection->Query("DROP VIEW \"" + name + "\"");
 	}
