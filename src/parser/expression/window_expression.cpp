@@ -8,7 +8,7 @@ namespace duckdb {
 
 WindowExpression::WindowExpression(ExpressionType type, string schema, const string &function_name)
     : ParsedExpression(type, ExpressionClass::WINDOW), schema(move(schema)),
-      function_name(StringUtil::Lower(function_name)) {
+      function_name(StringUtil::Lower(function_name)), ignore_nulls(false) {
 	switch (type) {
 	case ExpressionType::WINDOW_AGGREGATE:
 	case ExpressionType::WINDOW_ROW_NUMBER:
@@ -45,6 +45,10 @@ string WindowExpression::ToString() const {
 	if (default_expr.get()) {
 		result += ", ";
 		result += default_expr->ToString();
+	}
+	// IGNORE NULLS
+	if (ignore_nulls) {
+		result += " IGNORE NULLS";
 	}
 	// Over clause
 	result += ") OVER(";
@@ -150,6 +154,9 @@ bool WindowExpression::Equals(const WindowExpression *a, const WindowExpression 
 	if (b->children.size() != a->children.size()) {
 		return false;
 	}
+	if (a->ignore_nulls != b->ignore_nulls) {
+		return false;
+	}
 	for (idx_t i = 0; i < a->children.size(); i++) {
 		if (!a->children[i]->Equals(b->children[i].get())) {
 			return false;
@@ -212,6 +219,7 @@ unique_ptr<ParsedExpression> WindowExpression::Copy() const {
 	new_window->end_expr = end_expr ? end_expr->Copy() : nullptr;
 	new_window->offset_expr = offset_expr ? offset_expr->Copy() : nullptr;
 	new_window->default_expr = default_expr ? default_expr->Copy() : nullptr;
+	new_window->ignore_nulls = ignore_nulls;
 
 	return move(new_window);
 }
@@ -234,6 +242,7 @@ void WindowExpression::Serialize(Serializer &serializer) {
 	serializer.WriteOptional(end_expr);
 	serializer.WriteOptional(offset_expr);
 	serializer.WriteOptional(default_expr);
+	serializer.Write<bool>(ignore_nulls);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, Deserializer &source) {
@@ -254,6 +263,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(ExpressionType type, 
 	expr->end_expr = source.ReadOptional<ParsedExpression>();
 	expr->offset_expr = source.ReadOptional<ParsedExpression>();
 	expr->default_expr = source.ReadOptional<ParsedExpression>();
+	expr->ignore_nulls = source.Read<bool>();
 	return move(expr);
 }
 

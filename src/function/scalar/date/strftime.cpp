@@ -1108,7 +1108,7 @@ static unique_ptr<FunctionData> StrpTimeBindFunction(ClientContext &context, Sca
 }
 
 string StrpTimeFormat::FormatStrpTimeError(const string &input, idx_t position) {
-	if (position == INVALID_INDEX) {
+	if (position == DConstants::INVALID_INDEX) {
 		return string();
 	}
 	return input + "\n" + string(position, ' ') + "^";

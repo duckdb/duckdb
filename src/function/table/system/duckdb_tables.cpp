@@ -25,40 +25,40 @@ static unique_ptr<FunctionData> DuckDBTablesBind(ClientContext &context, vector<
                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                  vector<string> &names) {
 	names.emplace_back("schema_name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("schema_oid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("table_name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("table_oid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("internal");
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	names.emplace_back("temporary");
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	names.emplace_back("has_primary_key");
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	names.emplace_back("estimated_size");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("column_count");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("index_count");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("check_constraint_count");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("sql");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }

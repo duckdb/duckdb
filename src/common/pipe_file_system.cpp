@@ -9,13 +9,13 @@ public:
 	    : FileHandle(pipe_fs, path), child_handle(move(child_handle_p)) {
 	}
 
-	int64_t ReadChunk(void *buffer, int64_t nr_bytes);
-	int64_t WriteChunk(void *buffer, int64_t nr_bytes);
-
 	PipeFileSystem pipe_fs;
 	unique_ptr<FileHandle> child_handle;
 
-protected:
+public:
+	int64_t ReadChunk(void *buffer, int64_t nr_bytes);
+	int64_t WriteChunk(void *buffer, int64_t nr_bytes);
+
 	void Close() override {
 	}
 };

@@ -7,10 +7,11 @@
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
 #include "parquet_metadata.hpp"
+#include "zstd_file_system.hpp"
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -19,6 +20,7 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
+#include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -100,7 +102,7 @@ public:
 		if (result->files.empty()) {
 			throw IOException("No files found that match the pattern \"%s\"", info.file_path);
 		}
-		ParquetOptions parquet_options;
+		ParquetOptions parquet_options(context);
 		result->initial_reader = make_shared<ParquetReader>(context, result->files[0], expected_types, parquet_options);
 		return move(result);
 	}
@@ -193,7 +195,7 @@ public:
 	                                                vector<string> &input_table_names,
 	                                                vector<LogicalType> &return_types, vector<string> &names) {
 		auto file_name = inputs[0].GetValue<string>();
-		ParquetOptions parquet_options;
+		ParquetOptions parquet_options(context);
 		for (auto &kv : named_parameters) {
 			if (kv.first == "binary_as_string") {
 				parquet_options.binary_as_string = kv.second.value_.boolean;
@@ -218,7 +220,7 @@ public:
 		if (files.empty()) {
 			throw IOException("Parquet reader needs at least one file to read");
 		}
-		ParquetOptions parquet_options;
+		ParquetOptions parquet_options(context);
 		for (auto &kv : named_parameters) {
 			if (kv.first == "binary_as_string") {
 				parquet_options.binary_as_string = kv.second.value_.boolean;
@@ -482,6 +484,9 @@ unique_ptr<TableFunctionRef> ParquetScanReplacement(const string &table_name, vo
 }
 
 void ParquetExtension::Load(DuckDB &db) {
+	auto &fs = db.GetFileSystem();
+	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_unique<ZStdFileSystem>());
+
 	auto scan_fun = ParquetScanFunction::GetFunctionSet();
 	CreateTableFunctionInfo cinfo(scan_fun);
 	cinfo.name = "read_parquet";
@@ -520,6 +525,12 @@ void ParquetExtension::Load(DuckDB &db) {
 
 	auto &config = DBConfig::GetConfig(*db.instance);
 	config.replacement_scans.emplace_back(ParquetScanReplacement);
+	config.AddExtensionOption("binary_as_string", "In Parquet files, interpret binary data as a string.",
+	                          LogicalType::BOOLEAN);
+}
+
+std::string ParquetExtension::Name() {
+	return "parquet";
 }
 
 } // namespace duckdb

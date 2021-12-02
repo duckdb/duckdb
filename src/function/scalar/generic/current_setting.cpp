@@ -25,16 +25,6 @@ static void CurrentSettingFunction(DataChunk &args, ExpressionState &state, Vect
 	result.Reference(info.value);
 }
 
-static string NormalizeSettingName(const string &name) {
-	if (CaseInsensitiveStringEquality()(name, "schema")) {
-		// The PG doc says:
-		// >  SET SCHEMA 'value' is an alias for SET search_path TO value.
-		return "search_path";
-	}
-
-	return name;
-}
-
 unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFunction &bound_function,
                                             vector<unique_ptr<Expression>> &arguments) {
 
@@ -42,18 +32,18 @@ unique_ptr<FunctionData> CurrentSettingBind(ClientContext &context, ScalarFuncti
 
 	if (key_child->return_type.id() != LogicalTypeId::VARCHAR ||
 	    key_child->return_type.id() != LogicalTypeId::VARCHAR || !key_child->IsFoldable()) {
-		throw ParserException("Key name for struct_extract needs to be a constant string");
+		throw ParserException("Key name for current_setting needs to be a constant string");
 	}
 	Value key_val = ExpressionExecutor::EvaluateScalar(*key_child.get());
 	D_ASSERT(key_val.type().id() == LogicalTypeId::VARCHAR);
-	if (key_val.is_null || key_val.str_value.length() < 1) {
-		throw ParserException("Key name for struct_extract needs to be neither NULL nor empty");
+	if (key_val.is_null || key_val.str_value.empty()) {
+		throw ParserException("Key name for current_setting needs to be neither NULL nor empty");
 	}
 
-	const auto &key = NormalizeSettingName(key_val.str_value);
+	auto key = StringUtil::Lower(key_val.str_value);
 	Value val;
 	if (!context.TryGetCurrentSetting(key, val)) {
-		throw InvalidInputException("Variable '%s' was not SET in this context", key);
+		throw InvalidInputException("unrecognized configuration parameter \"%s\"", key_val.str_value);
 	}
 
 	bound_function.return_type = val.type();

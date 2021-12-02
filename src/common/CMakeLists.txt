@@ -15,6 +15,7 @@ add_library_unity(
   arrow_wrapper.cpp
   assert.cpp
   radix.cpp
+  compressed_file_system.cpp
   constants.cpp
   checksum.cpp
   cycle_counter.cpp
@@ -33,7 +34,8 @@ add_library_unity(
   symbols.cpp
   tree_renderer.cpp
   types.cpp
-  virtual_file_system.cpp)
+  virtual_file_system.cpp
+  windows_util.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_common>
     PARENT_SCOPE)

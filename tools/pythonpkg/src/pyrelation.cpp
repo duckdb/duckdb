@@ -2,6 +2,8 @@
 #include "duckdb_python/pyconnection.hpp"
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/main/client_context.hpp"
+
 namespace duckdb {
 
 void DuckDBPyRelation::Initialize(py::handle &m) {
@@ -82,6 +84,16 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromCsvAuto(const string &filenam
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquet(const string &filename, bool binary_as_string) {
 	return DuckDBPyConnection::DefaultConnection()->FromParquet(filename, binary_as_string);
+}
+
+unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromParquetDefault(const string &filename) {
+	auto connection = DuckDBPyConnection::DefaultConnection();
+	bool binary_as_string = false;
+	Value result;
+	if (connection->connection->context->TryGetCurrentSetting("binary_as_string", result)) {
+		binary_as_string = result.GetValue<bool>();
+	}
+	return connection->FromParquet(filename, binary_as_string);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::FromArrowTable(py::object &table) {

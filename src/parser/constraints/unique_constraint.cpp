@@ -6,6 +6,14 @@
 
 namespace duckdb {
 
+UniqueConstraint::UniqueConstraint(uint64_t index, bool is_primary_key)
+    : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
+}
+UniqueConstraint::UniqueConstraint(vector<string> columns, bool is_primary_key)
+    : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX), columns(move(columns)),
+      is_primary_key(is_primary_key) {
+}
+
 string UniqueConstraint::ToString() const {
 	string base = is_primary_key ? "PRIMARY KEY(" : "UNIQUE(";
 	for (idx_t i = 0; i < columns.size(); i++) {
@@ -18,7 +26,7 @@ string UniqueConstraint::ToString() const {
 }
 
 unique_ptr<Constraint> UniqueConstraint::Copy() {
-	if (index == INVALID_INDEX) {
+	if (index == DConstants::INVALID_INDEX) {
 		return make_unique<UniqueConstraint>(columns, is_primary_key);
 	} else {
 		auto result = make_unique<UniqueConstraint>(index, is_primary_key);
@@ -48,7 +56,7 @@ unique_ptr<Constraint> UniqueConstraint::Deserialize(Deserializer &source) {
 		columns.push_back(column_name);
 	}
 
-	if (index != INVALID_INDEX) {
+	if (index != DConstants::INVALID_INDEX) {
 		// single column parsed constraint
 		auto result = make_unique<UniqueConstraint>(index, is_primary_key);
 		result->columns = move(columns);

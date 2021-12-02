@@ -15,9 +15,9 @@ static unique_ptr<FunctionData> PragmaVersionBind(ClientContext &context, vector
                                                   vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                   vector<string> &names) {
 	names.emplace_back("library_version");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("source_id");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 	return nullptr;
 }
 
@@ -50,6 +50,20 @@ const char *DuckDB::SourceID() {
 
 const char *DuckDB::LibraryVersion() {
 	return DUCKDB_VERSION;
+}
+
+string DuckDB::Platform() {
+	string os = "linux";
+	string arch = "amd64";
+#ifdef _WIN32
+	os = "windows";
+#elif defined(__APPLE__)
+	os = "osx";
+#endif
+#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
+	arch = "arm64";
+#endif
+	return os + "_" + arch;
 }
 
 } // namespace duckdb

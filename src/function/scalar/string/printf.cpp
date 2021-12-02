@@ -39,11 +39,11 @@ unique_ptr<FunctionData> BindPrintfFunction(ClientContext &context, ScalarFuncti
 			break;
 		case LogicalTypeId::DECIMAL:
 			// decimal type: add cast to double
-			bound_function.arguments.push_back(LogicalType::DOUBLE);
+			bound_function.arguments.emplace_back(LogicalType::DOUBLE);
 			break;
 		default:
 			// all other types: add cast to string
-			bound_function.arguments.push_back(LogicalType::VARCHAR);
+			bound_function.arguments.emplace_back(LogicalType::VARCHAR);
 			break;
 		}
 	}

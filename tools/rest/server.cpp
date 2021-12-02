@@ -20,7 +20,7 @@
 
 #include <unordered_map>
 
-using namespace httplib;
+using namespace duckdb_httplib;
 using namespace duckdb;
 using namespace nlohmann;
 

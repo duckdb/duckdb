@@ -9,6 +9,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/vector_operations/unary_executor.hpp"
+#include "duckdb/common/operator/add.hpp"
 
 namespace duckdb {
 
@@ -42,9 +43,12 @@ struct NextSequenceValueOperator {
 	static int64_t Operation(Transaction &transaction, SequenceCatalogEntry *seq) {
 		lock_guard<mutex> seqlock(seq->lock);
 		int64_t result;
+		result = seq->counter;
+		bool overflow = !TryAddOperator::Operation(seq->counter, seq->increment, seq->counter);
 		if (seq->cycle) {
-			result = seq->counter;
-			seq->counter += seq->increment;
+			if (overflow) {
+				throw SequenceException("overflow in sequence");
+			}
 			if (result < seq->min_value) {
 				result = seq->max_value;
 				seq->counter = seq->max_value + seq->increment;
@@ -53,13 +57,11 @@ struct NextSequenceValueOperator {
 				seq->counter = seq->min_value + seq->increment;
 			}
 		} else {
-			result = seq->counter;
-			seq->counter += seq->increment;
-			if (result < seq->min_value) {
+			if (result < seq->min_value || (overflow && seq->increment < 0)) {
 				throw SequenceException("nextval: reached minimum value of sequence \"%s\" (%lld)", seq->name,
 				                        seq->min_value);
 			}
-			if (result > seq->max_value) {
+			if (result > seq->max_value || overflow) {
 				throw SequenceException("nextval: reached maximum value of sequence \"%s\" (%lld)", seq->name,
 				                        seq->max_value);
 			}

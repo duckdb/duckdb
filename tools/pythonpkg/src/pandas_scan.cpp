@@ -81,7 +81,7 @@ unique_ptr<FunctionOperatorData> PandasScanFunction::PandasScanInit(ClientContex
 }
 
 idx_t PandasScanFunction::PandasScanMaxThreads(ClientContext &context, const FunctionData *bind_data_p) {
-	if (context.verify_parallelism) {
+	if (ClientConfig::GetConfig(context).verify_parallelism) {
 		return context.db->NumberOfThreads();
 	}
 	auto &bind_data = (const PandasScanFunctionData &)*bind_data_p;

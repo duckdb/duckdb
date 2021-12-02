@@ -773,8 +773,8 @@ void RowGroup::GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &resu
 class VersionDeleteState {
 public:
 	VersionDeleteState(RowGroup &info, Transaction &transaction, DataTable *table, idx_t base_row)
-	    : info(info), transaction(transaction), table(table), current_info(nullptr), current_chunk(INVALID_INDEX),
-	      count(0), base_row(base_row), delete_count(0) {
+	    : info(info), transaction(transaction), table(table), current_info(nullptr),
+	      current_chunk(DConstants::INVALID_INDEX), count(0), base_row(base_row), delete_count(0) {
 	}
 
 	RowGroup &info;

@@ -1,7 +1,9 @@
 name: Cancel
 on:
   workflow_run:
-    workflows: ["Main"]
+    workflows: ["Main", "LinuxRelease", "NodeJS", "OSX", "Python", "R", "Windows"]
+    branches-ignore:
+      - master
     types:
       - requested
 jobs:

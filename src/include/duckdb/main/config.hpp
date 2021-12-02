@@ -21,6 +21,7 @@
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/window_aggregation_mode.hpp"
+#include "duckdb/common/enums/set_scope.hpp"
 
 namespace duckdb {
 class ClientContext;
@@ -28,6 +29,7 @@ class TableFunctionRef;
 class CompressionFunction;
 
 struct CompressionFunctionSet;
+struct DBConfig;
 
 enum class AccessMode : uint8_t { UNDEFINED = 0, AUTOMATIC = 1, READ_ONLY = 2, READ_WRITE = 3 };
 
@@ -38,25 +40,31 @@ enum class CheckpointAbort : uint8_t {
 	DEBUG_ABORT_AFTER_FREE_LIST_WRITE = 3
 };
 
-enum class ConfigurationOptionType : uint32_t {
-	INVALID = 0,
-	ACCESS_MODE,
-	DEFAULT_ORDER_TYPE,
-	DEFAULT_NULL_ORDER,
-	ENABLE_EXTERNAL_ACCESS,
-	ENABLE_OBJECT_CACHE,
-	MAXIMUM_MEMORY,
-	THREADS
-};
+typedef void (*set_global_function_t)(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+typedef void (*set_local_function_t)(ClientContext &context, const Value &parameter);
+typedef Value (*get_setting_function_t)(ClientContext &context);
 
 struct ConfigurationOption {
-	ConfigurationOptionType type;
 	const char *name;
 	const char *description;
 	LogicalTypeId parameter_type;
+	set_global_function_t set_global;
+	set_local_function_t set_local;
+	get_setting_function_t get_setting;
 };
 
-// this is optional and only used in tests at the moment
+typedef void (*set_option_callback_t)(ClientContext &context, SetScope scope, Value &parameter);
+
+struct ExtensionOption {
+	ExtensionOption(string description_p, LogicalType type_p, set_option_callback_t set_function_p)
+	    : description(move(description_p)), type(move(type_p)), set_function(set_function_p) {
+	}
+
+	string description;
+	LogicalType type;
+	set_option_callback_t set_function;
+};
+
 struct DBConfig {
 	friend class DatabaseInstance;
 	friend class StorageManager;
@@ -96,8 +104,6 @@ public:
 	bool enable_external_access = true;
 	//! Whether or not object cache is used
 	bool object_cache_enable = false;
-	//! Database configuration variables as controlled by SET
-	case_insensitive_map_t<Value> set_variables;
 	//! Force checkpoint when CHECKPOINT is called or on shutdown, even if no changes have been made
 	bool force_checkpoint = false;
 	//! Run a checkpoint on successful shutdown and delete the WAL, to leave only a single database file behind
@@ -117,6 +123,14 @@ public:
 	bool debug_many_free_list_blocks = false;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
 	WindowAggregationMode window_mode = WindowAggregationMode::WINDOW;
+
+	//! Extra parameters that can be SET for loaded extensions
+	case_insensitive_map_t<ExtensionOption> extension_parameters;
+	//! Database configuration variables as controlled by SET
+	case_insensitive_map_t<Value> set_variables;
+
+	DUCKDB_API void AddExtensionOption(string name, string description, LogicalType parameter,
+	                                   set_option_callback_t function = nullptr);
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);

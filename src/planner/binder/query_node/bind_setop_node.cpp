@@ -35,7 +35,7 @@ static void GatherAliases(BoundQueryNode &node, unordered_map<string, idx_t> &al
 					// there is a conflict
 					// we place "-1" in the aliases map at this location
 					// "-1" signifies that there is an ambiguous reference
-					aliases[name] = INVALID_INDEX;
+					aliases[name] = DConstants::INVALID_INDEX;
 				}
 			} else {
 				// the alias is not in there yet, just assign it
@@ -47,7 +47,7 @@ static void GatherAliases(BoundQueryNode &node, unordered_map<string, idx_t> &al
 				// the node is in there
 				// repeat the same as with the alias: if there is an ambiguity we insert "-1"
 				if (expr_entry->second != i) {
-					expressions[expr.get()] = INVALID_INDEX;
+					expressions[expr.get()] = DConstants::INVALID_INDEX;
 				}
 			} else {
 				// not in there yet, just place it in there

@@ -35,6 +35,8 @@ struct BoundColumnReferenceInfo {
 };
 
 struct BindResult {
+	BindResult() {
+	}
 	explicit BindResult(string error) : error(error) {
 	}
 	explicit BindResult(unique_ptr<Expression> expr) : expression(move(expr)) {
@@ -71,9 +73,16 @@ public:
 
 	string Bind(unique_ptr<ParsedExpression> *expr, idx_t depth, bool root_expression = false);
 
+	unique_ptr<ParsedExpression> CreateStructExtract(unique_ptr<ParsedExpression> base, string field_name);
+	BindResult BindQualifiedColumnName(ColumnRefExpression &colref, const string &table_name);
+
+	unique_ptr<ParsedExpression> QualifyColumnName(const string &column_name, string &error_message);
+	unique_ptr<ParsedExpression> QualifyColumnName(ColumnRefExpression &colref, string &error_message);
+
 	// Bind table names to ColumnRefExpressions
-	static void BindTableNames(Binder &binder, ParsedExpression &expr,
-	                           unordered_map<string, idx_t> *alias_map = nullptr);
+	void QualifyColumnNames(unique_ptr<ParsedExpression> &expr);
+	static void QualifyColumnNames(Binder &binder, unique_ptr<ParsedExpression> &expr);
+
 	static unique_ptr<Expression> PushCollation(ClientContext &context, unique_ptr<Expression> source,
 	                                            const string &collation, bool equality_only = false);
 	static void TestCollation(ClientContext &context, const string &collation);
@@ -121,9 +130,7 @@ protected:
 	virtual BindResult BindMacro(FunctionExpression &expr, MacroCatalogEntry *macro, idx_t depth,
 	                             unique_ptr<ParsedExpression> *expr_ptr);
 
-	virtual void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
-	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, QueryNode &node);
-	virtual void ReplaceMacroParametersRecursive(ParsedExpression &expr, TableRef &ref);
+	void ReplaceMacroParametersRecursive(unique_ptr<ParsedExpression> &expr);
 
 	virtual string UnsupportedAggregateMessage();
 	virtual string UnsupportedUnnestMessage();

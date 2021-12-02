@@ -10,19 +10,25 @@ if(NOT MSVC)
   )
 endif()
 
+set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
+
+if(MSVC OR MINGW)
+  set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32)
+endif()
+
 if(AMALGAMATION_BUILD)
   if(WIN32)
     add_definitions(/bigobj)
   endif()
 
   add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
-  target_link_libraries(duckdb ${CMAKE_DL_LIBS})
+  target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb)
   link_extension_libraries(duckdb)
 
   add_library(duckdb_static STATIC
               "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
-  target_link_libraries(duckdb_static ${CMAKE_DL_LIBS})
+  target_link_libraries(duckdb_static ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb_static)
   link_extension_libraries(duckdb_static)
 
@@ -49,7 +55,7 @@ else()
   add_subdirectory(transaction)
 
   set(DUCKDB_LINK_LIBS
-      ${CMAKE_DL_LIBS}
+      ${DUCKDB_SYSTEM_LIBS}
       fmt
       pg_query
       duckdb_re2
