@@ -1,0 +1,11 @@
+# name: test/sql/subquery/scalar/values_list_large.test_slow
+# description: Test large correlated subquery with VALUES list
+# group: [scalar]
+
+statement ok
+CREATE TABLE test AS SELECT CASE WHEN i%7=2 THEN NULL ELSE i::INTEGER END AS i, CASE WHEN i%9=2 THEN NULL ELSE i::INTEGER+2 END AS j FROM generate_series(0, 9999999, 1) tbl(i);
+
+query III
+SELECT SUM(i), SUM(j), SUM((SELECT max(x) FROM (VALUES (i), (j)) AS X(x))) as maxn FROM test;
+----
+42857134285714	44444461111111	49206358253971

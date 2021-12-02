@@ -635,7 +635,7 @@ int64_t DatePart::EpochOperator::Operation(interval_t input) {
 
 template <>
 int64_t DatePart::EpochOperator::Operation(dtime_t input) {
-	return SecondsOperator::Operation<dtime_t, int64_t>(input);
+	return input.micros / Interval::MICROS_PER_SEC;
 }
 
 template <>

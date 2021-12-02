@@ -27,18 +27,11 @@ public:
 	vector<vector<unique_ptr<Expression>>> expressions;
 
 public:
-	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
-	void GetData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-	             LocalSourceState &lstate) const override;
+	unique_ptr<OperatorState> GetOperatorState(ClientContext &context) const override;
+	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+	                           OperatorState &state) const override;
 
-public:
-	// Sink interface
-	SinkResultType Sink(ExecutionContext &context, GlobalSinkState &gstate, LocalSinkState &lstate,
-	                    DataChunk &input) const override;
-
-	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
-
-	bool IsSink() const override {
+	bool ParallelOperator() const override {
 		return true;
 	}
 

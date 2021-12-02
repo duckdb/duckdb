@@ -677,7 +677,9 @@ idx_t GroupedAggregateHashTable::Scan(idx_t &scan_position, DataChunk &result) {
 }
 
 void GroupedAggregateHashTable::Finalize() {
-	D_ASSERT(!is_finalized);
+	if (is_finalized) {
+		return;
+	}
 
 	// early release hashes, not needed for partition/scan
 	hashes_hdl.reset();

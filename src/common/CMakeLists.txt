@@ -15,6 +15,7 @@ add_library_unity(
   arrow_wrapper.cpp
   assert.cpp
   radix.cpp
+  compressed_file_system.cpp
   constants.cpp
   checksum.cpp
   cycle_counter.cpp

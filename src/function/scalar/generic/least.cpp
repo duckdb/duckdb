@@ -20,14 +20,7 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 	}
 	auto result_type = VectorType::CONSTANT_VECTOR;
 	for (idx_t col_idx = 0; col_idx < args.ColumnCount(); col_idx++) {
-		if (args.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			if (ConstantVector::IsNull(args.data[col_idx])) {
-				// constant NULL: result is constant NULL
-				result.SetVectorType(VectorType::CONSTANT_VECTOR);
-				ConstantVector::SetNull(result, true);
-				return;
-			}
-		} else {
+		if (args.data[col_idx].GetVectorType() != VectorType::CONSTANT_VECTOR) {
 			// non-constant input: result is not a constant vector
 			result_type = VectorType::FLAT_VECTOR;
 		}
@@ -37,58 +30,65 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 		}
 	}
 
-	// we start off performing a binary operation between the first two inputs, where we store the lowest (or highest)
-	// directly in the result
-	BinaryExecutor::ExecuteGeneric<T, T, T, BinarySingleArgumentOperatorWrapper, LeastOperator<OP>, bool>(
-	    args.data[0], args.data[1], result, args.size(), false);
-
-	// now we loop over the other columns and compare it to the stored result
 	auto result_data = FlatVector::GetData<T>(result);
 	auto &result_mask = FlatVector::Validity(result);
-	SelectionVector rsel;
-	idx_t rcount = 0;
-	// create a selection vector from the mask
-	rsel.Initialize();
-	for (idx_t i = 0; i < args.size(); i++) {
-		if (result_mask.RowIsValid(i)) {
-			rsel.set_index(rcount++, i);
+	// copy over the first column
+	bool result_has_value[STANDARD_VECTOR_SIZE];
+	{
+		VectorData vdata;
+		args.data[0].Orrify(args.size(), vdata);
+		auto input_data = (T *)vdata.data;
+		for (idx_t i = 0; i < args.size(); i++) {
+			auto vindex = vdata.sel->get_index(i);
+			if (vdata.validity.RowIsValid(vindex)) {
+				result_data[i] = input_data[vindex];
+				result_has_value[i] = true;
+			} else {
+				result_has_value[i] = false;
+			}
 		}
 	}
-	for (idx_t col_idx = 2; col_idx < args.ColumnCount(); col_idx++) {
+	// now handle the remainder of the columns
+	for (idx_t col_idx = 1; col_idx < args.ColumnCount(); col_idx++) {
+		if (args.data[col_idx].GetVectorType() == VectorType::CONSTANT_VECTOR &&
+		    ConstantVector::IsNull(args.data[col_idx])) {
+			// ignore null vector
+			continue;
+		}
+
 		VectorData vdata;
 		args.data[col_idx].Orrify(args.size(), vdata);
 
 		auto input_data = (T *)vdata.data;
 		if (!vdata.validity.AllValid()) {
 			// potential new null entries: have to check the null mask
-			idx_t new_count = 0;
-			for (idx_t i = 0; i < rcount; i++) {
-				auto rindex = rsel.get_index(i);
-				auto vindex = vdata.sel->get_index(rindex);
-				if (!vdata.validity.RowIsValid(vindex)) {
-					// new null entry: set nullmask
-					result_mask.SetInvalid(rindex);
-				} else {
+			for (idx_t i = 0; i < args.size(); i++) {
+				auto vindex = vdata.sel->get_index(i);
+				if (vdata.validity.RowIsValid(vindex)) {
 					// not a null entry: perform the operation and add to new set
 					auto ivalue = input_data[vindex];
-					if (OP::template Operation<T>(ivalue, result_data[rindex])) {
-						result_data[rindex] = ivalue;
+					if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
+						result_has_value[i] = true;
+						result_data[i] = ivalue;
 					}
-					rsel.set_index(new_count++, rindex);
 				}
 			}
-			rcount = new_count;
 		} else {
 			// no new null entries: only need to perform the operation
-			for (idx_t i = 0; i < rcount; i++) {
-				auto rindex = rsel.get_index(i);
-				auto vindex = vdata.sel->get_index(rindex);
+			for (idx_t i = 0; i < args.size(); i++) {
+				auto vindex = vdata.sel->get_index(i);
 
 				auto ivalue = input_data[vindex];
-				if (OP::template Operation<T>(ivalue, result_data[rindex])) {
-					result_data[rindex] = ivalue;
+				if (!result_has_value[i] || OP::template Operation<T>(ivalue, result_data[i])) {
+					result_has_value[i] = true;
+					result_data[i] = ivalue;
 				}
 			}
+		}
+	}
+	for (idx_t i = 0; i < args.size(); i++) {
+		if (!result_has_value[i]) {
+			result_mask.SetInvalid(i);
 		}
 	}
 	result.SetVectorType(result_type);

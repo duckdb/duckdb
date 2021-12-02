@@ -30,7 +30,7 @@
 
 #include "snappy-sinksource.h"
 
-namespace snappy {
+namespace duckdb_snappy {
 
 Source::~Source() { }
 
@@ -101,4 +101,4 @@ char* UncheckedByteArraySink::GetAppendBufferVariable(
   return dest_;
 }
 
-}  // namespace snappy
+}  // namespace duckdb_snappy

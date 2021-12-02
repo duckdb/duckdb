@@ -67,15 +67,14 @@ public:
 		Close();
 	}
 
-protected:
+	int fd;
+
+public:
 	void Close() override {
 		if (fd != -1) {
 			close(fd);
 		}
 	};
-
-public:
-	int fd;
 };
 
 static FileType GetFileTypeInternal(int fd) { // LCOV_EXCL_START
@@ -443,14 +442,13 @@ public:
 		Close();
 	}
 
-protected:
+	idx_t position;
+	HANDLE fd;
+
+public:
 	void Close() override {
 		CloseHandle(fd);
 	};
-
-public:
-	idx_t position;
-	HANDLE fd;
 };
 
 unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path, uint8_t flags, FileLockType lock_type,
