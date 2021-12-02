@@ -113,7 +113,7 @@
 #define DECLARE_bool(flag_name) \
   extern bool FLAGS_ ## flag_name
 
-namespace snappy {
+namespace duckdb_snappy {
 
 //static const uint32 kuint32max = static_cast<uint32>(0xFFFFFFFF);
 //static const int64 kint64max = static_cast<int64>(0x7FFFFFFFFFFFFFFFLL);
@@ -503,6 +503,6 @@ inline char* string_as_array(string* str) {
   return str->empty() ? NULL : &*str->begin();
 }
 
-}  // namespace snappy
+}  // namespace duckdb_snappy
 
 #endif  // THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_
