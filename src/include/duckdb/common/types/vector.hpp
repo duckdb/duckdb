@@ -67,7 +67,12 @@ public:
 	    If create_data is true, the vector will be an owning empty vector.
 	    If zero_data is true, the allocated data will be zero-initialized.
 	*/
+<<<<<<< HEAD
 	DUCKDB_API Vector(LogicalType type, bool create_data, bool zero_data, idx_t capacity = STANDARD_VECTOR_SIZE);
+=======
+	Vector(LogicalType type, bool create_data, bool zero_data, idx_t capacity = STANDARD_VECTOR_SIZE,
+	       VectorType vector_type = VectorType::FLAT_VECTOR);
+>>>>>>> 671087622 (Adding vector type to vector constructor)
 	// implicit copying of Vectors is not allowed
 	DUCKDB_API Vector(const Vector &) = delete;
 	// but moving of vectors is allowed

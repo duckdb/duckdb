@@ -254,8 +254,8 @@ void JoinHashTable::Build(DataChunk &keys, DataChunk &payload) {
 void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_locations[]) {
 	D_ASSERT(hashes.GetType().id() == LogicalTypeId::HASH);
 
-	// use bitmask to get position in array
-	Vector indices(hashes.GetType(), false, true, count);
+	// create a vector for indices and apply the bitmask to get them from the hash_values
+	Vector indices(hashes.GetType(), false, true, count, hashes.GetVectorType());
 	ApplyBitmask(hashes, indices, count);
 
 	hashes.Normalify(count);
@@ -263,6 +263,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices_data = FlatVector::GetData<hash_t>(indices);
+	auto hash_data = FlatVector::GetData<hash_t>(hashes);
 	for (idx_t i = 0; i < count; i++) {
 		auto index = indices_data[i];
 		// store current_pointer in next_pointer location (NOTE: this will be nullptr if
@@ -272,9 +273,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count, data_ptr_t key_loc
 		// In case of a conflict
 		if (pointers[index] != 0) {
 			// check whether the hash_values are the same
-			auto current_ptr = pointers[index] + pointer_offset;
-			auto current_hash = Load<hash_t>((data_ptr_t)(current_ptr));
-			auto next_hash = Load<hash_t>((data_ptr_t)(next_entry_ptr));
+			auto current_hash = hash_data[] auto next_hash = Load<hash_t>((data_ptr_t)(next_entry_ptr));
 			has_primary_key = true;
 		}
 		Store<data_ptr_t>(pointers[index], next_entry_ptr);
