@@ -410,7 +410,6 @@ void Executor::BuildPipelines(PhysicalOperator *op, Pipeline *current) {
 		case PhysicalOperatorType::TOP_N:
 		case PhysicalOperatorType::COPY_TO_FILE:
 		case PhysicalOperatorType::LIMIT:
-		case PhysicalOperatorType::LIMIT_PERCENT:
 		case PhysicalOperatorType::EXPRESSION_SCAN:
 		case PhysicalOperatorType::EXPLAIN_ANALYZE:
 			D_ASSERT(op->children.size() == 1);
