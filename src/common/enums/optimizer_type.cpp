@@ -1,43 +1,54 @@
 #include "duckdb/common/enums/optimizer_type.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #include "duckdb/common/exception.hpp"
 
 namespace duckdb {
 
+struct DefaultOptimizerType {
+	const char *name;
+	OptimizerType type;
+};
+
+static DefaultOptimizerType internal_optimizer_types[] = {
+    {"expression_rewriter", OptimizerType::EXPRESSION_REWRITER},
+    {"filter_pullup", OptimizerType::FILTER_PULLUP},
+    {"filter_pushdown", OptimizerType::FILTER_PUSHDOWN},
+    {"regex_range", OptimizerType::REGEX_RANGE},
+    {"in_clause", OptimizerType::IN_CLAUSE},
+    {"join_order", OptimizerType::JOIN_ORDER},
+    {"deliminator", OptimizerType::DELIMINATOR},
+    {"unused_columns", OptimizerType::UNUSED_COLUMNS},
+    {"statistics_propagation", OptimizerType::STATISTICS_PROPAGATION},
+    {"common_subexpressions", OptimizerType::COMMON_SUBEXPRESSIONS},
+    {"common_aggregate", OptimizerType::COMMON_AGGREGATE},
+    {"column_lifetime", OptimizerType::COLUMN_LIFETIME},
+    {"top_n", OptimizerType::TOP_N},
+    {"reorder_filter", OptimizerType::REORDER_FILTER},
+    {nullptr, OptimizerType::INVALID}};
+
 string OptimizerTypeToString(OptimizerType type) {
-	switch (type) {
-	case OptimizerType::EXPRESSION_REWRITER:
-		return "expression_rewriter";
-	case OptimizerType::FILTER_PULLUP:
-		return "filter_pullup";
-	case OptimizerType::FILTER_PUSHDOWN:
-		return "filter_pushdown";
-	case OptimizerType::REGEX_RANGE:
-		return "regex_range";
-	case OptimizerType::IN_CLAUSE:
-		return "in_clause";
-	case OptimizerType::JOIN_ORDER:
-		return "join_order";
-	case OptimizerType::DELIMINATOR:
-		return "deliminator";
-	case OptimizerType::UNUSED_COLUMNS:
-		return "unused_columns";
-	case OptimizerType::STATISTICS_PROPAGATION:
-		return "statistics_propagation";
-	case OptimizerType::COMMON_SUBEXPRESSIONS:
-		return "common_subexpressions";
-	case OptimizerType::COMMON_AGGREGATE:
-		return "common_aggregate";
-	case OptimizerType::COLUMN_LIFETIME:
-		return "column_lifetime";
-	case OptimizerType::TOP_N:
-		return "top_n";
-	case OptimizerType::REORDER_FILTER:
-		return "reorder_filter";
-	case OptimizerType::INVALID: // LCOV_EXCL_START
-		break;
+	for (idx_t i = 0; internal_optimizer_types[i].name; i++) {
+		if (internal_optimizer_types[i].type == type) {
+			return internal_optimizer_types[i].name;
+		}
 	}
-	return "INVALID"; // LCOV_EXCL_STOP
+	throw InternalException("Invalid optimizer type");
+}
+
+OptimizerType OptimizerTypeFromString(const string &str) {
+	for (idx_t i = 0; internal_optimizer_types[i].name; i++) {
+		if (internal_optimizer_types[i].name == str) {
+			return internal_optimizer_types[i].type;
+		}
+	}
+	// optimizer not found, construct candidate list
+	vector<string> optimizer_names;
+	for (idx_t i = 0; internal_optimizer_types[i].name; i++) {
+		optimizer_names.emplace_back(internal_optimizer_types[i].name);
+	}
+	throw ParserException("Optimizer type \"%s\" not recognized\n%s", str,
+	                      StringUtil::CandidatesErrorMessage(optimizer_names, str, "Candidate optimizers"));
 }
 
 } // namespace duckdb

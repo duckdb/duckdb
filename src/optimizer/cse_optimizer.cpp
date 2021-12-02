@@ -15,7 +15,7 @@ struct CSENode {
 	idx_t count;
 	idx_t column_index;
 
-	CSENode() : count(1), column_index(INVALID_INDEX) {
+	CSENode() : count(1), column_index(DConstants::INVALID_INDEX) {
 	}
 };
 
@@ -49,6 +49,9 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	case ExpressionClass::BOUND_COLUMN_REF:
 	case ExpressionClass::BOUND_CONSTANT:
 	case ExpressionClass::BOUND_PARAMETER:
+	// skip conjunctions and case, since short-circuiting might be incorrectly disabled otherwise
+	case ExpressionClass::BOUND_CONJUNCTION:
+	case ExpressionClass::BOUND_CASE:
 		return;
 	default:
 		break;
@@ -88,14 +91,16 @@ void CommonSubExpressionOptimizer::PerformCSEReplacement(unique_ptr<Expression> 
 		return;
 	}
 	// check if this child is eligible for CSE elimination
-	if (state.expression_count.find(&expr) != state.expression_count.end()) {
+	bool can_cse = expr.expression_class != ExpressionClass::BOUND_CONJUNCTION &&
+	               expr.expression_class != ExpressionClass::BOUND_CASE;
+	if (can_cse && state.expression_count.find(&expr) != state.expression_count.end()) {
 		auto &node = state.expression_count[&expr];
 		if (node.count > 1) {
 			// this expression occurs more than once! push it into the projection
 			// check if it has already been pushed into the projection
 			auto alias = expr.alias;
 			auto type = expr.return_type;
-			if (node.column_index == INVALID_INDEX) {
+			if (node.column_index == DConstants::INVALID_INDEX) {
 				// has not been pushed yet: push it
 				node.column_index = state.expressions.size();
 				state.expressions.push_back(move(*expr_ptr));

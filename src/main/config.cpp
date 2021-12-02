@@ -31,6 +31,7 @@ static ConfigurationOption internal_options[] = {DUCKDB_GLOBAL(AccessModeSetting
                                                  DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
                                                  DUCKDB_GLOBAL(DefaultOrderSetting),
                                                  DUCKDB_GLOBAL(DefaultNullOrderSetting),
+                                                 DUCKDB_GLOBAL(DisabledOptimizersSetting),
                                                  DUCKDB_GLOBAL(EnableExternalAccessSetting),
                                                  DUCKDB_GLOBAL(EnableObjectCacheSetting),
                                                  DUCKDB_LOCAL(EnableProfilingSetting),
@@ -97,9 +98,14 @@ void DBConfig::SetOption(const ConfigurationOption &option, const Value &value) 
 	option.set_global(nullptr, *this, input);
 }
 
+void DBConfig::AddExtensionOption(string name, string description, LogicalType parameter,
+                                  set_option_callback_t function) {
+	extension_parameters.insert(make_pair(move(name), ExtensionOption(move(description), move(parameter), function)));
+}
+
 idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	if (arg[0] == '-' || arg == "null" || arg == "none") {
-		return INVALID_INDEX;
+		return DConstants::INVALID_INDEX;
 	}
 	// split based on the number/non-number
 	idx_t idx = 0;

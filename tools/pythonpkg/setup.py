@@ -10,11 +10,14 @@ from setuptools import setup, Extension
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts','tpch', 'tpcds', 'visualizer']
+extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'visualizer']
 
 if platform.system() == 'Windows':
     extensions = ['parquet', 'icu', 'fts','tpch']
 
+unity_build = 0
+if 'DUCKDB_BUILD_UNITY' in os.environ:
+    unity_build = 16
 
 def parallel_cpp_compile(self, sources, output_dir=None, macros=None, include_dirs=None, debug=0,
                          extra_preargs=None, extra_postargs=None, depends=None):
@@ -39,7 +42,6 @@ def parallel_cpp_compile(self, sources, output_dir=None, macros=None, include_di
 if os.name != 'nt':
     import distutils.ccompiler
     distutils.ccompiler.CCompiler.compile = parallel_cpp_compile
-
 
 def open_utf8(fpath, flags):
     import sys
@@ -125,7 +127,7 @@ if len(existing_duckdb_dir) == 0:
         sys.path.append(os.path.join(script_path, '..', '..', 'scripts'))
         import package_build
 
-        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, 'duckdb'), extensions)
+        (source_list, include_list, original_sources) = package_build.build_package(os.path.join(script_path, 'duckdb'), extensions, False, unity_build)
 
         duckdb_sources = [os.path.sep.join(package_build.get_relative_path(script_path, x).split('/')) for x in source_list]
         duckdb_sources.sort()

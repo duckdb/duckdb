@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/map.hpp"
 
 namespace duckdb {
 
@@ -91,6 +92,10 @@ public:
 		sub_systems.push_back(move(fs));
 	}
 
+	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override {
+		compressed_fs[compression_type] = move(fs);
+	}
+
 	std::string GetName() const override {
 		return "VirtualFileSystem";
 	}
@@ -107,6 +112,7 @@ private:
 
 private:
 	vector<unique_ptr<FileSystem>> sub_systems;
+	map<FileCompressionType, unique_ptr<FileSystem>> compressed_fs;
 	const unique_ptr<FileSystem> default_fs;
 };
 

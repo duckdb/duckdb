@@ -1,4 +1,4 @@
-# name: benchmark/micro/join/left_outer_join_left_big.benchmark
+# name: benchmark/micro/join/left_outer_join_right_big.benchmark
 # description: LEFT OUTER JOIN between two tables, where the right table is significantly bigger than the left table
 # group: [join]
 

@@ -44,7 +44,7 @@ RangeFunctionBind(ClientContext &context, vector<Value> &inputs, unordered_map<s
 	} else if (result->start < result->end && result->increment < 0) {
 		throw BinderException("start is smaller than end, but increment is negative: cannot generate infinite series");
 	}
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 	if (GENERATE_SERIES) {
 		// generate_series has inclusive bounds on the RHS
 		if (result->increment < 0) {

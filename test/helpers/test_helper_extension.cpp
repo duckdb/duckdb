@@ -43,4 +43,8 @@ void TestHelperExtension::ClearLastError() {
 	last_error.reset();
 }
 
+std::string TestHelperExtension::Name() {
+	return "test_helper";
+}
+
 } // namespace duckdb

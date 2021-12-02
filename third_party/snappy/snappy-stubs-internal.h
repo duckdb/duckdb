@@ -111,7 +111,7 @@
 #define SNAPPY_FLAG(flag_type, flag_name, default_value, help) \
   flag_type FLAGS_ ## flag_name = default_value
 
-namespace snappy {
+namespace duckdb_snappy {
 
 // Stubbed version of absl::GetFlag().
 template <typename T>
@@ -487,6 +487,6 @@ inline char* string_as_array(std::string* str) {
   return str->empty() ? NULL : &*str->begin();
 }
 
-}  // namespace snappy
+}  // namespace duckdb_snappy
 
 #endif  // THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_INTERNAL_H_

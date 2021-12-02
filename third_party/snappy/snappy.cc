@@ -78,7 +78,7 @@
 #include <utility>
 #include <vector>
 
-namespace snappy {
+namespace duckdb_snappy {
 
 namespace {
 
@@ -2190,4 +2190,4 @@ bool Uncompress(Source* compressed, Sink* uncompressed) {
   }
 }
 
-}  // namespace snappy
+}  // namespace duckdb_snappy

@@ -1,0 +1,23 @@
+# name: test/sql/function/generic/case_short_circuit.test
+# description: Test correct CASE statement short circuiting
+# group: [generic]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table t (n text);
+
+statement ok
+insert into t values ('1'),('0'),('');
+
+query II
+select n, case 
+when n <> '' and cast(substr(n, 1, 1) as int) <= 0 then '0' 
+when n <> '' and cast(substr(n, 1, 1) as int) > 0 then '1' 
+else '2'end as x from t
+ORDER BY n;
+----
+(empty)	2
+0	0
+1	1

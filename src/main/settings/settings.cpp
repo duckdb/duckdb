@@ -200,6 +200,35 @@ Value DefaultNullOrderSetting::GetSetting(ClientContext &context) {
 }
 
 //===--------------------------------------------------------------------===//
+// Disabled Optimizer
+//===--------------------------------------------------------------------===//
+void DisabledOptimizersSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto list = StringUtil::Split(input.ToString(), ",");
+	set<OptimizerType> disabled_optimizers;
+	for (auto &entry : list) {
+		auto param = StringUtil::Lower(entry);
+		StringUtil::Trim(param);
+		if (param.empty()) {
+			continue;
+		}
+		disabled_optimizers.insert(OptimizerTypeFromString(param));
+	}
+	config.disabled_optimizers = move(disabled_optimizers);
+}
+
+Value DisabledOptimizersSetting::GetSetting(ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	string result;
+	for (auto &optimizer : config.disabled_optimizers) {
+		if (!result.empty()) {
+			result += ",";
+		}
+		result += OptimizerTypeToString(optimizer);
+	}
+	return Value(result);
+}
+
+//===--------------------------------------------------------------------===//
 // Enable External Access
 //===--------------------------------------------------------------------===//
 void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
