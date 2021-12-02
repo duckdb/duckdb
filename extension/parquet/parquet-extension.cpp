@@ -7,11 +7,18 @@
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
 #include "parquet_metadata.hpp"
+<<<<<<< HEAD
 #include "zstd_file_system.hpp"
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/file_system.hpp"
+=======
+
+#include "duckdb.hpp"
+#ifndef DUCKDB_AMALGAMATION
+#include "duckdb.hpp"
+>>>>>>> Initial commit
 #include "duckdb/common/types/chunk_collection.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/table_function.hpp"
@@ -20,7 +27,10 @@
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
+<<<<<<< HEAD
 #include "duckdb/common/enums/file_compression_type.hpp"
+=======
+>>>>>>> Initial commit
 #include "duckdb/main/config.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
@@ -484,9 +494,12 @@ unique_ptr<TableFunctionRef> ParquetScanReplacement(const string &table_name, vo
 }
 
 void ParquetExtension::Load(DuckDB &db) {
+<<<<<<< HEAD
 	auto &fs = db.GetFileSystem();
 	fs.RegisterSubSystem(FileCompressionType::ZSTD, make_unique<ZStdFileSystem>());
 
+=======
+>>>>>>> Initial commit
 	auto scan_fun = ParquetScanFunction::GetFunctionSet();
 	CreateTableFunctionInfo cinfo(scan_fun);
 	cinfo.name = "read_parquet";

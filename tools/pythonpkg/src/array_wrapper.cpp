@@ -5,7 +5,10 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/interval.hpp"
+<<<<<<< HEAD
 #include "duckdb_python/pyresult.hpp"
+=======
+>>>>>>> Initial commit
 
 namespace duckdb {
 
@@ -216,6 +219,7 @@ struct BlobConvert {
 	}
 };
 
+<<<<<<< HEAD
 struct ListConvert {
 	static py::list ConvertValue(Vector &input, idx_t chunk_offset) {
 		auto val = input.GetValue(chunk_offset);
@@ -243,6 +247,8 @@ struct StructMapConvert {
 	}
 };
 
+=======
+>>>>>>> Initial commit
 struct IntegralConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static NUMPY_T ConvertValue(DUCKDB_T val) {
@@ -321,6 +327,7 @@ static bool ConvertColumnCategoricalTemplate(idx_t target_offset, data_ptr_t tar
 	return false;
 }
 
+<<<<<<< HEAD
 template <class NUMPY_T, class CONVERT>
 static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *target_mask, Vector &input,
                           VectorData &idata, idx_t count) {
@@ -348,6 +355,8 @@ static bool ConvertNested(idx_t target_offset, data_ptr_t target_data, bool *tar
 	}
 }
 
+=======
+>>>>>>> Initial commit
 template <class NUMPY_T>
 static bool ConvertColumnCategorical(idx_t target_offset, data_ptr_t target_data, VectorData &idata, idx_t count,
                                      PhysicalType physical_type) {
@@ -467,9 +476,12 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::ENUM:
+<<<<<<< HEAD
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
+=======
+>>>>>>> Initial commit
 		type_width = sizeof(PyObject *);
 		break;
 	default:
@@ -528,9 +540,12 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
+<<<<<<< HEAD
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
+=======
+>>>>>>> Initial commit
 		dtype = "object";
 		break;
 	case LogicalTypeId::ENUM: {
@@ -673,6 +688,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertColumn<string_t, PyObject *, duckdb_py_convert::BlobConvert>(current_offset, dataptr,
 		                                                                                    maskptr, idata, count);
 		break;
+<<<<<<< HEAD
 	case LogicalTypeId::LIST:
 		may_have_null = ConvertNested<py::list, duckdb_py_convert::ListConvert>(current_offset, dataptr, maskptr, input,
 		                                                                        idata, count);
@@ -682,6 +698,8 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructMapConvert>(current_offset, dataptr, maskptr,
 		                                                                             input, idata, count);
 		break;
+=======
+>>>>>>> Initial commit
 	default:
 		throw std::runtime_error("unsupported type " + input.GetType().ToString());
 	}

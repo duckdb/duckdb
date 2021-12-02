@@ -6,7 +6,11 @@ coverage:
         # basic
         # for now
         target: number
+<<<<<<< HEAD
         threshold: 0%
+=======
+        threshold: 95%
+>>>>>>> Initial commit
          # advanced settings
         if_not_found: failure
         if_ci_failed: failure

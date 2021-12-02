@@ -216,8 +216,12 @@ void ColumnReader::PreparePage(idx_t compressed_page_size, idx_t uncompressed_pa
 		break;
 	}
 	case CompressionCodec::SNAPPY: {
+<<<<<<< HEAD
 		auto res =
 		    duckdb_snappy::RawUncompress((const char *)block->ptr, compressed_page_size, (char *)unpacked_block->ptr);
+=======
+		auto res = snappy::RawUncompress((const char *)block->ptr, compressed_page_size, (char *)unpacked_block->ptr);
+>>>>>>> Initial commit
 		if (!res) {
 			throw std::runtime_error("Decompression failure");
 		}

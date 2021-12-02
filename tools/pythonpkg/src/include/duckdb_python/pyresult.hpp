@@ -50,8 +50,11 @@ public:
 
 	void Close();
 
+<<<<<<< HEAD
 	static py::object GetValueToPython(Value &val, const LogicalType &type);
 
+=======
+>>>>>>> Initial commit
 private:
 	void FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name);
 };
