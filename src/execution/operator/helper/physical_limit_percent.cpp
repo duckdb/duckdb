@@ -116,17 +116,14 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 		}
 	}
 
-	if (current_offset >= limit) {
+	if (current_offset >= limit || state.chunk_idx >= gstate.data.ChunkCount()) {
 		return;
 	}
 
-	while (state.chunk_idx < gstate.data.ChunkCount()) {
-		DataChunk &input = gstate.data.GetChunk(state.chunk_idx);
-		state.chunk_idx++;
-		if (PhysicalLimit::HandleOffset(input, current_offset, 0, limit)) {
-			chunk.Reference(input);
-			break;
-		}
+	DataChunk &input = gstate.data.GetChunk(state.chunk_idx);
+	state.chunk_idx++;
+	if (PhysicalLimit::HandleOffset(input, current_offset, 0, limit)) {
+		chunk.Reference(input);
 	}
 }
 
