@@ -10,10 +10,10 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/common.hpp"
+#include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
-#include "duckdb/common/enums/operator_result_type.hpp"
 
 namespace duckdb {
 class Event;
@@ -38,6 +38,7 @@ public:
 	}
 
 	SinkFinalizeType state;
+	bool has_primary_key {false};
 };
 
 class LocalSinkState {
