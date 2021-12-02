@@ -2,11 +2,8 @@ name: Cancel
 on:
   workflow_run:
     workflows: ["Main", "LinuxRelease", "NodeJS", "OSX", "Python", "R", "Windows"]
-<<<<<<< HEAD
     branches-ignore:
       - master
-=======
->>>>>>> Initial commit
     types:
       - requested
 jobs:

@@ -317,6 +317,29 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	case LogicalOperatorType::LOGICAL_DISTINCT:
 		plan->children[0] = PushDownDependentJoin(move(plan->children[0]));
 		return plan;
+	case LogicalOperatorType::LOGICAL_EXPRESSION_GET: {
+		// expression get
+		// first we flatten the dependent join in the child
+		plan->children[0] = PushDownDependentJoinInternal(move(plan->children[0]));
+		// then we replace any correlated expressions with the corresponding entry in the correlated_map
+		RewriteCorrelatedExpressions rewriter(base_binding, correlated_map);
+		rewriter.VisitOperator(*plan);
+		// now we add all the correlated columns to each of the expressions of the expression scan
+		auto expr_get = (LogicalExpressionGet *)plan.get();
+		for (idx_t i = 0; i < correlated_columns.size(); i++) {
+			for (auto &expr_list : expr_get->expressions) {
+				auto colref = make_unique<BoundColumnRefExpression>(
+				    correlated_columns[i].type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+				expr_list.push_back(move(colref));
+			}
+			expr_get->expr_types.push_back(correlated_columns[i].type);
+		}
+
+		base_binding.table_index = expr_get->table_index;
+		this->delim_offset = base_binding.column_index = expr_get->expr_types.size() - correlated_columns.size();
+		this->data_offset = 0;
+		return plan;
+	}
 	case LogicalOperatorType::LOGICAL_ORDER_BY:
 		throw ParserException("ORDER BY not supported in correlated subquery");
 	default:
