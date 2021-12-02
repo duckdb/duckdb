@@ -145,13 +145,13 @@ static unique_ptr<FunctionData> ICUTimeZoneBind(ClientContext &context, vector<V
                                                 vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                 vector<string> &names) {
 	names.emplace_back("name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("abbrev");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 	names.emplace_back("utc_offset");
-	return_types.push_back(LogicalType::INTERVAL);
+	return_types.emplace_back(LogicalType::INTERVAL);
 	names.emplace_back("is_dst");
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	return nullptr;
 }
@@ -248,8 +248,11 @@ void ICUExtension::Load(DuckDB &db) {
 	// Time Zones
 	auto &config = DBConfig::GetConfig(*db.instance);
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, SetICUTimeZone);
-	Value utc("UTC");
-	config.set_variables["TimeZone"] = move(utc);
+	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
+	icu::UnicodeString tz_id;
+	std::string tz_string;
+	tz->getID(tz_id).toUTF8String(tz_string);
+	config.set_variables["TimeZone"] = Value(tz_string);
 
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit, nullptr,
 	                       ICUTimeZoneCleanup);
@@ -270,12 +273,12 @@ std::string ICUExtension::Name() {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void icu_init(duckdb::DatabaseInstance &db) {
+DUCKDB_EXTENSION_API void icu_init(duckdb::DatabaseInstance &db) { // NOLINT
 	duckdb::DuckDB db_wrapper(db);
 	db_wrapper.LoadExtension<duckdb::ICUExtension>();
 }
 
-DUCKDB_EXTENSION_API const char *icu_version() {
+DUCKDB_EXTENSION_API const char *icu_version() { // NOLINT
 	return duckdb::DuckDB::LibraryVersion();
 }
 }
