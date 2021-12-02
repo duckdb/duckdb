@@ -26,7 +26,6 @@
 #include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
-class Appender;
 class Catalog;
 class CatalogSearchPath;
 class ChunkCollection;
