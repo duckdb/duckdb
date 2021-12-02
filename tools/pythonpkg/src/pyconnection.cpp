@@ -201,6 +201,7 @@ DuckDBPyConnection *DuckDBPyConnection::RegisterPythonObject(const string &name,
 	}
 	return this;
 }
+
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromQuery(const string &query, const string &alias) {
 	if (!connection) {
 		throw std::runtime_error("connection closed");
