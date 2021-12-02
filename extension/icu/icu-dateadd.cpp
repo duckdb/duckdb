@@ -7,6 +7,67 @@
 
 namespace duckdb {
 
+struct ICUCalendarAdd {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+		throw InternalException("Unimplemented type for ICUCalendarAdd");
+	}
+};
+
+struct ICUCalendarSub {
+	template <class TA, class TB, class TR>
+	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+		throw InternalException("Unimplemented type for ICUCalendarSub");
+	}
+};
+
+template <>
+timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval, icu::Calendar *calendar) {
+	int64_t millis = timestamp.value / Interval::MICROS_PER_MSEC;
+	int64_t micros = timestamp.value % Interval::MICROS_PER_MSEC;
+
+	// Manually move the µs
+	micros += interval.micros % Interval::MICROS_PER_MSEC;
+	if (micros >= Interval::MICROS_PER_MSEC) {
+		micros -= Interval::MICROS_PER_MSEC;
+		++millis;
+	} else if (micros < 0) {
+		micros += Interval::MICROS_PER_MSEC;
+		--millis;
+	}
+
+	// Now use the calendar to add the other parts
+	UErrorCode status = U_ZERO_ERROR;
+	const auto udate = UDate(millis);
+	calendar->setTime(udate, status);
+
+	// Add interval fields from lowest to highest
+	calendar->add(UCAL_MILLISECOND, interval.micros / Interval::MICROS_PER_MSEC, status);
+	calendar->add(UCAL_DATE, interval.days, status);
+	calendar->add(UCAL_MONTH, interval.months, status);
+
+	// Extract the new time
+	millis = int64_t(calendar->getTime(status));
+	if (U_FAILURE(status)) {
+		throw Exception("Unable to compute ICU DATEADD.");
+	}
+
+	millis *= Interval::MICROS_PER_MSEC;
+	millis += micros;
+	return timestamp_t(millis);
+}
+
+template <>
+timestamp_t ICUCalendarAdd::Operation(interval_t interval, timestamp_t timestamp, icu::Calendar *calendar) {
+	return Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
+}
+
+template <>
+timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval, icu::Calendar *calendar) {
+	const interval_t negated {-interval.months, -interval.days, -interval.micros};
+	return ICUCalendarAdd::template Operation<timestamp_t, interval_t, timestamp_t>(timestamp, negated, calendar);
+}
+
 struct ICUDateAdd {
 	using CalendarPtr = unique_ptr<icu::Calendar>;
 	typedef void (*part_truncator_t)(icu::Calendar *calendar, uint64_t &micros);
@@ -40,69 +101,43 @@ struct ICUDateAdd {
 		return make_unique<BindData>(move(calendar));
 	}
 
-	static void BinaryOperator(DataChunk &args, ExpressionState &state, Vector &result) {
+	template <typename TA, typename TB, typename TR, typename OP>
+	static void ExecuteBinary(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
-
-		// Reorder the arguments
-		idx_t interval_col = 0;
-		for (; interval_col < args.ColumnCount(); ++interval_col) {
-			if (args.data[interval_col].GetType().id() == LogicalTypeId::INTERVAL) {
-				break;
-			}
-		}
-
-		auto &interval_arg = args.data[interval_col];
-		auto &date_arg = args.data[1 - interval_col];
 
 		auto &func_expr = (BoundFunctionExpression &)state.expr;
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 
-		BinaryExecutor::Execute<timestamp_t, interval_t, timestamp_t>(
-		    date_arg, interval_arg, result, args.size(), [&](timestamp_t timestamp, interval_t interval) {
-			    int64_t millis = timestamp.value / Interval::MICROS_PER_MSEC;
-			    int64_t micros = timestamp.value % Interval::MICROS_PER_MSEC;
-
-			    // Manually move the µs
-			    micros += interval.micros % Interval::MICROS_PER_MSEC;
-			    if (micros >= Interval::MICROS_PER_MSEC) {
-				    micros -= Interval::MICROS_PER_MSEC;
-				    ++millis;
-			    } else if (micros < 0) {
-				    micros += Interval::MICROS_PER_MSEC;
-				    --millis;
-			    }
-
-			    // Now use the calendar to add the other parts
-			    UErrorCode status = U_ZERO_ERROR;
-			    const auto udate = UDate(millis);
-			    calendar->setTime(udate, status);
-
-			    // Add interval fields from lowest to highest
-			    calendar->add(UCAL_MILLISECOND, interval.micros / Interval::MICROS_PER_MSEC, status);
-			    calendar->add(UCAL_DATE, interval.days, status);
-			    calendar->add(UCAL_MONTH, interval.months, status);
-
-			    // Extract the new time
-			    millis = int64_t(calendar->getTime(status));
-			    if (U_FAILURE(status)) {
-				    throw Exception("Unable to compute ICU DATEADD.");
-			    }
-
-			    millis *= Interval::MICROS_PER_MSEC;
-			    millis += micros;
-			    return timestamp_t(millis);
-		    });
+		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, args.size(), [&](TA left, TB right) {
+			return OP::template Operation<TA, TB, TR>(left, right, calendar.get());
+		});
 	}
 
-	static ScalarFunction GetDateAddOperator(const LogicalTypeId &left_type, const LogicalTypeId &right_type) {
-		return ScalarFunction({left_type, right_type}, LogicalType::TIMESTAMP_TZ, BinaryOperator, false, Bind);
+	template <typename TA, typename TB, typename OP>
+	static ScalarFunction GetDateIntervalOperator(const LogicalTypeId &left_type, const LogicalTypeId &right_type) {
+		return ScalarFunction({left_type, right_type}, LogicalType::TIMESTAMP_TZ,
+		                      ExecuteBinary<TA, TB, timestamp_t, OP>, false, Bind);
 	}
 
-	static void AddBinaryTimestampOperator(const string &name, ClientContext &context) {
+	static void AddDateAddOperators(const string &name, ClientContext &context) {
+		//	temporal + interval
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetDateAddOperator(LogicalType::TIMESTAMP_TZ, LogicalType::INTERVAL));
-		set.AddFunction(GetDateAddOperator(LogicalType::INTERVAL, LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetDateIntervalOperator<timestamp_t, interval_t, ICUCalendarAdd>(LogicalType::TIMESTAMP_TZ,
+		                                                                                 LogicalType::INTERVAL));
+		set.AddFunction(GetDateIntervalOperator<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
+		                                                                                 LogicalType::TIMESTAMP_TZ));
+
+		CreateScalarFunctionInfo func_info(set);
+		auto &catalog = Catalog::GetCatalog(context);
+		catalog.AddFunction(context, &func_info);
+	}
+
+	static void AddDateSubOperators(const string &name, ClientContext &context) {
+		//	temporal - interval
+		ScalarFunctionSet set(name);
+		set.AddFunction(GetDateIntervalOperator<timestamp_t, interval_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
+		                                                                                 LogicalType::INTERVAL));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);
@@ -111,7 +146,8 @@ struct ICUDateAdd {
 };
 
 void RegisterICUDateAddFunctions(ClientContext &context) {
-	ICUDateAdd::AddBinaryTimestampOperator("+", context);
+	ICUDateAdd::AddDateAddOperators("+", context);
+	ICUDateAdd::AddDateSubOperators("-", context);
 }
 
 } // namespace duckdb
