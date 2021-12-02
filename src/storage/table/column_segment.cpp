@@ -210,6 +210,16 @@ static void FilterSelectionSwitch(T *vec, T *predicate, SelectionVector &sel, id
 		}
 		break;
 	}
+	case ExpressionType::COMPARE_NOTEQUAL: {
+		if (mask.AllValid()) {
+			approved_tuple_count =
+			    TemplatedFilterSelection<T, NotEquals, false>(vec, predicate, sel, approved_tuple_count, mask, new_sel);
+		} else {
+			approved_tuple_count =
+			    TemplatedFilterSelection<T, NotEquals, true>(vec, predicate, sel, approved_tuple_count, mask, new_sel);
+		}
+		break;
+	}
 	case ExpressionType::COMPARE_LESSTHAN: {
 		if (mask.AllValid()) {
 			approved_tuple_count =

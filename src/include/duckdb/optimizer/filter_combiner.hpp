@@ -58,13 +58,15 @@ private:
 	//! Functions used to push and generate OR Filters
 	void LookUpConjunctions(Expression *expr);
 	void BFSLookUpConjunctions(BoundConjunctionExpression *conjunction);
+	void VerifyOrsToPush(Expression &expr);
 
-	void UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr);
-	void UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr, bool can_pushdown);
+	void UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr, Expression &expr);
+	void UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr);
 	void GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids);
 
 	void SetCurrentConjunction(BoundConjunctionExpression *conjunction);
-	bool CheckEarlyStopPushdown();
+	void SetEarlyStopPushdown(bool value);
+	bool VerifyEarlyStopPushdown();
 
 	template <typename CONJUNCTION_TYPE>
 	void GenerateConjunctionFilter(BoundConjunctionExpression *conjunction, ConjunctionFilter *last_conj_filter) {
@@ -106,9 +108,8 @@ private:
 		// only preserve AND if there is a single column in the expression
 		bool preserve_and = true;
 
-		// flag to indicate if pushdown can conitnue, only if there are single comparisons, e.g., against scalar.
-		// otherwise it will be false, e.g., in case of bound_functions
-		bool can_pushdown = true;
+		// an AND filter was found and uses this column, we should stop pushdown from this point
+		bool and_conj_found = false;
 
 		// conjunction chain for this column
 		vector<unique_ptr<BoundConjunctionExpression>> conjunctions;
@@ -119,9 +120,11 @@ private:
 
 		BoundConjunctionExpression *cur_conjunction;
 
-		bool early_stop_pushdown = false;
+		// flag to indicate if pushdown can conitnue, it will continue in the case:
+		// 1) Only if there are single comparisons (against scalar), it will stop in case of bound functions.
+		// 2) Only a single column in the root OR, it will stop in case of multiple columns.
+		bool stop_pushdown = false;
 
-		// pointer for the rela
 		unique_ptr<ColConjunctionToPush> col_conjunction = nullptr;
 	};
 
