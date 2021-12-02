@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/expression/bound_between_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
