@@ -423,17 +423,10 @@ void ParquetWriter::Flush(ChunkCollection &buffer) {
 			compressed_data = temp_writer.blob.data.get();
 			break;
 		case CompressionCodec::SNAPPY: {
-<<<<<<< HEAD
 			compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.blob.size);
 			compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
 			duckdb_snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
 			                           (char *)compressed_buf.get(), &compressed_size);
-=======
-			compressed_size = snappy::MaxCompressedLength(temp_writer.blob.size);
-			compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-			snappy::RawCompress((const char *)temp_writer.blob.data.get(), temp_writer.blob.size,
-			                    (char *)compressed_buf.get(), &compressed_size);
->>>>>>> Initial commit
 			compressed_data = compressed_buf.get();
 			break;
 		}

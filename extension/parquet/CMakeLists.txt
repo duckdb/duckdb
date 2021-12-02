@@ -14,10 +14,7 @@ set(PARQUET_EXTENSION_FILES
     parquet_timestamp.cpp
     parquet_writer.cpp
     parquet_statistics.cpp
-<<<<<<< HEAD
     zstd_file_system.cpp
-=======
->>>>>>> Initial commit
     column_reader.cpp)
 
 if(NOT CLANG_TIDY)

@@ -13,10 +13,7 @@
 #include "arrow_array_stream.hpp"
 #include "duckdb.hpp"
 #include "duckdb_python/pybind_wrapper.hpp"
-<<<<<<< HEAD
 #include <thread>
-=======
->>>>>>> Initial commit
 
 namespace duckdb {
 
@@ -49,10 +46,7 @@ public:
 	unordered_map<string, unique_ptr<RegisteredObject>> registered_objects;
 	unique_ptr<DuckDBPyResult> result;
 	vector<shared_ptr<DuckDBPyConnection>> cursors;
-<<<<<<< HEAD
 	std::thread::id thread_id = std::this_thread::get_id();
-=======
->>>>>>> Initial commit
 
 public:
 	static void Initialize(py::handle &m);

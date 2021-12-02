@@ -390,11 +390,6 @@ jobs:
     name: Symbol Leakage
     runs-on: ubuntu-20.04
     needs: linux-release-64
-<<<<<<< HEAD
-=======
-    env:
-      DISABLE_PARQUET: 1
->>>>>>> Initial commit
 
     steps:
     - uses: actions/checkout@v2
