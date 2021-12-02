@@ -2,7 +2,6 @@
 # description: Issue #2261: TPC-H Q6 fails on Parquet input
 # group: [parquet]
 
-
 # Here's how we generate this
 # from pyspark.sql import SparkSession
 # from pyspark.sql.types import *
@@ -265,3 +264,9 @@ query IIIIIIII
 select min(id), max(id), sum(id), count(id), min(id_with_null), max(id_with_null), sum(id_with_null), count(id_with_null) from 'data/parquet-testing/p2.parquet'
 ----
 42	9998	24994580	4979	42	9998	19999680	3984
+
+
+query IIII
+select min(id_int), max(id_int), sum(id_int), count(id_int) from 'data/parquet-testing/p2.parquet'
+----
+42	9998	19999680	3984

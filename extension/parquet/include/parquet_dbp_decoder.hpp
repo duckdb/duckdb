@@ -1,4 +1,6 @@
 #pragma once
+#include "decode_utils.hpp"
+
 namespace duckdb {
 class DbpDecoder {
 public:
@@ -6,10 +8,10 @@ public:
 
 		//<block size in values> <number of miniblocks in a block> <total value count> <first value>
 		// overall header
-		block_value_count = VarintDecode<uint64_t>(buffer_);
-		miniblocks_per_block = VarintDecode<uint64_t>(buffer_);
-		total_value_count = VarintDecode<uint64_t>(buffer_);
-		start_value = zigzagToInt(VarintDecode<int64_t>(buffer_));
+		block_value_count = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
+		miniblocks_per_block = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
+		total_value_count = ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_);
+		start_value = ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<int64_t>(buffer_));
 
 		// some derivatives
 		values_per_miniblock = block_value_count / miniblocks_per_block;
@@ -51,7 +53,7 @@ public:
 				if (bitpack_pos > 0) {       // have to eat the leftovers if any
 					buffer_.inc(1);
 				}
-				min_delta = zigzagToInt(VarintDecode<uint64_t>(buffer_));
+				min_delta = ParquetDecodeUtils::ZigzagToInt(ParquetDecodeUtils::VarintDecode<uint64_t>(buffer_));
 				for (idx_t miniblock_idx = 0; miniblock_idx < miniblocks_per_block; miniblock_idx++) {
 					miniblock_bit_widths[miniblock_idx] = buffer_.read<uint8_t>();
 					// TODO what happens if width is 0?
@@ -67,7 +69,8 @@ public:
 			}
 
 			auto read_now = MinValue(values_left_in_miniblock, (idx_t)batch_size - value_offset);
-			BitUnpack<T>(&values[value_offset], read_now, miniblock_bit_widths[miniblock_offset]);
+			ParquetDecodeUtils::BitUnpack<T>(buffer_, bitpack_pos, &values[value_offset], read_now,
+			                                 miniblock_bit_widths[miniblock_offset]);
 			for (idx_t i = value_offset; i < value_offset + read_now; i++) {
 				values[i] = ((i == 0) ? start_value : values[i - 1]) + min_delta + values[i];
 			}
@@ -96,50 +99,8 @@ private:
 	idx_t miniblock_offset;
 	int64_t min_delta;
 
-	uint8_t bitpack_pos;
-
 	bool is_first_value;
 
-	template <class T>
-	T zigzagToInt(const T n) {
-		return (n >> 1) ^ -(n & 1);
-	}
-
-	static const uint32_t BITPACK_MASKS[];
-	static const uint8_t BITPACK_DLEN;
-
-	template <typename T>
-	uint32_t BitUnpack(T *dest, uint32_t count, uint8_t width) {
-		auto mask = BITPACK_MASKS[width];
-
-		for (uint32_t i = 0; i < count; i++) {
-			T val = (buffer_.get<uint8_t>() >> bitpack_pos) & mask;
-			bitpack_pos += width;
-			while (bitpack_pos > BITPACK_DLEN) {
-				buffer_.inc(1);
-				val |= (buffer_.get<uint8_t>() << (BITPACK_DLEN - (bitpack_pos - width))) & mask;
-				bitpack_pos -= BITPACK_DLEN;
-			}
-			dest[i] = val;
-		}
-		return count;
-	}
-
-	template <class T>
-	T VarintDecode(ByteBuffer &buf) {
-		T result = 0;
-		uint8_t shift = 0;
-		while (true) {
-			auto byte = buf.read<uint8_t>();
-			result |= (byte & 127) << shift;
-			if ((byte & 128) == 0)
-				break;
-			shift += 7;
-			if (shift > sizeof(T) * 8) {
-				throw std::runtime_error("Varint-decoding found too large number");
-			}
-		}
-		return result;
-	}
+	uint8_t bitpack_pos;
 };
 } // namespace duckdb

@@ -30,20 +30,12 @@ using duckdb_parquet::format::Encoding;
 using duckdb_parquet::format::PageType;
 using duckdb_parquet::format::Type;
 
-const uint32_t RleBpDecoder::BITPACK_MASKS[] = {
+const uint32_t ParquetDecodeUtils::BITPACK_MASKS[] = {
     0,       1,       3,        7,        15,       31,        63,        127,       255,        511,       1023,
     2047,    4095,    8191,     16383,    32767,    65535,     131071,    262143,    524287,     1048575,   2097151,
     4194303, 8388607, 16777215, 33554431, 67108863, 134217727, 268435455, 536870911, 1073741823, 2147483647};
 
-const uint8_t RleBpDecoder::BITPACK_DLEN = 8;
-
-// TODO not copy this stuff
-const uint32_t DbpDecoder::BITPACK_MASKS[] = {
-    0,       1,       3,        7,        15,       31,        63,        127,       255,        511,       1023,
-    2047,    4095,    8191,     16383,    32767,    65535,     131071,    262143,    524287,     1048575,   2097151,
-    4194303, 8388607, 16777215, 33554431, 67108863, 134217727, 268435455, 536870911, 1073741823, 2147483647};
-
-const uint8_t DbpDecoder::BITPACK_DLEN = 8;
+const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 
 ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                            idx_t max_define_p, idx_t max_repeat_p)
@@ -217,9 +209,6 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	auto possibly_compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 	trans.read((uint8_t *)block->ptr, uncompressed_bytes);
 
-    if (!page_hdr.data_page_header_v2.is_compressed) {
-        return;
-    }
 	switch (chunk->meta_data.codec) {
 	case CompressionCodec::UNCOMPRESSED:
 		trans.read(((uint8_t *)block->ptr) + uncompressed_bytes, possibly_compressed_bytes);
@@ -232,7 +221,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		trans.read((uint8_t *)compressed_bytes_buffer.ptr, possibly_compressed_bytes);
 
 		auto res = duckdb_snappy::RawUncompress((const char *)compressed_bytes_buffer.ptr, possibly_compressed_bytes,
-		                                 ((char *)block->ptr) + uncompressed_bytes);
+		                                        ((char *)block->ptr) + uncompressed_bytes);
 		if (!res) {
 			throw std::runtime_error("Decompression failure");
 		}
@@ -349,7 +338,6 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	switch (page_encoding) {
 	case Encoding::RLE_DICTIONARY:
 	case Encoding::PLAIN_DICTIONARY: {
-		// TODO there seems to be some confusion whether this is in the bytes for v2
 		// where is it otherwise??
 		auto dict_width = block->read<uint8_t>();
 		// TODO somehow dict_width can be 0 ?
@@ -412,34 +400,40 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, uint8_t 
 
 		idx_t null_count = 0;
 
-		if (dict_decoder || dbp_decoder) {
-			if (HasDefines()) {
-				for (idx_t i = 0; i < read_now; i++) {
-					if (define_out[i + result_offset] != max_define) {
-						null_count++;
-					}
+		if ((dict_decoder || dbp_decoder) && HasDefines()) {
+			// we need the null count because the dictionary offsets have no entries for nulls
+			for (idx_t i = 0; i < read_now; i++) {
+				if (define_out[i + result_offset] != max_define) {
+					null_count++;
 				}
 			}
 		}
 
 		if (dict_decoder) {
-			// we need the null count because the offsets have no entries for nulls
-
 			offset_buffer.resize(reader.allocator, sizeof(uint32_t) * (read_now - null_count));
 			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
 			DictReference(result);
 			Offsets((uint32_t *)offset_buffer.ptr, define_out, read_now, filter, result_offset, result);
 		} else if (dbp_decoder) {
-
+			// TODO keep this in the state
 			auto read_buf = make_shared<ResizeableBuffer>();
-			// TODO does the null count matter here?
-			// TODO this hardcodes bigint
-			D_ASSERT(type.id() == LogicalTypeId::BIGINT);
-			read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now - null_count));
-			dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now - null_count);
 
+			switch (type.id()) {
+			case LogicalTypeId::INTEGER:
+				read_buf->resize(reader.allocator, sizeof(int32_t) * (read_now - null_count));
+				dbp_decoder->GetBatch<int32_t>(read_buf->ptr, read_now - null_count);
+
+				break;
+			case LogicalTypeId::BIGINT:
+				read_buf->resize(reader.allocator, sizeof(int64_t) * (read_now - null_count));
+				dbp_decoder->GetBatch<int64_t>(read_buf->ptr, read_now - null_count);
+				break;
+
+			default:
+				throw std::runtime_error("DELTA_BINARY_PACKED should only be INT32 or INT64");
+			}
+			// Plain() will put NULLs in the right place
 			Plain(read_buf, define_out, read_now, filter, result_offset, result);
-
 		} else {
 			PlainReference(block, result);
 			Plain(block, define_out, read_now, filter, result_offset, result);

@@ -1,4 +1,6 @@
 #pragma once
+#include "decode_utils.hpp"
+
 namespace duckdb {
 class RleBpDecoder {
 public:
@@ -27,7 +29,8 @@ public:
 				values_read += repeat_batch;
 			} else if (literal_count_ > 0) {
 				uint32_t literal_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(literal_count_));
-				uint32_t actual_read = BitUnpack<T>(values + values_read, literal_batch);
+				uint32_t actual_read = ParquetDecodeUtils::BitUnpack<T>(buffer_, bitpack_pos, values + values_read,
+				                                                        literal_batch, bit_width_);
 				if (literal_batch != actual_read) {
 					throw std::runtime_error("Did not find enough values");
 				}
@@ -60,25 +63,6 @@ private:
 
 	uint8_t bitpack_pos = 0;
 
-	// this is slow but whatever, calls are rare
-	uint32_t VarintDecode() {
-		uint32_t result = 0;
-		uint8_t shift = 0;
-		uint8_t len = 0;
-		while (true) {
-			auto byte = buffer_.read<uint8_t>();
-			len++;
-			result |= (byte & 127) << shift;
-			if ((byte & 128) == 0)
-				break;
-			shift += 7;
-			if (shift > 32) {
-				throw std::runtime_error("Varint-decoding found too large number");
-			}
-		}
-		return result;
-	}
-
 	/// Fills literal_count_ and repeat_count_ with next values. Returns false if there
 	/// are no more.
 	template <typename T>
@@ -89,7 +73,7 @@ private:
 			buffer_.inc(1);
 			bitpack_pos = 0;
 		}
-		auto indicator_value = VarintDecode();
+		auto indicator_value = ParquetDecodeUtils::VarintDecode<uint32_t>(buffer_);
 
 		// lsb indicates if it is a literal run or repeated run
 		bool is_literal = indicator_value & 1;
@@ -109,28 +93,6 @@ private:
 		}
 		// TODO complain if we run out of buffer
 		return true;
-	}
-
-	// somewhat optimized implementation that avoids non-alignment
-
-	static const uint32_t BITPACK_MASKS[];
-	static const uint8_t BITPACK_DLEN;
-
-	template <typename T>
-	uint32_t BitUnpack(T *dest, uint32_t count) {
-		auto mask = BITPACK_MASKS[bit_width_];
-
-		for (uint32_t i = 0; i < count; i++) {
-			T val = (buffer_.get<uint8_t>() >> bitpack_pos) & mask;
-			bitpack_pos += bit_width_;
-			while (bitpack_pos > BITPACK_DLEN) {
-				buffer_.inc(1);
-				val |= (buffer_.get<uint8_t>() << (BITPACK_DLEN - (bitpack_pos - bit_width_))) & mask;
-				bitpack_pos -= BITPACK_DLEN;
-			}
-			dest[i] = val;
-		}
-		return count;
 	}
 };
 } // namespace duckdb
