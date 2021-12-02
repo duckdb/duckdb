@@ -71,7 +71,7 @@ SinkResultType PhysicalLimitPercent::Sink(ExecutionContext &context, GlobalSinkS
 		state.is_offset_delimited = true;
 	}
 
-	if (!PhysicalLimit::HandleOffset(input, state.current_offset, 0, DConstants::INVALID_INDEX)) {
+	if (!PhysicalLimit::HandleOffset(input, state.current_offset, offset, DConstants::INVALID_INDEX)) {
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
@@ -107,20 +107,23 @@ void PhysicalLimitPercent::GetData(ExecutionContext &context, DataChunk &chunk, 
 
 	if (gstate.is_limit_percent_delimited && limit == DConstants::INVALID_INDEX) {
 		idx_t count = gstate.data.Count();
+		if (count > 0) {
+			count += offset;
+		}
 		limit = MinValue((idx_t)(limit_percent / 100 * count), count);
 		if (limit == 0) {
 			return;
 		}
 	}
 
-	if (current_offset >= limit + offset) {
+	if (current_offset >= limit) {
 		return;
 	}
 
 	while (state.chunk_idx < gstate.data.ChunkCount()) {
 		DataChunk &input = gstate.data.GetChunk(state.chunk_idx);
 		state.chunk_idx++;
-		if (PhysicalLimit::HandleOffset(input, current_offset, offset, limit)) {
+		if (PhysicalLimit::HandleOffset(input, current_offset, 0, limit)) {
 			chunk.Reference(input);
 			break;
 		}
