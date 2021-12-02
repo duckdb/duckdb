@@ -91,8 +91,8 @@ void MergeSorter::GetNextPartition() {
 	const idx_t l_count = left_block.Count();
 	const idx_t r_count = right_block.Count();
 	// Initialize left and right reader
-	left = make_unique<SortedBlockReadState>(buffer_manager, state);
-	right = make_unique<SortedBlockReadState>(buffer_manager, state);
+	left = make_unique<SBScanState>(buffer_manager, state);
+	right = make_unique<SBScanState>(buffer_manager, state);
 	// Compute the work that this thread must do using Merge Path
 	idx_t l_end;
 	idx_t r_end;
@@ -109,8 +109,8 @@ void MergeSorter::GetNextPartition() {
 		r_end = r_count;
 	}
 	// Create slices of the data that this thread must merge
-	left->ResetIndices(0, 0);
-	right->ResetIndices(0, 0);
+	left->SetIndices(0, 0);
+	right->SetIndices(0, 0);
 	left_input = left_block.CreateSlice(state.l_start, l_end, left->entry_idx);
 	right_input = right_block.CreateSlice(state.r_start, r_end, right->entry_idx);
 	left->sb = left_input.get();
@@ -130,8 +130,7 @@ void MergeSorter::GetNextPartition() {
 	}
 }
 
-int MergeSorter::CompareUsingGlobalIndex(SortedBlockReadState &l, SortedBlockReadState &r, const idx_t l_idx,
-                                         const idx_t r_idx) {
+int MergeSorter::CompareUsingGlobalIndex(SBScanState &l, SBScanState &r, const idx_t l_idx, const idx_t r_idx) {
 	D_ASSERT(l_idx < l.sb->Count());
 	D_ASSERT(r_idx < r.sb->Count());
 
@@ -320,8 +319,8 @@ void MergeSorter::ComputeMerge(const idx_t &count, bool left_smaller[]) {
 		}
 	}
 	// Reset block indices
-	left->ResetIndices(l_block_idx_before, l_entry_idx_before);
-	right->ResetIndices(r_block_idx_before, r_entry_idx_before);
+	left->SetIndices(l_block_idx_before, l_entry_idx_before);
+	right->SetIndices(r_block_idx_before, r_entry_idx_before);
 }
 
 void MergeSorter::MergeRadix(const idx_t &count, const bool left_smaller[]) {
@@ -391,8 +390,8 @@ void MergeSorter::MergeRadix(const idx_t &count, const bool left_smaller[]) {
 		}
 	}
 	// Reset block indices
-	left->ResetIndices(l_block_idx_before, l_entry_idx_before);
-	right->ResetIndices(r_block_idx_before, r_entry_idx_before);
+	left->SetIndices(l_block_idx_before, l_entry_idx_before);
+	right->SetIndices(r_block_idx_before, r_entry_idx_before);
 }
 
 void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedData &r_data, const idx_t &count,
@@ -565,8 +564,8 @@ void MergeSorter::MergeData(SortedData &result_data, SortedData &l_data, SortedD
 		}
 	}
 	if (reset_indices) {
-		left->ResetIndices(l_block_idx_before, l_entry_idx_before);
-		right->ResetIndices(r_block_idx_before, r_entry_idx_before);
+		left->SetIndices(l_block_idx_before, l_entry_idx_before);
+		right->SetIndices(r_block_idx_before, r_entry_idx_before);
 	}
 }
 
