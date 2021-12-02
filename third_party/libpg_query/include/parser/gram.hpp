@@ -244,121 +244,121 @@
      INPUT_P = 460,
      INSENSITIVE = 461,
      INSERT = 462,
-     INSTALL = 463,
-     INSTEAD = 464,
-     INT_P = 465,
-     INTEGER = 466,
-     INTERSECT = 467,
-     INTERVAL = 468,
-     INTO = 469,
-     INVOKER = 470,
-     IS = 471,
-     ISNULL = 472,
-     ISOLATION = 473,
-     JOIN = 474,
-     KEY = 475,
-     LABEL = 476,
-     LANGUAGE = 477,
-     LARGE_P = 478,
-     LAST_P = 479,
-     LATERAL_P = 480,
-     LEADING = 481,
-     LEAKPROOF = 482,
-     LEFT = 483,
-     LEVEL = 484,
-     LIKE = 485,
-     LIMIT = 486,
-     LISTEN = 487,
-     LOAD = 488,
-     LOCAL = 489,
-     LOCALTIME = 490,
-     LOCALTIMESTAMP = 491,
-     LOCATION = 492,
-     LOCK_P = 493,
-     LOCKED = 494,
-     LOGGED = 495,
-     MACRO = 496,
-     MAP = 497,
-     MAPPING = 498,
-     MATCH = 499,
-     MATERIALIZED = 500,
-     MAXVALUE = 501,
-     METHOD = 502,
-     MICROSECOND_P = 503,
-     MICROSECONDS_P = 504,
-     MILLISECOND_P = 505,
-     MILLISECONDS_P = 506,
-     MINUTE_P = 507,
-     MINUTES_P = 508,
-     MINVALUE = 509,
-     MODE = 510,
-     MONTH_P = 511,
-     MONTHS_P = 512,
-     MOVE = 513,
-     NAME_P = 514,
-     NAMES = 515,
-     NATIONAL = 516,
-     NATURAL = 517,
-     NCHAR = 518,
-     NEW = 519,
-     NEXT = 520,
-     NO = 521,
-     NONE = 522,
-     NOT = 523,
-     NOTHING = 524,
-     NOTIFY = 525,
-     NOTNULL = 526,
-     NOWAIT = 527,
-     NULL_P = 528,
-     NULLIF = 529,
-     NULLS_P = 530,
-     NUMERIC = 531,
-     OBJECT_P = 532,
-     OF = 533,
-     OFF = 534,
-     OFFSET = 535,
-     OIDS = 536,
-     OLD = 537,
-     ON = 538,
-     ONLY = 539,
-     OPERATOR = 540,
-     OPTION = 541,
-     OPTIONS = 542,
-     OR = 543,
-     ORDER = 544,
-     ORDINALITY = 545,
-     OUT_P = 546,
-     OUTER_P = 547,
-     OVER = 548,
-     OVERLAPS = 549,
-     OVERLAY = 550,
-     OVERRIDING = 551,
-     OWNED = 552,
-     OWNER = 553,
-     PARALLEL = 554,
-     PARSER = 555,
-     PARTIAL = 556,
-     PARTITION = 557,
-     PASSING = 558,
-     PASSWORD = 559,
-     PERCENT = 560,
-     PLACING = 561,
-     PLANS = 562,
-     POLICY = 563,
-     POSITION = 564,
-     PRAGMA_P = 565,
-     PRECEDING = 566,
-     PRECISION = 567,
-     PREPARE = 568,
-     PREPARED = 569,
-     PRESERVE = 570,
-     PRIMARY = 571,
-     PRIOR = 572,
-     PRIVILEGES = 573,
-     PROCEDURAL = 574,
-     PROCEDURE = 575,
-     PROGRAM = 576,
-     PUBLICATION = 577,
+     INSTEAD = 463,
+     INT_P = 464,
+     INTEGER = 465,
+     INTERSECT = 466,
+     INTERVAL = 467,
+     INTO = 468,
+     INVOKER = 469,
+     IS = 470,
+     ISNULL = 471,
+     ISOLATION = 472,
+     JOIN = 473,
+     KEY = 474,
+     LABEL = 475,
+     LANGUAGE = 476,
+     LARGE_P = 477,
+     LAST_P = 478,
+     LATERAL_P = 479,
+     LEADING = 480,
+     LEAKPROOF = 481,
+     LEFT = 482,
+     LEVEL = 483,
+     LIKE = 484,
+     LIMIT = 485,
+     LISTEN = 486,
+     LOAD = 487,
+     LOCAL = 488,
+     LOCALTIME = 489,
+     LOCALTIMESTAMP = 490,
+     LOCATION = 491,
+     LOCK_P = 492,
+     LOCKED = 493,
+     LOGGED = 494,
+     MACRO = 495,
+     MAP = 496,
+     MAPPING = 497,
+     MATCH = 498,
+     MATERIALIZED = 499,
+     MAXVALUE = 500,
+     METHOD = 501,
+     MICROSECOND_P = 502,
+     MICROSECONDS_P = 503,
+     MILLISECOND_P = 504,
+     MILLISECONDS_P = 505,
+     MINUTE_P = 506,
+     MINUTES_P = 507,
+     MINVALUE = 508,
+     MODE = 509,
+     MONTH_P = 510,
+     MONTHS_P = 511,
+     MOVE = 512,
+     NAME_P = 513,
+     NAMES = 514,
+     NATIONAL = 515,
+     NATURAL = 516,
+     NCHAR = 517,
+     NEW = 518,
+     NEXT = 519,
+     NO = 520,
+     NONE = 521,
+     NOT = 522,
+     NOTHING = 523,
+     NOTIFY = 524,
+     NOTNULL = 525,
+     NOWAIT = 526,
+     NULL_P = 527,
+     NULLIF = 528,
+     NULLS_P = 529,
+     NUMERIC = 530,
+     OBJECT_P = 531,
+     OF = 532,
+     OFF = 533,
+     OFFSET = 534,
+     OIDS = 535,
+     OLD = 536,
+     ON = 537,
+     ONLY = 538,
+     OPERATOR = 539,
+     OPTION = 540,
+     OPTIONS = 541,
+     OR = 542,
+     ORDER = 543,
+     ORDINALITY = 544,
+     OUT_P = 545,
+     OUTER_P = 546,
+     OVER = 547,
+     OVERLAPS = 548,
+     OVERLAY = 549,
+     OVERRIDING = 550,
+     OWNED = 551,
+     OWNER = 552,
+     PARALLEL = 553,
+     PARSER = 554,
+     PARTIAL = 555,
+     PARTITION = 556,
+     PASSING = 557,
+     PASSWORD = 558,
+     PERCENT = 559,
+     PLACING = 560,
+     PLANS = 561,
+     POLICY = 562,
+     POSITION = 563,
+     PRAGMA_P = 564,
+     PRECEDING = 565,
+     PRECISION = 566,
+     PREPARE = 567,
+     PREPARED = 568,
+     PRESERVE = 569,
+     PRIMARY = 570,
+     PRIOR = 571,
+     PRIVILEGES = 572,
+     PROCEDURAL = 573,
+     PROCEDURE = 574,
+     PROGRAM = 575,
+     PUBLICATION = 576,
+     QUALIFY = 577,
      QUOTE = 578,
      RANGE = 579,
      READ_P = 580,
@@ -725,121 +725,121 @@
 #define INPUT_P 460
 #define INSENSITIVE 461
 #define INSERT 462
-#define INSTALL 463
-#define INSTEAD 464
-#define INT_P 465
-#define INTEGER 466
-#define INTERSECT 467
-#define INTERVAL 468
-#define INTO 469
-#define INVOKER 470
-#define IS 471
-#define ISNULL 472
-#define ISOLATION 473
-#define JOIN 474
-#define KEY 475
-#define LABEL 476
-#define LANGUAGE 477
-#define LARGE_P 478
-#define LAST_P 479
-#define LATERAL_P 480
-#define LEADING 481
-#define LEAKPROOF 482
-#define LEFT 483
-#define LEVEL 484
-#define LIKE 485
-#define LIMIT 486
-#define LISTEN 487
-#define LOAD 488
-#define LOCAL 489
-#define LOCALTIME 490
-#define LOCALTIMESTAMP 491
-#define LOCATION 492
-#define LOCK_P 493
-#define LOCKED 494
-#define LOGGED 495
-#define MACRO 496
-#define MAP 497
-#define MAPPING 498
-#define MATCH 499
-#define MATERIALIZED 500
-#define MAXVALUE 501
-#define METHOD 502
-#define MICROSECOND_P 503
-#define MICROSECONDS_P 504
-#define MILLISECOND_P 505
-#define MILLISECONDS_P 506
-#define MINUTE_P 507
-#define MINUTES_P 508
-#define MINVALUE 509
-#define MODE 510
-#define MONTH_P 511
-#define MONTHS_P 512
-#define MOVE 513
-#define NAME_P 514
-#define NAMES 515
-#define NATIONAL 516
-#define NATURAL 517
-#define NCHAR 518
-#define NEW 519
-#define NEXT 520
-#define NO 521
-#define NONE 522
-#define NOT 523
-#define NOTHING 524
-#define NOTIFY 525
-#define NOTNULL 526
-#define NOWAIT 527
-#define NULL_P 528
-#define NULLIF 529
-#define NULLS_P 530
-#define NUMERIC 531
-#define OBJECT_P 532
-#define OF 533
-#define OFF 534
-#define OFFSET 535
-#define OIDS 536
-#define OLD 537
-#define ON 538
-#define ONLY 539
-#define OPERATOR 540
-#define OPTION 541
-#define OPTIONS 542
-#define OR 543
-#define ORDER 544
-#define ORDINALITY 545
-#define OUT_P 546
-#define OUTER_P 547
-#define OVER 548
-#define OVERLAPS 549
-#define OVERLAY 550
-#define OVERRIDING 551
-#define OWNED 552
-#define OWNER 553
-#define PARALLEL 554
-#define PARSER 555
-#define PARTIAL 556
-#define PARTITION 557
-#define PASSING 558
-#define PASSWORD 559
-#define PERCENT 560
-#define PLACING 561
-#define PLANS 562
-#define POLICY 563
-#define POSITION 564
-#define PRAGMA_P 565
-#define PRECEDING 566
-#define PRECISION 567
-#define PREPARE 568
-#define PREPARED 569
-#define PRESERVE 570
-#define PRIMARY 571
-#define PRIOR 572
-#define PRIVILEGES 573
-#define PROCEDURAL 574
-#define PROCEDURE 575
-#define PROGRAM 576
-#define PUBLICATION 577
+#define INSTEAD 463
+#define INT_P 464
+#define INTEGER 465
+#define INTERSECT 466
+#define INTERVAL 467
+#define INTO 468
+#define INVOKER 469
+#define IS 470
+#define ISNULL 471
+#define ISOLATION 472
+#define JOIN 473
+#define KEY 474
+#define LABEL 475
+#define LANGUAGE 476
+#define LARGE_P 477
+#define LAST_P 478
+#define LATERAL_P 479
+#define LEADING 480
+#define LEAKPROOF 481
+#define LEFT 482
+#define LEVEL 483
+#define LIKE 484
+#define LIMIT 485
+#define LISTEN 486
+#define LOAD 487
+#define LOCAL 488
+#define LOCALTIME 489
+#define LOCALTIMESTAMP 490
+#define LOCATION 491
+#define LOCK_P 492
+#define LOCKED 493
+#define LOGGED 494
+#define MACRO 495
+#define MAP 496
+#define MAPPING 497
+#define MATCH 498
+#define MATERIALIZED 499
+#define MAXVALUE 500
+#define METHOD 501
+#define MICROSECOND_P 502
+#define MICROSECONDS_P 503
+#define MILLISECOND_P 504
+#define MILLISECONDS_P 505
+#define MINUTE_P 506
+#define MINUTES_P 507
+#define MINVALUE 508
+#define MODE 509
+#define MONTH_P 510
+#define MONTHS_P 511
+#define MOVE 512
+#define NAME_P 513
+#define NAMES 514
+#define NATIONAL 515
+#define NATURAL 516
+#define NCHAR 517
+#define NEW 518
+#define NEXT 519
+#define NO 520
+#define NONE 521
+#define NOT 522
+#define NOTHING 523
+#define NOTIFY 524
+#define NOTNULL 525
+#define NOWAIT 526
+#define NULL_P 527
+#define NULLIF 528
+#define NULLS_P 529
+#define NUMERIC 530
+#define OBJECT_P 531
+#define OF 532
+#define OFF 533
+#define OFFSET 534
+#define OIDS 535
+#define OLD 536
+#define ON 537
+#define ONLY 538
+#define OPERATOR 539
+#define OPTION 540
+#define OPTIONS 541
+#define OR 542
+#define ORDER 543
+#define ORDINALITY 544
+#define OUT_P 545
+#define OUTER_P 546
+#define OVER 547
+#define OVERLAPS 548
+#define OVERLAY 549
+#define OVERRIDING 550
+#define OWNED 551
+#define OWNER 552
+#define PARALLEL 553
+#define PARSER 554
+#define PARTIAL 555
+#define PARTITION 556
+#define PASSING 557
+#define PASSWORD 558
+#define PERCENT 559
+#define PLACING 560
+#define PLANS 561
+#define POLICY 562
+#define POSITION 563
+#define PRAGMA_P 564
+#define PRECEDING 565
+#define PRECISION 566
+#define PREPARE 567
+#define PREPARED 568
+#define PRESERVE 569
+#define PRIMARY 570
+#define PRIOR 571
+#define PRIVILEGES 572
+#define PROCEDURAL 573
+#define PROCEDURE 574
+#define PROGRAM 575
+#define PUBLICATION 576
+#define QUALIFY 577
 #define QUOTE 578
 #define RANGE 579
 #define READ_P 580
