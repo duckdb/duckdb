@@ -249,8 +249,11 @@ void ICUExtension::Load(DuckDB &db) {
 	// Time Zones
 	auto &config = DBConfig::GetConfig(*db.instance);
 	config.AddExtensionOption("TimeZone", "The current time zone", LogicalType::VARCHAR, SetICUTimeZone);
-	Value utc("UTC");
-	config.set_variables["TimeZone"] = move(utc);
+	std::unique_ptr<icu::TimeZone> tz(icu::TimeZone::createDefault());
+	icu::UnicodeString tz_id;
+	std::string tz_string;
+	tz->getID(tz_id).toUTF8String(tz_string);
+	config.set_variables["TimeZone"] = Value(tz_string);
 
 	TableFunction tz_names("pg_timezone_names", {}, ICUTimeZoneFunction, ICUTimeZoneBind, ICUTimeZoneInit, nullptr,
 	                       ICUTimeZoneCleanup);

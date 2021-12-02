@@ -1,0 +1,21 @@
+# name: test/sql/function/time/epoch.test
+# description: Extract function
+# group: [time]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select epoch(TIME '14:21:13')
+----
+51673
+
+query I
+select extract(epoch from TIME '14:21:13')
+----
+51673
+
+query I
+select extract(seconds from TIME '14:21:13')
+----
+13

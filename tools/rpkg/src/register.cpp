@@ -141,11 +141,11 @@ private:
 		}
 		case TableFilterType::CONJUNCTION_AND: {
 			auto &and_filter = (ConjunctionAndFilter &)filter;
-			return TransformChildFilters(functions, column_name, "and", and_filter.child_filters);
+			return TransformChildFilters(functions, column_name, "and_kleene", and_filter.child_filters);
 		}
 		case TableFilterType::CONJUNCTION_OR: {
 			auto &and_filter = (ConjunctionAndFilter &)filter;
-			return TransformChildFilters(functions, column_name, "or", and_filter.child_filters);
+			return TransformChildFilters(functions, column_name, "or_kleene", and_filter.child_filters);
 		}
 
 		default:
@@ -176,7 +176,7 @@ private:
 		fit++;
 		for (; fit != filter_collection.table_filters->filters.end(); ++fit) {
 			SEXP rhs = r.Protect(TransformFilterExpression(*fit->second, columns[fit->first], functions));
-			res = r.Protect(CreateExpression(functions, "and", res, rhs));
+			res = r.Protect(CreateExpression(functions, "and_kleene", res, rhs));
 		}
 		return res;
 	}

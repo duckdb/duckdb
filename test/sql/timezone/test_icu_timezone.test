@@ -4,11 +4,6 @@
 
 require icu
 
-query IIII
-SELECT * FROM duckdb_settings() WHERE name = 'TimeZone';
-----
-TimeZone	UTC	The current time zone	VARCHAR
-
 statement ok
 SET TimeZone = 'America/Los_Angeles';
 
