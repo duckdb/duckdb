@@ -15,7 +15,6 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 
-
 #include "duckdb/storage/data_table.hpp"
 #include <functional>
 
@@ -79,9 +78,10 @@ private:
 	template <typename CONJUNCTION_TYPE>
 	unique_ptr<TableFilter> NextConjunctionFilter(BoundConjunctionExpression *conjunction) {
 		unique_ptr<ConjunctionFilter> conj_filter = make_unique<CONJUNCTION_TYPE>();
-		for (auto &expr: conjunction->children) {
+		for (auto &expr : conjunction->children) {
 			auto comp_expr = (BoundComparisonExpression *)expr.get();
-			auto &const_expr = (comp_expr->left->type == ExpressionType::VALUE_CONSTANT) ? *comp_expr->left: *comp_expr->right;
+			auto &const_expr =
+			    (comp_expr->left->type == ExpressionType::VALUE_CONSTANT) ? *comp_expr->left : *comp_expr->right;
 			auto const_value = ExpressionExecutor::EvaluateScalar(const_expr);
 			auto const_filter = make_unique<ConstantFilter>(comp_expr->type, const_value);
 			conj_filter->child_filters.push_back(move(const_filter));
@@ -97,7 +97,6 @@ private:
 	unordered_map<idx_t, vector<ExpressionValueInformation>> constant_values;
 	unordered_map<idx_t, vector<Expression *>> equivalence_map;
 	idx_t set_index = 0;
-
 
 	//! Structures used for OR Filters
 

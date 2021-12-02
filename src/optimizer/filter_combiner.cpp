@@ -996,7 +996,7 @@ ValueComparisonResult CompareValueInformation(ExpressionValueInformation &left, 
 void FilterCombiner::LookUpConjunctions(Expression *expr) {
 	if (expr->GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 		auto root_or = (BoundConjunctionExpression *)expr;
-		for (auto &or_to_push: ors_to_pushdown) {
+		for (auto &or_to_push : ors_to_pushdown) {
 			if (or_to_push->root_or->Equals(root_or)) {
 				return;
 			}
@@ -1016,31 +1016,31 @@ void FilterCombiner::LookUpConjunctions(Expression *expr) {
 }
 
 void FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjunction) {
-	if(VerifyEarlyStopPushdown()) {
+	if (VerifyEarlyStopPushdown()) {
 		return;
 	}
 
 	vector<BoundConjunctionExpression *> conjunctions_to_visit;
 
-	for (auto &child: conjunction->children) {
+	for (auto &child : conjunction->children) {
 		switch (child->GetExpressionClass()) {
-			case ExpressionClass::BOUND_CONJUNCTION: {
-				auto child_conjunction = (BoundConjunctionExpression *)child.get();
-				conjunctions_to_visit.emplace_back(child_conjunction);
-				break;
-			}
-			case ExpressionClass::BOUND_COMPARISON: {
-				UpdateConjunctionFilter((BoundComparisonExpression *)child.get(), *child);
-				break;
-			}
-			default: {
-				SetEarlyStopPushdown(true);
-				return;
-			}
+		case ExpressionClass::BOUND_CONJUNCTION: {
+			auto child_conjunction = (BoundConjunctionExpression *)child.get();
+			conjunctions_to_visit.emplace_back(child_conjunction);
+			break;
+		}
+		case ExpressionClass::BOUND_COMPARISON: {
+			UpdateConjunctionFilter((BoundComparisonExpression *)child.get(), *child);
+			break;
+		}
+		default: {
+			SetEarlyStopPushdown(true);
+			return;
+		}
 		}
 	}
 
-	for(auto child_conjunction: conjunctions_to_visit) {
+	for (auto child_conjunction : conjunctions_to_visit) {
 		SetCurrentConjunction(child_conjunction);
 		// traverse child conjuction
 		BFSLookUpConjunctions(child_conjunction);
@@ -1050,7 +1050,7 @@ void FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjuncti
 void FilterCombiner::VerifyOrsToPush(Expression &expr) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expr;
-		for (auto &or_to_push: ors_to_pushdown) {
+		for (auto &or_to_push : ors_to_pushdown) {
 			if (or_to_push->col_conjunction) {
 				// case we have the same column in AND expression, we should give priority to it
 				if (or_to_push->col_conjunction->column_ref->Equals(&colref)) {
@@ -1059,7 +1059,7 @@ void FilterCombiner::VerifyOrsToPush(Expression &expr) {
 			}
 		}
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { VerifyOrsToPush(child);});
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { VerifyOrsToPush(child); });
 }
 
 void FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr, Expression &expr) {
@@ -1076,16 +1076,17 @@ void FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparis
 			}
 		}
 	}
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { UpdateConjunctionFilter(comparison_expr, child);});
+	ExpressionIterator::EnumerateChildren(expr,
+	                                      [&](Expression &child) { UpdateConjunctionFilter(comparison_expr, child); });
 
 	// bool left_is_scalar = comparison_expr->left->IsFoldable();
 	// bool right_is_scalar = comparison_expr->right->IsFoldable();
 
 	// Expression *non_scalar_expr;
 	// if (left_is_scalar || right_is_scalar) {
-	// 	// only support comparison with scalar	
+	// 	// only support comparison with scalar
 	// 	non_scalar_expr = left_is_scalar ? comparison_expr->right.get() : comparison_expr->left.get();
-		
+
 	// 	switch (non_scalar_expr->GetExpressionType()) {
 	// 		case ExpressionType::BOUND_COLUMN_REF:
 	// 			UpdateFilterByColumn((BoundColumnRefExpression *)non_scalar_expr, comparison_expr);
@@ -1105,7 +1106,8 @@ void FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparis
 	// }
 }
 
-void FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr) {
+void FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
+                                          BoundComparisonExpression *comparison_expr) {
 	auto &or_to_push = ors_to_pushdown.back();
 	if (or_to_push->col_conjunction == nullptr) {
 		or_to_push->col_conjunction = make_unique<ColConjunctionToPush>();
@@ -1120,7 +1122,7 @@ void FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref, 
 	}
 
 	auto col_conjunction = or_to_push->col_conjunction.get();
-	
+
 	if (!col_conjunction->column_ref->Equals(column_ref)) {
 		// check for multiple colunms in the same root OR
 		if (or_to_push->root_or == or_to_push->cur_conjunction) {
@@ -1146,7 +1148,8 @@ void FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref, 
 	if (or_to_push->cur_conjunction->GetExpressionType() == last_conjunction->GetExpressionType()) {
 		last_conjunction->children.emplace_back(move(comparison_expr->Copy()));
 	} else {
-		auto new_conjunction = make_unique<BoundConjunctionExpression>(or_to_push->cur_conjunction->GetExpressionType());
+		auto new_conjunction =
+		    make_unique<BoundConjunctionExpression>(or_to_push->cur_conjunction->GetExpressionType());
 		new_conjunction->children.emplace_back(move(comparison_expr->Copy()));
 		col_conjunction->conjunctions.emplace_back(move(new_conjunction));
 	}
@@ -1179,7 +1182,7 @@ bool FilterCombiner::VerifyEarlyStopPushdown() {
 }
 
 void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids) {
-	for (auto &or_to_push: ors_to_pushdown) {
+	for (auto &or_to_push : ors_to_pushdown) {
 		// stop early was reached
 		if (or_to_push->stop_pushdown) {
 			continue;
@@ -1200,7 +1203,7 @@ void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_
 		// variable to hold the last conjuntion filter pointer
 		// the next filter will be added into it, i.e., we create a chain of conjunction filters
 		ConjunctionFilter *last_conj_filter = root_or_filter.get();
-		for(auto &conjunction: col_conjunction->conjunctions) {
+		for (auto &conjunction : col_conjunction->conjunctions) {
 			if (conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND && col_conjunction->preserve_and) {
 				GenerateConjunctionFilter<ConjunctionAndFilter>(conjunction.get(), last_conj_filter);
 			} else {
@@ -1208,7 +1211,7 @@ void FilterCombiner::GenerateORFilters(TableFilterSet &table_filter, vector<idx_
 			}
 		}
 
-        table_filter.PushFilter(column_index, move(root_or_filter));
+		table_filter.PushFilter(column_index, move(root_or_filter));
 	}
 	ors_to_pushdown.clear();
 }

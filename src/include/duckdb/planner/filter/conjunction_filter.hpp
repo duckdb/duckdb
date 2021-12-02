@@ -12,7 +12,7 @@
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
-class ConjunctionFilter: public TableFilter {
+class ConjunctionFilter : public TableFilter {
 public:
 	ConjunctionFilter(TableFilterType filter_type_p) : TableFilter(filter_type_p) {
 	}

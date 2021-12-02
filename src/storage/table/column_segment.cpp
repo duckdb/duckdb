@@ -290,7 +290,7 @@ static idx_t TemplatedNullSelection(SelectionVector &sel, idx_t approved_tuple_c
 }
 
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const TableFilter &filter,
-                                    idx_t &approved_tuple_count, ValidityMask &mask) {
+                                     idx_t &approved_tuple_count, ValidityMask &mask) {
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_OR: {
 		// similar to the CONJUNCTION_AND, but we need to take cake of the SelectionVectors (OR all of them)
@@ -308,7 +308,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
 				bool is_new_idx = true;
 				for (idx_t res_idx = 0; res_idx < count_total; res_idx++) {
 					if (result_sel.get_index(res_idx) == new_idx) {
-						is_new_idx=false;
+						is_new_idx = false;
 						break;
 					}
 				}
