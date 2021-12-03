@@ -50,13 +50,14 @@ EXPLAIN SELECT * FROM integers WHERE a=1 OR a>3 OR a<5
 physical_plan	<REGEX>:.*SEQ_SCAN.*Filters: a=1 OR a>3 OR a<5|.*
 
 query II
-SELECT * FROM integers WHERE a=1 OR a>3 OR a<5
+SELECT * FROM integers WHERE a=1 OR a>3 OR a<5 ORDER by a
 ----
 1	1
-4	4
-5	5
 2	2
 3	3
+4	4
+5	5
+
 
 ######### Testing String
 
