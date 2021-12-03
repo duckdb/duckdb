@@ -154,13 +154,12 @@ private:
 	// Sign bit extension
 	template <class T, class T_U = typename std::make_unsigned<T>::type>
 	static void SignExtend(data_ptr_t dst, bitpacking_width_t width) {
+		T const mask = ((T_U)1) << (width - 1);
 		for (idx_t i = 0; i < BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE; ++i) {
-			T val = *((T *)dst + i);
-			T result;
-			T const m = 1UL << (width - 1);   // mask can be pre-computed if b is fixed
-			val = val & ((1UL << width) - 1); // (Skip this if bits in x above position b are already zero.)
-			result = (val ^ m) - m;
-			*((T *)dst + i) = result;
+			T value = Load<T>(dst + i * sizeof(T));
+			value = value & ((((T_U)1) << width) - ((T_U)1));
+			T result = (value ^ mask) - mask;
+			Store(result, dst + i * sizeof(T));
 		}
 	}
 
