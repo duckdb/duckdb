@@ -25,4 +25,3 @@ coverage:
         only_pulls: true
         paths:
           - "src"
-          - "tools"

@@ -92,7 +92,6 @@ else()
           DESTINATION "${INSTALL_INCLUDE_DIR}")
 
 endif()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} --coverage")
 
 if(BUILD_PYTHON
    OR BUILD_R
