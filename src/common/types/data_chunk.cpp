@@ -466,6 +466,9 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::DATE_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIME_TZ:
 		child_holder.vector = make_unique<Vector>(data);
 		child.n_buffers = 2;
 		child.buffers[1] = (void *)FlatVector::GetData(*child_holder.vector);

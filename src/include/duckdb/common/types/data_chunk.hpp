@@ -45,10 +45,10 @@ public:
 	vector<Vector> data;
 
 public:
-	DUCKDB_API idx_t size() const {
+	inline idx_t size() const { // NOLINT
 		return count;
 	}
-	DUCKDB_API idx_t ColumnCount() const {
+	inline idx_t ColumnCount() const {
 		return data.size();
 	}
 	inline void SetCardinality(idx_t count_p) {

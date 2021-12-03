@@ -20,6 +20,15 @@ SELECT instr(s,'h') FROM strings
 0
 NULL
 
+# position is an alias for instr
+query I
+SELECT position('h' in s) FROM strings
+----
+1
+0
+0
+NULL
+
 # Test second letter
 query I
 SELECT instr(s,'e') FROM strings
@@ -41,6 +50,14 @@ NULL
 # Test multiple letters
 query I
 SELECT instr(s,'he') FROM strings
+----
+1
+0
+0
+NULL
+
+query I
+SELECT position('he' in s) FROM strings
 ----
 1
 0

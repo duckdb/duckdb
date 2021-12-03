@@ -181,6 +181,15 @@ void Catalog::DropEntry(ClientContext &context, DropInfo *info) {
 	lookup.schema->DropEntry(context, info);
 }
 
+CatalogEntry *Catalog::AddFunction(ClientContext &context, CreateFunctionInfo *info) {
+	auto schema = GetSchema(context, info->schema);
+	return AddFunction(context, schema, info);
+}
+
+CatalogEntry *Catalog::AddFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info) {
+	return schema->AddFunction(context, info);
+}
+
 SchemaCatalogEntry *Catalog::GetSchema(ClientContext &context, const string &schema_name, bool if_exists,
                                        QueryErrorContext error_context) {
 	D_ASSERT(!schema_name.empty());

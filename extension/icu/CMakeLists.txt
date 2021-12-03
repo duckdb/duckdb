@@ -4,7 +4,8 @@ project(ICUExtension)
 
 include_directories(include)
 
-add_library(icu_extension STATIC icu-collate.cpp icu-extension.cpp)
+add_library(icu_extension STATIC icu-collate.cpp icu-extension.cpp
+                                 icu-datepart.cpp icu-datetrunc.cpp)
 link_threads(icu_extension)
 disable_target_warnings(icu_extension)
 

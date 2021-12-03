@@ -169,6 +169,11 @@ public:
 	T *GetEntry(ClientContext &context, const string &schema_name, const string &name, bool if_exists = false,
 	            QueryErrorContext error_context = QueryErrorContext());
 
+	//! Append a scalar or aggregate function to the catalog
+	DUCKDB_API CatalogEntry *AddFunction(ClientContext &context, CreateFunctionInfo *info);
+	//! Append a scalar or aggregate function to the catalog
+	DUCKDB_API CatalogEntry *AddFunction(ClientContext &context, SchemaCatalogEntry *schema, CreateFunctionInfo *info);
+
 	//! Alter an existing entry in the catalog.
 	DUCKDB_API void Alter(ClientContext &context, AlterInfo *info);
 

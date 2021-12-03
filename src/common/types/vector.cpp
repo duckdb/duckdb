@@ -311,6 +311,7 @@ void Vector::SetValue(idx_t index, const Value &val) {
 		((int16_t *)data)[index] = val.value_.smallint;
 		break;
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::INTEGER:
 		((int32_t *)data)[index] = val.value_.integer;
 		break;
@@ -321,6 +322,8 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	case LogicalTypeId::HASH:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIME_TZ:
 		((int64_t *)data)[index] = val.value_.bigint;
 		break;
 	case LogicalTypeId::UTINYINT:
@@ -463,8 +466,12 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::INTEGER(((int32_t *)data)[index]);
 	case LogicalTypeId::DATE:
 		return Value::DATE(((date_t *)data)[index]);
+	case LogicalTypeId::DATE_TZ:
+		return Value::DATETZ(((date_t *)data)[index]);
 	case LogicalTypeId::TIME:
 		return Value::TIME(((dtime_t *)data)[index]);
+	case LogicalTypeId::TIME_TZ:
+		return Value::TIMETZ(((dtime_t *)data)[index]);
 	case LogicalTypeId::BIGINT:
 		return Value::BIGINT(((int64_t *)data)[index]);
 	case LogicalTypeId::UTINYINT:
@@ -483,6 +490,8 @@ Value Vector::GetValue(idx_t index) const {
 		return Value::TimestampMs(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TimestampSec(((timestamp_t *)data)[index]);
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
 		return Value::HUGEINT(((hugeint_t *)data)[index]);
 	case LogicalTypeId::UUID:
@@ -1056,7 +1065,7 @@ void Vector::Verify(const SelectionVector &sel, idx_t count) {
 
 	if (GetType().InternalType() == PhysicalType::STRUCT) {
 		auto &child_types = StructType::GetChildTypes(GetType());
-		D_ASSERT(child_types.size() > 0);
+		D_ASSERT(!child_types.empty());
 		if (GetVectorType() == VectorType::FLAT_VECTOR || GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// create a selection vector of the non-null entries of the struct vector
 			auto &children = StructVector::GetEntries(*this);
@@ -1486,13 +1495,16 @@ vector<idx_t> ListVector::Search(Vector &list, Value &key, idx_t row) {
 		                                       entry.length);
 		break;
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		::duckdb::TemplatedSearchInMap<date_t>(list, key.value_.date, offsets, key.is_null, entry.offset, entry.length);
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		::duckdb::TemplatedSearchInMap<dtime_t>(list, key.value_.time, offsets, key.is_null, entry.offset,
 		                                        entry.length);
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		::duckdb::TemplatedSearchInMap<timestamp_t>(list, key.value_.timestamp, offsets, key.is_null, entry.offset,
 		                                            entry.length);
 		break;
