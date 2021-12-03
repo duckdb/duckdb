@@ -28,8 +28,6 @@ public:
 	void CreateBlock();
 	//! Create a slice that holds the rows between the start and end indices
 	unique_ptr<SortedData> CreateSlice(idx_t start_block_index, idx_t end_block_index, idx_t end_entry_index);
-	//! Copy the SortedData
-	unique_ptr<SortedData> Copy();
 	//! Unswizzles all
 	void Unswizzle();
 
@@ -67,8 +65,6 @@ public:
 	void GlobalToLocalIndex(const idx_t &global_idx, idx_t &local_block_index, idx_t &local_entry_index);
 	//! Create a slice that holds the rows between the start and end indices
 	unique_ptr<SortedBlock> CreateSlice(const idx_t start, const idx_t end, idx_t &entry_idx);
-	//! Copy the SortedBlock
-	unique_ptr<SortedBlock> Copy();
 
 	//! Size (in bytes) of the heap of this block
 	idx_t HeapSize() const;

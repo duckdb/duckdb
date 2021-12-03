@@ -58,17 +58,6 @@ unique_ptr<SortedData> SortedData::CreateSlice(idx_t start_block_index, idx_t en
 	return result;
 }
 
-unique_ptr<SortedData> SortedData::Copy() {
-	auto result = make_unique<SortedData>(type, layout, buffer_manager, state);
-	for (idx_t i = 0; i < data_blocks.size(); i++) {
-		result->data_blocks.push_back(data_blocks[i]);
-	}
-	for (idx_t i = 0; i < heap_blocks.size(); i++) {
-		result->heap_blocks.push_back(heap_blocks[i]);
-	}
-	return result;
-}
-
 void SortedData::Unswizzle() {
 	if (layout.AllConstant() || !swizzled) {
 		return;
@@ -188,16 +177,6 @@ unique_ptr<SortedBlock> SortedBlock::CreateSlice(const idx_t start, const idx_t 
 	}
 	// And the payload data
 	result->payload_data = payload_data->CreateSlice(start_block_index, end_block_index, end_entry_index);
-	return result;
-}
-
-unique_ptr<SortedBlock> SortedBlock::Copy() {
-	auto result = make_unique<SortedBlock>(buffer_manager, state);
-	for (idx_t i = 0; i < radix_sorting_data.size(); i++) {
-		result->radix_sorting_data.push_back(radix_sorting_data[i]);
-	}
-	result->blob_sorting_data = blob_sorting_data->Copy();
-	result->payload_data = payload_data->Copy();
 	return result;
 }
 
