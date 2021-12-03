@@ -121,8 +121,11 @@ public:
 	DUCKDB_API static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
-	//! Create a list value with the given entries
+	//! Create a list value with the given entries, list type is inferred from children
+	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);
+	//! Create a list value with the given entries
+	DUCKDB_API static Value LIST(LogicalType child_type, vector<Value> values);
 	//! Create an empty list with the specified type
 	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
 	//! Creat a map value from a (key, value) pair
