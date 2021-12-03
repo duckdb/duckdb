@@ -350,7 +350,30 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		block->inc(block->len);
 		break;
 	}
-	case Encoding::DELTA_BYTE_ARRAY:
+	case Encoding::DELTA_BYTE_ARRAY: {
+		dbp_decoder = make_unique<DbpDecoder>((const uint8_t *)block->ptr, block->len);
+		auto prefix_buffer = make_shared<ResizeableBuffer>();
+		prefix_buffer->resize(reader.allocator, sizeof(uint32_t) * page_hdr.data_page_header_v2.num_rows);
+
+		auto suffix_buffer = make_shared<ResizeableBuffer>();
+		suffix_buffer->resize(reader.allocator, sizeof(uint32_t) * page_hdr.data_page_header_v2.num_rows);
+
+		dbp_decoder->GetBatch<uint32_t>(prefix_buffer->ptr, page_hdr.data_page_header_v2.num_rows);
+		auto buffer_after_prefixes = dbp_decoder->BufferPtr();
+
+		dbp_decoder = make_unique<DbpDecoder>((const uint8_t *)buffer_after_prefixes.ptr, buffer_after_prefixes.len);
+		dbp_decoder->GetBatch<uint32_t>(suffix_buffer->ptr, page_hdr.data_page_header_v2.num_rows);
+
+		auto string_buffer = dbp_decoder->BufferPtr();
+
+		for (idx_t i = 0 ; i < page_hdr.data_page_header_v2.num_rows; i++) {
+			auto suffix_length = (uint32_t*) suffix_buffer->ptr;
+			string str( suffix_length[i] + 1, '\0');
+			string_buffer.copy_to((char*) str.data(), suffix_length[i]);
+			printf("%s\n", str.c_str());
+		}
+		throw std::runtime_error("eek");
+
 
 		// This is also known as incremental encoding or front compression: for each element in a sequence of strings,
 		// store the prefix length of the previous entry plus the suffix. This is stored as a sequence of delta-encoded
@@ -360,6 +383,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 
 		// TODO actually do something here
 		break;
+	}
 	case Encoding::PLAIN:
 		// nothing to do here, will be read directly below
 		break;

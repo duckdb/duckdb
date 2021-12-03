@@ -26,6 +26,15 @@ public:
 		is_first_value = true;
 	};
 
+	ByteBuffer BufferPtr() {
+		if (bitpack_pos != 0) {
+			buffer_.inc(1);
+			bitpack_pos = 0;
+		}
+		return buffer_;
+	}
+
+
 	template <typename T>
 	void GetBatch(char *values_target_ptr, uint32_t batch_size) {
 		auto values = (T *)values_target_ptr;
