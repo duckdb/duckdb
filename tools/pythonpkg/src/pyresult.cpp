@@ -128,8 +128,8 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 		}
 		return std::move(py_struct);
 	}
-	default:                                                                   // LCOV_EXCL_LINE
-		throw NotImplementedException("unsupported type: " + type.ToString()); // LCOV_EXCL_LINE
+	default:
+		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
 }
 
@@ -410,8 +410,8 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::LIST: {
 		return py::str("list");
 	}
-	default:                                                                   // LCOV_EXCL_LINE
-		throw NotImplementedException("unsupported type: " + type.ToString()); // LCOV_EXCL_LINE
+	default:
+		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
 }
 

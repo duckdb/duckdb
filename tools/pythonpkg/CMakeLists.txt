@@ -25,4 +25,3 @@ add_library(
   src/arrow_array_stream.cpp)
 target_include_directories(python_duckdb PRIVATE ${PYTHON_INCLUDE_DIRS})
 target_link_libraries(python_duckdb duckdb_static ${PYTHON_LIBRARIES})
-
