@@ -1079,32 +1079,6 @@ void FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparis
 	}
 	ExpressionIterator::EnumerateChildren(expr,
 	                                      [&](Expression &child) { UpdateConjunctionFilter(comparison_expr, child); });
-
-	// bool left_is_scalar = comparison_expr->left->IsFoldable();
-	// bool right_is_scalar = comparison_expr->right->IsFoldable();
-
-	// Expression *non_scalar_expr;
-	// if (left_is_scalar || right_is_scalar) {
-	// 	// only support comparison with scalar
-	// 	non_scalar_expr = left_is_scalar ? comparison_expr->right.get() : comparison_expr->left.get();
-
-	// 	switch (non_scalar_expr->GetExpressionType()) {
-	// 		case ExpressionType::BOUND_COLUMN_REF:
-	// 			UpdateFilterByColumn((BoundColumnRefExpression *)non_scalar_expr, comparison_expr);
-	// 			break;
-	// 		case ExpressionType::BOUND_FUNCTION: {
-	// 			auto function_expr = (BoundFunctionExpression *) non_scalar_expr;
-	// 			for(auto &child: function_expr->children) {
-	// 				if (child->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-	// 					UpdateFilterByColumn((BoundColumnRefExpression *)child.get(), comparison_expr);
-	// 				}
-	// 			}
-	// 			break;
-	// 		}
-	// 		default: {
-	// 		}
-	// 	}
-	// }
 }
 
 void FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
