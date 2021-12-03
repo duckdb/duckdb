@@ -103,7 +103,7 @@ struct ScalarFunctionExtractor {
 	static Value GetParameters(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions[offset].arguments.size(); i++) {
-			results.push_back(Value("col" + to_string(i)));
+			results.emplace_back("col" + to_string(i));
 		}
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
@@ -111,7 +111,7 @@ struct ScalarFunctionExtractor {
 	static Value GetParameterTypes(ScalarFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions[offset].arguments.size(); i++) {
-			results.push_back(entry.functions[offset].arguments[i].ToString());
+			results.emplace_back(entry.functions[offset].arguments[i].ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
@@ -147,7 +147,7 @@ struct AggregateFunctionExtractor {
 	static Value GetParameters(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions[offset].arguments.size(); i++) {
-			results.push_back(Value("col" + to_string(i)));
+			results.emplace_back("col" + to_string(i));
 		}
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
@@ -155,7 +155,7 @@ struct AggregateFunctionExtractor {
 	static Value GetParameterTypes(AggregateFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions[offset].arguments.size(); i++) {
-			results.push_back(entry.functions[offset].arguments[i].ToString());
+			results.emplace_back(entry.functions[offset].arguments[i].ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
@@ -193,10 +193,10 @@ struct MacroExtractor {
 		for (auto &param : entry.function->parameters) {
 			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
 			auto &colref = (ColumnRefExpression &)*param;
-			results.push_back(Value(colref.GetColumnName()));
+			results.emplace_back(colref.GetColumnName());
 		}
 		for (auto &param_entry : entry.function->default_parameters) {
-			results.push_back(Value(param_entry.first));
+			results.emplace_back(param_entry.first);
 		}
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
@@ -204,10 +204,10 @@ struct MacroExtractor {
 	static Value GetParameterTypes(MacroCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.function->parameters.size(); i++) {
-			results.push_back(Value(LogicalType::VARCHAR));
+			results.emplace_back(LogicalType::VARCHAR);
 		}
 		for (idx_t i = 0; i < entry.function->default_parameters.size(); i++) {
-			results.push_back(Value(LogicalType::VARCHAR));
+			results.emplace_back(LogicalType::VARCHAR);
 		}
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
@@ -241,10 +241,10 @@ struct TableFunctionExtractor {
 	static Value GetParameters(TableFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions[offset].arguments.size(); i++) {
-			results.push_back(Value("col" + to_string(i)));
+			results.emplace_back("col" + to_string(i));
 		}
 		for (auto &param : entry.functions[offset].named_parameters) {
-			results.push_back(Value(param.first));
+			results.emplace_back(param.first);
 		}
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
@@ -252,10 +252,10 @@ struct TableFunctionExtractor {
 	static Value GetParameterTypes(TableFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions[offset].arguments.size(); i++) {
-			results.push_back(entry.functions[offset].arguments[i].ToString());
+			results.emplace_back(entry.functions[offset].arguments[i].ToString());
 		}
 		for (auto &param : entry.functions[offset].named_parameters) {
-			results.push_back(Value(param.second.ToString()));
+			results.emplace_back(param.second.ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
@@ -291,10 +291,10 @@ struct PragmaFunctionExtractor {
 	static Value GetParameters(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions[offset].arguments.size(); i++) {
-			results.push_back(Value("col" + to_string(i)));
+			results.emplace_back("col" + to_string(i));
 		}
 		for (auto &param : entry.functions[offset].named_parameters) {
-			results.push_back(Value(param.first));
+			results.emplace_back(param.first);
 		}
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
@@ -302,10 +302,10 @@ struct PragmaFunctionExtractor {
 	static Value GetParameterTypes(PragmaFunctionCatalogEntry &entry, idx_t offset) {
 		vector<Value> results;
 		for (idx_t i = 0; i < entry.functions[offset].arguments.size(); i++) {
-			results.push_back(entry.functions[offset].arguments[i].ToString());
+			results.emplace_back(entry.functions[offset].arguments[i].ToString());
 		}
 		for (auto &param : entry.functions[offset].named_parameters) {
-			results.push_back(Value(param.second.ToString()));
+			results.emplace_back(param.second.ToString());
 		}
 		return Value::LIST(LogicalType::VARCHAR, move(results));
 	}
