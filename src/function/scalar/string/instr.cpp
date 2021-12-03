@@ -62,6 +62,8 @@ void InstrFun::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(instr);
 	instr.name = "strpos";
 	set.AddFunction(instr);
+	instr.name = "position";
+	set.AddFunction(instr);
 }
 
 } // namespace duckdb

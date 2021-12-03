@@ -282,6 +282,9 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			return move(plan->children[0]);
 		}
 	}
+	case LogicalOperatorType::LOGICAL_LIMIT_PERCENT: {
+		throw ParserException("Limit percent operator not supported in correlated subquery");
+	}
 	case LogicalOperatorType::LOGICAL_WINDOW: {
 		auto &window = (LogicalWindow &)*plan;
 		// push into children
