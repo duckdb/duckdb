@@ -1,0 +1,11 @@
+# name: test/sql/types/date/test_date_tz.test
+# description: Test IEJoin
+# group: [date]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select datetz '2021-11-15';
+----
+2021-11-15+00
