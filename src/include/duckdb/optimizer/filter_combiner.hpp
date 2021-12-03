@@ -86,7 +86,7 @@ private:
 			auto const_filter = make_unique<ConstantFilter>(comp_expr->type, const_value);
 			conj_filter->child_filters.push_back(move(const_filter));
 		}
-		return conj_filter;
+		return move(conj_filter);
 	}
 
 private:
