@@ -37,6 +37,12 @@ class TestRuntimeError(object):
             raised_error = True
         assert raised_error == True
 
+    def test_register_error(self, duckdb_cursor):
+        con = duckdb.connect()
+        py_obj = "this is a string"
+        with pytest.raises(Exception):
+            con.register(py_obj, "v")
+
     def test_arrow_fetch_table_error(self, duckdb_cursor):
         try:
             import pyarrow as pa
@@ -108,7 +114,7 @@ class TestRuntimeError(object):
         conn = duckdb.connect()
         conn.close()
         df_in = pd.DataFrame({'numbers': [1,2,3,4,5],})
-        
+
         with pytest.raises(Exception):
             conn.register("bla",df_in)
 
@@ -123,28 +129,28 @@ class TestRuntimeError(object):
 
         with pytest.raises(Exception):
             conn.view("bla")
-            
+
         with pytest.raises(Exception):
             conn.values("bla")
-            
+
         with pytest.raises(Exception):
             conn.table_function("bla")
-        
+
         with pytest.raises(Exception):
             conn.from_df("bla")
-            
+
         with pytest.raises(Exception):
             conn.from_csv_auto("bla")
-            
+
         with pytest.raises(Exception):
             conn.from_parquet("bla")
 
         with pytest.raises(Exception):
             conn.from_arrow_table("bla")
-    
+
     def test_missing_result_from_conn_exceptions(self, duckdb_cursor):
         conn = duckdb.connect()
-        
+
         with pytest.raises(Exception):
             conn.fetchone()
 
@@ -159,13 +165,12 @@ class TestRuntimeError(object):
 
         with pytest.raises(Exception):
             conn.fetch_df_chunk()
-            
+
         with pytest.raises(Exception):
             conn.fetch_arrow_table()
-            
+
         with pytest.raises(Exception):
             conn.fetch_arrow_chunk()
-        
+
         with pytest.raises(Exception):
             conn.fetch_record_batch()
-    

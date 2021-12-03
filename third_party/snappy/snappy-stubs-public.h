@@ -49,7 +49,7 @@
 #define SNAPPY_VERSION \
     ((SNAPPY_MAJOR << 16) | (SNAPPY_MINOR << 8) | SNAPPY_PATCHLEVEL)
 
-namespace snappy {
+namespace duckdb_snappy {
 
 using int8 = std::int8_t;
 using uint8 = std::uint8_t;
@@ -71,6 +71,6 @@ struct iovec {
 };
 #endif  // !HAVE_SYS_UIO_H
 
-}  // namespace snappy
+}  // namespace duckdb_snappy
 
 #endif  // THIRD_PARTY_SNAPPY_OPENSOURCE_SNAPPY_STUBS_PUBLIC_H_

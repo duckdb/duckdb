@@ -6,7 +6,7 @@ coverage:
         # basic
         # for now
         target: number
-        threshold: 95%
+        threshold: 0%
          # advanced settings
         if_not_found: failure
         if_ci_failed: failure

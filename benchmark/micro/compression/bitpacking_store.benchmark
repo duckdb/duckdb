@@ -1,0 +1,16 @@
+# name: benchmark/micro/compression/bitpacking_store.benchmark
+# description: Storing 1GB of ints compressed at ~3x compression
+# group: [compression]
+
+name Bitpacking Insert
+group aggregate
+storage persistent
+require_reinit
+
+load
+PRAGMA force_compression='bitpacking';
+DROP TABLE IF EXISTS integers;
+
+run
+CREATE TABLE integers AS SELECT i % 4000000 AS i FROM range(0, 250000000) tbl(i);
+checkpoint;

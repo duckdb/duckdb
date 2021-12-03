@@ -15,6 +15,12 @@
 #define suint64_t int64_t
 #endif
 
+#if defined(_WIN32) || defined(_WIN64)
+#define DUCKDB_WINDOWS
+#elif defined(__unix__) || defined(__unix) || (defined(__APPLE__) && defined(__MACH__))
+#define DUCKDB_POSIX
+#endif
+
 namespace duckdb {
 #if !defined(_MSC_VER) && (__cplusplus < 201402L)
 template <typename T, typename... Args>

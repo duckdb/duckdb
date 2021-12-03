@@ -166,11 +166,10 @@ struct ModeFunction {
 
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE>
 	static void Window(const INPUT_TYPE *data, const ValidityMask &dmask, FunctionData *bind_data_p, STATE *state,
-	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid) {
+	                   const FrameBounds &frame, const FrameBounds &prev, Vector &result, idx_t rid, idx_t bias) {
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
 		auto &rmask = FlatVector::Validity(result);
 
-		const auto bias = MinValue(frame.first, prev.first);
 		if (!state->frequency_map) {
 			state->frequency_map = new unordered_map<KEY_TYPE, size_t>();
 		}
@@ -290,7 +289,8 @@ unique_ptr<FunctionData> BindModeDecimal(ClientContext &context, AggregateFuncti
 }
 
 void ModeFun::RegisterFunction(BuiltinFunctions &set) {
-	const vector<LogicalType> TEMPORAL = {LogicalType::DATE, LogicalType::TIMESTAMP, LogicalType::TIME,
+	const vector<LogicalType> TEMPORAL = {LogicalType::DATE,    LogicalType::TIMESTAMP,    LogicalType::TIME,
+	                                      LogicalType::DATE_TZ, LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ,
 	                                      LogicalType::INTERVAL};
 
 	AggregateFunctionSet mode("mode");

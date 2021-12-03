@@ -1,0 +1,277 @@
+# name: test/sql/function/timestamp/test_icu_datepart.test
+# description: Test moving ICU date part functions
+# group: [timestamp]
+
+require icu
+
+statement ok
+SET TimeZone = 'America/Los_Angeles';
+
+statement ok
+CREATE TABLE timestamps AS SELECT ts::TIMESTAMPTZ AS ts, part FROM (VALUES
+	('2021-01-01 00:00:00+00', 'year'),
+	('2021-02-02 00:00:00+00', 'month'),
+	('2021-11-26 10:15:13.123456+00', 'microsecond'),
+	('2021-11-15 02:30:00-08', 'hour'),
+	('2021-11-15 02:30:00-07', 'minute'),
+	('2021-12-25 00:00:00+02', 'day')
+) tbl(ts, part);
+
+query II
+SELECT year(ts), year(ts::TIMESTAMP) FROM timestamps;
+----
+2020	2021
+2021	2021
+2021	2021
+2021	2021
+2021	2021
+2021	2021
+
+query II
+SELECT month(ts), month(ts::TIMESTAMP) FROM timestamps;
+----
+12	1
+2	2
+11	11
+11	11
+11	11
+12	12
+
+query II
+SELECT day(ts), day(ts::TIMESTAMP) FROM timestamps;
+----
+31	1
+1	2
+26	26
+15	15
+15	15
+24	24
+
+query II
+SELECT decade(ts), decade(ts::TIMESTAMP) FROM timestamps;
+----
+202	202
+202	202
+202	202
+202	202
+202	202
+202	202
+
+query II
+SELECT century(ts), century(ts::TIMESTAMP) FROM timestamps;
+----
+21	21
+21	21
+21	21
+21	21
+21	21
+21	21
+
+query II
+SELECT millennium(ts), millennium(ts::TIMESTAMP) FROM timestamps;
+----
+3	3
+3	3
+3	3
+3	3
+3	3
+3	3
+
+query II
+SELECT microsecond(ts), microsecond(ts::TIMESTAMP) FROM timestamps;
+----
+0	0
+0	0
+13123456	13123456
+0	0
+0	0
+0	0
+
+query II
+SELECT millisecond(ts), millisecond(ts::TIMESTAMP) FROM timestamps;
+----
+0	0
+0	0
+13123	13123
+0	0
+0	0
+0	0
+
+query II
+SELECT second(ts), second(ts::TIMESTAMP) FROM timestamps;
+----
+0	0
+0	0
+13	13
+0	0
+0	0
+0	0
+
+query II
+SELECT minute(ts), minute(ts::TIMESTAMP) FROM timestamps;
+----
+0	0
+0	0
+15	15
+30	30
+30	30
+0	0
+
+query II
+SELECT hour(ts), hour(ts::TIMESTAMP) FROM timestamps;
+----
+16	0
+16	0
+2	10
+2	10
+1	9
+14	22
+
+query II
+SELECT dayofweek(ts), dayofweek(ts::TIMESTAMP) FROM timestamps;
+----
+4	5
+1	2
+5	5
+1	1
+1	1
+5	5
+
+query II
+SELECT isodow(ts), isodow(ts::TIMESTAMP) FROM timestamps;
+----
+5	5
+2	2
+6	5
+2	1
+2	1
+6	5
+
+query II
+SELECT week(ts), week(ts::TIMESTAMP) FROM timestamps;
+----
+53	53
+5	5
+47	47
+46	45
+46	45
+51	51
+
+query II
+SELECT dayofyear(ts), dayofyear(ts::TIMESTAMP) FROM timestamps;
+----
+366	1
+32	33
+330	330
+319	319
+319	319
+358	358
+
+query II
+SELECT quarter(ts), quarter(ts::TIMESTAMP) FROM timestamps;
+----
+4	1
+1	1
+4	4
+4	4
+4	4
+4	4
+
+query II
+SELECT yearweek(ts), yearweek(ts::TIMESTAMP) FROM timestamps;
+----
+202053	202153
+202105	202105
+202147	202147
+202146	202145
+202146	202145
+202151	202151
+
+query II
+SELECT epoch(ts), epoch(ts::TIMESTAMP) FROM timestamps;
+----
+1609430400	1609459200
+1612195200	1612224000
+1637892913	1637921713
+1636943400	1636972200
+1636939800	1636968600
+1640354400	1640383200
+
+query III
+SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part FROM timestamps;
+----
+2020	2021	year
+2	2	month
+13123456	13123456	microsecond
+2	10	hour
+30	30	minute
+24	24	day
+
+# Aliases
+query III
+SELECT datepart(part, ts), datepart(part, ts::TIMESTAMP), part FROM timestamps;
+----
+2020	2021	year
+2	2	month
+13123456	13123456	microsecond
+2	10	hour
+30	30	minute
+24	24	day
+
+query II
+SELECT dayofmonth(ts), dayofmonth(ts::TIMESTAMP) FROM timestamps;
+----
+31	1
+1	2
+26	26
+15	15
+15	15
+24	24
+
+
+query II
+SELECT weekday(ts), weekday(ts::TIMESTAMP) FROM timestamps;
+----
+4	5
+1	2
+5	5
+1	1
+1	1
+5	5
+
+query II
+SELECT weekofyear(ts), weekofyear(ts::TIMESTAMP) FROM timestamps;
+----
+53	53
+5	5
+47	47
+46	45
+46	45
+51	51
+
+#  last_day
+statement ok
+CREATE TABLE februaries AS
+SELECT ts::TIMESTAMPTZ AS ts
+FROM (VALUES
+	('1900-02-12'),
+	('1992-02-12'),
+	('2000-02-12')
+) tbl(ts);
+
+query TTT
+SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM februaries;
+----
+1900-02-12 00:00:00+00	1900-02-28+00	1900-02-28
+1992-02-12 00:00:00+00	1992-02-29+00	1992-02-29
+2000-02-12 00:00:00+00	2000-02-29+00	2000-02-29
+
+query TTT
+SELECT ts, LAST_DAY(ts), LAST_DAY(ts::TIMESTAMP) FROM timestamps;
+----
+2021-01-01 00:00:00+00	2020-12-31+00	2021-01-31
+2021-02-02 00:00:00+00	2021-02-28+00	2021-02-28
+2021-11-26 10:15:13.123456+00	2021-11-30+00	2021-11-30
+2021-11-15 10:30:00+00	2021-11-30+00	2021-11-30
+2021-11-15 09:30:00+00	2021-11-30+00	2021-11-30
+2021-12-24 22:00:00+00	2021-12-31+00	2021-12-31

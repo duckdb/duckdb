@@ -1795,9 +1795,14 @@ typedef struct PGViewStmt {
  *		Load Statement
  * ----------------------
  */
+
+typedef enum PGLoadInstallType { PG_LOAD_TYPE_LOAD,  PG_LOAD_TYPE_INSTALL, PG_LOAD_TYPE_FORCE_INSTALL } PGLoadInstallType;
+
+
 typedef struct PGLoadStmt {
 	PGNodeTag type;
-	char *filename; /* file to load */
+	const char *filename; /* file to load */
+	PGLoadInstallType load_type;
 } PGLoadStmt;
 
 /* ----------------------
@@ -1978,6 +1983,14 @@ typedef struct PGSampleOptions {
 	int location;             /* token location, or -1 if unknown */
 } PGSampleOptions;
 
+/* ----------------------
+ *              Limit Percentage
+ * ----------------------
+ */
+typedef struct PGLimitPercent {
+	PGNodeTag type;
+    PGNode* limit_percent;  /* limit percent */
+} PGLimitPercent;
 
 /* ----------------------
  *		Lambda Function

@@ -1,0 +1,86 @@
+# name: test/sql/storage/compression/bitpacking/bitpacking_types.test_coverage
+# description: Test bitpacking with different types, especially around the numerical limits
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)
+statement ok
+CREATE TABLE test (a ${type});
+
+statement ok
+CREATE TABLE a AS SELECT MOD(i,3) i FROM range(10000) tbl(i)
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM a
+----
+0	2	0.999900	10000	10000
+
+query IIIII
+SELECT MIN(i), MAX(i), AVG(i), COUNT(*), COUNT(i) FROM a WHERE i=1
+----
+1	1	1.000000	3333	3333
+
+statement ok
+DROP TABLE a
+
+endloop
+
+
+statement ok
+CREATE TABLE test (a INT64, b INT32, c INT16, d INT8);
+
+statement ok
+INSERT INTO test SELECT i, i, i, i FROM range(-128, 128) tbl(i);
+INSERT INTO test SELECT i, i, i, NULL FROM range(-32767, 32768) tbl(i);
+INSERT INTO test SELECT i, i, NULL, NULL FROM range(-2147483648, -2147482648) tbl(i);
+INSERT INTO test SELECT i, i, NULL, NULL FROM range(2147482648, 2147483648) tbl(i);
+INSERT INTO test SELECT i, NULL, NULL, NULL FROM range(-9223372036854775808, -9223372036854774808) tbl(i);
+INSERT INTO test SELECT i, NULL, NULL, NULL FROM range(9223372036854774808, 9223372036854775807) tbl(i);
+INSERT INTO test values (9223372036854775807, NULL, NULL, NULL);
+
+statement ok
+checkpoint
+
+query IIIII
+SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
+----
+-0.030491	-0.016639	-0.001946	-0.500000	69791
+
+statement ok
+drop table test
+
+statement ok
+CREATE TABLE test (a UINT64, b UINT32, c UINT16, d UINT8);
+
+statement ok
+INSERT INTO test SELECT i, i, i, i FROM range(0, 256) tbl(i);
+INSERT INTO test SELECT i, i, i, NULL FROM range(31768, 32768) tbl(i);
+INSERT INTO test SELECT i, i, NULL, NULL FROM range(4294966295, 4294967295) tbl(i);
+INSERT INTO test SELECT 18446744073709551615 - i, NULL, NULL, NULL FROM range(0, 1000) tbl(i);
+
+statement ok
+checkpoint
+
+query IIIII
+SELECT AVG(a), AVG(b), AVG(c), AVG(d), COUNT(*) FROM test
+----
+5665461940419088384.000000	1903811655.425532	25716.671975	127.500000	3256
+
+statement ok
+CREATE TABLE test_bool (id VARCHAR, col BOOL)
+
+statement ok
+INSERT INTO test_bool SELECT i::VARCHAR id, CAST (i%2 as BOOL) col FROM range(10000) tbl(i)
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT COUNT(*) FROM test_bool WHERE col = TRUE
+----
+5000

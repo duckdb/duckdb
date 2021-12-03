@@ -85,7 +85,7 @@ SchemaCatalogEntry *Binder::BindCreateFunctionInfo(CreateInfo &info) {
 		if (param.IsQualified()) {
 			throw BinderException("Invalid parameter name '%s': must be unqualified", param.ToString());
 		}
-		dummy_types.push_back(LogicalType::SQLNULL);
+		dummy_types.emplace_back(LogicalType::SQLNULL);
 		dummy_names.push_back(param.GetColumnName());
 	}
 	// default parameters

@@ -43,21 +43,21 @@ class CatalogSet {
 	friend class DependencyManager;
 
 public:
-	explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
+	DUCKDB_API explicit CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults = nullptr);
 
 	//! Create an entry in the catalog set. Returns whether or not it was
 	//! successful.
-	bool CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
-	                 unordered_set<CatalogEntry *> &dependencies);
+	DUCKDB_API bool CreateEntry(ClientContext &context, const string &name, unique_ptr<CatalogEntry> value,
+	                            unordered_set<CatalogEntry *> &dependencies);
 
-	bool AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info);
+	DUCKDB_API bool AlterEntry(ClientContext &context, const string &name, AlterInfo *alter_info);
 
-	bool DropEntry(ClientContext &context, const string &name, bool cascade);
+	DUCKDB_API bool DropEntry(ClientContext &context, const string &name, bool cascade);
 
 	void CleanupEntry(CatalogEntry *catalog_entry);
 
 	//! Returns the entry with the specified name
-	CatalogEntry *GetEntry(ClientContext &context, const string &name);
+	DUCKDB_API CatalogEntry *GetEntry(ClientContext &context, const string &name);
 
 	//! Gets the entry that is most similar to the given name (i.e. smallest levenshtein distance), or empty string if
 	//! none is found. The returned pair consists of the entry name and the distance (smaller means closer).
@@ -68,9 +68,9 @@ public:
 	void Undo(CatalogEntry *entry);
 
 	//! Scan the catalog set, invoking the callback method for every committed entry
-	void Scan(const std::function<void(CatalogEntry *)> &callback);
+	DUCKDB_API void Scan(const std::function<void(CatalogEntry *)> &callback);
 	//! Scan the catalog set, invoking the callback method for every entry
-	void Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback);
+	DUCKDB_API void Scan(ClientContext &context, const std::function<void(CatalogEntry *)> &callback);
 
 	template <class T>
 	vector<T *> GetEntries(ClientContext &context) {
@@ -79,8 +79,8 @@ public:
 		return result;
 	}
 
-	static bool HasConflict(ClientContext &context, transaction_t timestamp);
-	static bool UseTimestamp(ClientContext &context, transaction_t timestamp);
+	DUCKDB_API static bool HasConflict(ClientContext &context, transaction_t timestamp);
+	DUCKDB_API static bool UseTimestamp(ClientContext &context, transaction_t timestamp);
 
 	CatalogEntry *GetEntryFromIndex(idx_t index);
 	void UpdateTimestamp(CatalogEntry *entry, transaction_t timestamp);

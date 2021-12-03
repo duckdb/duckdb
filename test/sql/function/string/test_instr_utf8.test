@@ -29,6 +29,14 @@ SELECT INSTR(s,'á') FROM strings
 0
 0
 
+query I
+SELECT POSITION('á' in s) FROM strings
+----
+1
+3
+0
+0
+
 # Test a sentence with UTF-8
 query I
 SELECT INSTR(s,'olá mundo') FROM strings

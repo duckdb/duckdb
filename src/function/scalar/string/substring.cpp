@@ -112,7 +112,7 @@ string_t SubstringFun::SubstringScalarFunction(Vector &result, string_t input, i
 
 	// now scan the graphemes of the string to find the positions of the start and end characters
 	int64_t current_character = 0;
-	idx_t start_pos = INVALID_INDEX, end_pos = input_size;
+	idx_t start_pos = DConstants::INVALID_INDEX, end_pos = input_size;
 	utf8proc_grapheme_callback(input_data, input_size, [&](size_t gstart, size_t gend) {
 		if (current_character == start) {
 			start_pos = gstart;
@@ -123,7 +123,7 @@ string_t SubstringFun::SubstringScalarFunction(Vector &result, string_t input, i
 		current_character++;
 		return true;
 	});
-	if (start_pos == INVALID_INDEX) {
+	if (start_pos == DConstants::INVALID_INDEX) {
 		return SubstringEmptyString(result);
 	}
 	// after we have found these, we can slice the substring

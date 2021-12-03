@@ -27,25 +27,25 @@ static unique_ptr<FunctionData> DuckDBDependenciesBind(ClientContext &context, v
                                                        vector<string> &input_table_names,
                                                        vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("classid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("objid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("objsubid");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("refclassid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("refobjid");
-	return_types.push_back(LogicalType::BIGINT);
+	return_types.emplace_back(LogicalType::BIGINT);
 
 	names.emplace_back("refobjsubid");
-	return_types.push_back(LogicalType::INTEGER);
+	return_types.emplace_back(LogicalType::INTEGER);
 
 	names.emplace_back("deptype");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	return nullptr;
 }

@@ -1,4 +1,4 @@
-# name: benchmark/micro/date/extract_year.benchmark
+# name: benchmark/micro/date/extract_month.benchmark
 # description: EXTRACT(month from date)
 # group: [date]
 

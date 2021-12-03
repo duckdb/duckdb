@@ -1,12 +1,14 @@
-# name: test/sql/storage/compression/rle/rle_null.test
-# description: Test storage with RLE and many null values
-# group: [rle]
+# name: test/sql/storage/compression/compression_null.test
+# description: Test storage with compression and many null values
+# group: [compression]
 
 # load the DB from disk
 load __TEST_DIR__/test_rle.db
 
+foreach compression <compression>
+
 statement ok
-PRAGMA force_compression = 'rle'
+PRAGMA force_compression = '${compression}'
 
 # single NULL value
 statement ok
@@ -64,3 +66,10 @@ query III
 SELECT COUNT(*), COUNT(i), SUM(i) FROM nulls
 ----
 70006	6	9
+
+statement ok
+DROP TABLE nulls
+
+endloop
+
+

@@ -27,6 +27,14 @@ LogicalType::LogicalType(LogicalTypeId id, shared_ptr<ExtraTypeInfo> type_info_p
 	physical_type_ = GetInternalType();
 }
 
+LogicalType::LogicalType(const LogicalType &other)
+    : id_(other.id_), physical_type_(other.physical_type_), type_info_(other.type_info_) {
+}
+
+LogicalType::LogicalType(LogicalType &&other) noexcept
+    : id_(other.id_), physical_type_(other.physical_type_), type_info_(move(other.type_info_)) {
+}
+
 hash_t LogicalType::Hash() const {
 	return duckdb::Hash<uint8_t>((uint8_t)id_);
 }
@@ -45,6 +53,7 @@ PhysicalType LogicalType::GetInternalType() {
 		return PhysicalType::UINT16;
 	case LogicalTypeId::SQLNULL:
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 	case LogicalTypeId::INTEGER:
 		return PhysicalType::INT32;
 	case LogicalTypeId::UINTEGER:
@@ -55,6 +64,8 @@ PhysicalType LogicalType::GetInternalType() {
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		return PhysicalType::INT64;
 	case LogicalTypeId::UBIGINT:
 		return PhysicalType::UINT64;
@@ -125,41 +136,46 @@ PhysicalType LogicalType::GetInternalType() {
 	}
 }
 
-const LogicalType LogicalType::INVALID = LogicalType(LogicalTypeId::INVALID);
-const LogicalType LogicalType::SQLNULL = LogicalType(LogicalTypeId::SQLNULL);
-const LogicalType LogicalType::BOOLEAN = LogicalType(LogicalTypeId::BOOLEAN);
-const LogicalType LogicalType::TINYINT = LogicalType(LogicalTypeId::TINYINT);
-const LogicalType LogicalType::UTINYINT = LogicalType(LogicalTypeId::UTINYINT);
-const LogicalType LogicalType::SMALLINT = LogicalType(LogicalTypeId::SMALLINT);
-const LogicalType LogicalType::USMALLINT = LogicalType(LogicalTypeId::USMALLINT);
-const LogicalType LogicalType::INTEGER = LogicalType(LogicalTypeId::INTEGER);
-const LogicalType LogicalType::UINTEGER = LogicalType(LogicalTypeId::UINTEGER);
-const LogicalType LogicalType::BIGINT = LogicalType(LogicalTypeId::BIGINT);
-const LogicalType LogicalType::UBIGINT = LogicalType(LogicalTypeId::UBIGINT);
-const LogicalType LogicalType::HUGEINT = LogicalType(LogicalTypeId::HUGEINT);
-const LogicalType LogicalType::UUID = LogicalType(LogicalTypeId::UUID);
-const LogicalType LogicalType::FLOAT = LogicalType(LogicalTypeId::FLOAT);
-const LogicalType LogicalType::DOUBLE = LogicalType(LogicalTypeId::DOUBLE);
-const LogicalType LogicalType::DATE = LogicalType(LogicalTypeId::DATE);
+constexpr const LogicalTypeId LogicalType::INVALID;
+constexpr const LogicalTypeId LogicalType::SQLNULL;
+constexpr const LogicalTypeId LogicalType::BOOLEAN;
+constexpr const LogicalTypeId LogicalType::TINYINT;
+constexpr const LogicalTypeId LogicalType::UTINYINT;
+constexpr const LogicalTypeId LogicalType::SMALLINT;
+constexpr const LogicalTypeId LogicalType::USMALLINT;
+constexpr const LogicalTypeId LogicalType::INTEGER;
+constexpr const LogicalTypeId LogicalType::UINTEGER;
+constexpr const LogicalTypeId LogicalType::BIGINT;
+constexpr const LogicalTypeId LogicalType::UBIGINT;
+constexpr const LogicalTypeId LogicalType::HUGEINT;
+constexpr const LogicalTypeId LogicalType::UUID;
+constexpr const LogicalTypeId LogicalType::FLOAT;
+constexpr const LogicalTypeId LogicalType::DOUBLE;
+constexpr const LogicalTypeId LogicalType::DATE;
 
-const LogicalType LogicalType::TIMESTAMP = LogicalType(LogicalTypeId::TIMESTAMP);
-const LogicalType LogicalType::TIMESTAMP_MS = LogicalType(LogicalTypeId::TIMESTAMP_MS);
-const LogicalType LogicalType::TIMESTAMP_NS = LogicalType(LogicalTypeId::TIMESTAMP_NS);
-const LogicalType LogicalType::TIMESTAMP_S = LogicalType(LogicalTypeId::TIMESTAMP_SEC);
+constexpr const LogicalTypeId LogicalType::TIMESTAMP;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_MS;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_NS;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_S;
 
-const LogicalType LogicalType::TIME = LogicalType(LogicalTypeId::TIME);
-const LogicalType LogicalType::HASH = LogicalType(LogicalTypeId::HASH);
-const LogicalType LogicalType::POINTER = LogicalType(LogicalTypeId::POINTER);
+constexpr const LogicalTypeId LogicalType::TIME;
 
-const LogicalType LogicalType::VARCHAR = LogicalType(LogicalTypeId::VARCHAR);
+constexpr const LogicalTypeId LogicalType::DATE_TZ;
+constexpr const LogicalTypeId LogicalType::TIME_TZ;
+constexpr const LogicalTypeId LogicalType::TIMESTAMP_TZ;
 
-const LogicalType LogicalType::BLOB = LogicalType(LogicalTypeId::BLOB);
-const LogicalType LogicalType::INTERVAL = LogicalType(LogicalTypeId::INTERVAL);
+constexpr const LogicalTypeId LogicalType::HASH;
+constexpr const LogicalTypeId LogicalType::POINTER;
+
+constexpr const LogicalTypeId LogicalType::VARCHAR;
+
+constexpr const LogicalTypeId LogicalType::BLOB;
+constexpr const LogicalTypeId LogicalType::INTERVAL;
 
 // TODO these are incomplete and should maybe not exist as such
-const LogicalType LogicalType::TABLE = LogicalType(LogicalTypeId::TABLE);
+constexpr const LogicalTypeId LogicalType::TABLE;
 
-const LogicalType LogicalType::ANY = LogicalType(LogicalTypeId::ANY);
+constexpr const LogicalTypeId LogicalType::ANY;
 
 const vector<LogicalType> LogicalType::NUMERIC = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
                                                   LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
@@ -176,7 +192,8 @@ const vector<LogicalType> LogicalType::ALL_TYPES = {
     LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,      LogicalType::INTERVAL,
     LogicalType::HUGEINT,  LogicalTypeId::DECIMAL, LogicalType::UTINYINT,  LogicalType::USMALLINT,
     LogicalType::UINTEGER, LogicalType::UBIGINT,   LogicalType::TIME,      LogicalTypeId::LIST,
-    LogicalTypeId::STRUCT, LogicalTypeId::MAP,     LogicalType::UUID};
+    LogicalTypeId::STRUCT, LogicalType::DATE_TZ,   LogicalType::TIME_TZ,   LogicalType::TIMESTAMP_TZ,
+    LogicalTypeId::MAP,    LogicalType::UUID};
 
 const LogicalType LOGICAL_ROW_TYPE = LogicalType::BIGINT;
 const PhysicalType ROW_TYPE = PhysicalType::INT64;
@@ -358,6 +375,12 @@ string LogicalTypeIdToString(LogicalTypeId id) {
 		return "TIMESTAMP (NS)";
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return "TIMESTAMP (SEC)";
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return "TIMESTAMP WITH TIME ZONE";
+	case LogicalTypeId::TIME_TZ:
+		return "TIME WITH TIME ZONE";
+	case LogicalTypeId::DATE_TZ:
+		return "DATE WITH TIME ZONE";
 	case LogicalTypeId::FLOAT:
 		return "FLOAT";
 	case LogicalTypeId::DOUBLE:
@@ -515,6 +538,12 @@ LogicalTypeId TransformStringToLogicalType(const string &str) {
 		return LogicalTypeId::UINTEGER;
 	} else if (lower_str == "ubigint" || lower_str == "uint64") {
 		return LogicalTypeId::UBIGINT;
+	} else if (lower_str == "timestamptz") {
+		return LogicalTypeId::TIMESTAMP_TZ;
+	} else if (lower_str == "timetz") {
+		return LogicalTypeId::TIME_TZ;
+	} else if (lower_str == "datetz") {
+		return LogicalTypeId::DATE_TZ;
 	} else {
 		// This is a User Type, at this point we don't know if its one of the User Defined Types or an error
 		// It is checked in the binder
@@ -997,6 +1026,7 @@ struct EnumTypeInfo : public ExtraTypeInfo {
 	TypeCatalogEntry *catalog_entry = nullptr;
 
 public:
+	// Equalities are only used in enums with different catalog entries
 	bool Equals(ExtraTypeInfo *other_p) override {
 		if (!other_p) {
 			return false;
@@ -1005,9 +1035,12 @@ public:
 			return false;
 		}
 		auto &other = (EnumTypeInfo &)*other_p;
-		return other.enum_name == enum_name && other.values_insert_order == values_insert_order;
+		// We must check if all elements are equal
+		if (other.values_insert_order == values_insert_order) {
+			return true;
+		}
+		return false;
 	}
-
 	void Serialize(Serializer &serializer) const override {
 		serializer.Write<uint32_t>(values_insert_order.size());
 		serializer.WriteString(enum_name);

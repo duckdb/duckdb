@@ -9,14 +9,16 @@
 
 #pragma once
 
+#ifndef DUCKDB_API
 #ifdef _WIN32
-#ifdef DUCKDB_BUILD_LIBRARY
+#if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
 #define DUCKDB_API __declspec(dllexport)
 #else
 #define DUCKDB_API __declspec(dllimport)
 #endif
 #else
 #define DUCKDB_API
+#endif
 #endif
 
 #include <stdbool.h>

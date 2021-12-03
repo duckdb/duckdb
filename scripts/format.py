@@ -12,7 +12,7 @@ from python_helpers import open_utf8
 
 cpp_format_command = 'clang-format --sort-includes=0 -style=file'
 cmake_format_command = 'cmake-format'
-extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test', '.test_slow', '.test_coverage']
+extensions = ['.cpp', '.c', '.hpp', '.h', '.cc', '.hh', 'CMakeLists.txt', '.test', '.test_slow', '.test_coverage', '.benchmark']
 formatted_directories = ['src', 'benchmark', 'test', 'tools', 'examples', 'extension']
 ignored_files = ['tpch_constants.hpp', 'tpcds_constants.hpp', '_generated', 'tpce_flat_input.hpp',
                  'test_csv_header.hpp', 'duckdb.cpp', 'duckdb.hpp', 'json.hpp', 'sqlite3.h', 'shell.c',
@@ -164,9 +164,8 @@ def get_formatted_text(f, full_path, directory, ext):
         return result
 
     if ext == ".hpp" and directory.startswith("src/include"):
-        f = open_utf8(full_path, 'r')
-        lines = f.readlines()
-        f.close()
+        with open_utf8(full_path, 'r') as f:
+            lines = f.readlines()
 
         # format header in files
         header_middle = "// " + os.path.relpath(full_path, base_dir) + "\n"
@@ -178,7 +177,7 @@ def get_formatted_text(f, full_path, directory, ext):
             if not is_old_header:
                 text += line
 
-    if ext == '.test' or ext == '.test_slow' or ext == '.test_coverage':
+    if ext == '.test' or ext == '.test_slow' or ext == '.test_coverage' or ext == '.benchmark':
         f = open_utf8(full_path, 'r')
         lines = f.readlines()
         f.close()
@@ -189,27 +188,27 @@ def get_formatted_text(f, full_path, directory, ext):
         new_path_line = '# name: ' + full_path + '\n'
         new_group_line =  '# group: [' + group_name + ']' + '\n'
         found_diff = False
-        for i in range(0, len(lines)):
-            line = lines[i]
-            if line.startswith('# name: ') or line.startswith('#name: '):
-                if found_name:
-                    print("Error formatting file " + full_path + ", multiple lines starting with # name found")
+        # Find description.
+        found_description = False
+        for line in lines:
+            if line.lower().startswith('# description:') or line.lower().startswith('#description:'):
+                if found_description:
+                    print("Error formatting file " + full_path + ", multiple lines starting with # description found")
                     exit(1)
-                found_name = True
-                if lines[i] != new_path_line:
-                    lines[i] = new_path_line
-            if line.startswith('# group: ') or line.startswith('#group: '):
-                if found_group:
-                    print("Error formatting file " + full_path + ", multiple lines starting with # group found")
-                    exit(1)
-                found_group = True
-                if lines[i] != new_group_line:
-                    lines[i] = new_group_line
-        if not found_group:
-            lines = [new_group_line] + lines
-        if not found_name:
-            lines = [new_path_line] + lines
-        return ''.join(lines)
+                found_description = True
+                new_description_line = '# description: ' + line.split(':', 1)[1].strip() + '\n'
+        # Filter old meta.
+        meta = ['#name:', '# name:', '#description:', '# description:', '#group:', '# group:']
+        lines = [line for line in lines if not any(line.lower().startswith(m) for m in meta)]
+        # Clean up empty leading lines.
+        while lines and not lines[0].strip():
+            lines.pop(0)
+        # Ensure header is prepended.
+        header = [new_path_line]
+        if found_description: header.append(new_description_line)
+        header.append(new_group_line)
+        header.append('\n')
+        return ''.join(header + lines)
     proc_command = format_commands[ext].split(' ') + [full_path]
     proc = subprocess.Popen(proc_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     new_text = proc.stdout.read().decode('utf8')
@@ -220,13 +219,13 @@ def get_formatted_text(f, full_path, directory, ext):
         print(' '.join(proc_command))
         print(stderr)
         exit(1)
-    return new_text
+    return new_text.replace('\r', '')
 
 def format_file(f, full_path, directory, ext):
     global difference_files
-    f = open_utf8(full_path, 'r')
-    old_lines = f.read().split('\n')
-    f.close()
+    with open_utf8(full_path, 'r') as f:
+        old_text = f.read()
+    old_lines = old_text.split('\n')
 
     new_text = get_formatted_text(f, full_path, directory, ext)
     if check_only:
@@ -238,6 +237,7 @@ def format_file(f, full_path, directory, ext):
         for diff_line in diff_result:
             total_diff += diff_line + "\n"
         total_diff = total_diff.strip()
+
         if len(total_diff) > 0:
             print("----------------------------------------")
             print("----------------------------------------")
@@ -248,10 +248,10 @@ def format_file(f, full_path, directory, ext):
             difference_files.append(full_path)
     else:
         tmpfile = full_path + ".tmp"
-        f = open_utf8(tmpfile, 'w+')
-        f.write(new_text)
-        f.close()
+        with open_utf8(tmpfile, 'w+') as f:
+            f.write(new_text)
         os.rename(tmpfile, full_path)
+
 
 def format_directory(directory):
     files = os.listdir(directory)

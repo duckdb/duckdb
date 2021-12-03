@@ -24,22 +24,22 @@ static unique_ptr<FunctionData> PragmaFunctionsBind(ClientContext &context, vect
                                                     vector<string> &input_table_names,
                                                     vector<LogicalType> &return_types, vector<string> &names) {
 	names.emplace_back("name");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("type");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("parameters");
 	return_types.push_back(LogicalType::LIST(LogicalType::VARCHAR));
 
 	names.emplace_back("varargs");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("return_type");
-	return_types.push_back(LogicalType::VARCHAR);
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("side_effects");
-	return_types.push_back(LogicalType::BOOLEAN);
+	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	return nullptr;
 }

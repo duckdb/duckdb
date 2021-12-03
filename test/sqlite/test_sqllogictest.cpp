@@ -1523,6 +1523,7 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 						def.tokens.push_back("none");
 						def.tokens.push_back("uncompressed");
 						def.tokens.push_back("rle");
+						def.tokens.push_back("bitpacking");
 						collection = true;
 					}
 					if (!collection) {

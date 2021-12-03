@@ -608,7 +608,13 @@ void RowGroup::Update(Transaction &transaction, DataChunk &update_chunk, row_t *
 		auto column = column_ids[i];
 		D_ASSERT(column != COLUMN_IDENTIFIER_ROW_ID);
 		D_ASSERT(columns[column]->type.id() == update_chunk.data[i].GetType().id());
-		columns[column]->Update(transaction, column, update_chunk.data[i], ids, offset, count);
+		if (offset > 0) {
+			Vector sliced_vector(update_chunk.data[i], offset);
+			sliced_vector.Normalify(count);
+			columns[column]->Update(transaction, column, sliced_vector, ids + offset, count);
+		} else {
+			columns[column]->Update(transaction, column, update_chunk.data[i], ids, count);
+		}
 		MergeStatistics(column, *columns[column]->GetUpdateStatistics());
 	}
 }
@@ -773,8 +779,8 @@ void RowGroup::GetStorageInfo(idx_t row_group_index, vector<vector<Value>> &resu
 class VersionDeleteState {
 public:
 	VersionDeleteState(RowGroup &info, Transaction &transaction, DataTable *table, idx_t base_row)
-	    : info(info), transaction(transaction), table(table), current_info(nullptr), current_chunk(INVALID_INDEX),
-	      count(0), base_row(base_row), delete_count(0) {
+	    : info(info), transaction(transaction), table(table), current_info(nullptr),
+	      current_chunk(DConstants::INVALID_INDEX), count(0), base_row(base_row), delete_count(0) {
 	}
 
 	RowGroup &info;
