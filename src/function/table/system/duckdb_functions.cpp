@@ -8,6 +8,7 @@
 #include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
 #include "duckdb/catalog/catalog_entry/pragma_function_catalog_entry.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/common/algorithm.hpp"
 
 namespace duckdb {
 
@@ -77,6 +78,8 @@ unique_ptr<FunctionOperatorData> DuckDBFunctionsInit(ClientContext &context, con
 	};
 	ExtractFunctionsFromSchema(context, *context.temporary_objects, *result);
 
+	std::sort(result->entries.begin(), result->entries.end(),
+	          [](CatalogEntry *&a, CatalogEntry *&b) -> bool { return (int)a->type < (int)b->type; });
 	return move(result);
 }
 
