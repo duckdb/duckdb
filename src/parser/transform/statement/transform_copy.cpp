@@ -64,7 +64,11 @@ unique_ptr<CopyStatement> Transformer::TransformCopy(duckdb_libpgquery::PGNode *
 	// get file_path and is_from
 	info.file_path = stmt->filename;
 	info.is_from = stmt->is_from;
-	info.format = "csv";
+	if (StringUtil::EndsWith(info.file_path, ".parquet")) {
+		info.format = "parquet";
+	} else {
+		info.format = "csv";
+	}
 
 	// get select_list
 	if (stmt->attlist) {
