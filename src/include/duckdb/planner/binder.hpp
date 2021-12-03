@@ -17,6 +17,7 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/parser/result_modifier.hpp"
 
 namespace duckdb {
 class BoundResultModifier;
@@ -170,7 +171,7 @@ private:
 	void BindDefaultValues(vector<ColumnDefinition> &columns, vector<unique_ptr<Expression>> &bound_defaults);
 	//! Bind a delimiter value (LIMIT or OFFSET)
 	unique_ptr<Expression> BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
-	                                     int64_t &delimiter_value);
+	                                     const LogicalType &type, Value &delimiter_value);
 
 	//! Move correlated expressions from the child binder to this binder
 	void MoveCorrelatedExpressions(Binder &other);
@@ -238,6 +239,7 @@ private:
 
 	BoundStatement BindSummarize(ShowStatement &stmt);
 	unique_ptr<BoundResultModifier> BindLimit(LimitModifier &limit_mod);
+	unique_ptr<BoundResultModifier> BindLimitPercent(LimitPercentModifier &limit_mod);
 	unique_ptr<Expression> BindOrderExpression(OrderBinder &order_binder, unique_ptr<ParsedExpression> expr);
 
 	unique_ptr<LogicalOperator> PlanFilter(unique_ptr<Expression> condition, unique_ptr<LogicalOperator> root);

@@ -56,7 +56,7 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	unique_ptr<Expression> result =
 	    ScalarFunction::BindScalarFunction(context, *func, move(children), error, function.is_operator);
 	if (!result) {
-		throw BinderException(binder.FormatError(function, error));
+		return BindResult(binder.FormatError(function, error));
 	}
 	return BindResult(move(result));
 }
