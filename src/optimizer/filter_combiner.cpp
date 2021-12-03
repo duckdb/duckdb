@@ -1072,10 +1072,10 @@ void FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparis
 			auto non_scalar_expr = left_is_scalar ? comparison_expr->right.get() : comparison_expr->left.get();
 			if (non_scalar_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				UpdateFilterByColumn((BoundColumnRefExpression *)&expr, comparison_expr);
-			} else {
-				SetEarlyStopPushdown(true);
+				return;
 			}
 		}
+		SetEarlyStopPushdown(true);
 	}
 	ExpressionIterator::EnumerateChildren(expr,
 	                                      [&](Expression &child) { UpdateConjunctionFilter(comparison_expr, child); });
