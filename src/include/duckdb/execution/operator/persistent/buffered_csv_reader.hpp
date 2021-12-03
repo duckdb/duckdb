@@ -56,8 +56,8 @@ struct BufferedCSVReaderOptions {
 	//! The file path of the CSV file to read
 	string file_path;
 	//! Whether file is compressed or not, and if so which compression type
-	//! ("infer" (default; infer from file extention), "gzip", "none")
-	string compression = "infer";
+	//! AUTO_DETECT (default; infer from file extension)
+	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Whether or not to automatically detect dialect and datatypes
 	bool auto_detect = false;
 	//! Whether or not a delimiter was defined by the user
@@ -129,7 +129,6 @@ public:
 	unique_ptr<FileHandle> file_handle;
 	bool plain_file_source = false;
 	idx_t file_size = 0;
-	FileCompressionType compression = FileCompressionType::UNCOMPRESSED;
 
 	unique_ptr<char[]> buffer;
 	idx_t buffer_size;

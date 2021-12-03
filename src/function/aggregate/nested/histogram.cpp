@@ -155,6 +155,15 @@ unique_ptr<FunctionData> HistogramBindFunction(ClientContext &context, Aggregate
 	return make_unique<VariableReturnBindData>(function.return_type);
 }
 
+template <typename T>
+AggregateFunction GetHistogramFunction(const LogicalType &type) {
+	using STATE_TYPE = HistogramAggState<T>;
+	return AggregateFunction("histogram", {type}, LogicalTypeId::MAP, AggregateFunction::StateSize<STATE_TYPE>,
+	                         AggregateFunction::StateInitialize<STATE_TYPE, HistogramFunction>,
+	                         HistogramUpdateFunction<T>, HistogramCombineFunction<T>, HistogramFinalize<T>, nullptr,
+	                         HistogramBindFunction, AggregateFunction::StateDestroy<STATE_TYPE, HistogramFunction>);
+}
+
 AggregateFunction GetHistogramFunction(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::UINT16:
@@ -237,12 +246,8 @@ void HistogramFun::RegisterFunction(BuiltinFunctions &set) {
 	fun.AddFunction(GetHistogramFunction(PhysicalType::FLOAT));
 	fun.AddFunction(GetHistogramFunction(PhysicalType::DOUBLE));
 	fun.AddFunction(GetHistogramFunction(PhysicalType::VARCHAR));
-	fun.AddFunction(AggregateFunction("histogram", {LogicalType::TIMESTAMP}, LogicalTypeId::MAP,
-	                                  AggregateFunction::StateSize<HistogramAggState<int64_t>>,
-	                                  AggregateFunction::StateInitialize<HistogramAggState<int64_t>, HistogramFunction>,
-	                                  HistogramUpdateFunction<int64_t>, HistogramCombineFunction<int64_t>,
-	                                  HistogramFinalize<int64_t>, nullptr, HistogramBindFunction,
-	                                  AggregateFunction::StateDestroy<HistogramAggState<int64_t>, HistogramFunction>));
+	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP));
+	fun.AddFunction(GetHistogramFunction<int64_t>(LogicalType::TIMESTAMP_TZ));
 	set.AddFunction(fun);
 }
 

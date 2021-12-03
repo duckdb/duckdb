@@ -58,7 +58,7 @@ public:
 	static string ToString(const interval_t &val);
 
 	//! Convert milliseconds to a normalised interval
-	static interval_t FromMicro(int64_t micros);
+	DUCKDB_API static interval_t FromMicro(int64_t micros);
 
 	//! Get Interval in milliseconds
 	static int64_t GetMilli(const interval_t &val);

@@ -44,7 +44,7 @@
 
 #include "snappy-stubs-public.h"
 
-namespace snappy {
+namespace duckdb_snappy {
   class Source;
   class Sink;
 
@@ -184,6 +184,6 @@ namespace snappy {
   // unspecified prefix of *compressed.
   bool IsValidCompressed(Source* compressed);
 
-}  // end namespace snappy
+}  // end namespace duckdb_snappy
 
 #endif  // THIRD_PARTY_SNAPPY_SNAPPY_H__

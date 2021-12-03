@@ -1,0 +1,12 @@
+# name: test/sql/types/timestamp/test_timestamp_tz.test
+# description: Test TIMESTAMP WITH TIME ZONE common operations
+# group: [timestamp]
+
+statement ok
+PRAGMA enable_verification
+
+# Cast from string
+query I
+select timestamptz '2021-11-15 02:30:00';
+----
+2021-11-15 02:30:00+00

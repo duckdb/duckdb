@@ -25,7 +25,7 @@ unique_ptr<Expression> InClauseSimplificationRule::Apply(LogicalOperator &op, ve
 	}
 	//! Here we check if we can apply the expression on the constant side
 	auto target_type = cast_expression->source_type();
-	if (!BoundCastExpression::CastIsInvertible(target_type, cast_expression->return_type)) {
+	if (!BoundCastExpression::CastIsInvertible(cast_expression->return_type, target_type)) {
 		return nullptr;
 	}
 	vector<unique_ptr<BoundConstantExpression>> cast_list;
