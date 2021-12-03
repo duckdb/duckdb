@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/helper/physical_limit.hpp
+// duckdb/execution/operator/helper/physical_limit_percent.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,16 +13,18 @@
 
 namespace duckdb {
 
-//! PhyisicalLimit represents the LIMIT operator
-class PhysicalLimit : public PhysicalOperator {
+//! PhyisicalLimitPercent represents the LIMIT PERCENT operator
+class PhysicalLimitPercent : public PhysicalOperator {
 public:
-	PhysicalLimit(vector<LogicalType> types, idx_t limit, idx_t offset, unique_ptr<Expression> limit_expression,
-	              unique_ptr<Expression> offset_expression, idx_t estimated_cardinality)
-	    : PhysicalOperator(PhysicalOperatorType::LIMIT, move(types), estimated_cardinality), limit_value(limit),
-	      offset_value(offset), limit_expression(move(limit_expression)), offset_expression(move(offset_expression)) {
+	PhysicalLimitPercent(vector<LogicalType> types, double limit_percent, idx_t offset,
+	                     unique_ptr<Expression> limit_expression, unique_ptr<Expression> offset_expression,
+	                     idx_t estimated_cardinality)
+	    : PhysicalOperator(PhysicalOperatorType::LIMIT_PERCENT, move(types), estimated_cardinality),
+	      limit_percent(limit_percent), offset_value(offset), limit_expression(move(limit_expression)),
+	      offset_expression(move(offset_expression)) {
 	}
 
-	idx_t limit_value;
+	double limit_percent;
 	idx_t offset_value;
 	unique_ptr<Expression> limit_expression;
 	unique_ptr<Expression> offset_expression;
@@ -46,9 +48,6 @@ public:
 	bool SinkOrderMatters() const override {
 		return true;
 	}
-
-	static bool HandleOffset(DataChunk &input, idx_t &current_offset, idx_t offset, idx_t limit);
-	static Value GetDelimiter(DataChunk &input, Expression *expr);
 };
 
 } // namespace duckdb

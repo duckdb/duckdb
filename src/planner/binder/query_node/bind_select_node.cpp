@@ -34,15 +34,14 @@ unique_ptr<Expression> Binder::BindOrderExpression(OrderBinder &order_binder, un
 }
 
 unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, unique_ptr<ParsedExpression> delimiter,
-                                             int64_t &delimiter_value) {
+                                             const LogicalType &type, Value &delimiter_value) {
 	auto new_binder = Binder::CreateBinder(context, this, true);
 	ExpressionBinder expr_binder(*new_binder, context);
-	expr_binder.target_type = LogicalType::UBIGINT;
+	expr_binder.target_type = type;
 	auto expr = expr_binder.Bind(delimiter);
 	if (expr->IsFoldable()) {
 		//! this is a constant
-		Value value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(LogicalType::BIGINT);
-		delimiter_value = value.GetValue<int64_t>();
+		delimiter_value = ExpressionExecutor::EvaluateScalar(*expr).CastAs(type);
 		return nullptr;
 	}
 	return expr;
@@ -51,10 +50,40 @@ unique_ptr<Expression> Binder::BindDelimiter(ClientContext &context, unique_ptr<
 unique_ptr<BoundResultModifier> Binder::BindLimit(LimitModifier &limit_mod) {
 	auto result = make_unique<BoundLimitModifier>();
 	if (limit_mod.limit) {
-		result->limit = BindDelimiter(context, move(limit_mod.limit), result->limit_val);
+		Value val;
+		result->limit = BindDelimiter(context, move(limit_mod.limit), LogicalType::BIGINT, val);
+		if (!result->limit) {
+			result->limit_val = val.GetValue<int64_t>();
+		}
 	}
 	if (limit_mod.offset) {
-		result->offset = BindDelimiter(context, move(limit_mod.offset), result->offset_val);
+		Value val;
+		result->offset = BindDelimiter(context, move(limit_mod.offset), LogicalType::BIGINT, val);
+		if (!result->offset) {
+			result->offset_val = val.GetValue<int64_t>();
+		}
+	}
+	return move(result);
+}
+
+unique_ptr<BoundResultModifier> Binder::BindLimitPercent(LimitPercentModifier &limit_mod) {
+	auto result = make_unique<BoundLimitPercentModifier>();
+	if (limit_mod.limit) {
+		Value val;
+		result->limit = BindDelimiter(context, move(limit_mod.limit), LogicalType::DOUBLE, val);
+		if (!result->limit) {
+			result->limit_percent = val.GetValue<double>();
+			if (result->limit_percent < 0.0) {
+				throw Exception("Limit percentage can't be negative value");
+			}
+		}
+	}
+	if (limit_mod.offset) {
+		Value val;
+		result->offset = BindDelimiter(context, move(limit_mod.offset), LogicalType::BIGINT, val);
+		if (!result->offset) {
+			result->offset_val = val.GetValue<int64_t>();
+		}
 	}
 	return move(result);
 }
@@ -102,6 +131,9 @@ void Binder::BindModifiers(OrderBinder &order_binder, QueryNode &statement, Boun
 		}
 		case ResultModifierType::LIMIT_MODIFIER:
 			bound_modifier = BindLimit((LimitModifier &)*mod);
+			break;
+		case ResultModifierType::LIMIT_PERCENT_MODIFIER:
+			bound_modifier = BindLimitPercent((LimitPercentModifier &)*mod);
 			break;
 		default:
 			throw Exception("Unsupported result modifier");
