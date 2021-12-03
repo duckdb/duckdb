@@ -298,24 +298,24 @@ void ColumnData::FetchRow(Transaction &transaction, ColumnFetchState &state, row
 }
 
 void ColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                        idx_t offset, idx_t update_count) {
+                        idx_t update_count) {
 	lock_guard<mutex> update_guard(update_lock);
 	if (!updates) {
 		updates = make_unique<UpdateSegment>(*this);
 	}
 	Vector base_vector(type);
 	ColumnScanState state;
-	auto fetch_count = Fetch(state, row_ids[offset], base_vector);
+	auto fetch_count = Fetch(state, row_ids[0], base_vector);
 
 	base_vector.Normalify(fetch_count);
-	updates->Update(transaction, column_index, update_vector, row_ids, offset, update_count, base_vector);
+	updates->Update(transaction, column_index, update_vector, row_ids, update_count, base_vector);
 }
 
 void ColumnData::UpdateColumn(Transaction &transaction, const vector<column_t> &column_path, Vector &update_vector,
                               row_t *row_ids, idx_t update_count, idx_t depth) {
 	// this method should only be called at the end of the path in the base column case
 	D_ASSERT(depth >= column_path.size());
-	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, 0, update_count);
+	ColumnData::Update(transaction, column_path[0], update_vector, row_ids, update_count);
 }
 
 unique_ptr<BaseStatistics> ColumnData::GetUpdateStatistics() {

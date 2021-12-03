@@ -218,7 +218,7 @@ idx_t ListColumnData::Fetch(ColumnScanState &state, row_t row_id, Vector &result
 }
 
 void ListColumnData::Update(Transaction &transaction, idx_t column_index, Vector &update_vector, row_t *row_ids,
-                            idx_t offset, idx_t update_count) {
+                            idx_t update_count) {
 	throw NotImplementedException("List Update is not supported.");
 }
 
