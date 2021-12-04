@@ -22,8 +22,10 @@ void DuckDBPyResult::Initialize(py::handle &m) {
 	    .def("fetchdf", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df", &DuckDBPyResult::FetchDF)
 	    .def("fetch_df_chunk", &DuckDBPyResult::FetchDFChunk)
-	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable)
-	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader)
+	    .def("fetch_arrow_table", &DuckDBPyResult::FetchArrowTable, "Fetch Result as an Arrow Table",
+	         py::arg("stream") = false, py::arg("num_of_vectors") = 1, py::arg("return_table") = true)
+	    .def("fetch_arrow_reader", &DuckDBPyResult::FetchRecordBatchReader,
+	         "Fetch Result as an Arrow Record Batch Reader", py::arg("approx_batch_size"))
 	    .def("fetch_arrow_chunk", &DuckDBPyResult::FetchArrowTableChunk)
 	    .def("arrow", &DuckDBPyResult::FetchArrowTable)
 	    .def("df", &DuckDBPyResult::FetchDF);
