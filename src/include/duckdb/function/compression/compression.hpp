@@ -33,4 +33,9 @@ struct BitpackingFun {
 	static bool TypeIsSupported(PhysicalType type);
 };
 
+struct DictionaryCompressionFun {
+	static CompressionFunction GetFunction(PhysicalType type);
+	static bool TypeIsSupported(PhysicalType type);
+};
+
 } // namespace duckdb

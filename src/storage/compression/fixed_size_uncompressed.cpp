@@ -1,14 +1,14 @@
-#include "duckdb/storage/segment/uncompressed.hpp"
-#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
-#include "duckdb/storage/buffer_manager.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/storage/table/append_state.hpp"
-#include "duckdb/storage/statistics/numeric_statistics.hpp"
 #include "duckdb/common/types/null_value.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/checkpoint/write_overflow_strings_to_disk.hpp"
+#include "duckdb/storage/segment/uncompressed.hpp"
+#include "duckdb/storage/statistics/numeric_statistics.hpp"
+#include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/column_data_checkpointer.hpp"
+#include "duckdb/storage/table/column_segment.hpp"
 
 namespace duckdb {
 
@@ -41,35 +41,31 @@ idx_t FixedSizeFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-struct UncompressedCompressState : public CompressionState {
-	explicit UncompressedCompressState(ColumnDataCheckpointer &checkpointer) : checkpointer(checkpointer) {
-		CreateEmptySegment(checkpointer.GetRowGroup().start);
-	}
+UncompressedCompressState::UncompressedCompressState(ColumnDataCheckpointer &checkpointer)
+    : checkpointer(checkpointer) {
+	CreateEmptySegment(checkpointer.GetRowGroup().start);
+}
 
-	void CreateEmptySegment(idx_t row_start) {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
-		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
-		if (type.InternalType() == PhysicalType::VARCHAR) {
-			auto &state = (UncompressedStringSegmentState &)*compressed_segment->GetSegmentState();
-			state.overflow_writer = make_unique<WriteOverflowStringsToDisk>(db);
-		}
-		current_segment = move(compressed_segment);
+void UncompressedCompressState::CreateEmptySegment(idx_t row_start) {
+	auto &db = checkpointer.GetDatabase();
+	auto &type = checkpointer.GetType();
+	auto compressed_segment = ColumnSegment::CreateTransientSegment(db, type, row_start);
+	if (type.InternalType() == PhysicalType::VARCHAR) {
+		auto &state = (UncompressedStringSegmentState &)*compressed_segment->GetSegmentState();
+		state.overflow_writer = make_unique<WriteOverflowStringsToDisk>(db);
 	}
+	current_segment = move(compressed_segment);
+}
 
-	void FlushSegment(idx_t segment_size) {
-		auto &state = checkpointer.GetCheckpointState();
-		state.FlushSegment(move(current_segment), segment_size);
-	}
+void UncompressedCompressState::FlushSegment(idx_t segment_size) {
+	auto &state = checkpointer.GetCheckpointState();
+	state.FlushSegment(move(current_segment), segment_size);
+}
 
-	void Finalize(idx_t segment_size) {
-		FlushSegment(segment_size);
-		current_segment.reset();
-	}
-
-	ColumnDataCheckpointer &checkpointer;
-	unique_ptr<ColumnSegment> current_segment;
-};
+void UncompressedCompressState::Finalize(idx_t segment_size) {
+	FlushSegment(segment_size);
+	current_segment.reset();
+}
 
 unique_ptr<CompressionState> UncompressedFunctions::InitCompression(ColumnDataCheckpointer &checkpointer,
                                                                     unique_ptr<AnalyzeState> state) {

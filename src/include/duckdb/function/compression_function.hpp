@@ -40,6 +40,17 @@ struct CompressedSegmentState {
 	}
 };
 
+struct UncompressedCompressState : public CompressionState {
+	explicit UncompressedCompressState(ColumnDataCheckpointer &checkpointer);
+
+	ColumnDataCheckpointer &checkpointer;
+	unique_ptr<ColumnSegment> current_segment;
+
+	virtual void CreateEmptySegment(idx_t row_start);
+	void FlushSegment(idx_t segment_size);
+	void Finalize(idx_t segment_size);
+};
+
 //===--------------------------------------------------------------------===//
 // Analyze
 //===--------------------------------------------------------------------===//

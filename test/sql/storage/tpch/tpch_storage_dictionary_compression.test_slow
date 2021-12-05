@@ -1,0 +1,117 @@
+# name: test/sql/storage/tpch/tpch_storage_uncompressed.test_slow
+# description: Test TPC-H SF1 queries on persistent storage (uncompressed)
+# group: [tpch]
+
+require tpch
+
+load __TEST_DIR__/tpch_storage.db
+
+statement ok
+PRAGMA force_compression='dictionary'
+
+statement ok
+call dbgen(sf=1);
+
+statement ok
+CHECKPOINT
+
+restart
+
+query IIII
+SELECT MIN(l_orderkey), MAX(l_orderkey), AVG(l_orderkey), COUNT(l_orderkey) FROM lineitem;
+----
+1	6000000	3000279.604204982	6001215
+
+query IIII
+SELECT MIN(l_partkey), MAX(l_partkey), AVG(l_partkey), COUNT(l_partkey) FROM lineitem;
+----
+1	200000	100017.98932999402	6001215
+
+
+query IIII
+SELECT MIN(l_suppkey), MAX(l_suppkey), AVG(l_suppkey), COUNT(l_suppkey) FROM lineitem;
+----
+1	10000	5000.602606138924	6001215
+
+query IIII
+SELECT MIN(l_linenumber), MAX(l_linenumber), AVG(l_linenumber), COUNT(l_linenumber) FROM lineitem;
+----
+1	7	3.0005757167506912	6001215
+
+query IIII
+SELECT MIN(l_quantity), MAX(l_quantity), AVG(l_quantity), COUNT(l_quantity) FROM lineitem;
+----
+1	50	25.507967136654827	6001215
+
+query IIII
+SELECT MIN(l_extendedprice), MAX(l_extendedprice), AVG(l_extendedprice), COUNT(l_extendedprice) FROM lineitem;
+----
+901.00	104949.50	38255.138484656854	6001215
+
+query IIII
+SELECT MIN(l_discount), MAX(l_discount), AVG(l_discount), COUNT(l_discount) FROM lineitem;
+----
+0.00	0.10	0.04999943011540163	6001215
+
+query IIII
+SELECT MIN(l_tax), MAX(l_tax), AVG(l_tax), COUNT(l_tax) FROM lineitem;
+----
+0.00	0.08	0.04001350893110812	6001215
+
+query III
+SELECT MIN(l_returnflag), MAX(l_returnflag), COUNT(l_returnflag) FROM lineitem;
+----
+A	R	6001215
+
+query III
+SELECT MIN(l_linestatus), MAX(l_linestatus), COUNT(l_linestatus) FROM lineitem;
+----
+F	O	6001215
+
+query III
+SELECT MIN(l_shipdate), MAX(l_shipdate), COUNT(l_shipdate) FROM lineitem;
+----
+1992-01-02	1998-12-01	6001215
+
+query III
+SELECT MIN(l_commitdate), MAX(l_commitdate), COUNT(l_commitdate) FROM lineitem;
+----
+1992-01-31	1998-10-31	6001215
+
+query III
+SELECT MIN(l_receiptdate), MAX(l_receiptdate), COUNT(l_receiptdate) FROM lineitem;
+----
+1992-01-04	1998-12-31	6001215
+
+query III
+SELECT MIN(l_shipinstruct), MAX(l_shipinstruct), COUNT(l_shipinstruct) FROM lineitem;
+----
+COLLECT COD	TAKE BACK RETURN	6001215
+
+query III
+SELECT MIN(l_shipmode), MAX(l_shipmode), COUNT(l_shipmode) FROM lineitem;
+----
+AIR	TRUCK	6001215
+
+query III
+SELECT MIN(l_comment), MAX(l_comment), COUNT(l_comment) FROM lineitem;
+----
+ Tiresias 	zzle? slyly final platelets sleep quickly. 	6001215
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
