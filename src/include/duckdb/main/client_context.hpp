@@ -23,7 +23,6 @@
 #include "duckdb/transaction/transaction_context.hpp"
 #include <random>
 #include "duckdb/common/atomic.hpp"
-#include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
 class Catalog;
