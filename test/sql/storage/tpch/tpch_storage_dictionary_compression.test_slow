@@ -1,4 +1,4 @@
-# name: test/sql/storage/tpch/tpch_storage_uncompressed.test_slow
+# name: test/sql/storage/tpch/tpch_storage_dictionary_compression.test_slow
 # description: Test TPC-H SF1 queries on persistent storage (uncompressed)
 # group: [tpch]
 

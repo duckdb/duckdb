@@ -51,3 +51,18 @@ query I
 SELECT compression FROM pragma_storage_info('test_constant') WHERE segment_type ILIKE 'INTEGER' LIMIT 1
 ----
 Constant
+
+# Dictionary
+statement ok
+CREATE TABLE test_dict (a VARCHAR);
+
+statement ok
+INSERT INTO test_dict SELECT concat('foobar-', (i%2)::VARCHAR) FROM range(0, 2000) tbl(i);
+
+statement ok
+CHECKPOINT
+
+query I
+SELECT compression FROM pragma_storage_info('test_dict') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+----
+Dictionary

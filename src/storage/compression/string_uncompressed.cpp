@@ -150,11 +150,11 @@ unique_ptr<CompressedSegmentState> UncompressedStringStorage::StringInitSegment(
 
 idx_t UncompressedStringStorage::StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data,
                                               idx_t offset, idx_t count) {
-    return UncompressedStringStorage::StringAppendBase(segment, stats, data, offset, count, nullptr);
+	return UncompressedStringStorage::StringAppendBase(segment, stats, data, offset, count, nullptr);
 }
 
 idx_t UncompressedStringStorage::StringAppendBase(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data,
-                                              idx_t offset, idx_t count, std::map<string, int32_t>* seen_strings) {
+                                                  idx_t offset, idx_t count, std::map<string, int32_t> *seen_strings) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 	auto handle = buffer_manager.Pin(segment.block);
 

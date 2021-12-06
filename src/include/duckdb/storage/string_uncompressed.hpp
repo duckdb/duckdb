@@ -43,8 +43,8 @@ public:
 	static unique_ptr<CompressedSegmentState> StringInitSegment(ColumnSegment &segment, block_id_t block_id);
 	static idx_t StringAppend(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset,
 	                          idx_t count);
-	static idx_t StringAppendBase(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data,
-	                                                  idx_t offset, idx_t count, std::map<string, int32_t>* seen_strings);
+	static idx_t StringAppendBase(ColumnSegment &segment, SegmentStatistics &stats, VectorData &data, idx_t offset,
+	                              idx_t count, std::map<string, int32_t> *seen_strings);
 	static idx_t FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats);
 
 public:

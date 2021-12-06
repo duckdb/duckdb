@@ -1,0 +1,39 @@
+# name: test/sql/storage/compression/dictionary/dictionary_compression_ratio.test
+# description: Assert dictionary compression ratio is within reasonable margins
+# group: [dictionary]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+# First test: detailed compression ratio
+statement ok
+PRAGMA force_compression='dictionary'
+
+# Uncompressed size: 10 x 10 x sizeof(char) + 10 x sizeof(int32_t)
+# Compress value size: 10 x sizeof(char) + 10 x sizeof(int32_t)
+# Ratio: 4
+statement ok
+CREATE TABLE test_dictionary AS SELECT concat('BEEPBOOP-', (i%10)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
+
+statement ok
+checkpoint
+
+statement ok
+PRAGMA force_compression='uncompressed'
+
+statement ok
+CREATE TABLE test_uncompressed AS SELECT concat('BEEPBOOP-', (i%10)::VARCHAR) AS i FROM range(0, 1250000) tbl(i);
+
+statement ok
+checkpoint
+
+# This query keeps a pretty wide margin in compression ratio un purpose to account for possible changes that
+# influence compression ratio.
+query II
+select (uncompressed::FLOAT / dictionary::FLOAT) > 3, (uncompressed::FLOAT / dictionary::FLOAT) < 6  FROM (
+    select
+        (select count(distinct block_id) from pragma_storage_info('test_dictionary') where segment_type in('VARCHAR')) as dictionary,
+        (select count(distinct block_id) from pragma_storage_info('test_uncompressed') where segment_type in('VARCHAR')) as uncompressed
+)
+----
+True	True

@@ -48,7 +48,7 @@ struct DictionaryCompressionState : UncompressedCompressState {
 	}
 };
 
-struct DictionaryCompressionStorage : UncompressedStringStorage{
+struct DictionaryCompressionStorage : UncompressedStringStorage {
 
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
@@ -84,6 +84,7 @@ bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &
 	VectorData vdata;
 	input.Orrify(count, vdata);
 
+	// TODO test analysis
 	state.count += count;
 	auto data = (string_t *)vdata.data;
 	for (idx_t i = 0; i < count; i++) {
@@ -94,12 +95,13 @@ bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &
 
 			if (string_size >= StringUncompressed::STRING_BLOCK_LIMIT) {
 				state.overflow_strings++;
-				state.current_segment_fill = BIG_STRING_MARKER_SIZE;
+				state.current_segment_fill += BIG_STRING_MARKER_SIZE;
 			}
 
 			if (state.current_string_map.count(data[idx].GetString()) == 0) {
 				state.total_string_size += string_size;
 				state.current_segment_fill += string_size;
+				state.current_string_map.insert({data[idx].GetString(), string_size});
 			}
 
 			// If we have filled a segment size worth of data, we clear the string map to simulate a new segment being
@@ -142,7 +144,10 @@ void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &s
 		}
 		auto next_start = state.current_segment->start + state.current_segment->count;
 		// the segment is full: flush it to disk
-		state.FlushSegment(state.current_segment->FinalizeAppend());
+
+		// TODO directly calling the finalize append may be hacky?
+		state.FlushSegment(
+		    UncompressedStringStorage::FinalizeAppend(*state.current_segment, state.current_segment->stats));
 
 		// now create a new segment and continue appending
 		state.CreateEmptySegment(next_start);
@@ -153,21 +158,20 @@ void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &s
 
 void DictionaryCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 	auto &state = (DictionaryCompressionState &)state_p;
-	state.Finalize(state.current_segment->FinalizeAppend());
+	state.Finalize(UncompressedStringStorage::FinalizeAppend(*state.current_segment, state.current_segment->stats));
 }
 
 //===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type) {
-	return CompressionFunction(CompressionType::COMPRESSION_DICTIONARY, data_type,
-	                           DictionaryCompressionStorage ::StringInitAnalyze, DictionaryCompressionStorage::StringAnalyze,
-	                           DictionaryCompressionStorage::StringFinalAnalyze,
-	                           DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
-	                           DictionaryCompressionStorage::FinalizeCompress,
-	                           UncompressedStringStorage::StringInitScan, UncompressedStringStorage::StringScan,
-	                           UncompressedStringStorage::StringScanPartial, UncompressedStringStorage::StringFetchRow,
-	                           UncompressedFunctions::EmptySkip);
+	return CompressionFunction(
+	    CompressionType::COMPRESSION_DICTIONARY, data_type, DictionaryCompressionStorage ::StringInitAnalyze,
+	    DictionaryCompressionStorage::StringAnalyze, DictionaryCompressionStorage::StringFinalAnalyze,
+	    DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
+	    DictionaryCompressionStorage::FinalizeCompress, UncompressedStringStorage::StringInitScan,
+	    UncompressedStringStorage::StringScan, UncompressedStringStorage::StringScanPartial,
+	    UncompressedStringStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
 
 bool DictionaryCompressionFun::TypeIsSupported(PhysicalType type) {
