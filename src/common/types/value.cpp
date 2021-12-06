@@ -860,6 +860,12 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 		return Value::TIMESTAMPMS(timestamp_t(value));
 	case LogicalTypeId::TIMESTAMP_SEC:
 		return Value::TIMESTAMPSEC(timestamp_t(value));
+	case LogicalTypeId::DATE_TZ:
+		return Value::DATETZ(date_t(value));
+	case LogicalTypeId::TIME_TZ:
+		return Value::TIMETZ(dtime_t(value));
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return Value::TIMESTAMPTZ(timestamp_t(value));
 	case LogicalTypeId::ENUM:
 		switch (type.InternalType()) {
 		case PhysicalType::UINT8:

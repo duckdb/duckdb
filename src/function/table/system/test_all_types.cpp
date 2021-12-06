@@ -36,9 +36,9 @@ static vector<TestType> GetTestTypes() {
 	result.emplace_back(LogicalType::BIGINT, "bigint");
 	result.emplace_back(LogicalType::HUGEINT, "hugeint");
 	result.emplace_back(LogicalType::UTINYINT, "utinyint");
-	result.emplace_back(LogicalType::USMALLINT, "uint");
-	result.emplace_back(LogicalType::UINTEGER, "ubigint");
-	result.emplace_back(LogicalType::UBIGINT, "uhugeint");
+	result.emplace_back(LogicalType::USMALLINT, "usmallint");
+	result.emplace_back(LogicalType::UINTEGER, "uint");
+	result.emplace_back(LogicalType::UBIGINT, "ubigint");
 	result.emplace_back(LogicalType::DATE, "date");
 	result.emplace_back(LogicalType::TIME, "time");
 	result.emplace_back(LogicalType::TIMESTAMP, "timestamp");

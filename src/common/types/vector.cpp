@@ -670,7 +670,7 @@ void Vector::Normalify(idx_t count) {
 		// allocate a new buffer for the vector
 		auto old_buffer = move(buffer);
 		auto old_data = data;
-		buffer = VectorBuffer::CreateStandardVector(type);
+		buffer = VectorBuffer::CreateStandardVector(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
 		data = buffer->GetData();
 		vector_type = VectorType::FLAT_VECTOR;
 		if (is_null) {
