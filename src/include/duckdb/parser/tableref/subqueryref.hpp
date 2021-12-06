@@ -19,7 +19,7 @@ public:
 
 	//! The subquery
 	unique_ptr<SelectStatement> subquery;
-	//! Alises for the column names
+	//! Aliases for the column names
 	vector<string> column_name_alias;
 
 public:
