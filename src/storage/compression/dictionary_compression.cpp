@@ -11,14 +11,14 @@
 namespace duckdb {
 
 struct DictionaryCompressionState : UncompressedCompressState {
-
 	explicit DictionaryCompressionState(ColumnDataCheckpointer &checkpointer)
 	    : UncompressedCompressState(checkpointer) {
 		auto &db = checkpointer.GetDatabase();
 		auto &config = DBConfig::GetConfig(db);
 		function = config.GetCompressionFunction(CompressionType::COMPRESSION_DICTIONARY, PhysicalType::VARCHAR);
 		current_segment->function = function;
-	};
+		current_string_map = make_unique<std::unordered_map<string, int32_t>>();
+	}
 
 	void CreateEmptySegment(idx_t row_start) override {
 		auto &db = checkpointer.GetDatabase();
@@ -32,20 +32,14 @@ struct DictionaryCompressionState : UncompressedCompressState {
 		current_segment = move(compressed_segment);
 
 		// Reset the string map
-		current_string_map.clear();
+//		current_string_map->clear(); TODO why is this slow?
+		current_string_map.reset();
+		current_string_map = make_unique<std::unordered_map<string, int32_t>>();
 	}
 
 	// TODO initialize with certain size?
-	std::map<string, int32_t> current_string_map;
+	unique_ptr<std::unordered_map<string, int32_t>> current_string_map;
 	CompressionFunction *function;
-
-	void AddStringSeen(string s, int32_t s_ptr) {
-		current_string_map.insert({s, s_ptr});
-	}
-
-	size_t SeenStringCount(string s) {
-		return current_string_map.count(s);
-	}
 };
 
 struct DictionaryCompressionStorage : UncompressedStringStorage {
@@ -65,13 +59,14 @@ struct DictionaryCompressionStorage : UncompressedStringStorage {
 //===--------------------------------------------------------------------===//
 struct DictionaryCompressionAnalyzeState : public AnalyzeState {
 	DictionaryCompressionAnalyzeState() : count(0), total_string_size(0), overflow_strings(0), current_segment_fill(0) {
+		current_string_map = make_unique<std::unordered_map<string, int32_t>>();
 	}
 
 	idx_t count;
 	idx_t total_string_size;
 	idx_t overflow_strings;
 
-	std::map<string, int32_t> current_string_map;
+	unique_ptr<std::unordered_map<string, int32_t>> current_string_map;
 	size_t current_segment_fill;
 };
 
@@ -98,17 +93,20 @@ bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &
 				state.current_segment_fill += BIG_STRING_MARKER_SIZE;
 			}
 
-			if (state.current_string_map.count(data[idx].GetString()) == 0) {
+			if (state.current_string_map->count(data[idx].GetString()) == 0) {
 				state.total_string_size += string_size;
 				state.current_segment_fill += string_size;
-				state.current_string_map.insert({data[idx].GetString(), string_size});
+				state.current_string_map->insert({data[idx].GetString(), string_size});
 			}
 
 			// If we have filled a segment size worth of data, we clear the string map to simulate a new segment being
 			// used
 			// TODO can we do better than this in size estimation?
 			if (state.current_segment_fill >= Storage::BLOCK_SIZE) {
-				state.current_string_map.clear();
+				// For some reason, clear is really slow?
+//				state.current_string_map->clear();
+				state.current_string_map.reset();
+				state.current_string_map = make_unique<std::unordered_map<string, int32_t>>();
 			}
 		}
 	}
@@ -136,8 +134,8 @@ void DictionaryCompressionStorage::Compress(CompressionState &state_p, Vector &s
 	ColumnAppendState append_state;
 	idx_t offset = 0;
 	while (count > 0) {
-		idx_t appended = UncompressedStringStorage::StringAppendBase(
-		    *state.current_segment, state.current_segment->stats, vdata, offset, count, &state.current_string_map);
+		idx_t appended = UncompressedStringStorage::StringAppendBase<true>(
+		    *state.current_segment, state.current_segment->stats, vdata, offset, count, state.current_string_map.get());
 		if (appended == count) {
 			// appended everything: finished
 			return;
