@@ -1,4 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
+#include "duckdb/common/pair.hpp"
 
 namespace duckdb {
 
@@ -108,19 +109,39 @@ static vector<TestType> GetTestTypes() {
 	result.push_back(TestType(nested_list_type, "nested_int_array", empty_nested_list, nested_int_list));
 
 	// structs
-	auto struct_type =
-	    LogicalType::STRUCT({make_pair("a", LogicalType::INTEGER), make_pair("b", LogicalType::VARCHAR)});
-	auto min_struct_val =
-	    Value::STRUCT({make_pair("a", Value(LogicalType::INTEGER)), make_pair("b", Value(LogicalType::VARCHAR))});
-	auto max_struct_val =
-	    Value::STRUCT({make_pair("a", Value::INTEGER(42)), make_pair("b", Value("🦆🦆🦆🦆🦆🦆"))});
+	child_list_t<LogicalType> struct_type_list;
+	struct_type_list.push_back(make_pair("a", LogicalType::INTEGER));
+	struct_type_list.push_back(make_pair("b", LogicalType::VARCHAR));
+	auto struct_type = LogicalType::STRUCT(move(struct_type_list));
+
+	child_list_t<Value> min_struct_list;
+	min_struct_list.push_back(make_pair("a", Value(LogicalType::INTEGER)));
+	min_struct_list.push_back(make_pair("b", Value(LogicalType::VARCHAR)));
+	auto min_struct_val = Value::STRUCT(move(min_struct_list));
+
+	child_list_t<Value> max_struct_list;
+	max_struct_list.push_back(make_pair("a", Value::INTEGER(42)));
+	max_struct_list.push_back(make_pair("b", Value("🦆🦆🦆🦆🦆🦆")));
+	auto max_struct_val = Value::STRUCT(move(max_struct_list));
+
 	result.push_back(TestType(struct_type, "struct", min_struct_val, max_struct_val));
 
 	// structs with lists
-	auto struct_list_type = LogicalType::STRUCT({make_pair("a", int_list_type), make_pair("b", varchar_list_type)});
-	auto min_struct_val_list =
-	    Value::STRUCT({make_pair("a", Value(int_list_type)), make_pair("b", Value(varchar_list_type))});
-	auto max_struct_val_list = Value::STRUCT({make_pair("a", int_list), make_pair("b", varchar_list)});
+	child_list_t<LogicalType> struct_list_type_list;
+	struct_list_type_list.push_back(make_pair("a", int_list_type));
+	struct_list_type_list.push_back(make_pair("b", varchar_list_type));
+	auto struct_list_type = LogicalType::STRUCT(move(struct_list_type_list));
+
+	child_list_t<Value> min_struct_vl_list;
+	min_struct_vl_list.push_back(make_pair("a", Value(int_list_type)));
+	min_struct_vl_list.push_back(make_pair("b", Value(varchar_list_type)));
+	auto min_struct_val_list = Value::STRUCT(move(min_struct_vl_list));
+
+	child_list_t<Value> max_struct_vl_list;
+	max_struct_vl_list.push_back(make_pair("a", int_list));
+	max_struct_vl_list.push_back(make_pair("b", varchar_list));
+	auto max_struct_val_list = Value::STRUCT(move(max_struct_vl_list));
+
 	result.push_back(
 	    TestType(struct_list_type, "struct_of_arrays", move(min_struct_val_list), move(max_struct_val_list)));
 
