@@ -65,8 +65,8 @@ static vector<TestType> GetTestTypes() {
 	max_interval.months = 999;
 	max_interval.days = 999;
 	max_interval.micros = 999999999;
-	result.push_back(
-	    TestType(LogicalType::INTERVAL, "interval", Value::INTERVAL(min_interval), Value::INTERVAL(max_interval)));
+	result.emplace_back(LogicalType::INTERVAL, "interval", Value::INTERVAL(min_interval),
+	                    Value::INTERVAL(max_interval));
 	// strings/blobs
 	result.emplace_back(LogicalType::VARCHAR, "varchar", Value("🦆🦆🦆🦆🦆🦆"), Value("goose"));
 	result.emplace_back(LogicalType::BLOB, "blob", Value::BLOB("thisisalongblob\\x00withnullbytes"),
