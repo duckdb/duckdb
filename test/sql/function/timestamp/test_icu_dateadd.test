@@ -187,3 +187,169 @@ SELECT iv, '1962-07-31 12:20:48.123456'::TIMESTAMPTZ + iv FROM intervals;
 -00:00:00.000001	1962-07-31 12:20:48.123455+00
 00:00:00.000612	1962-07-31 12:20:48.124068+00
 -00:00:00.000485	1962-07-31 12:20:48.122971+00
+
+#
+# Limits testing
+#
+statement ok
+CREATE TABLE limits AS SELECT ts, label FROM (VALUES
+	('290309-12-22 (BC) 00:00:00'::TIMESTAMPTZ, 'tsmin'),
+	('294247-01-10 04:00:54.775807'::TIMESTAMPTZ, 'tsmax')
+) tbl(ts, label);
+
+# Forward from the minimum
+query II
+SELECT iv, ts + iv FROM limits, intervals
+WHERE label = 'tsmin'
+  AND iv >= INTERVAL 0 SECONDS;
+----
+1 year	290308-12-22 (BC) 00:00:00+00
+1 month	290308-01-22 (BC) 00:00:00+00
+1 year 1 month	290307-01-22 (BC) 00:00:00+00
+1 day	290309-12-23 (BC) 00:00:00+00
+32 days	290308-01-23 (BC) 00:00:00+00
+01:00:00	290309-12-22 (BC) 01:00:00+00
+11:00:00	290309-12-22 (BC) 11:00:00+00
+00:01:00	290309-12-22 (BC) 00:01:00+00
+00:06:00	290309-12-22 (BC) 00:06:00+00
+00:00:01	290309-12-22 (BC) 00:00:01+00
+00:00:23	290309-12-22 (BC) 00:00:23+00
+00:00:00.001	290309-12-22 (BC) 00:00:00+00
+00:00:00.91	290309-12-22 (BC) 00:00:00.91+00
+00:00:00.000001	290309-12-22 (BC) 00:00:00.000001+00
+00:00:00.000612	290309-12-22 (BC) 00:00:00.000612+00
+
+# Backwards from the minimum
+statement error
+SELECT ts + (INTERVAL (-1) year) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-1) month) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-15) month) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-1) day) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-40) day) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-1) hour) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-14) hour) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-1) minute) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-72) minute) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-1) second) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-118) second) FROM limits WHERE label = 'tsmin';
+
+# Succeeds because we are below the precision of UDate
+query I
+SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmin';
+----
+290309-12-22 (BC) 00:00:00+00
+
+statement error
+SELECT ts + (INTERVAL (-150) millisecond) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-1) microsecond) FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + (INTERVAL (-485) microsecond) FROM limits WHERE label = 'tsmin';
+statement error
+SELECT ts + INTERVAL (-150) millisecond FROM limits WHERE label = 'tsmin';
+
+statement error
+SELECT ts + INTERVAL (-485) microsecond FROM limits WHERE label = 'tsmin';
+----
+290309-12-22 (BC) 00:00:00.000515+00
+
+# Backward from the maximum
+# UDate loses ms accuracy when close to the upper limit,
+# so these results are off by 1ms
+
+query II
+SELECT iv, ts + iv FROM limits, intervals
+WHERE label = 'tsmax'
+  AND iv < (INTERVAL (-1) millisecond);
+----
+-1 years	294246-01-10 04:00:54.776807+00
+-1 months	294246-12-10 04:00:54.776807+00
+-1 years -3 months	294245-10-10 03:00:54.776807+00
+-1 days	294247-01-09 04:00:54.776807+00
+-40 days	294246-12-01 04:00:54.776807+00
+-01:00:00	294247-01-10 03:00:54.776807+00
+-14:00:00	294247-01-09 14:00:54.776807+00
+-00:01:00	294247-01-10 03:59:54.776807+00
+-01:12:00	294247-01-10 02:48:54.776807+00
+-00:00:01	294247-01-10 04:00:53.776807+00
+-00:01:58	294247-01-10 03:58:56.776807+00
+-00:00:00.15	294247-01-10 04:00:54.626807+00
+
+statement error
+SELECT ts + (INTERVAL (-485) microsecond) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL (-1) microsecond) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL (-1) millisecond) FROM limits WHERE label = 'tsmax';
+
+# Forward from the maximum
+statement error
+SELECT ts + (INTERVAL 1 year) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 1 month) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 13 month) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 1 day) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 32 day) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 1 hour) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 11 hour) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 1 minute) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 6 minute) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 1 second) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 23 second) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 1 millisecond) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 910 millisecond) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 1 microsecond) FROM limits WHERE label = 'tsmax';
+
+statement error
+SELECT ts + (INTERVAL 612 microsecond) FROM limits WHERE label = 'tsmax';
+
+

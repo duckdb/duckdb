@@ -4,6 +4,9 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
 
@@ -36,6 +39,12 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 		--millis;
 	}
 
+	// Make sure the value is still in range
+	date_t d;
+	dtime_t t;
+	auto us = MultiplyOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC);
+	Timestamp::Convert(timestamp_t(us), d, t);
+
 	// Now use the calendar to add the other parts
 	UErrorCode status = U_ZERO_ERROR;
 	const auto udate = UDate(millis);
@@ -52,8 +61,13 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 		throw Exception("Unable to compute ICU DATEADD.");
 	}
 
-	millis *= Interval::MICROS_PER_MSEC;
-	millis += micros;
+	// UDate is a double, so it can't overflow (it just loses accuracy), but converting back to µs can.
+	millis = MultiplyOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, Interval::MICROS_PER_MSEC);
+	millis = AddOperatorOverflowCheck::Operation<int64_t, int64_t, int64_t>(millis, micros);
+
+	// Now make sure the value is in range
+	Timestamp::Convert(timestamp_t(millis), d, t);
+
 	return timestamp_t(millis);
 }
 
@@ -70,7 +84,6 @@ timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval
 
 struct ICUDateAdd {
 	using CalendarPtr = unique_ptr<icu::Calendar>;
-	typedef void (*part_truncator_t)(icu::Calendar *calendar, uint64_t &micros);
 
 	struct BindData : public FunctionData {
 		explicit BindData(CalendarPtr calendar_p) : calendar(move(calendar_p)) {
