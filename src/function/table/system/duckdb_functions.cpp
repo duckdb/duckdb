@@ -79,7 +79,7 @@ unique_ptr<FunctionOperatorData> DuckDBFunctionsInit(ClientContext &context, con
 	ExtractFunctionsFromSchema(context, *context.temporary_objects, *result);
 
 	std::sort(result->entries.begin(), result->entries.end(),
-	          [](CatalogEntry *&a, CatalogEntry *&b) -> bool { return (int)a->type < (int)b->type; });
+	          [&](CatalogEntry *a, CatalogEntry *b) { return (int)a->type < (int)b->type; });
 	return move(result);
 }
 
