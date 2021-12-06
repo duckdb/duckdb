@@ -69,6 +69,8 @@ public:
 	private:
 		//! Next operator for the inner join
 		void NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
+		//! Next operator for inner join with unique keys
+		void NextInnerUniqueKeysJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the semi join
 		void NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result);
 		//! Next operator for the anti join
@@ -158,7 +160,7 @@ public:
 	std::atomic<bool> has_null;
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
-	//! Flag to control weather the build side has a primary key
+	//! Flag to control weather the build side is composed of unique keys only
 	bool has_unique_keys {true};
 
 	struct {

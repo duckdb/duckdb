@@ -275,10 +275,6 @@ void JoinHashTable::Finalize() {
 		}
 		pinned_handles.push_back(move(handle));
 	}
-	// In case of primary key with an inner join do a semi-join instead
-	if (join_type == JoinType::INNER && has_unique_keys) {
-		join_type = JoinType::SEMI;
-	}
 	finalized = true;
 }
 
@@ -293,7 +289,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	// First, fill the hash_map and handle conflicts with a next_pointer
 	if (has_unique_keys && join_type == JoinType::INNER) {
-		// For inner joins we check whether the build is a primary key during the insertion into the hashmap
+		// For inner joins we check whether the build is composed of unique keys during the insertion into the hash map
 		InsertHashesAndCheckUniqueness(count_tuples, indices, key_locations, pointers); // inlined
 	} else {
 		for (idx_t i = 0; i < count_tuples; i++) {
@@ -411,7 +407,7 @@ unique_ptr<ScanStructure> JoinHashTable::Probe(DataChunk &keys) {
 	// set up the scan structure
 	auto ss = make_unique<ScanStructure>(*this);
 
-	if (join_type != JoinType::INNER) {
+	if (join_type != JoinType::INNER || has_unique_keys) {
 		ss->found_match = unique_ptr<bool[]>(new bool[STANDARD_VECTOR_SIZE]);
 		memset(ss->found_match.get(), 0, sizeof(bool) * STANDARD_VECTOR_SIZE);
 	}
@@ -456,7 +452,11 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	switch (ht.join_type) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
-		NextInnerJoin(keys, left, result);
+		if (ht.has_unique_keys) {
+			NextInnerUniqueKeysJoin(keys, left, result);
+		} else {
+			NextInnerJoin(keys, left, result);
+		}
 		break;
 	case JoinType::SEMI:
 		NextSemiJoin(keys, left, result);
@@ -601,6 +601,7 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 
 template <bool MATCH>
 void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+	D_ASSERT(left.ColumnCount() == result.ColumnCount());
 	D_ASSERT(keys.size() == left.size());
 	// create the selection vector from the matches that were found
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
@@ -616,8 +617,28 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChu
 		// we only return the columns on the left side
 		// reference the columns of the left side from the result
 		result.Slice(left, sel, result_count);
-		// This was supposed to be an inner join,
-		if (ht.has_unique_keys && left.ColumnCount() < result.ColumnCount()) {
+	} else {
+		D_ASSERT(result.size() == 0);
+	}
+}
+
+void ScanStructure::NextInnerUniqueKeysJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
+	D_ASSERT(keys.size() == left.size());
+	// create the selection vector from the matches that were found
+	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	idx_t result_count = 0;
+	for (idx_t i = 0; i < keys.size(); i++) {
+		if (found_match[i]) {
+			// part of the result
+			sel.set_index(result_count++, i);
+		}
+	}
+	// construct the final result
+	if (result_count > 0) {
+		// Reference the columns of the left side from the result
+		result.Slice(left, sel, result_count);
+		// And the columns of the right side
+		if (left.ColumnCount() < result.ColumnCount()) {
 			// on the RHS, we need to fetch the data from the hash table
 			for (idx_t i = 0; i < ht.build_types.size(); i++) {
 				auto &vector = result.data[left.ColumnCount() + i];
