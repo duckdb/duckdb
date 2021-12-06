@@ -8,8 +8,9 @@
 
 namespace duckdb {
 
-SortedData::SortedData(const RowLayout &layout, BufferManager &buffer_manager, GlobalSortState &state)
-    : layout(layout), block_idx(0), entry_idx(0), swizzled(false), buffer_manager(buffer_manager), state(state) {
+SortedData::SortedData(SortedDataType type, const RowLayout &layout, BufferManager &buffer_manager,
+                       GlobalSortState &state)
+    : type(type), layout(layout), swizzled(false), buffer_manager(buffer_manager), state(state) {
 }
 
 idx_t SortedData::Count() {
@@ -22,37 +23,6 @@ idx_t SortedData::Count() {
 	return count;
 }
 
-void SortedData::Pin() {
-	PinData();
-	if (!layout.AllConstant() && state.external) {
-		PinHeap();
-	}
-}
-
-data_ptr_t SortedData::DataPtr() const {
-	D_ASSERT(data_blocks[block_idx].block->Readers() != 0 &&
-	         data_handle->handle->BlockId() == data_blocks[block_idx].block->BlockId());
-	return data_ptr + entry_idx * layout.GetRowWidth();
-}
-
-data_ptr_t SortedData::HeapPtr() const {
-	D_ASSERT(!layout.AllConstant() && state.external);
-	D_ASSERT(heap_blocks[block_idx].block->Readers() != 0 &&
-	         heap_handle->handle->BlockId() == heap_blocks[block_idx].block->BlockId());
-	return heap_ptr + Load<idx_t>(DataPtr() + layout.GetHeapPointerOffset());
-}
-
-void SortedData::Advance(const bool &adv) {
-	entry_idx += adv;
-	if (entry_idx == data_blocks[block_idx].count) {
-		block_idx++;
-		entry_idx = 0;
-		if (block_idx < data_blocks.size()) {
-			Pin();
-		}
-	}
-}
-
 void SortedData::CreateBlock() {
 	auto capacity =
 	    MaxValue(((idx_t)Storage::BLOCK_SIZE + layout.GetRowWidth() - 1) / layout.GetRowWidth(), state.block_capacity);
@@ -63,15 +33,9 @@ void SortedData::CreateBlock() {
 	}
 }
 
-void SortedData::ResetIndices(idx_t block_idx_to, idx_t entry_idx_to) {
-	block_idx = block_idx_to;
-	entry_idx = entry_idx_to;
-}
-
-unique_ptr<SortedData> SortedData::CreateSlice(idx_t start_block_index, idx_t start_entry_index, idx_t end_block_index,
-                                               idx_t end_entry_index) {
+unique_ptr<SortedData> SortedData::CreateSlice(idx_t start_block_index, idx_t end_block_index, idx_t end_entry_index) {
 	// Add the corresponding blocks to the result
-	auto result = make_unique<SortedData>(layout, buffer_manager, state);
+	auto result = make_unique<SortedData>(type, layout, buffer_manager, state);
 	for (idx_t i = start_block_index; i <= end_block_index; i++) {
 		result->data_blocks.push_back(data_blocks[i]);
 		if (!layout.AllConstant() && state.external) {
@@ -86,7 +50,6 @@ unique_ptr<SortedData> SortedData::CreateSlice(idx_t start_block_index, idx_t st
 		}
 	}
 	// Use start and end entry indices to set the boundaries
-	result->entry_idx = start_entry_index;
 	D_ASSERT(end_entry_index <= result->data_blocks.back().count);
 	result->data_blocks.back().count = end_entry_index;
 	if (!layout.AllConstant() && state.external) {
@@ -112,29 +75,11 @@ void SortedData::Unswizzle() {
 	heap_blocks.clear();
 }
 
-void SortedData::PinData() {
-	D_ASSERT(block_idx < data_blocks.size());
-	auto &block = data_blocks[block_idx];
-	if (!data_handle || data_handle->handle->BlockId() != block.block->BlockId()) {
-		data_handle = buffer_manager.Pin(data_blocks[block_idx].block);
-	}
-	data_ptr = data_handle->Ptr();
-}
-
-void SortedData::PinHeap() {
-	D_ASSERT(!layout.AllConstant() && state.external);
-	auto &block = heap_blocks[block_idx];
-	if (!heap_handle || heap_handle->handle->BlockId() != block.block->BlockId()) {
-		heap_handle = buffer_manager.Pin(heap_blocks[block_idx].block);
-	}
-	heap_ptr = heap_handle->Ptr();
-}
-
 SortedBlock::SortedBlock(BufferManager &buffer_manager, GlobalSortState &state)
-    : block_idx(0), entry_idx(0), buffer_manager(buffer_manager), state(state), sort_layout(state.sort_layout),
+    : buffer_manager(buffer_manager), state(state), sort_layout(state.sort_layout),
       payload_layout(state.payload_layout) {
-	blob_sorting_data = make_unique<SortedData>(sort_layout.blob_layout, buffer_manager, state);
-	payload_data = make_unique<SortedData>(payload_layout, buffer_manager, state);
+	blob_sorting_data = make_unique<SortedData>(SortedDataType::BLOB, sort_layout.blob_layout, buffer_manager, state);
+	payload_data = make_unique<SortedData>(SortedDataType::PAYLOAD, payload_layout, buffer_manager, state);
 }
 
 idx_t SortedBlock::Count() const {
@@ -145,17 +90,6 @@ idx_t SortedBlock::Count() const {
 	}
 	D_ASSERT(count == payload_data->Count());
 	return count;
-}
-
-idx_t SortedBlock::Remaining() const {
-	idx_t remaining = 0;
-	if (block_idx < radix_sorting_data.size()) {
-		remaining += radix_sorting_data[block_idx].count - entry_idx;
-		for (idx_t i = block_idx + 1; i < radix_sorting_data.size(); i++) {
-			remaining += radix_sorting_data[i].count;
-		}
-	}
-	return remaining;
 }
 
 void SortedBlock::InitializeWrite() {
@@ -170,14 +104,6 @@ void SortedBlock::CreateBlock() {
 	auto capacity = MaxValue(((idx_t)Storage::BLOCK_SIZE + sort_layout.entry_size - 1) / sort_layout.entry_size,
 	                         state.block_capacity);
 	radix_sorting_data.emplace_back(buffer_manager, capacity, sort_layout.entry_size);
-}
-
-void SortedBlock::PinRadix(idx_t pin_block_idx) {
-	D_ASSERT(pin_block_idx < radix_sorting_data.size());
-	auto &block = radix_sorting_data[pin_block_idx];
-	if (!radix_handle || radix_handle->handle->BlockId() != block.block->BlockId()) {
-		radix_handle = buffer_manager.Pin(block.block);
-	}
 }
 
 void SortedBlock::AppendSortedBlocks(vector<unique_ptr<SortedBlock>> &sorted_blocks) {
@@ -224,7 +150,7 @@ void SortedBlock::GlobalToLocalIndex(const idx_t &global_idx, idx_t &local_block
 	D_ASSERT(local_entry_index < radix_sorting_data[local_block_index].count);
 }
 
-unique_ptr<SortedBlock> SortedBlock::CreateSlice(const idx_t start, const idx_t end) {
+unique_ptr<SortedBlock> SortedBlock::CreateSlice(const idx_t start, const idx_t end, idx_t &entry_idx) {
 	// Identify blocks/entry indices of this slice
 	idx_t start_block_index;
 	idx_t start_entry_index;
@@ -242,18 +168,15 @@ unique_ptr<SortedBlock> SortedBlock::CreateSlice(const idx_t start, const idx_t 
 		radix_sorting_data[i].block = nullptr;
 	}
 	// Use start and end entry indices to set the boundaries
-	result->entry_idx = start_entry_index;
+	entry_idx = start_entry_index;
 	D_ASSERT(end_entry_index <= result->radix_sorting_data.back().count);
 	result->radix_sorting_data.back().count = end_entry_index;
 	// Same for the var size sorting data
 	if (!sort_layout.all_constant) {
-		result->blob_sorting_data =
-		    blob_sorting_data->CreateSlice(start_block_index, start_entry_index, end_block_index, end_entry_index);
+		result->blob_sorting_data = blob_sorting_data->CreateSlice(start_block_index, end_block_index, end_entry_index);
 	}
 	// And the payload data
-	result->payload_data =
-	    payload_data->CreateSlice(start_block_index, start_entry_index, end_block_index, end_entry_index);
-	D_ASSERT(result->Remaining() == end - start);
+	result->payload_data = payload_data->CreateSlice(start_block_index, end_block_index, end_entry_index);
 	return result;
 }
 
@@ -288,19 +211,90 @@ idx_t SortedBlock::SizeInBytes() const {
 	return bytes;
 }
 
-SortedDataScanner::SortedDataScanner(SortedData &sorted_data, GlobalSortState &global_sort_state)
-    : sorted_data(sorted_data), total_count(sorted_data.Count()), global_sort_state(global_sort_state),
-      total_scanned(0) {
+SBScanState::SBScanState(BufferManager &buffer_manager, GlobalSortState &state)
+    : buffer_manager(buffer_manager), sort_layout(state.sort_layout), state(state), block_idx(0), entry_idx(0) {
 }
 
-void SortedDataScanner::Scan(DataChunk &chunk) {
+void SBScanState::PinRadix(idx_t block_idx_to) {
+	auto &radix_sorting_data = sb->radix_sorting_data;
+	D_ASSERT(block_idx_to < radix_sorting_data.size());
+	auto &block = radix_sorting_data[block_idx_to];
+	if (!radix_handle || radix_handle->handle->BlockId() != block.block->BlockId()) {
+		radix_handle = buffer_manager.Pin(block.block);
+	}
+}
+
+void SBScanState::PinData(SortedData &sd) {
+	D_ASSERT(block_idx < sd.data_blocks.size());
+	auto &data_handle = sd.type == SortedDataType::BLOB ? blob_sorting_data_handle : payload_data_handle;
+	auto &heap_handle = sd.type == SortedDataType::BLOB ? blob_sorting_heap_handle : payload_heap_handle;
+
+	auto &data_block = sd.data_blocks[block_idx];
+	if (!data_handle || data_handle->handle->BlockId() != data_block.block->BlockId()) {
+		data_handle = buffer_manager.Pin(data_block.block);
+	}
+	if (sd.layout.AllConstant() || !state.external) {
+		return;
+	}
+	auto &heap_block = sd.heap_blocks[block_idx];
+	if (!heap_handle || heap_handle->handle->BlockId() != heap_block.block->BlockId()) {
+		heap_handle = buffer_manager.Pin(heap_block.block);
+	}
+}
+
+data_ptr_t SBScanState::RadixPtr() const {
+	return radix_handle->Ptr() + entry_idx * sort_layout.entry_size;
+}
+
+data_ptr_t SBScanState::DataPtr(SortedData &sd) const {
+	auto &data_handle = sd.type == SortedDataType::BLOB ? *blob_sorting_data_handle : *payload_data_handle;
+	D_ASSERT(sd.data_blocks[block_idx].block->Readers() != 0 &&
+	         data_handle.handle->BlockId() == sd.data_blocks[block_idx].block->BlockId());
+	return data_handle.Ptr() + entry_idx * sd.layout.GetRowWidth();
+}
+
+data_ptr_t SBScanState::HeapPtr(SortedData &sd) const {
+	return BaseHeapPtr(sd) + Load<idx_t>(DataPtr(sd) + sd.layout.GetHeapPointerOffset());
+}
+
+data_ptr_t SBScanState::BaseHeapPtr(SortedData &sd) const {
+	auto &heap_handle = sd.type == SortedDataType::BLOB ? *blob_sorting_heap_handle : *payload_heap_handle;
+	D_ASSERT(!sd.layout.AllConstant() && state.external);
+	D_ASSERT(sd.heap_blocks[block_idx].block->Readers() != 0 &&
+	         heap_handle.handle->BlockId() == sd.heap_blocks[block_idx].block->BlockId());
+	return heap_handle.Ptr();
+}
+
+idx_t SBScanState::Remaining() const {
+	const auto &blocks = sb->radix_sorting_data;
+	idx_t remaining = 0;
+	if (block_idx < blocks.size()) {
+		remaining += blocks[block_idx].count - entry_idx;
+		for (idx_t i = block_idx + 1; i < blocks.size(); i++) {
+			remaining += blocks[i].count;
+		}
+	}
+	return remaining;
+}
+
+void SBScanState::SetIndices(idx_t block_idx_to, idx_t entry_idx_to) {
+	block_idx = block_idx_to;
+	entry_idx = entry_idx_to;
+}
+
+PayloadScanner::PayloadScanner(SortedData &sorted_data, GlobalSortState &global_sort_state)
+    : sorted_data(sorted_data), read_state(global_sort_state.buffer_manager, global_sort_state),
+      total_count(sorted_data.Count()), global_sort_state(global_sort_state), total_scanned(0) {
+}
+
+void PayloadScanner::Scan(DataChunk &chunk) {
 	auto count = MinValue((idx_t)STANDARD_VECTOR_SIZE, total_count - total_scanned);
 	if (count == 0) {
-		D_ASSERT(sorted_data.block_idx == sorted_data.data_blocks.size());
+		D_ASSERT(read_state.block_idx == sorted_data.data_blocks.size());
 		return;
 	}
 	// Eagerly delete references to blocks that we've passed
-	for (idx_t i = 0; i < sorted_data.block_idx; i++) {
+	for (idx_t i = 0; i < read_state.block_idx; i++) {
 		sorted_data.data_blocks[i].block = nullptr;
 	}
 	const idx_t &row_width = sorted_data.layout.GetRowWidth();
@@ -308,10 +302,10 @@ void SortedDataScanner::Scan(DataChunk &chunk) {
 	idx_t scanned = 0;
 	auto data_pointers = FlatVector::GetData<data_ptr_t>(addresses);
 	while (scanned < count) {
-		sorted_data.Pin();
-		auto &data_block = sorted_data.data_blocks[sorted_data.block_idx];
-		idx_t next = MinValue(data_block.count - sorted_data.entry_idx, count - scanned);
-		const data_ptr_t data_ptr = sorted_data.data_handle->Ptr() + sorted_data.entry_idx * row_width;
+		read_state.PinData(sorted_data);
+		auto &data_block = sorted_data.data_blocks[read_state.block_idx];
+		idx_t next = MinValue(data_block.count - read_state.entry_idx, count - scanned);
+		const data_ptr_t data_ptr = read_state.payload_data_handle->Ptr() + read_state.entry_idx * row_width;
 		// Set up the next pointers
 		data_ptr_t row_ptr = data_ptr;
 		for (idx_t i = 0; i < next; i++) {
@@ -320,14 +314,15 @@ void SortedDataScanner::Scan(DataChunk &chunk) {
 		}
 		// Unswizzle the offsets back to pointers (if needed)
 		if (!sorted_data.layout.AllConstant() && global_sort_state.external) {
-			RowOperations::UnswizzleHeapPointer(sorted_data.layout, data_ptr, sorted_data.heap_handle->Ptr(), next);
+			RowOperations::UnswizzleHeapPointer(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(),
+			                                    next);
 			RowOperations::UnswizzleColumns(sorted_data.layout, data_ptr, next);
 		}
 		// Update state indices
-		sorted_data.entry_idx += next;
-		if (sorted_data.entry_idx == data_block.count) {
-			sorted_data.block_idx++;
-			sorted_data.entry_idx = 0;
+		read_state.entry_idx += next;
+		if (read_state.entry_idx == data_block.count) {
+			read_state.block_idx++;
+			read_state.entry_idx = 0;
 		}
 		scanned += next;
 	}
