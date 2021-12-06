@@ -60,9 +60,6 @@ unique_ptr<FunctionData> MapFunction::MapFunctionBind(ClientContext &context, ve
 	auto df = FunctionCall(conversion, data.in_names, data.function);
 	vector<PandasColumnBindData> pandas_bind_data; // unused
 	VectorConversion::BindPandas(df, pandas_bind_data, return_types, names);
-	if (return_types.empty()) {
-		throw InvalidInputException("Zero-Column data frame?");
-	}
 
 	data.out_names = names;
 	data.out_types = return_types;

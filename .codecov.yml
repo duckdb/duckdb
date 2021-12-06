@@ -1,5 +1,8 @@
 comment: false
 coverage:
+  precision: 2
+  round: down
+  range: "94...100"
   status:
     project:
       default:

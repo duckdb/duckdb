@@ -40,6 +40,16 @@ public:
 	string Group() override;
 	string Subgroup() override;
 
+	string GetDatabasePath();
+
+	bool InMemory() {
+		return in_memory;
+	}
+
+	bool RequireReinit() override {
+		return require_reinit;
+	}
+
 private:
 	bool is_loaded = false;
 	std::unordered_map<string, string> replacement_mapping;
@@ -56,6 +66,9 @@ private:
 	string display_name;
 	string display_group;
 	string subgroup;
+
+	bool in_memory = true;
+	bool require_reinit = false;
 };
 
 } // namespace duckdb
