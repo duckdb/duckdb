@@ -1,0 +1,30 @@
+# name: test/sql/storage/compression/bitpacking/struct_bitpacking.test
+# description: Test storage with Bitpacking inside structs
+# group: [bitpacking]
+
+# load the DB from disk
+load __TEST_DIR__/test_bitpacking.db
+
+statement ok
+PRAGMA force_compression = 'bitpacking'
+
+statement ok
+CREATE TABLE test (s ROW(a INTEGER));
+
+statement ok
+INSERT INTO test SELECT {'a': i} FROM range(0, 10000) tbl(i);
+INSERT INTO test SELECT {'a': i} FROM range(22767, 32767) tbl(i);
+INSERT INTO test SELECT {'a': i} FROM range(2147473647, 2147483647) tbl(i);
+INSERT INTO test SELECT {'a': i} FROM range(2147473647, 2147483647) tbl(i);
+
+query IIII
+SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+----
+42949900590000	0	2147483646	40000
+
+restart
+
+query IIII
+SELECT SUM(s['a']), MIN(s['a']), MAX(s['a']), COUNT(*) FROM test
+----
+42949900590000	0	2147483646	40000

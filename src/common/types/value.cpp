@@ -551,6 +551,16 @@ Value Value::LIST(vector<Value> values) {
 	return result;
 }
 
+Value Value::LIST(LogicalType child_type, vector<Value> values) {
+	if (values.empty()) {
+		return Value::EMPTYLIST(move(child_type));
+	}
+	for (auto &val : values) {
+		val = val.CastAs(child_type);
+	}
+	return Value::LIST(move(values));
+}
+
 Value Value::EMPTYLIST(LogicalType child_type) {
 	Value result;
 	result.type_ = LogicalType::LIST(move(child_type));

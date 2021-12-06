@@ -191,7 +191,7 @@ void PhysicalOrder::ScheduleMergeTasks(Pipeline &pipeline, Event &event, OrderGl
 class PhysicalOrderOperatorState : public GlobalSourceState {
 public:
 	//! Payload scanner
-	unique_ptr<SortedDataScanner> scanner;
+	unique_ptr<PayloadScanner> scanner;
 };
 
 unique_ptr<GlobalSourceState> PhysicalOrder::GetGlobalSourceState(ClientContext &context) const {
@@ -210,7 +210,7 @@ void PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, GlobalS
 			return;
 		}
 		state.scanner =
-		    make_unique<SortedDataScanner>(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
+		    make_unique<PayloadScanner>(*global_sort_state.sorted_blocks[0]->payload_data, global_sort_state);
 	}
 
 	// Scan the next data chunk
