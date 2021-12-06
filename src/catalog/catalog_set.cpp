@@ -13,6 +13,34 @@
 
 namespace duckdb {
 
+//! Class responsible to keep track of state when removing entries from the catalog.
+//! When deleting, many types of errors can be thrown, since we want to avoid try/catch blocks
+//! this class makes sure that whatever elements were modified are returned to a correct state
+//! when exceptions are thrown.
+//! The idea here is to use RAII (Resource acquisition is initialization) to mimic a try/catch/finally block.
+//! If any exception is raised when this object exists, then its destructor will be called
+//! and the entry will return to its previous state during deconstruction.
+class EntryDropper {
+public:
+	//! Both constructor and destructor are privates because they should only be called by DropEntryDependencies
+	explicit EntryDropper(CatalogSet &catalog_set, idx_t entry_index)
+	    : catalog_set(catalog_set), entry_index(entry_index) {
+		old_deleted = catalog_set.entries[entry_index].get()->deleted;
+	}
+
+	~EntryDropper() {
+		catalog_set.entries[entry_index].get()->deleted = old_deleted;
+	}
+
+private:
+	//! The current catalog_set
+	CatalogSet &catalog_set;
+	//! Keeps track of the state of the entry before starting the delete
+	bool old_deleted;
+	//! Index of entry to be deleted
+	idx_t entry_index;
+};
+
 CatalogSet::CatalogSet(Catalog &catalog, unique_ptr<DefaultGenerator> defaults)
     : catalog(catalog), defaults(move(defaults)) {
 }
@@ -180,10 +208,26 @@ bool CatalogSet::AlterEntry(ClientContext &context, const string &name, AlterInf
 	return true;
 }
 
+void CatalogSet::DropEntryDependencies(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade) {
+
+	// Stores the deleted value of the entry before starting the process
+	EntryDropper dropper(*this, entry_index);
+
+	// To correctly delete the object and its dependencies, it temporarily is set to deleted.
+	entries[entry_index].get()->deleted = true;
+
+	// check any dependencies of this object
+	entry.catalog->dependency_manager->DropObject(context, &entry, cascade);
+
+	// dropper destructor is called here
+	// the destructor makes sure to return the value to the previous state
+	// dropper.~EntryDropper()
+}
+
 void CatalogSet::DropEntryInternal(ClientContext &context, idx_t entry_index, CatalogEntry &entry, bool cascade) {
 	auto &transaction = Transaction::GetTransaction(context);
 
-	EntryDropper::DropEntryDependencies(this, context, entry_index, entry, cascade);
+	DropEntryDependencies(context, entry_index, entry, cascade);
 
 	// create a new entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
@@ -536,31 +580,5 @@ void CatalogSet::Scan(const std::function<void(CatalogEntry *)> &callback) {
 			callback(entry);
 		}
 	}
-}
-
-EntryDropper::EntryDropper(CatalogSet *catalog_set, idx_t entry_index)
-    : catalog_set(catalog_set), entry_index(entry_index) {
-	old_deleted = catalog_set->entries[entry_index].get()->deleted;
-}
-
-EntryDropper::~EntryDropper() {
-	catalog_set->entries[entry_index].get()->deleted = old_deleted;
-}
-
-void EntryDropper::DropEntryDependencies(CatalogSet *catalog_set, ClientContext &context, idx_t entry_index,
-                                         CatalogEntry &entry, bool cascade) {
-
-	// Stores the deleted value of the entry before starting the process
-	auto dropper = EntryDropper(catalog_set, entry_index);
-
-	// To correctly delete the object and its dependencies, it temporarily is set to deleted.
-	catalog_set->entries[entry_index].get()->deleted = true;
-
-	// check any dependencies of this object
-	entry.catalog->dependency_manager->DropObject(context, &entry, cascade);
-
-	// dropper destructor is called here
-	// the destructor makes sure to return the value to the previous state
-	// dropper.~EntryDropper()
 }
 } // namespace duckdb

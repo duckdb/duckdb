@@ -21,7 +21,6 @@ class ClientContext;
 //! The DependencyManager is in charge of managing dependencies between catalog entries
 class DependencyManager {
 	friend class CatalogSet;
-	friend class EntryDropper;
 
 public:
 	explicit DependencyManager(Catalog &catalog);
