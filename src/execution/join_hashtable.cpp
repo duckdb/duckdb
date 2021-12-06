@@ -67,22 +67,6 @@ JoinHashTable::JoinHashTable(BufferManager &buffer_manager, const vector<JoinCon
 JoinHashTable::~JoinHashTable() {
 }
 
-void JoinHashTable::ApplyBitmask(Vector &hashes, Vector &indices, idx_t count) {
-	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		D_ASSERT(!ConstantVector::IsNull(hashes));
-		auto hash_data = ConstantVector::GetData<hash_t>(hashes);
-		auto indices_data = ConstantVector::GetData<hash_t>(indices);
-		*indices_data = *hash_data & bitmask;
-	} else {
-		hashes.Normalify(count);
-		auto hash_data = FlatVector::GetData<hash_t>(hashes);
-		auto indices_data = FlatVector::GetData<hash_t>(indices);
-		for (idx_t i = 0; i < count; i++) {
-			indices_data[i] = hash_data[i] & bitmask;
-		}
-	}
-}
-
 void JoinHashTable::ApplyBitmask(Vector &hashes, idx_t count) {
 	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		D_ASSERT(!ConstantVector::IsNull(hashes));
@@ -292,7 +276,7 @@ void JoinHashTable::Finalize() {
 		pinned_handles.push_back(move(handle));
 	}
 	// In case of primary key with an inner join do a semi-join instead
-	if (join_type == JoinType::INNER && has_primary_key) {
+	if (join_type == JoinType::INNER && has_unique_keys) {
 		join_type = JoinType::SEMI;
 	}
 	finalized = true;
@@ -308,9 +292,9 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	auto pointers = (data_ptr_t *)hash_map->node->buffer;
 	auto indices = FlatVector::GetData<hash_t>(hashes);
 	// First, fill the hash_map and handle conflicts with a next_pointer
-	if (has_primary_key && join_type == JoinType::INNER) {
+	if (has_unique_keys && join_type == JoinType::INNER) {
 		// For inner joins we check whether the build is a primary key during the insertion into the hashmap
-		InsertHashesAndCheckPrimaryKey(count_tuples, indices, key_locations, pointers); // inlined
+		InsertHashesAndCheckUniqueness(count_tuples, indices, key_locations, pointers); // inlined
 	} else {
 		for (idx_t i = 0; i < count_tuples; i++) {
 			// For each tuple, the hash_value will be replaced by a pointer to the next_entry in the hash_map
@@ -324,7 +308,7 @@ void JoinHashTable::InsertHashes(Vector &hashes, idx_t count_tuples, data_ptr_t 
 	}
 }
 
-void JoinHashTable::InsertHashesAndCheckPrimaryKey(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
+void JoinHashTable::InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
                                                    data_ptr_t *pointers) {
 	auto col_offsets = layout.GetOffsets();
 	vector<data_ptr_t> conflict_entries;
@@ -334,13 +318,13 @@ void JoinHashTable::InsertHashesAndCheckPrimaryKey(idx_t count_tuples, hash_t *i
 		auto index = indices[i];
 		auto next_ptr = key_locations[i] + pointer_offset;
 		// In case this is still a primary key and there is a conflict
-		if (has_primary_key && pointers[index] != nullptr) {
+		if (has_unique_keys && pointers[index] != nullptr) {
 			// for each key pair in the entry
 			for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
 				auto key_type = condition_types[key_idx];
 				auto key_offset = col_offsets[key_idx];
 				// check whether the keys are the same
-				has_primary_key =
+				has_unique_keys =
 				    !CompareKeysSwitch(key_locations[i] + key_offset, pointers[index] + key_offset, key_type);
 			}
 			// store a ptr to the next entry to evaluate the next_key later
@@ -352,16 +336,16 @@ void JoinHashTable::InsertHashesAndCheckPrimaryKey(idx_t count_tuples, hash_t *i
 		pointers[index] = key_locations[i];
 	}
 	// It is still necessary to handle multiple conflicts to the same key
-	if (has_primary_key) {
+	if (has_unique_keys) {
 		for (auto entry : conflict_entries) {
 			auto next_entry_ptr = Load<data_ptr_t>(entry + pointer_offset);
 			// check the whole chain
-			while (has_primary_key && next_entry_ptr != nullptr) {
+			while (has_unique_keys && next_entry_ptr != nullptr) {
 				// check whether the keys are the same
 				for (idx_t key_idx = 0; key_idx != condition_types.size(); ++key_idx) {
 					auto key_type = condition_types[key_idx];
 					auto key_offset = col_offsets[key_idx];
-					has_primary_key = !CompareKeysSwitch(entry + key_offset, next_entry_ptr + key_offset, key_type);
+					has_unique_keys = !CompareKeysSwitch(entry + key_offset, next_entry_ptr + key_offset, key_type);
 				}
 				// walk to the next entry
 				next_entry_ptr = Load<data_ptr_t>(next_entry_ptr + pointer_offset);
@@ -633,7 +617,7 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChu
 		// reference the columns of the left side from the result
 		result.Slice(left, sel, result_count);
 		// This was supposed to be an inner join,
-		if (ht.has_primary_key && left.ColumnCount() < result.ColumnCount()) {
+		if (ht.has_unique_keys && left.ColumnCount() < result.ColumnCount()) {
 			// on the RHS, we need to fetch the data from the hash table
 			for (idx_t i = 0; i < ht.build_types.size(); i++) {
 				auto &vector = result.data[left.ColumnCount() + i];

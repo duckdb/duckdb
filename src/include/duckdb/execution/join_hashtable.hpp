@@ -127,7 +127,7 @@ public:
 	//! Compare Switch function to specify the type in which the keys will be compared
 	bool CompareKeysSwitch(data_ptr_t left_entry, data_ptr_t right_entry, const LogicalType &key_type);
 	//! Insert Hashes and check for primary key
-	inline void InsertHashesAndCheckPrimaryKey(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
+	inline void InsertHashesAndCheckUniqueness(idx_t count_tuples, hash_t *indices, data_ptr_t key_locations[],
 	                                           data_ptr_t *pointers);
 
 	//! BufferManager
@@ -159,7 +159,7 @@ public:
 	//! Bitmask for getting relevant bits from the hashes to determine the position
 	uint64_t bitmask;
 	//! Flag to control weather the build side has a primary key
-	bool has_primary_key {true};
+	bool has_unique_keys {true};
 
 	struct {
 		mutex mj_lock;
@@ -183,7 +183,6 @@ private:
 
 	//! Apply a bitmask to the hashes
 	void ApplyBitmask(Vector &hashes, idx_t count);
-	void ApplyBitmask(Vector &hashes, Vector &indices, idx_t count);
 	void ApplyBitmask(Vector &hashes, const SelectionVector &sel, idx_t count, Vector &pointers);
 
 private:
