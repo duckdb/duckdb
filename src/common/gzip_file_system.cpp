@@ -86,7 +86,7 @@ public:
 
 MiniZStreamWrapper::~MiniZStreamWrapper() {
 	// avoid closing if destroyed during stack unwinding
-	if (std::uncaught_exception()) {
+	if (Exception::UncaughtException()) {
 		return;
 	}
 	try {

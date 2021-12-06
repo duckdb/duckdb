@@ -103,6 +103,8 @@ public:
 		return ConstructMessageRecursive(msg, values, params...);
 	}
 
+	DUCKDB_API static bool UncaughtException();
+
 private:
 	string exception_message_;
 };
