@@ -473,6 +473,7 @@ public:
 	DUCKDB_API static LogicalType LIST( LogicalType child);                       // NOLINT
 	DUCKDB_API static LogicalType STRUCT( child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
+	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
 	DUCKDB_API static LogicalType ENUM(const string &enum_name, const vector<string> &ordered_data); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
@@ -579,7 +580,7 @@ bool IsValidType() {
 extern const LogicalType LOGICAL_ROW_TYPE;
 extern const PhysicalType ROW_TYPE;
 
-string TypeIdToString(PhysicalType type);
+DUCKDB_API string TypeIdToString(PhysicalType type);
 idx_t GetTypeIdSize(PhysicalType type);
 bool TypeIsConstantSize(PhysicalType type);
 bool TypeIsIntegral(PhysicalType type);

@@ -97,9 +97,9 @@ public:
 	DUCKDB_API static Value TIMESTAMP(date_t date, dtime_t time);
 	//! Create a timestamp Value from a specified timestamp
 	DUCKDB_API static Value TIMESTAMP(timestamp_t timestamp);
-	DUCKDB_API static Value TimestampNs(timestamp_t timestamp);
-	DUCKDB_API static Value TimestampMs(timestamp_t timestamp);
-	DUCKDB_API static Value TimestampSec(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPNS(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPMS(timestamp_t timestamp);
+	DUCKDB_API static Value TIMESTAMPSEC(timestamp_t timestamp);
 	DUCKDB_API static Value TIMESTAMPTZ(timestamp_t timestamp);
 	//! Create a timestamp Value from a specified timestamp in separate values
 	DUCKDB_API static Value TIMESTAMP(int32_t year, int32_t month, int32_t day, int32_t hour, int32_t min, int32_t sec,
@@ -121,8 +121,11 @@ public:
 	DUCKDB_API static Value DOUBLE(double value);
 	//! Create a struct value with given list of entries
 	DUCKDB_API static Value STRUCT(child_list_t<Value> values);
-	//! Create a list value with the given entries
+	//! Create a list value with the given entries, list type is inferred from children
+	//! Cannot be called with an empty list, use either EMPTYLIST or LIST with a type instead
 	DUCKDB_API static Value LIST(vector<Value> values);
+	//! Create a list value with the given entries
+	DUCKDB_API static Value LIST(LogicalType child_type, vector<Value> values);
 	//! Create an empty list with the specified type
 	DUCKDB_API static Value EMPTYLIST(LogicalType child_type);
 	//! Creat a map value from a (key, value) pair

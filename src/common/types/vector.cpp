@@ -485,11 +485,11 @@ Value Vector::GetValue(idx_t index) const {
 	case LogicalTypeId::TIMESTAMP:
 		return Value::TIMESTAMP(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_NS:
-		return Value::TimestampNs(((timestamp_t *)data)[index]);
+		return Value::TIMESTAMPNS(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_MS:
-		return Value::TimestampMs(((timestamp_t *)data)[index]);
+		return Value::TIMESTAMPMS(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_SEC:
-		return Value::TimestampSec(((timestamp_t *)data)[index]);
+		return Value::TIMESTAMPSEC(((timestamp_t *)data)[index]);
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(((timestamp_t *)data)[index]);
 	case LogicalTypeId::HUGEINT:
@@ -670,7 +670,7 @@ void Vector::Normalify(idx_t count) {
 		// allocate a new buffer for the vector
 		auto old_buffer = move(buffer);
 		auto old_data = data;
-		buffer = VectorBuffer::CreateStandardVector(type);
+		buffer = VectorBuffer::CreateStandardVector(type, MaxValue<idx_t>(STANDARD_VECTOR_SIZE, count));
 		data = buffer->GetData();
 		vector_type = VectorType::FLAT_VECTOR;
 		if (is_null) {

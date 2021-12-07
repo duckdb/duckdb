@@ -428,3 +428,30 @@ jobs:
 
     - name: Test
       run: make allunit
+
+ amalgamation-tests:
+    name: Amalgamation Tests
+    runs-on: ubuntu-20.04
+    env:
+      CC: clang
+      CXX: clang++
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - uses: actions/setup-python@v2
+      with:
+        python-version: '3.7'
+
+    - name: Install LLVM and Clang
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "10.0"
+
+    - name: Generate Amalgamation
+      run:  |
+          python scripts/amalgamation.py --extended
+          python scripts/parquet_amalgamation.py
+          clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/parquet-amalgamation.cpp src/amalgamation/duckdb.cpp -emit-llvm -S -O0

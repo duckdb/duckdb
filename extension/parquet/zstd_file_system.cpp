@@ -22,7 +22,7 @@ public:
 };
 
 ZstdStreamWrapper::~ZstdStreamWrapper() {
-	if (std::uncaught_exception()) {
+	if (Exception::UncaughtException()) {
 		return;
 	}
 	try {
