@@ -12,5 +12,5 @@ PRAGMA force_compression='dictionary';
 DROP TABLE IF EXISTS integers;
 
 run
-CREATE TABLE test AS SELECT (100 + (i%2))::VARCHAR AS i FROM range(0, 10000000) tbl(i);
+CREATE TABLE test AS SELECT (100 + (i%100))::VARCHAR AS i FROM range(0, 10000000) tbl(i);
 checkpoint;

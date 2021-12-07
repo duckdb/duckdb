@@ -32,7 +32,8 @@ struct DictionaryCompressionState : UncompressedCompressState {
 		current_segment = move(compressed_segment);
 
 		// Reset the string map
-//		current_string_map->clear(); TODO why is this slow?
+		// Clearing the string map is crazy slow for poorly compressible data, likely due to random access.
+//		current_string_map->clear();
 		current_string_map.reset();
 		current_string_map = make_unique<std::unordered_map<string, int32_t>>();
 	}
@@ -103,7 +104,8 @@ bool DictionaryCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &
 			// used
 			// TODO can we do better than this in size estimation?
 			if (state.current_segment_fill >= Storage::BLOCK_SIZE) {
-				// For some reason, clear is really slow?
+
+				// Clearing the string map is crazy slow for poorly compressible data.
 //				state.current_string_map->clear();
 				state.current_string_map.reset();
 				state.current_string_map = make_unique<std::unordered_map<string, int32_t>>();
