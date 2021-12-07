@@ -19,14 +19,12 @@ struct ICUDateFunc {
 	using CalendarPtr = unique_ptr<icu::Calendar>;
 
 	struct BindData : public FunctionData {
-		inline explicit BindData(CalendarPtr calendar_p) : calendar(move(calendar_p)) {
-		}
+		explicit BindData(ClientContext &context);
+		BindData(const BindData &other);
 
 		CalendarPtr calendar;
 
-		unique_ptr<FunctionData> Copy() override {
-			return make_unique<BindData>(CalendarPtr(calendar->clone()));
-		}
+		unique_ptr<FunctionData> Copy() override;
 	};
 
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,

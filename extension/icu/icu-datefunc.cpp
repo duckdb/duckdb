@@ -4,8 +4,10 @@
 
 namespace duckdb {
 
-unique_ptr<FunctionData> ICUDateFunc::Bind(ClientContext &context, ScalarFunction &bound_function,
-                                           vector<unique_ptr<Expression>> &arguments) {
+ICUDateFunc::BindData::BindData(const BindData &other) : calendar(other.calendar->clone()) {
+}
+
+ICUDateFunc::BindData::BindData(ClientContext &context) {
 	Value tz_value;
 	string tz_id;
 	if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
@@ -14,12 +16,19 @@ unique_ptr<FunctionData> ICUDateFunc::Bind(ClientContext &context, ScalarFunctio
 	auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id)));
 
 	UErrorCode success = U_ZERO_ERROR;
-	CalendarPtr calendar(icu::Calendar::createInstance(tz, success));
+	calendar.reset(icu::Calendar::createInstance(tz, success));
 	if (U_FAILURE(success)) {
 		throw Exception("Unable to create ICU calendar.");
 	}
+}
 
-	return make_unique<BindData>(move(calendar));
+unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() {
+	return make_unique<BindData>(*this);
+}
+
+unique_ptr<FunctionData> ICUDateFunc::Bind(ClientContext &context, ScalarFunction &bound_function,
+                                           vector<unique_ptr<Expression>> &arguments) {
+	return make_unique<BindData>(context);
 }
 
 } // namespace duckdb
