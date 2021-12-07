@@ -63,7 +63,7 @@ ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
 }
 
 ClientContext::~ClientContext() {
-	if (std::uncaught_exception()) {
+	if (Exception::UncaughtException()) {
 		return;
 	}
 	// destroy the client context and rollback if there is an active transaction
