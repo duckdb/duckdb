@@ -8,10 +8,11 @@
 
 #pragma once
 
-
 #include "duckdb/main/query_result.hpp"
+#include "duckdb/execution/executor.hpp"
 
 namespace duckdb {
+class ClientContext;
 
 enum class PendingExecutionResult : uint8_t {
 	RESULT_READY,
@@ -24,6 +25,7 @@ public:
 	DUCKDB_API PendingQueryResult(StatementType statement_type);
 	DUCKDB_API PendingQueryResult(StatementType statement_type, vector<LogicalType> types, vector<string> names);
 	DUCKDB_API explicit PendingQueryResult(string error_message);
+	DUCKDB_API ~PendingQueryResult();
 
 public:
 	//! Executes a single task within the query, returning whether or not the query is ready.
@@ -43,6 +45,10 @@ public:
 private:
 	//! Whether or not the PendingQueryResult is still open
 	bool is_open;
+	//! The current query being executed
+	string query;
+	//! The query executor
+	unique_ptr<Executor> executor;
 };
 
 } // namespace duckdb

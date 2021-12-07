@@ -27,6 +27,7 @@ public:
 	                       vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API BaseQueryResult(QueryResultType type, string error);
+	DUCKDB_API virtual ~BaseQueryResult();
 
 	//! The type of the result (MATERIALIZED or STREAMING)
 	QueryResultType type;
@@ -45,6 +46,7 @@ public:
 	DUCKDB_API bool HasError();
 	DUCKDB_API const string &GetError();
 	DUCKDB_API idx_t ColumnCount();
+	DUCKDB_API virtual void MarkAsClosed();
 };
 
 //! The QueryResult object holds the result of a query. It can either be a MaterializedQueryResult, in which case the
@@ -59,8 +61,7 @@ public:
 	                       vector<string> names);
 	//! Creates an unsuccessful query result with error condition
 	DUCKDB_API QueryResult(QueryResultType type, string error);
-	DUCKDB_API virtual ~QueryResult() {
-	}
+	DUCKDB_API virtual ~QueryResult() override;
 
 	//! The next result (if any)
 	unique_ptr<QueryResult> next;

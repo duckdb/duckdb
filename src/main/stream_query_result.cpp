@@ -8,8 +8,8 @@ namespace duckdb {
 StreamQueryResult::StreamQueryResult(StatementType statement_type, shared_ptr<ClientContext> context,
                                      vector<LogicalType> types, vector<string> names,
                                      shared_ptr<PreparedStatementData> prepared)
-    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), move(names)), is_open(true),
-      context(move(context)), prepared(move(prepared)) {
+    : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), move(names)),
+      context(move(context)), prepared(move(prepared)), is_open(true) {
 }
 
 StreamQueryResult::~StreamQueryResult() {
@@ -64,6 +64,10 @@ void StreamQueryResult::Close() {
 	}
 	is_open = false;
 	context->Cleanup();
+}
+
+void StreamQueryResult::MarkAsClosed() {
+	this->is_open = false;
 }
 
 } // namespace duckdb

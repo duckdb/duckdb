@@ -11,16 +11,42 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/main/client_config.hpp"
 #include <utility>
 #include <algorithm>
 
 namespace duckdb {
 
+QueryProfiler::QueryProfiler(ClientContext &context_p) :
+	context(context_p), running(false), query_requires_profiling(false),
+	is_explain_analyze(false) {
+}
+
+bool QueryProfiler::IsEnabled() const {
+	return is_explain_analyze ? true : ClientConfig::GetConfig(context).enable_profiler;
+}
+
+bool QueryProfiler::IsDetailedEnabled() const {
+	return is_explain_analyze ? false : ClientConfig::GetConfig(context).enable_detailed_profiling;
+}
+
+ProfilerPrintFormat QueryProfiler::GetPrintFormat() const {
+	return is_explain_analyze ? ProfilerPrintFormat::NONE : ClientConfig::GetConfig(context).profiler_print_format;
+}
+
+string QueryProfiler::GetSaveLocation() const {
+	return is_explain_analyze ? string() : ClientConfig::GetConfig(context).profiler_save_location;
+}
+
+QueryProfiler &QueryProfiler::Get(ClientContext &context) {
+	throw InternalException("FIXME: get query profiler");
+}
+
 void QueryProfiler::StartQuery(string query, bool is_explain_analyze) {
 	if (is_explain_analyze) {
 		StartExplainAnalyze();
 	}
-	if (!enabled) {
+	if (!IsEnabled()) {
 		return;
 	}
 	this->running = true;
@@ -78,17 +104,10 @@ void QueryProfiler::Finalize(TreeNode &node) {
 
 void QueryProfiler::StartExplainAnalyze() {
 	this->is_explain_analyze = true;
-	this->stored_enabled = enabled;
-	this->stored_automatic_print_format = automatic_print_format;
-	this->stored_save_location = save_location;
-
-	this->enabled = true;
-	this->save_location = string();
-	this->automatic_print_format = ProfilerPrintFormat::NONE;
 }
 
 void QueryProfiler::EndQuery() {
-	if (!enabled || !running) {
+	if (!IsEnabled() || !running) {
 		return;
 	}
 
@@ -97,6 +116,7 @@ void QueryProfiler::EndQuery() {
 		Finalize(*root);
 	}
 	this->running = false;
+	auto automatic_print_format = GetPrintFormat();
 	// print or output the query profiling after termination, if this is enabled
 	if (automatic_print_format != ProfilerPrintFormat::NONE) {
 		// check if this query should be output based on the operator types
@@ -108,7 +128,7 @@ void QueryProfiler::EndQuery() {
 		} else if (automatic_print_format == ProfilerPrintFormat::QUERY_TREE_OPTIMIZER) {
 			query_info = ToString(true);
 		}
-
+		auto save_location = GetSaveLocation();
 		if (save_location.empty()) {
 			Printer::Print(query_info);
 			Printer::Print("\n");
@@ -116,16 +136,11 @@ void QueryProfiler::EndQuery() {
 			WriteToFile(save_location.c_str(), query_info);
 		}
 	}
-	if (is_explain_analyze) {
-		this->is_explain_analyze = false;
-		this->enabled = stored_enabled;
-		this->automatic_print_format = stored_automatic_print_format;
-		this->save_location = stored_save_location;
-	}
+	this->is_explain_analyze = false;
 }
 
 void QueryProfiler::StartPhase(string new_phase) {
-	if (!enabled || !running) {
+	if (!IsEnabled() || !running) {
 		return;
 	}
 
@@ -149,7 +164,7 @@ void QueryProfiler::StartPhase(string new_phase) {
 }
 
 void QueryProfiler::EndPhase() {
-	if (!enabled || !running) {
+	if (!IsEnabled() || !running) {
 		return;
 	}
 	D_ASSERT(phase_stack.size() > 0);
@@ -169,7 +184,7 @@ void QueryProfiler::EndPhase() {
 }
 
 void QueryProfiler::Initialize(PhysicalOperator *root_op) {
-	if (!enabled || !running) {
+	if (!IsEnabled() || !running) {
 		return;
 	}
 	this->query_requires_profiling = false;
@@ -250,7 +265,7 @@ void OperatorProfiler::Flush(const PhysicalOperator *phys_op, ExpressionExecutor
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
-	if (!enabled || !running) {
+	if (!IsEnabled() || !running) {
 		return;
 	}
 	lock_guard<mutex> guard(flush_lock);
@@ -260,7 +275,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 
 		entry->second->info.time += node.second.time;
 		entry->second->info.elements += node.second.elements;
-		if (!detailed_enabled) {
+		if (!IsDetailedEnabled()) {
 			continue;
 		}
 		for (auto &info : node.second.executors_info) {
@@ -321,7 +336,7 @@ string QueryProfiler::ToString(bool print_optimizer_output) const {
 }
 
 void QueryProfiler::ToStream(std::ostream &ss, bool print_optimizer_output) const {
-	if (!enabled) {
+	if (!IsEnabled()) {
 		ss << "Query profiling is disabled. Call "
 		      "Connection::EnableProfiling() to enable profiling!";
 		return;
@@ -492,7 +507,7 @@ static void ToJSONRecursive(QueryProfiler::TreeNode &node, std::ostream &ss, int
 }
 
 string QueryProfiler::ToJSON() const {
-	if (!enabled) {
+	if (!IsEnabled()) {
 		return "{ \"result\": \"disabled\" }\n";
 	}
 	if (query.empty()) {
@@ -607,10 +622,6 @@ vector<QueryProfiler::PhaseTimingItem> QueryProfiler::GetOrderedPhaseTimings() c
 	return result;
 }
 void QueryProfiler::Propagate(QueryProfiler &qp) {
-	this->automatic_print_format = qp.automatic_print_format;
-	this->save_location = qp.save_location;
-	this->enabled = qp.enabled;
-	this->detailed_enabled = qp.detailed_enabled;
 }
 
 void ExpressionInfo::ExtractExpressionsRecursive(unique_ptr<ExpressionState> &state) {

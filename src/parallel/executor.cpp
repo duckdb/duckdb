@@ -26,7 +26,8 @@ Executor::~Executor() {
 }
 
 Executor &Executor::Get(ClientContext &context) {
-	return context.executor;
+	throw InternalException("FIXME: get executor");
+	// return context.executor;
 }
 
 void Executor::AddEvent(shared_ptr<Event> event) {
@@ -273,7 +274,8 @@ void Executor::Initialize(PhysicalOperator *plan) {
 		lock_guard<mutex> elock(executor_lock);
 		physical_plan = plan;
 
-		context.profiler->Initialize(physical_plan);
+		auto &profiler = QueryProfiler::Get(context);
+		profiler.Initialize(physical_plan);
 		this->producer = scheduler.CreateProducer();
 
 		auto root_pipeline = make_shared<Pipeline>(*this);
@@ -642,7 +644,8 @@ void Executor::ThrowExceptionInternal() { // LCOV_EXCL_START
 
 void Executor::Flush(ThreadContext &tcontext) {
 	lock_guard<mutex> elock(executor_lock);
-	context.profiler->Flush(tcontext.profiler);
+	auto &profiler = QueryProfiler::Get(context);
+	profiler.Flush(tcontext.profiler);
 }
 
 bool Executor::GetPipelinesProgress(int &current_progress) { // LCOV_EXCL_START

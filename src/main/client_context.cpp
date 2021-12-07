@@ -51,15 +51,13 @@ private:
 };
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : profiler(make_unique<QueryProfiler>()), query_profiler_history(make_unique<QueryProfilerHistory>()),
-      db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false), executor(*this),
+    : query_profiler_history(make_unique<QueryProfilerHistory>()),
+      db(move(database)), transaction(db->GetTransactionManager(), *this), interrupted(false),
       temporary_objects(make_unique<SchemaCatalogEntry>(&db->GetCatalog(), TEMP_SCHEMA, true)),
       catalog_search_path(make_unique<CatalogSearchPath>(*this)),
       file_opener(make_unique<ClientContextFileOpener>(*this)), open_result(nullptr) {
 	std::random_device rd;
 	random_engine.seed(rd());
-
-	progress_bar = make_unique<ProgressBar>(&executor, config.wait_time);
 }
 
 ClientContext::~ClientContext() {
@@ -93,7 +91,7 @@ void ClientContext::Cleanup() {
 
 unique_ptr<DataChunk> ClientContext::Fetch() {
 	auto lock = LockContext();
-	if (!open_result) {
+	if (!open_result || open_result->type != QueryResultType::STREAM_RESULT) {
 		throw InternalException("Fetch was called, but there is no open result (or the result was previously closed)");
 	}
 	try {
@@ -111,22 +109,24 @@ unique_ptr<DataChunk> ClientContext::Fetch() {
 }
 
 string ClientContext::FinalizeQuery(ClientContextLock &lock, bool success) {
-	profiler->EndQuery();
-	executor.Reset();
+	throw InternalException("FIXME: finalize query");
+	// profiler->EndQuery();
+	// executor.Reset();
 
 	string error;
 	if (transaction.HasActiveTransaction()) {
 		ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
 		// Move the query profiler into the history
-		auto &prev_profilers = query_profiler_history->GetPrevProfilers();
-		prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
-		// Reinitialize the query profiler
-		profiler = make_unique<QueryProfiler>();
-		// Propagate settings of the saved query into the new profiler.
-		profiler->Propagate(*prev_profilers.back().second);
-		if (prev_profilers.size() >= query_profiler_history->GetPrevProfilersSize()) {
-			prev_profilers.pop_front();
-		}
+		throw InternalException("FIXME: profiler history");
+		// auto &prev_profilers = query_profiler_history->GetPrevProfilers();
+		// prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
+		// // Reinitialize the query profiler
+		// profiler = make_unique<QueryProfiler>();
+		// // Propagate settings of the saved query into the new profiler.
+		// profiler->Propagate(*prev_profilers.back().second);
+		// if (prev_profilers.size() >= query_profiler_history->GetPrevProfilersSize()) {
+		// 	prev_profilers.pop_front();
+		// }
 		try {
 			if (transaction.IsAutoCommit()) {
 				if (success) {
@@ -159,14 +159,12 @@ void ClientContext::CleanupInternal(ClientContextLock &lock) {
 		open_result->success = error.empty();
 	}
 
-	open_result->is_open = false;
+	open_result->MarkAsClosed();
 	open_result = nullptr;
-
-	this->query = string();
 }
 
 unique_ptr<DataChunk> ClientContext::FetchInternal(ClientContextLock &) {
-	return executor.FetchChunk();
+	throw InternalException("FIXME; FetchInternal");
 }
 
 shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientContextLock &lock, const string &query,
@@ -174,11 +172,12 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	StatementType statement_type = statement->type;
 	auto result = make_shared<PreparedStatementData>(statement_type);
 
-	profiler->StartPhase("planner");
+	auto &profiler = QueryProfiler::Get(*this);
+	profiler.StartPhase("planner");
 	Planner planner(*this);
 	planner.CreatePlan(move(statement));
 	D_ASSERT(planner.plan);
-	profiler->EndPhase();
+	profiler.EndPhase();
 
 	auto plan = move(planner.plan);
 #ifdef DEBUG
@@ -194,22 +193,22 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 	result->catalog_version = Transaction::GetTransaction(*this).catalog_version;
 
 	if (config.enable_optimizer) {
-		profiler->StartPhase("optimizer");
+		profiler.StartPhase("optimizer");
 		Optimizer optimizer(*planner.binder, *this);
 		plan = optimizer.Optimize(move(plan));
 		D_ASSERT(plan);
-		profiler->EndPhase();
+		profiler.EndPhase();
 
 #ifdef DEBUG
 		plan->Verify();
 #endif
 	}
 
-	profiler->StartPhase("physical_planner");
+	profiler.StartPhase("physical_planner");
 	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
 	auto physical_plan = physical_planner.CreatePlan(move(plan));
-	profiler->EndPhase();
+	profiler.EndPhase();
 
 #ifdef DEBUG
 	D_ASSERT(!physical_plan->ToString().empty());
@@ -219,8 +218,9 @@ shared_ptr<PreparedStatementData> ClientContext::CreatePreparedStatement(ClientC
 }
 
 int ClientContext::GetProgress() {
-	D_ASSERT(progress_bar);
-	return progress_bar->GetCurrentPercentage();
+	throw InternalException("FIXME: GetProgress");
+	// D_ASSERT(progress_bar);
+	// return progress_bar->GetCurrentPercentage();
 }
 
 unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLock &lock, const string &query,
@@ -241,45 +241,47 @@ unique_ptr<QueryResult> ClientContext::ExecutePreparedStatement(ClientContextLoc
 
 	bool create_stream_result = statement.allow_stream_result && allow_stream_result;
 	if (config.enable_progress_bar) {
-		progress_bar->Initialize(config.wait_time);
-		progress_bar->Start();
+		throw InternalException("FIXME: enable progress bar");
+		// progress_bar->Initialize(config.wait_time);
+		// progress_bar->Start();
 	}
+	throw InternalException("FIXME: executor");
 	// store the physical plan in the context for calls to Fetch()
-	executor.Initialize(statement.plan.get());
+// 	executor.Initialize(statement.plan.get());
 
-	auto types = executor.GetTypes();
+// 	auto types = executor.GetTypes();
 
-	D_ASSERT(types == statement.types);
+// 	D_ASSERT(types == statement.types);
 
-	if (create_stream_result) {
-		if (config.enable_progress_bar) {
-			progress_bar->Stop();
-		}
-		// successfully compiled SELECT clause and it is the last statement
-		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
-		return make_unique<StreamQueryResult>(statement.statement_type, shared_from_this(), statement.types,
-		                                      statement.names, move(statement_p));
-	}
-	// create a materialized result by continuously fetching
-	auto result = make_unique<MaterializedQueryResult>(statement.statement_type, statement.types, statement.names);
-	while (true) {
-		auto chunk = FetchInternal(lock);
-		if (chunk->size() == 0) {
-			break;
-		}
-#ifdef DEBUG
-		for (idx_t i = 0; i < chunk->ColumnCount(); i++) {
-			if (statement.types[i].id() == LogicalTypeId::VARCHAR) {
-				chunk->data[i].UTFVerify(chunk->size());
-			}
-		}
-#endif
-		result->collection.Append(*chunk);
-	}
-	if (config.enable_progress_bar) {
-		progress_bar->Stop();
-	}
-	return move(result);
+// 	if (create_stream_result) {
+// 		if (config.enable_progress_bar) {
+// 			throw InternalException("FIXME: progress bar");
+// 		}
+// 		// successfully compiled SELECT clause and it is the last statement
+// 		// return a StreamQueryResult so the client can call Fetch() on it and stream the result
+// 		return make_unique<StreamQueryResult>(statement.statement_type, shared_from_this(), statement.types,
+// 		                                      statement.names, move(statement_p));
+// 	}
+// 	// create a materialized result by continuously fetching
+// 	auto result = make_unique<MaterializedQueryResult>(statement.statement_type, statement.types, statement.names);
+// 	while (true) {
+// 		auto chunk = FetchInternal(lock);
+// 		if (chunk->size() == 0) {
+// 			break;
+// 		}
+// #ifdef DEBUG
+// 		for (idx_t i = 0; i < chunk->ColumnCount(); i++) {
+// 			if (statement.types[i].id() == LogicalTypeId::VARCHAR) {
+// 				chunk->data[i].UTFVerify(chunk->size());
+// 			}
+// 		}
+// #endif
+// 		result->collection.Append(*chunk);
+// 	}
+// 	if (config.enable_progress_bar) {
+// 		throw InternalException("FIXME: progress bar");
+// 	}
+// 	return move(result);
 }
 
 void ClientContext::InitialCleanup(ClientContextLock &lock) {
@@ -421,8 +423,6 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
                                                                        shared_ptr<PreparedStatementData> &prepared,
                                                                        vector<Value> *values,
                                                                        bool allow_stream_result) {
-	this->query = query;
-
 	unique_ptr<QueryResult> result;
 	// check if we are on AutoCommit. In this case we should start a transaction.
 	if (transaction.IsAutoCommit()) {
@@ -447,7 +447,8 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
 		statement = move(copied_statement);
 	}
 	// start the profiler
-	profiler->StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
+	auto &profiler = QueryProfiler::Get(*this);
+	profiler.StartQuery(query, IsExplainAnalyze(statement ? statement.get() : prepared->unbound_statement.get()));
 	try {
 		if (statement) {
 			result = RunStatementInternal(lock, query, move(statement), allow_stream_result);
@@ -497,37 +498,6 @@ unique_ptr<QueryResult> ClientContext::RunStatementOrPreparedStatement(ClientCon
 	return result;
 }
 
-unique_ptr<QueryResult> ClientContext::RunStatement(ClientContextLock &lock, const string &query,
-                                                    unique_ptr<SQLStatement> statement, bool allow_stream_result) {
-	shared_ptr<PreparedStatementData> prepared;
-	return RunStatementOrPreparedStatement(lock, query, move(statement), prepared, nullptr, allow_stream_result);
-}
-
-unique_ptr<QueryResult> ClientContext::RunStatements(ClientContextLock &lock, const string &query,
-                                                     vector<unique_ptr<SQLStatement>> &statements,
-                                                     bool allow_stream_result) {
-	// now we have a list of statements
-	// iterate over them and execute them one by one
-	unique_ptr<QueryResult> result;
-	QueryResult *last_result = nullptr;
-	for (idx_t i = 0; i < statements.size(); i++) {
-		auto &statement = statements[i];
-		bool is_last_statement = i + 1 == statements.size();
-		auto current_result = RunStatement(lock, query, move(statement), allow_stream_result && is_last_statement);
-		// now append the result to the list of results
-		if (!last_result) {
-			// first result of the query
-			result = move(current_result);
-			last_result = result.get();
-		} else {
-			// later results; attach to the result chain
-			last_result->next = move(current_result);
-			last_result = last_result->next.get();
-		}
-	}
-	return result;
-}
-
 void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 	if (!log_query_writer) {
 #ifdef DUCKDB_FORCE_QUERY_LOG
@@ -550,34 +520,82 @@ void ClientContext::LogQueryInternal(ClientContextLock &, const string &query) {
 }
 
 unique_ptr<QueryResult> ClientContext::Query(unique_ptr<SQLStatement> statement, bool allow_stream_result) {
-	auto lock = LockContext();
-	LogQueryInternal(*lock, statement->query.substr(statement->stmt_location, statement->stmt_length));
-
-	vector<unique_ptr<SQLStatement>> statements;
-	statements.push_back(move(statement));
-
-	return RunStatements(*lock, query, statements, allow_stream_result);
+	auto pending_query = PendingQuery(move(statement));
+	return pending_query->Execute(allow_stream_result);
 }
 
 unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_stream_result) {
 	auto lock = LockContext();
-	LogQueryInternal(*lock, query);
 
+	string error;
 	vector<unique_ptr<SQLStatement>> statements;
-	try {
-		InitialCleanup(*lock);
-		// parse the query and transform it into a set of statements
-		statements = ParseStatementsInternal(*lock, query);
-	} catch (std::exception &ex) {
-		return make_unique<MaterializedQueryResult>(ex.what());
+	if (!ParseStatements(*lock, query, statements, error)) {
+		return make_unique<MaterializedQueryResult>(move(error));
 	}
-
 	if (statements.empty()) {
 		// no statements, return empty successful result
 		return make_unique<MaterializedQueryResult>(StatementType::INVALID_STATEMENT);
 	}
 
-	return RunStatements(*lock, query, statements, allow_stream_result);
+	unique_ptr<QueryResult> result;
+	QueryResult *last_result = nullptr;
+	for (idx_t i = 0; i < statements.size(); i++) {
+		auto &statement = statements[i];
+		bool is_last_statement = i + 1 == statements.size();
+		bool stream_result = allow_stream_result && is_last_statement;
+		auto pending_query = PendingQueryInternal(*lock, move(statements[i]));
+		auto current_result = ExecutePendingQueryInternal(*lock, *pending_query, stream_result);
+		// now append the result to the list of results
+		if (!last_result) {
+			// first result of the query
+			result = move(current_result);
+			last_result = result.get();
+		} else {
+			// later results; attach to the result chain
+			last_result->next = move(current_result);
+			last_result = last_result->next.get();
+		}
+	}
+	return result;
+}
+
+bool ClientContext::ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result, string &error) {
+	try {
+		InitialCleanup(lock);
+		// parse the query and transform it into a set of statements
+		result = ParseStatementsInternal(lock, query);
+		return true;
+	} catch (std::exception &ex) {
+		error = ex.what();
+		return false;
+	}
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query) {
+	auto lock = LockContext();
+
+	string error;
+	vector<unique_ptr<SQLStatement>> statements;
+	if (!ParseStatements(*lock, query, statements, error)) {
+		return make_unique<PendingQueryResult>(move(error));
+	}
+	if (statements.size() != 1) {
+		return make_unique<PendingQueryResult>("PendingQuery can only take a single statement");
+	}
+	return PendingQueryInternal(*lock, move(statements[0]));
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStatement> statement) {
+	auto lock = LockContext();
+	return PendingQueryInternal(*lock, move(statement));
+}
+
+unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement) {
+	throw InternalException("eek");
+}
+
+unique_ptr<QueryResult> ClientContext::ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query, bool allow_stream_result) {
+	throw InternalException("eek2");
 }
 
 void ClientContext::Interrupt() {
@@ -586,12 +604,14 @@ void ClientContext::Interrupt() {
 
 void ClientContext::EnableProfiling() {
 	auto lock = LockContext();
-	profiler->Enable();
+	auto &config = ClientConfig::GetConfig(*this);
+	config.enable_profiler = true;
 }
 
 void ClientContext::DisableProfiling() {
 	auto lock = LockContext();
-	profiler->Disable();
+	auto &config = ClientConfig::GetConfig(*this);
+	config.enable_profiler = false;
 }
 
 string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement) {
@@ -653,9 +673,10 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 #endif
 
 	// disable profiling if it is enabled
-	bool profiling_is_enabled = profiler->IsEnabled();
+	auto &config = ClientConfig::GetConfig(*this);
+	bool profiling_is_enabled = config.enable_profiler;
 	if (profiling_is_enabled) {
-		profiler->Disable();
+		config.enable_profiler = false;
 	}
 
 	// see below
@@ -722,7 +743,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	config.enable_optimizer = true;
 
 	if (profiling_is_enabled) {
-		profiler->Enable();
+		config.enable_profiler = true;
 	}
 
 	// now compare the results
@@ -893,12 +914,15 @@ unique_ptr<QueryResult> ClientContext::Execute(const shared_ptr<Relation> &relat
 			// verify read only statements by running a select statement
 			auto select = make_unique<SelectStatement>();
 			select->node = relation->GetQueryNode();
-			RunStatement(*lock, query, move(select), false);
+			throw InternalException("FIXME: RunStatement");
+			// RunStatement(*lock, query, move(select), false);
 		}
 	}
 	auto &expected_columns = relation->Columns();
 	auto relation_stmt = make_unique<RelationStatement>(relation);
-	auto result = RunStatement(*lock, query, move(relation_stmt), false);
+	throw InternalException("FIXME: RunStatement");
+	unique_ptr<QueryResult> result;
+	// result = RunStatement(*lock, query, move(relation_stmt), false);
 	if (!result->success) {
 		return result;
 	}

@@ -13,6 +13,8 @@ PendingQueryResult::PendingQueryResult(string error) :
 
 }
 
+PendingQueryResult::~PendingQueryResult() {}
+
 PendingExecutionResult PendingQueryResult::ExecuteTask() {
 	throw InternalException("FIXME: execute task");
 }

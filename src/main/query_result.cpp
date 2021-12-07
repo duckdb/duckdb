@@ -19,6 +19,9 @@ BaseQueryResult::BaseQueryResult(QueryResultType type, StatementType statement_t
 BaseQueryResult::BaseQueryResult(QueryResultType type, string error) : type(type), success(false), error(move(error)) {
 }
 
+BaseQueryResult::~BaseQueryResult() {
+}
+
 bool BaseQueryResult::HasError() {
 	return !success;
 }
@@ -27,6 +30,10 @@ const string &BaseQueryResult::GetError() {
 }
 idx_t BaseQueryResult::ColumnCount() {
 	return types.size();
+}
+
+void BaseQueryResult::MarkAsClosed() {
+	throw InternalException("Unsupported query result type for MarkAsClosed()");
 }
 
 QueryResult::QueryResult(QueryResultType type, StatementType statement_type) :
@@ -39,6 +46,9 @@ QueryResult::QueryResult(QueryResultType type, StatementType statement_type, vec
 
 QueryResult::QueryResult(QueryResultType type, string error) :
 	BaseQueryResult(type, move(error)) {
+}
+
+QueryResult::~QueryResult() {
 }
 
 unique_ptr<DataChunk> QueryResult::Fetch() {

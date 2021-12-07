@@ -26,9 +26,6 @@ public:
 	                             shared_ptr<PreparedStatementData> prepared = nullptr);
 	DUCKDB_API ~StreamQueryResult() override;
 
-	//! Whether or not the StreamQueryResult is still open
-	bool is_open;
-
 public:
 	//! Fetches a DataChunk from the query result.
 	DUCKDB_API unique_ptr<DataChunk> FetchRaw() override;
@@ -40,11 +37,20 @@ public:
 	//! Closes the StreamQueryResult
 	DUCKDB_API void Close();
 
+	DUCKDB_API void MarkAsClosed() override;
+
+	inline bool IsOpen() const {
+		return is_open;
+	}
+
 private:
 	//! The client context this StreamQueryResult belongs to
 	shared_ptr<ClientContext> context;
 	//! The prepared statement data this StreamQueryResult was created with (if any)
 	shared_ptr<PreparedStatementData> prepared;
+
+	//! Whether or not the StreamQueryResult is still open
+	bool is_open;
 };
 
 } // namespace duckdb

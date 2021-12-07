@@ -13,6 +13,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/function/udf_function.hpp"
 #include "duckdb/main/materialized_query_result.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/main/relation.hpp"
@@ -77,6 +78,12 @@ public:
 		vector<Value> values;
 		return QueryParamsRecursive(query, values, args...);
 	}
+
+	//! Issues a query to the database and returns a Pending Query Result. Note that "query" may only contain
+	//! a single statement.
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query);
+	//! Issues a query to the database and returns a Pending Query Result
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement);
 
 	//! Prepare the specified query, returning a prepared statement object
 	DUCKDB_API unique_ptr<PreparedStatement> Prepare(const string &query);

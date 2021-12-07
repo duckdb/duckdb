@@ -15,11 +15,11 @@
 #include "duckdb/common/progress_bar.hpp"
 #include "duckdb/common/unordered_set.hpp"
 #include "duckdb/common/winapi.hpp"
-#include "duckdb/execution/executor.hpp"
 #include "duckdb/main/prepared_statement.hpp"
 #include "duckdb/main/stream_query_result.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/main/pending_query_result.hpp"
 #include <random>
 #include "duckdb/common/atomic.hpp"
 #include "duckdb/main/client_config.hpp"
@@ -49,8 +49,7 @@ class ClientContext : public std::enable_shared_from_this<ClientContext> {
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
-	//! Query profiler
-	unique_ptr<QueryProfiler> profiler;
+
 	//! QueryProfiler History
 	unique_ptr<QueryProfilerHistory> query_profiler_history;
 	//! The database that this client is connected to
@@ -59,14 +58,6 @@ public:
 	TransactionContext transaction;
 	//! Whether or not the query is interrupted
 	atomic<bool> interrupted;
-	//! The current query being executed by the client context
-	string query;
-
-	//! The query executor
-	Executor executor;
-
-	//! The Progress Bar
-	unique_ptr<ProgressBar> progress_bar;
 
 	unique_ptr<SchemaCatalogEntry> temporary_objects;
 	unordered_map<string, shared_ptr<PreparedStatementData>> prepared_statements;
@@ -100,6 +91,13 @@ public:
 	//! statement.
 	DUCKDB_API unique_ptr<QueryResult> Query(const string &query, bool allow_stream_result);
 	DUCKDB_API unique_ptr<QueryResult> Query(unique_ptr<SQLStatement> statement, bool allow_stream_result);
+
+	//! Issues a query to the database and returns a Pending Query Result. Note that "query" may only contain
+	//! a single statement.
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const string &query);
+	//! Issues a query to the database and returns a Pending Query Result
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement);
+
 	//! Fetch a query from the current result set (if any)
 	DUCKDB_API unique_ptr<DataChunk> Fetch();
 	//! Cleanup the result set (if any).
@@ -137,6 +135,7 @@ public:
 
 	//! Parse statements from a query
 	DUCKDB_API vector<unique_ptr<SQLStatement>> ParseStatements(const string &query);
+
 	//! Extract the logical plan of a query
 	DUCKDB_API unique_ptr<LogicalOperator> ExtractPlan(const string &query);
 	void HandlePragmaStatements(vector<unique_ptr<SQLStatement>> &statements);
@@ -153,6 +152,12 @@ public:
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
 private:
+	//! Parse statements and resolve pragmas from a query
+	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result, string &error);
+	//! Issues a query to the database and returns a Pending Query Result
+	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
+	unique_ptr<QueryResult> ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query, bool allow_stream_result);
+
 	//! Parse statements from a query
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
@@ -165,12 +170,6 @@ private:
 	string FinalizeQuery(ClientContextLock &lock, bool success);
 	//! Internal fetch, does not lock. Caller must hold the context_lock.
 	unique_ptr<DataChunk> FetchInternal(ClientContextLock &lock);
-	//! Internally execute a set of SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> RunStatements(ClientContextLock &lock, const string &query,
-	                                      vector<unique_ptr<SQLStatement>> &statements, bool allow_stream_result);
-	//! Internally prepare and execute a prepared SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> RunStatement(ClientContextLock &lock, const string &query,
-	                                     unique_ptr<SQLStatement> statement, bool allow_stream_result);
 	unique_ptr<QueryResult> RunStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
 	                                                        shared_ptr<PreparedStatementData> &prepared,
@@ -194,8 +193,8 @@ private:
 	bool UpdateFunctionInfoFromEntry(ScalarFunctionCatalogEntry *existing_function, CreateScalarFunctionInfo *new_info);
 
 private:
-	//! The currently opened StreamQueryResult (if any)
-	StreamQueryResult *open_result = nullptr;
+	//! The currently opened query result (if any)
+	BaseQueryResult *open_result = nullptr;
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
 };

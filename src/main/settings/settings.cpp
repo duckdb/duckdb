@@ -260,24 +260,27 @@ Value EnableObjectCacheSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void EnableProfilingSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
+
+	auto &config = ClientConfig::GetConfig(context);
 	if (parameter == "json") {
-		context.profiler->automatic_print_format = ProfilerPrintFormat::JSON;
+		config.profiler_print_format = ProfilerPrintFormat::JSON;
 	} else if (parameter == "query_tree") {
-		context.profiler->automatic_print_format = ProfilerPrintFormat::QUERY_TREE;
+		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE;
 	} else if (parameter == "query_tree_optimizer") {
-		context.profiler->automatic_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
+		config.profiler_print_format = ProfilerPrintFormat::QUERY_TREE_OPTIMIZER;
 	} else {
 		throw ParserException(
 		    "Unrecognized print format %s, supported formats: [json, query_tree, query_tree_optimizer]", parameter);
 	}
-	context.profiler->Enable();
+	config.enable_profiler = true;
 }
 
 Value EnableProfilingSetting::GetSetting(ClientContext &context) {
-	if (!context.profiler->IsEnabled()) {
+	auto &config = ClientConfig::GetConfig(context);
+	if (!config.enable_profiler) {
 		return Value();
 	}
-	switch (context.profiler->automatic_print_format) {
+	switch (config.profiler_print_format) {
 	case ProfilerPrintFormat::NONE:
 		return Value("none");
 	case ProfilerPrintFormat::JSON:
@@ -421,12 +424,14 @@ Value ProfilerHistorySize::GetSetting(ClientContext &context) {
 // Profile Output
 //===--------------------------------------------------------------------===//
 void ProfileOutputSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
 	auto parameter = input.ToString();
-	context.profiler->save_location = parameter;
+	config.profiler_save_location = parameter;
 }
 
 Value ProfileOutputSetting::GetSetting(ClientContext &context) {
-	return Value(context.profiler->save_location);
+	auto &config = ClientConfig::GetConfig(context);
+	return Value(config.profiler_save_location);
 }
 
 //===--------------------------------------------------------------------===//
@@ -434,17 +439,24 @@ Value ProfileOutputSetting::GetSetting(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 void ProfilingModeSetting::SetLocal(ClientContext &context, const Value &input) {
 	auto parameter = StringUtil::Lower(input.ToString());
+	auto &config = ClientConfig::GetConfig(context);
 	if (parameter == "standard") {
-		context.profiler->Enable();
+		config.enable_profiler = true;
+		config.enable_detailed_profiling = false;
 	} else if (parameter == "detailed") {
-		context.profiler->DetailedEnable();
+		config.enable_profiler = true;
+		config.enable_detailed_profiling = true;
 	} else {
 		throw ParserException("Unrecognized profiling mode \"%s\", supported formats: [standard, detailed]", parameter);
 	}
 }
 
 Value ProfilingModeSetting::GetSetting(ClientContext &context) {
-	return Value(context.profiler->IsDetailedEnabled() ? "detailed" : "standard");
+	auto &config = ClientConfig::GetConfig(context);
+	if (!config.enable_profiler) {
+		return Value();
+	}
+	return Value(config.enable_detailed_profiling ? "detailed" : "standard");
 }
 
 //===--------------------------------------------------------------------===//
