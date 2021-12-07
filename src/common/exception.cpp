@@ -18,6 +18,14 @@ const char *Exception::what() const noexcept {
 	return exception_message_.c_str();
 }
 
+bool Exception::UncaughtException() {
+#if __cplusplus >= 201703L
+	return std::uncaught_exceptions() > 0;
+#else
+	return std::uncaught_exception();
+#endif
+}
+
 string Exception::ConstructMessageRecursive(const string &msg, vector<ExceptionFormatValue> &values) {
 	return ExceptionFormatValue::Format(msg, values);
 }
