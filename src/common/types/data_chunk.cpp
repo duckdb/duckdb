@@ -629,14 +629,19 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	case LogicalTypeId::ENUM: {
 		// We need to initialize our dictionary
 		child_holder.children.resize(1);
-		InitializeChild(child_holder.children[0], EnumType::GetSize(type));
-		//		auto dictionary = EnumType::GetValuesInsertOrder(type);
-		//		child.dictionary->buffers[1] = &dictionary.front();
+		idx_t dict_size = EnumType::GetSize(type);
+		InitializeChild(child_holder.children[0], dict_size);
+		Vector dictionary(EnumType::GetValuesInsertOrder(type));
+		SetArrowChild(child_holder.children[0], dictionary.GetType(), dictionary, dict_size);
+		child_holder.children_ptrs.push_back(&child_holder.children[0].array);
 
+		// now we set the data
+		child.dictionary = child_holder.children_ptrs[0];
 		child_holder.vector = make_unique<Vector>(data);
 		child.n_buffers = 2;
-		child.dictionary->n_buffers = 2;
 		child.buffers[1] = (void *)FlatVector::GetData(*child_holder.vector);
+
+		break;
 	}
 	default:
 		throw std::runtime_error("Unsupported type " + type.ToString());

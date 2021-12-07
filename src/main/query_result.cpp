@@ -292,7 +292,14 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		default:
 			throw InternalException("Unsupported Enum Internal Type");
 		}
+		root_holder.nested_children.emplace_back();
+		root_holder.nested_children.back().resize(1);
+		root_holder.nested_children_ptr.emplace_back();
+		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
+		InitializeChild(root_holder.nested_children.back()[0]);
+		child.dictionary = root_holder.nested_children_ptr.back()[0];
 		child.dictionary->format = "u";
+		break;
 	}
 	default:
 		throw InternalException("Unsupported Arrow type " + type.ToString());

@@ -397,7 +397,10 @@ void VectorConversion::BindPandas(py::handle original_df, vector<PandasColumnBin
 					auto enum_name = string(py::str(df_columns[col_idx]));
 					vector<string> enum_entries = py::cast<vector<string>>(categories);
 					idx_t size = enum_entries.size();
-					Vector enum_entries_vec(LogicalType::VARCHAR, size);
+					Vector enum_entries_vec(LogicalType::VARCHAR);
+					if (size > STANDARD_VECTOR_SIZE) {
+						enum_entries_vec.Resize(STANDARD_VECTOR_SIZE, size);
+					}
 					for (idx_t i = 0; i < size; i++) {
 						enum_entries_vec.SetValue(i, enum_entries[i]);
 					}
