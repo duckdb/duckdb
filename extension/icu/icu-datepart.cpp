@@ -181,22 +181,24 @@ struct ICUDatePart {
 		return Date::EpochToDate(ExtractEpoch(calendar, 0));
 	}
 
-	template <typename ADAPTER_TYPE>
+	template <typename RESULT_TYPE>
 	struct BindData : public FunctionData {
-		BindData(CalendarPtr calendar_p, ADAPTER_TYPE adapter_p) : calendar(move(calendar_p)), adapter(adapter_p) {
+		using result_t = RESULT_TYPE;
+		typedef result_t (*adapter_t)(icu::Calendar *calendar, const uint64_t micros);
+		BindData(CalendarPtr calendar_p, adapter_t adapter_p) : calendar(move(calendar_p)), adapter(adapter_p) {
 		}
 
 		CalendarPtr calendar;
-		ADAPTER_TYPE adapter;
+		adapter_t adapter;
 
 		unique_ptr<FunctionData> Copy() override {
 			return make_unique<BindData>(CalendarPtr(calendar->clone()), adapter);
 		}
 	};
 
-	template <typename RESULT_TYPE, typename ADAPTER_TYPE>
-	static void UnaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-		using BIND_TYPE = BindData<ADAPTER_TYPE>;
+	template <typename RESULT_TYPE>
+	static void UnaryTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+		using BIND_TYPE = BindData<RESULT_TYPE>;
 		D_ASSERT(args.ColumnCount() == 1);
 		auto &date_arg = args.data[0];
 
@@ -218,8 +220,9 @@ struct ICUDatePart {
 		});
 	}
 
-	static void BinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-		using BIND_TYPE = BindData<part_adapter_t>;
+	template <typename RESULT_TYPE>
+	static void BinaryTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+		using BIND_TYPE = BindData<int64_t>;
 		D_ASSERT(args.ColumnCount() == 2);
 		auto &part_arg = args.data[0];
 		auto &date_arg = args.data[1];
@@ -228,7 +231,7 @@ struct ICUDatePart {
 		auto &info = (BIND_TYPE &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 
-		BinaryExecutor::Execute<string_t, timestamp_t, int64_t>(
+		BinaryExecutor::Execute<string_t, timestamp_t, RESULT_TYPE>(
 		    part_arg, date_arg, result, args.size(), [&](string_t specifier, timestamp_t input) {
 			    UErrorCode status = U_ZERO_ERROR;
 
@@ -244,9 +247,10 @@ struct ICUDatePart {
 		    });
 	}
 
-	template <typename ADAPTER_TYPE>
+	template <typename BIND_TYPE>
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments, ADAPTER_TYPE adapter) {
+	                                     vector<unique_ptr<Expression>> &arguments,
+	                                     typename BIND_TYPE::adapter_t adapter) {
 		Value tz_value;
 		string tz_id;
 		if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
@@ -260,35 +264,35 @@ struct ICUDatePart {
 			throw Exception("Unable to create ICU date part calendar.");
 		}
 
-		return make_unique<BindData<ADAPTER_TYPE>>(move(calendar), adapter);
+		return make_unique<BIND_TYPE>(move(calendar), adapter);
 	}
 
 	static unique_ptr<FunctionData> BindDatePart(ClientContext &context, ScalarFunction &bound_function,
 	                                             vector<unique_ptr<Expression>> &arguments) {
+		using data_t = BindData<int64_t>;
 		auto adapter =
 		    (arguments.size() == 1) ? PartCodeAdapterFactory(PartCodeFromFunction(bound_function.name)) : nullptr;
-		return Bind(context, bound_function, arguments, adapter);
+		return Bind<data_t>(context, bound_function, arguments, adapter);
 	}
 
-	template <typename RESULT_TYPE, typename ADAPTER_TYPE>
 	static ScalarFunction GetUnaryPartCodeFunction(const string &name) {
 		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT,
-		                      UnaryFunction<RESULT_TYPE, ADAPTER_TYPE>, false, BindDatePart);
+		                      UnaryTimestampFunction<int64_t>, false, BindDatePart);
 	}
 
 	static void AddUnaryPartCodeFunction(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
-		ScalarFunction func = GetUnaryPartCodeFunction<int64_t, part_adapter_t>(name);
+		ScalarFunction func = GetUnaryPartCodeFunction(name);
 		CreateScalarFunctionInfo func_info(move(func));
 		catalog.AddFunction(context, &func_info);
 	}
 
 	static ScalarFunction GetBinaryPartCodeFunction(const string &name) {
 		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT,
-		                      BinaryFunction, false, BindDatePart);
+		                      BinaryTimestampFunction<int64_t>, false, BindDatePart);
 	}
 
-	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
+	static void AddBinaryPartCodeFunction(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
 		ScalarFunction func = GetBinaryPartCodeFunction(name);
 		CreateScalarFunctionInfo func_info(move(func));
@@ -297,13 +301,13 @@ struct ICUDatePart {
 
 	static unique_ptr<FunctionData> BindLastDate(ClientContext &context, ScalarFunction &bound_function,
 	                                             vector<unique_ptr<Expression>> &arguments) {
-		return Bind(context, bound_function, arguments, MakeLastDay);
+		using data_t = BindData<date_t>;
+		return Bind<data_t>(context, bound_function, arguments, MakeLastDay);
 	}
 
 	static ScalarFunction GetLastDayFunction(const string &name) {
-		typedef date_t (*date_adapter_t)(icu::Calendar * calendar, const uint64_t micros);
 		return ScalarFunction(name, {LogicalType::TIMESTAMP_TZ}, LogicalType::DATE_TZ,
-		                      UnaryFunction<date_t, date_adapter_t>, false, BindLastDate);
+		                      UnaryTimestampFunction<date_t>, false, BindLastDate);
 	}
 	static void AddLastDayFunction(const string &name, ClientContext &context) {
 		auto &catalog = Catalog::GetCatalog(context);
@@ -345,8 +349,8 @@ void RegisterICUDatePartFunctions(ClientContext &context) {
 	ICUDatePart::AddLastDayFunction("last_day", context);
 
 	// finally the actual date_part function
-	ICUDatePart::AddBinaryTimestampFunction("date_part", context);
-	ICUDatePart::AddBinaryTimestampFunction("datepart", context);
+	ICUDatePart::AddBinaryPartCodeFunction("date_part", context);
+	ICUDatePart::AddBinaryPartCodeFunction("datepart", context);
 }
 
 } // namespace duckdb
