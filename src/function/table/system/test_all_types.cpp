@@ -11,12 +11,6 @@ struct TestAllTypesData : public FunctionOperatorData {
 	idx_t offset;
 };
 
-void ResizeEnum(Vector &enum_vector, idx_t new_size) {
-	if (new_size > STANDARD_VECTOR_SIZE) {
-		enum_vector.Resize(STANDARD_VECTOR_SIZE, new_size);
-	}
-}
-
 struct TestType {
 	TestType(LogicalType type_p, string name_p)
 	    : type(move(type_p)), name(move(name_p)), min_value(Value::MinimumValue(type)),
@@ -79,14 +73,12 @@ static vector<TestType> GetTestTypes() {
 	                    Value("\\x00\\x00\\x00a"));
 
 	// enums
-	Vector small_enum(LogicalType::VARCHAR);
-	ResizeEnum(small_enum, 2);
+	Vector small_enum(LogicalType::VARCHAR, 2);
 	small_enum.SetValue(0, "DUCK_DUCK_ENUM");
 	small_enum.SetValue(1, "GOOSE");
 	result.emplace_back(LogicalType::ENUM("small_enum", small_enum, 2), "small_enum");
 
-	Vector medium_enum(LogicalType::VARCHAR);
-	ResizeEnum(medium_enum, 300);
+	Vector medium_enum(LogicalType::VARCHAR, 300);
 
 	for (idx_t i = 0; i < 300; i++) {
 		medium_enum.SetValue(i, string("enum_") + to_string(i));
@@ -94,8 +86,7 @@ static vector<TestType> GetTestTypes() {
 	result.emplace_back(LogicalType::ENUM("medium_enum", medium_enum, 300), "medium_enum");
 
 	// this is a big one... not sure if we should push this one here, but it's required for completeness
-	Vector large_enum(LogicalType::VARCHAR);
-	ResizeEnum(large_enum, 700);
+	Vector large_enum(LogicalType::VARCHAR, 70000);
 
 	large_enum.Resize(STANDARD_VECTOR_SIZE, 70000);
 

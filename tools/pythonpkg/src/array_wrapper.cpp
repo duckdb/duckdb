@@ -746,7 +746,6 @@ void NumpyResultConversion::Append(DataChunk &chunk, unordered_map<idx_t, py::li
 				for (idx_t i = 0; i < categories_size; i++) {
 					(*categories)[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));
 				}
-				(*categories)[col_idx] = py::cast(categories_list);
 			}
 		}
 	}

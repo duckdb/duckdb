@@ -1085,7 +1085,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 	}
 	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &source, uint32_t size) {
 		auto enum_name = source.Read<string>();
-		Vector values_insert_order(LogicalType::VARCHAR);
+		Vector values_insert_order(LogicalType::VARCHAR, size);
 		values_insert_order.Deserialize(size, source);
 		return make_shared<EnumTypeInfoTemplated>(move(enum_name), values_insert_order, size);
 	}

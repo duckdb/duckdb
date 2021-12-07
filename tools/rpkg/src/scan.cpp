@@ -81,10 +81,7 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 
 			auto levels = r.Protect(GET_LEVELS(coldata));
 			idx_t size = LENGTH(levels);
-			Vector duckdb_levels(LogicalType::VARCHAR);
-			if (size > STANDARD_VECTOR_SIZE) {
-				duckdb_levels.Resize(STANDARD_VECTOR_SIZE, size);
-			}
+			Vector duckdb_levels(LogicalType::VARCHAR, size);
 			for (idx_t level_idx = 0; level_idx < size; level_idx++) {
 				duckdb_levels.SetValue(level_idx, string(CHAR(STRING_ELT(levels, level_idx))));
 			}
