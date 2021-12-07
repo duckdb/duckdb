@@ -1083,8 +1083,7 @@ struct EnumTypeInfoTemplated : public EnumTypeInfo {
 			values[values_insert_order_p.GetValue(count).ToString()] = count;
 		}
 	}
-	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &source) {
-		auto size = source.Read<uint32_t>();
+	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &source, uint32_t size) {
 		auto enum_name = source.Read<string>();
 		Vector values_insert_order(LogicalType::VARCHAR);
 		values_insert_order.Deserialize(size, source);
@@ -1224,14 +1223,15 @@ shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Deserialize(Deserializer &source) {
 	case ExtraTypeInfoType::USER_TYPE_INFO:
 		return UserTypeInfo::Deserialize(source);
 	case ExtraTypeInfoType::ENUM_TYPE_INFO: {
-		auto enum_internal_type = EnumType::GetPhysicalType(source.Read<uint32_t>());
+		auto enum_size = source.Read<uint32_t>();
+		auto enum_internal_type = EnumType::GetPhysicalType(enum_size);
 		switch (enum_internal_type) {
 		case PhysicalType::UINT8:
-			return EnumTypeInfoTemplated<uint8_t>::Deserialize(source);
+			return EnumTypeInfoTemplated<uint8_t>::Deserialize(source, enum_size);
 		case PhysicalType::UINT16:
-			return EnumTypeInfoTemplated<uint16_t>::Deserialize(source);
+			return EnumTypeInfoTemplated<uint16_t>::Deserialize(source, enum_size);
 		case PhysicalType::UINT32:
-			return EnumTypeInfoTemplated<uint32_t>::Deserialize(source);
+			return EnumTypeInfoTemplated<uint32_t>::Deserialize(source, enum_size);
 		default:
 			throw InternalException("Invalid Physical Type for ENUMs");
 		}
