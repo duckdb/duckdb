@@ -278,6 +278,22 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		SetArrowMapFormat(root_holder, child, type);
 		break;
 	}
+	case LogicalTypeId::ENUM: {
+		switch (EnumType::GetPhysicalType(EnumType::GetSize(type))) {
+		case PhysicalType::UINT8:
+			child.format = "C";
+			break;
+		case PhysicalType::UINT16:
+			child.format = "S";
+			break;
+		case PhysicalType::UINT32:
+			child.format = "I";
+			break;
+		default:
+			throw InternalException("Unsupported Enum Internal Type");
+		}
+		child.dictionary->format = "u";
+	}
 	default:
 		throw InternalException("Unsupported Arrow type " + type.ToString());
 	}

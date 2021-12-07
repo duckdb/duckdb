@@ -741,7 +741,11 @@ void NumpyResultConversion::Append(DataChunk &chunk, unordered_map<idx_t, py::li
 			D_ASSERT(categories);
 			// It's an ENUM type, in addition to converting the codes we must convert the categories
 			if (categories->find(col_idx) == categories->end()) {
-				auto categories_list = EnumType::GetValuesInsertOrder(chunk.data[col_idx].GetType());
+				auto categories_list(EnumType::GetValuesInsertOrder(chunk.data[col_idx].GetType()));
+				auto categories_size = EnumType::GetSize(chunk.data[col_idx].GetType());
+				for (idx_t i = 0; i < categories_size; i++) {
+					(*categories)[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));
+				}
 				(*categories)[col_idx] = py::cast(categories_list);
 			}
 		}

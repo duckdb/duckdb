@@ -526,7 +526,7 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 	}
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-	case LogicalTypeId::UUID:{
+	case LogicalTypeId::UUID: {
 		child_holder.vector = make_unique<Vector>(data);
 		child.n_buffers = 3;
 		child_holder.offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
@@ -542,10 +542,9 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 			if (!mask.RowIsValid(row_idx)) {
 				continue;
 			}
-			if (type.id() == LogicalTypeId::UUID){
-				total_string_length+= 36;
-			}
-			else{
+			if (type.id() == LogicalTypeId::UUID) {
+				total_string_length += 36;
+			} else {
 				total_string_length += string_t_ptr[row_idx].GetSize();
 			}
 		}
@@ -563,10 +562,9 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 				continue;
 			}
 			string_t str;
-			if (type.id() == LogicalTypeId::UUID){
+			if (type.id() == LogicalTypeId::UUID) {
 				str = UUID::ToString(uint64_t_ptr[row_idx]);
-			}
-			else{
+			} else {
 				str = string_t_ptr[row_idx];
 			}
 			memcpy((void *)((uint8_t *)child.buffers[2] + current_heap_offset), str.GetDataUnsafe(), str.GetSize());
@@ -627,6 +625,18 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 			target_ptr[row_idx] = Interval::GetMilli(source_ptr[row_idx]);
 		}
 		break;
+	}
+	case LogicalTypeId::ENUM: {
+		// We need to initialize our dictionary
+		child_holder.children.resize(1);
+		InitializeChild(child_holder.children[0], EnumType::GetSize(type));
+		//		auto dictionary = EnumType::GetValuesInsertOrder(type);
+		//		child.dictionary->buffers[1] = &dictionary.front();
+
+		child_holder.vector = make_unique<Vector>(data);
+		child.n_buffers = 2;
+		child.dictionary->n_buffers = 2;
+		child.buffers[1] = (void *)FlatVector::GetData(*child_holder.vector);
 	}
 	default:
 		throw std::runtime_error("Unsupported type " + type.ToString());

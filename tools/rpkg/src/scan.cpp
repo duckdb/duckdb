@@ -80,11 +80,15 @@ static unique_ptr<FunctionData> dataframe_scan_bind(ClientContext &context, vect
 			// TODO What about factors that use numeric?
 
 			auto levels = r.Protect(GET_LEVELS(coldata));
-			vector<string> duckdb_levels(LENGTH(levels));
-			for (idx_t level_idx = 0; level_idx < LENGTH(levels); level_idx++) {
-				duckdb_levels[level_idx] = string(CHAR(STRING_ELT(levels, level_idx)));
+			idx_t size = LENGTH(levels);
+			Vector duckdb_levels(LogicalType::VARCHAR);
+			if (size > STANDARD_VECTOR_SIZE) {
+				duckdb_levels.Resize(STANDARD_VECTOR_SIZE, size);
 			}
-			duckdb_col_type = LogicalType::ENUM(column_name, duckdb_levels);
+			for (idx_t level_idx = 0; level_idx < size; level_idx++) {
+				duckdb_levels.SetValue(level_idx, string(CHAR(STRING_ELT(levels, level_idx))));
+			}
+			duckdb_col_type = LogicalType::ENUM(column_name, duckdb_levels, size);
 			break;
 		}
 		case RType::STRING:

@@ -17,14 +17,35 @@ vector<string> ReadPgListToString(duckdb_libpgquery::PGList *column_list) {
 	return result;
 }
 
+Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
+	Vector result(LogicalType::VARCHAR);
+	if (!column_list) {
+		return result;
+	}
+	// First we discover the size of this list
+	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
+		size++;
+	}
+	if (size > STANDARD_VECTOR_SIZE) {
+		result.Resize(STANDARD_VECTOR_SIZE, size);
+	}
+	size = 0;
+	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
+		auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
+		result.SetValue(size++, target->name);
+	}
+	return result;
+}
+
 unique_ptr<CreateStatement> Transformer::TransformCreateEnum(duckdb_libpgquery::PGNode *node) {
 	auto stmt = reinterpret_cast<duckdb_libpgquery::PGCreateEnumStmt *>(node);
 	D_ASSERT(stmt);
 	auto result = make_unique<CreateStatement>();
 	auto info = make_unique<CreateTypeInfo>();
 	info->name = ReadPgListToString(stmt->typeName)[0];
-	vector<string> ordered_array = ReadPgListToString(stmt->vals);
-	info->type = make_unique<LogicalType>(LogicalType::ENUM(info->name, ordered_array));
+	idx_t size = 0;
+	auto ordered_array = ReadPgListToVector(stmt->vals, size);
+	info->type = make_unique<LogicalType>(LogicalType::ENUM(info->name, ordered_array, size));
 	result->info = move(info);
 	return result;
 }

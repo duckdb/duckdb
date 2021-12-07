@@ -11,6 +11,12 @@ struct TestAllTypesData : public FunctionOperatorData {
 	idx_t offset;
 };
 
+void ResizeEnum(Vector &enum_vector, idx_t new_size) {
+	if (new_size > STANDARD_VECTOR_SIZE) {
+		enum_vector.Resize(STANDARD_VECTOR_SIZE, new_size);
+	}
+}
+
 struct TestType {
 	TestType(LogicalType type_p, string name_p)
 	    : type(move(type_p)), name(move(name_p)), min_value(Value::MinimumValue(type)),
@@ -73,21 +79,30 @@ static vector<TestType> GetTestTypes() {
 	                    Value("\\x00\\x00\\x00a"));
 
 	// enums
-	vector<string> small_enum {"DUCK_DUCK_ENUM", "GOOSE"};
-	result.emplace_back(LogicalType::ENUM("small_enum", small_enum), "small_enum");
+	Vector small_enum(LogicalType::VARCHAR);
+	ResizeEnum(small_enum, 2);
+	small_enum.SetValue(0, "DUCK_DUCK_ENUM");
+	small_enum.SetValue(1, "GOOSE");
+	result.emplace_back(LogicalType::ENUM("small_enum", small_enum, 2), "small_enum");
 
-	vector<string> medium_enum;
+	Vector medium_enum(LogicalType::VARCHAR);
+	ResizeEnum(medium_enum, 300);
+
 	for (idx_t i = 0; i < 300; i++) {
-		medium_enum.push_back(string("enum_") + to_string(i));
+		medium_enum.SetValue(i, string("enum_") + to_string(i));
 	}
-	result.emplace_back(LogicalType::ENUM("medium_enum", medium_enum), "medium_enum");
+	result.emplace_back(LogicalType::ENUM("medium_enum", medium_enum, 300), "medium_enum");
 
 	// this is a big one... not sure if we should push this one here, but it's required for completeness
-	vector<string> large_enum;
+	Vector large_enum(LogicalType::VARCHAR);
+	ResizeEnum(large_enum, 700);
+
+	large_enum.Resize(STANDARD_VECTOR_SIZE, 70000);
+
 	for (idx_t i = 0; i < 70000; i++) {
-		large_enum.push_back(string("enum_") + to_string(i));
+		large_enum.SetValue(i, string("enum_") + to_string(i));
 	}
-	result.emplace_back(LogicalType::ENUM("large_enum", large_enum), "large_enum");
+	result.emplace_back(LogicalType::ENUM("large_enum", large_enum, 70000), "large_enum");
 
 	// arrays
 	auto int_list_type = LogicalType::LIST(LogicalType::INTEGER);

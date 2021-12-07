@@ -52,8 +52,7 @@ class Test2747(object):
 		except:
 			return
 
-		skip_types = {'small_enum', 'medium_enum', 'large_enum'}
-		all_types = ['uuid']
+		skip_types = {'small_enum', 'medium_enum', 'large_enum', 'interval'}
 		conn = duckdb.connect()	
 		for cur_type in all_types:
 			if cur_type not in skip_types:

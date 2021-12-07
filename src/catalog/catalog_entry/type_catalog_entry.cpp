@@ -34,14 +34,15 @@ string TypeCatalogEntry::ToSQL() {
 	std::stringstream ss;
 	switch (user_type->id()) {
 	case (LogicalTypeId::ENUM): {
-		auto values_insert_order = EnumType::GetValuesInsertOrder(*user_type);
+		Vector values_insert_order(EnumType::GetValuesInsertOrder(*user_type));
+		idx_t size = EnumType::GetSize(*user_type);
 		ss << "CREATE TYPE ";
 		ss << name;
 		ss << " AS ENUM ( ";
 
-		for (idx_t i = 0; i < values_insert_order.size(); i++) {
-			ss << "'" << values_insert_order[i] << "'";
-			if (i != values_insert_order.size() - 1) {
+		for (idx_t i = 0; i < size; i++) {
+			ss << "'" << values_insert_order.GetValue(i).ToString() << "'";
+			if (i != size - 1) {
 				ss << ", ";
 			}
 		}
