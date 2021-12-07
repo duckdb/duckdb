@@ -17,6 +17,8 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 
+#include "duckdb/common/types/uuid.hpp"
+
 namespace duckdb {
 
 DataChunk::DataChunk() : count(0), capacity(STANDARD_VECTOR_SIZE) {
@@ -523,7 +525,8 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		break;
 	}
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::VARCHAR: {
+	case LogicalTypeId::VARCHAR:
+	case LogicalTypeId::UUID:{
 		child_holder.vector = make_unique<Vector>(data);
 		child.n_buffers = 3;
 		child_holder.offsets = unique_ptr<data_t[]>(new data_t[sizeof(uint32_t) * (size + 1)]);
@@ -532,12 +535,19 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 		//! step 1: figure out total string length:
 		idx_t total_string_length = 0;
 		auto string_t_ptr = FlatVector::GetData<string_t>(*child_holder.vector);
+		auto uint64_t_ptr = FlatVector::GetData<uint64_t>(*child_holder.vector);
+
 		auto &mask = FlatVector::Validity(*child_holder.vector);
 		for (idx_t row_idx = 0; row_idx < size; row_idx++) {
 			if (!mask.RowIsValid(row_idx)) {
 				continue;
 			}
-			total_string_length += string_t_ptr[row_idx].GetSize();
+			if (type.id() == LogicalTypeId::UUID){
+				total_string_length+= 36;
+			}
+			else{
+				total_string_length += string_t_ptr[row_idx].GetSize();
+			}
 		}
 		//! step 2: allocate this much
 		child_holder.data = unique_ptr<data_t[]>(new data_t[total_string_length]);
@@ -552,7 +562,13 @@ void SetArrowChild(DuckDBArrowArrayChildHolder &child_holder, const LogicalType 
 			if (!mask.RowIsValid(row_idx)) {
 				continue;
 			}
-			auto &str = string_t_ptr[row_idx];
+			string_t str;
+			if (type.id() == LogicalTypeId::UUID){
+				str = UUID::ToString(uint64_t_ptr[row_idx]);
+			}
+			else{
+				str = string_t_ptr[row_idx];
+			}
 			memcpy((void *)((uint8_t *)child.buffers[2] + current_heap_offset), str.GetDataUnsafe(), str.GetSize());
 			current_heap_offset += str.GetSize();
 		}

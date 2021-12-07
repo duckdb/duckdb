@@ -183,6 +183,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DOUBLE:
 		child.format = "g";
 		break;
+	case LogicalTypeId::UUID:
 	case LogicalTypeId::VARCHAR:
 		child.format = "u";
 		break;
