@@ -7,7 +7,7 @@
 #include "duckdb/common/types/time.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb_python/array_wrapper.hpp"
-
+#include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/arrow_wrapper.hpp"
 
 namespace duckdb {
@@ -75,7 +75,8 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_SEC: {
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 		auto timestamp = val.GetValueUnsafe<timestamp_t>();
 		if (type.id() == LogicalTypeId::TIMESTAMP_MS) {
@@ -93,7 +94,8 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 		Time::Convert(time, hour, min, sec, micros);
 		return py::cast<py::object>(PyDateTime_FromDateAndTime(year, month, day, hour, min, sec, micros));
 	}
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT64);
 
 		int32_t hour, min, sec, microsec;
@@ -101,7 +103,8 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 		duckdb::Time::Convert(time, hour, min, sec, microsec);
 		return py::cast<py::object>(PyTime_FromTime(hour, min, sec, microsec));
 	}
-	case LogicalTypeId::DATE: {
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ: {
 		D_ASSERT(type.InternalType() == PhysicalType::INT32);
 
 		auto date = val.GetValueUnsafe<date_t>();
@@ -128,6 +131,18 @@ py::object DuckDBPyResult::GetValueToPython(Value &val, const LogicalType &type)
 		}
 		return std::move(py_struct);
 	}
+	case LogicalTypeId::UUID: {
+		auto uuid_value = val.GetValueUnsafe<hugeint_t>();
+		return py::cast<py::object>(py::module::import("uuid").attr("UUID")(UUID::ToString(uuid_value)));
+	}
+	case LogicalTypeId::INTERVAL: {
+		auto interval_value = val.GetValueUnsafe<interval_t>();
+		uint64_t days = duckdb::Interval::DAYS_PER_MONTH * interval_value.months + interval_value.days;
+		return py::cast<py::object>(
+		    py::module::import("datetime")
+		        .attr("timedelta")(py::arg("days") = days, py::arg("microseconds") = interval_value.micros));
+	}
+
 	default:
 		throw NotImplementedException("unsupported type: " + type.ToString());
 	}
