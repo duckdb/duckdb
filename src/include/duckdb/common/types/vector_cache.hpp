@@ -15,7 +15,7 @@
 namespace duckdb {
 class Vector;
 
-//! The VectorCache holds cached data for DataChunk memory
+//! The VectorCache holds cached data that allows for re-use of the same memory by vectors
 class VectorCache {
 public:
 	//! Instantiate a vector cache with the given type
