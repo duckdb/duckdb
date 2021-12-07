@@ -33,8 +33,8 @@ void RowOperations::SwizzleColumns(const RowLayout &layout, const data_ptr_t bas
 			if (physical_type == PhysicalType::VARCHAR) {
 				data_ptr_t string_ptr = col_ptr + sizeof(uint32_t) + string_t::PREFIX_LENGTH;
 				for (idx_t i = 0; i < next; i++) {
-					if (!Load<string_t>(col_ptr).IsInlined()) {
-						// Overwrite the string pointer with the within-row offset
+					if (Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH) {
+						// Overwrite the string pointer with the within-row offset (if not inlined)
 						Store<idx_t>(Load<data_ptr_t>(string_ptr) - heap_row_ptrs[i], string_ptr);
 					}
 					col_ptr += row_width;
@@ -90,8 +90,8 @@ void RowOperations::UnswizzlePointers(const RowLayout &layout, const data_ptr_t 
 			if (physical_type == PhysicalType::VARCHAR) {
 				data_ptr_t string_ptr = col_ptr + sizeof(uint32_t) + string_t::PREFIX_LENGTH;
 				for (idx_t i = 0; i < next; i++) {
-					if (!Load<string_t>(col_ptr).IsInlined()) {
-						// Overwrite the string offset with the pointer
+					if (Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH) {
+						// Overwrite the string offset with the pointer (if not inlined)
 						Store<data_ptr_t>(heap_row_ptrs[i] + Load<idx_t>(string_ptr), string_ptr);
 					}
 					col_ptr += row_width;
