@@ -15,11 +15,11 @@
 namespace duckdb {
 class Vector;
 
-//! The VectorCache holds cached data for
+//! The VectorCache holds cached data that allows for re-use of the same memory by vectors
 class VectorCache {
 public:
-	// Instantiate a vector cache with the given type
-	VectorCache(const LogicalType &type);
+	//! Instantiate a vector cache with the given type
+	explicit VectorCache(const LogicalType &type);
 
 	buffer_ptr<VectorBuffer> buffer;
 

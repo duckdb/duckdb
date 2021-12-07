@@ -62,7 +62,7 @@ bool TryAddOperator::Operation(int16_t left, int16_t right, int16_t &result);
 template <>
 bool TryAddOperator::Operation(int32_t left, int32_t right, int32_t &result);
 template <>
-bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result);
+DUCKDB_API bool TryAddOperator::Operation(int64_t left, int64_t right, int64_t &result);
 
 struct AddOperatorOverflowCheck {
 	template <class TA, class TB, class TR>
