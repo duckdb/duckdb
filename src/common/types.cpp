@@ -969,6 +969,13 @@ LogicalType LogicalType::MAP(child_list_t<LogicalType> children) {
 	return LogicalType(LogicalTypeId::MAP, move(info));
 }
 
+LogicalType LogicalType::MAP(LogicalType key, LogicalType value) {
+	child_list_t<LogicalType> child_types;
+	child_types.push_back({"key", LogicalType::LIST(move(key))});
+	child_types.push_back({"value", LogicalType::LIST(move(value))});
+	return LogicalType::MAP(move(child_types));
+}
+
 //===--------------------------------------------------------------------===//
 // User Type
 //===--------------------------------------------------------------------===//
