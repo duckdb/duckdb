@@ -60,7 +60,6 @@ class Test2747(object):
 			if cur_type not in skip_types:
 				arrow_table = conn.execute("select "+cur_type+" from test_all_types()").arrow()
 				if cur_type in enum_types:
-					arrow_table = conn.execute("select small_enum from test_all_types()").arrow()
 					round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
 					result_arrow = conn.execute("select * from arrow_table").fetchall()
 					result_roundtrip = conn.execute("select * from round_trip_arrow_table").fetchall()
@@ -69,4 +68,15 @@ class Test2747(object):
 					round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
 					assert arrow_table.equals(round_trip_arrow_table, check_metadata=True)
 			
-
+	def test_pandas(self, duckdb_cursor):
+		# We skip those since the extreme ranges are not supported in python.
+		skip_types = {'date', 'timestamp', 'timestamp_s', 'timestamp_ns', 'timestamp_ms', 'date_tz', 'timestamp_tz'}
+		conn = duckdb.connect()
+		for cur_type in all_types:
+			print (cur_type)
+			if cur_type not in skip_types:
+					dataframe = conn.execute("select "+cur_type+" from test_all_types()").arrow()
+					round_trip_dataframe = conn.execute("select * from dataframe").arrow()
+					result_dataframe = conn.execute("select * from dataframe").fetchall()
+					result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
+					assert result_dataframe == result_roundtrip
