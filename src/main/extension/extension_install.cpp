@@ -17,7 +17,7 @@ const vector<string> ExtensionHelper::PATH_COMPONENTS = {".duckdb", "extensions"
 void ExtensionHelper::InstallExtension(DatabaseInstance &db, const string &extension, bool force_install) {
 	auto &config = DBConfig::GetConfig(db);
 	if (!config.enable_external_access) {
-		throw Exception("Installing extensions is disabled");
+		throw PermissionException("Installing extensions is disabled through configuration");
 	}
 	auto &fs = FileSystem::GetFileSystem(db);
 

@@ -98,6 +98,8 @@ string Exception::ExceptionTypeToString(ExceptionType type) {
 		return "Invalid Input";
 	case ExceptionType::OUT_OF_MEMORY:
 		return "Out of Memory";
+	case ExceptionType::PERMISSION:
+		return "Permission";
 	default:
 		return "Unknown";
 	}
@@ -181,6 +183,9 @@ CatalogException::CatalogException(const string &msg) : StandardException(Except
 }
 
 ParserException::ParserException(const string &msg) : StandardException(ExceptionType::PARSER, msg) {
+}
+
+PermissionException::PermissionException(const string &msg) : StandardException(ExceptionType::PERMISSION, msg) {
 }
 
 SyntaxException::SyntaxException(const string &msg) : Exception(ExceptionType::SYNTAX, msg) {
