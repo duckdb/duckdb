@@ -624,7 +624,9 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChu
 
 void ScanStructure::NextInnerUniqueKeysJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	D_ASSERT(keys.size() == left.size());
-	// create the selection vector from the matches that were found
+	// first scan for key matches
+	ScanKeyMatches(keys);
+	// then construct the result from all tuples with a match
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t result_count = 0;
 	for (idx_t i = 0; i < keys.size(); i++) {

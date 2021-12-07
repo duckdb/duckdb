@@ -2,6 +2,24 @@
 # description: Test joins with primary keys
 # group: [inner]
 
+
+statement ok
+CREATE TABLE integers1 AS SELECT * FROM (VALUES (1), (2), (10)) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM (VALUES (2, 5), (3, 6), (4, 7)) tbl(i, j);
+
+statement ok
+PRAGMA explain_output = OPTIMIZED_ONLY;
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT i1.i FROM integers1 i1 JOIN integers2 i2 ON (i1.i=i2.i AND i1.i<i2.j);
+----
+2
+
 statement ok
 PRAGMA enable_verification
 
@@ -113,11 +131,9 @@ NULL	NULL
 2	1
 3	NULL
 
-statement ok
-PRAGMA disable_profiling
 
 statement ok
-CREATE TABLE integers AS SELECT * FROM (VALUES (1), (2), (10)) tbl(i);
+CREATE TABLE integers1 AS SELECT * FROM (VALUES (1), (2), (10)) tbl(i);
 
 statement ok
 CREATE TABLE integers2 AS SELECT * FROM (VALUES (2, 5), (3, 6), (4, 7)) tbl(i, j);
@@ -129,6 +145,6 @@ statement ok
 PRAGMA enable_verification
 
 query I
-SELECT i1.i FROM integers i1 JOIN integers2 i2 ON (i1.i=i2.i AND i1.i<i2.j);
+SELECT i1.i FROM integers1 i1 JOIN integers2 i2 ON (i1.i=i2.i AND i1.i<i2.j);
 ----
 2
