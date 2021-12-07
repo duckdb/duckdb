@@ -30,6 +30,13 @@ struct ICUDateFunc {
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
 
+	//! Gets the timestamp from the calendar, assuming it is in range.
+	static timestamp_t GetTimeUnsafe(icu::Calendar *calendar, uint64_t micros = 0);
+	//! Sets the calendar to the timestamp, returning the unused µs part
+	static uint64_t SetTime(icu::Calendar *calendar, timestamp_t date);
+	//! Extracts the field from the calendar
+	static int32_t ExtractField(icu::Calendar *calendar, UCalendarDateFields field);
+
 	template <typename TA, typename TB, typename TR, typename OP>
 	static void ExecuteBinary(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
