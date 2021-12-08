@@ -1,10 +1,15 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/execution/operator/persistent/physical_export.hpp"
 #include "duckdb/planner/operator/logical_export.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExport &op) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_external_access) {
+		throw PermissionException("Export is disabled through configuration");
+	}
 	auto export_node = make_unique<PhysicalExport>(op.types, op.function, move(op.copy_info), op.estimated_cardinality,
 	                                               op.exported_tables);
 	// plan the underlying copy statements, if any

@@ -2,6 +2,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -14,6 +15,10 @@ static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, vector<
                                                  vector<LogicalType> &input_table_types,
                                                  vector<string> &input_table_names, vector<LogicalType> &return_types,
                                                  vector<string> &names) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_external_access) {
+		throw PermissionException("Globbing is disabled through configuration");
+	}
 	auto result = make_unique<GlobFunctionBindData>();
 	auto &fs = FileSystem::GetFileSystem(context);
 	result->files = fs.Glob(inputs[0].str_value);

@@ -232,10 +232,11 @@ Value DisabledOptimizersSetting::GetSetting(ClientContext &context) {
 // Enable External Access
 //===--------------------------------------------------------------------===//
 void EnableExternalAccessSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
-	if (db) {
+	auto new_value = input.GetValue<bool>();
+	if (db && new_value) {
 		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
 	}
-	config.enable_external_access = input.GetValue<bool>();
+	config.enable_external_access = new_value;
 }
 
 Value EnableExternalAccessSetting::GetSetting(ClientContext &context) {

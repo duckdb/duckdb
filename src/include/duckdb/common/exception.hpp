@@ -73,7 +73,8 @@ enum class ExceptionType {
 	INTERNAL =
 	    31, // Internal exception: exception that indicates something went wrong internally (i.e. bug in the code base)
 	INVALID_INPUT = 32, // Input or arguments error
-	OUT_OF_MEMORY = 33  // out of memory
+	OUT_OF_MEMORY = 33, // out of memory
+	PERMISSION = 34     // insufficient permissions
 };
 
 class Exception : public std::exception {
@@ -134,6 +135,16 @@ public:
 
 	template <typename... Args>
 	explicit ParserException(const string &msg, Args... params) : ParserException(ConstructMessage(msg, params...)) {
+	}
+};
+
+class PermissionException : public StandardException {
+public:
+	DUCKDB_API explicit PermissionException(const string &msg);
+
+	template <typename... Args>
+	explicit PermissionException(const string &msg, Args... params)
+	    : PermissionException(ConstructMessage(msg, params...)) {
 	}
 };
 
