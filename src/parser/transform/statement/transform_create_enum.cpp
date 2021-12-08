@@ -2,6 +2,7 @@
 #include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/parser/transformer.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
