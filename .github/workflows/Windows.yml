@@ -214,5 +214,5 @@ jobs:
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
           pip install awscli
-          ./scripts/extension-upload.sh windows-amd64
+          ./scripts/extension-upload.sh windows_amd64
         fi
