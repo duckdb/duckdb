@@ -34,6 +34,7 @@ struct DictionaryCompressionState : UncompressedCompressState {
 		}
 		current_segment = move(compressed_segment);
 
+		// TODO clean up this mess
 		// Reset the string map
 		// Clearing the string map is crazy slow for poorly compressible data, likely due to random access.
 		//		current_string_map->clear();
@@ -80,6 +81,11 @@ struct DictionaryCompressionStorage : UncompressedStringStorage {
 	                           idx_t result_idx);
 
 	static idx_t RemainingSpace(ColumnSegment &segment, BufferHandle &handle, std::vector<int32_t> *index_buffer);
+	static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict,
+	                             Vector &result, data_ptr_t baseptr, int32_t dict_offset,
+	                             uint16_t string_len);
+
+	static uint16_t GetStringLength(int32_t* index_buffer_ptr, int32_t string_number);
 };
 
 //===--------------------------------------------------------------------===//
@@ -237,12 +243,12 @@ idx_t DictionaryCompressionStorage::StringAppendCompressed(ColumnSegment &segmen
 				// Unknown string, continue
 				// non-null value, check if we can fit it within the block
 				idx_t string_length = source_data[source_idx].GetSize();
-				idx_t dictionary_length = string_length + sizeof(uint16_t);
+				idx_t dictionary_length = string_length;
 
 				idx_t required_space = dictionary_length + sizeof(int32_t); // for index_buffer value
 				if (required_space >= StringUncompressed::STRING_BLOCK_LIMIT) {
 					// string exceeds block limit, store in overflow block and only write a marker here
-					throw InternalException("GTFO with your overflow strings");
+					throw InternalException("Overflow strings not supported");
 				}
 				if (required_space > remaining_space) {
 					// no space remaining: return how many tuples we ended up writing
@@ -256,11 +262,9 @@ idx_t DictionaryCompressionStorage::StringAppendCompressed(ColumnSegment &segmen
 				D_ASSERT(string_length < NumericLimits<uint16_t>::Maximum());
 				dictionary.size += dictionary_length;
 
-				// first write the length as u16
 				auto dict_pos = end - dictionary.size;
-				Store<uint16_t>(string_length, dict_pos);
 				// now write the actual string data into the dictionary
-				memcpy(dict_pos + sizeof(uint16_t), source_data[source_idx].GetDataUnsafe(), string_length);
+				memcpy(dict_pos, source_data[source_idx].GetDataUnsafe(), string_length);
 
 				dictionary.Verify();
 
@@ -339,13 +343,13 @@ unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(Column
 
 		state->dictionary = make_buffer<Vector>(LogicalType::VARCHAR, index_buffer_count);
 
-
 		auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
 
 		// TODO the first value in the index buffer is always 0, do we care?
 		for (uint32_t i = 0; i < index_buffer_count; i++) {
 			// NOTE: the passing of dict_child_vector, will not be used, its for big strings
-			dict_child_data[i] = FetchStringFromDict(segment, dict, *(state->dictionary), baseptr, index_buffer_ptr[i]);
+			uint16_t str_len = GetStringLength(index_buffer_ptr, i);
+			dict_child_data[i] = FetchStringFromDict(segment, dict, *(state->dictionary), baseptr, index_buffer_ptr[i], str_len);
 		}
 	}
 
@@ -385,9 +389,10 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	} else {
 		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
-			auto dict_offset = index_buffer_ptr[base_data[start + i]];
-
-			result_data[result_offset + i] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset);
+			auto string_number = base_data[start + i];
+			auto dict_offset = index_buffer_ptr[string_number];
+			uint16_t str_len = GetStringLength(index_buffer_ptr, string_number);
+			result_data[result_offset + i] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset, str_len);
 		}
 	}
 }
@@ -428,9 +433,11 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 	auto base_data = (int32_t *)(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
-	auto dict_offset = index_buffer_ptr[base_data[row_id]];
+	auto string_number = base_data[row_id];
+	auto dict_offset = index_buffer_ptr[string_number];
+	uint16_t str_len = GetStringLength(index_buffer_ptr, string_number);
 
-	result_data[result_idx] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset);
+	result_data[result_idx] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset, str_len);
 }
 
 //===--------------------------------------------------------------------===//
@@ -444,6 +451,31 @@ idx_t DictionaryCompressionStorage::RemainingSpace(ColumnSegment &segment, Buffe
 	                   index_buffer->size() * sizeof(int32_t);
 	D_ASSERT(Storage::BLOCK_SIZE >= used_space);
 	return Storage::BLOCK_SIZE - used_space;
+}
+
+string_t DictionaryCompressionStorage::FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict,
+                                                        Vector &result, data_ptr_t baseptr, int32_t dict_offset,
+                                                        uint16_t string_len) {
+
+	D_ASSERT(dict_offset >= 0 && dict_offset <= Storage::BLOCK_SIZE);
+
+	if (dict_offset == 0) {
+		return string_t(nullptr, 0);
+	}
+	// normal string: read string from this block
+	auto dict_end = baseptr + dict.end;
+	auto dict_pos = dict_end - dict_offset;
+
+	auto str_ptr = (char *)(dict_pos);
+	return string_t(str_ptr, string_len);
+}
+
+uint16_t DictionaryCompressionStorage::GetStringLength(int32_t* index_buffer_ptr, int32_t string_number) {
+	if (string_number == 0) {
+		return 0;
+	} else {
+		return index_buffer_ptr[string_number] - index_buffer_ptr[string_number-1];
+	}
 }
 
 //===--------------------------------------------------------------------===//
