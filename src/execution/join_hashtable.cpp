@@ -453,7 +453,7 @@ void ScanStructure::Next(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	case JoinType::INNER:
 	case JoinType::RIGHT:
 		if (ht.has_unique_keys) {
-			NextInnerUniqueKeysJoin(keys, left, result);
+			NextInnerJoin(keys, left, result);
 		} else {
 			NextInnerJoin(keys, left, result);
 		}
@@ -578,13 +578,14 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 	}
 }
 
-void ScanStructure::ScanKeyMatches(DataChunk &keys) {
+void ScanStructure::ScanKeyMatches(DataChunk &keys, SelectionVector &sel_vec) {
 	// the semi-join, anti-join and mark-join we handle a differently from the inner join
 	// since there can be at most STANDARD_VECTOR_SIZE results
 	// we handle the entire chunk in one call to Next().
 	// for every pointer, we keep chasing pointers and doing comparisons.
 	// this results in a boolean array indicating whether or not the tuple has a match
 	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
+	idx_t result_count = 0;
 	while (this->count > 0) {
 		// resolve the predicates for the current set of pointers
 		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
@@ -592,7 +593,9 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys) {
 
 		// mark each of the matches as found
 		for (idx_t i = 0; i < match_count; i++) {
-			found_match[match_sel.get_index(i)] = true;
+			auto sel_index = match_sel.get_index(i);
+			found_match[sel_index] = true;
+			sel_vec.set_index(result_count++, sel_index);
 		}
 		// continue searching for the ones where we did not find a match yet
 		AdvancePointers(no_match_sel, no_match_count);
@@ -628,8 +631,9 @@ void ScanStructure::NextInnerUniqueKeysJoin(DataChunk &keys, DataChunk &left, Da
 		// No more data to be read
 		return;
 	}
+	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
 	// first scan for key matches
-	ScanKeyMatches(keys);
+	ScanKeyMatches(keys, result_sel);
 	// then construct the result from all tuples with a match
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	idx_t result_count = 0;
@@ -655,13 +659,15 @@ void ScanStructure::NextInnerUniqueKeysJoin(DataChunk &keys, DataChunk &left, Da
 	} else {
 		D_ASSERT(result.size() == 0);
 	}
-	// like the SEMI, ANTI, Single and MARK join types, the UNIQUE KEYS join only ever does one pass over the HT per input chunk
+	// like the SEMI, ANTI, Single and MARK join types, the UNIQUE KEYS join only ever does one pass over the HT per
+	// input chunk
 	finished = true;
 }
 
 void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	// first scan for key matches
-	ScanKeyMatches(keys);
+	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
+	ScanKeyMatches(keys, result_sel);
 	// then construct the result from all tuples with a match
 	NextSemiOrAntiJoin<true>(keys, left, result);
 
@@ -670,7 +676,8 @@ void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &re
 
 void ScanStructure::NextAntiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	// first scan for key matches
-	ScanKeyMatches(keys);
+	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
+	ScanKeyMatches(keys, result_sel);
 	// then construct the result from all tuples that did not find a match
 	NextSemiOrAntiJoin<false>(keys, left, result);
 
@@ -725,8 +732,8 @@ void ScanStructure::NextMarkJoin(DataChunk &keys, DataChunk &input, DataChunk &r
 	D_ASSERT(result.data.back().GetType() == LogicalType::BOOLEAN);
 	// this method should only be called for a non-empty HT
 	D_ASSERT(ht.Count() > 0);
-
-	ScanKeyMatches(keys);
+	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
+	ScanKeyMatches(keys, result_sel);
 	if (ht.correlated_mark_join_info.correlated_types.empty()) {
 		ConstructMarkJoinResult(keys, input, result);
 	} else {
@@ -830,22 +837,7 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	// (2) we return NULL for that data if there is no match
 	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
-	SelectionVector match_sel(STANDARD_VECTOR_SIZE), no_match_sel(STANDARD_VECTOR_SIZE);
-	while (this->count > 0) {
-		// resolve the predicates for the current set of pointers
-		idx_t match_count = ResolvePredicates(keys, match_sel, &no_match_sel);
-		idx_t no_match_count = this->count - match_count;
-
-		// mark each of the matches as found
-		for (idx_t i = 0; i < match_count; i++) {
-			// found a match for this index
-			auto index = match_sel.get_index(i);
-			found_match[index] = true;
-			result_sel.set_index(result_count++, index);
-		}
-		// continue searching for the ones where we did not find a match yet
-		AdvancePointers(no_match_sel, no_match_count);
-	}
+	ScanKeyMatches(keys, result_sel);
 	// reference the columns of the left side from the result
 	D_ASSERT(input.ColumnCount() > 0);
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
