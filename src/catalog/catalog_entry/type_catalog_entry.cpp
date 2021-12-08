@@ -5,7 +5,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/serializer.hpp"
 #include "duckdb/parser/parsed_data/create_sequence_info.hpp"
-
+#include "duckdb/common/types/vector.hpp"
 #include <algorithm>
 #include <sstream>
 
