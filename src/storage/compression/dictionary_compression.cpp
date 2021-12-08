@@ -1,3 +1,4 @@
+#include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/function/compression/compression.hpp"
 #include "duckdb/function/compression_function.hpp"
 #include "duckdb/storage/segment/uncompressed.hpp"
@@ -52,7 +53,9 @@ struct DictionaryCompressionState : UncompressedCompressState {
 struct DictionaryCompressionStorage : UncompressedStringStorage {
 
 	// We override this to make space to store the offset to the index buffer
-	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
+	// HEADER: dict_end, dict_size, buffer_index_start, buffer_index_count;
+	static constexpr uint16_t DICTIONARY_HEADER_SIZE =
+	    sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t) + sizeof(uint32_t);
 
 	static unique_ptr<AnalyzeState> StringInitAnalyze(ColumnData &col_data, PhysicalType type);
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
@@ -69,6 +72,7 @@ struct DictionaryCompressionStorage : UncompressedStringStorage {
 
 	static idx_t FinalizeAppend(ColumnSegment &segment, SegmentStatistics &stats, DictionaryCompressionState &state);
 
+	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
 	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                              idx_t result_offset);
 	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
@@ -289,6 +293,9 @@ idx_t DictionaryCompressionStorage::FinalizeAppend(ColumnSegment &segment, Segme
 	memcpy(handle->node->buffer + offset_size, state.index_buffer->data(), index_buffer_size);
 	Store<uint32_t>(offset_size, handle->node->buffer + 2 * sizeof(uint32_t)); // TODO segment offset?
 
+	// We store the size of the index buffer which we need to construct the dictionary on scan initialization
+	Store<uint32_t>(state.index_buffer->size(), handle->node->buffer + 3 * sizeof(uint32_t)); // TODO segment offset?
+
 	if (total_size >= Storage::BLOCK_SIZE / 5 * 4) {
 		// the block is full enough, don't bother moving around the dictionary
 		return Storage::BLOCK_SIZE;
@@ -306,12 +313,52 @@ idx_t DictionaryCompressionStorage::FinalizeAppend(ColumnSegment &segment, Segme
 }
 
 //===--------------------------------------------------------------------===//
+// Scan
+//===--------------------------------------------------------------------===//
+struct CompressedStringScanState : public StringScanState {
+	unique_ptr<BufferHandle> handle;
+	buffer_ptr<Vector> dictionary;
+};
+
+unique_ptr<SegmentScanState> DictionaryCompressionStorage::StringInitScan(ColumnSegment &segment) {
+	auto state = make_unique<CompressedStringScanState>();
+	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
+	state->handle = buffer_manager.Pin(segment.block);
+
+	// Simplest implementation create fresh vector that fits
+
+	// TODO: we should consider if emitting dictionary vectors is always a good idea, probably not.
+	// TODO: we could use index_buffer_count to estimate the compression ratio and switch to emitting dict vectors when
+	// TODO: compression ratio is high
+	if (true) {
+		auto baseptr = state->handle->node->buffer + segment.GetBlockOffset();
+		auto dict = GetDictionary(segment, *(state->handle));
+		auto index_buffer_offset = Load<uint32_t>(baseptr + 2 * sizeof(uint32_t));
+		auto index_buffer_count = Load<uint32_t>(baseptr + 3 * sizeof(uint32_t));
+		auto index_buffer_ptr = (int32_t *)(baseptr + index_buffer_offset);
+
+		state->dictionary = make_buffer<Vector>(LogicalType::VARCHAR, index_buffer_count);
+
+
+		auto dict_child_data = FlatVector::GetData<string_t>(*(state->dictionary));
+
+		// TODO the first value in the index buffer is always 0, do we care?
+		for (uint32_t i = 0; i < index_buffer_count; i++) {
+			// NOTE: the passing of dict_child_vector, will not be used, its for big strings
+			dict_child_data[i] = FetchStringFromDict(segment, dict, *(state->dictionary), baseptr, index_buffer_ptr[i]);
+		}
+	}
+
+	return move(state);
+}
+
+//===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
 void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
                                                      Vector &result, idx_t result_offset) {
 	// clear any previously locked buffers and get the primary buffer handle
-	auto &scan_state = (StringScanState &)*state.scan_state;
+	auto &scan_state = (CompressedStringScanState &)*state.scan_state;
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle->node->buffer + segment.GetBlockOffset();
@@ -323,11 +370,25 @@ void DictionaryCompressionStorage::StringScanPartial(ColumnSegment &segment, Col
 	auto base_data = (int32_t *)(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
-	for (idx_t i = 0; i < scan_count; i++) {
-		// Lookup dict offset in index buffer
-		auto dict_offset = index_buffer_ptr[base_data[start + i]];
+	if (scan_state.dictionary && scan_count == STANDARD_VECTOR_SIZE) {
 
-		result_data[result_offset + i] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset);
+		// Emit dictionary vectors
+		buffer_ptr<SelectionData> sel_data = make_buffer<SelectionData>(scan_count);
+		SelectionVector sel_vector(sel_data);
+
+		for (idx_t i = 0; i < scan_count; i++) {
+			sel_vector[i] = base_data[start + i];
+		}
+
+		result.Slice(*(scan_state.dictionary), sel_vector, scan_count);
+
+	} else {
+		for (idx_t i = 0; i < scan_count; i++) {
+			// Lookup dict offset in index buffer
+			auto dict_offset = index_buffer_ptr[base_data[start + i]];
+
+			result_data[result_offset + i] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset);
+		}
 	}
 }
 
@@ -393,7 +454,7 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    CompressionType::COMPRESSION_DICTIONARY, data_type, DictionaryCompressionStorage ::StringInitAnalyze,
 	    DictionaryCompressionStorage::StringAnalyze, DictionaryCompressionStorage::StringFinalAnalyze,
 	    DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
-	    DictionaryCompressionStorage::FinalizeCompress, UncompressedStringStorage::StringInitScan,
+	    DictionaryCompressionStorage::FinalizeCompress, DictionaryCompressionStorage::StringInitScan,
 	    DictionaryCompressionStorage::StringScan, DictionaryCompressionStorage::StringScanPartial,
 	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip);
 }
