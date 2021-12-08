@@ -14,6 +14,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/catalog/catalog_entry/type_catalog_entry.hpp"
 #include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/operator/comparison_operators.hpp"
 
 namespace duckdb {
 
@@ -1054,16 +1055,8 @@ public:
 
 		// Now we must check if all strings are the same
 		for (idx_t i = 0; i < size; i++) {
-			auto str_size = this_vector_ptr[i].GetSize();
-			if (other_vector_ptr[i].GetSize() != this_vector_ptr[i].GetSize()) {
+			if (!Equals::Operation(other_vector_ptr[i], this_vector_ptr[i])) {
 				return false;
-			}
-			auto other_str = other_vector_ptr[i].GetDataUnsafe();
-			auto this_str = this_vector_ptr[i].GetDataUnsafe();
-			for (idx_t str_idx = 0; i < str_size; i++) {
-				if (other_str[str_idx] != this_str[str_idx]) {
-					return false;
-				}
 			}
 		}
 		return true;

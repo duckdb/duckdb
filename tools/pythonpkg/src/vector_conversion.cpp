@@ -397,12 +397,10 @@ void VectorConversion::BindPandas(py::handle original_df, vector<PandasColumnBin
 					auto enum_name = string(py::str(df_columns[col_idx]));
 					vector<string> enum_entries = py::cast<vector<string>>(categories);
 					idx_t size = enum_entries.size();
-					Vector enum_entries_vec(LogicalType::VARCHAR);
-					if (size > STANDARD_VECTOR_SIZE) {
-						enum_entries_vec.Resize(STANDARD_VECTOR_SIZE, size);
-					}
+					Vector enum_entries_vec(LogicalType::VARCHAR, size);
+					auto enum_entries_ptr = FlatVector::GetData<string_t>(enum_entries_vec);
 					for (idx_t i = 0; i < size; i++) {
-						enum_entries_vec.SetValue(i, enum_entries[i]);
+						enum_entries_ptr[i] = StringVector::AddStringOrBlob(enum_entries_vec, enum_entries[i]);
 					}
 					D_ASSERT(py::hasattr(column.attr("cat"), "codes"));
 					duckdb_col_type = LogicalType::ENUM(enum_name, enum_entries_vec, size);

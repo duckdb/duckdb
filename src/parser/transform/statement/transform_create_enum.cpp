@@ -19,17 +19,17 @@ vector<string> ReadPgListToString(duckdb_libpgquery::PGList *column_list) {
 }
 
 Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
-	Vector result(LogicalType::VARCHAR);
 	if (!column_list) {
+		Vector result(LogicalType::VARCHAR);
 		return result;
 	}
 	// First we discover the size of this list
 	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
 		size++;
 	}
-	if (size > STANDARD_VECTOR_SIZE) {
-		result.Resize(STANDARD_VECTOR_SIZE, size);
-	}
+
+	Vector result(LogicalType::VARCHAR, size);
+
 	size = 0;
 	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
 		auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);

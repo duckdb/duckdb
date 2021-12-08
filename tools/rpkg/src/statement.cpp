@@ -447,7 +447,7 @@ static void transform(Vector &src_vec, SEXP &dest, idx_t dest_offset, idx_t n) {
 		}
 
 		RProtector r;
-		Vector str_vec(EnumType::GetValuesInsertOrder(src_vec.GetType()));
+		auto &str_vec = EnumType::GetValuesInsertOrder(src_vec.GetType());
 		auto size = EnumType::GetSize(src_vec.GetType());
 		vector<string> str_c_vec(size);
 		for (idx_t i = 0; i < size; i++) {

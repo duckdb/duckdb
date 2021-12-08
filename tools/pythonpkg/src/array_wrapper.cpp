@@ -6,6 +6,7 @@
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb_python/pyresult.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -208,6 +209,19 @@ struct BlobConvert {
 	template <class DUCKDB_T, class NUMPY_T>
 	static PyObject *ConvertValue(string_t val) {
 		return PyByteArray_FromStringAndSize(val.GetDataUnsafe(), val.GetSize());
+	}
+
+	template <class NUMPY_T>
+	static NUMPY_T NullValue() {
+		return nullptr;
+	}
+};
+
+struct UUIDConvert {
+	template <class DUCKDB_T, class NUMPY_T>
+	static PyObject *ConvertValue(hugeint_t val) {
+		py::handle h = py::module::import("uuid").attr("UUID")(UUID::ToString(val)).release();
+		return h.ptr();
 	}
 
 	template <class NUMPY_T>
@@ -461,15 +475,19 @@ RawArrayWrapper::RawArrayWrapper(const LogicalType &type) : data(nullptr), type(
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::INTERVAL:
+	case LogicalTypeId::DATE_TZ:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		type_width = sizeof(int64_t);
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::ENUM:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UUID:
 		type_width = sizeof(PyObject *);
 		break;
 	default:
@@ -516,21 +534,25 @@ void RawArrayWrapper::Initialize(idx_t capacity) {
 		dtype = "float64";
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		dtype = "datetime64[ns]";
 		break;
 	case LogicalTypeId::INTERVAL:
 		dtype = "timedelta64[ns]";
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 	case LogicalTypeId::VARCHAR:
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::LIST:
 	case LogicalTypeId::MAP:
 	case LogicalTypeId::STRUCT:
+	case LogicalTypeId::UUID:
 		dtype = "object";
 		break;
 	case LogicalTypeId::ENUM: {
@@ -638,6 +660,7 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertDecimal(input.GetType(), current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 		may_have_null = ConvertColumn<timestamp_t, int64_t, duckdb_py_convert::TimestampConvert>(
 		    current_offset, dataptr, maskptr, idata, count);
 		break;
@@ -654,10 +677,12 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		    current_offset, dataptr, maskptr, idata, count);
 		break;
 	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ:
 		may_have_null = ConvertColumn<date_t, int64_t, duckdb_py_convert::DateConvert>(current_offset, dataptr, maskptr,
 		                                                                               idata, count);
 		break;
 	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ:
 		may_have_null = ConvertColumn<dtime_t, PyObject *, duckdb_py_convert::TimeConvert>(current_offset, dataptr,
 		                                                                                   maskptr, idata, count);
 		break;
@@ -682,6 +707,11 @@ void ArrayWrapper::Append(idx_t current_offset, Vector &input, idx_t count) {
 		may_have_null = ConvertNested<py::dict, duckdb_py_convert::StructMapConvert>(current_offset, dataptr, maskptr,
 		                                                                             input, idata, count);
 		break;
+	case LogicalTypeId::UUID:
+		may_have_null = ConvertColumn<hugeint_t, PyObject *, duckdb_py_convert::UUIDConvert>(current_offset, dataptr,
+		                                                                                     maskptr, idata, count);
+		break;
+
 	default:
 		throw std::runtime_error("unsupported type " + input.GetType().ToString());
 	}
@@ -741,7 +771,7 @@ void NumpyResultConversion::Append(DataChunk &chunk, unordered_map<idx_t, py::li
 			D_ASSERT(categories);
 			// It's an ENUM type, in addition to converting the codes we must convert the categories
 			if (categories->find(col_idx) == categories->end()) {
-				auto categories_list(EnumType::GetValuesInsertOrder(chunk.data[col_idx].GetType()));
+				auto &categories_list = EnumType::GetValuesInsertOrder(chunk.data[col_idx].GetType());
 				auto categories_size = EnumType::GetSize(chunk.data[col_idx].GetType());
 				for (idx_t i = 0; i < categories_size; i++) {
 					(*categories)[col_idx].append(py::cast(categories_list.GetValue(i).ToString()));

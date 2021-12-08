@@ -15,11 +15,19 @@ def get_all_types():
 
 all_types = get_all_types()
 
-class Test2747(object):
+class TestAllTypes(object):
 	def test_fetchall(self, duckdb_cursor):
 		conn = duckdb.connect()	
-		# We skip those since the extreme ranges are not supported in python.
-		skip_types = {'date', 'timestamp', 'timestamp_s', 'timestamp_ns', 'timestamp_ms', 'date_tz', 'timestamp_tz'}
+		# We replace these values since the extreme ranges are not supported in native-python.
+		replacement_values = {
+			'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",
+			'timestamp_s': "'1990-01-01 00:00:00'::TIMESTAMP_S",
+			'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
+			'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
+			'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ",
+			'date': "'1990-01-01'::DATE",
+			'date_tz': "'1990-01-01'::DATETZ"}
+
 		correct_answer_map = {'bool':[(False,), (True,), (None,)]
 			, 'tinyint':[(-128,), (127,), (None,)], 'smallint': [(-32768,), (32767,), (None,)]
 			, 'int':[(-2147483648,), (2147483647,), (None,)],'bigint':[(-9223372036854775808,), (9223372036854775807,), (None,)]
@@ -37,14 +45,17 @@ class Test2747(object):
 			, 'nested_int_array': [([],), ([[], [42, 999, None, None, -42], None, [], [42, 999, None, None, -42]],), (None,)], 'struct': [({'a': None, 'b': None},), ({'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'},), (None,)]
 			, 'struct_of_arrays': [({'a': None, 'b': None},), ({'a': [42, 999, None, None, -42], 'b': ['🦆🦆🦆🦆🦆🦆', 'goose', None, '']},), (None,)]
 			, 'array_of_structs': [([],), ([{'a': None, 'b': None}, {'a': 42, 'b': '🦆🦆🦆🦆🦆🦆'}, None],), (None,)], 'map':[({'key': [], 'value': []},), ({'key': ['key1', 'key2'], 'value': ['🦆🦆🦆🦆🦆🦆', 'goose']},), (None,)] 
-			, 'time_tz':[(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)], 'interval': [(datetime.timedelta(0),), (datetime.timedelta(days=30969, seconds=999, microseconds=999999),), (None,)]}
+			, 'time_tz':[(datetime.time(0, 0),), (datetime.time(23, 59, 59, 999999),), (None,)], 'interval': [(datetime.timedelta(0),), (datetime.timedelta(days=30969, seconds=999, microseconds=999999),), (None,)]
+			, 'timestamp':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'date':[(datetime.date(1990, 1, 1),)], 'date_tz':[(datetime.date(1990, 1, 1),)], 'timestamp_s':[(datetime.datetime(1990, 1, 1, 0, 0),)]
+			, 'timestamp_ns':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_ms':[(datetime.datetime(1990, 1, 1, 0, 0),)], 'timestamp_tz':[(datetime.datetime(1990, 1, 1, 0, 0),)]}
 
 		for cur_type in all_types:
-			if cur_type not in skip_types:
+			if cur_type in replacement_values:
+				result = conn.execute("select "+replacement_values[cur_type]).fetchall()
+			else:
 				result = conn.execute("select "+cur_type+" from test_all_types()").fetchall()
-				print (result)
-				correct_result = correct_answer_map[cur_type]
-				assert result == correct_result
+			correct_result = correct_answer_map[cur_type]
+			assert result == correct_result
 
 	def test_arrow(self, duckdb_cursor):
 		try:
@@ -52,31 +63,40 @@ class Test2747(object):
 		except:
 			return
 		# We skip those since the extreme ranges are not supported in arrow.
-		skip_types = {'interval'}
+		replacement_values = {'interval': "INTERVAL '2 years'"}
 		# We do not round trip enum types
 		enum_types = {'small_enum', 'medium_enum', 'large_enum'}
 		conn = duckdb.connect()	
 		for cur_type in all_types:
-			if cur_type not in skip_types:
+			if cur_type in replacement_values:
+				arrow_table = conn.execute("select "+replacement_values[cur_type]).arrow()
+			else:	
 				arrow_table = conn.execute("select "+cur_type+" from test_all_types()").arrow()
-				if cur_type in enum_types:
-					round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
-					result_arrow = conn.execute("select * from arrow_table").fetchall()
-					result_roundtrip = conn.execute("select * from round_trip_arrow_table").fetchall()
-					assert result_arrow == result_roundtrip
-				else:
-					round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
-					assert arrow_table.equals(round_trip_arrow_table, check_metadata=True)
+			if cur_type in enum_types:
+				round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
+				result_arrow = conn.execute("select * from arrow_table").fetchall()
+				result_roundtrip = conn.execute("select * from round_trip_arrow_table").fetchall()
+				assert result_arrow == result_roundtrip
+			else:
+				round_trip_arrow_table = conn.execute("select * from arrow_table").arrow()
+				assert arrow_table.equals(round_trip_arrow_table, check_metadata=True)
 			
 	def test_pandas(self, duckdb_cursor):
 		# We skip those since the extreme ranges are not supported in python.
-		skip_types = {'date', 'timestamp', 'timestamp_s', 'timestamp_ns', 'timestamp_ms', 'date_tz', 'timestamp_tz'}
+		replacement_values = { 'timestamp': "'1990-01-01 00:00:00'::TIMESTAMP",
+			'timestamp_s': "'1990-01-01 00:00:00'::TIMESTAMP_S",
+			'timestamp_ns': "'1990-01-01 00:00:00'::TIMESTAMP_NS",
+			'timestamp_ms': "'1990-01-01 00:00:00'::TIMESTAMP_MS",
+			'timestamp_tz': "'1990-01-01 00:00:00'::TIMESTAMPTZ"}
+
 		conn = duckdb.connect()
 		for cur_type in all_types:
-			print (cur_type)
-			if cur_type not in skip_types:
-					dataframe = conn.execute("select "+cur_type+" from test_all_types()").arrow()
-					round_trip_dataframe = conn.execute("select * from dataframe").arrow()
-					result_dataframe = conn.execute("select * from dataframe").fetchall()
-					result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
-					assert result_dataframe == result_roundtrip
+			print(cur_type)
+			if cur_type in replacement_values:
+				dataframe = conn.execute("select "+replacement_values[cur_type]).df()
+			else:
+				dataframe = conn.execute("select "+cur_type+" from test_all_types()").df()
+			round_trip_dataframe = conn.execute("select * from dataframe").df()
+			result_dataframe = conn.execute("select * from dataframe").fetchall()
+			result_roundtrip = conn.execute("select * from round_trip_dataframe").fetchall()
+			assert result_dataframe == result_roundtrip

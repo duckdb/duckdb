@@ -27,9 +27,9 @@ public:
 
 	//! Convert a hugeint object to a uuid style string
 	static string ToString(hugeint_t input) {
-		char buff[36];
+		char buff[SIZE];
 		ToString(input, buff);
-		return string(buff, 36);
+		return string(buff, SIZE);
 	}
 
 	static hugeint_t FromString(string str) {
@@ -37,6 +37,7 @@ public:
 		FromString(str, result);
 		return result;
 	}
+	static const uint8_t SIZE = 36;
 };
 
 } // namespace duckdb

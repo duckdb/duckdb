@@ -614,7 +614,9 @@ void FillEnum(Vector &source, Vector &result, idx_t count) {
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 
-	Vector str_vec(EnumType::GetValuesInsertOrder(source.GetType()));
+	auto &str_vec = EnumType::GetValuesInsertOrder(source.GetType());
+	auto str_vec_ptr = FlatVector::GetData<string_t>(str_vec);
+
 	auto res_enum_type = result.GetType();
 
 	VectorData vdata;
@@ -633,7 +635,7 @@ void FillEnum(Vector &source, Vector &result, idx_t count) {
 			result_mask.SetInvalid(i);
 			continue;
 		}
-		auto str = str_vec.GetValue(source_data[src_idx]).ToString();
+		auto str = str_vec_ptr[source_data[src_idx]].GetString();
 		auto key = EnumType::GetPos(res_enum_type, str);
 		if (key == -1) {
 			// key doesn't exist on result enum
@@ -667,13 +669,17 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 	} else {
 		result.SetVectorType(VectorType::FLAT_VECTOR);
 	}
+	auto &str_vec = EnumType::GetValuesInsertOrder(source.GetType());
+	auto str_vec_ptr = FlatVector::GetData<string_t>(str_vec);
+	auto res_vec_ptr = FlatVector::GetData<string_t>(result);
+
 	for (idx_t i = 0; i < count; i++) {
 		auto src_val = source.GetValue(i);
 		if (src_val.is_null) {
 			result.SetValue(i, Value());
 			continue;
 		}
-		Vector str_vec(EnumType::GetValuesInsertOrder(source.GetType()));
+
 		uint64_t enum_idx;
 		switch (enum_physical_type) {
 		case PhysicalType::UINT8:
@@ -688,7 +694,7 @@ void EnumToVarchar(Vector &source, Vector &result, idx_t count, PhysicalType enu
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
-		result.SetValue(i, str_vec.GetValue(enum_idx));
+		res_vec_ptr[i] = str_vec_ptr[enum_idx];
 	}
 }
 

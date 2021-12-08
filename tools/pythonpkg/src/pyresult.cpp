@@ -408,15 +408,18 @@ py::str GetTypeToPython(const LogicalType &type) {
 	case LogicalTypeId::BLOB:
 		return py::str("BINARY");
 	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
 	case LogicalTypeId::TIMESTAMP_MS:
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::TIMESTAMP_SEC: {
 		return py::str("DATETIME");
 	}
-	case LogicalTypeId::TIME: {
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIME_TZ: {
 		return py::str("Time");
 	}
-	case LogicalTypeId::DATE: {
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::DATE_TZ: {
 		return py::str("Date");
 	}
 	case LogicalTypeId::MAP:
