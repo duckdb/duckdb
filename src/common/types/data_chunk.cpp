@@ -429,7 +429,7 @@ struct ArrowUUIDConversion {
 	}
 
 	static idx_t GetStringLength(uint64_t value) {
-		return UUID::SIZE;
+		return UUID::STRING_SIZE;
 	}
 
 	static string_t ConvertValue(Vector &tgt_vec, string_t *tgt_ptr, internal_type_t *src_ptr, idx_t row) {

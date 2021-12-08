@@ -16,6 +16,7 @@ namespace duckdb {
 //! The UUID class contains static operations for the UUID type
 class UUID {
 public:
+	constexpr static const uint8_t STRING_SIZE = 36;
 	//! Convert a uuid string to a hugeint object
 	static bool FromString(string str, hugeint_t &result);
 	//! Convert a uuid string to a hugeint object
@@ -27,9 +28,9 @@ public:
 
 	//! Convert a hugeint object to a uuid style string
 	static string ToString(hugeint_t input) {
-		char buff[SIZE];
+		char buff[STRING_SIZE];
 		ToString(input, buff);
-		return string(buff, SIZE);
+		return string(buff, STRING_SIZE);
 	}
 
 	static hugeint_t FromString(string str) {
@@ -37,7 +38,6 @@ public:
 		FromString(str, result);
 		return result;
 	}
-	static const uint8_t SIZE = 36;
 };
 
 } // namespace duckdb
