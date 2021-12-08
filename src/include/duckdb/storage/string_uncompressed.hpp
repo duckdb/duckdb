@@ -19,6 +19,10 @@ struct StringDictionaryContainer {
 	}
 };
 
+struct StringScanState : public SegmentScanState {
+	unique_ptr<BufferHandle> handle;
+};
+
 struct UncompressedStringStorage {
 public:
 	//! Dictionary header size at the beginning of the string segment (offset + length)
@@ -108,7 +112,6 @@ public:
 						return i;
 					}
 
-					// TODO only if we string is unseen
 					// we have space: write the string
 					UpdateStringStats(stats, source_data[source_idx]);
 

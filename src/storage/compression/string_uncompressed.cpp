@@ -68,10 +68,6 @@ idx_t UncompressedStringStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-struct StringScanState : public SegmentScanState {
-	unique_ptr<BufferHandle> handle;
-};
-
 unique_ptr<SegmentScanState> UncompressedStringStorage::StringInitScan(ColumnSegment &segment) {
 	auto result = make_unique<StringScanState>();
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
