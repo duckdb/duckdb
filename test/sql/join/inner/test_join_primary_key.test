@@ -2,6 +2,21 @@
 # description: Test joins with primary keys
 # group: [inner]
 
+statement ok
+create temporary table t as select range i, mod(range,10) j,mod(range,10)*10000000 k from range(1000);
+
+# use correlated expression inside the filter itself
+query I
+    SELECT
+ (select sum(t2.i) FILTER (where t.i = t2.i) from t as t2) sq
+FROM t
+where i < 5 ORDER BY sq
+----
+0
+1
+2
+3
+4
 
 statement ok
 CREATE TABLE integers1 AS SELECT * FROM (VALUES (1), (2), (10)) tbl(i);
@@ -131,20 +146,3 @@ NULL	NULL
 2	1
 3	NULL
 
-
-statement ok
-CREATE TABLE integers1 AS SELECT * FROM (VALUES (1), (2), (10)) tbl(i);
-
-statement ok
-CREATE TABLE integers2 AS SELECT * FROM (VALUES (2, 5), (3, 6), (4, 7)) tbl(i, j);
-
-statement ok
-PRAGMA explain_output = OPTIMIZED_ONLY;
-
-statement ok
-PRAGMA enable_verification
-
-query I
-SELECT i1.i FROM integers1 i1 JOIN integers2 i2 ON (i1.i=i2.i AND i1.i<i2.j);
-----
-2

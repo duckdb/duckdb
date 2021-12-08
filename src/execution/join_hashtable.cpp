@@ -624,6 +624,10 @@ void ScanStructure::NextSemiOrAntiJoin(DataChunk &keys, DataChunk &left, DataChu
 
 void ScanStructure::NextInnerUniqueKeysJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
 	D_ASSERT(keys.size() == left.size());
+	if (this->count == 0) {
+		// No more data to be read
+		return;
+	}
 	// first scan for key matches
 	ScanKeyMatches(keys);
 	// then construct the result from all tuples with a match
@@ -651,6 +655,8 @@ void ScanStructure::NextInnerUniqueKeysJoin(DataChunk &keys, DataChunk &left, Da
 	} else {
 		D_ASSERT(result.size() == 0);
 	}
+	// like the SEMI, ANTI, Single and MARK join types, the UNIQUE KEYS join only ever does one pass over the HT per input chunk
+	finished = true;
 }
 
 void ScanStructure::NextSemiJoin(DataChunk &keys, DataChunk &left, DataChunk &result) {
