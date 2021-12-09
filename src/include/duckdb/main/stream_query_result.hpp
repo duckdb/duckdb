@@ -14,16 +14,19 @@
 namespace duckdb {
 
 class ClientContext;
+class Executor;
 class MaterializedQueryResult;
 class PreparedStatementData;
 
 class StreamQueryResult : public QueryResult {
+	friend class ClientContext;
+
 public:
 	//! Create a successful StreamQueryResult. StreamQueryResults should always be successful initially (it makes no
 	//! sense to stream an error).
 	DUCKDB_API StreamQueryResult(StatementType statement_type, shared_ptr<ClientContext> context,
 	                             vector<LogicalType> types, vector<string> names,
-	                             shared_ptr<PreparedStatementData> prepared = nullptr);
+	                             shared_ptr<PreparedStatementData> prepared, unique_ptr<Executor> executor);
 	DUCKDB_API ~StreamQueryResult() override;
 
 public:
@@ -48,6 +51,8 @@ private:
 	shared_ptr<ClientContext> context;
 	//! The prepared statement data this StreamQueryResult was created with (if any)
 	shared_ptr<PreparedStatementData> prepared;
+	//! The query executor
+	unique_ptr<Executor> executor;
 
 	//! Whether or not the StreamQueryResult is still open
 	bool is_open;

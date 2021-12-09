@@ -44,12 +44,15 @@ class ScalarFunctionCatalogEntry;
 //! The ClientContext holds information relevant to the current client session
 //! during execution
 class ClientContext : public std::enable_shared_from_this<ClientContext> {
+	friend class PendingQueryResult;
 	friend class TransactionManager;
 
 public:
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
 
+	//! Query profiler
+	unique_ptr<QueryProfiler> profiler;
 	//! QueryProfiler History
 	unique_ptr<QueryProfilerHistory> query_profiler_history;
 	//! The database that this client is connected to
@@ -98,8 +101,6 @@ public:
 	//! Issues a query to the database and returns a Pending Query Result
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement);
 
-	//! Fetch a query from the current result set (if any)
-	DUCKDB_API unique_ptr<DataChunk> Fetch();
 	//! Cleanup the result set (if any).
 	DUCKDB_API void Cleanup();
 	//! Destroy the client context
@@ -151,6 +152,8 @@ public:
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
+	DUCKDB_API unique_ptr<DataChunk> Fetch(StreamQueryResult &result);
+
 private:
 	//! Parse statements and resolve pragmas from a query
 	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result, string &error);
@@ -168,25 +171,27 @@ private:
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
 	void CleanupInternal(ClientContextLock &lock);
 	string FinalizeQuery(ClientContextLock &lock, bool success);
-	//! Internal fetch, does not lock. Caller must hold the context_lock.
-	unique_ptr<DataChunk> FetchInternal(ClientContextLock &lock);
-	unique_ptr<QueryResult> RunStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
+	unique_ptr<PendingQueryResult> PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
 	                                                        unique_ptr<SQLStatement> statement,
 	                                                        shared_ptr<PreparedStatementData> &prepared,
-	                                                        vector<Value> *values, bool allow_stream_result);
+	                                                        vector<Value> *values);
+	unique_ptr<PendingQueryResult> PendingPreparedStatement(
+		ClientContextLock &lock,
+		shared_ptr<PreparedStatementData> statement_p,
+		vector<Value> bound_values);
 
 	//! Internally prepare a SQL statement. Caller must hold the context_lock.
 	shared_ptr<PreparedStatementData> CreatePreparedStatement(ClientContextLock &lock, const string &query,
 	                                                          unique_ptr<SQLStatement> statement);
-	//! Internally execute a prepared SQL statement. Caller must hold the context_lock.
-	unique_ptr<QueryResult> ExecutePreparedStatement(ClientContextLock &lock, const string &query,
-	                                                 shared_ptr<PreparedStatementData> statement,
-	                                                 vector<Value> bound_values, bool allow_stream_result);
-	//! Call CreatePreparedStatement() and ExecutePreparedStatement() without any bound values
+	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
+	                                             unique_ptr<SQLStatement> statement);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
+
+	unique_ptr<QueryResult> FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending, bool allow_stream_result);
+	unique_ptr<DataChunk> FetchInternal(ClientContextLock &lock, Executor &executor, BaseQueryResult &result);
 
 	unique_ptr<ClientContextLock> LockContext();
 
@@ -197,6 +202,18 @@ private:
 	BaseQueryResult *open_result = nullptr;
 	//! Lock on using the ClientContext in parallel
 	mutex context_lock;
+};
+
+class ClientContextLock {
+public:
+	explicit ClientContextLock(mutex &context_lock) : client_guard(context_lock) {
+	}
+
+	~ClientContextLock() {
+	}
+
+private:
+	lock_guard<mutex> client_guard;
 };
 
 } // namespace duckdb

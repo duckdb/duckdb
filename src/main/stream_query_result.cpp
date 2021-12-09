@@ -7,9 +7,9 @@ namespace duckdb {
 
 StreamQueryResult::StreamQueryResult(StatementType statement_type, shared_ptr<ClientContext> context,
                                      vector<LogicalType> types, vector<string> names,
-                                     shared_ptr<PreparedStatementData> prepared)
+                                     shared_ptr<PreparedStatementData> prepared, unique_ptr<Executor> executor_p)
     : QueryResult(QueryResultType::STREAM_RESULT, statement_type, move(types), move(names)),
-      context(move(context)), prepared(move(prepared)), is_open(true) {
+      context(move(context)), prepared(move(prepared)), executor(move(executor_p)), is_open(true) {
 }
 
 StreamQueryResult::~StreamQueryResult() {
@@ -32,7 +32,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchRaw() {
 		throw InvalidInputException(
 		    "Attempting to fetch from an unsuccessful or closed streaming query result\nError: %s", error);
 	}
-	auto chunk = context->Fetch();
+	auto chunk = context->Fetch(*this);
 	if (!chunk || chunk->ColumnCount() == 0 || chunk->size() == 0) {
 		Close();
 		return nullptr;

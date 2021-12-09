@@ -12,6 +12,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/client_context.hpp"
 #include <utility>
 #include <algorithm>
 
@@ -39,7 +40,7 @@ string QueryProfiler::GetSaveLocation() const {
 }
 
 QueryProfiler &QueryProfiler::Get(ClientContext &context) {
-	throw InternalException("FIXME: get query profiler");
+	return *context.profiler;
 }
 
 void QueryProfiler::StartQuery(string query, bool is_explain_analyze) {
