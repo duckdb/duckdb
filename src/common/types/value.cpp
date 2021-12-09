@@ -1128,7 +1128,7 @@ string Value::ToString() const {
 		default:
 			throw InternalException("ENUM can only have unsigned integers (except UINT64) as physical types");
 		}
-		return values_insert_order[enum_idx];
+		return values_insert_order.GetValue(enum_idx).ToString();
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for printing: %s", type_.ToString());

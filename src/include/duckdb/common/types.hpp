@@ -20,6 +20,7 @@ class Serializer;
 class Deserializer;
 class Value;
 class TypeCatalogEntry;
+class Vector;
 //! Type used to represent dates (days since 1970-01-01)
 struct date_t {
 	int32_t days;
@@ -474,7 +475,7 @@ public:
 	DUCKDB_API static LogicalType STRUCT( child_list_t<LogicalType> children);    // NOLINT
 	DUCKDB_API static LogicalType MAP( child_list_t<LogicalType> children);       // NOLINT
 	DUCKDB_API static LogicalType MAP(LogicalType key, LogicalType value); // NOLINT
-	DUCKDB_API static LogicalType ENUM(const string &enum_name, const vector<string> &ordered_data); // NOLINT
+	DUCKDB_API static LogicalType ENUM(const string &enum_name, Vector &ordered_data, idx_t size); // NOLINT
 	DUCKDB_API static LogicalType USER(const string &user_type_name); // NOLINT
 	//! A list of all NUMERIC types (integral and floating point types)
 	DUCKDB_API static const vector<LogicalType> NUMERIC;
@@ -504,9 +505,9 @@ struct UserType{
 struct EnumType{
 	DUCKDB_API static const string &GetTypeName(const LogicalType &type);
 	DUCKDB_API static int64_t GetPos(const LogicalType &type, const string& key);
-	DUCKDB_API static const vector<string> &GetValuesInsertOrder(const LogicalType &type);
+	DUCKDB_API static Vector &GetValuesInsertOrder(const LogicalType &type);
 	DUCKDB_API static idx_t GetSize(const LogicalType &type);
-	DUCKDB_API static const string& GetValue(const Value &val);
+	DUCKDB_API static const string GetValue(const Value &val);
 	DUCKDB_API static void SetCatalog(LogicalType &type, TypeCatalogEntry* catalog_entry);
 	DUCKDB_API static TypeCatalogEntry* GetCatalog(const LogicalType &type);
 	DUCKDB_API static PhysicalType GetPhysicalType(idx_t size);
