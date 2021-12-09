@@ -594,7 +594,7 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	if (length < 0) {
 		value = string(val);
 	} else {
-		value = string(val, val + length);
+		value = string(val, length);
 	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);
