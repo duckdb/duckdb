@@ -1,5 +1,5 @@
 #include "include/icu-datetrunc.hpp"
-#include "include/icu-collate.hpp"
+#include "include/icu-datefunc.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/enums/date_part_specifier.hpp"
@@ -10,47 +10,8 @@
 
 namespace duckdb {
 
-struct ICUDateTrunc {
-	using CalendarPtr = unique_ptr<icu::Calendar>;
+struct ICUDateTrunc : public ICUDateFunc {
 	typedef void (*part_truncator_t)(icu::Calendar *calendar, uint64_t &micros);
-
-	struct BindData : public FunctionData {
-		explicit BindData(CalendarPtr calendar_p) : calendar(move(calendar_p)) {
-		}
-
-		CalendarPtr calendar;
-
-		unique_ptr<FunctionData> Copy() override {
-			return make_unique<BindData>(CalendarPtr(calendar->clone()));
-		}
-	};
-
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
-		Value tz_value;
-		string tz_id;
-		if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
-			tz_id = tz_value.ToString();
-		}
-		auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id)));
-
-		UErrorCode success = U_ZERO_ERROR;
-		CalendarPtr calendar(icu::Calendar::createInstance(tz, success));
-		if (U_FAILURE(success)) {
-			throw Exception("Unable to create ICU DATETRUNC calendar.");
-		}
-
-		return make_unique<BindData>(move(calendar));
-	}
-
-	static int32_t ExtractField(icu::Calendar *calendar, UCalendarDateFields field) {
-		UErrorCode status = U_ZERO_ERROR;
-		const auto result = calendar->get(field, status);
-		if (U_FAILURE(status)) {
-			throw Exception("Unable to extract ICU date part.");
-		}
-		return result;
-	}
 
 	static void TruncMicrosecond(icu::Calendar *calendar, uint64_t &micros) {
 	}
@@ -157,7 +118,9 @@ struct ICUDateTrunc {
 			throw NotImplementedException("Specifier type not implemented for DATETRUNC");
 		}
 	}
-	static void BinaryFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+
+	template <typename T>
+	static void ICUDateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
 		auto &part_arg = args.data[0];
 		auto &date_arg = args.data[1];
@@ -166,37 +129,42 @@ struct ICUDateTrunc {
 		auto &info = (BindData &)*func_expr.bind_info;
 		CalendarPtr calendar(info.calendar->clone());
 
-		BinaryExecutor::Execute<string_t, timestamp_t, timestamp_t>(
-		    part_arg, date_arg, result, args.size(), [&](string_t specifier, timestamp_t input) {
-			    UErrorCode status = U_ZERO_ERROR;
-
-			    int64_t millis = input.value / Interval::MICROS_PER_MSEC;
-			    uint64_t micros = input.value % Interval::MICROS_PER_MSEC;
-			    const auto udate = UDate(millis);
-			    calendar->setTime(udate, status);
-			    if (U_FAILURE(status)) {
-				    throw Exception("Unable to compute ICU DATETRUNC.");
-			    }
-			    auto truncator = TruncatorFactory(GetDatePartSpecifier(specifier.GetString()));
-			    truncator(calendar.get(), micros);
-
-			    millis = int64_t(calendar->getTime(status));
-			    if (U_FAILURE(status)) {
-				    throw Exception("Unable to compute ICU DATETRUNC.");
-			    }
-			    millis *= Interval::MICROS_PER_MSEC;
-			    millis += micros;
-			    return timestamp_t(millis);
-		    });
+		if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			// Common case of constant part.
+			if (ConstantVector::IsNull(part_arg)) {
+				result.SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(result, true);
+			} else {
+				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
+				auto truncator = TruncatorFactory(GetDatePartSpecifier(specifier));
+				UnaryExecutor::Execute<T, timestamp_t>(date_arg, result, args.size(), [&](T input) {
+					auto micros = SetTime(calendar.get(), input);
+					truncator(calendar.get(), micros);
+					return GetTimeUnsafe(calendar.get(), micros);
+				});
+			}
+		} else {
+			BinaryExecutor::Execute<string_t, T, timestamp_t>(
+			    part_arg, date_arg, result, args.size(), [&](string_t specifier, T input) {
+				    auto truncator = TruncatorFactory(GetDatePartSpecifier(specifier.GetString()));
+				    auto micros = SetTime(calendar.get(), input);
+				    truncator(calendar.get(), micros);
+				    return GetTimeUnsafe(calendar.get(), micros);
+			    });
+		}
 	}
 
-	static ScalarFunction GetBinaryTimestampFunction(const string &name) {
-		return ScalarFunction(name, {LogicalType::VARCHAR, LogicalType::TIMESTAMP_TZ}, LogicalType::TIMESTAMP_TZ,
-		                      BinaryFunction, false, Bind);
+	template <typename TA>
+	static ScalarFunction GetDateTruncFunction(const LogicalTypeId &type) {
+		return ScalarFunction({LogicalType::VARCHAR, type}, LogicalType::TIMESTAMP_TZ, ICUDateTruncFunction<TA>, false,
+		                      Bind);
 	}
 
 	static void AddBinaryTimestampFunction(const string &name, ClientContext &context) {
-		CreateScalarFunctionInfo func_info(GetBinaryTimestampFunction(name));
+		ScalarFunctionSet set(name);
+		set.AddFunction(GetDateTruncFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+
+		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);
 		catalog.AddFunction(context, &func_info);
 	}
