@@ -2,7 +2,6 @@
 #include "include/icu-datefunc.hpp"
 
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
-#include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/common/vector_operations/binary_executor.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
@@ -11,8 +10,6 @@
 namespace duckdb {
 
 struct ICUDateTrunc : public ICUDateFunc {
-	typedef void (*part_truncator_t)(icu::Calendar *calendar, uint64_t &micros);
-
 	static void TruncMicrosecond(icu::Calendar *calendar, uint64_t &micros) {
 	}
 
@@ -81,44 +78,6 @@ struct ICUDateTrunc : public ICUDateFunc {
 		calendar->set(UCAL_YEAR, yyyy * 1000);
 	}
 
-	static part_truncator_t TruncatorFactory(DatePartSpecifier type) {
-		switch (type) {
-		case DatePartSpecifier::MILLENNIUM:
-			return TruncMillenium;
-		case DatePartSpecifier::CENTURY:
-			return TruncCentury;
-		case DatePartSpecifier::DECADE:
-			return TruncDecade;
-		case DatePartSpecifier::YEAR:
-			return TruncYear;
-		case DatePartSpecifier::QUARTER:
-			return TruncQuarter;
-		case DatePartSpecifier::MONTH:
-			return TruncMonth;
-		case DatePartSpecifier::WEEK:
-		case DatePartSpecifier::YEARWEEK:
-			return TruncWeek;
-		case DatePartSpecifier::DAY:
-		case DatePartSpecifier::DOW:
-		case DatePartSpecifier::ISODOW:
-		case DatePartSpecifier::DOY:
-			return TruncDay;
-		case DatePartSpecifier::HOUR:
-			return TruncHour;
-		case DatePartSpecifier::MINUTE:
-			return TruncMinute;
-		case DatePartSpecifier::SECOND:
-		case DatePartSpecifier::EPOCH:
-			return TruncSecond;
-		case DatePartSpecifier::MILLISECONDS:
-			return TruncMillisecond;
-		case DatePartSpecifier::MICROSECONDS:
-			return TruncMicrosecond;
-		default:
-			throw NotImplementedException("Specifier type not implemented for DATETRUNC");
-		}
-	}
-
 	template <typename T>
 	static void ICUDateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
@@ -136,7 +95,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 				ConstantVector::SetNull(result, true);
 			} else {
 				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
-				auto truncator = TruncatorFactory(GetDatePartSpecifier(specifier));
+				auto truncator = TruncationFactory(GetDatePartSpecifier(specifier));
 				UnaryExecutor::Execute<T, timestamp_t>(date_arg, result, args.size(), [&](T input) {
 					auto micros = SetTime(calendar.get(), input);
 					truncator(calendar.get(), micros);
@@ -146,7 +105,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 		} else {
 			BinaryExecutor::Execute<string_t, T, timestamp_t>(
 			    part_arg, date_arg, result, args.size(), [&](string_t specifier, T input) {
-				    auto truncator = TruncatorFactory(GetDatePartSpecifier(specifier.GetString()));
+				    auto truncator = TruncationFactory(GetDatePartSpecifier(specifier.GetString()));
 				    auto micros = SetTime(calendar.get(), input);
 				    truncator(calendar.get(), micros);
 				    return GetTimeUnsafe(calendar.get(), micros);
@@ -169,6 +128,44 @@ struct ICUDateTrunc : public ICUDateFunc {
 		catalog.AddFunction(context, &func_info);
 	}
 };
+
+ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type) {
+	switch (type) {
+	case DatePartSpecifier::MILLENNIUM:
+		return ICUDateTrunc::TruncMillenium;
+	case DatePartSpecifier::CENTURY:
+		return ICUDateTrunc::TruncCentury;
+	case DatePartSpecifier::DECADE:
+		return ICUDateTrunc::TruncDecade;
+	case DatePartSpecifier::YEAR:
+		return ICUDateTrunc::TruncYear;
+	case DatePartSpecifier::QUARTER:
+		return ICUDateTrunc::TruncQuarter;
+	case DatePartSpecifier::MONTH:
+		return ICUDateTrunc::TruncMonth;
+	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::YEARWEEK:
+		return ICUDateTrunc::TruncWeek;
+	case DatePartSpecifier::DAY:
+	case DatePartSpecifier::DOW:
+	case DatePartSpecifier::ISODOW:
+	case DatePartSpecifier::DOY:
+		return ICUDateTrunc::TruncDay;
+	case DatePartSpecifier::HOUR:
+		return ICUDateTrunc::TruncHour;
+	case DatePartSpecifier::MINUTE:
+		return ICUDateTrunc::TruncMinute;
+	case DatePartSpecifier::SECOND:
+	case DatePartSpecifier::EPOCH:
+		return ICUDateTrunc::TruncSecond;
+	case DatePartSpecifier::MILLISECONDS:
+		return ICUDateTrunc::TruncMillisecond;
+	case DatePartSpecifier::MICROSECONDS:
+		return ICUDateTrunc::TruncMicrosecond;
+	default:
+		throw NotImplementedException("Specifier type not implemented for ICU DATETRUNC");
+	}
+}
 
 void RegisterICUDateTruncFunctions(ClientContext &context) {
 	ICUDateTrunc::AddBinaryTimestampFunction("date_trunc", context);
