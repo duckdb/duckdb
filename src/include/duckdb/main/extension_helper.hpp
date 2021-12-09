@@ -30,7 +30,6 @@ private:
 
 private:
 	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);
-
 };
 
 } // namespace duckdb

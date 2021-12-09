@@ -49,7 +49,8 @@ ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string
 	return LoadExtensionInternal(db, extension, false);
 }
 
-ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load) {
+ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std::string &extension,
+                                                           bool initial_load) {
 #ifdef DUCKDB_TEST_REMOTE_INSTALL
 	if (!initial_load && StringUtil::Contains(DUCKDB_TEST_REMOTE_INSTALL, extension)) {
 		Connection con(db);

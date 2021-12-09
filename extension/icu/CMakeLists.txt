@@ -5,13 +5,13 @@ project(ICUExtension)
 include_directories(include)
 
 set(ICU_EXTENSION_FILES
-  icu-collate.cpp
-  icu-extension.cpp
-  icu-dateadd.cpp
-  icu-datefunc.cpp
-  icu-datepart.cpp
-  icu-datesub.cpp
-  icu-datetrunc.cpp)
+    icu-collate.cpp
+    icu-extension.cpp
+    icu-dateadd.cpp
+    icu-datefunc.cpp
+    icu-datepart.cpp
+    icu-datesub.cpp
+    icu-datetrunc.cpp)
 
 add_library(icu_extension STATIC ${ICU_EXTENSION_FILES})
 link_threads(icu_extension)
