@@ -207,15 +207,12 @@ jobs:
       run: |
         make
 
-    - name: Test
-      run: build/release/test/Debug/unittest.exe
-
     - name: Deploy
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
           pip install awscli
           ./scripts/extension-upload.sh windows_amd64
-          ./scripts/test-extension.sh
+          ./scripts/extension-upload-test.sh
         else
-          ./scripts/test-extension.sh local
+          ./scripts/extension-upload-test.sh local
         fi
