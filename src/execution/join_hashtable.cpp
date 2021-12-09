@@ -578,7 +578,7 @@ void ScanStructure::NextInnerJoin(DataChunk &keys, DataChunk &left, DataChunk &r
 	}
 }
 
-void ScanStructure::ScanKeyMatches(DataChunk &keys, SelectionVector &sel_vec) {
+idx_t ScanStructure::ScanKeyMatches(DataChunk &keys, SelectionVector &result_sel) {
 	// the semi-join, anti-join and mark-join we handle a differently from the inner join
 	// since there can be at most STANDARD_VECTOR_SIZE results
 	// we handle the entire chunk in one call to Next().
@@ -595,11 +595,12 @@ void ScanStructure::ScanKeyMatches(DataChunk &keys, SelectionVector &sel_vec) {
 		for (idx_t i = 0; i < match_count; i++) {
 			auto sel_index = match_sel.get_index(i);
 			found_match[sel_index] = true;
-			sel_vec.set_index(result_count++, sel_index);
+			result_sel.set_index(result_count++, sel_index);
 		}
 		// continue searching for the ones where we did not find a match yet
 		AdvancePointers(no_match_sel, no_match_count);
 	}
+	return result_count;
 }
 
 template <bool MATCH>
@@ -835,9 +836,9 @@ void ScanStructure::NextSingleJoin(DataChunk &keys, DataChunk &input, DataChunk 
 	// this join is similar to the semi join except that
 	// (1) we actually return data from the RHS and
 	// (2) we return NULL for that data if there is no match
-	idx_t result_count = 0;
 	SelectionVector result_sel(STANDARD_VECTOR_SIZE);
-	ScanKeyMatches(keys, result_sel);
+	auto result_count = ScanKeyMatches(keys, result_sel);
+
 	// reference the columns of the left side from the result
 	D_ASSERT(input.ColumnCount() > 0);
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
