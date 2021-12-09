@@ -20521,6 +20521,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv){
      || strcmp(z,"-nullvalue")==0
      || strcmp(z,"-newline")==0
      || strcmp(z,"-cmd")==0
+     || strcmp(z,"-c")==0
+     || strcmp(z,"-s")==0
     ){
       (void)cmdline_option_value(argc, argv, ++i);
     }else if( strcmp(z,"-init")==0 ){

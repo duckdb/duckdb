@@ -24,7 +24,7 @@ do
 		install_path=${f}
 	fi
 	echo ${install_path}
-	testext/duckdb ":memory:" -c "INSTALL '${install_path}'"
+	testext/duckdb -c "INSTALL '${install_path}'"
 	testext/duckdb -c "LOAD '${ext}'"
 done
 testext/test/unittest "*"
