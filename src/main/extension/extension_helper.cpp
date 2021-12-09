@@ -3,6 +3,7 @@
 #include "duckdb/common/windows.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/string_util.hpp"
 
 #ifdef BUILD_ICU_EXTENSION
 #include "icu-extension.hpp"
@@ -37,7 +38,7 @@ namespace duckdb {
 void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	unordered_set<string> extensions {"parquet", "icu", "tpch", "tpcds", "fts", "httpfs", "visualizer"};
 	for (auto &ext : extensions) {
-		LoadExtension(db, ext);
+		LoadExtensionInternal(db, ext, true);
 	}
 }
 
@@ -45,6 +46,26 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 // Load Statically Compiled Extension
 //===--------------------------------------------------------------------===//
 ExtensionLoadResult ExtensionHelper::LoadExtension(DuckDB &db, const std::string &extension) {
+	return LoadExtensionInternal(db, extension, false);
+}
+
+ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load) {
+#ifdef DUCKDB_TEST_REMOTE_INSTALL
+	if (!initial_load && StringUtil::Contains(DUCKDB_TEST_REMOTE_INSTALL, extension)) {
+		Connection con(db);
+		auto result = con.Query("INSTALL " + extension);
+		if (!result->success) {
+			result->Print();
+			return ExtensionLoadResult::EXTENSION_UNKNOWN;
+		}
+		result = con.Query("LOAD " + extension);
+		if (!result->success) {
+			result->Print();
+			return ExtensionLoadResult::EXTENSION_UNKNOWN;
+		}
+		return ExtensionLoadResult::LOADED_EXTENSION;
+	}
+#endif
 	if (extension == "parquet") {
 #ifdef BUILD_PARQUET_EXTENSION
 		db.LoadExtension<ParquetExtension>();

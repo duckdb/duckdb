@@ -27,6 +27,10 @@ public:
 
 private:
 	static const vector<string> PATH_COMPONENTS;
+
+private:
+	static ExtensionLoadResult LoadExtensionInternal(DuckDB &db, const std::string &extension, bool initial_load);
+
 };
 
 } // namespace duckdb

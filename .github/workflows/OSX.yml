@@ -120,4 +120,7 @@ jobs:
           if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
             pip install awscli
             ./scripts/extension-upload.sh osx_amd64
+            ./scripts/test-extension.sh
+          else
+            ./scripts/test-extension.sh local
           fi

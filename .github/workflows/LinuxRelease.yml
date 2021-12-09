@@ -97,6 +97,7 @@ jobs:
     name: Linux Extensions (64 Bit)
     runs-on: ubuntu-latest
     container: ubuntu:16.04
+    needs: linux-release-64
     env:
       GEN: ninja
       BUILD_VISUALIZER: 1
@@ -149,7 +150,11 @@ jobs:
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
           ./scripts/extension-upload.sh linux_amd64
+          ./scripts/test-extension.sh
+        else
+          ./scripts/test-extension.sh local
         fi
+
 
 
  linux-release-32:
