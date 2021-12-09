@@ -12,7 +12,7 @@ done
 mkdir -p testext
 cd testext
 cmake -DCMAKE_BUILD_TYPE=Release -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
-cmake --build .
+cmake --build . -j
 cd ..
 
 for f in $FILES
