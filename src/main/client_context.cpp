@@ -526,7 +526,12 @@ unique_ptr<QueryResult> ClientContext::Query(const string &query, bool allow_str
 		bool is_last_statement = i + 1 == statements.size();
 		bool stream_result = allow_stream_result && is_last_statement;
 		auto pending_query = PendingQueryInternal(*lock, move(statement));
-		auto current_result = ExecutePendingQueryInternal(*lock, *pending_query, stream_result);
+		unique_ptr<QueryResult> current_result;
+		if (!pending_query->success) {
+			current_result = make_unique<MaterializedQueryResult>(pending_query->error);
+		} else {
+			current_result = ExecutePendingQueryInternal(*lock, *pending_query, stream_result);
+		}
 		// now append the result to the list of results
 		if (!last_result) {
 			// first result of the query
