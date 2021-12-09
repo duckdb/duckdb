@@ -29,11 +29,12 @@ Vector ReadPgListToVector(duckdb_libpgquery::PGList *column_list, idx_t &size) {
 	}
 
 	Vector result(LogicalType::VARCHAR, size);
+	auto result_ptr = FlatVector::GetData<string_t>(result);
 
 	size = 0;
 	for (auto c = column_list->head; c != nullptr; c = lnext(c)) {
 		auto target = (duckdb_libpgquery::PGResTarget *)(c->data.ptr_value);
-		result.SetValue(size++, target->name);
+		result_ptr[size++] = StringVector::AddStringOrBlob(result, target->name);
 	}
 	return result;
 }
