@@ -31,7 +31,7 @@ do
 		install_path=${f}
 	fi
 	echo ${install_path}
-	testext/duckdb -c "INSTALL '${install_path}'"
-	testext/duckdb -c "LOAD '${ext}'"
+	${duckdb_path} -c "INSTALL '${install_path}'"
+	${duckdb_path} -c "LOAD '${ext}'"
 done
-testext/test/unittest "*"
+${unittest_path} "*"
