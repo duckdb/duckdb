@@ -181,22 +181,22 @@ constexpr const LogicalTypeId LogicalType::TABLE;
 constexpr const LogicalTypeId LogicalType::ANY;
 
 const vector<LogicalType> LogicalType::Numeric() {
-	const vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
-	                                   LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
-	                                   LogicalType::DOUBLE,    LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
-	                                   LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
+	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
+	                             LogicalType::BIGINT,    LogicalType::HUGEINT,   LogicalType::FLOAT,
+	                             LogicalType::DOUBLE,    LogicalTypeId::DECIMAL, LogicalType::UTINYINT,
+	                             LogicalType::USMALLINT, LogicalType::UINTEGER,  LogicalType::UBIGINT};
 	return types;
 }
 
 const vector<LogicalType> LogicalType::Integral() {
-	const vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
-	                                   LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
-	                                   LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
+	vector<LogicalType> types = {LogicalType::TINYINT,   LogicalType::SMALLINT, LogicalType::INTEGER,
+	                             LogicalType::BIGINT,    LogicalType::HUGEINT,  LogicalType::UTINYINT,
+	                             LogicalType::USMALLINT, LogicalType::UINTEGER, LogicalType::UBIGINT};
 	return types;
 }
 
 const vector<LogicalType> LogicalType::AllTypes() {
-	const vector<LogicalType> types = {
+	vector<LogicalType> types = {
 	    LogicalType::BOOLEAN,  LogicalType::TINYINT,   LogicalType::SMALLINT,  LogicalType::INTEGER,
 	    LogicalType::BIGINT,   LogicalType::DATE,      LogicalType::TIMESTAMP, LogicalType::DOUBLE,
 	    LogicalType::FLOAT,    LogicalType::VARCHAR,   LogicalType::BLOB,      LogicalType::INTERVAL,

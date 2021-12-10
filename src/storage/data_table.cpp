@@ -193,7 +193,7 @@ DataTable::DataTable(ClientContext &context, DataTable &parent, idx_t changed_id
 	vector<LogicalType> scan_types;
 	for (idx_t i = 0; i < bound_columns.size(); i++) {
 		if (bound_columns[i] == COLUMN_IDENTIFIER_ROW_ID) {
-			scan_types.push_back(LogicalType::ROW_TYPE);
+			scan_types.emplace_back(LogicalType::ROW_TYPE);
 		} else {
 			scan_types.push_back(parent.column_definitions[bound_columns[i]].type);
 		}
@@ -1029,7 +1029,7 @@ void DataTable::AddIndex(unique_ptr<Index> index, const vector<unique_ptr<Expres
 	for (auto &id : index->column_ids) {
 		intermediate_types.push_back(column_definitions[id].type);
 	}
-	intermediate_types.push_back(LogicalType::ROW_TYPE);
+	intermediate_types.emplace_back(LogicalType::ROW_TYPE);
 	intermediate.Initialize(intermediate_types);
 
 	// initialize an index scan

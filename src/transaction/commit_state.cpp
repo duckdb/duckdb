@@ -163,7 +163,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	} else {
 		update_types.push_back(column_data.type);
 	}
-	update_types.push_back(LogicalType::ROW_TYPE);
+	update_types.emplace_back(LogicalType::ROW_TYPE);
 
 	update_chunk = make_unique<DataChunk>();
 	update_chunk->Initialize(update_types);
