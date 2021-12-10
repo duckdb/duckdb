@@ -152,6 +152,9 @@ public:
 	//! Equivalent to CURRENT_SETTING(key) SQL function.
 	DUCKDB_API bool TryGetCurrentSetting(const std::string &key, Value &result);
 
+	//! Fetch a list of table names that are required for a given query
+	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
+
 private:
 	//! Parse statements from a query
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);

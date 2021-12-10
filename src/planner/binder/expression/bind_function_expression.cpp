@@ -46,6 +46,10 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 	if (!error.empty()) {
 		return BindResult(error);
 	}
+	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+		return BindResult(make_unique<BoundConstantExpression>(Value(LogicalType::SQLNULL)));
+	}
+
 	// all children bound successfully
 	// extract the children and types
 	vector<unique_ptr<Expression>> children;
