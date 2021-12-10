@@ -293,7 +293,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &result, const
                                      idx_t &approved_tuple_count, ValidityMask &mask) {
 	switch (filter.filter_type) {
 	case TableFilterType::CONJUNCTION_OR: {
-		// similar to the CONJUNCTION_AND, but we need to take cake of the SelectionVectors (OR all of them)
+		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
 		idx_t count_total = 0;
 		SelectionVector result_sel(approved_tuple_count);
 		auto &conjunction_or = (ConjunctionOrFilter &)filter;
