@@ -1003,12 +1003,19 @@ void FilterCombiner::LookUpConjunctions(Expression *expr) {
 			}
 		}
 
-		auto or_to_push = make_unique<OrToPush>();
-		or_to_push->root_or = root_or;
-		or_to_push->cur_conjunction = root_or;
-		ors_to_pushdown.emplace_back(move(or_to_push));
+		cur_or_to_push = make_unique<OrToPush>();
+		cur_or_to_push->root_or = root_or;
+		cur_or_to_push->cur_conjunction = root_or;
+		// ors_to_pushdown.emplace_back(move(or_to_push));
 
-		BFSLookUpConjunctions(root_or);
+		if (BFSLookUpConjunctions(root_or)) {
+			// ors_to_pushdown.erase(--ors_to_pushdown.end());
+			auto colref = cur_or_to_push->col_conjunction->column_ref;
+			map_colref_in_ors[colref] = colref;
+			ors_to_pushdown.emplace_back(move(cur_or_to_push));
+		}
+
+		cur_or_to_push.reset(nullptr);
 		return;
 	}
 
@@ -1016,9 +1023,9 @@ void FilterCombiner::LookUpConjunctions(Expression *expr) {
 	VerifyOrsToPush(*expr);
 }
 
-void FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjunction) {
+bool FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjunction) {
 	if (VerifyEarlyStopPushdown()) {
-		return;
+		return false;
 	}
 
 	vector<BoundConjunctionExpression *> conjunctions_to_visit;
@@ -1031,12 +1038,13 @@ void FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjuncti
 			break;
 		}
 		case ExpressionClass::BOUND_COMPARISON: {
-			UpdateConjunctionFilter((BoundComparisonExpression *)child.get(), *child);
+			if (!UpdateConjunctionFilter((BoundComparisonExpression *)child.get())) {
+				return false;
+			}
 			break;
 		}
 		default: {
-			SetEarlyStopPushdown(true);
-			return;
+			return false;
 		}
 		}
 	}
@@ -1044,18 +1052,24 @@ void FilterCombiner::BFSLookUpConjunctions(BoundConjunctionExpression *conjuncti
 	for (auto child_conjunction : conjunctions_to_visit) {
 		SetCurrentConjunction(child_conjunction);
 		// traverse child conjuction
-		BFSLookUpConjunctions(child_conjunction);
+		if (!BFSLookUpConjunctions(child_conjunction)) {
+			return false;
+		}
 	}
+	return true;
 }
 
 void FilterCombiner::VerifyOrsToPush(Expression &expr) {
 	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = (BoundColumnRefExpression &)expr;
-		for (auto &or_to_push : ors_to_pushdown) {
-			if (or_to_push->col_conjunction) {
-				// case we have the same column in AND expression, we should give priority to it
-				if (or_to_push->col_conjunction->column_ref->Equals(&colref)) {
-					or_to_push->stop_pushdown = true;
+		auto got = map_colref_in_ors.find(&colref);
+		if (got != map_colref_in_ors.end()) {
+			for (auto &or_to_push : ors_to_pushdown) {
+				if (or_to_push->col_conjunction) {
+					// case we have the same column in AND expression, we should give priority to it
+					if (or_to_push->col_conjunction->column_ref->Equals(&colref)) {
+						or_to_push->stop_pushdown = true;
+					}
 				}
 			}
 		}
@@ -1063,93 +1077,89 @@ void FilterCombiner::VerifyOrsToPush(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { VerifyOrsToPush(child); });
 }
 
-void FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr, Expression &expr) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		bool left_is_scalar = comparison_expr->left->IsFoldable();
-		bool right_is_scalar = comparison_expr->right->IsFoldable();
+bool FilterCombiner::UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr) {
+	bool left_is_scalar = comparison_expr->left->IsFoldable();
+	bool right_is_scalar = comparison_expr->right->IsFoldable();
+
+	Expression *non_scalar_expr;
+	if (left_is_scalar || right_is_scalar) {
 		// only support comparison with scalar
-		if (left_is_scalar || right_is_scalar) {
-			auto non_scalar_expr = left_is_scalar ? comparison_expr->right.get() : comparison_expr->left.get();
-			if (non_scalar_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
-				UpdateFilterByColumn((BoundColumnRefExpression *)&expr, comparison_expr);
-				return;
-			}
+		non_scalar_expr = left_is_scalar ? comparison_expr->right.get() : comparison_expr->left.get();
+
+		if (non_scalar_expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
+			return UpdateFilterByColumn((BoundColumnRefExpression *)non_scalar_expr, comparison_expr);
 		}
-		SetEarlyStopPushdown(true);
 	}
-	ExpressionIterator::EnumerateChildren(expr,
-	                                      [&](Expression &child) { UpdateConjunctionFilter(comparison_expr, child); });
+
+	return false;
 }
 
-void FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
+bool FilterCombiner::UpdateFilterByColumn(BoundColumnRefExpression *column_ref,
                                           BoundComparisonExpression *comparison_expr) {
-	auto &or_to_push = ors_to_pushdown.back();
-	if (or_to_push->col_conjunction == nullptr) {
-		or_to_push->col_conjunction = make_unique<ColConjunctionToPush>();
+	if (cur_or_to_push->col_conjunction == nullptr) {
+		cur_or_to_push->col_conjunction = make_unique<ColConjunctionToPush>();
 
-		or_to_push->col_conjunction->column_ref = column_ref;
+		cur_or_to_push->col_conjunction->column_ref = column_ref;
 
 		auto or_conjunction = make_unique<BoundConjunctionExpression>(ExpressionType::CONJUNCTION_OR);
 		or_conjunction->children.emplace_back(move(comparison_expr->Copy()));
 
-		or_to_push->col_conjunction->conjunctions.emplace_back(move(or_conjunction));
-		return;
+		cur_or_to_push->col_conjunction->conjunctions.emplace_back(move(or_conjunction));
+		return true;
 	}
 
-	auto col_conjunction = or_to_push->col_conjunction.get();
+	auto col_conjunction = cur_or_to_push->col_conjunction.get();
 
 	if (!col_conjunction->column_ref->Equals(column_ref)) {
-		// check for multiple colunms in the same root OR
-		if (or_to_push->root_or == or_to_push->cur_conjunction) {
-			or_to_push->stop_pushdown = true;
-			return;
+		// check for multiple colunms in the same root OR node
+		if (cur_or_to_push->root_or == cur_or_to_push->cur_conjunction) {
+			cur_or_to_push->stop_pushdown = true;
+			return false;
 		}
-		if (or_to_push->cur_conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
-			or_to_push->stop_pushdown = true;
-			return;
+		if (cur_or_to_push->cur_conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+			cur_or_to_push->stop_pushdown = true;
+			return false;
 		}
 
 		// found a different column, AND conditions cannot be preserved anymore
 		col_conjunction->preserve_and = false;
-		return;
+		return true;
 	} else {
-		if (or_to_push->cur_conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
+		if (cur_or_to_push->cur_conjunction->GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 			// AND conjuction found using this column
 			col_conjunction->and_conj_found = true;
 		}
 	}
 
 	auto &last_conjunction = col_conjunction->conjunctions.back();
-	if (or_to_push->cur_conjunction->GetExpressionType() == last_conjunction->GetExpressionType()) {
+	if (cur_or_to_push->cur_conjunction->GetExpressionType() == last_conjunction->GetExpressionType()) {
 		last_conjunction->children.emplace_back(move(comparison_expr->Copy()));
 	} else {
 		auto new_conjunction =
-		    make_unique<BoundConjunctionExpression>(or_to_push->cur_conjunction->GetExpressionType());
+		    make_unique<BoundConjunctionExpression>(cur_or_to_push->cur_conjunction->GetExpressionType());
 		new_conjunction->children.emplace_back(move(comparison_expr->Copy()));
 		col_conjunction->conjunctions.emplace_back(move(new_conjunction));
 	}
+	return true;
 }
 
 void FilterCombiner::SetCurrentConjunction(BoundConjunctionExpression *conjunction) {
-	D_ASSERT(ors_to_pushdown.size() > 0);
-	auto &or_to_push = ors_to_pushdown.back();
-	or_to_push->cur_conjunction = conjunction;
+	D_ASSERT(cur_or_to_push);
+	cur_or_to_push->cur_conjunction = conjunction;
 }
 
 void FilterCombiner::SetEarlyStopPushdown(bool value) {
-	D_ASSERT(ors_to_pushdown.size() > 0);
-	auto &or_to_push = ors_to_pushdown.back();
-	or_to_push->stop_pushdown = value;
+	D_ASSERT(cur_or_to_push);
+	cur_or_to_push->stop_pushdown = value;
 }
 
 bool FilterCombiner::VerifyEarlyStopPushdown() {
-	D_ASSERT(ors_to_pushdown.size() > 0);
-	auto &or_to_push = ors_to_pushdown.back();
-	if (or_to_push->stop_pushdown) {
+	D_ASSERT(cur_or_to_push);
+	if (cur_or_to_push->stop_pushdown) {
 		return true;
 	}
 
-	auto &col_conjunction = or_to_push->col_conjunction;
+	auto &col_conjunction = cur_or_to_push->col_conjunction;
 	if (col_conjunction) {
 		return col_conjunction->and_conj_found;
 	}

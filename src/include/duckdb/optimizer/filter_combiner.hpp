@@ -56,11 +56,11 @@ private:
 
 	//! Functions used to push and generate OR Filters
 	void LookUpConjunctions(Expression *expr);
-	void BFSLookUpConjunctions(BoundConjunctionExpression *conjunction);
+	bool BFSLookUpConjunctions(BoundConjunctionExpression *conjunction);
 	void VerifyOrsToPush(Expression &expr);
 
-	void UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr, Expression &expr);
-	void UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr);
+	bool UpdateConjunctionFilter(BoundComparisonExpression *comparison_expr);
+	bool UpdateFilterByColumn(BoundColumnRefExpression *column_ref, BoundComparisonExpression *comparison_expr);
 	void GenerateORFilters(TableFilterSet &table_filter, vector<idx_t> &column_ids);
 
 	void SetCurrentConjunction(BoundConjunctionExpression *conjunction);
@@ -127,7 +127,10 @@ private:
 		unique_ptr<ColConjunctionToPush> col_conjunction = nullptr;
 	};
 
+	unique_ptr<OrToPush> cur_or_to_push;
 	vector<unique_ptr<OrToPush>> ors_to_pushdown;
+	// map used as index to find column_refs inserted into OR filters to be pushed
+	expression_map_t<BoundColumnRefExpression *> map_colref_in_ors;
 };
 
 } // namespace duckdb
