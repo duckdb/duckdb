@@ -12,6 +12,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/main/config.hpp"
+#include "duckdb/planner/tableref/bound_dummytableref.hpp"
 
 namespace duckdb {
 
