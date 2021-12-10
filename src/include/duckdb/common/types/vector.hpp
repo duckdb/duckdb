@@ -289,7 +289,6 @@ struct FlatVector {
 	}
 	DUCKDB_API static const SelectionVector *IncrementalSelectionVector(idx_t count, SelectionVector &owned_sel);
 
-	static const sel_t INCREMENTAL_VECTOR[STANDARD_VECTOR_SIZE];
 	static const SelectionVector INCREMENTAL_SELECTION_VECTOR;
 };
 

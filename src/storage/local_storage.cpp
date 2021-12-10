@@ -125,7 +125,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 	if (count != chunk_count) {
 		sel.Initialize(valid_sel);
 	} else {
-		sel.Initialize((sel_t *)FlatVector::INCREMENTAL_VECTOR);
+		sel.Initialize(nullptr);
 	}
 	// now scan the vectors of the chunk
 	for (idx_t i = 0; i < column_ids.size(); i++) {
