@@ -11,6 +11,7 @@
 #include "duckdb.hpp"
 #include "icu-collate.hpp"
 
+#include "duckdb/common/enums/date_part_specifier.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -27,6 +28,7 @@ struct ICUDateFunc {
 		unique_ptr<FunctionData> Copy() override;
 	};
 
+	//! Binds a default calendar object for use by the function
 	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                     vector<unique_ptr<Expression>> &arguments);
 
@@ -36,26 +38,16 @@ struct ICUDateFunc {
 	static uint64_t SetTime(icu::Calendar *calendar, timestamp_t date);
 	//! Extracts the field from the calendar
 	static int32_t ExtractField(icu::Calendar *calendar, UCalendarDateFields field);
+	//! Subtracts the field of the given date from the calendar
+	static int64_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date);
 
-	template <typename TA, typename TB, typename TR, typename OP>
-	static void ExecuteBinary(DataChunk &args, ExpressionState &state, Vector &result) {
-		D_ASSERT(args.ColumnCount() == 2);
+	//! Truncates the calendar time to the given part precision
+	typedef void (*part_trunc_t)(icu::Calendar *calendar, uint64_t &micros);
+	static part_trunc_t TruncationFactory(DatePartSpecifier part);
 
-		auto &func_expr = (BoundFunctionExpression &)state.expr;
-		auto &info = (BindData &)*func_expr.bind_info;
-		CalendarPtr calendar(info.calendar->clone());
-
-		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, args.size(), [&](TA left, TB right) {
-			return OP::template Operation<TA, TB, TR>(left, right, calendar.get());
-		});
-	}
-
-	template <typename TA, typename TB, typename TR, typename OP>
-	inline static ScalarFunction GetBinaryDateFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type,
-	                                                   const LogicalTypeId &result_type) {
-		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, timestamp_t, OP>, false,
-		                      Bind);
-	}
+	//! Subtracts the two times at the given part precision
+	typedef int64_t (*part_sub_t)(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date);
+	static part_sub_t SubtractFactory(DatePartSpecifier part);
 };
 
 } // namespace duckdb

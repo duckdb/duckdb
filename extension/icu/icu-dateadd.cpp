@@ -83,6 +83,26 @@ timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval
 
 struct ICUDateAdd : public ICUDateFunc {
 
+	template <typename TA, typename TB, typename TR, typename OP>
+	static void ExecuteBinary(DataChunk &args, ExpressionState &state, Vector &result) {
+		D_ASSERT(args.ColumnCount() == 2);
+
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &info = (BindData &)*func_expr.bind_info;
+		CalendarPtr calendar(info.calendar->clone());
+
+		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, args.size(), [&](TA left, TB right) {
+			return OP::template Operation<TA, TB, TR>(left, right, calendar.get());
+		});
+	}
+
+	template <typename TA, typename TB, typename TR, typename OP>
+	inline static ScalarFunction GetBinaryDateFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type,
+	                                                   const LogicalTypeId &result_type) {
+		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, timestamp_t, OP>, false,
+		                      Bind);
+	}
+
 	template <typename TA, typename TB, typename OP>
 	static ScalarFunction GetDateAddFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type) {
 		return GetBinaryDateFunction<TA, TB, timestamp_t, OP>(left_type, right_type, LogicalType::TIMESTAMP_TZ);
