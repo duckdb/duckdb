@@ -15,6 +15,13 @@ cmake -DCMAKE_BUILD_TYPE=Release -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
 cmake --build . -j
 cd ..
 
+duckdb_path="testext/duckdb"
+unittest_path="testext/test/unittest"
+if [ ! -f "${duckdb_path}" ]; then
+	duckdb_path="testext/Release/duckdb"
+	unittest_path="testext/test/Release/unittest"
+fi
+
 for f in $FILES
 do
 	ext=`basename $f .duckdb_extension`
