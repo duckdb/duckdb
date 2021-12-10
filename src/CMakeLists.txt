@@ -12,6 +12,10 @@ endif()
 
 set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
 
+if(NOT MSVC)
+  set(CXX_EXTRA_DEBUG "${CXX_EXTRA_DEBUG} -Wexit-time-destructors")
+endif()
+
 if(MSVC OR MINGW)
   set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ws2_32)
 endif()

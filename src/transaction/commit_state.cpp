@@ -137,7 +137,7 @@ void CommitState::WriteDelete(DeleteInfo *info) {
 
 	if (!delete_chunk) {
 		delete_chunk = make_unique<DataChunk>();
-		vector<LogicalType> delete_types = {LOGICAL_ROW_TYPE};
+		vector<LogicalType> delete_types = {LogicalType::ROW_TYPE};
 		delete_chunk->Initialize(delete_types);
 	}
 	auto rows = FlatVector::GetData<row_t>(delete_chunk->data[0]);
@@ -163,7 +163,7 @@ void CommitState::WriteUpdate(UpdateInfo *info) {
 	} else {
 		update_types.push_back(column_data.type);
 	}
-	update_types.push_back(LOGICAL_ROW_TYPE);
+	update_types.push_back(LogicalType::ROW_TYPE);
 
 	update_chunk = make_unique<DataChunk>();
 	update_chunk->Initialize(update_types);

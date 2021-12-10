@@ -350,7 +350,7 @@ void RowGroup::TemplatedScan(Transaction *transaction, RowGroupScanState &state,
 			if (count != max_count) {
 				sel.Initialize(valid_sel);
 			} else {
-				sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
+				sel.Initialize((sel_t *)FlatVector::INCREMENTAL_VECTOR);
 			}
 			//! first, we scan the columns with filters, fetch their data and generate a selection vector.
 			//! get runtime statistics

@@ -55,7 +55,7 @@ void LogicalGet::ResolveTypes() {
 	}
 	for (auto &index : column_ids) {
 		if (index == COLUMN_IDENTIFIER_ROW_ID) {
-			types.push_back(LOGICAL_ROW_TYPE);
+			types.push_back(LogicalType::ROW_TYPE);
 		} else {
 			types.push_back(returned_types[index]);
 		}

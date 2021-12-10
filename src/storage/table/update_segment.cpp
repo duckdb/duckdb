@@ -938,7 +938,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 				update_data[i] = segment->GetStringHeap().AddString(update_data[i]);
 			}
 		}
-		sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
+		sel.Initialize((sel_t *)FlatVector::INCREMENTAL_VECTOR);
 		return count;
 	} else {
 		idx_t not_null_count = 0;

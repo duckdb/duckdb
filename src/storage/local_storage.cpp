@@ -125,7 +125,7 @@ void LocalStorage::Scan(LocalScanState &state, const vector<column_t> &column_id
 	if (count != chunk_count) {
 		sel.Initialize(valid_sel);
 	} else {
-		sel.Initialize(FlatVector::INCREMENTAL_SELECTION_VECTOR);
+		sel.Initialize((sel_t *)FlatVector::INCREMENTAL_VECTOR);
 	}
 	// now scan the vectors of the chunk
 	for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -177,7 +177,7 @@ void LocalStorage::Append(DataTable *table, DataChunk &chunk) {
 		idx_t base_id = MAX_ROW_ID + storage->collection.Count();
 
 		// first generate the vector of row identifiers
-		Vector row_ids(LOGICAL_ROW_TYPE);
+		Vector row_ids(LogicalType::ROW_TYPE);
 		VectorOperations::GenerateSequence(row_ids, chunk.size(), base_id, 1);
 
 		// now append the entries to the indices
@@ -296,7 +296,7 @@ static void TemplatedUpdateLoop(Vector &data_vector, Vector &update_vector, Vect
 
 static void UpdateChunk(Vector &data, Vector &updates, Vector &row_ids, idx_t count, idx_t base_index) {
 	D_ASSERT(data.GetType() == updates.GetType());
-	D_ASSERT(row_ids.GetType() == LOGICAL_ROW_TYPE);
+	D_ASSERT(row_ids.GetType() == LogicalType::ROW_TYPE);
 
 	switch (data.GetType().InternalType()) {
 	case PhysicalType::INT8:
