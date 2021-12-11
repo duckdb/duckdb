@@ -18,8 +18,8 @@ cd ..
 duckdb_path="testext/duckdb"
 unittest_path="testext/test/unittest"
 if [ ! -f "${duckdb_path}" ]; then
-	duckdb_path="testext/Release/duckdb"
-	unittest_path="testext/test/Release/unittest"
+	duckdb_path="testext/Release/duckdb.exe"
+	unittest_path="testext/test/Release/unittest.exe"
 fi
 
 for f in $FILES
