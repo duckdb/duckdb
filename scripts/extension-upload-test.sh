@@ -18,7 +18,7 @@ cd ..
 duckdb_path="testext/duckdb"
 unittest_path="testext/test/unittest"
 if [ ! -f "${duckdb_path}" ]; then
-	duckdb_path="testext/Release/duckdb.exe"
+	duckdb_path="Release/duckdb.exe"
 	unittest_path="testext/test/Release/unittest.exe"
 fi
 

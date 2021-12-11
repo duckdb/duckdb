@@ -10,11 +10,8 @@ if(NOT MSVC)
   )
 endif()
 if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-  set(CMAKE_CXX_FLAGS_DEBUG
-      "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors"
-  )
+  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wexit-time-destructors")
 endif()
-
 
 set(DUCKDB_SYSTEM_LIBS ${CMAKE_DL_LIBS})
 
