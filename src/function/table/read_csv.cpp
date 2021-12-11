@@ -18,6 +18,10 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, vector<Value
                                             unordered_map<string, Value> &named_parameters,
                                             vector<LogicalType> &input_table_types, vector<string> &input_table_names,
                                             vector<LogicalType> &return_types, vector<string> &names) {
+	auto &config = DBConfig::GetConfig(context);
+	if (!config.enable_external_access) {
+		throw PermissionException("Scanning CSV files is disabled through configuration");
+	}
 	auto result = make_unique<ReadCSVData>();
 	auto &options = result->options;
 

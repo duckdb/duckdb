@@ -1,7 +1,6 @@
 #include "include/icu-dateadd.hpp"
-#include "include/icu-collate.hpp"
+#include "include/icu-datefunc.hpp"
 
-#include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/operator/add.hpp"
@@ -82,37 +81,7 @@ timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval
 	return ICUCalendarAdd::template Operation<timestamp_t, interval_t, timestamp_t>(timestamp, negated, calendar);
 }
 
-struct ICUDateAdd {
-	using CalendarPtr = unique_ptr<icu::Calendar>;
-
-	struct BindData : public FunctionData {
-		explicit BindData(CalendarPtr calendar_p) : calendar(move(calendar_p)) {
-		}
-
-		CalendarPtr calendar;
-
-		unique_ptr<FunctionData> Copy() override {
-			return make_unique<BindData>(CalendarPtr(calendar->clone()));
-		}
-	};
-
-	static unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
-	                                     vector<unique_ptr<Expression>> &arguments) {
-		Value tz_value;
-		string tz_id;
-		if (context.TryGetCurrentSetting("TimeZone", tz_value)) {
-			tz_id = tz_value.ToString();
-		}
-		auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id)));
-
-		UErrorCode success = U_ZERO_ERROR;
-		CalendarPtr calendar(icu::Calendar::createInstance(tz, success));
-		if (U_FAILURE(success)) {
-			throw Exception("Unable to create ICU DATEADD calendar.");
-		}
-
-		return make_unique<BindData>(move(calendar));
-	}
+struct ICUDateAdd : public ICUDateFunc {
 
 	template <typename TA, typename TB, typename TR, typename OP>
 	static void ExecuteBinary(DataChunk &args, ExpressionState &state, Vector &result) {
@@ -127,19 +96,25 @@ struct ICUDateAdd {
 		});
 	}
 
+	template <typename TA, typename TB, typename TR, typename OP>
+	inline static ScalarFunction GetBinaryDateFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type,
+	                                                   const LogicalTypeId &result_type) {
+		return ScalarFunction({left_type, right_type}, result_type, ExecuteBinary<TA, TB, timestamp_t, OP>, false,
+		                      Bind);
+	}
+
 	template <typename TA, typename TB, typename OP>
-	static ScalarFunction GetDateIntervalOperator(const LogicalTypeId &left_type, const LogicalTypeId &right_type) {
-		return ScalarFunction({left_type, right_type}, LogicalType::TIMESTAMP_TZ,
-		                      ExecuteBinary<TA, TB, timestamp_t, OP>, false, Bind);
+	static ScalarFunction GetDateAddFunction(const LogicalTypeId &left_type, const LogicalTypeId &right_type) {
+		return GetBinaryDateFunction<TA, TB, timestamp_t, OP>(left_type, right_type, LogicalType::TIMESTAMP_TZ);
 	}
 
 	static void AddDateAddOperators(const string &name, ClientContext &context) {
 		//	temporal + interval
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetDateIntervalOperator<timestamp_t, interval_t, ICUCalendarAdd>(LogicalType::TIMESTAMP_TZ,
-		                                                                                 LogicalType::INTERVAL));
-		set.AddFunction(GetDateIntervalOperator<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
-		                                                                                 LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetDateAddFunction<timestamp_t, interval_t, ICUCalendarAdd>(LogicalType::TIMESTAMP_TZ,
+		                                                                            LogicalType::INTERVAL));
+		set.AddFunction(GetDateAddFunction<interval_t, timestamp_t, ICUCalendarAdd>(LogicalType::INTERVAL,
+		                                                                            LogicalType::TIMESTAMP_TZ));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);
@@ -149,8 +124,8 @@ struct ICUDateAdd {
 	static void AddDateSubOperators(const string &name, ClientContext &context) {
 		//	temporal - interval
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetDateIntervalOperator<timestamp_t, interval_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
-		                                                                                 LogicalType::INTERVAL));
+		set.AddFunction(GetDateAddFunction<timestamp_t, interval_t, ICUCalendarSub>(LogicalType::TIMESTAMP_TZ,
+		                                                                            LogicalType::INTERVAL));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);

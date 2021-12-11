@@ -67,8 +67,7 @@ void SortedData::Unswizzle() {
 		auto &heap_block = heap_blocks[i];
 		auto data_handle_p = buffer_manager.Pin(data_block.block);
 		auto heap_handle_p = buffer_manager.Pin(heap_block.block);
-		RowOperations::UnswizzleHeapPointer(layout, data_handle_p->Ptr(), heap_handle_p->Ptr(), data_block.count);
-		RowOperations::UnswizzleColumns(layout, data_handle_p->Ptr(), data_block.count);
+		RowOperations::UnswizzlePointers(layout, data_handle_p->Ptr(), heap_handle_p->Ptr(), data_block.count);
 		state.heap_blocks.push_back(move(heap_block));
 		state.pinned_blocks.push_back(move(heap_handle_p));
 	}
@@ -314,9 +313,7 @@ void PayloadScanner::Scan(DataChunk &chunk) {
 		}
 		// Unswizzle the offsets back to pointers (if needed)
 		if (!sorted_data.layout.AllConstant() && global_sort_state.external) {
-			RowOperations::UnswizzleHeapPointer(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(),
-			                                    next);
-			RowOperations::UnswizzleColumns(sorted_data.layout, data_ptr, next);
+			RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(), next);
 		}
 		// Update state indices
 		read_state.entry_idx += next;

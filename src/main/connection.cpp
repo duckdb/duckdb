@@ -195,6 +195,10 @@ shared_ptr<Relation> Connection::ReadCSV(const string &csv_file, const vector<st
 	return make_shared<ReadCSVRelation>(*context, csv_file, move(column_list));
 }
 
+unordered_set<string> Connection::GetTableNames(const string &query) {
+	return context->GetTableNames(query);
+}
+
 shared_ptr<Relation> Connection::RelationFromQuery(const string &query, const string &alias) {
 	return make_shared<QueryRelation>(*context, query, alias);
 }
