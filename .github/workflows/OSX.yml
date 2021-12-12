@@ -114,7 +114,7 @@ jobs:
 
     - name: Deploy
       run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ -a "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             pip install awscli
             ./scripts/extension-upload.sh osx_amd64
             ./scripts/extension-upload-test.sh
