@@ -145,7 +145,7 @@ jobs:
 
     - name: Deploy
       run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ -a "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           ./scripts/extension-upload.sh linux_amd64
           ./scripts/extension-upload-test.sh
         else
