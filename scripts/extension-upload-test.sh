@@ -2,7 +2,10 @@
 
 set -e
 
-FILES="build/release/extension/*/*.duckdb_extension"
+CMAKE_CONFIG=Release
+EXT_BASE_PATH=build/release
+
+FILES="${EXT_BASE_PATH}/extension/*/*.duckdb_extension"
 EXTENSION_LIST=""
 for f in $FILES
 do
@@ -11,15 +14,15 @@ do
 done
 mkdir -p testext
 cd testext
-cmake -DCMAKE_BUILD_TYPE=Release -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
-cmake --build . -j --config Release
+cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
+cmake --build . -j --config ${CMAKE_CONFIG}
 cd ..
 
 duckdb_path="testext/duckdb"
 unittest_path="testext/test/unittest"
 if [ ! -f "${duckdb_path}" ]; then
-	duckdb_path="testext/Release/duckdb.exe"
-	unittest_path="testext/test/Release/unittest.exe"
+	duckdb_path="testext/${CMAKE_CONFIG}/duckdb.exe"
+	unittest_path="testext/test/${CMAKE_CONFIG}/unittest.exe"
 fi
 
 for f in $FILES

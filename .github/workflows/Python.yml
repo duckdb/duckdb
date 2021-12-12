@@ -93,7 +93,7 @@ jobs:
     - name: Deploy aarch64
       if: ${{ matrix.arch == 'aarch64' }}
       run: |
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ ]] ; then
+        if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ -a "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           twine upload --non-interactive --disable-progress-bar --skip-existing tools/pythonpkg/wheelhouse/*.whl
         fi
 
