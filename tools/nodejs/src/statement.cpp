@@ -137,7 +137,6 @@ static Napi::Value convert_chunk(Napi::Env &env, std::vector<std::string> names,
 			Napi::Value value;
 
 			auto dval = chunk.GetValue(col_idx, row_idx);
-
 			if (dval.is_null) {
 				row_result.Set(node_names[col_idx], env.Null());
 				continue;
