@@ -12,13 +12,13 @@ done
 mkdir -p testext
 cd testext
 cmake -DCMAKE_BUILD_TYPE=Release -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
-cmake --build . -j
+cmake --build . -j --config Release
 cd ..
 
 duckdb_path="testext/duckdb"
 unittest_path="testext/test/unittest"
 if [ ! -f "${duckdb_path}" ]; then
-	duckdb_path="Release/duckdb.exe"
+	duckdb_path="testext/Release/duckdb.exe"
 	unittest_path="testext/test/Release/unittest.exe"
 fi
 
@@ -34,4 +34,4 @@ do
 	${duckdb_path} -c "INSTALL '${install_path}'"
 	${duckdb_path} -c "LOAD '${ext}'"
 done
-${unittest_path} "*"
+${unittest_path}
