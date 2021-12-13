@@ -9,7 +9,7 @@
 namespace duckdb {
 
 QualifyBinder::QualifyBinder(Binder &binder, ClientContext &context, BoundSelectNode &node, BoundGroupInformation &info,
-                           unordered_map<string, idx_t> &alias_map)
+                             unordered_map<string, idx_t> &alias_map)
     : SelectBinder(binder, context, node, info), column_alias_binder(node, alias_map) {
 	target_type = LogicalType(LogicalTypeId::BOOLEAN);
 }
