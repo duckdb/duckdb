@@ -16,7 +16,7 @@ done
 mkdir -p testext
 cd testext
 cmake -DCMAKE_BUILD_TYPE=${CMAKE_CONFIG} -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
-cmake --build . -j --config ${CMAKE_CONFIG}
+cmake --build . --config ${CMAKE_CONFIG}
 cd ..
 
 duckdb_path="testext/duckdb"

@@ -65,54 +65,7 @@ jobs:
       run: |
         if [[ "$GITHUB_REF" =~ ^(refs/heads/master|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
           ./scripts/extension-upload.sh linux_amd64
+          ./scripts/extension-upload-test.sh
+        else
+          ./scripts/extension-upload-test.sh local
         fi
-
-    - name: Build Test Extension
-      run: |
-        echo "Hello World"
-        FILES="build/release/extension/*/*.duckdb_extension"
-        EXTENSION_LIST=""
-        for f in $FILES
-        do
-          ext=`basename $f .duckdb_extension`
-          echo $ext
-          EXTENSION_LIST="${EXTENSION_LIST}-$ext"
-        done
-        export FILES
-        export EXTENSION_LIST
-        echo ${EXTENSION_LIST}
-
-    - name: Build Test Extension 2
-      run: |
-        mkdir -p testext
-        cd testext
-        cmake -DCMAKE_BUILD_TYPE=Release -DTEST_REMOTE_INSTALL="${EXTENSION_LIST}" ..
-        cmake --build . --config Release
-        cd ..
-
-    # - name: Run Install Commands
-    #   run: |
-    #     FILES="build/release/extension/*/*.duckdb_extension"
-    #     EXTENSION_LIST=""
-    #     for f in $FILES
-    #     do
-    #       ext=`basename $f .duckdb_extension`
-    #       EXTENSION_LIST="${EXTENSION_LIST}-$ext"
-    #     done
-    #     for f in $FILES
-    #     do
-    #       ext=`basename $f .duckdb_extension`
-    #       install_path=${ext}
-    #       if [ "$1" = "local" ]
-    #       then
-    #         install_path=${f}
-    #       fi
-    #       echo ${install_path}
-    #       testext/duckdb -c "INSTALL '${install_path}'"
-    #       testext/duckdb -c "LOAD '${ext}'"
-    #     done
-
-    # - name: Run Tests
-    #   run: |
-    #    testext/test/unittest
-
