@@ -78,7 +78,8 @@ unique_ptr<GlobalSinkState> PhysicalPiecewiseMergeJoin::GetGlobalSinkState(Clien
 	rhs_layout.Initialize(types);
 	auto state = make_unique<MergeJoinGlobalState>(BufferManager::GetBufferManager(context), rhs_orders, rhs_layout);
 	// Set external (can be force with the PRAGMA)
-	state->rhs_global_sort_state.external = context.force_external;
+	auto &config = ClientConfig::GetConfig(context);
+	state->rhs_global_sort_state.external = config.force_external;
 	// Memory usage per thread should scale with max mem / num threads
 	// We take 1/4th of this, to be conservative
 	idx_t max_memory = BufferManager::GetBufferManager(context).GetMaxMemory();
@@ -329,7 +330,8 @@ public:
 
 unique_ptr<OperatorState> PhysicalPiecewiseMergeJoin::GetOperatorState(ClientContext &context) const {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	return make_unique<PiecewiseMergeJoinState>(*this, buffer_manager, context.force_external);
+	auto &config = ClientConfig::GetConfig(context);
+	return make_unique<PiecewiseMergeJoinState>(*this, buffer_manager, config.force_external);
 }
 
 static inline idx_t SortedBlockNotNull(const idx_t base, const idx_t count, const idx_t not_null) {
@@ -367,14 +369,15 @@ static void SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const i
                                const idx_t left_cols = 0) {
 	// There should only be one sorted block if they have been sorted
 	D_ASSERT(info.state.sorted_blocks.size() == 1);
-	auto &sorted_data = *info.state.sorted_blocks[0]->payload_data;
-	sorted_data.block_idx = info.block_idx;
-	sorted_data.Pin();
+	SBScanState read_state(info.state.buffer_manager, info.state);
+	read_state.sb = info.state.sorted_blocks[0].get();
+	auto &sorted_data = *read_state.sb->payload_data;
 
 	// We have to create pointers for the entire block
 	// because unswizzle works on ranges not selections.
-	const idx_t &row_width = sorted_data.layout.GetRowWidth();
-	const auto data_ptr = sorted_data.DataPtr() + info.base_idx * row_width;
+	read_state.SetIndices(info.block_idx, info.base_idx);
+	read_state.PinData(sorted_data);
+	const auto data_ptr = read_state.DataPtr(sorted_data);
 	const auto next = vcount - info.base_idx;
 
 	// Set up a batch of pointers to scan data from
@@ -383,14 +386,14 @@ static void SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const i
 
 	// Set up the data pointers
 	data_ptr_t row_ptr = data_ptr;
+	const idx_t &row_width = sorted_data.layout.GetRowWidth();
 	for (idx_t i = 0; i < next; ++i) {
 		data_pointers[i] = row_ptr;
 		row_ptr += row_width;
 	}
 	// Unswizzle the offsets back to pointers (if needed)
 	if (!sorted_data.layout.AllConstant() && info.state.external) {
-		RowOperations::UnswizzleHeapPointer(sorted_data.layout, data_ptr, sorted_data.heap_handle->Ptr(), next);
-		RowOperations::UnswizzleColumns(sorted_data.layout, data_ptr, next);
+		RowOperations::UnswizzlePointers(sorted_data.layout, data_ptr, read_state.payload_heap_handle->Ptr(), next);
 	}
 
 	// Deserialize the payload data
@@ -399,6 +402,21 @@ static void SliceSortedPayload(DataChunk &payload, BlockMergeInfo &info, const i
 		RowOperations::Gather(addresses, info.result, payload.data[left_cols + col_idx],
 		                      FlatVector::INCREMENTAL_SELECTION_VECTOR, result_count, col_offset, col_idx);
 	}
+}
+
+static void MergeJoinPinSortingBlock(SBScanState &scan, const idx_t block_idx) {
+	scan.SetIndices(block_idx, 0);
+	scan.PinRadix(block_idx);
+
+	auto &sd = *scan.sb->blob_sorting_data;
+	if (block_idx < sd.data_blocks.size()) {
+		scan.PinData(sd);
+	}
+}
+
+static data_ptr_t MergeJoinRadixPtr(SBScanState &scan, const idx_t entry_idx) {
+	scan.entry_idx = entry_idx;
+	return scan.RadixPtr();
 }
 
 static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlobalState &rstate, bool *found_match,
@@ -415,28 +433,26 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 
 	// There should only be one sorted block if they have been sorted
 	D_ASSERT(lsort.sorted_blocks.size() == 1);
-	auto &lsorted = *lsort.sorted_blocks[0];
-	D_ASSERT(lsorted.radix_sorting_data.size() == 1);
+	SBScanState lread(lsort.buffer_manager, lsort);
+	lread.sb = lsort.sorted_blocks[0].get();
+
 	const idx_t l_block_idx = 0;
 	idx_t l_entry_idx = 0;
-	lsorted.PinRadix(l_block_idx);
-	if (!all_constant) {
-		lsorted.blob_sorting_data->ResetIndices(l_block_idx, l_entry_idx);
-		lsorted.blob_sorting_data->Pin();
-	}
 	const auto lhs_not_null = lstate.lhs_count - lstate.lhs_has_null;
+	MergeJoinPinSortingBlock(lread, l_block_idx);
 
 	D_ASSERT(rsort.sorted_blocks.size() == 1);
-	auto &rsorted = *rsort.sorted_blocks[0];
+	SBScanState rread(rsort.buffer_manager, rsort);
+	rread.sb = rsort.sorted_blocks[0].get();
 
 	idx_t right_base = 0;
-	for (idx_t r_block_idx = 0; r_block_idx < rsorted.radix_sorting_data.size(); r_block_idx++) {
+	for (idx_t r_block_idx = 0; r_block_idx < rread.sb->radix_sorting_data.size(); r_block_idx++) {
 		// we only care about the BIGGEST value in each of the RHS data blocks
 		// because we want to figure out if the LHS values are less than [or equal] to ANY value
 		// get the biggest value from the RHS chunk
-		rsorted.PinRadix(r_block_idx);
+		MergeJoinPinSortingBlock(rread, r_block_idx);
 
-		auto &rblock = rsorted.radix_sorting_data[r_block_idx];
+		auto &rblock = rread.sb->radix_sorting_data[r_block_idx];
 		const auto r_not_null = SortedBlockNotNull(right_base, rblock.count, rstate.rhs_count - rstate.rhs_has_null);
 		if (0 == r_not_null) {
 			break;
@@ -444,22 +460,18 @@ static idx_t MergeJoinSimpleBlocks(PiecewiseMergeJoinState &lstate, MergeJoinGlo
 		const auto r_entry_idx = r_not_null - 1;
 		right_base += rblock.count;
 
-		auto r_ptr = rsorted.radix_handle->Ptr() + r_entry_idx * rsort.sort_layout.entry_size;
-		if (!all_constant) {
-			rsorted.blob_sorting_data->ResetIndices(r_block_idx, r_entry_idx);
-			rsorted.blob_sorting_data->Pin();
-		}
+		auto r_ptr = MergeJoinRadixPtr(rread, r_entry_idx);
 
 		// now we start from the current lpos value and check if we found a new value that is [<= OR <] the max RHS
 		// value
 		while (true) {
-			auto l_ptr = lsorted.radix_handle->Ptr() + l_entry_idx * lsort.sort_layout.entry_size;
+			auto l_ptr = MergeJoinRadixPtr(lread, l_entry_idx);
 
 			int comp_res;
 			if (all_constant) {
 				comp_res = memcmp(l_ptr, r_ptr, lsort.sort_layout.comparison_size);
 			} else {
-				comp_res = Comparators::CompareTuple(lsorted, rsorted, l_ptr, r_ptr, lsort.sort_layout, external);
+				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, lsort.sort_layout, external);
 			}
 
 			if (comp_res <= cmp) {
@@ -537,42 +549,40 @@ void PhysicalPiecewiseMergeJoin::ResolveSimpleJoin(ExecutionContext &context, Da
 static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const ExpressionType comparison) {
 	const auto cmp = MergeJoinComparisonValue(comparison);
 
+	// The sort parameters should all be the same
 	D_ASSERT(l.state.sort_layout.all_constant == r.state.sort_layout.all_constant);
-	D_ASSERT(l.state.external == r.state.external);
 	const auto all_constant = r.state.sort_layout.all_constant;
+	D_ASSERT(l.state.external == r.state.external);
 	const auto external = l.state.external;
 
 	// There should only be one sorted block if they have been sorted
 	D_ASSERT(l.state.sorted_blocks.size() == 1);
-	auto &lsorted = *l.state.sorted_blocks[0];
-	D_ASSERT(lsorted.radix_sorting_data.size() == 1);
-	lsorted.PinRadix(l.block_idx);
+	SBScanState lread(l.state.buffer_manager, l.state);
+	lread.sb = l.state.sorted_blocks[0].get();
+	D_ASSERT(lread.sb->radix_sorting_data.size() == 1);
+	MergeJoinPinSortingBlock(lread, l.block_idx);
 
 	D_ASSERT(r.state.sorted_blocks.size() == 1);
-	auto &rsorted = *r.state.sorted_blocks[0];
-	rsorted.PinRadix(r.block_idx);
+	SBScanState rread(r.state.buffer_manager, r.state);
+	rread.sb = r.state.sorted_blocks[0].get();
+
 	if (r.entry_idx >= r.not_null) {
 		return 0;
 	}
 
-	auto r_ptr = rsorted.radix_handle->Ptr() + r.entry_idx * r.state.sort_layout.entry_size;
-	if (!all_constant) {
-		rsorted.blob_sorting_data->ResetIndices(r.block_idx, r.entry_idx);
-		rsorted.blob_sorting_data->Pin();
-	}
+	MergeJoinPinSortingBlock(rread, r.block_idx);
+	auto r_ptr = MergeJoinRadixPtr(rread, r.entry_idx);
 
 	idx_t result_count = 0;
 	while (true) {
 		if (l.entry_idx < l.not_null) {
-			auto l_ptr = lsorted.radix_handle->Ptr() + l.entry_idx * l.state.sort_layout.entry_size;
+			auto l_ptr = MergeJoinRadixPtr(lread, l.entry_idx);
 
 			int comp_res;
 			if (all_constant) {
 				comp_res = memcmp(l_ptr, r_ptr, l.state.sort_layout.comparison_size);
 			} else {
-				lsorted.blob_sorting_data->ResetIndices(l.block_idx, l.entry_idx);
-				lsorted.blob_sorting_data->Pin();
-				comp_res = Comparators::CompareTuple(lsorted, rsorted, l_ptr, r_ptr, l.state.sort_layout, external);
+				comp_res = Comparators::CompareTuple(lread, rread, l_ptr, r_ptr, l.state.sort_layout, external);
 			}
 
 			if (comp_res <= cmp) {
@@ -597,12 +607,7 @@ static idx_t MergeJoinComplexBlocks(BlockMergeInfo &l, BlockMergeInfo &r, const 
 			break;
 		}
 
-		r_ptr = rsorted.radix_handle->Ptr() + r.entry_idx * r.state.sort_layout.entry_size;
-
-		if (!all_constant) {
-			rsorted.blob_sorting_data->ResetIndices(r.block_idx, r.entry_idx);
-			rsorted.blob_sorting_data->Pin();
-		}
+		r_ptr = MergeJoinRadixPtr(rread, r.entry_idx);
 	}
 
 	return result_count;
@@ -720,7 +725,7 @@ public:
 
 	mutex lock;
 	const PhysicalPiecewiseMergeJoin &op;
-	unique_ptr<SortedDataScanner> scanner;
+	unique_ptr<PayloadScanner> scanner;
 
 public:
 	idx_t MaxThreads() override {
@@ -747,7 +752,7 @@ void PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, DataChunk &r
 		if (sort_state.sorted_blocks.empty()) {
 			return;
 		}
-		state.scanner = make_unique<SortedDataScanner>(*sort_state.sorted_blocks[0]->payload_data, sort_state);
+		state.scanner = make_unique<PayloadScanner>(*sort_state.sorted_blocks[0]->payload_data, sort_state);
 	}
 
 	// if the LHS is exhausted in a FULL/RIGHT OUTER JOIN, we scan the found_match for any chunks we
