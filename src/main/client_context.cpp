@@ -871,17 +871,33 @@ void ClientContext::RegisterFunction(CreateFunctionInfo *info) {
 
 void ClientContext::RunFunctionInTransactionInternal(ClientContextLock &lock, const std::function<void(void)> &fun,
                                                      bool requires_valid_transaction) {
-	BeginTransactionInternal(lock, requires_valid_transaction);
+	if (requires_valid_transaction && transaction.HasActiveTransaction() &&
+	    transaction.ActiveTransaction().IsInvalidated()) {
+		throw Exception("Failed: transaction has been invalidated!");
+	}
+	// check if we are on AutoCommit. In this case we should start a transaction
+	bool require_new_transaction = transaction.IsAutoCommit() && !transaction.HasActiveTransaction();
+	if (require_new_transaction) {
+		transaction.BeginTransaction();
+	}
 	try {
 		fun();
 	} catch (StandardException &ex) {
-		EndQueryInternal(lock, false, false);
+		if (require_new_transaction) {
+			transaction.Rollback();
+		}
 		throw;
 	} catch (std::exception &ex) {
-		EndQueryInternal(lock, false, true);
+		if (require_new_transaction) {
+			transaction.Rollback();
+		} else {
+			ActiveTransaction().Invalidate();
+		}
 		throw;
 	}
-	EndQueryInternal(lock, true, false);
+	if (require_new_transaction) {
+		transaction.Commit();
+	}
 }
 
 void ClientContext::RunFunctionInTransaction(const std::function<void(void)> &fun, bool requires_valid_transaction) {
