@@ -7,26 +7,6 @@
 namespace duckdb {
 
 struct ICUCalendarSub : public ICUDateFunc {
-	typedef int64_t (*part_sub_t)(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date);
-
-	static int64_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date) {
-		// ICU triggers the address sanitiser because it tries to left shift a negative value
-		// when start_date > end_date. To avoid this, we swap the values and negate the result.
-		const auto start_date = GetTimeUnsafe(calendar);
-		if (start_date > end_date) {
-			SetTime(calendar, end_date);
-			return -SubtractField(calendar, field, start_date);
-		}
-
-		const int64_t millis = end_date.value / Interval::MICROS_PER_MSEC;
-		const auto when = UDate(millis);
-		UErrorCode status = U_ZERO_ERROR;
-		auto sub = calendar->fieldDifference(when, field, status);
-		if (U_FAILURE(status)) {
-			throw Exception("Unable to subtract ICU calendar part.");
-		}
-		return sub;
-	}
 
 	//	ICU only has 32 bit precision for date parts, so it can overflow a high resolution.
 	//	Since there is no difference between ICU and the obvious calculations,
@@ -94,44 +74,6 @@ struct ICUCalendarSub : public ICUDateFunc {
 		return SubtractYear(calendar, start_date, end_date) / 1000;
 	}
 
-	static part_sub_t SubtractFactory(DatePartSpecifier type) {
-		switch (type) {
-		case DatePartSpecifier::MILLENNIUM:
-			return SubtractMillenium;
-		case DatePartSpecifier::CENTURY:
-			return SubtractCentury;
-		case DatePartSpecifier::DECADE:
-			return SubtractDecade;
-		case DatePartSpecifier::YEAR:
-			return SubtractYear;
-		case DatePartSpecifier::QUARTER:
-			return SubtractQuarter;
-		case DatePartSpecifier::MONTH:
-			return SubtractMonth;
-		case DatePartSpecifier::WEEK:
-		case DatePartSpecifier::YEARWEEK:
-			return SubtractWeek;
-		case DatePartSpecifier::DAY:
-		case DatePartSpecifier::DOW:
-		case DatePartSpecifier::ISODOW:
-		case DatePartSpecifier::DOY:
-			return SubtractDay;
-		case DatePartSpecifier::HOUR:
-			return SubtractHour;
-		case DatePartSpecifier::MINUTE:
-			return SubtractMinute;
-		case DatePartSpecifier::SECOND:
-		case DatePartSpecifier::EPOCH:
-			return SubtractSecond;
-		case DatePartSpecifier::MILLISECONDS:
-			return SubtractMillisecond;
-		case DatePartSpecifier::MICROSECONDS:
-			return SubtractMicrosecond;
-		default:
-			throw NotImplementedException("Specifier type not implemented for DATEDIFF");
-		}
-	}
-
 	template <typename T>
 	static void ICUDateSubFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 3);
@@ -166,14 +108,127 @@ struct ICUCalendarSub : public ICUDateFunc {
 	}
 
 	template <typename TA>
-	static ScalarFunction GetDateSubtractFunction(const LogicalTypeId &type) {
+	static ScalarFunction GetFunction(const LogicalTypeId &type) {
 		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateSubFunction<TA>, false,
 		                      Bind);
 	}
 
-	static void AddDateSubFunctions(const string &name, ClientContext &context) {
+	static void AddFunctions(const string &name, ClientContext &context) {
 		ScalarFunctionSet set(name);
-		set.AddFunction(GetDateSubtractFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
+
+		CreateScalarFunctionInfo func_info(set);
+		auto &catalog = Catalog::GetCatalog(context);
+		catalog.AddFunction(context, &func_info);
+	}
+};
+
+ICUDateFunc::part_sub_t ICUDateFunc::SubtractFactory(DatePartSpecifier type) {
+	switch (type) {
+	case DatePartSpecifier::MILLENNIUM:
+		return ICUCalendarSub::SubtractMillenium;
+	case DatePartSpecifier::CENTURY:
+		return ICUCalendarSub::SubtractCentury;
+	case DatePartSpecifier::DECADE:
+		return ICUCalendarSub::SubtractDecade;
+	case DatePartSpecifier::YEAR:
+		return ICUCalendarSub::SubtractYear;
+	case DatePartSpecifier::QUARTER:
+		return ICUCalendarSub::SubtractQuarter;
+	case DatePartSpecifier::MONTH:
+		return ICUCalendarSub::SubtractMonth;
+	case DatePartSpecifier::WEEK:
+	case DatePartSpecifier::YEARWEEK:
+		return ICUCalendarSub::SubtractWeek;
+	case DatePartSpecifier::DAY:
+	case DatePartSpecifier::DOW:
+	case DatePartSpecifier::ISODOW:
+	case DatePartSpecifier::DOY:
+		return ICUCalendarSub::SubtractDay;
+	case DatePartSpecifier::HOUR:
+		return ICUCalendarSub::SubtractHour;
+	case DatePartSpecifier::MINUTE:
+		return ICUCalendarSub::SubtractMinute;
+	case DatePartSpecifier::SECOND:
+	case DatePartSpecifier::EPOCH:
+		return ICUCalendarSub::SubtractSecond;
+	case DatePartSpecifier::MILLISECONDS:
+		return ICUCalendarSub::SubtractMillisecond;
+	case DatePartSpecifier::MICROSECONDS:
+		return ICUCalendarSub::SubtractMicrosecond;
+	default:
+		throw NotImplementedException("Specifier type not implemented for ICU subtraction");
+	}
+}
+
+// MS-SQL differences can be computed using ICU by truncating both arguments
+// to the desired part precision and then applying ICU subtraction/difference
+struct ICUCalendarDiff : public ICUDateFunc {
+
+	template <typename T>
+	static int64_t DifferenceFunc(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date,
+	                              part_trunc_t trunc_func, part_sub_t sub_func) {
+		// Truncate the two arguments. This is safe because we will stay in range
+		auto micros = SetTime(calendar, start_date);
+		trunc_func(calendar, micros);
+		start_date = GetTimeUnsafe(calendar, micros);
+
+		micros = SetTime(calendar, end_date);
+		trunc_func(calendar, micros);
+		end_date = GetTimeUnsafe(calendar, micros);
+
+		// Now use ICU difference
+		return sub_func(calendar, start_date, end_date);
+	}
+
+	template <typename T>
+	static void ICUDateDiffFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+		D_ASSERT(args.ColumnCount() == 3);
+		auto &part_arg = args.data[0];
+		auto &startdate_arg = args.data[1];
+		auto &enddate_arg = args.data[2];
+
+		auto &func_expr = (BoundFunctionExpression &)state.expr;
+		auto &info = (BindData &)*func_expr.bind_info;
+		CalendarPtr calendar_ptr(info.calendar->clone());
+		auto calendar = calendar_ptr.get();
+
+		if (part_arg.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			// Common case of constant part.
+			if (ConstantVector::IsNull(part_arg)) {
+				result.SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(result, true);
+			} else {
+				const auto specifier = ConstantVector::GetData<string_t>(part_arg)->GetString();
+				const auto part = GetDatePartSpecifier(specifier);
+				auto trunc_func = TruncationFactory(part);
+				auto sub_func = SubtractFactory(part);
+				BinaryExecutor::Execute<T, T, int64_t>(
+				    startdate_arg, enddate_arg, result, args.size(), [&](T start_date, T end_date) {
+					    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
+				    });
+			}
+		} else {
+			TernaryExecutor::Execute<string_t, T, T, int64_t>(
+			    part_arg, startdate_arg, enddate_arg, result, args.size(),
+			    [&](string_t specifier, T start_date, T end_date) {
+				    const auto part = GetDatePartSpecifier(specifier.GetString());
+				    auto trunc_func = TruncationFactory(part);
+				    auto sub_func = SubtractFactory(part);
+				    return DifferenceFunc<T>(calendar, start_date, end_date, trunc_func, sub_func);
+			    });
+		}
+	}
+
+	template <typename TA>
+	static ScalarFunction GetFunction(const LogicalTypeId &type) {
+		return ScalarFunction({LogicalType::VARCHAR, type, type}, LogicalType::BIGINT, ICUDateDiffFunction<TA>, false,
+		                      Bind);
+	}
+
+	static void AddFunctions(const string &name, ClientContext &context) {
+		ScalarFunctionSet set(name);
+		set.AddFunction(GetFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
 
 		CreateScalarFunctionInfo func_info(set);
 		auto &catalog = Catalog::GetCatalog(context);
@@ -182,8 +237,11 @@ struct ICUCalendarSub : public ICUDateFunc {
 };
 
 void RegisterICUDateSubFunctions(ClientContext &context) {
-	ICUCalendarSub::AddDateSubFunctions("date_sub", context);
-	ICUCalendarSub::AddDateSubFunctions("datesub", context);
+	ICUCalendarSub::AddFunctions("date_sub", context);
+	ICUCalendarSub::AddFunctions("datesub", context);
+
+	ICUCalendarDiff::AddFunctions("date_diff", context);
+	ICUCalendarDiff::AddFunctions("datediff", context);
 }
 
 } // namespace duckdb
