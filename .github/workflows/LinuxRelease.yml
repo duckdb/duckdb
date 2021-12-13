@@ -105,7 +105,6 @@ jobs:
       BUILD_TPCH: 1
       BUILD_TPCDS: 1
       BUILD_FTS: 1
-      BUILD_HTTPFS: 1
       TREAT_WARNINGS_AS_ERRORS: 1
       FORCE_WARN_UNUSED: 1
       AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
