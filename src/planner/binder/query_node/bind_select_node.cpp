@@ -366,7 +366,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(SelectNode &statement) {
 
 	// QUALIFY clause requires at least one window function to be specified in at least one of the SELECT column list or
 	// the filter predicate of the QUALIFY clause
-	if (statement.qualify && result->windows.size() <= 0) {
+	if (statement.qualify && result->windows.empty()) {
 		throw BinderException("at least one window function must appear in the SELECT column or QUALIFY clause");
 	}
 
