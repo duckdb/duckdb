@@ -17,4 +17,16 @@ struct EnumFirst {
 	static void RegisterFunction(BuiltinFunctions &set);
 };
 
+struct EnumLast {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct EnumRange {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
+struct EnumRangeBoundary {
+	static void RegisterFunction(BuiltinFunctions &set);
+};
+
 } // namespace duckdb
