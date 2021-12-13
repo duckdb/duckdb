@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+set -x
 
 CMAKE_CONFIG=Release
 EXT_BASE_PATH=build/release
