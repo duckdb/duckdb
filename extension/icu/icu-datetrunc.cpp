@@ -78,6 +78,13 @@ struct ICUDateTrunc : public ICUDateFunc {
 		calendar->set(UCAL_YEAR, yyyy * 1000);
 	}
 
+	static void TruncEra(icu::Calendar *calendar, uint64_t &micros) {
+		TruncYear(calendar, micros);
+		auto era = ExtractField(calendar, UCAL_ERA);
+		calendar->set(UCAL_YEAR, 0);
+		calendar->set(UCAL_ERA, era);
+	}
+
 	template <typename T>
 	static void ICUDateTruncFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 		D_ASSERT(args.ColumnCount() == 2);
@@ -131,6 +138,8 @@ struct ICUDateTrunc : public ICUDateFunc {
 
 ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type) {
 	switch (type) {
+	case DatePartSpecifier::ERA:
+		return ICUDateTrunc::TruncEra;
 	case DatePartSpecifier::MILLENNIUM:
 		return ICUDateTrunc::TruncMillenium;
 	case DatePartSpecifier::CENTURY:

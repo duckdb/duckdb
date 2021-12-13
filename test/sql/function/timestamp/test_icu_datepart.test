@@ -207,6 +207,48 @@ SELECT date_part(part, ts), date_part(part, ts::TIMESTAMP), part FROM timestamps
 30	30	minute
 24	24	day
 
+
+query I
+SELECT ERA(ts) FROM timestamps;
+----
+1
+1
+1
+1
+1
+1
+
+query I
+SELECT DATE_PART('era', ts) FROM timestamps;
+----
+1
+1
+1
+1
+1
+1
+
+# Beware the ides of March
+query I
+SELECT DATE_PART('era', '0044-03-15 (BC) 12:00:00'::TIMESTAMPTZ);
+----
+0
+
+query I
+SELECT DATE_PART('offset', ts) / (60::BIGINT * 60 * 1000 * 1000) FROM timestamps;
+----
+-8
+-8
+-8
+-8
+-8
+-8
+
+query I
+SELECT DATE_PART('offset', '2021-07-31 00:00:00-07'::TIMESTAMPTZ) / (60::BIGINT * 60 * 1000 * 1000);
+----
+-7
+
 # Aliases
 query III
 SELECT datepart(part, ts), datepart(part, ts::TIMESTAMP), part FROM timestamps;
