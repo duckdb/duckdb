@@ -156,12 +156,13 @@ public:
 
 	DUCKDB_API bool IsActiveResult(ClientContextLock &lock, BaseQueryResult *result);
 	Executor &GetExecutor();
+	const string &GetCurrentQuery();
 
 private:
 	//! Parse statements and resolve pragmas from a query
 	bool ParseStatements(ClientContextLock &lock, const string &query, vector<unique_ptr<SQLStatement>> &result, string &error);
 	//! Issues a query to the database and returns a Pending Query Result
-	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
+	unique_ptr<PendingQueryResult> PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement, bool verify = true);
 	unique_ptr<QueryResult> ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query, bool allow_stream_result);
 
 	//! Parse statements from a query
@@ -189,7 +190,7 @@ private:
 	unique_ptr<PendingQueryResult> PendingStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
-	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result);
+	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result, bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
 

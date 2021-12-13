@@ -130,10 +130,23 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 }
 
 string ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction) {
+	profiler->EndQuery();
+
 	D_ASSERT(active_query.get());
 	string error;
 	try {
 		if (transaction.HasActiveTransaction()) {
+			// Move the query profiler into the history
+			auto &prev_profilers = query_profiler_history->GetPrevProfilers();
+			prev_profilers.emplace_back(transaction.ActiveTransaction().active_query, move(profiler));
+			// Reinitialize the query profiler
+			profiler = make_unique<QueryProfiler>(*this);
+			// Propagate settings of the saved query into the new profiler.
+			profiler->Propagate(*prev_profilers.back().second);
+			if (prev_profilers.size() >= query_profiler_history->GetPrevProfilersSize()) {
+				prev_profilers.pop_front();
+			}
+
 			ActiveTransaction().active_query = MAXIMUM_QUERY_ID;
 			if (transaction.IsAutoCommit()) {
 				if (success) {
@@ -173,6 +186,11 @@ Executor &ClientContext::GetExecutor() {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->executor);
 	return *active_query->executor;
+}
+
+const string &ClientContext::GetCurrentQuery() {
+	D_ASSERT(active_query);
+	return active_query->query;
 }
 
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending, bool allow_stream_result) {
@@ -416,7 +434,7 @@ unique_ptr<QueryResult> ClientContext::Execute(const string &query, shared_ptr<P
 	} catch (std::exception &ex) {
 		return make_unique<MaterializedQueryResult>(ex.what());
 	}
-	auto pending = PendingStatementOrPreparedStatement(*lock, query, nullptr, prepared, &values);
+	auto pending = PendingStatementOrPreparedStatementInternal(*lock, query, nullptr, prepared, &values);
 	if (!pending->success) {
 		return make_unique<MaterializedQueryResult>(pending->error);
 	}
@@ -434,8 +452,8 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementInternal(ClientCon
 }
 
 unique_ptr<QueryResult> ClientContext::RunStatementInternal(ClientContextLock &lock, const string &query,
-												unique_ptr<SQLStatement> statement, bool allow_stream_result) {
-	auto pending = PendingQueryInternal(lock, move(statement));
+												unique_ptr<SQLStatement> statement, bool allow_stream_result, bool verify) {
+	auto pending = PendingQueryInternal(lock, move(statement), verify);
 	if (!pending->success) {
 		return make_unique<MaterializedQueryResult>(move(pending->error));
 	}
@@ -480,7 +498,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatemen
 		}
 		statement = move(copied_statement);
 	}
-	return PendingStatementOrPreparedStatement(lock, query, move(statement), prepared, nullptr);
+	return PendingStatementOrPreparedStatement(lock, query, move(statement), prepared, values);
 }
 
 unique_ptr<PendingQueryResult> ClientContext::PendingStatementOrPreparedStatement(ClientContextLock &lock, const string &query,
@@ -625,10 +643,14 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(unique_ptr<SQLStateme
 	return PendingQueryInternal(*lock, move(statement));
 }
 
-unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement) {
+unique_ptr<PendingQueryResult> ClientContext::PendingQueryInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement, bool verify) {
 	auto query = statement->query;
 	shared_ptr<PreparedStatementData> prepared;
-	return PendingStatementOrPreparedStatement(lock, query, move(statement), prepared, nullptr);
+	if (verify) {
+		return PendingStatementOrPreparedStatementInternal(lock, query, move(statement), prepared, nullptr);
+	} else {
+		return PendingStatementOrPreparedStatement(lock, query, move(statement), prepared, nullptr);
+	}
 }
 
 unique_ptr<QueryResult> ClientContext::ExecutePendingQueryInternal(ClientContextLock &lock, PendingQueryResult &query, bool allow_stream_result) {
@@ -730,7 +752,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 
 	// execute the original statement
 	try {
-		auto result = RunStatementInternal(lock, query, move(statement), false);
+		auto result = RunStatementInternal(lock, query, move(statement), false, false);
 		original_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (std::exception &ex) {
 		original_result->error = ex.what();
@@ -743,7 +765,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 		auto explain_q = "EXPLAIN " + query;
 		auto explain_stmt = make_unique<ExplainStatement>(move(statement_copy_for_explain));
 		try {
-			RunStatementInternal(lock, explain_q, move(explain_stmt), false);
+			RunStatementInternal(lock, explain_q, move(explain_stmt), false, false);
 		} catch (std::exception &ex) { // LCOV_EXCL_START
 			return "EXPLAIN failed but query did not (" + string(ex.what()) + ")";
 		} // LCOV_EXCL_STOP
@@ -751,7 +773,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 
 	// now execute the copied statement
 	try {
-		auto result = RunStatementInternal(lock, query, move(copied_stmt), false);
+		auto result = RunStatementInternal(lock, query, move(copied_stmt), false, false);
 		copied_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (std::exception &ex) {
 		copied_result->error = ex.what();
@@ -760,7 +782,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	}
 	// now execute the deserialized statement
 	try {
-		auto result = RunStatementInternal(lock, query, move(deserialized_stmt), false);
+		auto result = RunStatementInternal(lock, query, move(deserialized_stmt), false, false);
 		deserialized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (std::exception &ex) {
 		deserialized_result->error = ex.what();
@@ -770,7 +792,7 @@ string ClientContext::VerifyQuery(ClientContextLock &lock, const string &query, 
 	// now execute the unoptimized statement
 	config.enable_optimizer = false;
 	try {
-		auto result = RunStatementInternal(lock, query, move(unoptimized_stmt), false);
+		auto result = RunStatementInternal(lock, query, move(unoptimized_stmt), false, false);
 		unoptimized_result = unique_ptr_cast<QueryResult, MaterializedQueryResult>(move(result));
 	} catch (std::exception &ex) {
 		unoptimized_result->error = ex.what();
