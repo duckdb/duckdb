@@ -1,13 +1,35 @@
+#include "duckdb/execution/operator/aggregate/physical_streaming_window.hpp"
 #include "duckdb/execution/operator/aggregate/physical_window.hpp"
 #include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
+#include "duckdb/planner/operator/logical_window.hpp"
 
 #include <numeric>
 
 namespace duckdb {
+
+bool IsStreaming(vector<unique_ptr<Expression>> &select_list) {
+	for (auto &expr : select_list) {
+		auto wexpr = reinterpret_cast<BoundWindowExpression *>(expr.get());
+		if (!wexpr->partitions.empty() || !wexpr->orders.empty() || wexpr->ignore_nulls) {
+			return false;
+		}
+		switch (wexpr->type) {
+		// TODO: add more expression types here
+		case ExpressionType::WINDOW_FIRST_VALUE:
+		case ExpressionType::WINDOW_PERCENT_RANK:
+		case ExpressionType::WINDOW_RANK:
+		case ExpressionType::WINDOW_RANK_DENSE:
+		case ExpressionType::WINDOW_ROW_NUMBER:
+			break;
+		default:
+			return false;
+		}
+	}
+	return true;
+}
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	D_ASSERT(op.children.size() == 1);
@@ -54,7 +76,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		}
 
 		// Chain the new window operator on top of the plan
-		auto window = make_unique<PhysicalWindow>(types, move(select_list), op.estimated_cardinality);
+		unique_ptr<PhysicalOperator> window;
+		if (IsStreaming(select_list)) {
+			window = make_unique<PhysicalStreamingWindow>(types, move(select_list), op.estimated_cardinality);
+		} else {
+			window = make_unique<PhysicalWindow>(types, move(select_list), op.estimated_cardinality);
+		}
 		window->children.push_back(move(plan));
 		plan = move(window);
 

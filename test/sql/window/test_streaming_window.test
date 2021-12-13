@@ -1,0 +1,88 @@
+# name: test/sql/window/test_streaming_window.test
+# description: Streaming window functions
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+PRAGMA explain_output = PHYSICAL_ONLY;
+
+statement ok
+create table integers (i int, j int)
+
+statement ok
+insert into integers values (2, 2), (2, 1), (1, 2), (1, NULL)
+
+query TT
+explain select row_number() over (), i, j from integers
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TTT
+select row_number() over (), i, j from integers
+----
+1	2	2
+2	2	1
+3	1	2
+4	1	NULL
+
+query TT
+explain select rank() over (), i, j from integers
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TTT
+select rank() over (), i, j from integers
+----
+1	2	2
+1	2	1
+1	1	2
+1	1	NULL
+
+query TT
+explain select dense_rank() over (), i, j from integers
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TTT
+select dense_rank() over (), i, j from integers
+----
+1	2	2
+1	2	1
+1	1	2
+1	1	NULL
+
+query TT
+explain select percent_rank() over (), i, j from integers
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TTT
+select percent_rank() over (), i, j from integers
+----
+0.0	2	2
+0.0	2	1
+0.0	1	2
+0.0	1	NULL
+
+query TT
+explain select i, j, first_value(i) over (), first_value(j) over () from integers
+----
+physical_plan	<REGEX>:.*STREAMING_WINDOW.*
+
+query TTTT
+select i, j, first_value(i) over (), first_value(j) over () from integers
+----
+2	2	2	2
+2	1	2	2
+1	2	2	2
+1	NULL	2	2
+
+query TTT
+select row_number() over (), first_value(i) over (), first_value(j) over () from integers
+----
+1	2	2
+2	2	2
+3	2	2
+4	2	2
