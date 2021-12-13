@@ -84,6 +84,7 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 	if (zVfs) { /* unsupported so if set we complain */
 		return SQLITE_ERROR;
 	}
+	int rc = SQLITE_OK;
 	sqlite3 *pDb = nullptr;
 	try {
 		pDb = new sqlite3();
@@ -99,10 +100,10 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 			pDb->last_error = ex.what();
 			pDb->errCode = SQLITE_ERROR;
 		}
-		return SQLITE_ERROR;
+		rc = SQLITE_ERROR;
 	}
 	*ppDb = pDb;
-	return SQLITE_OK;
+	return rc;
 }
 
 int sqlite3_close(sqlite3 *db) {
@@ -594,7 +595,7 @@ int sqlite3_bind_text(sqlite3_stmt *stmt, int idx, const char *val, int length, 
 	if (length < 0) {
 		value = string(val);
 	} else {
-		value = string(val, val + length);
+		value = string(val, length);
 	}
 	if (free_func && ((ptrdiff_t)free_func) != -1) {
 		free_func((void *)val);

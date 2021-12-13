@@ -34,6 +34,8 @@ struct BoundCreateTableInfo;
 struct BoundCreateFunctionInfo;
 struct CommonTableExpressionInfo;
 
+enum class BindingMode : uint8_t { STANDARD_BINDING, EXTRACT_NAMES };
+
 struct CorrelatedColumnInfo {
 	ColumnBinding binding;
 	LogicalType type;
@@ -148,6 +150,11 @@ public:
 	bool HasMatchingBinding(const string &schema_name, const string &table_name, const string &column_name,
 	                        string &error_message);
 
+	void SetBindingMode(BindingMode mode);
+	BindingMode GetBindingMode();
+	void AddTableName(string table_name);
+	const unordered_set<string> &GetTableNames();
+
 private:
 	//! The parent binder (if any)
 	shared_ptr<Binder> parent;
@@ -165,6 +172,10 @@ private:
 	bool can_contain_nulls = false;
 	//! The root statement of the query that is currently being parsed
 	SQLStatement *root_statement = nullptr;
+	//! Binding mode
+	BindingMode mode = BindingMode::STANDARD_BINDING;
+	//! Table names extracted for BindingMode::EXTRACT_NAMES
+	unordered_set<string> table_names;
 
 private:
 	//! Bind the default values of the columns of a table
